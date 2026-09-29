@@ -7,109 +7,39 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import type { AdminGroup } from '../../queries/groups-admin';
 
 /*
- * Administrare → Setări (#825): the two organization settings, moved out of
- * the Perioade de evaluare screen. A small fake of the database behind the
- * panel: the tables it reads through `from()` and the functions it calls
- * through `rpc()`. Each RPC records its
- * payload, and a test can make one refuse with a server reason.
+ * Administrare → Setări (#825, #923): the organization settings, grouped by
+ * purpose, each a row with its effect, the value in force ("Nesetat" when
+ * empty) and one edit pattern. A small fake of the database behind the tab:
+ * `org_settings` through `from()` and `set_org_setting` through `rpc()`,
+ * which records its payload and can refuse with a server reason.
  */
-type Period = {
-  id: number;
-  name: string;
-  opened_at: string;
-  closed_at: string | null;
-  closing_threshold: number | null;
-};
 const db = vi.hoisted(() => ({
-  periods: [] as Period[],
-  rule: { id: 2, initial_threshold: 30 } as {
-    id: number;
-    initial_threshold: number;
-  } | null,
   settings: new Map<string, string | null>(),
-  ranking: [] as {
-    member_id: string;
-    role: string;
-    task_points: number;
-    rank: number;
-    cohort_size: number;
-    share_size: number;
-    inside: boolean;
-  }[],
   refuse: new Map<string, string>(),
   rpc: vi.fn(),
   groups: vi.fn(),
 }));
 
-function tableRows(table: string): unknown {
-  if (table === 'evaluation_periods')
-    return [...db.periods].sort((a, b) => b.id - a.id);
-  if (table === 'org_settings')
-    return [...db.settings].map(([key, value]) => ({ key, value }));
-  if (table === 'promotion_rules') return db.rule;
-  throw new Error(`unexpected table ${table}`);
-}
-
 vi.mock('../../lib/supabase', () => {
+  const rows = () => [...db.settings].map(([key, value]) => ({ key, value }));
   const from = (table: string) => {
+    if (table !== 'org_settings') throw new Error(`unexpected table ${table}`);
     const builder = {
       select: () => builder,
-      order: () => builder,
-      eq: () => builder,
-      maybeSingle: () =>
-        Promise.resolve({ data: tableRows(table), error: null }),
       then: (resolve: (value: unknown) => unknown) =>
-        resolve({ data: tableRows(table), error: null }),
+        resolve({ data: rows(), error: null }),
     };
     return builder;
   };
-  const inForce = () =>
-    [...db.periods]
-      .filter((p) => p.closed_at !== null && p.closing_threshold !== null)
-      .sort((a, b) => b.id - a.id)[0]?.closing_threshold ??
-    db.rule?.initial_threshold ??
-    null;
   const rpc = async (name: string, args: Record<string, unknown>) => {
     db.rpc(name, args);
     const reason = db.refuse.get(name);
     if (reason)
       return { data: null, error: { code: 'PT400', message: reason } };
-    switch (name) {
-      case 'promotion_threshold_in_force':
-        return { data: inForce(), error: null };
-      case 'retention_ranking':
-        return { data: db.ranking, error: null };
-      case 'open_evaluation_period': {
-        const id = db.periods.length + 1;
-        db.periods.push({
-          id,
-          name: String(args.p_name),
-          opened_at: '2026-09-25T09:00:00Z',
-          closed_at: null,
-          closing_threshold: null,
-        });
-        return { data: id, error: null };
-      }
-      case 'close_evaluation_period': {
-        const period = db.periods.find((p) => p.id === args.p_period_id);
-        if (period) {
-          period.closed_at = '2026-09-25T10:00:00Z';
-          period.closing_threshold = 12;
-        }
-        return { data: null, error: null };
-      }
-      case 'set_promotion_rule':
-        if (db.rule)
-          db.rule.initial_threshold = args.p_initial_threshold as number;
-        return { data: null, error: null };
-      case 'set_org_setting': {
-        const value = String(args.p_value).trim();
-        db.settings.set(String(args.p_key), value === '' ? null : value);
-        return { data: null, error: null };
-      }
-      default:
-        throw new Error(`unexpected rpc ${name}`);
-    }
+    if (name !== 'set_org_setting') throw new Error(`unexpected rpc ${name}`);
+    const value = String(args.p_value).trim();
+    db.settings.set(String(args.p_key), value === '' ? null : value);
+    return { data: null, error: null };
   };
   return { supabase: { from, rpc } };
 });
@@ -123,34 +53,6 @@ vi.mock('../../queries/groups-admin', async (original) => ({
   ...(await original<object>()),
   useAdminGroups: db.groups,
 }));
-vi.mock('../../queries/member-identities', () => ({
-  useMemberIdentities: () => ({
-    data: new Map([
-      [
-        'ana',
-        {
-          memberId: 'ana',
-          nickname: null,
-          fullName: 'Ana Pop',
-          avatarColor: null,
-        },
-      ],
-      [
-        'dan',
-        {
-          memberId: 'dan',
-          nickname: 'Dănuț',
-          fullName: 'Dan Ionescu',
-          avatarColor: null,
-        },
-      ],
-    ]),
-  }),
-}));
-vi.mock(
-  '../../queries/member-card',
-  () => import('../../test/member-card-mock'),
-);
 import AdminSettingsTab from './AdminSettingsTab';
 
 vi.setConfig({ testTimeout: 15_000 });
@@ -166,15 +68,12 @@ function group(id: number, name: string, extra: Partial<AdminGroup> = {}) {
 }
 
 beforeEach(() => {
-  db.periods = [];
-  db.rule = { id: 2, initial_threshold: 30 };
   db.settings = new Map<string, string | null>([
     ['adherence_form_url', null],
     ['adunarea_generala_group_id', null],
     ['board_group_id', null],
     ['vote_retention_percent', '25'],
   ]);
-  db.ranking = [];
   db.refuse = new Map();
   db.rpc.mockReset();
   const team = {
@@ -225,65 +124,111 @@ function show() {
 const rpcCalls = (name: string) =>
   db.rpc.mock.calls.filter(([called]) => called === name).map(([, a]) => a);
 
-it('sets the three settings as panels, one column at reading width (AD4)', async () => {
+/** The setting's row, named by its label. */
+const row = (label: string) => screen.findByRole('listitem', { name: label });
+/** The value the row shows as in force. */
+const valueOf = (item: HTMLElement) =>
+  item.querySelector('[data-slot="setting-value"]') as HTMLElement;
+
+it('groups the settings by purpose, each with its effect, value and one Editează (#923)', async () => {
   const { container } = show();
+  const promotions = await screen.findByRole('region', {
+    name: 'Promovări și evaluări',
+  });
+  const profile = screen.getByRole('region', { name: 'Profilul membrilor' });
+  // Sections by purpose, and no eyebrow that could contradict the tab.
+  expect(container.querySelector('[data-slot="section-eyebrow"]')).toBeNull();
   expect(
-    await screen.findByRole('region', { name: 'Formular de adeziune' }),
-  ).toBeVisible();
+    within(promotions)
+      .getAllByRole('listitem')
+      .map((item) => item.getAttribute('data-setting')),
+  ).toEqual(['adherence_form_url', 'adunarea_generala_group_id']);
   expect(
-    screen.getByRole('region', { name: 'Adunarea Generală' }),
-  ).toBeVisible();
+    within(profile)
+      .getAllByRole('listitem')
+      .map((item) => item.getAttribute('data-setting')),
+  ).toEqual(['board_group_id']);
+  // The thresholds and shares live in Evaluări de rol (R28, R30).
   expect(
-    screen.getByRole('region', { name: 'Biroul de Conducere' }),
-  ).toBeVisible();
-  const grid = container.querySelector('[data-slot="page-grid"]');
-  expect(grid).toHaveAttribute('data-columns', '1');
-  expect(grid).toHaveClass('max-w-3xl');
-  // The shared select (#842, X12), never a raw native one.
-  for (const select of container.querySelectorAll('select'))
-    expect(select).toHaveAttribute('data-slot', 'native-select');
+    within(promotions).getByRole('link', { name: /Praguri și procente/ }),
+  ).toHaveAttribute('href', '/administrare/evaluari');
+
+  // Every setting: one sentence of effect, "Nesetat" with its consequence,
+  // and the same Editează button; no editor open, no permanent hint.
+  const expected = [
+    [
+      'Formular de adeziune',
+      'Membrii promovați Voluntar Activ primesc acest link în notificare, ca să completeze adeziunea.',
+      'Membrii promovați nu primesc niciun link: află doar că formularul vine de la BC.',
+    ],
+    [
+      'Grupul Adunării Generale',
+      'Managerii și responsabilii acestui grup și ai grupurilor de deasupra lui văd clasamentul complet al evaluărilor de rol.',
+      'Doar BC și Moderatorul văd clasamentul complet.',
+    ],
+    [
+      'Grupul Biroului de Conducere',
+      'Titlul fiecărui responsabil din acest grup privat apare pe Profilul lui, la Funcția în OSUBB.',
+      'Profilul membrilor BC și BCE arată rolul, nu un titlu.',
+    ],
+  ] as const;
+  for (const [label, effect, unset] of expected) {
+    const item = await row(label);
+    expect(within(item).getByText(effect)).toBeVisible();
+    expect(within(valueOf(item)).getByText('Nesetat')).toBeVisible();
+    expect(within(valueOf(item)).getByText(unset)).toBeVisible();
+    expect(
+      within(item).getByRole('button', { name: `Editează ${label}` }),
+    ).toBeEnabled();
+  }
+  // Ruling R28: no Periods; Retention Signals are not this setting's (F-14).
+  expect(container).not.toHaveTextContent(/perioad|semnal|http:\/\//i);
+  expect(container.querySelectorAll('form')).toHaveLength(0);
   expect((await axe.run(container)).violations).toEqual([]);
 });
 
-it('links the adherence form only when its address is http(s)', async () => {
+it('shows the adherence form in force as a link, only when it is http(s)', async () => {
   db.settings.set('adherence_form_url', 'https://forms.example.org/adeziune');
   const view = show();
-  const link = await screen.findByRole('link', {
-    name: 'Deschide formularul salvat',
+  const item = await row('Formular de adeziune');
+  const link = within(valueOf(item)).getByRole('link', {
+    name: /forms\.example\.org\/adeziune/,
   });
   expect(link).toHaveAttribute('href', 'https://forms.example.org/adeziune');
   expect(link).toHaveAttribute('rel', 'noopener noreferrer');
-  // The address itself is shown once, as the field's value.
-  expect(screen.getByLabelText('Adresa formularului')).toHaveValue(
-    'https://forms.example.org/adeziune',
-  );
+  expect(within(item).queryByText('Nesetat')).toBeNull();
   view.unmount();
 
   // A value written outside the server's guard is shown, never linked.
   db.settings.set('adherence_form_url', 'javascript:alert(1)');
   show();
-  const section = (
-    await screen.findByRole('heading', { name: 'Formular de adeziune' })
-  ).closest('section') as HTMLElement;
-  expect(
-    await within(section).findByDisplayValue('javascript:alert(1)'),
-  ).toBeVisible();
-  expect(within(section).queryByRole('link')).toBeNull();
+  const unsafe = await row('Formular de adeziune');
+  expect(within(unsafe).getByText('javascript:alert(1)')).toBeVisible();
+  expect(within(unsafe).queryByRole('link')).toBeNull();
 });
 
-it('sets, refuses and clears the adherence-form address', async () => {
+it('edits the adherence form: refuses, saves, cancels and clears', async () => {
   const user = userEvent.setup();
   show();
-  const section = (
-    await screen.findByRole('heading', { name: 'Formular de adeziune' })
-  ).closest('section') as HTMLElement;
-  const field = within(section).getByLabelText('Adresa formularului');
+  const item = await row('Formular de adeziune');
+  const edit = within(item).getByRole('button', {
+    name: 'Editează Formular de adeziune',
+  });
+  await user.click(edit);
+  const field = within(item).getByRole('textbox', {
+    name: 'Formular de adeziune',
+  });
+  expect(field).toHaveFocus();
+  const save = within(item).getByRole('button', { name: 'Salvează' });
+  // Unchanged: nothing to save, and no hint about clearing an empty value.
+  expect(save).toBeDisabled();
+  expect(item).not.toHaveTextContent('Lasă câmpul gol');
 
-  // ftp:// is refused in the browser, in the kit's words, under the field.
+  // ftp:// is refused in the browser, under the field, only now.
   await user.type(field, 'ftp://example.org/form');
-  await user.click(within(section).getByRole('button', { name: 'Salvează' }));
+  await user.click(save);
   expect(
-    within(section).getByText(
+    within(item).getByText(
       'Adresa trebuie să înceapă cu http:// sau https://.',
     ),
   ).toBeVisible();
@@ -294,49 +239,86 @@ it('sets, refuses and clears the adherence-form address', async () => {
   db.refuse.set('set_org_setting', 'invalid_org_setting_value');
   await user.clear(field);
   await user.type(field, 'https://forms.example.org/adeziune');
-  await user.click(within(section).getByRole('button', { name: 'Salvează' }));
+  await user.click(save);
   expect(
-    await within(section).findByText(/Valoarea nu este acceptată/),
+    await within(item).findByText(/Valoarea nu este acceptată/),
   ).toBeVisible();
 
   db.refuse.clear();
-  await user.click(within(section).getByRole('button', { name: 'Salvează' }));
+  await user.click(within(item).getByRole('button', { name: 'Salvează' }));
   await waitFor(() =>
     expect(rpcCalls('set_org_setting').at(-1)).toEqual({
       p_key: 'adherence_form_url',
       p_value: 'https://forms.example.org/adeziune',
     }),
   );
+  expect(await within(item).findByRole('status')).toHaveTextContent(
+    'Setare salvată.',
+  );
   expect(
-    await within(section).findByRole('link', {
-      name: 'Deschide formularul salvat',
+    await within(valueOf(item)).findByRole('link', {
+      name: /forms\.example\.org\/adeziune/,
     }),
   ).toBeVisible();
+  expect(within(item).queryByRole('textbox')).toBeNull();
+  expect(
+    within(item).getByRole('button', { name: 'Editează Formular de adeziune' }),
+  ).toHaveFocus();
 
-  await user.clear(within(section).getByLabelText('Adresa formularului'));
-  await user.click(within(section).getByRole('button', { name: 'Salvează' }));
+  // Renunță drops the draft: the value in force stays, nothing is sent.
+  const sent = rpcCalls('set_org_setting').length;
+  await user.click(
+    within(item).getByRole('button', { name: 'Editează Formular de adeziune' }),
+  );
+  await user.clear(within(item).getByRole('textbox'));
+  await user.type(within(item).getByRole('textbox'), 'https://altceva.ro');
+  await user.click(within(item).getByRole('button', { name: 'Renunță' }));
+  expect(within(item).queryByRole('textbox')).toBeNull();
+  expect(rpcCalls('set_org_setting')).toHaveLength(sent);
+  expect(
+    within(valueOf(item)).getByRole('link', {
+      name: /forms\.example\.org\/adeziune/,
+    }),
+  ).toBeVisible();
+  expect(within(item).getByRole('status')).toBeEmptyDOMElement();
+  // … and reopening starts from the value in force.
+  await user.click(
+    within(item).getByRole('button', { name: 'Editează Formular de adeziune' }),
+  );
+  expect(within(item).getByRole('textbox')).toHaveValue(
+    'https://forms.example.org/adeziune',
+  );
+
+  // Emptying the field clears the setting; the hint says so, now relevant.
+  expect(item).toHaveTextContent(
+    'Lasă câmpul gol ca să nu mai trimiți niciun link.',
+  );
+  await user.clear(within(item).getByRole('textbox'));
+  await user.click(within(item).getByRole('button', { name: 'Salvează' }));
   await waitFor(() =>
     expect(rpcCalls('set_org_setting').at(-1)).toEqual({
       p_key: 'adherence_form_url',
       p_value: '',
     }),
   );
-  await waitFor(() => expect(within(section).queryByRole('link')).toBeNull());
+  expect(await within(valueOf(item)).findByText('Nesetat')).toBeVisible();
+  expect(within(item).queryByRole('link')).toBeNull();
 });
 
-it('offers the Adunarea Generală only top-level Teams with automatic membership (B59)', async () => {
+it('edits the Adunarea Generală among top-level Teams with automatic membership (B59)', async () => {
   const user = userEvent.setup();
   show();
-  const section = (
-    await screen.findByRole('heading', { name: 'Adunarea Generală' })
-  ).closest('section') as HTMLElement;
-  const select = within(section).getByLabelText('Grupul Adunării Generale');
-  // Ruling R28: the setting grants the Role Evaluation ranking; there are no
-  // Periods, and Retention Signals stay with level 5 and up (F-14).
-  expect(section).toHaveTextContent(
-    'Managerii și responsabilii acestui grup văd clasamentul complet al evaluărilor de rol.',
+  const item = await row('Grupul Adunării Generale');
+  await user.click(
+    within(item).getByRole('button', {
+      name: 'Editează Grupul Adunării Generale',
+    }),
   );
-  expect(section).not.toHaveTextContent(/perioad|semnal/i);
+  const select = within(item).getByRole('combobox', {
+    name: 'Grupul Adunării Generale',
+  });
+  expect(select).toHaveFocus();
+  expect(select).toHaveAttribute('data-slot', 'native-select');
   // Not OSUBB, a Department, a child Team, a Team with a roster or one at
   // another Minimum Level than 3.
   expect(
@@ -344,72 +326,119 @@ it('offers the Adunarea Generală only top-level Teams with automatic membership
       .getAllByRole('option')
       .map((option) => option.textContent),
   ).toEqual(['Alege un grup', 'Adunarea Generală']);
-  expect(
-    within(section).getByRole('button', { name: 'Salvează' }),
-  ).toBeDisabled();
+  const save = within(item).getByRole('button', { name: 'Salvează' });
+  expect(save).toBeDisabled();
 
+  // Renunță after a choice sends nothing and keeps "Nesetat".
   await user.selectOptions(select, '5');
-  await user.click(within(section).getByRole('button', { name: 'Salvează' }));
+  expect(save).toBeEnabled();
+  await user.click(within(item).getByRole('button', { name: 'Renunță' }));
+  expect(rpcCalls('set_org_setting')).toEqual([]);
+  expect(within(valueOf(item)).getByText('Nesetat')).toBeVisible();
+
+  // A server refusal is shown in the editor, which stays open.
+  db.refuse.set('set_org_setting', 'invalid_org_setting_value');
+  await user.click(
+    within(item).getByRole('button', {
+      name: 'Editează Grupul Adunării Generale',
+    }),
+  );
+  await user.selectOptions(within(item).getByRole('combobox'), '5');
+  await user.click(within(item).getByRole('button', { name: 'Salvează' }));
+  expect(await within(item).findByRole('alert')).toHaveTextContent(
+    /Valoarea nu este acceptată/,
+  );
+  expect(within(item).getByRole('combobox')).toBeVisible();
+
+  db.refuse.clear();
+  await user.click(within(item).getByRole('button', { name: 'Salvează' }));
   await waitFor(() =>
     expect(rpcCalls('set_org_setting').at(-1)).toEqual({
       p_key: 'adunarea_generala_group_id',
       p_value: '5',
     }),
   );
-  expect(
-    await within(section).findByText('Grupul Adunării Generale a fost salvat.'),
-  ).toBeVisible();
-  // The Group in force is named once: in the select, not above it too.
-  expect(select).toHaveValue('5');
-  expect(within(section).getAllByText('Adunarea Generală')).toHaveLength(2);
+  expect(await within(item).findByRole('status')).toHaveTextContent(
+    'Setare salvată.',
+  );
+  expect(within(valueOf(item)).getByText('Adunarea Generală')).toBeVisible();
+  expect(within(item).queryByText('Nesetat')).toBeNull();
 });
 
-it('points the board setting at an active Private Group (#824)', async () => {
+it('points the board setting at an active Private Group and clears it (#824)', async () => {
   const user = userEvent.setup();
+  db.settings.set('board_group_id', '6');
   show();
-  const section = await screen.findByRole('region', {
-    name: 'Biroul de Conducere',
+  const item = await row('Grupul Biroului de Conducere');
+  expect(within(valueOf(item)).getByText('Consiliu privat')).toBeVisible();
+  await user.click(
+    within(item).getByRole('button', {
+      name: 'Editează Grupul Biroului de Conducere',
+    }),
+  );
+  const select = within(item).getByRole('combobox', {
+    name: 'Grupul Biroului de Conducere',
   });
-  const select = within(section).getByLabelText('Grupul Biroului de Conducere');
+  expect(select).toHaveValue('6');
   expect(
     within(select)
       .getAllByRole('option')
       .map((option) => option.textContent),
-  ).toEqual(['Alege un grup', 'Consiliu privat']);
+  ).toEqual(['Niciun grup', 'Consiliu privat']);
 
-  await user.selectOptions(select, '6');
-  await user.click(within(section).getByRole('button', { name: 'Salvează' }));
-  await waitFor(() =>
-    expect(rpcCalls('set_org_setting').at(-1)).toEqual({
-      p_key: 'board_group_id',
-      p_value: '6',
-    }),
-  );
-  expect(
-    await within(section).findByText(
-      'Grupul Biroului de Conducere a fost salvat.',
-    ),
-  ).toBeVisible();
-
-  // … and back to no Group: a blank choice clears it on the server.
-  expect(
-    within(section).getByRole('option', { name: 'Niciun grup' }),
-  ).toBeInTheDocument();
+  // A blank choice clears it on the server.
   await user.selectOptions(select, '');
-  await user.click(within(section).getByRole('button', { name: 'Salvează' }));
+  await user.click(within(item).getByRole('button', { name: 'Salvează' }));
   await waitFor(() =>
     expect(rpcCalls('set_org_setting').at(-1)).toEqual({
       p_key: 'board_group_id',
       p_value: '',
     }),
   );
+  expect(await within(item).findByRole('status')).toHaveTextContent(
+    'Setare salvată.',
+  );
+  expect(await within(valueOf(item)).findByText('Nesetat')).toBeVisible();
   expect(
-    await within(section).findByText(
-      'Grupul Biroului de Conducere a fost șters din setări.',
+    within(item).getByText(
+      'Profilul membrilor BC și BCE arată rolul, nu un titlu.',
     ),
   ).toBeVisible();
-  expect(select).toHaveValue('');
+});
+
+it('lets the editor be left when the Groups cannot be loaded', async () => {
+  const user = userEvent.setup();
+  const refetch = vi.fn();
+  db.settings.set('adunarea_generala_group_id', '5');
+  db.groups.mockReturnValue({
+    data: undefined,
+    isPending: false,
+    isError: true,
+    refetch,
+  });
+  show();
+  const item = await row('Grupul Adunării Generale');
   expect(
-    within(section).getByRole('option', { name: 'Alege un grup' }),
-  ).toBeInTheDocument();
+    within(valueOf(item)).getByText('Numele grupului nu s-a putut încărca.'),
+  ).toBeVisible();
+  await user.click(
+    within(item).getByRole('button', {
+      name: 'Editează Grupul Adunării Generale',
+    }),
+  );
+  expect(within(item).getByRole('alert')).toHaveTextContent(
+    'Nu am putut încărca grupurile.',
+  );
+  await user.click(
+    within(item).getByRole('button', { name: 'Încearcă din nou' }),
+  );
+  expect(refetch).toHaveBeenCalled();
+  await user.click(within(item).getByRole('button', { name: 'Renunță' }));
+  expect(within(item).queryByRole('alert')).toBeNull();
+  expect(
+    within(item).getByRole('button', {
+      name: 'Editează Grupul Adunării Generale',
+    }),
+  ).toHaveFocus();
+  expect(rpcCalls('set_org_setting')).toEqual([]);
 });
