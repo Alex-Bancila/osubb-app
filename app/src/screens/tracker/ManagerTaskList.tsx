@@ -150,7 +150,6 @@ export function ManagerTaskList({
     <div className="min-w-0 space-y-4">
       <TrackerWorkFilter
         rows={rows}
-        hint="Grupul include toate subgrupurile sale; perioada se aplică termenului taskului."
         fields={fields}
         fieldsActive={Number(Boolean(state)) + Number(Boolean(query))}
       />

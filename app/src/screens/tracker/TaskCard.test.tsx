@@ -685,6 +685,30 @@ describe('Member Task cards', () => {
     }
   });
 
+  it('shows every chip that fits, with no "+n" (F-5)', () => {
+    // The audit's Acasă line at 1280: 435 px, and two chips 5 px too wide
+    // at their natural widths. The Campaign truncates; it does not fold.
+    const rect = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ width: 217 } as DOMRect);
+    const width = vi
+      .spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+      .mockReturnValue(435);
+    try {
+      const { container } = card({
+        campaign_id: 3,
+        campaign: { name: 'Școala de Toamnă 2026' },
+      });
+      expect(
+        container.querySelector('[data-slot="task-chips-more"]'),
+      ).toBeNull();
+      expect(screen.getByText('Campanie: Școala de Toamnă 2026')).toBeVisible();
+    } finally {
+      rect.mockRestore();
+      width.mockRestore();
+    }
+  });
+
   it('shows every chip, wrapped, in the details sheet, without the Audience chip (B20)', () => {
     const task = toTaskPresentation(
       taskRow({

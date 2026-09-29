@@ -5,16 +5,15 @@ import { fieldForReason, reasonSchema } from '../../lib/schemas/reason';
 import { useFormValidation } from '../../lib/use-form-validation';
 import { useGiveUpTask } from '../../queries/task-give-up';
 import { useReceiptTurn } from './receipt-turn';
-
-/** The receipt a give-up leaves (Audit D-3). */
-export const GAVE_UP_RECEIPT =
-  'Ai renunțat la task. Taskul revine la „De făcut”; managerul alege alt executor din coadă.';
+import { gaveUpReceipt } from './give-up-receipt';
 
 export function TaskGiveUpControl({
   taskId,
+  assignmentMode,
   onGaveUp,
 }: {
   taskId: number;
+  assignmentMode: 'direct' | 'public' | null;
   /**
    * The list the card sits in shows the receipt: the card itself leaves
    * Taskurile mele once the Task is no longer the Member's (Audit D-3).
@@ -41,7 +40,7 @@ export function TaskGiveUpControl({
       setOpen(false);
       if (onGaveUp) onGaveUp();
       else {
-        setMessage(GAVE_UP_RECEIPT);
+        setMessage(gaveUpReceipt(assignmentMode));
         turn.claim();
       }
     } catch (failure) {

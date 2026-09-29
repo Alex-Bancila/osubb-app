@@ -16,6 +16,11 @@ import {
   SheetTitle,
 } from '../../components/ui/sheet';
 import { useAuth } from '../../lib/auth';
+import {
+  formatBucharestDay,
+  formatBucharestTime,
+} from '../../lib/calendar-time';
+import { useTaskHistory } from '../../queries/task-history';
 import { cn } from '../../lib/utils';
 import { useTaskDetails } from '../../queries/task-details';
 import { useTaskProgress } from '../../queries/task-progress';
@@ -39,6 +44,54 @@ import {
   sheetTrailPush,
   type SheetTrail,
 } from './sheet-trail';
+
+/**
+ * The reviewer's note on the latest return to progress, for the Executor who
+ * has to act on it (F-23): read from the history the Executor may read, so
+ * they need not open "Istoricul taskului" to learn what to change.
+ */
+function ReturnNote({ taskId }: { taskId: number }) {
+  const history = useTaskHistory(taskId);
+  // A failed read must not look like "no note": say so and offer a retry.
+  if (history.isError)
+    return (
+      <div role="alert" className="space-y-2 text-sm">
+        <p>Nu am putut încărca modificările cerute.</p>
+        <Button
+          type="button"
+          variant="outline"
+          className="min-h-11"
+          onClick={() => void history.refetch()}
+        >
+          Reîncarcă modificările cerute
+        </Button>
+      </div>
+    );
+  const latest = history.data
+    ?.filter((row) => row.kind === 'returned_to_progress')
+    .at(-1);
+  const note = latest?.note?.trim();
+  if (!latest || !note) return null;
+  return (
+    <section
+      aria-label="Modificări cerute"
+      data-slot="return-note"
+      className="min-w-0 space-y-2 rounded-lg border-l-2 border-primary/70 bg-muted/60 px-3 py-2.5"
+    >
+      <p className="flex flex-wrap items-baseline gap-x-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        Modificări cerute
+        <time
+          dateTime={latest.occurred_at}
+          className="font-normal tracking-normal normal-case"
+        >
+          {formatBucharestDay(latest.occurred_at)},{' '}
+          {formatBucharestTime(latest.occurred_at)}
+        </time>
+      </p>
+      <p className="text-sm whitespace-pre-wrap wrap-anywhere">{note}</p>
+    </section>
+  );
+}
 
 function TaskDetails({
   taskId,
@@ -69,6 +122,11 @@ function TaskDetails({
   // Rundă de verificare says something only once a review returned the work,
   // and only to whoever reviews it (relevance B20).
   const showReviewRound = canManage && task.reviewRound >= 1;
+  const ownReturnedTask =
+    task.feedbackPending &&
+    memberId !== undefined &&
+    task.executor?.memberId === memberId &&
+    task.executor.isCurrent;
   return (
     <div className="flex flex-col gap-5">
       <div className="[&>article]:h-auto [&_[data-slot=card]]:h-auto">
@@ -84,23 +142,21 @@ function TaskDetails({
           inSheet
         />
       </div>
+      {ownReturnedTask && <ReturnNote taskId={taskId} />}
       {task.submission && (
         <SubmissionNote submission={task.submission} showTime />
       )}
       <dl
         data-slot="task-facts"
-        className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm"
+        className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm empty:hidden"
       >
-        <div className="min-w-0">
-          <dt className="font-semibold">Atribuire</dt>
-          <dd>
-            {task.assignmentMode === 'direct'
-              ? 'Directă'
-              : task.assignmentMode === 'public'
-                ? 'Publică'
-                : 'Indisponibilă'}
-          </dd>
-        </div>
+        {/* An Umbrella has no Assignment (F-28): no Atribuire fact. */}
+        {task.assignmentMode !== null && task.kind === 'task' && (
+          <div className="min-w-0">
+            <dt className="font-semibold">Atribuire</dt>
+            <dd>{task.assignmentMode === 'direct' ? 'Directă' : 'Publică'}</dd>
+          </div>
+        )}
         {/* A direct Task is local only (R26): its Audience says nothing. */}
         {task.assignmentMode === 'public' && (
           <div className="min-w-0">
@@ -193,12 +249,12 @@ function TaskDetails({
           onNavigate={onNavigate}
         />
       )}
+      {/* Only a public Task has a Candidate Queue: a direct one has no queue
+          section at all, in any status (F-2, Alex 2026-09-29). */}
       {canManage &&
         task.kind === 'task' &&
-        !isTerminalTask(task.status) &&
-        // In review there is no Candidate to select; a direct Task has no queue
-        // toggle either, so the section would be empty.
-        !(task.status === 'in_review' && task.assignmentMode !== 'public') && (
+        task.assignmentMode === 'public' &&
+        !isTerminalTask(task.status) && (
           <section
             aria-labelledby={`task-${taskId}-candidate-heading`}
             className="flex flex-col gap-3 rounded-md border border-border p-4"
@@ -214,9 +270,7 @@ function TaskDetails({
                 Poți înlocui executorul numai cu o persoană înscrisă în coadă.
               </p>
             </div>
-            {task.assignmentMode === 'public' && (
-              <TaskQueueControl taskId={taskId} closed={task.queueClosed} />
-            )}
+            <TaskQueueControl taskId={taskId} closed={task.queueClosed} />
             {/* private.select_task_candidate_impl refuses in_review with
               PT409 task_in_review — a Task returned/evaluated mid-review is
               never handed to someone else, so the selector has nothing to

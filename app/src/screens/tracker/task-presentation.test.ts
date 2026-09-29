@@ -6,6 +6,7 @@ import {
   type TaskStatus,
 } from './task-presentation';
 import { taskRow as sharedTaskRow } from '../../test/task-fixtures';
+import { AUDIENCE_LABELS } from './task-form-model';
 
 const now = new Date('2026-09-15T12:00:00Z');
 function taskRow(
@@ -445,5 +446,20 @@ describe('TaskPresentation', () => {
       toTaskPresentation(taskRow({ link_label: 'Brief', link_url: null }), now)
         .link,
     ).toBeNull();
+  });
+});
+
+describe('Task Audience words (F-12)', () => {
+  it('reads the same as the form offers it', () => {
+    expect(
+      toTaskPresentation(taskRow({ audience: 'local' }), now).audienceLabel,
+    ).toBe(AUDIENCE_LABELS.local);
+    expect(
+      toTaskPresentation(taskRow({ audience: 'org' }), now).audienceLabel,
+    ).toBe(AUDIENCE_LABELS.org);
+    expect(AUDIENCE_LABELS).toEqual({
+      local: 'Membrii grupului',
+      org: 'Toți membrii OSUBB',
+    });
   });
 });
