@@ -1026,7 +1026,7 @@ function changeValues(change: ThresholdChange): string {
     case 'percent':
       return `${change.from_value ?? '—'} % → ${change.to_value} %`;
     case 'tenure':
-      return `${change.from_value ?? '—'} → ${formatMonthCount(change.to_value)}`;
+      return `${change.from_value === null ? '—' : formatMonthCount(change.from_value)} → ${formatMonthCount(change.to_value)}`;
     case 'enabled': {
       const state = (value: number | null) =>
         value === 1 ? 'pornită' : 'oprită';

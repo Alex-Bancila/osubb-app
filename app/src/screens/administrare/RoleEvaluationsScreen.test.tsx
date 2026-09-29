@@ -861,7 +861,7 @@ it('edits a Promotion Rule’s tenure and on/off with the #923 row pattern, logg
         .map((row) => row.textContent),
     ).toEqual([
       '28.09.2026 · Recrut → Voluntar · starepornită → oprită·BCBianca Coman',
-      '28.09.2026 · Recrut → Voluntar · vechime6 → 2 luni·BCBianca Coman',
+      '28.09.2026 · Recrut → Voluntar · vechime6 luni → 2 luni·BCBianca Coman',
     ]),
   );
   // A rule change is not a threshold change: the threshold keeps no author.
