@@ -26,6 +26,10 @@ import { useAuth } from '../../lib/auth';
 import { bucharestWallTimeToIso } from '../../lib/calendar-time';
 import { useCapabilities } from '../../lib/capabilities';
 import {
+  GROUP_MINIMUM_LEVELS,
+  minimumLevelOptions,
+} from '../../lib/minimum-level';
+import {
   announcementSchema,
   fieldForReason,
 } from '../../lib/schemas/announcement';
@@ -42,7 +46,7 @@ const fieldClass = 'block space-y-1.5 text-sm font-medium text-foreground';
 type Priority = 'normal' | 'important' | 'critical';
 
 export default function AnnouncementComposeSheet() {
-  const { session } = useAuth();
+  const { session, claims } = useAuth();
   const capabilities = useCapabilities();
   const myGroups = useMyGroupRoles();
   const groups = useGroups();
@@ -60,6 +64,13 @@ export default function AnnouncementComposeSheet() {
   const [linkUrl, setLinkUrl] = useState('');
   // The Termen as the datetime-local input holds it, read in Romania (#909).
   const [deadline, setDeadline] = useState('');
+  // #909: who reads it, by the Role names of ruling R29b; everyone by default.
+  const [minLevel, setMinLevel] = useState(0);
+  const actorLevel = claims?.member_level ?? 0;
+  const levelChoices = minimumLevelOptions(
+    GROUP_MINIMUM_LEVELS,
+    (level) => actorLevel >= 9 || level <= actorLevel,
+  );
   const [published, setPublished] = useState(false);
   // Ruling R8: the same limits `announcements_guard_text` enforces, checked
   // on blur and on publish; the guard's 23514 reason lands under its field.
@@ -92,6 +103,7 @@ export default function AnnouncementComposeSheet() {
     setLinkLabel('');
     setLinkUrl('');
     setDeadline('');
+    setMinLevel(0);
     form.reset();
   }
 
@@ -118,6 +130,7 @@ export default function AnnouncementComposeSheet() {
         form_label: values.link.label,
         form_url: values.link.url,
         deadline: values.deadline,
+        min_level: minLevel,
       });
       setPublished(true);
       setOpen(false);
@@ -269,6 +282,20 @@ export default function AnnouncementComposeSheet() {
                 </ChoiceRow>
               </RadioGroup>
             </div>
+            <label className={fieldClass}>
+              Cine îl vede
+              <NativeSelect
+                name="min_level"
+                value={minLevel}
+                onChange={(event) => setMinLevel(Number(event.target.value))}
+              >
+                {levelChoices.map((choice) => (
+                  <NativeSelectOption key={choice.level} value={choice.level}>
+                    {choice.label}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </label>
             <label className={fieldClass}>
               Prioritate
               <NativeSelect

@@ -32,6 +32,8 @@ function presentation(
     publishedAt: '2026-09-18T15:00:00.000Z',
     publishedLabel: '18 septembrie 2026, 18:00',
     deadline: null,
+    minLevel: 0,
+    minLevelLabel: null,
     isRead: false,
     ...overrides,
   };
@@ -404,5 +406,24 @@ describe('the Termen on the card (#909)', () => {
     expect(termen()).toHaveAttribute('data-state', 'expired');
     expect(termen()).toHaveTextContent('Termen expirat');
     expect(termen()?.className).toMatch('text-muted-foreground');
+  });
+});
+
+describe('the Minimum Level on the card (#909)', () => {
+  it('shows it in the meta line only above Recrut', () => {
+    const { unmount } = render(
+      <AnnouncementCard
+        announcement={presentation({
+          minLevel: 2,
+          minLevelLabel: 'Nivel minim: Voluntar Activ',
+        })}
+        onOpen={vi.fn()}
+      />,
+    );
+    const meta = document.querySelector('[data-slot="announcement-meta"]');
+    expect(meta).toHaveTextContent('Nivel minim: Voluntar Activ');
+    unmount();
+    render(<AnnouncementCard announcement={presentation()} onOpen={vi.fn()} />);
+    expect(screen.queryByText(/Nivel minim/)).toBeNull();
   });
 });

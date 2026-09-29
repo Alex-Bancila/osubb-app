@@ -89,6 +89,7 @@ export type Database = {
           form_url: string | null
           group_id: number
           id: number
+          min_level: number
           pinned: boolean
           priority: Database["public"]["Enums"]["announce_priority"]
           published_at: string
@@ -105,6 +106,7 @@ export type Database = {
           form_url?: string | null
           group_id: number
           id?: never
+          min_level?: number
           pinned?: boolean
           priority?: Database["public"]["Enums"]["announce_priority"]
           published_at?: string
@@ -121,6 +123,7 @@ export type Database = {
           form_url?: string | null
           group_id?: number
           id?: never
+          min_level?: number
           pinned?: boolean
           priority?: Database["public"]["Enums"]["announce_priority"]
           published_at?: string

@@ -12,7 +12,8 @@ import {
 /**
  * The one meta line of an Announcement (B34, layout N1): a pin when it is
  * pinned, the priority only when it is Important or Critic, the Origin by the
- * Group's name, and the Audience only when it is local ("Doar Educațional").
+ * Group's name, the Audience only when it is local ("Doar Educațional"), and
+ * the Minimum Level only above Recrut ("Nivel minim: BCE", #909).
  * `trailing` closes the line (the unread dot on a card, the read state in the
  * details sheet). One line: the Group name and the Audience truncate before
  * the line wraps.
@@ -74,6 +75,12 @@ export function AnnouncementMeta({
       {announcement.audienceLabel && (
         <span className="min-w-0 truncate text-xs text-muted-foreground">
           {announcement.audienceLabel}
+        </span>
+      )}
+
+      {announcement.minLevelLabel && (
+        <span className="min-w-0 truncate text-xs text-muted-foreground">
+          {announcement.minLevelLabel}
         </span>
       )}
 

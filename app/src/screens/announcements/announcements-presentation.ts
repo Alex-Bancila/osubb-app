@@ -2,6 +2,7 @@ import { ro } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
 import { BUCHAREST_TIME_ZONE, bucharestDayKey } from '../../lib/calendar-time';
 import type { Database } from '../../lib/database.types';
+import { minimumLevelText } from '../../lib/minimum-level';
 import type { MemberIdentity } from '../../components/member/member-identity';
 import type { Group } from '../../queries/reference';
 
@@ -55,6 +56,10 @@ export type AnnouncementPresentation = {
   publishedLabel: string;
   /** The optional Termen (#909), an ISO instant; null when there is none. */
   deadline: string | null;
+  /** The Minimum Level (#909); 0 is everyone in the Audience. */
+  minLevel: number;
+  /** "Nivel minim: Voluntar Activ", or null at 0 (it says nothing then). */
+  minLevelLabel: string | null;
   isRead: boolean;
 };
 
@@ -96,6 +101,11 @@ export function formatAnnouncementDate(instant: string): string {
   return formatInTimeZone(date, BUCHAREST_TIME_ZONE, 'd MMMM yyyy, HH:mm', {
     locale: ro,
   });
+}
+
+/** "Nivel minim: BCE" — shown only above Recrut, by the Role's name (R29b). */
+export function minLevelLabel(level: number): string | null {
+  return level > 0 ? `Nivel minim: ${minimumLevelText(level)}` : null;
 }
 
 export type TermenState = 'upcoming' | 'soon' | 'expired';
@@ -203,6 +213,8 @@ export function toAnnouncementPresentation(
     publishedAt: row.published_at,
     publishedLabel: formatAnnouncementDate(row.published_at),
     deadline: row.deadline ?? null,
+    minLevel: row.min_level ?? 0,
+    minLevelLabel: minLevelLabel(row.min_level ?? 0),
     isRead,
   };
 }

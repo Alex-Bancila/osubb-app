@@ -12,7 +12,10 @@ const mock = vi.hoisted(() => ({
   create: vi.fn(),
 }));
 vi.mock('../../lib/auth', () => ({
-  useAuth: () => ({ session: { user: { id: 'member-1' } } }),
+  useAuth: () => ({
+    session: { user: { id: 'member-1' } },
+    claims: { member_level: 3 },
+  }),
 }));
 vi.mock('../../lib/capabilities', () => ({
   useCapabilities: mock.capabilities,
@@ -141,6 +144,8 @@ describe('Announcement composer', () => {
         audience: 'org',
         // No Termen typed: the Announcement has none (#909).
         deadline: null,
+        // Everyone in the Audience unless a Minimum Level is chosen (#909).
+        min_level: 0,
       }),
     );
     // The server stamps the author and the date (security pass M1).
@@ -182,6 +187,42 @@ describe('Announcement composer', () => {
     await draftWithTermen('2099-10-02T23:59');
     expect(mutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({ deadline: '2099-10-02T20:59:00.000Z' }),
+    );
+  });
+
+  it('offers "Cine îl vede" by Role name up to the author\'s level and sends it (#909)', async () => {
+    const user = userEvent.setup();
+    render(<AnnouncementComposeSheet />);
+    await user.click(screen.getByRole('button', { name: 'Anunț nou' }));
+    const dialog = screen.getByRole('dialog', { name: 'Anunț nou' });
+    const picker = within(dialog).getByRole('combobox', {
+      name: 'Cine îl vede',
+    }) as HTMLSelectElement;
+    expect(picker).toHaveValue('0');
+    expect(Array.from(picker.options).map((option) => option.text)).toEqual([
+      'Recrut',
+      'Voluntar',
+      'Voluntar Activ',
+      'Voluntar cu Drept de Vot',
+    ]);
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'Titlu' }),
+      'Adunare',
+    );
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'Mesaj' }),
+      'Doar pentru votanți.',
+    );
+    await user.selectOptions(
+      within(dialog).getByRole('combobox', { name: 'Grup de origine' }),
+      '2',
+    );
+    await user.selectOptions(picker, '3');
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Publică anunțul' }),
+    );
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ min_level: 3 }),
     );
   });
 

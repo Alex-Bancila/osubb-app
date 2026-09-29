@@ -328,8 +328,8 @@ const REASON_COPY = new Map<string, string>([
     'Nu ai permisiunea să publici un anunț din acest grup. Debifează „Creează și un anunț” și creează doar evenimentul.',
   ],
   [
-    'announcement_event_restricted',
-    'Anunțul ajunge la tot grupul, iar evenimentul e vizibil doar de la un anumit nivel. Debifează anunțul sau alege la „Cine îl vede” nivelul grupului.',
+    'invalid_announcement_min_level',
+    'Alege cine vede anunțul dintre nivelurile din listă.',
   ],
   [
     'event_min_level_below_group',

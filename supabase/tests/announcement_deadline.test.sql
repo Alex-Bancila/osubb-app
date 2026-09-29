@@ -1,4 +1,4 @@
--- #909: an Announcement's optional Termen, and create_event(p_announce) publishing
+-- #909: an Announcement's optional Termen and Minimum Level, and create_event(p_announce) publishing
 -- one Announcement for the new Event -- never with more authority than a
 -- direct insert, and never leaving an Event behind when it is refused.
 begin;
@@ -6,23 +6,24 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(39);
+select plan(53);
 
 -- Personas (prefix 909): 1 Responsible of Root #909 (Voluntar, level 1),
--- 2 plain Member of Root #909, 3 BC, 4 a Member of no Group.
+-- 2 plain Member of Root #909 (Voluntar, level 1), 3 BC, 4 a Member of no
+-- Group, 5 a Voluntar cu Drept de Vot (level 3) in Root #909.
 create function pg_temp.u909(n integer) returns uuid language sql immutable as $$
   select ('90900000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
 $$;
 insert into auth.users(id,email)
-select pg_temp.u909(n),'termen.'||n||'.909@test.local' from generate_series(1,4) n;
+select pg_temp.u909(n),'termen.'||n||'.909@test.local' from generate_series(1,5) n;
 insert into profiles(id,full_name,email,role,status)
 select pg_temp.u909(n),'Termen #909 '||n,'termen.'||n||'.909@test.local',
-  (case when n=3 then 'bc' else 'voluntar' end)::member_role,'activ'
-from generate_series(1,4) n;
+  (case when n=3 then 'bc' when n=5 then 'vot' else 'voluntar' end)::member_role,'activ'
+from generate_series(1,5) n;
 insert into groups(name,category,min_level) values ('Root #909','team',0);
 insert into group_members(group_id,member_id,group_role)
 select grp.id,pg_temp.u909(roster.n),roster.role
-from (values (1,'responsible'),(2,'member')) as roster(n,role)
+from (values (1,'responsible'),(2,'member'),(5,'member')) as roster(n,role)
 join groups as grp on grp.name='Root #909';
 create temp table fx as
 select (select id from groups where name='Root #909') as root,
@@ -138,21 +139,87 @@ select results_eq(
   $$select (select org from fx), 'org'::text$$,
   'an Organization Event''s Announcement goes to the whole organization');
 
--- ==================== 6. refusals leave nothing behind ====================
--- An Announcement has no Minimum Level: an Event hidden from part of its
--- Group cannot be announced to the whole Group.
-select pg_temp.test_login_leadership(pg_temp.u909(3));
-select throws_ok($$select public.create_event('Restrâns #909','sedinta',(select root from fx),
-  '2030-09-25 15:40+00',p_min_level => 3,p_announce => true)$$,
-  'PT400','announcement_event_restricted',
-  'an Event above its Group''s Minimum Level cannot be announced');
-select lives_ok($$select public.create_event('Restrâns fără anunț #909','sedinta',(select root from fx),
-  '2030-09-25 15:40+00',p_min_level => 3)$$,
-  'the same Event without the Announcement is created');
+-- ==================== 6. the Minimum Level ====================
+select col_not_null('public','announcements','min_level','the Minimum Level is always set');
+select col_default_is('public','announcements','min_level','0','by default everyone in the Audience reads it (Recrut)');
+select pg_temp.test_login_leadership(pg_temp.u909(1));
+select throws_ok($$insert into announcements(title,body,group_id,audience,min_level)
+  select 'Nivel 4 #909','Corp.',root,'local',4 from fx$$,
+  '23514','invalid_announcement_min_level',
+  'a Minimum Level off the R29b ladder is named, not a raw constraint');
 reset role;
-select is((select count(*) from events where title='Restrâns #909'), 0::bigint,
-  'the refused restricted Event was not left behind');
 
+-- The unread badge before the level-3 Announcement exists, for 2 and 5.
+create temp table badge(n integer, phase text, unread integer);
+grant select, insert on badge to authenticated;
+select pg_temp.test_login_leadership(pg_temp.u909(2));
+insert into badge select 2,'before',public.my_unread_announcements_count();
+reset role;
+select pg_temp.test_login_leadership(pg_temp.u909(5));
+insert into badge select 5,'before',public.my_unread_announcements_count();
+reset role;
+
+-- Posted by the level-1 Responsible, for level 3 and up.
+select pg_temp.test_login_leadership(pg_temp.u909(1));
+select lives_ok($$insert into announcements(title,body,group_id,audience,min_level)
+  select 'Nivel #909','Doar pentru votanți.',root,'local',3 from fx$$,
+  'an Announcement is published with a Minimum Level');
+select is((select count(*) from announcements where title='Nivel #909'), 1::bigint,
+  'its author reads it even below its Minimum Level');
+reset role;
+-- The id is read as the owner: the Member below the level cannot see it.
+create temp table hidden as select id from announcements where title='Nivel #909';
+grant select on hidden to authenticated;
+
+select pg_temp.test_login_leadership(pg_temp.u909(2));
+select is((select count(*) from announcements where title='Nivel #909'), 0::bigint,
+  'a Member of the Audience below the Minimum Level cannot read it (feed, details, ?anunt=)');
+insert into badge select 2,'after',public.my_unread_announcements_count();
+select throws_ok($$insert into announcement_reads(announcement_id,member_id)
+  select id,'90900000-0000-0000-0000-000000000002' from hidden$$,
+  '42501',null,
+  'a Member below the Minimum Level cannot plant a read receipt on it');
+reset role;
+
+select pg_temp.test_login_leadership(pg_temp.u909(5));
+select is((select count(*) from announcements where title='Nivel #909'), 1::bigint,
+  'a Member of the Audience at the Minimum Level reads it');
+insert into badge select 5,'after',public.my_unread_announcements_count();
+reset role;
+select is((select unread from badge where n=2 and phase='after')
+          - (select unread from badge where n=2 and phase='before'), 0,
+  'the unread badge of a Member below the Minimum Level does not count it');
+select is((select unread from badge where n=5 and phase='after')
+          - (select unread from badge where n=5 and phase='before'), 1,
+  'the unread badge of a Member at the Minimum Level counts it');
+select is((select count(*) from notifications
+            where title='Anunț nou: Nivel #909' and member_id=pg_temp.u909(2)), 0::bigint,
+  'no Notification reaches a Member below the Minimum Level');
+select is((select count(*) from notifications
+            where title='Anunț nou: Nivel #909' and member_id=pg_temp.u909(5)), 1::bigint,
+  'the Notification reaches a Member at the Minimum Level');
+
+select pg_temp.test_login_leadership(pg_temp.u909(1));
+select is((select count(*) from public.announcement_readers((select id from hidden))
+            where member_id=pg_temp.u909(2)), 0::bigint,
+  'the readers list leaves out the Audience below the Minimum Level');
+select is((select count(*) from public.announcement_readers((select id from hidden))
+            where member_id=pg_temp.u909(5)), 1::bigint,
+  'the readers list names the Audience at the Minimum Level');
+reset role;
+
+-- An Event's Announcement takes the Event's Minimum Level.
+select pg_temp.test_login_leadership(pg_temp.u909(3));
+select lives_ok($$select public.create_event('Restrâns #909','sedinta',(select root from fx),
+  '2030-09-25 15:40+00',p_min_level => 3,p_announce => true)$$,
+  'an Event above its Group''s Minimum Level can be announced');
+reset role;
+select is((select min_level from announcements where title='Restrâns #909'), 3,
+  'the Announcement copies the Event''s Minimum Level');
+select is((select min_level from announcements where title='Atelier #909'), 0,
+  'an open Event''s Announcement is open to the whole Audience');
+
+-- ==================== 7. refusals leave nothing behind ====================
 -- The author's daily Announcement cap (PT409 rate_limited) refuses the whole call.
 select pg_temp.test_clear_jwt();
 insert into announcements(title,body,group_id,audience,created_by)

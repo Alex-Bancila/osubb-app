@@ -440,20 +440,20 @@ describe('NewEventControl receipt', () => {
       expect(announceBox()).toBeNull();
     });
 
-    it("is disabled, and sends nothing, for an Event above its Group's Minimum Level", async () => {
+    it("stays available for an Event above its Group's Minimum Level: the Announcement takes that level", async () => {
       const user = setup();
       await open(user);
       await fillRequired(user);
       await user.click(announceBox() as HTMLElement);
       await user.selectOptions(screen.getByLabelText('Cine îl vede'), '3');
-      expect(announceBox()).toHaveAttribute('aria-disabled', 'true');
-      expect(screen.getByText(/Un anunț ajunge la tot grupul/)).toBeVisible();
+      expect(announceBox()).not.toHaveAttribute('aria-disabled', 'true');
+      expect(announceBox()).toBeChecked();
       await user.click(
         screen.getByRole('button', { name: 'Creează evenimentul' }),
       );
       await waitFor(() =>
         expect(state.mutateAsync).toHaveBeenCalledWith(
-          expect.objectContaining({ minLevel: 3, announce: false }),
+          expect.objectContaining({ minLevel: 3, announce: true }),
         ),
       );
     });

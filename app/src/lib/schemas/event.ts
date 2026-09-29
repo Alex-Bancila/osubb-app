@@ -3,8 +3,8 @@ import { bucharestWallTimeToIso } from '../calendar-time';
 import { EVENT_MINIMUM_LEVELS } from '../minimum-level';
 import {
   EVENT_TYPE_CHOICES,
-  eventAnnouncementState,
   eventCampaignsFor,
+  mayAnnounceEvent,
   type EventDraft,
   type EventFormOptions,
   type EventFormValues,
@@ -113,12 +113,11 @@ export function eventSchema(
       announce:
         creating &&
         values.announce &&
-        eventAnnouncementState(
+        values.groupId !== null &&
+        mayAnnounceEvent(
           options,
           options.groups.find((item) => item.id === values.groupId) ?? null,
-          values.minLevel,
-        ) === 'available' &&
-        values.groupId !== null,
+        ),
     }));
 }
 

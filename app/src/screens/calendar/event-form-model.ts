@@ -136,18 +136,14 @@ export function eventCampaignsFor(
 
 /**
  * Whether "Creează și un anunț" may be offered for this Group (#909): the
- * viewer may publish from it, and the Event is not raised above the Group's
- * Minimum Level — an Announcement reaches the whole Group, so the server
- * refuses one for a restricted Event (`announcement_event_restricted`).
- * Presentation only: `create_event` decides.
+ * viewer may publish from it. The Announcement copies the Event's Minimum
+ * Level, so every Event may carry one. Before a Group is chosen it is offered
+ * when any Group would allow it. Presentation only: `create_event` decides.
  */
-export function eventAnnouncementState(
+export function mayAnnounceEvent(
   options: Pick<EventFormOptions, 'announceGroupIds'>,
-  group: Pick<EventFormGroup, 'id' | 'minLevel'> | null,
-  minLevel: number,
-): 'hidden' | 'restricted' | 'available' {
+  group: Pick<EventFormGroup, 'id'> | null,
+): boolean {
   const ids = options.announceGroupIds ?? [];
-  if (group ? !ids.includes(group.id) : ids.length === 0) return 'hidden';
-  if (group && minLevel > group.minLevel) return 'restricted';
-  return 'available';
+  return group ? ids.includes(group.id) : ids.length > 0;
 }

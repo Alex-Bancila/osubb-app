@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Group } from '../../queries/reference';
 import {
   describeTermen,
+  minLevelLabel,
   countUnreadAnnouncements,
   formatAnnouncementDate,
   getUnreadCriticalAnnouncement,
@@ -82,6 +83,7 @@ function rawRow(
     form_url: null,
     published_at: '2026-09-18T15:00:00.000Z',
     deadline: null,
+    min_level: 0,
     created_by: 'd0000000-0000-0000-0000-000000000007',
     announcement_reads: [],
     ...overrides,
@@ -586,5 +588,22 @@ describe('describeTermen (#909)', () => {
       'vineri, 15 ianuarie 2027, 12:00',
     );
     expect(describeTermen('not a date', now)).toBeNull();
+  });
+});
+
+describe('minLevelLabel (#909)', () => {
+  it('says nothing for everyone and names the Role above it (R29b)', () => {
+    expect(minLevelLabel(0)).toBeNull();
+    expect(minLevelLabel(2)).toBe('Nivel minim: Voluntar Activ');
+    expect(minLevelLabel(5)).toBe('Nivel minim: BCE');
+  });
+
+  it("carries the row's level into the presentation", () => {
+    const item = toAnnouncementPresentation(
+      rawRow({ min_level: 3 }),
+      groupsById,
+    );
+    expect(item.minLevel).toBe(3);
+    expect(item.minLevelLabel).toBe('Nivel minim: Voluntar cu Drept de Vot');
   });
 });

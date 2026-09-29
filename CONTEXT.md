@@ -266,7 +266,7 @@ Informational attendance guidance for an Event. It does not reject an RSVP or cr
 ## Communication
 
 **Announcement**:
-An OSUBB message posted on behalf of one Group, its Origin, by one of that Group's Managers or Responsibles, with an Announcement Audience, a normal, important, or critical Priority, an optional link to an external form, and an optional **Termen** (the date by which its readers should act, never in the past when posted). An Announcement of the Organization Group may be posted by anyone holding a Group Role. Creating an Event may publish its Announcement in the same step, with the Event's Group and Audience and Termen = the Event's start.
+An OSUBB message posted on behalf of one Group, its Origin, by one of that Group's Managers or Responsibles, with an Announcement Audience, a normal, important, or critical Priority, an optional link to an external form, an optional **Termen** (the date by which its readers should act, never in the past when posted), and a Minimum Level: only Members of its Audience at or above it read the Announcement or are notified of it (everyone by default). An Announcement of the Organization Group may be posted by anyone holding a Group Role. Creating an Event may publish its Announcement in the same step, with the Event's Group, Audience and Minimum Level and Termen = the Event's start.
 _Avoid_: Post, news item, broadcast when the Audience is local
 
 **Announcement Audience**:

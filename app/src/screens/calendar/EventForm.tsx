@@ -26,8 +26,8 @@ import { useFormValidation } from '../../lib/use-form-validation';
 import {
   EVENT_TYPE_CHOICES,
   emptyEventFormValues,
-  eventAnnouncementState,
   eventCampaignsFor,
+  mayAnnounceEvent,
   minimumLevelChoices,
   type EventDraft,
   type EventFormGroup,
@@ -94,10 +94,8 @@ export function EventForm({
     options.groups.find((group) => group.id === values.groupId) ?? null;
   const campaigns = eventCampaignsFor(selectedGroup, options.campaigns);
   // #909: "Creează și un anunț" — a new Event only, where the viewer may publish.
-  const announcement =
-    mode === 'create'
-      ? eventAnnouncementState(options, selectedGroup, values.minLevel)
-      : 'hidden';
+  const offersAnnouncement =
+    mode === 'create' && mayAnnounceEvent(options, selectedGroup);
   const levelChoices = minimumLevelChoices(
     selectedGroup?.minLevel ?? 0,
     actorLevel,
@@ -363,12 +361,11 @@ export function EventForm({
           <FieldError {...form.errorProps('description')} />
         </div>
 
-        {announcement !== 'hidden' && (
+        {offersAnnouncement && (
           <div className="grid gap-0.5">
             <ChoiceRow className="font-medium">
               <Checkbox
-                checked={values.announce && announcement === 'available'}
-                disabled={announcement !== 'available'}
+                checked={values.announce}
                 aria-describedby={`${id}-announce-hint`}
                 onCheckedChange={(next) => update({ announce: next === true })}
               />
@@ -378,9 +375,8 @@ export function EventForm({
               id={`${id}-announce-hint`}
               className="pl-8 text-sm text-muted-foreground"
             >
-              {announcement === 'restricted'
-                ? 'Un anunț ajunge la tot grupul: alege la „Cine îl vede” nivelul grupului ca să-l poți crea.'
-                : 'Publică în Anunțuri titlul, data, locul și descrierea, cu termen la începutul evenimentului.'}
+              Publică în Anunțuri titlul, data, locul și descrierea, pentru cine
+              vede evenimentul, cu termen la începutul lui.
             </p>
           </div>
         )}
