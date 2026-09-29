@@ -4375,6 +4375,7 @@ export type Database = {
           p_email: string
           p_full_name: string
           p_group_ids?: number[]
+          p_joined_at?: string
           p_role?: Database["public"]["Enums"]["member_role"]
           p_user_id: string
         }
