@@ -20,6 +20,7 @@ vi.mock(
 vi.mock('../../lib/capabilities', () => ({
   useCapability: () => ({ data: false }),
 }));
+import { closeFilters, openFilters } from '../../test/filters';
 import { useMemberCard } from '../../test/member-card-mock';
 const uid = '35400000-0000-0000-0000-000000000001';
 function view(id = uid, query = '', from?: unknown) {
@@ -240,8 +241,10 @@ it('narrows by Group subtree and Campaign on the page, and sends the deadline ra
   expect(state.history).toHaveBeenLastCalledWith(uid, range);
   expect(cards()).toHaveLength(2);
   // Educație covers Mentorat below it, not Financiar.
+  await openFilters(user);
   await user.click(screen.getByRole('combobox', { name: 'Grup principal' }));
   await user.click(await screen.findByRole('option', { name: 'Educație' }));
+  await closeFilters(user);
   expect(cards()).toHaveLength(1);
   expect(screen.getByText('1 din 2 atribuiri')).toBeInTheDocument();
   // The Group never reaches the server; only the range does.

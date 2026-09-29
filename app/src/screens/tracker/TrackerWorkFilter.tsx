@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { FilterChip } from '../../components/work-filter/FilterToolbar';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import { workFilterChoices, type WorkItem } from '../../lib/work-filter';
@@ -11,7 +12,7 @@ export const TRACKER_FILTER_DATES_HINT =
   'Perioada se aplică termenului taskului.';
 
 /**
- * The Work Filter (#678) above a Tracker list. Its state is in the URL, so
+ * The Work Filter (#678) as the toolbar above a Tracker list (#903). Its state is in the URL, so
  * the list reads the same `useWorkFilter()` and narrows itself. `rows` are
  * the Tasks the list can show: Rule W (#845) offers only their Groups and
  * Campaigns, and the hint speaks of Groups only when a Group level shows.
@@ -19,12 +20,16 @@ export const TRACKER_FILTER_DATES_HINT =
 export function TrackerWorkFilter({
   rows,
   fields,
-  fieldsActive,
+  extraChips,
+  search,
 }: {
   rows: readonly WorkItem[];
-  /** More cells for the same grid (De gestionat's Stare, Caută, Ordonează). */
+  /** More cells for the sheet (De gestionat's Stare, Ordonează). */
   fields?: (id: string) => ReactNode;
-  fieldsActive?: number;
+  /** Chips for those cells when set. */
+  extraChips?: readonly FilterChip[];
+  /** The title search, visible in the toolbar. */
+  search?: ReactNode;
 }) {
   const options = useWorkFilterOptions();
   const { value } = useWorkFilter();
@@ -46,7 +51,8 @@ export function TrackerWorkFilter({
       work={rows}
       hint={groupShown ? TRACKER_FILTER_HINT : TRACKER_FILTER_DATES_HINT}
       fields={fields}
-      fieldsActive={fieldsActive}
+      extraChips={extraChips}
+      search={search}
     />
   );
 }

@@ -9,6 +9,7 @@ import type {
   WorkFilterLevels,
   WorkItem,
 } from '../../lib/work-filter';
+import { closeFilters, filterButton, openFilters } from '../../test/filters';
 import { WorkFilter } from './WorkFilter';
 
 const groups: WorkFilterGroup[] = [
@@ -63,6 +64,7 @@ describe('WorkFilter', () => {
   it('offers top-level Groups with OSUBB first, then only the Groups below the root', async () => {
     const user = userEvent.setup();
     renderFilter();
+    await openFilters(user);
     const sub = screen.getByRole('combobox', { name: 'Subgrup' });
     expect(sub).toHaveTextContent('Toate subgrupurile');
     expect(sub).toBeDisabled();
@@ -86,6 +88,7 @@ describe('WorkFilter', () => {
   it('offers the Campaigns on the chosen Group, its ancestors and below it', async () => {
     const user = userEvent.setup();
     renderFilter('?grup=1&subgrup=2');
+    await openFilters(user);
     await user.click(screen.getByRole('combobox', { name: 'Campanie' }));
     expect(await options()).toEqual([
       'Bun venit· Educațional',
@@ -100,6 +103,7 @@ describe('WorkFilter', () => {
     renderFilter(
       '?grup=1&subgrup=2&campanie=11&de_la=2026-09-01&pana_la=2026-09-30',
     );
+    await openFilters(user);
     expect(
       screen.getByRole('combobox', { name: 'Grup principal' }),
     ).toHaveTextContent('Educațional');
@@ -152,12 +156,14 @@ describe('WorkFilter', () => {
     await user.click(screen.getByRole('button', { name: 'Șterge filtrele' }));
     expect(search()).toBe('');
     expect(screen.queryByRole('group', { name: 'Filtre active' })).toBeNull();
-    expect(document.activeElement).toHaveAccessibleName('Grup principal');
+    // With no chip left, focus returns to Filtrează.
+    expect(filterButton()).toHaveFocus();
   });
 
   it('shows the range error under Până la and keeps the dates in the URL', async () => {
     const user = userEvent.setup();
     renderFilter('?de_la=2026-09-15');
+    await openFilters(user);
     const to = screen.getByLabelText('Până la');
     await user.type(to, '2026-09-14');
     expect(search()).toBe('?de_la=2026-09-15&pana_la=2026-09-14');
@@ -175,8 +181,10 @@ describe('WorkFilter', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('hides the levels a page does not filter by', () => {
+  it('hides the levels a page does not filter by', async () => {
+    const user = userEvent.setup();
     renderFilter('?campanie=10', { campaign: false, dates: false });
+    await openFilters(user);
     expect(screen.queryByRole('combobox', { name: 'Campanie' })).toBeNull();
     expect(screen.queryByLabelText('De la')).toBeNull();
     expect(screen.queryByRole('group', { name: 'Filtre active' })).toBeNull();
@@ -185,6 +193,11 @@ describe('WorkFilter', () => {
   it('hides both Group levels when the page does not filter by Group, and clearing keeps them in the URL', async () => {
     const user = userEvent.setup();
     renderFilter('?grup=1&subgrup=2&campanie=10', { group: false });
+    const sheet = await openFilters(user);
+    expect(
+      within(sheet).getByRole('combobox', { name: 'Campanie' }),
+    ).toBeVisible();
+    await closeFilters(user);
     expect(
       screen.queryByRole('combobox', { name: 'Grup principal' }),
     ).toBeNull();
@@ -194,21 +207,19 @@ describe('WorkFilter', () => {
     expect(chips).not.toHaveTextContent('Grup principal');
     await user.click(screen.getByRole('button', { name: 'Șterge filtrele' }));
     expect(search()).toBe('?grup=1&subgrup=2');
-    // With no chip left, focus returns to the first field the page shows.
-    expect(screen.getByRole('combobox', { name: 'Campanie' })).toHaveFocus();
+    // With no chip left, focus returns to Filtrează.
+    expect(filterButton()).toHaveFocus();
   });
 
-  it('labels every control, with no axe violations', async () => {
+  it('labels every control, with no axe violations, closed and open', async () => {
+    const user = userEvent.setup();
     const { container } = renderFilter(
       '?grup=1&subgrup=2&campanie=11&de_la=2026-09-15&pana_la=2026-09-01',
     );
-    expect(
-      (
-        await axe.run(container, {
-          rules: { 'color-contrast': { enabled: false } },
-        })
-      ).violations,
-    ).toEqual([]);
+    const rules = { 'color-contrast': { enabled: false } };
+    expect((await axe.run(container, { rules })).violations).toEqual([]);
+    const sheet = await openFilters(user);
+    expect((await axe.run(sheet, { rules })).violations).toEqual([]);
   });
 
   describe('Rule W', () => {
@@ -221,6 +232,7 @@ describe('WorkFilter', () => {
     it('offers only the Groups with work, with their parents, and no Group without any', async () => {
       const user = userEvent.setup();
       renderFilter('', undefined, work);
+      await openFilters(user);
       await user.click(
         screen.getByRole('combobox', { name: 'Grup principal' }),
       );
@@ -235,44 +247,56 @@ describe('WorkFilter', () => {
       ]);
     });
 
-    it('does not draw a level with one option or none, and shows its URL value as a chip', () => {
+    it('does not draw a level with one option or none, and shows its URL value as a chip', async () => {
+      const user = userEvent.setup();
       // Under Comunicare: one Subgrup (Social media), one Campaign (Brand).
       renderFilter('?grup=8&campanie=14', undefined, work);
-      expect(screen.queryByRole('combobox', { name: 'Subgrup' })).toBeNull();
-      expect(screen.queryByRole('combobox', { name: 'Campanie' })).toBeNull();
-      const chip = screen.getByRole('button', {
-        name: 'Elimină filtrul Campanie: Brand',
-      });
-      // Its control is not drawn, so the chip shows at every width.
-      expect(chip.parentElement).not.toHaveClass('md:hidden');
-      // Grup principal is drawn: its chip is for the phone only (K1).
+      // Every set level is a chip, its control drawn or not.
+      expect(
+        screen.getByRole('button', { name: 'Elimină filtrul Campanie: Brand' }),
+      ).toBeVisible();
       expect(
         screen.getByRole('button', {
           name: 'Elimină filtrul Grup principal: Comunicare',
-        }).parentElement,
-      ).toHaveClass('md:hidden');
+        }),
+      ).toBeVisible();
+      const sheet = await openFilters(user);
+      expect(
+        within(sheet).getByRole('combobox', { name: 'Grup principal' }),
+      ).toBeVisible();
+      expect(
+        within(sheet).queryByRole('combobox', { name: 'Subgrup' }),
+      ).toBeNull();
+      expect(
+        within(sheet).queryByRole('combobox', { name: 'Campanie' }),
+      ).toBeNull();
     });
 
-    it('keeps a Group the shared URL carries though it owns nothing', () => {
+    it('keeps a Group the shared URL carries though it owns nothing', async () => {
+      const user = userEvent.setup();
       renderFilter('?grup=5', undefined, work);
+      await openFilters(user);
       expect(
         screen.getByRole('combobox', { name: 'Grup principal' }),
       ).toHaveTextContent('OSUBB');
     });
   });
 
-  describe('on a phone', () => {
-    it('collapses to a Filtre (n) button that opens the panel in a sheet', async () => {
+  describe('the Filtrează button', () => {
+    it('counts the set levels and opens one sheet, returning focus on close', async () => {
       const user = userEvent.setup();
       renderFilter('?grup=1&de_la=2026-09-01');
-      const open = screen.getByRole('button', { name: 'Filtre (2)' });
-      expect(open).toHaveClass('md:hidden');
-      // The inline grid and hint are for md and up.
-      expect(
-        document.querySelector('[data-slot=work-filter-grid]')?.parentElement,
-      ).toHaveClass('max-md:hidden');
-      await user.click(open);
-      const sheet = screen.getByRole('dialog', { name: 'Filtre' });
+      const open = filterButton();
+      expect(open).toHaveAccessibleName('Filtrează, 2 filtre active');
+      expect(open).toHaveTextContent('Filtrează2');
+      expect(open).toHaveAttribute('aria-expanded', 'false');
+      // It is the toolbar's first control, before the chips.
+      const toolbar = screen.getByRole('group', { name: 'Filtre' });
+      expect(within(toolbar).getAllByRole('button')[0]).toBe(open);
+
+      const sheet = await openFilters(user);
+      expect(open).toHaveAttribute('aria-expanded', 'true');
+      expect(open).toHaveAttribute('aria-controls', sheet.id);
       expect(sheet).toHaveAccessibleDescription(
         'Grupul include subgrupurile sale.',
       );
@@ -280,30 +304,64 @@ describe('WorkFilter', () => {
         within(sheet).getByRole('combobox', { name: 'Grup principal' }),
       ).toHaveTextContent('Educațional');
       expect(within(sheet).getByLabelText('De la')).toHaveValue('2026-09-01');
-      await user.click(
-        within(sheet).getByRole('button', { name: 'Vezi rezultatele' }),
-      );
+      await closeFilters(user);
       expect(screen.queryByRole('dialog')).toBeNull();
+      expect(open).toHaveFocus();
+      expect(open).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('names one filter in the singular', () => {
+      renderFilter('?grup=1');
+      expect(filterButton()).toHaveAccessibleName('Filtrează, 1 filtru activ');
     });
 
     it('clears every level from the sheet', async () => {
       const user = userEvent.setup();
       renderFilter('?grup=1');
-      await user.click(screen.getByRole('button', { name: 'Filtre (1)' }));
+      const sheet = await openFilters(user);
       await user.click(
-        within(screen.getByRole('dialog')).getByRole('button', {
-          name: 'Șterge filtrele',
-        }),
+        within(sheet).getByRole('button', { name: 'Șterge filtrele' }),
       );
       expect(search()).toBe('');
       // The sheet stays open on the cleared controls until Vezi rezultatele.
-      await user.click(
-        within(screen.getByRole('dialog')).getByRole('button', {
-          name: 'Vezi rezultatele',
-        }),
-      );
-      expect(screen.getByRole('button', { name: 'Filtre' })).toBeVisible();
+      expect(
+        within(sheet).queryByRole('button', { name: 'Șterge filtrele' }),
+      ).toBeNull();
+      await closeFilters(user);
+      expect(filterButton()).toHaveAccessibleName('Filtrează');
     });
+
+    it('is not drawn when the filter offers nothing', () => {
+      renderFilter('', { group: false, campaign: false, dates: false });
+      expect(screen.queryByRole('button', { name: /^Filtrează/ })).toBeNull();
+      expect(screen.queryByRole('group', { name: 'Filtre' })).toBeNull();
+    });
+  });
+
+  it("counts a page's own set cells as chips and clears them too", async () => {
+    const user = userEvent.setup();
+    const onRemove = vi.fn();
+    render(
+      <MemoryRouter initialEntries={['/tracker?grup=1']}>
+        <WorkFilter
+          groups={groups}
+          campaigns={campaigns}
+          fields={() => <p>Stare</p>}
+          extraChips={[
+            { key: 'state', label: 'Stare', text: 'În lucru', onRemove },
+          ]}
+          search={<input aria-label="Caută după titlu" />}
+        />
+        <Search />
+      </MemoryRouter>,
+    );
+    expect(filterButton()).toHaveAccessibleName('Filtrează, 2 filtre active');
+    // The search stays in the toolbar, after the button.
+    const toolbar = screen.getByRole('group', { name: 'Filtre' });
+    expect(within(toolbar).getByLabelText('Caută după titlu')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Șterge filtrele' }));
+    expect(search()).toBe('');
+    expect(onRemove).toHaveBeenCalled();
   });
 
   it('says so while the options load, and offers a retry when they fail', async () => {
@@ -319,6 +377,8 @@ describe('WorkFilter', () => {
       </MemoryRouter>,
     );
     expect(screen.getByText('Se încarcă filtrele…')).toBeInTheDocument();
+    // The button keeps its place, disabled, while the options load.
+    expect(filterButton()).toBeDisabled();
     const onRetry = vi.fn();
     rerender(
       <MemoryRouter>

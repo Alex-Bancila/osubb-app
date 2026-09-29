@@ -4,10 +4,8 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from '../../components/ui/native-select';
-import {
-  workFilterCellClass,
-  workFilterFieldClass,
-} from '../../components/work-filter/field-class';
+import { FilterSearch } from '../../components/work-filter/FilterToolbar';
+import { workFilterCellClass } from '../../components/work-filter/field-class';
 import { formatTaskCount } from '../../lib/format';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import { matchesWorkFilter } from '../../lib/work-filter';
@@ -34,10 +32,11 @@ const SEARCH_DELAY_MS = 200;
 export const LIST_CONTROLS_FROM = 6;
 
 /**
- * De gestionat and Toate (#687): one Filtre panel — the Work Filter, then,
- * on the same grid, Stare (only the states the list holds), the title search
- * and the order (#845, layout T4) — then the Tasks as dense rows, no table,
- * so nothing scrolls sideways at any width.
+ * De gestionat and Toate (#687): the filter toolbar (#903) — Filtrează, whose
+ * sheet holds the Work Filter, Stare (only the states the list holds) and the
+ * order (#845, layout T4), then the title search, visible beside it — then
+ * the Tasks as dense rows, no table, so nothing scrolls sideways at any
+ * width.
  */
 export function ManagerTaskList({
   rows,
@@ -119,16 +118,6 @@ export function ManagerTaskList({
               ))}
             </NativeSelect>
           </label>
-          <label className={workFilterCellClass} htmlFor={`${id}-search`}>
-            <span className="text-sm font-medium">Caută după titlu</span>
-            <input
-              id={`${id}-search`}
-              type="search"
-              className={workFilterFieldClass}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </label>
           <label className={workFilterCellClass} htmlFor={`${id}-sort`}>
             <span className="text-sm font-medium">Ordonează după</span>
             <NativeSelect
@@ -151,7 +140,28 @@ export function ManagerTaskList({
       <TrackerWorkFilter
         rows={rows}
         fields={fields}
-        fieldsActive={Number(Boolean(state)) + Number(Boolean(query))}
+        extraChips={
+          state
+            ? [
+                {
+                  key: 'state',
+                  label: 'Stare',
+                  text: states.find(([value]) => value === state)?.[1] ?? state,
+                  onRemove: () => setState(''),
+                },
+              ]
+            : []
+        }
+        search={
+          listControls && (
+            <FilterSearch
+              label="Caută după titlu"
+              placeholder="Caută după titlu"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          )
+        }
       />
       {!params ? (
         <p>{RANGE_FIRST}</p>
