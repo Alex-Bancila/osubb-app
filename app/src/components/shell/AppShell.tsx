@@ -19,7 +19,7 @@ import { usePendingDecisions } from '../../queries/request-decisions';
 import { unreadAnnouncementsLabel } from '../../screens/announcements/announcements-presentation';
 import { unreadBadgeLabel } from '../../screens/notifications/notifications-presentation';
 import { Badge } from '../ui/badge';
-import { Button } from '../ui/button';
+import { Button, buttonVariants } from '../ui/button';
 import {
   Sheet,
   SheetBackdrop,
@@ -317,10 +317,13 @@ export default function AppShell() {
           <span className="truncate text-lg font-extrabold">
             {current?.label ?? 'OSUBB'}
           </span>
-          <Button
-            variant="ghost"
-            size="icon"
+          {/* A link, drawn as the icon button: a Base UI Button rendered as
+              a link logs the `nativeButton` error, and `nativeButton={false}`
+              would announce it as a button (F-26). */}
+          <Link
+            to={NOTIFICATIONS_PATH}
             className={cn(
+              buttonVariants({ variant: 'ghost', size: 'icon' }),
               'relative ml-auto shrink-0 lg:hidden',
               isNotificationsActive && 'bg-accent text-accent-foreground',
             )}
@@ -330,7 +333,6 @@ export default function AppShell() {
                 ? `Notificări, ${unreadBadgeLabel(unreadCount)}`
                 : 'Notificări'
             }
-            render={<Link to={NOTIFICATIONS_PATH} />}
           >
             <Bell aria-hidden="true" />
             {unreadCount > 0 && (
@@ -341,7 +343,7 @@ export default function AppShell() {
                 <span aria-hidden="true">{unreadCount}</span>
               </Badge>
             )}
-          </Button>
+          </Link>
         </header>
       </Sheet>
 

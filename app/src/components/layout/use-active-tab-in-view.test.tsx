@@ -53,25 +53,35 @@ function Strip({
   );
 }
 
-let resized: (() => void) | undefined;
+// Each observer and what it watches, so a test resizes one element.
+let observers: { callback: () => void; targets: Set<Element> }[] = [];
+function resize(target: Element) {
+  for (const observer of observers)
+    if (observer.targets.has(target)) observer.callback();
+}
 
 beforeEach(() => {
   scrollTo.mockReset();
   vi.stubGlobal(
     'ResizeObserver',
     class {
+      targets = new Set<Element>();
       constructor(callback: () => void) {
-        resized = callback;
+        observers.push({ callback, targets: this.targets });
       }
-      observe() {}
-      disconnect() {}
+      observe(target: Element) {
+        this.targets.add(target);
+      }
+      disconnect() {
+        this.targets.clear();
+      }
     },
   );
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  resized = undefined;
+  observers = [];
 });
 
 describe('useActiveTabInView', () => {
@@ -86,10 +96,19 @@ describe('useActiveTabInView', () => {
     expect(scrollTo).not.toHaveBeenCalled();
     // The window narrows below 640 px: the strip now overflows.
     size(getByRole('tablist'), { scrollWidth: 700 });
-    resized?.();
+    resize(getByRole('tablist'));
     expect(scrollTo).toHaveBeenCalledOnce();
     // Further resizes while it overflows leave the member's scroll alone.
-    resized?.();
+    resize(getByRole('tablist'));
     expect(scrollTo).toHaveBeenCalledOnce();
+  });
+
+  it('centres again when the tabs themselves widen, as when the web font lands (F-25)', () => {
+    const { getByRole } = render(<Strip active="setari" scrollWidth={300} />);
+    expect(scrollTo).not.toHaveBeenCalled();
+    // The strip keeps its width; its tabs grow past it.
+    size(getByRole('tablist'), { scrollWidth: 700 });
+    resize(getByRole('tab', { name: 'setari' }));
+    expect(scrollTo).toHaveBeenCalledWith({ left: 416 - (343 - 90) / 2 });
   });
 });

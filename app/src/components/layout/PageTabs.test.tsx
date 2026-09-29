@@ -56,20 +56,18 @@ describe('PageTabs', () => {
     expect(tabClass).toContain('aria-selected:bg-primary');
   });
 
-  it('is one scrolling row under 640 px and wraps from 640 px (X7)', () => {
+  it('is one scrolling row at every width and never wraps (X7, F-25)', () => {
     render(
       <MemoryRouter>
         <PageTabs label="Secțiuni" tabs={tabs} />
       </MemoryRouter>,
     );
     const nav = screen.getByRole('navigation', { name: 'Secțiuni' });
-    expect(nav).toHaveClass(
-      'sm:flex-wrap',
-      'max-sm:overflow-x-auto',
-      'max-sm:snap-x',
-      'max-sm:-mx-4',
-    );
-    expect(nav).not.toHaveClass('flex-wrap');
+    expect(nav).toHaveClass('overflow-x-auto', 'snap-x', '-mx-4', 'px-4');
+    // No wrap at any breakpoint, so no tab is stranded on a second line.
+    expect(nav.className).not.toMatch(/(^|[\s:])flex-wrap/);
+    // The strip is the same at every breakpoint: no width-gated class.
+    expect(nav.className).not.toMatch(/(^|\s)(max-)?(sm|md|lg):/);
     // No margin of its own: the Page's gap spaces it.
     expect(nav.className).not.toMatch(/(^| )mb-/);
     for (const link of screen.getAllByRole('link'))

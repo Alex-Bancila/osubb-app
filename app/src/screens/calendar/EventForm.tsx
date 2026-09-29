@@ -151,6 +151,46 @@ export function EventForm({
           <FieldError {...form.errorProps('title')} />
         </div>
 
+        <div className="grid gap-1.5" {...form.slot('groupId')}>
+          <span id={`${id}-group`} className="text-sm font-medium">
+            Grup
+          </span>
+          <Combobox<EventFormGroup>
+            items={options.groups}
+            value={selectedGroup}
+            onValueChange={chooseGroup}
+            itemToStringLabel={groupLabel}
+            isItemEqualToValue={(a, b) => a.id === b.id}
+          >
+            <ComboboxTrigger aria-labelledby={`${id}-group`}>
+              <ComboboxValue placeholder="Alege un grup">
+                {(group: EventFormGroup | null) =>
+                  group ? (
+                    <GroupOption group={group} groupsById={groupsById} />
+                  ) : (
+                    'Alege un grup'
+                  )
+                }
+              </ComboboxValue>
+            </ComboboxTrigger>
+            <ComboboxContent>
+              <ComboboxInput
+                aria-label="Caută un grup"
+                placeholder="Caută un grup"
+              />
+              <ComboboxEmpty />
+              <ComboboxList>
+                {(group: EventFormGroup) => (
+                  <ComboboxItem key={group.id} value={group}>
+                    <GroupOption group={group} groupsById={groupsById} />
+                  </ComboboxItem>
+                )}
+              </ComboboxList>
+            </ComboboxContent>
+          </Combobox>
+          <FieldError {...form.errorProps('groupId')} />
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="grid gap-1.5">
             <label htmlFor={`${id}-type`} className="text-sm font-medium">
@@ -195,46 +235,6 @@ export function EventForm({
             </NativeSelect>
             <FieldError {...form.errorProps('minLevel')} />
           </div>
-        </div>
-
-        <div className="grid gap-1.5" {...form.slot('groupId')}>
-          <span id={`${id}-group`} className="text-sm font-medium">
-            Grup
-          </span>
-          <Combobox<EventFormGroup>
-            items={options.groups}
-            value={selectedGroup}
-            onValueChange={chooseGroup}
-            itemToStringLabel={groupLabel}
-            isItemEqualToValue={(a, b) => a.id === b.id}
-          >
-            <ComboboxTrigger aria-labelledby={`${id}-group`}>
-              <ComboboxValue placeholder="Alege un grup">
-                {(group: EventFormGroup | null) =>
-                  group ? (
-                    <GroupOption group={group} groupsById={groupsById} />
-                  ) : (
-                    'Alege un grup'
-                  )
-                }
-              </ComboboxValue>
-            </ComboboxTrigger>
-            <ComboboxContent>
-              <ComboboxInput
-                aria-label="Caută un grup"
-                placeholder="Caută un grup"
-              />
-              <ComboboxEmpty />
-              <ComboboxList>
-                {(group: EventFormGroup) => (
-                  <ComboboxItem key={group.id} value={group}>
-                    <GroupOption group={group} groupsById={groupsById} />
-                  </ComboboxItem>
-                )}
-              </ComboboxList>
-            </ComboboxContent>
-          </Combobox>
-          <FieldError {...form.errorProps('groupId')} />
         </div>
 
         <div className="grid gap-1.5">

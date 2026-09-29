@@ -2,13 +2,13 @@ import { useEffect, type RefObject } from 'react';
 
 /**
  * Scrolls a tab strip (`tabListClass`) so its active tab is in view, centred
- * when it can be. Under 640 px the strip scrolls sideways (layout X7), so a
+ * when it can be. The strip scrolls sideways (layout X7, F-25), so a
  * last tab that is the current one ("Setări", "Toate") would otherwise open
  * hidden past the edge. Does nothing while the strip does not overflow.
  *
  * `active` is whatever identifies the active tab (a route, a tab value); the
  * strip is re-centred when it changes, and when the strip starts to overflow
- * (a window narrowed below 640 px) — not on every resize, so a member's own
+ * (a narrowed window) — not on every resize, so a member's own
  * sideways scroll is left alone. The active tab is found by its marker:
  * `aria-current="page"` (a route), `aria-selected="true"` (a tablist) or
  * `data-active` (Base UI Tabs).
@@ -40,6 +40,27 @@ export function useActiveTabInView(
       overflowing = now;
     });
     observer.observe(list);
-    return () => observer.disconnect();
+    // The tabs themselves change after the first paint — the web font lands
+    // and widens them, or tabs gated on a capability read arrive — which
+    // moves the active tab without resizing the strip: centre again then.
+    const tabs = new ResizeObserver(() => {
+      overflowing = overflows();
+      centre();
+    });
+    const watchTabs = () => {
+      tabs.disconnect();
+      for (const tab of list.children) tabs.observe(tab);
+    };
+    watchTabs();
+    const added =
+      typeof MutationObserver === 'undefined'
+        ? undefined
+        : new MutationObserver(watchTabs);
+    added?.observe(list, { childList: true });
+    return () => {
+      observer.disconnect();
+      tabs.disconnect();
+      added?.disconnect();
+    };
   }, [strip, active]);
 }
