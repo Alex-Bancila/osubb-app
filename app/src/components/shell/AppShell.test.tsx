@@ -275,6 +275,22 @@ describe('AppShell', () => {
     expect(bell).not.toHaveTextContent(/\d/);
   });
 
+  it('renders the mobile header bell as a link with no Base UI nativeButton error (F-26)', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { container } = renderShell();
+      const header = within(container.querySelector('header') as HTMLElement);
+      expect(header.getByRole('link', { name: /^Notificări/ }).tagName).toBe(
+        'A',
+      );
+      expect(error.mock.calls.flat().map(String).join(' ')).not.toMatch(
+        /nativeButton/,
+      );
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   it('keeps the mobile header bell in its active state on the notifications screen itself', () => {
     const { container } = renderShell('/notificari');
     const header = within(container.querySelector('header') as HTMLElement);

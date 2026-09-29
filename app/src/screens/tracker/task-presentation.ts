@@ -3,6 +3,7 @@ import {
   formatBucharestDay,
   formatBucharestTime,
 } from '../../lib/calendar-time';
+import { AUDIENCE_LABELS } from './task-form-model';
 
 type Tables = Database['public']['Tables'];
 type Task = Tables['tasks']['Row'];
@@ -259,12 +260,11 @@ export function toTaskPresentation(
     origin: taskOrigin(row),
     audience:
       row.audience === 'local' || row.audience === 'org' ? row.audience : null,
+    // The form's own words (F-12), so the sheet and the form never drift.
     audienceLabel:
-      row.audience === 'local'
-        ? 'În cadrul originii'
-        : row.audience === 'org'
-          ? 'În tot OSUBB'
-          : 'Audiență indisponibilă',
+      row.audience === 'local' || row.audience === 'org'
+        ? AUDIENCE_LABELS[row.audience]
+        : 'Audiență indisponibilă',
     assignmentMode:
       row.assignment_mode === 'direct' || row.assignment_mode === 'public'
         ? row.assignment_mode

@@ -8,6 +8,7 @@ import {
 
 import { fetchCapabilities, type Capabilities } from '../lib/capabilities';
 import { useAuth } from '../lib/auth';
+import { inTreeOrder } from '../lib/work-filter';
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import type {
@@ -24,18 +25,6 @@ type GroupRow = Pick<
   Database['public']['Tables']['groups']['Row'],
   'id' | 'name' | 'path' | 'min_level' | 'status' | 'is_organization'
 >;
-
-function byPathThenId(a: GroupRow, b: GroupRow): number {
-  const length = Math.max(a.path.length, b.path.length);
-  for (let index = 0; index < length; index += 1) {
-    const left = a.path[index];
-    const right = b.path[index];
-    if (left === undefined) return -1;
-    if (right === undefined) return 1;
-    if (left !== right) return left - right;
-  }
-  return a.id - b.id;
-}
 
 function toFormGroup(group: GroupRow): EventFormGroup {
   return {
@@ -57,9 +46,11 @@ export function buildEventFormOptions(
   readable: readonly GroupRow[],
   campaigns: readonly EventFormCampaign[] = [],
 ): EventFormOptions {
-  const active = readable
-    .filter((group) => group.status === 'active')
-    .toSorted(byPathThenId);
+  // One order for every viewer: OSUBB first, then the tree by name (F-15).
+  const active = inTreeOrder(
+    readable.filter((group) => group.status === 'active'),
+    readable,
+  );
   const managedIds = new Set(
     mine
       .filter(

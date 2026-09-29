@@ -1220,8 +1220,8 @@ it('links a top-level Group’s unfinished work without a Subgrup', async () => 
 
 it('puts the Group tabs in one strip that keeps a single row at 375 px (X7)', () => {
   show();
-  expect(tabBar().className).toContain('max-sm:overflow-x-auto');
-  expect(tabBar().className).not.toContain('max-sm:flex-wrap');
+  expect(tabBar().className).toContain('overflow-x-auto');
+  expect(tabBar().className).not.toContain('flex-wrap');
 });
 
 it("gives the parent's Manager, who appoints this Group's coordinator, Roluri and no refusal line", () => {

@@ -27,10 +27,7 @@ export function AvailableOpportunities({
     : [];
   return (
     <div className="space-y-6">
-      <TrackerWorkFilter
-        rows={opportunities}
-        hint="Grupul include toate subgrupurile sale; perioada se aplică termenului taskului."
-      />
+      <TrackerWorkFilter rows={opportunities} />
       {!params ? (
         <p>{RANGE_FIRST}</p>
       ) : (

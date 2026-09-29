@@ -286,6 +286,41 @@ export function itemsInGroup<I extends WorkItem>(
 }
 
 /**
+ * The Group tree in reading order: each parent directly before its own
+ * children, and siblings with the Organization Group first, then by name
+ * (the order of **Grup principal**, one level at a time). `tree` names the
+ * ancestors when `groups` leaves them out. The Subgrup options and the
+ * Eveniment nou Group list both read it (F-15).
+ */
+export function inTreeOrder<G extends WorkFilterGroup>(
+  groups: readonly G[],
+  tree: readonly WorkFilterGroup[] = groups,
+): G[] {
+  const byId = new Map(tree.map((group) => [group.id, group]));
+  const step = (id: number) => ({
+    id,
+    first: Boolean(byId.get(id)?.is_organization),
+    name: byId.get(id)?.name ?? String(id),
+  });
+  return groups
+    .map((group) => ({ group, trail: group.path.map(step) }))
+    .sort((a, b) => {
+      for (let i = 0; i < Math.min(a.trail.length, b.trail.length); i += 1) {
+        const left = a.trail[i];
+        const right = b.trail[i];
+        if (!left || !right || left.id === right.id) continue;
+        return (
+          Number(right.first) - Number(left.first) ||
+          collator.compare(left.name, right.name) ||
+          left.id - right.id
+        );
+      }
+      return a.trail.length - b.trail.length;
+    })
+    .map(({ group }) => group);
+}
+
+/**
  * **Subgrup** options: every active Group below the root, at any depth, in
  * tree order — each parent directly before its own children.
  */
@@ -294,25 +329,15 @@ export function groupsBelow<G extends WorkFilterGroup>(
   rootId: number | undefined,
 ): G[] {
   if (rootId === undefined) return [];
-  const names = new Map(groups.map((group) => [group.id, group.name]));
-  const trail = (group: G) =>
-    group.path.map((id) => names.get(id) ?? String(id));
-  return groups
-    .filter(
+  return inTreeOrder(
+    groups.filter(
       (group) =>
         group.status === 'active' &&
         group.id !== rootId &&
         group.path.includes(rootId),
-    )
-    .map((group) => ({ group, trail: trail(group) }))
-    .sort((a, b) => {
-      for (let i = 0; i < Math.min(a.trail.length, b.trail.length); i += 1) {
-        const order = collator.compare(a.trail[i] ?? '', b.trail[i] ?? '');
-        if (order) return order;
-      }
-      return a.trail.length - b.trail.length;
-    })
-    .map(({ group }) => group);
+    ),
+    groups,
+  );
 }
 
 /**
