@@ -49,6 +49,17 @@ export type RequestDecision =
       difficulty: number;
       rating: number;
       note: string;
+      /**
+       * The Task as the decider shaped it (#915). Absent, the Task keeps the
+       * Request's text and Group; `description: null` clears the details.
+       */
+      task?: {
+        title: string;
+        description: string | null;
+        groupId: number;
+        link: { label: string | null; url: string | null };
+        campaignId: number | null;
+      };
     }
   | { kind: 'reject'; requestId: number; note: string };
 /** A refused decision, in the shared copy of `command-reasons.ts`. */
@@ -57,11 +68,22 @@ const FAILED = 'Nu am putut salva decizia. Reîncearcă.';
 async function sendDecision(input: RequestDecision) {
   if (input.kind === 'approve') {
     const values = parseOrRefuse(evaluationSchema, input, FAILED);
+    const task = input.task;
     return supabase.rpc('approve_completed_work_request', {
       p_request_id: input.requestId,
       p_difficulty: values.difficulty,
       p_rating: values.rating,
       p_note: values.note,
+      ...(task && {
+        p_title: task.title,
+        // '' clears the details; null would keep the Request's text.
+        p_description: task.description ?? '',
+        p_group_id: task.groupId,
+        // Generated argument types omit nullability: none is NULL.
+        p_link_label: task.link.label as string,
+        p_link_url: task.link.url as string,
+        p_campaign_id: task.campaignId as number,
+      }),
     });
   }
   const { note } = parseOrRefuse(noteSchema, input, FAILED);

@@ -107,6 +107,18 @@ export const keys = {
       ['tasks', 'form-options', { memberId }] as const,
     directExecutors: (memberId: string | undefined) =>
       ['tasks', 'direct-executors', { memberId }] as const,
+    /* #915: what "Adaugă task finalizat" and an approval choose from. Under
+       `['tasks']`, so any Task or Group change refreshes them. */
+    completedTaskOptions: (memberId: string | undefined) =>
+      ['tasks', 'completed-options', { memberId }] as const,
+    completedTaskGroups: (
+      memberId: string | undefined,
+      executorId: string | null,
+    ) => ['tasks', 'completed-groups', { memberId, executorId }] as const,
+    completedTaskExecutors: (
+      memberId: string | undefined,
+      groupId: number | null,
+    ) => ['tasks', 'completed-executors', { memberId, groupId }] as const,
     memberHistory: (
       memberId: string | undefined,
       targetId: string,

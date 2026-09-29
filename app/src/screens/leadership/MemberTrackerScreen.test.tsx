@@ -25,6 +25,32 @@ vi.mock(
 vi.mock('../../lib/capabilities', () => ({
   useCapability: () => ({ data: false }),
 }));
+// #915: "Adaugă task finalizat" reads where the viewer may credit this Member.
+const completed = vi.hoisted(() => ({
+  groups: vi.fn(),
+  create: vi.fn(),
+  scale: {
+    isPending: false,
+    isError: false,
+    data: {
+      ratings: [{ rating: 4, multiplier: 2, label: 'Foarte bun' }],
+      difficulties: [{ stars: 3, note: 'Mediu' }],
+    },
+  },
+}));
+vi.mock('../../queries/completed-tasks', () => ({
+  useCompletedTaskGroups: completed.groups,
+  useCompletedTaskExecutors: () => ({ data: [], isSuccess: true }),
+  useCompletedTaskOptions: () => ({ isPending: true }),
+  useCreateCompletedTask: () => ({
+    mutateAsync: completed.create,
+    isPending: false,
+  }),
+}));
+vi.mock('../../queries/reference', async (original) => ({
+  ...(await original<object>()),
+  useEvaluationScale: () => completed.scale,
+}));
 import { closeFilters, openFilters } from '../../test/filters';
 import { useMemberCard } from '../../test/member-card-mock';
 const uid = '35400000-0000-0000-0000-000000000001';
@@ -110,6 +136,11 @@ const budget = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  completed.groups.mockReturnValue({
+    data: { groups: [], groupNames: new Map(), campaigns: [] },
+    isPending: false,
+    isError: false,
+  });
   state.history.mockReturnValue({ data: [workshop, budget] });
   state.total.mockReturnValue({ data: 12, isPending: false, isError: false });
   state.options.mockReturnValue({
@@ -427,4 +458,100 @@ it('sends nothing for the total while the range is inverted (#906)', () => {
   view(uid, '?de_la=2026-09-30&pana_la=2026-09-01');
   expect(state.total).toHaveBeenLastCalledWith(uid, null);
   expect(total()).toHaveTextContent('Corectează perioada ca să vezi punctele.');
+});
+
+const mentorat = { id: 9, name: 'Mentorat', path: [7, 9], min_level: 0 };
+it('offers "Adaugă task finalizat" only to a viewer who may credit the Member somewhere (#915)', () => {
+  const hidden = view();
+  expect(completed.groups).toHaveBeenCalledWith(uid);
+  expect(
+    screen.queryByRole('button', { name: 'Adaugă task finalizat' }),
+  ).toBeNull();
+  hidden.unmount();
+  completed.groups.mockReturnValue({
+    data: {
+      groups: [mentorat],
+      groupNames: new Map([
+        [7, { name: 'Educație' }],
+        [9, { name: 'Mentorat' }],
+      ]),
+      campaigns: [],
+    },
+    isPending: false,
+    isError: false,
+  });
+  view();
+  expect(
+    screen.getByRole('button', { name: 'Adaugă task finalizat' }),
+  ).toBeVisible();
+});
+it('adds a completed Task for the tracked Member, preselected, and says so (#915)', async () => {
+  const user = userEvent.setup();
+  completed.groups.mockReturnValue({
+    data: {
+      groups: [mentorat],
+      groupNames: new Map([
+        [7, { name: 'Educație' }],
+        [9, { name: 'Mentorat' }],
+      ]),
+      campaigns: [],
+    },
+    isPending: false,
+    isError: false,
+  });
+  completed.create.mockResolvedValue({ id: 77, title: 'Atelier de vară' });
+  view();
+  await user.click(
+    screen.getByRole('button', { name: 'Adaugă task finalizat' }),
+  );
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Adaugă task finalizat',
+  });
+  // The volunteer is the Member, by Nickname; there is nobody else to pick.
+  expect(
+    dialog.querySelector('[data-slot="completed-volunteer"]'),
+  ).toHaveTextContent('Voluntar: Ioana');
+  expect(
+    within(dialog).queryByRole('combobox', { name: /Voluntar/ }),
+  ).toBeNull();
+  // Their one shared Group is chosen already.
+  expect(
+    within(dialog).getByRole('combobox', {
+      name: 'Grup principal (obligatoriu)',
+    }),
+  ).toHaveTextContent('Mentorat');
+  await user.type(
+    within(dialog).getByLabelText('Titlu (obligatoriu)'),
+    'Atelier de vară',
+  );
+  await user.click(
+    within(dialog).getByRole('radio', { name: '3 stele — Mediu' }),
+  );
+  await user.click(
+    within(dialog).getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
+  );
+  await user.keyboard('4');
+  await user.type(
+    within(dialog).getByLabelText('Observații (obligatoriu)'),
+    'Foarte bine',
+  );
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Adaugă și acordă punctele' }),
+  );
+  expect(completed.create).toHaveBeenCalledWith({
+    executorId: uid,
+    groupId: 9,
+    title: 'Atelier de vară',
+    description: null,
+    link: { label: null, url: null },
+    campaignId: null,
+    difficulty: 3,
+    rating: 4,
+    note: 'Foarte bine',
+  });
+  expect(
+    await screen.findByText(
+      /Taskul finalizat „Atelier de vară” a fost adăugat/,
+    ),
+  ).toHaveFocus();
 });
