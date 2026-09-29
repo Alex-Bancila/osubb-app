@@ -31,9 +31,17 @@ export type MemberChange =
       memberId: string;
       status: MemberStatus;
       reason: string | null;
+      /**
+       * Ruling R31 (#917): who takes the rank when the change takes the last
+       * live Moderator or BC out of `activ`. Sent only when named.
+       */
+      replacementId?: string | null;
     };
 
-/** Both commands write one Role History row; Status also revokes sessions in SQL. */
+/**
+ * Both commands write one Role History row (two with a named replacement);
+ * Status also revokes sessions in SQL.
+ */
 export async function changeMember(change: MemberChange) {
   const result =
     change.kind === 'role'
@@ -47,6 +55,7 @@ export async function changeMember(change: MemberChange) {
           p_member_id: change.memberId,
           p_status: change.status,
           p_reason: change.reason ?? undefined,
+          p_replacement_id: change.replacementId ?? undefined,
         });
   if (result.error) throw result.error;
   return result.data;

@@ -273,7 +273,7 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- wrapper -- authenticated only, never anon, service_role or PUBLIC -- even
   -- though only BC and the Moderator can get past their gate.
   ('set_member_role',    'p_member_id uuid, p_role member_role, p_reason text, p_replacement_id uuid', false, true,  false, false),
-  ('set_member_status',  'p_member_id uuid, p_status member_status, p_reason text', false, true,  false, false),
+  ('set_member_status',  'p_member_id uuid, p_status member_status, p_reason text, p_replacement_id uuid', false, true,  false, false),
   -- #327: the first Task command wrapper. Every later wrapper (#328-#345)
   -- adds its own row here the same way.
   ('create_task',        'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_link_label text, p_link_url text',
@@ -553,10 +553,10 @@ insert into pinned_private_functions (proname, args, category) values
   ('select_task_candidate_impl',                  'p_task_id bigint, p_candidate_id bigint, p_close_remaining boolean',                                                 'impl'),
   ('set_campaign_active_impl',                    'p_campaign_id bigint, p_active boolean',                                                                             'impl'),
   -- #580: the two audited Member commands. `impl` like every other command
-  -- body -- the level-6 gate, the Moderator-only branch and the self-target
-  -- refusal live inside the function, not in the grant.
+  -- body -- the level-6 gate, the last-holder guard (#905, #917) and the
+  -- self-target refusal live inside the function, not in the grant.
   ('set_member_role_impl',                        'p_member_id uuid, p_role member_role, p_reason text, p_replacement_id uuid',                                                                               'impl'),
-  ('set_member_status_impl',                      'p_member_id uuid, p_status member_status, p_reason text',                                                                           'impl'),
+  ('set_member_status_impl',                      'p_member_id uuid, p_status member_status, p_reason text, p_replacement_id uuid',                                                         'impl'),
   ('set_task_queue_impl',                         'p_task_id bigint, p_open boolean',                                                                                   'impl'),
   ('set_updated_at',                               '',                                                                                                                   'trigger'), -- #368, merged to main
   ('start_task_impl',                             'p_task_id bigint',                                                                                                   'impl'),

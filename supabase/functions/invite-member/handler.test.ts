@@ -413,14 +413,15 @@ Deno.test("a request with no Origin header gets Vary: Origin and no ACAO", async
   assertEquals(res.headers.has("Access-Control-Allow-Origin"), false);
 });
 
-// ==================== the rank ceiling (H1) ====================
-// Only the Moderator creates a BC or Moderator account, as only the Moderator
-// appoints one through set_member_role. The refusal comes before Auth is
-// reached, so no account is ever created (and then deleted) for it.
+// ==================== the rank ceiling (H1, ruling R31) ====================
+// Leadership creates a BC or Moderator account, as leadership appoints one
+// through set_member_role: since #917 a BC member as well as the Moderator.
+// Below BC the refusal comes before Auth is reached, so no account is ever
+// created (and then deleted) for it; provision_profile refuses it too.
 
-Deno.test("a BC cannot invite a BC or a Moderator, and Auth is never reached", async () => {
+Deno.test("a BCE cannot invite a BC or a Moderator, and Auth is never reached", async () => {
   for (const role of ["bc", "moderator", " Moderator "]) {
-    const { deps, calls } = fakeDeps({ level: 6 });
+    const { deps, calls } = fakeDeps({ level: 5 });
 
     const res = await handleInvite(request({ ...validBody, role }), deps);
     const payload = await res.json();
@@ -430,6 +431,16 @@ Deno.test("a BC cannot invite a BC or a Moderator, and Auth is never reached", a
     assertEquals(calls.includes("profileExists"), false);
     assertEquals(calls.includes("inviteByEmail"), false);
     assertEquals(calls.includes("provision"), false);
+  }
+});
+
+Deno.test("a BC invites a BC or a Moderator (ruling R31, #917)", async () => {
+  for (const role of ["bc", "moderator"]) {
+    const { deps, provisioned } = fakeDeps({ level: 6 });
+    const res = await handleInvite(request({ ...validBody, role }), deps);
+    assertEquals(res.status, 201);
+    assertEquals(provisioned[0].role, role);
+    assertEquals(provisioned[0].appointedBy, "caller-1");
   }
 });
 

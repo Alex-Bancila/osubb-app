@@ -174,20 +174,34 @@ it('offers a BC every Member and every rank, BC and Moderator included (R31)', a
   expect(screen.queryByText(/Rol actual|Status actual/)).toBeNull();
 });
 
-it('lets a BC re-rank a BC target but leaves its Status to the Moderator', () => {
+it('lets a BC re-rank a BC target and change its Status (R31, #917)', async () => {
+  const user = userEvent.setup();
   render(
     <MemoryRouter>
       <RolePanel selectedMemberId="protected" />
     </MemoryRouter>,
   );
   expect(screen.getByLabelText('Rol organizațional')).toHaveValue('bc');
-  expect(screen.queryByLabelText('Status')).toBeNull();
-  expect(
-    screen.getByText(/Statusul unui membru BC sau Moderator/),
-  ).toBeVisible();
+  expect(screen.getByLabelText('Status')).toHaveValue('activ');
+  expect(screen.queryByText(/îl schimbă numai/)).toBeNull();
   expect(
     screen.getAllByRole('button').map((button) => button.textContent),
-  ).toEqual(['Salvează rolul']);
+  ).toEqual(['Salvează rolul', 'Salvează statusul']);
+  // Another live BC remains (the viewer), so no replacement is asked for.
+  await user.selectOptions(screen.getByLabelText('Status'), 'inactiv');
+  expect(screen.queryByText('Înlocuitor')).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Dezactivează' }));
+  await user.click(
+    within(await screen.findByRole('dialog')).getByRole('button', {
+      name: 'Dezactivează membrul',
+    }),
+  );
+  expect(state.mutate).toHaveBeenCalledWith({
+    kind: 'status',
+    memberId: 'protected',
+    status: 'inactiv',
+    reason: null,
+  });
 });
 
 const soleModerator = {
@@ -314,6 +328,82 @@ it("never offers the last Moderator as the last BC's replacement, unless the tar
   await user.click(screen.getByRole('combobox', { name: 'Înlocuitor' }));
   expect((await listOptions()).map((option) => option.textContent)).toEqual([
     expect.stringContaining('Eu'),
+    expect.stringContaining('Ana Pop'),
+  ]);
+});
+
+it('asks a BC for a replacement before deactivating the last Moderator, and sends it (R31, #917)', async () => {
+  state.members.mockReturnValue({
+    data: [...people, soleModerator],
+    isPending: false,
+    isError: false,
+  });
+  const user = userEvent.setup();
+  const { container } = renderPanel();
+  await pick(user, 'Mod Unic');
+  expect(screen.queryByText('Înlocuitor')).toBeNull();
+  await user.selectOptions(screen.getByLabelText('Status'), 'inactiv');
+  expect(screen.getByText('Înlocuitor')).toBeVisible();
+  expect(screen.getByText(/este ultimul Moderator/)).toBeVisible();
+  const deactivate = screen.getByRole('button', { name: 'Dezactivează' });
+  expect(deactivate).toBeDisabled();
+  await user.click(screen.getByRole('combobox', { name: 'Înlocuitor' }));
+  const options = await listOptions();
+  // The viewer first, as "Eu"; never the target.
+  expect(options.map((option) => option.textContent)).toEqual([
+    expect.stringContaining('Eu'),
+    expect.stringContaining('Ana Pop'),
+    expect.stringContaining('BC Țintă'),
+  ]);
+  await user.click(options[0] as HTMLElement);
+  expect(
+    (
+      await axe.run(container, {
+        rules: { 'color-contrast': { enabled: false } },
+      })
+    ).violations,
+  ).toEqual([]);
+  await user.click(deactivate);
+  const dialog = await screen.findByRole('dialog');
+  const [first, second] = within(dialog).getAllByRole('listitem');
+  expect(first).toHaveTextContent(/^Tu: BC → Moderator$/);
+  expect(second).toHaveTextContent(/Mod Unic: Activ → Inactiv$/);
+  // The deactivation warning travels into the dialog.
+  expect(within(dialog).getByText(/cel mult o oră/)).toBeVisible();
+  expect(state.mutate).not.toHaveBeenCalled();
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Salvează ambele schimbări' }),
+  );
+  expect(state.mutate).toHaveBeenCalledWith({
+    kind: 'status',
+    memberId: soleModerator.memberId,
+    status: 'inactiv',
+    reason: null,
+    replacementId: 'bc',
+  });
+});
+
+it('never offers the last Moderator to replace the last BC leaving activ, even beside a swap draft (#917)', async () => {
+  state.auth.mockReturnValue({
+    session: { user: { id: soleModerator.memberId } },
+  });
+  state.members.mockReturnValue({
+    data: [soleModerator, ...people.filter((row) => row.memberId !== 'bc')],
+    isPending: false,
+    isError: false,
+  });
+  const user = userEvent.setup();
+  renderPanel();
+  await pick(user, 'BC Țintă');
+  await user.selectOptions(screen.getByLabelText('Status'), 'alumni');
+  expect(screen.getByText(/este ultimul membru BC/)).toBeVisible();
+  // A Status change keeps the target's rank, so there is no swap.
+  await user.selectOptions(
+    screen.getByLabelText('Rol organizațional'),
+    'moderator',
+  );
+  await user.click(screen.getByRole('combobox', { name: 'Înlocuitor' }));
+  expect((await listOptions()).map((option) => option.textContent)).toEqual([
     expect.stringContaining('Ana Pop'),
   ]);
 });

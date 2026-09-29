@@ -292,12 +292,10 @@ export function validateInput({ memberRows, taskRows, groups, today }) {
     } else {
       const earlier = byEmail.get(appointer);
       if (!earlier) at('appointed_by_email', `${appointer} is not an earlier row`);
+      // Leadership appoints any rank: since ruling R31 (#917) an earlier BC row
+      // may appoint a BC too, as public.provision_profile accepts from a live BC.
       else if (!['bc', 'moderator'].includes(earlier.role)) {
         at('appointed_by_email', `${appointer} is not BC or the Moderator`);
-      } else if (role === 'bc' && earlier.role !== 'moderator') {
-        // public.provision_profile refuses it (42501 member_manage_forbidden):
-        // only the Moderator creates a BC account, as only they appoint one.
-        at('appointed_by_email', `only the Moderator appoints a BC; ${appointer} is BC`);
       } else appointedBy = appointer;
     }
 

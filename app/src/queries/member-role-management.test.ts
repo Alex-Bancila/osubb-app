@@ -75,6 +75,25 @@ it('deactivates through the atomic Status command that revokes refresh sessions'
     p_status: 'inactiv',
     p_reason: 'Părăsire',
   });
+  expect(api.rpc.mock.lastCall?.[1]).toMatchObject({
+    p_replacement_id: undefined,
+  });
+});
+
+it('names the replacement when the Status change takes the last holder out (R31, #917)', async () => {
+  await changeMember({
+    kind: 'status',
+    memberId: 'member',
+    status: 'alumni',
+    reason: null,
+    replacementId: 'heir',
+  });
+  expect(api.rpc).toHaveBeenCalledExactlyOnceWith('set_member_status', {
+    p_member_id: 'member',
+    p_status: 'alumni',
+    p_reason: undefined,
+    p_replacement_id: 'heir',
+  });
 });
 
 it('reads every page of explicit Group memberships for departure preview', async () => {

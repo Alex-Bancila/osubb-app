@@ -2,17 +2,19 @@
 export const MODERATOR_LEVEL = 9;
 
 /**
- * The leadership ranks only the Moderator may create or re-invite (security
- * pass 2026-09-27, H1/H2) — the same reservation `set_member_role` applies.
- * `public.provision_profile` enforces it too; the Edge Functions refuse first
- * so the caller gets a 403 before any Auth user is created or moved.
+ * The leadership ranks only the Moderator may re-invite (security pass
+ * 2026-09-27, H2); `reinvite-member` refuses first so the caller gets a 403
+ * before any Auth user is moved. Creating an account at these ranks is no
+ * longer reserved: since ruling R31 (#917) every live BC member provisions at
+ * `bc` or `moderator`, as `set_member_role` lets them grant it, so
+ * `invite-member` needs no rank check beyond its level-6 gate.
  */
 export function isReservedRole(role: string): boolean {
   const normalized = role.trim().toLowerCase();
   return normalized === "bc" || normalized === "moderator";
 }
 
-/** True when a caller at `callerLevel` may create or re-invite `role`. */
+/** True when a caller at `callerLevel` may re-invite a Member holding `role`. */
 export function mayHandleRole(role: string, callerLevel: number): boolean {
   return !isReservedRole(role) || callerLevel >= MODERATOR_LEVEL;
 }
