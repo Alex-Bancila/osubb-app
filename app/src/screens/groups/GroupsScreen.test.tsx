@@ -485,6 +485,44 @@ it("lists the member's own Groups first, as links, with a position's display nam
   // One Group to apply to: nothing to search.
   expect(screen.queryByRole('searchbox')).toBeNull();
 });
+it('shows no position for one inherited from above, even on the roster (F-17)', () => {
+  api.groups.mockReturnValue(
+    ready([
+      group(8, 'Educațional', { accepts_applications: false }),
+      group(58, 'Echipa IT', {
+        parent_id: 8,
+        path: [8, 58],
+        accepts_applications: false,
+      }),
+    ]),
+  );
+  api.mine.mockReturnValue(
+    ready([
+      myGroup(8, 'Educațional', { group_role: 'manager' }),
+      // A plain member here, Coordonator from Educațional.
+      myGroup(58, 'Echipa IT', { group_role: 'manager' }),
+    ]),
+  );
+  api.rosterRows.mockReturnValue({
+    ...ready([]),
+    membershipRows: [
+      { group_id: 8, group_role: 'manager', position_title: null },
+      { group_id: 58, group_role: 'member', position_title: null },
+    ],
+  });
+  list();
+  const own = screen.getByRole('region', { name: 'Grupurile tale' });
+  const rows = within(own).getAllByRole('listitem');
+  expect(rows.map((row) => row.textContent)).toEqual([
+    'Echipa ITEchipă',
+    'EducaționalEchipă · Coordonator',
+  ]);
+});
+it('marks an archived Group as Arhivat on its page (F-18)', () => {
+  // The fixture Group is named "Arhivat": its name, then the badge.
+  detail(4);
+  expect(screen.getAllByText('Arhivat')).toHaveLength(2);
+});
 it('says no Group accepts Applications, with no search box and no "căutare" (B28, D-18)', () => {
   api.groups.mockReturnValue(
     ready([group(8, 'Educațional', { accepts_applications: false })]),

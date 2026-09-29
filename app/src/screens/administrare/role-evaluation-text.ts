@@ -1,4 +1,4 @@
-import { formatPoints } from '../../lib/format';
+import { formatPointCount, formatPoints } from '../../lib/format';
 import type { RoleEvaluationKind } from '../../lib/schemas/role-evaluation';
 import type { PromotionCandidate } from '../../queries/role-evaluations';
 import {
@@ -60,10 +60,11 @@ export function runConsequences({
   /** The Drept de Vot cohort's top share, percent. */
   y: string;
 }): string {
-  const prag = formatPoints(threshold);
+  // "30 de puncte", "1 punct" (F-20).
+  const prag = formatPointCount(threshold);
   return kind === 'voluntar_activ'
-    ? `Clasăm punctele de task primite între ${formatDay(from)} și ${formatDay(to)} de Voluntarii cu vechime și de Voluntarii Activi. Voluntarii cu cel puțin ${prag} puncte devin candidați la promovare; nimeni nu este promovat automat. Voluntarii Activi sub ${prag} puncte devin semnale de retenție. Pragul calculat acum, punctele ultimului Voluntar Activ din primii ${x}%, devine pragul în vigoare pentru următoarea evaluare, dacă este cel puțin 1. BC și Moderatorul primesc câte o notificare pentru fiecare candidat și semnal.`
-    : `Clasăm punctele de task primite între ${formatDay(from)} și ${formatDay(to)} de Voluntarii cu Drept de Vot. Cei sub ${prag} puncte devin semnale de retenție; niciun rol nu se retrage automat. Pragul calculat acum, punctele ultimului Voluntar cu Drept de Vot din primii ${y}%, devine pragul în vigoare pentru următoarea evaluare a Adunării Generale, dacă este cel puțin 1.`;
+    ? `Clasăm punctele de task primite între ${formatDay(from)} și ${formatDay(to)} de Voluntarii cu vechime și de Voluntarii Activi. Voluntarii cu cel puțin ${prag} devin candidați la promovare; nimeni nu este promovat automat. Voluntarii Activi sub ${prag} devin semnale de retenție. Pragul calculat acum, punctele ultimului Voluntar Activ din primii ${x}%, devine pragul în vigoare pentru următoarea evaluare, dacă este cel puțin 1. BC și Moderatorul primesc câte o notificare pentru fiecare candidat și semnal.`
+    : `Clasăm punctele de task primite între ${formatDay(from)} și ${formatDay(to)} de Voluntarii cu Drept de Vot. Cei sub ${prag} devin semnale de retenție; niciun rol nu se retrage automat. Pragul calculat acum, punctele ultimului Voluntar cu Drept de Vot din primii ${y}%, devine pragul în vigoare pentru următoarea evaluare a Adunării Generale, dacă este cel puțin 1.`;
 }
 
 /**

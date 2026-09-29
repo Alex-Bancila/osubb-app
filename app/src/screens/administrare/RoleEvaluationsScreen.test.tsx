@@ -348,7 +348,7 @@ it('runs a Voluntar Activ Role Evaluation after a confirmation that names its co
     }),
   ).toBeVisible();
   expect(dialog).toHaveTextContent(
-    'Clasăm punctele de task primite între 01.07.2026 și 28.09.2026 de Voluntarii cu vechime și de Voluntarii Activi. Voluntarii cu cel puțin 30 puncte devin candidați la promovare; nimeni nu este promovat automat. Voluntarii Activi sub 30 puncte devin semnale de retenție. Pragul calculat acum, punctele ultimului Voluntar Activ din primii 20%, devine pragul în vigoare pentru următoarea evaluare, dacă este cel puțin 1. BC și Moderatorul primesc câte o notificare pentru fiecare candidat și semnal.',
+    'Clasăm punctele de task primite între 01.07.2026 și 28.09.2026 de Voluntarii cu vechime și de Voluntarii Activi. Voluntarii cu cel puțin 30 de puncte devin candidați la promovare; nimeni nu este promovat automat. Voluntarii Activi sub 30 de puncte devin semnale de retenție. Pragul calculat acum, punctele ultimului Voluntar Activ din primii 20%, devine pragul în vigoare pentru următoarea evaluare, dacă este cel puțin 1. BC și Moderatorul primesc câte o notificare pentru fiecare candidat și semnal.',
   );
   expect(db.rpc).not.toHaveBeenCalledWith(
     'run_role_evaluation',
@@ -368,6 +368,10 @@ it('runs a Voluntar Activ Role Evaluation after a confirmation that names its co
       'Evaluarea „Semestrul II” a rulat: 2 candidați la promovare, 1 semnal de retenție.',
     ),
   ).toBeVisible();
+  // The run ended today: the next range cannot start tomorrow and end
+  // today, so De la waits for a date instead of an inverted default (F-21).
+  expect(within(run).getByLabelText('De la')).toHaveValue('');
+  expect(within(run).getByLabelText('Până la')).toHaveValue('2026-09-28');
   expect(
     (
       await axe.run(container, {
@@ -504,7 +508,7 @@ it('edits a threshold and lists every change with its author or run', async () =
     '01.07.2026 · Voluntar Activ30 → 42·evaluarea „Semestrul I”',
     '01.06.2026 · Voluntar Activnesetat → 30·DIDănuț',
   ]);
-  expect(thresholds).toHaveTextContent('Pragul Voluntar Activ42 puncte');
+  expect(thresholds).toHaveTextContent('Pragul Voluntar Activ42 de puncte');
   expect(thresholds).toHaveTextContent('calculat de evaluarea „Semestrul I”');
   expect(thresholds).toHaveTextContent('Pragul Adunării GeneraleNesetat');
 
@@ -547,6 +551,27 @@ it('edits a threshold and lists every change with its author or run', async () =
     ).toHaveTextContent('28.09.2026 · Voluntar Activ42 → 35·BCBianca Coman'),
   );
   expect(thresholds).toHaveTextContent('introdus deBCBianca Coman');
+
+  // One receipt at a time (F-11): the share's replaces the threshold's.
+  await user.click(
+    within(thresholds).getByRole('button', {
+      name: 'Editează: Procentul Voluntar Activ',
+    }),
+  );
+  const share = within(thresholds).getByLabelText('Procentul Voluntar Activ');
+  await user.clear(share);
+  await user.type(share, '35');
+  await user.click(
+    within(thresholds).getByRole('button', { name: 'Salvează' }),
+  );
+  expect(
+    await within(thresholds).findByText(
+      'Procentul Voluntar Activ a fost salvat.',
+    ),
+  ).toBeVisible();
+  expect(
+    within(thresholds).queryByText('Pragul Voluntar Activ a fost salvat.'),
+  ).toBeNull();
 });
 
 it('edits each kind’s share (#866): 1–100 in the browser, logged, and the next run’s confirmation names it', async () => {
@@ -682,7 +707,7 @@ it('lists the open Promotion Candidates: Promovează opens Roluri preset, Respin
   });
   const rows = within(list).getAllByRole('listitem');
   expect(rows[0]).toHaveTextContent(
-    '48 puncte · pragul 30 · vechime din 15.03.2026',
+    '48 de puncte · pragul 30 · vechime din 15.03.2026',
   );
   expect(rows[0]).toHaveTextContent('Evaluarea „Semestrul I”');
   const href =
@@ -710,7 +735,7 @@ it('lists the open Promotion Candidates: Promovează opens Roluri preset, Respin
   expect(
     within(dialog).getByRole('button', { name: 'Profilul membrului Dănuț' }),
   ).toBeVisible();
-  expect(dialog).toHaveTextContent('31 puncte · pragul 30');
+  expect(dialog).toHaveTextContent('31 de puncte · pragul 30');
   const reason = within(dialog).getByLabelText('Motivul respingerii');
   await user.click(
     within(dialog).getByRole('button', { name: 'Respinge candidatul' }),
@@ -809,7 +834,8 @@ it('shows each kind’s Retention Signals from its latest run', async () => {
     {
       member_id: 'ana',
       role: 'activ',
-      task_points: 12,
+      // One point reads "1 punct", never "1 puncte" (F-20).
+      task_points: 1,
       rank: 4,
       cohort_size: 4,
       share_size: 1,
@@ -852,9 +878,7 @@ it('shows each kind’s Retention Signals from its latest run', async () => {
   });
   const rows = within(list).getAllByRole('listitem');
   expect(rows).toHaveLength(1);
-  expect(rows[0]).toHaveTextContent(
-    'Voluntar Activ · 12 puncte · locul 4 din 4',
-  );
+  expect(rows[0]).toHaveTextContent('Voluntar Activ · 1 punct · locul 4 din 4');
   expect(
     within(rows[0] as HTMLElement).getByRole('link', {
       name: 'Editează rolul: Ana Pop',

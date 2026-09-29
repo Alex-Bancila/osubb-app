@@ -129,7 +129,9 @@ it('hides Cereri de aderare while none of the viewer’s Groups takes Applicatio
   expect(
     screen.queryByRole('navigation', { name: 'Secțiunile administrării' }),
   ).toBeNull();
-  expect(screen.getByTestId('where')).toHaveTextContent('/administrare/grupuri');
+  expect(screen.getByTestId('where')).toHaveTextContent(
+    '/administrare/grupuri',
+  );
   view.unmount();
 
   // Not known yet: not shown, so it never appears and then vanishes.
