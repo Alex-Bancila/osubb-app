@@ -44,14 +44,18 @@ export type EditProfileSheetProps = {
   open: boolean;
   onClose: () => void;
   profile: MyProfile;
+  /** After a successful save, before the sheet closes: Profil's receipt. */
+  onSaved?: () => void;
 };
 
 function EditProfileForm({
   profile,
   onClose,
+  onSaved,
 }: {
   profile: MyProfile;
   onClose: () => void;
+  onSaved?: () => void;
 }) {
   const [nickname, setNickname] = useState(profile.nickname ?? '');
   const [phone, setPhone] = useState(profile.phone ?? '');
@@ -80,6 +84,7 @@ function EditProfileForm({
         phone: values.phone,
         avatarColor: values.avatarColor,
       });
+      onSaved?.();
       onClose();
     } catch (err) {
       form.fail(err, 'Nu am putut salva modificările.');
@@ -220,6 +225,7 @@ export default function EditProfileSheet({
   open,
   onClose,
   profile,
+  onSaved,
 }: EditProfileSheetProps) {
   return (
     <Sheet
@@ -241,7 +247,11 @@ export default function EditProfileSheet({
 
           {open && (
             <>
-              <EditProfileForm profile={profile} onClose={onClose} />
+              <EditProfileForm
+                profile={profile}
+                onClose={onClose}
+                onSaved={onSaved}
+              />
               {/* #824: the sign-in address changes here too, as its own form
                   below the profile form, so the page itself has no email card. */}
               <div className="mt-6 border-t border-border pt-6">
