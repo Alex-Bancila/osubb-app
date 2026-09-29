@@ -23,6 +23,7 @@ import {
   SheetTitle,
 } from '../../components/ui/sheet';
 import { useAuth } from '../../lib/auth';
+import { bucharestWallTimeToIso } from '../../lib/calendar-time';
 import { useCapabilities } from '../../lib/capabilities';
 import {
   announcementSchema,
@@ -57,6 +58,8 @@ export default function AnnouncementComposeSheet() {
   const [body, setBody] = useState('');
   const [linkLabel, setLinkLabel] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
+  // The Termen as the datetime-local input holds it, read in Romania (#909).
+  const [deadline, setDeadline] = useState('');
   const [published, setPublished] = useState(false);
   // Ruling R8: the same limits `announcements_guard_text` enforces, checked
   // on blur and on publish; the guard's 23514 reason lands under its field.
@@ -67,6 +70,7 @@ export default function AnnouncementComposeSheet() {
       body,
       groupId: originId ? Number(originId) : null,
       link: { label: linkLabel, url: linkUrl },
+      deadline: deadline ? (bucharestWallTimeToIso(deadline) ?? '') : null,
     },
     fieldForReason,
   );
@@ -87,6 +91,7 @@ export default function AnnouncementComposeSheet() {
     setBody('');
     setLinkLabel('');
     setLinkUrl('');
+    setDeadline('');
     form.reset();
   }
 
@@ -112,6 +117,7 @@ export default function AnnouncementComposeSheet() {
         pinned,
         form_label: values.link.label,
         form_url: values.link.url,
+        deadline: values.deadline,
       });
       setPublished(true);
       setOpen(false);
@@ -198,6 +204,20 @@ export default function AnnouncementComposeSheet() {
                 />
               </label>
               <FieldError {...form.errorProps('body')} />
+            </div>
+            <div className="space-y-1.5">
+              <label className={fieldClass}>
+                Termen (opțional) — ora României
+                <input
+                  className={inputClass}
+                  name="deadline"
+                  type="datetime-local"
+                  value={deadline}
+                  onChange={(event) => setDeadline(event.target.value)}
+                  {...form.field('deadline')}
+                />
+              </label>
+              <FieldError {...form.errorProps('deadline')} />
             </div>
             <div className="space-y-1.5">
               <label className={fieldClass}>

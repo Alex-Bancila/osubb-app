@@ -84,6 +84,7 @@ export type Database = {
           body: string
           category: string | null
           created_by: string | null
+          deadline: string | null
           form_label: string | null
           form_url: string | null
           group_id: number
@@ -99,6 +100,7 @@ export type Database = {
           body: string
           category?: string | null
           created_by?: string | null
+          deadline?: string | null
           form_label?: string | null
           form_url?: string | null
           group_id: number
@@ -114,6 +116,7 @@ export type Database = {
           body?: string
           category?: string | null
           created_by?: string | null
+          deadline?: string | null
           form_label?: string | null
           form_url?: string | null
           group_id?: number
@@ -3746,6 +3749,7 @@ export type Database = {
       }
       create_event: {
         Args: {
+          p_announce?: boolean
           p_campaign_id?: number
           p_capacity?: number
           p_description?: string

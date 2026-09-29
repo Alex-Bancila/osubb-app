@@ -1,6 +1,9 @@
 import { ro } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
-import { BUCHAREST_TIME_ZONE } from '../../lib/calendar-time';
+import {
+  BUCHAREST_TIME_ZONE,
+  bucharestDayKey,
+} from '../../lib/calendar-time';
 import type { Database } from '../../lib/database.types';
 import type { MemberIdentity } from '../../components/member/member-identity';
 import type { Group } from '../../queries/reference';
@@ -53,6 +56,8 @@ export type AnnouncementPresentation = {
   formUrl: string | null;
   publishedAt: string;
   publishedLabel: string;
+  /** The optional Termen (#909), an ISO instant; null when there is none. */
+  deadline: string | null;
   isRead: boolean;
 };
 
@@ -94,6 +99,67 @@ export function formatAnnouncementDate(instant: string): string {
   return formatInTimeZone(date, BUCHAREST_TIME_ZONE, 'd MMMM yyyy, HH:mm', {
     locale: ro,
   });
+}
+
+export type TermenState = 'upcoming' | 'soon' | 'expired';
+
+export type TermenPresentation = {
+  state: TermenState;
+  /** "Termen" while it runs, "Termen expirat" once it has passed. */
+  label: string;
+  /** "vineri, 2 octombrie, 23:59"; "azi, 23:59" / "mâine, 18:40" when close. */
+  when: string;
+};
+
+/** Within this many hours a running Termen is emphasised (#909). */
+export const TERMEN_SOON_HOURS = 48;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * How the card shows a Termen (#909), always in Romania's time: past it reads
+ * "Termen expirat"; within 48 hours it is `soon`, and today or tomorrow says
+ * so ("azi", "mâine"); the year appears only when it is not this year's.
+ */
+export function describeTermen(
+  deadline: string,
+  now: Date = new Date(),
+): TermenPresentation | null {
+  const at = new Date(deadline);
+  if (Number.isNaN(at.getTime())) return null;
+  const left = at.getTime() - now.getTime();
+  const state: TermenState =
+    left < 0
+      ? 'expired'
+      : left <= TERMEN_SOON_HOURS * 60 * 60 * 1000
+        ? 'soon'
+        : 'upcoming';
+
+  const time = formatInTimeZone(at, BUCHAREST_TIME_ZONE, 'HH:mm');
+  const day = bucharestDayKey(at);
+  const relative =
+    state === 'expired'
+      ? null
+      : day === bucharestDayKey(now)
+        ? 'azi'
+        : day === bucharestDayKey(new Date(now.getTime() + DAY_MS))
+          ? 'mâine'
+          : null;
+  const sameYear =
+    formatInTimeZone(at, BUCHAREST_TIME_ZONE, 'yyyy') ===
+    formatInTimeZone(now, BUCHAREST_TIME_ZONE, 'yyyy');
+  const date = formatInTimeZone(
+    at,
+    BUCHAREST_TIME_ZONE,
+    sameYear ? 'EEEE, d MMMM' : 'EEEE, d MMMM yyyy',
+    { locale: ro },
+  );
+
+  return {
+    state,
+    label: state === 'expired' ? 'Termen expirat' : 'Termen',
+    when: `${relative ?? date}, ${time}`,
+  };
 }
 
 export function toAnnouncementPresentation(
@@ -139,6 +205,7 @@ export function toAnnouncementPresentation(
     formUrl: row.form_url,
     publishedAt: row.published_at,
     publishedLabel: formatAnnouncementDate(row.published_at),
+    deadline: row.deadline ?? null,
     isRead,
   };
 }
