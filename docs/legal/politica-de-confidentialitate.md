@@ -1,16 +1,17 @@
 <!--
   Politica de confidențialitate a aplicației OSUBB: sursa de adevăr pentru pagina /confidentialitate
   și pentru pasul de confirmare de după conectare (#771, ruling L16). Textul versiunii 1.0 a fost
-  aprobat de Alex pe 2026-09-27.
+  aprobat de Alex pe 2026-09-27; corecturile versiunii 1.1 (#860), pe 2026-09-29.
   Regula versiunilor: orice schimbare de conținut incrementează „Versiunea” și data, în acest fișier și
-  în app/src/screens/privacy/PrivacyNoticeContent.tsx; după Release, BC ridică în org_settings
-  `privacy_notice_version` la același număr și aplicația cere fiecărui Membru o nouă confirmare.
+  în app/src/screens/privacy/PrivacyNoticeContent.tsx, iar în același pull request o migrație ridică
+  în org_settings `privacy_notice_version` la același număr; aplicația cere apoi fiecărui Membru o
+  nouă confirmare. Serverul nu cere niciodată o versiune al cărei text aplicația nu îl are.
   Corecturile de formă nu schimbă versiunea.
 -->
 
 # Politica de confidențialitate a aplicației OSUBB
 
-**Versiunea 1.0 · în vigoare de la 02.10.2026**
+**Versiunea 1.1 · în vigoare de la 02.10.2026**
 
 Aplicația OSUBB („app.osubb.ro”) este aplicația internă a Organizației Studenților din Universitatea Babeș-Bolyai (OSUBB). Este folosită doar de membrii organizației, pe bază de invitație, pentru a organiza activitatea de voluntariat: taskuri și puncte, calendarul evenimentelor, anunțuri și notificări.
 
@@ -22,7 +23,7 @@ Operatorul datelor este organizația Studenților din Universitatea Babeș-Bolya
 
 ## 2. Ce date prelucrăm și de unde provin
 
-**Date de identificare și contact.** Numele complet, numărul de telefon și adresa de email, colectate de către Biroul de Conducere prin intermediul bazei de date a voluntarilor sau a formularului de recrutare. Opțional, va exista și un câmp de poreclă, pe care o poți completa tu în Profil.
+**Date de identificare și contact.** Numele complet, numărul de telefon și adresa de email, colectate de către Biroul de Conducere prin intermediul bazei de date a voluntarilor sau a formularului de recrutare. Opțional, un pseudonim, pe care îl poți completa tu în Profil.
 
 **Apartenența la organizație.** Rolul (Recrut, Voluntar, Voluntar Activ, Voluntar cu Drept de Vot, BCE, BC, Moderator), statutul de membru (activ/inactiv), data intrării în organizație, grupurile și departamentele din care faci parte, funcțiile de conducere în grupuri și istoricul schimbărilor de rol, cu cine le-a făcut și când.
 
@@ -34,23 +35,23 @@ Operatorul datelor este organizația Studenților din Universitatea Babeș-Bolya
 - Cererile de recunoaștere a muncii; participarea (RSVP) la evenimente;
 - Anunțurile pe care le-ai citit;
 - Notificările primite în aplicație și preferințele tale de notificare; candidaturile la grupuri;
-- Datele perioadelor de evaluare și ale promovărilor.
+- Evaluările de rol și rezultatele lor: candidații la promovare și semnalele de retenție.
 
-**Date tehnice.** Dacă activezi notificările pe un dispozitiv, aplicația păstrează abonamentul tehnic al acelui browser (o adresă unică și chei de criptare), pe care numai tu îl vezi și îl poți șterge. Furnizorul nostru de autentificare păstrează jurnale de conectare (data ultimei conectări, adresa IP, tipul de browser). Furnizorul de email păstrează jurnalul emailurilor de conectare trimise (adresa, subiectul, starea livrării, conținutul). Furnizorul de găzduire păstrează jurnale tehnice de acces (adresa IP, pagina cerută).
+**Date tehnice.** Dacă activezi notificările pe un dispozitiv, aplicația păstrează abonamentul tehnic al acelui browser (o adresă unică și chei de criptare), pe care numai tu îl vezi și îl poți șterge. Furnizorul nostru de autentificare păstrează jurnale de conectare (data ultimei conectări, adresa IP, tipul de browser). Furnizorul de email păstrează jurnalul emailurilor trimise, inclusiv al rezumatului zilnic opțional pe email (adresa, subiectul, starea livrării, conținutul). Furnizorul de găzduire păstrează jurnale tehnice de acces (adresa IP, pagina cerută).
 
 **Ce nu prelucrăm.** Aplicația nu folosește cookie-uri de urmărire, nu conține instrumente de analiză a comportamentului și nu vinde sau închiriază date nimănui. Nu cerem și nu stocăm parole: conectarea se face printr-un link sau un cod de unică folosință trimis pe email.
 
 ## 3. Decizii automate
 
-Aplicația aplică automat regulile de promovare stabilite de BC: trecerea de la Recrut la Voluntar după vechimea cerută, și de la Voluntar la Voluntar Activ după vechime plus fie o poziție în clasamentul perioadei de evaluare, fie atingerea pragului de puncte. Efectul este schimbarea rolului tău în organizație și o notificare. Nicio decizie automată nu retrogradează pe nimeni. Poți cere oricând ca o promovare (sau lipsa ei) să fie verificată de o persoană, scriind BC-ului sau la [it@osubb.ro](mailto:it@osubb.ro).
+Aplicația aplică automat o singură regulă de promovare stabilită de BC: trecerea de la Recrut la Voluntar după vechimea cerută. Efectul este schimbarea rolului tău în organizație și o notificare. Trecerea de la Voluntar la Voluntar Activ nu este automată: o evaluare de rol te poate arăta drept candidat la promovare, după vechime și pragul de puncte, iar BC decide promovarea. Nicio decizie automată nu retrogradează pe nimeni. Poți cere oricând ca o promovare (sau lipsa ei) să fie verificată de o persoană, scriind BC-ului sau la [it@osubb.ro](mailto:it@osubb.ro).
 
 ## 4. Cine vede datele tale în organizație
 
 Vizibilitatea depinde de rol, exact ca în organizație:
 
-- **Orice membru** vede numele sau porecla ta, rolul, grupurile din care faci parte, și te poate vedea pe listele de participare la evenimentele la care aveți acces amândoi, și în clasament, dacă rolul lui permite clasamentul.
+- **Orice membru** vede numele și pseudonimul tău, rolul, data intrării în organizație, grupurile din care faci parte, și te poate vedea în clasament, dacă rolul lui permite clasamentul.
 - **Coordonatorii grupurilor tale** văd taskurile tale din acele grupuri, evaluările și punctele aferente, candidaturile și cererile tale.
-- **BC, BCE și Moderatorul** văd toate datele de mai sus, plus datele de contact (email, telefon), istoricul rolurilor și confirmările acestei politici.
+- **BC, BCE și Moderatorul** văd toate taskurile, evaluările și punctele, participarea (RSVP) la evenimente și datele de contact (email, telefon); **BC și Moderatorul** văd în plus candidaturile și cererile din toate grupurile, istoricul rolurilor și confirmările acestei politici.
 
 Numai tu îți vezi notificările, preferințele și dispozitivele abonate la notificări.
 
@@ -58,11 +59,11 @@ Numai tu îți vezi notificările, preferințele și dispozitivele abonate la no
 
 Nu transmitem datele niciunui terț pentru scopurile lui. Folosim următorii furnizori, fiecare pe baza unui acord de prelucrare a datelor:
 
-| Furnizor             | Ce face pentru noi                                                       | Unde sunt datele                                                                                                                                                       |
-| -------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Supabase, Inc.**   | baza de date, autentificarea, funcțiile aplicației, copiile de siguranță | Frankfurt, Germania (UE)                                                                                                                                               |
-| **Resend, Inc.**     | trimiterea emailurilor de invitație și conectare                         | trimitere din Irlanda (UE); jurnalele emailurilor sunt stocate în SUA, în baza Cadrului UE–SUA privind confidențialitatea datelor și a clauzelor contractuale standard |
-| **Cloudflare, Inc.** | găzduirea și livrarea aplicației în browser                              | rețea globală; jurnale tehnice de acces conform acordului de prelucrare al Cloudflare                                                                                  |
+| Furnizor             | Ce face pentru noi                                                                                      | Unde sunt datele                                                                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Supabase, Inc.**   | baza de date, autentificarea, funcțiile aplicației, copiile de siguranță                                | Frankfurt, Germania (UE)                                                                                                                                               |
+| **Resend, Inc.**     | trimiterea emailurilor de invitație, conectare și schimbare a adresei, și a rezumatului zilnic opțional | trimitere din Irlanda (UE); jurnalele emailurilor sunt stocate în SUA, în baza Cadrului UE–SUA privind confidențialitatea datelor și a clauzelor contractuale standard |
+| **Cloudflare, Inc.** | găzduirea și livrarea aplicației în browser                                                             | rețea globală; jurnale tehnice de acces conform acordului de prelucrare al Cloudflare                                                                                  |
 
 ## 6. Cât păstrăm datele
 
@@ -77,7 +78,7 @@ Nu transmitem datele niciunui terț pentru scopurile lui. Folosim următorii fur
 Ai dreptul:
 
 - **de acces** — să afli ce date avem despre tine și să primești o copie;
-- **de rectificare** — porecla, telefonul și culoarea avatarului le schimbi singur în Profil; adresa de email o schimbi din Profil cu confirmare pe ambele adrese; numele complet îl corectează BC la cererea ta;
+- **de rectificare** — pseudonimul, telefonul și culoarea avatarului le schimbi singur în Profil; adresa de email o schimbi din Profil cu confirmare pe ambele adrese; numele complet îl corectează BC la cererea ta;
 - **la ștergere** — ștergerea contului și a tuturor datelor tale, inclusiv din istoric; ștergerea modifică retroactiv totalurile istorice ale grupurilor, ceea ce organizația acceptă;
 - **la restricționarea prelucrării** și **la opoziție** față de prelucrările bazate pe interes legitim;
 - **la portabilitate** — să primești datele furnizate de tine într-un format uzual;
@@ -92,12 +93,14 @@ Accesul este exclusiv pe bază de invitație; nu există înregistrare publică.
 
 ## 9. Stocare locală în browser
 
-Aplicația păstrează în memoria browserului tău sesiunea de conectare și câteva preferințe (tema, vederea calendarului, ultimul filtru). Nu folosim cookie-uri de urmărire și nu cerem acordul pentru cookie-uri, pentru că nu există unele care să aibă nevoie de el. Datele membrilor nu sunt stocate în browser pentru folosire offline.
+Aplicația păstrează în memoria browserului tău sesiunea de conectare, adresa de email pentru care ai cerut un link de conectare (cât timp linkul este valabil) și câteva preferințe (tema, vederea calendarului și a clasamentului, dacă notificările sunt pornite pe acel dispozitiv). Nu folosim cookie-uri de urmărire și nu cerem acordul pentru cookie-uri, pentru că nu există unele care să aibă nevoie de el. Datele membrilor nu sunt stocate în browser pentru folosire offline.
 
 ## 10. Modificări
 
-Când schimbăm această politică, publicăm noua versiune în aplicație, cu numărul și data ei, și îți cerem să confirmi că ai citit-o la următoarea conectare. Confirmarea ta (versiunea și momentul) este păstrată și vizibilă pentru BC, ca dovadă că ai fost informat; ea nu este un consimțământ și nu schimbă nimic din datele tale.
+Când schimbăm această politică, publicăm noua versiune în aplicație, cu numărul și data ei, și îți cerem să confirmi că ai citit-o la următoarea conectare. Confirmarea ta (versiunea și momentul) este păstrată și vizibilă pentru BC și Moderator, ca dovadă că ai fost informat; ea nu este un consimțământ și nu schimbă nimic din datele tale.
 
 ---
 
-_Versiunea 1.0 — 02.10.2026. Prima versiune, la lansarea aplicației._
+_Versiunea 1.1 — 02.10.2026. Corectează textul după aplicația de la lansare: pseudonimul, promovarea la Voluntar Activ decisă de BC, evaluările de rol, rezumatul zilnic pe email și cine vede ce date._
+
+_Versiunea 1.0 — aprobată pe 27.09.2026. Prima versiune, înlocuită de versiunea 1.1 înainte de lansare._

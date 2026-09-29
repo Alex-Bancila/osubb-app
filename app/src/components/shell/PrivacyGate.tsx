@@ -1,8 +1,10 @@
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { describeFailure } from '../../lib/command-reasons';
+import { reloadToLatestVersion } from '../../pwa/reload-to-latest';
 import {
   ACKNOWLEDGE_FAILED,
+  compareNoticeVersions,
   useAcknowledgePrivacyNotice,
   usePrivacyGate,
 } from '../../queries/privacy';
@@ -18,8 +20,16 @@ import { SessionLoader, SessionScreen } from './SessionScreen';
  *
  * A Member without an acknowledgement of the current Privacy Notice version
  * sees the notice full-screen with one button, "Am citit și am înțeles", and
- * nothing of the app until they tap it — once per version. When BC raises the
- * version, the next read asks again.
+ * nothing of the app until they tap it — once per version. When a migration
+ * moves the version (#860), the next read asks again.
+ *
+ * The server's version can be ahead of the text this bundle carries: a tab
+ * left open across a Release, or an installed app still on its cached build.
+ * Showing the older text would record nothing (the server answers it stale),
+ * so the step says "A apărut o versiune nouă a aplicației" and offers a reload
+ * onto the new build. It never locks the Member out: "Mai târziu" opens the
+ * app, and the notice is asked for once the new build is running (Audit D,
+ * D-19).
  *
  * Like every guard in `App.tsx`, this is kindness, not security: the tap
  * records that the Member was informed; it changes no data and grants
@@ -29,6 +39,8 @@ import { SessionLoader, SessionScreen } from './SessionScreen';
 export function PrivacyGate({ children }: { children: ReactElement }) {
   const gate = usePrivacyGate();
   const acknowledge = useAcknowledgePrivacyNotice();
+  const [later, setLater] = useState(false);
+  const [reloading, setReloading] = useState(false);
 
   if (gate.isPending)
     return (
@@ -55,6 +67,41 @@ export function PrivacyGate({ children }: { children: ReactElement }) {
   const { currentVersion, acknowledged } = gate.data;
   if (acknowledged || currentVersion === null) return children;
 
+  if (compareNoticeVersions(currentVersion, PRIVACY_NOTICE_VERSION) > 0) {
+    if (later) return children;
+    return (
+      <SessionScreen>
+        <h1 className="text-2xl leading-tight font-extrabold tracking-tight">
+          A apărut o versiune nouă a aplicației
+        </h1>
+        <p className="leading-relaxed">
+          Politica de confidențialitate are acum versiunea {currentVersion}.
+          Reîncarcă aplicația ca să o poți citi și confirma.
+        </p>
+        <div className="flex flex-col gap-2">
+          <Button
+            disabled={reloading}
+            onClick={() => {
+              setReloading(true);
+              void reloadToLatestVersion();
+            }}
+          >
+            {reloading && (
+              <LoaderCircle
+                className="animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+            )}
+            Reîncarcă aplicația
+          </Button>
+          <Button variant="outline" onClick={() => setLater(true)}>
+            Mai târziu
+          </Button>
+        </div>
+      </SessionScreen>
+    );
+  }
+
   return (
     <SessionScreen wide>
       <p className="text-sm leading-relaxed text-muted-foreground">
@@ -79,8 +126,9 @@ export function PrivacyGate({ children }: { children: ReactElement }) {
             acknowledge.isError ? 'privacy-gate-error' : undefined
           }
           // The version of the text on screen, not the one just read: a build
-          // older than the current version shows older text, and the server
-          // answers it stale instead of recording what was never displayed.
+          // newer than the server's version (the text shipped before its
+          // migration ran) is answered stale instead of recording what the
+          // server does not yet ask for.
           onClick={() => acknowledge.mutate(PRIVACY_NOTICE_VERSION)}
         >
           {acknowledge.isPending && (

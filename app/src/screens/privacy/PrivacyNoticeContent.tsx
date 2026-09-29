@@ -10,11 +10,13 @@ import type { ReactNode } from 'react';
  * words, the version, the date or a section heading here differ from the
  * document.
  *
- * After the Release that ships a new version, BC raises `org_settings`
- * `privacy_notice_version` to the same number, and every Member is asked to
- * acknowledge it again.
+ * The same pull request moves `org_settings` `privacy_notice_version` to the
+ * same number by migration (#860), so the server never asks for a version this
+ * bundle cannot show; every Member is then asked to acknowledge it again. An
+ * app older than the server's version (a tab left open across a Release)
+ * offers a reload instead — see `PrivacyGate`.
  */
-export const PRIVACY_NOTICE_VERSION = '1.0';
+export const PRIVACY_NOTICE_VERSION = '1.1';
 /** The effective date as the document writes it (dd.mm.yyyy). */
 export const PRIVACY_NOTICE_DATE = '02.10.2026';
 export const PRIVACY_NOTICE_TITLE =
@@ -31,7 +33,7 @@ const PROCESSORS = [
   },
   {
     name: 'Resend, Inc.',
-    role: 'trimiterea emailurilor de invitație și conectare',
+    role: 'trimiterea emailurilor de invitație, conectare și schimbare a adresei, și a rezumatului zilnic opțional',
     location:
       'trimitere din Irlanda (UE); jurnalele emailurilor sunt stocate în SUA, în baza Cadrului UE–SUA privind confidențialitatea datelor și a clauzelor contractuale standard',
   },
@@ -188,8 +190,8 @@ export function PrivacyNoticeContent() {
           <Term>Date de identificare și contact.</Term> Numele complet, numărul
           de telefon și adresa de email, colectate de către Biroul de Conducere
           prin intermediul bazei de date a voluntarilor sau a formularului de
-          recrutare. Opțional, va exista și un câmp de poreclă, pe care o poți
-          completa tu în Profil.
+          recrutare. Opțional, un pseudonim, pe care îl poți completa tu în
+          Profil.
         </p>
         <p>
           <Term>Apartenența la organizație.</Term> Rolul (Recrut, Voluntar,
@@ -221,7 +223,10 @@ export function PrivacyNoticeContent() {
               Notificările primite în aplicație și preferințele tale de
               notificare; candidaturile la grupuri;
             </li>
-            <li>Datele perioadelor de evaluare și ale promovărilor.</li>
+            <li>
+              Evaluările de rol și rezultatele lor: candidații la promovare și
+              semnalele de retenție.
+            </li>
           </List>
         </div>
         <p>
@@ -230,10 +235,10 @@ export function PrivacyNoticeContent() {
           (o adresă unică și chei de criptare), pe care numai tu îl vezi și îl
           poți șterge. Furnizorul nostru de autentificare păstrează jurnale de
           conectare (data ultimei conectări, adresa IP, tipul de browser).
-          Furnizorul de email păstrează jurnalul emailurilor de conectare
-          trimise (adresa, subiectul, starea livrării, conținutul). Furnizorul
-          de găzduire păstrează jurnale tehnice de acces (adresa IP, pagina
-          cerută).
+          Furnizorul de email păstrează jurnalul emailurilor trimise, inclusiv
+          al rezumatului zilnic opțional pe email (adresa, subiectul, starea
+          livrării, conținutul). Furnizorul de găzduire păstrează jurnale
+          tehnice de acces (adresa IP, pagina cerută).
         </p>
         <p>
           <Term>Ce nu prelucrăm.</Term> Aplicația nu folosește cookie-uri de
@@ -246,14 +251,15 @@ export function PrivacyNoticeContent() {
 
       <Section number={3} title="Decizii automate">
         <p>
-          Aplicația aplică automat regulile de promovare stabilite de BC:
-          trecerea de la Recrut la Voluntar după vechimea cerută, și de la
-          Voluntar la Voluntar Activ după vechime plus fie o poziție în
-          clasamentul perioadei de evaluare, fie atingerea pragului de puncte.
-          Efectul este schimbarea rolului tău în organizație și o notificare.
-          Nicio decizie automată nu retrogradează pe nimeni. Poți cere oricând
-          ca o promovare (sau lipsa ei) să fie verificată de o persoană, scriind
-          BC-ului sau la <ContactLink />.
+          Aplicația aplică automat o singură regulă de promovare stabilită de
+          BC: trecerea de la Recrut la Voluntar după vechimea cerută. Efectul
+          este schimbarea rolului tău în organizație și o notificare. Trecerea
+          de la Voluntar la Voluntar Activ nu este automată: o evaluare de rol
+          te poate arăta drept candidat la promovare, după vechime și pragul de
+          puncte, iar BC decide promovarea. Nicio decizie automată nu
+          retrogradează pe nimeni. Poți cere oricând ca o promovare (sau lipsa
+          ei) să fie verificată de o persoană, scriind BC-ului sau la{' '}
+          <ContactLink />.
         </p>
       </Section>
 
@@ -261,10 +267,9 @@ export function PrivacyNoticeContent() {
         <p>Vizibilitatea depinde de rol, exact ca în organizație:</p>
         <List>
           <li>
-            <Term>Orice membru</Term> vede numele sau porecla ta, rolul,
-            grupurile din care faci parte, și te poate vedea pe listele de
-            participare la evenimentele la care aveți acces amândoi, și în
-            clasament, dacă rolul lui permite clasamentul.
+            <Term>Orice membru</Term> vede numele și pseudonimul tău, rolul,
+            data intrării în organizație, grupurile din care faci parte, și te
+            poate vedea în clasament, dacă rolul lui permite clasamentul.
           </li>
           <li>
             <Term>Coordonatorii grupurilor tale</Term> văd taskurile tale din
@@ -272,9 +277,11 @@ export function PrivacyNoticeContent() {
             cererile tale.
           </li>
           <li>
-            <Term>BC, BCE și Moderatorul</Term> văd toate datele de mai sus,
-            plus datele de contact (email, telefon), istoricul rolurilor și
-            confirmările acestei politici.
+            <Term>BC, BCE și Moderatorul</Term> văd toate taskurile, evaluările
+            și punctele, participarea (RSVP) la evenimente și datele de contact
+            (email, telefon); <Term>BC și Moderatorul</Term> văd în plus
+            candidaturile și cererile din toate grupurile, istoricul rolurilor
+            și confirmările acestei politici.
           </li>
         </List>
         <p>
@@ -334,7 +341,7 @@ export function PrivacyNoticeContent() {
             primești o copie;
           </li>
           <li>
-            <Term>de rectificare</Term> — porecla, telefonul și culoarea
+            <Term>de rectificare</Term> — pseudonimul, telefonul și culoarea
             avatarului le schimbi singur în Profil; adresa de email o schimbi
             din Profil cu confirmare pe ambele adrese; numele complet îl
             corectează BC la cererea ta;
@@ -385,11 +392,14 @@ export function PrivacyNoticeContent() {
 
       <Section number={9} title="Stocare locală în browser">
         <p>
-          Aplicația păstrează în memoria browserului tău sesiunea de conectare
-          și câteva preferințe (tema, vederea calendarului, ultimul filtru). Nu
-          folosim cookie-uri de urmărire și nu cerem acordul pentru cookie-uri,
-          pentru că nu există unele care să aibă nevoie de el. Datele membrilor
-          nu sunt stocate în browser pentru folosire offline.
+          Aplicația păstrează în memoria browserului tău sesiunea de conectare,
+          adresa de email pentru care ai cerut un link de conectare (cât timp
+          linkul este valabil) și câteva preferințe (tema, vederea calendarului
+          și a clasamentului, dacă notificările sunt pornite pe acel
+          dispozitiv). Nu folosim cookie-uri de urmărire și nu cerem acordul
+          pentru cookie-uri, pentru că nu există unele care să aibă nevoie de
+          el. Datele membrilor nu sunt stocate în browser pentru folosire
+          offline.
         </p>
       </Section>
 
@@ -398,16 +408,24 @@ export function PrivacyNoticeContent() {
           Când schimbăm această politică, publicăm noua versiune în aplicație,
           cu numărul și data ei, și îți cerem să confirmi că ai citit-o la
           următoarea conectare. Confirmarea ta (versiunea și momentul) este
-          păstrată și vizibilă pentru BC, ca dovadă că ai fost informat; ea nu
-          este un consimțământ și nu schimbă nimic din datele tale.
+          păstrată și vizibilă pentru BC și Moderator, ca dovadă că ai fost
+          informat; ea nu este un consimțământ și nu schimbă nimic din datele
+          tale.
         </p>
       </Section>
 
-      <footer className="border-t pt-6">
-        <p className="text-sm text-muted-foreground italic">
+      <footer className="space-y-2 border-t pt-6 text-sm text-muted-foreground italic">
+        <p>
           Versiunea {PRIVACY_NOTICE_VERSION} —{' '}
-          <time dateTime={DATE_TIME}>{PRIVACY_NOTICE_DATE}</time>. Prima
-          versiune, la lansarea aplicației.
+          <time dateTime={DATE_TIME}>{PRIVACY_NOTICE_DATE}</time>. Corectează
+          textul după aplicația de la lansare: pseudonimul, promovarea la
+          Voluntar Activ decisă de BC, evaluările de rol, rezumatul zilnic pe
+          email și cine vede ce date.
+        </p>
+        <p>
+          Versiunea 1.0 — aprobată pe{' '}
+          <time dateTime="2026-09-27">27.09.2026</time>. Prima versiune,
+          înlocuită de versiunea 1.1 înainte de lansare.
         </p>
       </footer>
     </article>

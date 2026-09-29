@@ -13,11 +13,27 @@ import { keys } from './keys';
  * The Privacy Notice and Privacy Acknowledgements (#771, ruling L16).
  *
  * The current version is `org_settings.privacy_notice_version`, which every
- * Member reads; BC raises it after a Release that changes the text. A Member
+ * Member reads; a migration moves it in the pull request that changes the
+ * text (#860), so the server and the bundled text move together. A Member
  * who has no acknowledgement row for that version is shown the notice after
  * sign-in until they tap "Am citit și am înțeles". Nothing here is a security
  * control: the gate is kindness, and the server refuses a stale version.
  */
+
+/**
+ * Compare two dotted Privacy Notice versions part by part, as numbers
+ * (`1.10` is above `1.9`; a missing part counts as 0, so `1.1` equals
+ * `1.1.0`). Negative when `a` is older than `b`, positive when newer.
+ */
+export function compareNoticeVersions(a: string, b: string): number {
+  const left = a.split('.').map(Number);
+  const right = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
+    const difference = (left[i] ?? 0) - (right[i] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return 0;
+}
 
 /** The current version, or `null` when the setting does not exist yet. */
 async function fetchCurrentVersion(): Promise<string | null> {
@@ -57,7 +73,7 @@ export function usePrivacyGate() {
   return useQuery({
     queryKey: keys.privacy.gate(memberId),
     queryFn: memberId ? () => fetchPrivacyGate(memberId) : skipToken,
-    // A bump by BC must reach a Member who never signs out and never leaves
+    // A new version must reach a Member who never signs out and never leaves
     // the tab: re-read on every return to the tab and every fifteen minutes
     // while it stays open (one small read; the gate itself never remounts).
     staleTime: 5 * 60_000,
