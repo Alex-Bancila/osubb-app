@@ -17,14 +17,20 @@ function SheetPortal(props: ComponentProps<typeof Dialog.Portal>) {
   return <Dialog.Portal {...props} />;
 }
 
+// The same dim layer as a dialog's (#943): it renders for a nested sheet too
+// and shares the popup's `z-70`, so a sheet or dialog opened from a sheet
+// dims the sheet beneath it.
 function SheetBackdrop({
   className,
+  forceRender = true,
   ...props
 }: ComponentProps<typeof Dialog.Backdrop>) {
   return (
     <Dialog.Backdrop
+      data-slot="sheet-backdrop"
+      forceRender={forceRender}
       className={cn(
-        'fixed inset-0 z-60 bg-black/40 data-ending-style:opacity-0 data-starting-style:opacity-0 transition-opacity motion-reduce:transition-none',
+        'fixed inset-0 z-70 bg-black/40 data-ending-style:opacity-0 data-starting-style:opacity-0 transition-opacity motion-reduce:transition-none',
         className,
       )}
       {...props}
