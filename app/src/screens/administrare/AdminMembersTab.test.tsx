@@ -18,6 +18,22 @@ vi.mock('../../queries/groups-admin', async (original) => ({
 vi.mock('./CsvImportPanel', () => ({
   CsvImportPanel: () => <h2>Import CSV</h2>,
 }));
+vi.mock('./InviteMemberDialog', () => ({
+  InviteMemberDialog: ({
+    onInvited,
+  }: {
+    onInvited: (member: object) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onInvited({ userId: 'ana', email: 'ana@osubb.ro', name: 'Ana Pop' })
+      }
+    >
+      Invită membru
+    </button>
+  ),
+}));
 vi.mock(
   '../../queries/member-card',
   () => import('../../test/member-card-mock'),
@@ -198,4 +214,38 @@ it('sorts Rol by the Role level, then by name, both ways', async () => {
     screen.getByRole('button', { name: 'Sortează Rol descrescător' }),
   );
   expect(names()).toEqual(['BC', 'BCE', 'Voluntar', 'Voluntar', 'Recrut']);
+});
+
+/* #931: "Invită membru" sits on the Membri panel for whoever may provision. */
+it('offers "Invită membru" only to whoever may provision Members', () => {
+  const view = show();
+  const panel = screen.getByRole('region', { name: 'Membri' });
+  expect(
+    within(panel).getByRole('button', { name: 'Invită membru' }),
+  ).toBeVisible();
+  view.unmount();
+
+  api.capabilities.mockReturnValue({
+    data: { manageRoles: true, provisionMembers: false },
+  });
+  show();
+  expect(screen.queryByRole('button', { name: 'Invită membru' })).toBeNull();
+});
+
+it('confirms a sent invitation and marks the new Member in the list', async () => {
+  const user = userEvent.setup();
+  show();
+  expect(screen.queryByText('Invitație trimisă')).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Invită membru' }));
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Invitația a fost trimisă la ana@osubb.ro. Ana Pop apare în listă; intră în cont când deschide linkul din email.',
+  );
+  const row = screen
+    .getByRole('button', { name: /Ana Pop/ })
+    .closest('tr') as HTMLElement;
+  expect(within(row).getByText('Invitație trimisă')).toBeVisible();
+  const other = screen
+    .getByRole('button', { name: 'Profilul membrului Ștefi' })
+    .closest('tr') as HTMLElement;
+  expect(within(other).queryByText('Invitație trimisă')).toBeNull();
 });

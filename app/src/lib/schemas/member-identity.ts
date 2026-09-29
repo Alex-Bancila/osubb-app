@@ -39,3 +39,26 @@ export const invitationFieldForReason: Readonly<Record<string, string>> = {
   email_invalid: 'email',
   email_taken: 'email',
 };
+
+/**
+ * "Invită membru" (#931): the address and full name `invite-member` stores —
+ * trimmed, the address lowercased — measured as `profiles` measures them.
+ */
+export const memberInviteSchema = z.object({
+  email: emailSchema,
+  fullName: requiredText({
+    required: 'full_name_required',
+    max: 120,
+    tooLong: 'full_name_too_long',
+  }),
+});
+
+/** Where each reason about a new invitation is shown. */
+export const inviteFieldForReason: Readonly<Record<string, string>> = {
+  email_invalid: 'email',
+  invite_email_taken: 'email',
+  full_name_required: 'fullName',
+  full_name_too_long: 'fullName',
+  invite_group_unavailable: 'group',
+  invite_group_refused: 'group',
+};
