@@ -453,6 +453,29 @@ const REASON_COPY = new Map<string, string>([
     'invite_failed',
     'Invitația nu a putut fi trimisă. Încearcă din nou peste câteva minute.',
   ],
+  /* browser: invite-member's refusals as "Invită membru" names them (#931,
+     `INVITE_REASON` in `queries/member-invitation.ts`). Every one of them
+     leaves no account behind: the function rolls back what it created. */
+  [
+    'invite_session_expired',
+    'Sesiunea a expirat. Autentifică-te din nou, apoi trimite invitația.',
+  ],
+  [
+    'invite_forbidden',
+    'Doar BC și Moderatorul pot invita membri. Reîncarcă pagina.',
+  ],
+  [
+    'invite_email_taken',
+    'Există deja un membru cu această adresă. Caută-l în listă.',
+  ],
+  [
+    'invite_group_unavailable',
+    'Grupul ales nu mai există. Alege alt grup sau niciunul.',
+  ],
+  [
+    'invite_group_refused',
+    'Membrul nu poate fi adăugat în grupul ales: e arhivat, își adaugă membrii automat sau cere un rol mai mare. Nu s-a adăugat niciun membru; alege alt grup sau niciunul.',
+  ],
 
   /* ---- Role Evaluations, Promotion Thresholds and Candidates (#826, #827) ---- */
   [
