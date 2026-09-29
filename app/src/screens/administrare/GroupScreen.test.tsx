@@ -712,6 +712,32 @@ it('offers the position pickers only Members who could take the position (F-27)'
   }
 });
 
+it('offers no appointment until the positions above are known (F-27)', async () => {
+  api.coordination.mockReturnValue(new Promise(() => {}));
+  const user = userEvent.setup();
+  show();
+  await user.click(tab('Roluri'));
+  expect(
+    screen.getByRole('button', { name: 'Numește un responsabil' }),
+  ).toBeDisabled();
+  expect(
+    screen.getByRole('button', { name: 'Numește un coordonator' }),
+  ).toBeDisabled();
+});
+
+it('says so and offers no appointment when the positions above cannot be read (F-27)', async () => {
+  api.coordination.mockRejectedValue(new Error('offline'));
+  const user = userEvent.setup();
+  show();
+  await user.click(tab('Roluri'));
+  expect(
+    (await screen.findAllByText(/Nu am putut verifica funcțiile/)).length,
+  ).toBeGreaterThan(0);
+  expect(
+    screen.getByRole('button', { name: 'Numește un responsabil' }),
+  ).toBeDisabled();
+});
+
 it("never offers a Child Group's Manager the appointment that belongs one level up", async () => {
   capabilities(false);
   api.myGroups.mockReturnValue({ data: [myGroup(2, 'manager')] });

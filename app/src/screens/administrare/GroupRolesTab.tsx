@@ -36,9 +36,15 @@ import { groupRoleLabel, positionCandidates } from './group-tree';
 /**
  * The Members holding a position in a Group above this one: theirs flows
  * down (ADR-0009), so they are no one to appoint here. An ancestor the
- * viewer cannot read adds nobody; the server still decides.
+ * viewer cannot read adds nobody; the server still decides. Until every
+ * ancestor has answered, `ready` is false and nothing is offered — an
+ * unanswered lookup is not an empty one.
  */
-function useInheritedHolders(group: AdminGroup): string[] {
+function useInheritedHolders(group: AdminGroup): {
+  ids: string[];
+  ready: boolean;
+  failed: boolean;
+} {
   const viewer = useAuth().session?.user.id;
   const ancestors = group.path.filter((id) => id !== group.id);
   const results = useQueries({
@@ -49,9 +55,14 @@ function useInheritedHolders(group: AdminGroup): string[] {
       enabled: Boolean(viewer),
     })),
   });
-  return results.flatMap((result) =>
-    (result.data ?? []).map((row) => row.memberId),
-  );
+  // Manager and Responsible both flow down the path (private.group_role_of).
+  return {
+    ids: results.flatMap((result) =>
+      (result.data ?? []).map((row) => row.memberId),
+    ),
+    ready: results.every((result) => result.isSuccess),
+    failed: results.some((result) => result.isError),
+  };
 }
 
 const control =
@@ -379,10 +390,15 @@ export function GroupRolesTab({
     members,
     group,
     new Set([
-      ...inherited,
+      ...inherited.ids,
       ...[...managers, ...responsibles].map((entry) => entry.memberId),
     ]),
   );
+  // No appointment while the positions above are unknown (see above).
+  const appointBusy = busy || !inherited.ready;
+  const lookupFailed = inherited.failed
+    ? 'Nu am putut verifica funcțiile din grupurile de deasupra. Reîncarcă pagina ca să numești pe cineva.'
+    : undefined;
   const withdraw = (entry: RosterEntry) =>
     onRun({
       kind: 'setRole',
@@ -399,6 +415,7 @@ export function GroupRolesTab({
     <PageGrid columns={2} alignHeaders>
       <Panel
         title={group.manager_title?.trim() || 'Coordonatori'}
+        description={authority.appointManager ? lookupFailed : undefined}
         flush={managers.length > 0}
         control={
           authority.appointManager && (
@@ -409,7 +426,7 @@ export function GroupRolesTab({
               groupRole="manager"
               withTitle={false}
               members={candidates}
-              busy={busy}
+              busy={appointBusy}
               error={error}
               onAppoint={(memberId) =>
                 onRun({
@@ -437,6 +454,7 @@ export function GroupRolesTab({
 
       <Panel
         title="Responsabili"
+        description={authority.manageGroup ? lookupFailed : undefined}
         flush={responsibles.length > 0}
         control={
           authority.manageGroup && (
@@ -447,7 +465,7 @@ export function GroupRolesTab({
               groupRole="responsible"
               withTitle
               members={candidates}
-              busy={busy}
+              busy={appointBusy}
               error={error}
               onAppoint={(memberId, positionTitle) =>
                 onRun({

@@ -2,6 +2,8 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { UserCog } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router';
 import { Panel, SubHeading } from '../../components/layout';
+import { MemberName } from '../../components/member/MemberName';
+import type { MemberIdentity } from '../../components/member/member-identity';
 import { Button } from '../../components/ui/button';
 import {
   Dialog,
@@ -58,11 +60,11 @@ const DEACTIVATION_WARNING =
  * repeats the warning and only its own button sends the change.
  */
 function DeactivateDialog({
-  name,
+  member,
   disabled,
   onConfirm,
 }: {
-  name: string;
+  member: MemberIdentity;
   disabled: boolean;
   onConfirm: () => Promise<boolean>;
 }) {
@@ -84,9 +86,11 @@ function DeactivateDialog({
       </Button>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Dezactivezi pe {name}?</DialogTitle>
+          <DialogTitle>Dezactivezi acest membru?</DialogTitle>
           <DialogDescription>{DEACTIVATION_WARNING}</DialogDescription>
         </DialogHeader>
+        {/* The name through MemberName, in the body: a title holds no button. */}
+        <MemberName size="sm" {...member} />
         <DialogFooter>
           <Button
             type="button"
@@ -457,7 +461,12 @@ export function RolePanel({
                 <div className="min-w-0">
                   {nextStatus === 'inactiv' && nextStatus !== member.status ? (
                     <DeactivateDialog
-                      name={member.name}
+                      member={{
+                        memberId: member.memberId,
+                        fullName: member.name,
+                        nickname: member.nickname,
+                        avatarColor: member.avatarColor,
+                      }}
                       disabled={!canSaveStatus}
                       onConfirm={() =>
                         save({

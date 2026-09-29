@@ -105,7 +105,12 @@ beforeEach(() => {
   api.groups.mockReturnValue({ data: tree, isPending: false, isError: false });
   api.myGroups.mockReturnValue({ data: [], isPending: false, isError: false });
   api.members.mockReturnValue({ data: [] });
-  api.rosterRows.mockReturnValue({ membershipRows: undefined });
+  api.rosterRows.mockReturnValue({
+    membershipRows: [],
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  });
   api.roles.mockReturnValue({
     data: new Map([
       ['voluntar', { name: 'Voluntar', level: 1 }],
@@ -244,6 +249,14 @@ it('shows a Group Manager their own Groups instead, with the inherited role mark
   api.myGroups.mockReturnValue({
     // A plain membership is no function: OSUBB is not listed (relevance B47).
     data: [...mine, myGroup(9, 'OSUBB', 'member', { automatic: true })],
+    isPending: false,
+    isError: false,
+  });
+  // Coordonator of Logistică on its own roster row; Foto has none.
+  api.rosterRows.mockReturnValue({
+    membershipRows: [
+      { group_id: 2, group_role: 'manager', position_title: null },
+    ],
     isPending: false,
     isError: false,
   });
