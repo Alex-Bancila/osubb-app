@@ -799,15 +799,24 @@ select ok(
 
 -- #891 (F-3): the seed writes Task notifications directly, so it must copy
 -- the commands' Romanian text: "Termen:", never "Deadline:", and no raw
--- column name in an edit notification.
+-- column name in an edit notification: every edit body lists only the
+-- Romanian labels private.task_field_labels writes.
 select ok(
-  exists (select 1 from notifications where kind = 'task' and title like 'Task nou:%')
+  (select count(*) from notifications
+    where member_id = 'd0000000-0000-0000-0000-000000000002'
+      and kind = 'task' and title like 'Task nou:%') = 2
+  and (select count(*) from notifications
+        where member_id = 'd0000000-0000-0000-0000-000000000002'
+          and kind = 'task' and title like 'Task actualizat:%') >= 20
   and not exists (
     select 1 from notifications
      where kind = 'task'
        and (body like '%Deadline%'
             or body ~ '[a-z]+_[a-z]+'
-            or (title like 'Task nou:%' and body not like 'Ți-a fost atribuit acest task. Termen: %'))),
+            or (title like 'Task nou:%' and body not like 'Ți-a fost atribuit acest task. Termen: %')
+            or (title like 'Task actualizat:%'
+                and body !~ replace('^Modificat: (L)(, (L))*\.$', 'L',
+                  'titlu|descriere|termen|grup|campanie|audiență|atribuire|etichetă link|adresă link')))),
   'the seeded Task notifications use the commands'' Romanian copy (Termen, field labels)');
 
 -- ==================== Calendar, feed, notifications ====================
