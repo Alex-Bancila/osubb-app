@@ -158,8 +158,12 @@ function CountStartsLater({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="m-0 text-sm font-medium text-foreground">
-        Punctele pentru următoarea evaluare se numără din {since}.
+      <p
+        className="m-0 text-sm font-medium text-foreground"
+        data-testid="count-starts"
+      >
+        Punctele pentru următoarea evaluare se numără din{' '}
+        <span className="whitespace-nowrap">{since}</span>.
       </p>
       <p className="m-0 text-sm text-muted-foreground">
         Pragul în vigoare: {formatPointCount(threshold)}

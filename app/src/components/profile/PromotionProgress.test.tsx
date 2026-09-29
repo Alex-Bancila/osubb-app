@@ -206,11 +206,9 @@ describe('PromotionProgress (#634)', () => {
         today: new Date(2026, 8, 29, 18, 0),
       });
 
-      expect(
-        screen.getByText(
-          'Punctele pentru următoarea evaluare se numără din 30 septembrie 2026.',
-        ),
-      ).toBeInTheDocument();
+      expect(screen.getByTestId('count-starts')).toHaveTextContent(
+        'Punctele pentru următoarea evaluare se numără din 30 septembrie 2026.',
+      );
       expect(
         screen.getByText('Pragul în vigoare: 30 de puncte'),
       ).toBeInTheDocument();
@@ -346,11 +344,9 @@ describe('PromotionProgress (#634)', () => {
         today: new Date(2026, 8, 29, 18, 0),
       });
 
-      expect(
-        screen.getByText(
-          'Punctele pentru următoarea evaluare se numără din 30 septembrie 2026.',
-        ),
-      ).toBeInTheDocument();
+      expect(screen.getByTestId('count-starts')).toHaveTextContent(
+        'Punctele pentru următoarea evaluare se numără din 30 septembrie 2026.',
+      );
       expect(
         screen.getByText('Pragul în vigoare: 30 de puncte'),
       ).toBeInTheDocument();
