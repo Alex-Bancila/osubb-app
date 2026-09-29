@@ -6,7 +6,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(16);
+select plan(15);
 truncate announcements, announcement_reads cascade;
 
 -- Personas (prefix a1): 01 EDU Manager, 02 PR Member (outside EDU),
@@ -27,9 +27,9 @@ union all select id,'a1000000-0000-0000-0000-000000000002'::uuid,'member' from g
 
 -- ==================== M1: insert ====================
 select pg_temp.test_login_leadership('a1000000-0000-0000-0000-000000000001');
-select lives_ok($$insert into announcements(title,body,group_id,audience,created_by,published_at,author)
+select lives_ok($$insert into announcements(title,body,group_id,audience,created_by,published_at)
 select 'Forged #M1','Posted as the Moderator.',id,'local',
-       'a1000000-0000-0000-0000-000000000004','2020-01-01 00:00+00','Moderator'
+       'a1000000-0000-0000-0000-000000000004','2020-01-01 00:00+00'
   from groups where name='Educațional'$$,
 'a Manager''s insert naming the Moderator as author is accepted -- and rewritten, not trusted');
 select lives_ok($$insert into announcements(title,body,group_id,audience,published_at)
@@ -45,8 +45,8 @@ select is((select published_at from announcements where title='Forged #M1'), now
   'a backdated published_at is replaced by the server''s now()');
 select is((select published_at from announcements where title='Future #M1'), now(),
   'a forward-dated published_at is replaced by the server''s now(), so it cannot sit on top of the feed');
-select is((select author from announcements where title='Forged #M1'), null,
-  'a signed-in insert keeps no free-text author byline');
+select hasnt_column('public', 'announcements', 'author',
+  '#936: there is no free-text author byline at all -- the author is created_by');
 
 -- The readers list follows the stored author: the Manager is the author.
 select pg_temp.test_login_leadership('a1000000-0000-0000-0000-000000000001');
@@ -59,7 +59,6 @@ select pg_temp.test_login_leadership('a1000000-0000-0000-0000-000000000001');
 update announcements
    set created_by = 'a1000000-0000-0000-0000-000000000004',
        published_at = '2099-01-01 00:00+00',
-       author = 'Moderator',
        title = 'Forged #M1 edited'
  where title = 'Forged #M1';
 reset role;
@@ -67,8 +66,6 @@ select results_eq(
   $$select created_by, published_at from announcements where title='Forged #M1 edited'$$,
   $$values ('a1000000-0000-0000-0000-000000000001'::uuid, now())$$,
   'an update may change the text but keeps created_by and published_at as they were');
-select is((select author from announcements where title='Forged #M1 edited'), null,
-  'an update cannot set a free-text author byline');
 
 select pg_temp.test_login_leadership('a1000000-0000-0000-0000-000000000003');
 update announcements set pinned = true where title = 'Future #M1';
@@ -79,12 +76,12 @@ select results_eq($$select pinned, created_by from announcements where title='Fu
 
 -- ==================== M1: writes with no signed-in caller ====================
 select pg_temp.test_clear_jwt();
-insert into announcements(title,body,group_id,audience,created_by,published_at,author)
-select 'Fixture #M1','Seed.',id,'org','a1000000-0000-0000-0000-000000000004','2026-09-01 10:00+00','BC'
+insert into announcements(title,body,group_id,audience,created_by,published_at)
+select 'Fixture #M1','Seed.',id,'org','a1000000-0000-0000-0000-000000000004','2026-09-01 10:00+00'
   from groups where is_organization;
-select results_eq($$select created_by, published_at, author from announcements where title='Fixture #M1'$$,
-  $$values ('a1000000-0000-0000-0000-000000000004'::uuid, '2026-09-01 10:00+00'::timestamptz, 'BC'::text)$$,
-  'a write with no auth.uid() (seed, migrations) keeps its fixture author, date and byline');
+select results_eq($$select created_by, published_at from announcements where title='Fixture #M1'$$,
+  $$values ('a1000000-0000-0000-0000-000000000004'::uuid, '2026-09-01 10:00+00'::timestamptz)$$,
+  'a write with no auth.uid() (seed, migrations) keeps its fixture author and date');
 
 -- ==================== L2: read receipts ====================
 create temp table annauth as

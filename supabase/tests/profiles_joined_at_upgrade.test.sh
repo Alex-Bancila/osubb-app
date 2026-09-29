@@ -11,9 +11,12 @@ set local client_min_messages = warning;
 
 -- Reconstruct the pre-#160 schema. The view enumerates columns, so it goes first.
 drop view public.profiles_directory;
+-- #936 dropped profiles.tier and profiles.joined_year on main; the pre-#160 view,
+-- guard and backfill still name them. joined_year is rebuilt from joined_at,
+-- the value it was once the source of, before joined_at goes.
+alter table public.profiles add column tier text, add column joined_year integer;
+update public.profiles set joined_year = extract(year from joined_at)::integer;
 alter table public.profiles drop column joined_at;
--- #936 dropped profiles.tier on main; the pre-#160 view and guard still name it.
-alter table public.profiles add column tier text;
 create view public.profiles_directory with (security_invoker = on) as
   select id, full_name, role, status, avatar_color, tier, joined_year, created_at
     from public.profiles;

@@ -6,7 +6,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(24);
 
 -- ==================== 1. retired Task commands ====================
 select hasnt_function('public', 'update_task_content',
@@ -37,13 +37,16 @@ select ok(not has_table_privilege('authenticated', 'public.event_attendance', 'i
 select ok(has_table_privilege('authenticated', 'public.event_attendance', 'select'),
   'the read grant stays');
 
--- ==================== 4. profiles.tier ====================
+-- ==================== 4. retired columns ====================
 select hasnt_column('public', 'profiles', 'tier', 'profiles.tier is gone');
 select hasnt_column('public', 'profiles_directory', 'tier', 'profiles_directory no longer exposes it');
-select has_column('public', 'profiles', 'joined_year',
-  'profiles.joined_year stays: Profil still shows "Membru din <an>" from it');
+select hasnt_column('public', 'profiles', 'joined_year',
+  'profiles.joined_year is gone -- joined_at is the join date (#933 sets it for everyone)');
+select hasnt_column('public', 'announcements', 'author',
+  'announcements.author is gone -- the author is created_by');
+select hasnt_column('public', 'announcements', 'category', 'announcements.category is gone');
 select columns_are('public', 'profiles_directory',
-  array['id', 'full_name', 'role', 'status', 'avatar_color', 'joined_year', 'created_at', 'joined_at', 'nickname'],
+  array['id', 'full_name', 'role', 'status', 'avatar_color', 'created_at', 'joined_at', 'nickname'],
   'profiles_directory keeps every other column');
 select ok(coalesce((select 'security_invoker=on' = any (reloptions)
                       from pg_class where oid = 'public.profiles_directory'::regclass), false)

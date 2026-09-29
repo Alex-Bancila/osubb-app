@@ -35,7 +35,6 @@ export function RoleTimeline({ profile }: { profile: MyProfile }) {
     <TimelineBody
       historyQuery={historyQuery}
       joinedAt={profile.joined_at}
-      joinedYear={profile.joined_year}
       role={profile.role}
       label="Parcursul organizațional"
     />
@@ -62,7 +61,6 @@ export function MemberRoleTimeline({
     <TimelineBody
       historyQuery={historyQuery}
       joinedAt={joinedAt}
-      joinedYear={null}
       role={role}
       label="Istoric roluri"
     />
@@ -72,13 +70,11 @@ export function MemberRoleTimeline({
 function TimelineBody({
   historyQuery,
   joinedAt,
-  joinedYear,
   role,
   label,
 }: {
   historyQuery: UseQueryResult<RoleHistoryRow[]>;
   joinedAt: string | null;
-  joinedYear: number | null;
   role: string;
   label: string;
 }) {
@@ -104,7 +100,6 @@ function TimelineBody({
 
   const segments = buildRoleSegments(joinedAt, role, rows);
   const roleName = (key: string) => rolesQuery.data?.get(key)?.name ?? key;
-  const undated = segments.length === 1 && !segments[0]?.startDate;
 
   return (
     <ol className="space-y-4 border-l border-border pl-4" aria-label={label}>
@@ -131,11 +126,6 @@ function TimelineBody({
               <p className="text-xs text-muted-foreground">
                 {period}
                 {duration && ` · ${duration}`}
-              </p>
-            )}
-            {undated && joinedYear && (
-              <p className="text-xs text-muted-foreground">
-                Membru din {joinedYear}
               </p>
             )}
             {segment.openedBy && (

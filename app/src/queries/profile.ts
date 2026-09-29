@@ -17,7 +17,6 @@ export type MyProfile = {
   role: Database['public']['Enums']['member_role'];
   status: Database['public']['Enums']['member_status'];
   avatar_color: string | null;
-  joined_year: number | null;
   joined_at: string | null;
   email: string | null;
   phone: string | null;
@@ -61,9 +60,7 @@ export async function fetchMyProfile(memberId: string): Promise<MyProfile> {
   const [profileRes, contactRes] = await Promise.all([
     supabase
       .from('profiles')
-      .select(
-        'id, full_name, nickname, role, status, avatar_color, joined_year, joined_at',
-      )
+      .select('id, full_name, nickname, role, status, avatar_color, joined_at')
       .eq('id', memberId)
       .single(),
     supabase
@@ -89,7 +86,7 @@ export async function fetchMyProfile(memberId: string): Promise<MyProfile> {
  * Database security boundary:
  * 1. RLS policy `profiles_update_self` allows updates where `id = auth.uid()`.
  * 2. Trigger `guard_profile_privileged_columns()` rejects changes to
- *    `full_name, role, status, email, joined_year, joined_at` unless level >= 6
+ *    `full_name, role, status, email, joined_at` unless level >= 6
  *    (#675: the full name is BC/Moderator's), so `full_name` is never sent here.
  *    Trigger `profiles_guard_nickname` trims the Nickname, turns blank into null
  *    and names the reason one is refused (`nickname_too_short` ... `nickname_taken`).

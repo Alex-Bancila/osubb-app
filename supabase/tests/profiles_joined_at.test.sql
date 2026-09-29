@@ -1,7 +1,7 @@
 -- profiles_joined_at.test.sql — #160: the exact join date the Recrut ->
 -- Voluntar tenure rule needs. Column shape, the one-shot backfill (not a
--- trigger), the safe-projection view, and the same privileged-column guard
--- that already protects joined_year.
+-- trigger), the safe-projection view, and the privileged-column guard
+-- (#936 dropped joined_year, the column the backfill read).
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
@@ -23,18 +23,18 @@ insert into auth.users (id, email) values
   ('16000000-0000-0000-0000-000000000001', 'self-160@test.local'),
   ('16000000-0000-0000-0000-000000000002', 'bc-160@test.local'),
   ('16000000-0000-0000-0000-000000000003', 'fresh-160@test.local');
-insert into profiles (id, full_name, email, role, status, joined_year) values
-  ('16000000-0000-0000-0000-000000000001', 'Self 160', 'self-160@test.local', 'voluntar', 'activ', 2025),
-  ('16000000-0000-0000-0000-000000000002', 'BC 160', 'bc-160@test.local', 'bc', 'activ', 2023);
+insert into profiles (id, full_name, email, role, status) values
+  ('16000000-0000-0000-0000-000000000001', 'Self 160', 'self-160@test.local', 'voluntar', 'activ'),
+  ('16000000-0000-0000-0000-000000000002', 'BC 160', 'bc-160@test.local', 'bc', 'activ');
 
 -- The #160 backfill is a one-shot UPDATE in the migration, not a trigger — a
--- row inserted afterwards with a joined_year and no joined_at stays null.
-insert into profiles (id, full_name, email, role, status, joined_year) values
-  ('16000000-0000-0000-0000-000000000003', 'Fresh 160', 'fresh-160@test.local', 'voluntar', 'activ', 2024);
+-- row inserted afterwards with no joined_at stays null.
+insert into profiles (id, full_name, email, role, status) values
+  ('16000000-0000-0000-0000-000000000003', 'Fresh 160', 'fresh-160@test.local', 'voluntar', 'activ');
 select is(
   (select joined_at from profiles where id = '16000000-0000-0000-0000-000000000003'),
   null::date,
-  'a freshly inserted row with a joined_year keeps joined_at null — the backfill does not run again');
+  'a freshly inserted row keeps joined_at null — the backfill does not run again');
 
 -- ==================== Grants ====================
 select ok(has_column_privilege('authenticated', 'profiles', 'joined_at', 'select'),

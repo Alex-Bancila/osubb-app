@@ -7,7 +7,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(40);
+select plan(39);
 
 -- ==================== Structure ====================
 select has_function('public', 'guard_profile_privileged_columns',
@@ -126,12 +126,8 @@ select throws_ok(
 select throws_ok(
   $$ update profiles set email = 'altcineva@test.local' where id = 'e1000000-0000-0000-0000-0000000000e1' $$,
   '42501', null, 'SELF cannot rewrite the address they were invited at');
--- #936: profiles.tier is dropped; joined_year right below already covers
--- "SELF cannot write this privileged column" and porting tier onto it would
--- just duplicate that assertion.
-select throws_ok(
-  $$ update profiles set joined_year = 2019 where id = 'e1000000-0000-0000-0000-0000000000e1' $$,
-  '42501', null, 'SELF cannot backdate when they joined (the promotion clock)');
+-- #936 dropped profiles.tier and profiles.joined_year; joined_at right below is
+-- the promotion clock, and the only join-date column left.
 select throws_ok(
   $$ update profiles set joined_at = '2019-01-01' where id = 'e1000000-0000-0000-0000-0000000000e1' $$,
   '42501', null, 'SELF cannot backdate their exact join date either (#160)');

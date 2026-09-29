@@ -2,8 +2,9 @@
 --
 -- Found by the backend-without-frontend audit of 2026-09-29. Every object below
 -- was checked against app/src, supabase/functions, scripts, supabase/tests and
--- seed.sql before it was dropped; the only callers left were test suites and two
--- test scripts (the Tracker smoke and the seed fingerprint), ported in the same PR.
+-- seed.sql before it was dropped. The callers left were test suites, two test
+-- scripts (the Tracker smoke and the seed fingerprint), the seed-staging log,
+-- the seed, and -- for the three columns in 4 -- the app, all updated in the same PR.
 --
 -- 1. update_task_content and convert_task_mode: superseded by the full-state
 --    update_task / preview_task_update (ADR-0007 amended 2026-09-21). Their
@@ -19,11 +20,15 @@
 --    that asks the Event visibility rule (private.can_read_event) itself instead
 --    of reading through the caller's RLS. Same arguments, same return row, same
 --    three refusals. The read policy is untouched (the RSVP read issue owns it).
--- 4. profiles.tier: never read, not a glossary term. profiles_directory is
---    recreated without it and the privileged-column guard stops naming it.
---    Kept on purpose, because the app still reads them: profiles.joined_year
---    (the "Membru din <an>" fallback on Profil) and announcements.category /
---    announcements.author (shown on the Announcement card and details).
+-- 4. Columns (Alex, 2026-09-29):
+--    * profiles.tier: never read, not a glossary term.
+--    * profiles.joined_year: superseded by joined_at (#160), which every Member
+--      now has (#933: set at provisioning, backfilled). Profil reads joined_at only.
+--    profiles_directory is recreated without both, and the privileged-column
+--    guard stops naming them.
+--    * announcements.category and announcements.author: free text the compose
+--      sheet never set. The author is created_by, shown as a Member Card (R15);
+--      the authorship trigger stops keeping the byline.
 -- 5. An Announcement never moves between Groups and never changes Audience
 --    (CodeRabbit on PR #938): the edit form never sends either, and now a
 --    signed-in update that tries is refused 23514. Writes without auth.uid()
@@ -117,12 +122,12 @@ revoke execute on function public.set_event_rsvp(bigint, text)
   from public, anon, authenticated, service_role;
 grant execute on function public.set_event_rsvp(bigint, text) to authenticated;
 
--- ==================== 4. profiles.tier ====================
--- profiles_directory enumerates tier, so it is dropped and recreated around the
--- column drop (the same columns, minus tier).
+-- ==================== 4. retired columns ====================
+-- profiles_directory enumerates tier and joined_year, so it is dropped and
+-- recreated around the column drops (the same columns, minus those two).
 drop view public.profiles_directory;
 
--- Rebuilt from 20260927180000_live_level_gates.sql, the latest body, minus tier.
+-- Rebuilt from 20260927180000_live_level_gates.sql, the latest body, minus tier and joined_year.
 create or replace function public.guard_profile_privileged_columns() returns trigger
   language plpgsql
   set search_path = ''
@@ -132,7 +137,6 @@ begin
      and new.role        is not distinct from old.role
      and new.status      is not distinct from old.status
      and new.email       is not distinct from old.email
-     and new.joined_year is not distinct from old.joined_year
      and new.joined_at   is not distinct from old.joined_at then
     return new;
   end if;
@@ -141,12 +145,12 @@ begin
     return new;
   end if;
   raise exception
-    'Only BC (level >= 6) may change full_name, role, status, email, joined_year or joined_at on a profile'
+    'Only BC (level >= 6) may change full_name, role, status, email or joined_at on a profile'
     using errcode = '42501';
 end;
 $$;
 
-alter table public.profiles drop column tier;
+alter table public.profiles drop column tier, drop column joined_year;
 
 create view public.profiles_directory with (security_invoker = on) as
   select profiles.id,
@@ -154,13 +158,40 @@ create view public.profiles_directory with (security_invoker = on) as
          profiles.role,
          profiles.status,
          profiles.avatar_color,
-         profiles.joined_year,
          profiles.created_at,
          profiles.joined_at,
          profiles.nickname
     from public.profiles;
 revoke all on public.profiles_directory from public, anon, authenticated, service_role;
 grant select on public.profiles_directory to authenticated, service_role;
+
+-- Rebuilt from 20260927160000_announcement_authorship.sql, the latest body,
+-- minus the author byline it used to clear and keep.
+create or replace function private.stamp_announcement_authorship()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_actor uuid := (select auth.uid());
+begin
+  if v_actor is null then
+    return new;
+  end if;
+  if tg_op = 'INSERT' then
+    new.created_by := v_actor;
+    new.published_at := now();
+  else
+    new.created_by := old.created_by;
+    new.published_at := old.published_at;
+  end if;
+  return new;
+end;
+$$;
+comment on function private.stamp_announcement_authorship() is
+  'Security pass 2026-09-27 (M1): announcements_stamp_authorship -- for a signed-in caller an insert stores created_by = auth.uid() and published_at = now(), and an update keeps both unchanged. Writes without auth.uid() (migrations, seed, jobs) pass through. #936 dropped the free-text author byline.';
+
+alter table public.announcements drop column author, drop column category;
 
 -- ==================== 5. an Announcement keeps its Group and Audience ====================
 create function private.guard_announcement_origin()

@@ -30,13 +30,15 @@ select plan(76);
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
   'eight demo members exist');
 
--- #160: joined_at is January 1 of joined_year for every demo profile, so a
--- rebuilt database and a backfilled live one agree (issue AC 3).
+-- #160: every demo profile has a joined_at on January 1 of its year, so a
+-- rebuilt database and a backfilled live one agree (issue AC 3; #936 dropped
+-- the joined_year column it was first backfilled from).
 select ok(
   not exists (select 1 from profiles
                where email like '%@demo.osubb'
-                 and joined_at is distinct from make_date(joined_year, 1, 1)),
-  'every demo profile''s joined_at is January 1 of its joined_year');
+                 and (joined_at is null
+                      or joined_at is distinct from make_date(extract(year from joined_at)::int, 1, 1))),
+  'every demo profile''s joined_at is January 1 of its year');
 
 select is(
   (select count(distinct role) from profiles where email like '%@demo.osubb'), 7::bigint,

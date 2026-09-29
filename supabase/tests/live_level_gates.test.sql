@@ -114,8 +114,8 @@ reset role;
 
 select pg_temp.test_login('e4700000-0000-0000-0000-000000000006', '{"member_role":"bc","member_level":6}');
 select lives_ok(
-  $$ update public.profiles set joined_year = 2021 where id = 'e4700000-0000-0000-0000-000000000006' $$,
-  'the guard admits a live BC''s privileged-column change (#936: tier dropped, joined_year is still a guarded column)');
+  $$ update public.profiles set joined_at = '2021-01-01' where id = 'e4700000-0000-0000-0000-000000000006' $$,
+  'the guard admits a live BC''s privileged-column change (#936: tier and joined_year dropped, joined_at is a guarded column)');
 reset role;
 
 -- #936: member_points and leaderboard are dropped. Neither department_cup nor
