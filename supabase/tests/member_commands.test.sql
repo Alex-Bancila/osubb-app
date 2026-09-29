@@ -23,29 +23,29 @@ select plan(119);
 
 -- ==================== Structure ====================
 
-select has_function('public', 'set_member_role', array['uuid', 'member_role', 'text'],
-  'the rank command exists with the optional-reason signature #612 specifies');
+select has_function('public', 'set_member_role', array['uuid', 'member_role', 'text', 'uuid'],
+  'the rank command exists with #612''s optional reason and #905''s optional replacement');
 select has_function('public', 'set_member_status', array['uuid', 'member_status', 'text'],
   'the status command exists with the optional-reason signature #612 specifies');
 
 -- ADR-0009 ruling R15: rank and position decouple. The comment is the durable
 -- statement of that boundary, so it is asserted, not assumed.
 select matches(
-  obj_description('public.set_member_role(uuid, public.member_role, text)'::regprocedure, 'pg_proc'),
+  obj_description('public.set_member_role(uuid, public.member_role, text, uuid)'::regprocedure, 'pg_proc'),
   'leaves Group Roles alone',
   'set_member_role''s comment states R15 — it never appoints or removes a Group Role');
 
 -- …and the single exception to it, stated in the same comment so nobody reads
 -- R15 as absolute and "fixes" the Minimum-Level cleanup away.
 select matches(
-  obj_description('public.set_member_role(uuid, public.member_role, text)'::regprocedure, 'pg_proc'),
+  obj_description('public.set_member_role(uuid, public.member_role, text, uuid)'::regprocedure, 'pg_proc'),
   'single exception is Minimum Level',
   'and states R15''s one exception — falling below a Group''s Minimum Level');
 
 -- The half of that AC this issue cannot ship: public.group_applications does
 -- not exist until #584. Deferred is fine; silently dropped is not.
 select matches(
-  obj_description('public.set_member_role(uuid, public.member_role, text)'::regprocedure, 'pg_proc'),
+  obj_description('public.set_member_role(uuid, public.member_role, text, uuid)'::regprocedure, 'pg_proc'),
   '#584',
   'and names #584 as the owner of the pending-Application withdrawal it cannot do yet');
 
@@ -229,11 +229,10 @@ select throws_ok(
   'anon cannot even execute the command (invite-only, ADR-0003)');
 reset role;
 
--- Self-target. It is asserted as the *Moderator* on purpose: every actor who
--- clears the level-6 gate holds bc or moderator, so a BC aiming at their own
--- row would be refused by the Moderator-only branch even if the self-rule were
--- deleted, and the assertion would pass for the wrong reason. The Moderator
--- clears that branch, so only the self-rule can be answering here.
+-- Self-target. Asserted as the Moderator, whom no rank branch ever refused, so
+-- only the self-rule can be answering here. Since ruling R31 (#905) a BC's
+-- self-change is refused by the same rule alone; member_rank_authority.test.sql
+-- asserts that case, with and without a named replacement.
 select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000001');
 select throws_ok(
   $$ select public.set_member_role('58000000-0000-0000-0000-000000000001', 'bce') $$,
@@ -333,29 +332,30 @@ select is(
   'the Drept de Vot Notification also explains the Adunarea Generală consequence');
 select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000002');
 
--- ==================== set_member_role: bc/moderator is the Moderator's ====================
+-- ==================== set_member_role: bc/moderator is leadership's (R31) ====================
+-- Until #905 these three were the Moderator's alone. Ruling R31 gives them to
+-- every BC member; the last-holder guard and its replacement live in
+-- member_rank_authority.test.sql. Neither rank is left without a live holder
+-- here (the fixture BC and Moderator stay), so no replacement is needed.
 
-select throws_ok(
-  $$ select public.set_member_role('58000000-0000-0000-0000-00000000000c', 'bc') $$,
-  '42501', 'member_manage_forbidden',
-  'BC cannot mint another BC');
-select throws_ok(
-  $$ select public.set_member_role('58000000-0000-0000-0000-00000000000c', 'moderator') $$,
-  '42501', 'member_manage_forbidden',
-  'BC cannot mint a Moderator');
-select throws_ok(
-  $$ select public.set_member_role('58000000-0000-0000-0000-000000000007', 'bce') $$,
-  '42501', 'member_manage_forbidden',
-  'and BC cannot unseat a sitting BC either');
+select is(
+  (select role::text from public.set_member_role('58000000-0000-0000-0000-00000000000c', 'bc')),
+  'bc', 'a BC member appoints another BC (ruling R31)');
+select is(
+  (select role::text from public.set_member_role('58000000-0000-0000-0000-00000000000c', 'moderator')),
+  'moderator', 'and a Moderator');
+select is(
+  (select role::text from public.set_member_role('58000000-0000-0000-0000-000000000007', 'bce')),
+  'bce', 'and unseats a sitting BC');
 reset role;
 
 select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000001');
 select is(
   (select role::text from public.set_member_role('58000000-0000-0000-0000-00000000000c', 'bc')),
-  'bc', 'the Moderator appoints a BC');
+  'bc', 'the Moderator still re-ranks leadership: a Moderator back to BC');
 select is(
-  (select role::text from public.set_member_role('58000000-0000-0000-0000-000000000007', 'bce')),
-  'bce', 'and the Moderator unseats one');
+  (select role::text from public.set_member_role('58000000-0000-0000-0000-000000000007', 'bc')),
+  'bc', 'and appoints a BC');
 reset role;
 
 -- ==================== set_member_role leaves Group Roles alone (R15) ====================
@@ -463,9 +463,9 @@ select throws_ok(
   'anon cannot even execute the status command');
 reset role;
 
--- Deactivating a BC removes their authority as thoroughly as demoting them
--- would, so it sits behind the same Moderator-only rule. The target is the BC
--- the Moderator appointed above — still sitting, unlike the one it unseated.
+-- Deactivating a BC stays the Moderator's alone: ruling R31 (#905) gave BC the
+-- ranks, not the Membership Status of a BC or Moderator. The target is the BC
+-- the Moderator appointed above — still sitting.
 select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000002');
 select throws_ok(
   $$ select public.set_member_status('58000000-0000-0000-0000-00000000000c', 'inactiv') $$,
@@ -625,15 +625,15 @@ select throws_ok(
   'and a row recording no change at all is still refused, exactly as #50 intended');
 
 -- #612: optional reasons preserve the existing two-argument behavior.
-select has_function('private', 'set_member_role_impl', array['uuid', 'member_role', 'text'], 'the role implementation accepts a reason');
-select is(has_function_privilege('anon', 'public.set_member_role(uuid, public.member_role, text)', 'execute'), false, 'anon execute on public role command is false');
-select is(has_function_privilege('public', 'public.set_member_role(uuid, public.member_role, text)', 'execute'), false, 'public execute on public role command is false');
-select is(has_function_privilege('service_role', 'public.set_member_role(uuid, public.member_role, text)', 'execute'), false, 'service_role execute on public role command is false');
-select is(has_function_privilege('authenticated', 'public.set_member_role(uuid, public.member_role, text)', 'execute'), true, 'authenticated execute on public role command is true');
-select is(has_function_privilege('anon', 'private.set_member_role_impl(uuid, public.member_role, text)', 'execute'), false, 'anon execute on private role command is false');
-select is(has_function_privilege('public', 'private.set_member_role_impl(uuid, public.member_role, text)', 'execute'), false, 'public execute on private role command is false');
-select is(has_function_privilege('service_role', 'private.set_member_role_impl(uuid, public.member_role, text)', 'execute'), false, 'service_role execute on private role command is false');
-select is(has_function_privilege('authenticated', 'private.set_member_role_impl(uuid, public.member_role, text)', 'execute'), true, 'authenticated execute on private role command is true');
+select has_function('private', 'set_member_role_impl', array['uuid', 'member_role', 'text', 'uuid'], 'the role implementation accepts a reason and, since #905, a replacement');
+select is(has_function_privilege('anon', 'public.set_member_role(uuid, public.member_role, text, uuid)', 'execute'), false, 'anon execute on public role command is false');
+select is(has_function_privilege('public', 'public.set_member_role(uuid, public.member_role, text, uuid)', 'execute'), false, 'public execute on public role command is false');
+select is(has_function_privilege('service_role', 'public.set_member_role(uuid, public.member_role, text, uuid)', 'execute'), false, 'service_role execute on public role command is false');
+select is(has_function_privilege('authenticated', 'public.set_member_role(uuid, public.member_role, text, uuid)', 'execute'), true, 'authenticated execute on public role command is true');
+select is(has_function_privilege('anon', 'private.set_member_role_impl(uuid, public.member_role, text, uuid)', 'execute'), false, 'anon execute on private role command is false');
+select is(has_function_privilege('public', 'private.set_member_role_impl(uuid, public.member_role, text, uuid)', 'execute'), false, 'public execute on private role command is false');
+select is(has_function_privilege('service_role', 'private.set_member_role_impl(uuid, public.member_role, text, uuid)', 'execute'), false, 'service_role execute on private role command is false');
+select is(has_function_privilege('authenticated', 'private.set_member_role_impl(uuid, public.member_role, text, uuid)', 'execute'), true, 'authenticated execute on private role command is true');
 select has_function('private', 'set_member_status_impl', array['uuid', 'member_status', 'text'], 'the status implementation accepts a reason');
 select is(has_function_privilege('anon', 'public.set_member_status(uuid, public.member_status, text)', 'execute'), false, 'anon execute on public status command is false');
 select is(has_function_privilege('public', 'public.set_member_status(uuid, public.member_status, text)', 'execute'), false, 'public execute on public status command is false');
