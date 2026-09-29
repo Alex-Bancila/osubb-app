@@ -170,7 +170,7 @@ describe('Group options', () => {
   it('offers every active Group below any root, in tree order, with no root chosen (#919)', () => {
     const roots = rootGroups(groups);
     expect(ids(groupsBelowAny(groups, roots))).toEqual([2, 3, 4]);
-    expect(rootOf(groups[1]!, roots)).toBe(1);
+    expect(rootOf(groups[1] as WorkFilterGroup, roots)).toBe(1);
     // Only Comunicare as a root: nothing below it.
     expect(groupsBelowAny(groups, roots.slice(1, 2))).toEqual([]);
   });
