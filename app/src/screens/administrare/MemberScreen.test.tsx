@@ -637,6 +637,14 @@ it('puts a refused join-date write in the editor and keeps it open (#932)', asyn
     ),
   ).toBeVisible();
   expect(input).toBeVisible();
+  // Changing the date drops the refusal about the old one.
+  await user.clear(input);
+  await user.type(input, '2024-03-16');
+  expect(
+    screen.queryByText(
+      'Nu am putut salva data intrării. Verifică permisiunile și reîncearcă.',
+    ),
+  ).toBeNull();
   await user.click(screen.getByRole('button', { name: 'Renunță' }));
   expect(
     screen.getByRole('button', { name: 'Editează data intrării' }),

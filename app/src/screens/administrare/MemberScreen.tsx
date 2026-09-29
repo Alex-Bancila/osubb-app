@@ -290,7 +290,11 @@ function JoinDateFact({ member }: { member: AdminMember }) {
               max={today || undefined}
               disabled={change.isPending}
               autoFocus
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                // A refusal was about the old date.
+                form.reset();
+              }}
               {...form.field('joinedAt', hintId)}
             />
             <p id={hintId} className="m-0 text-sm text-muted-foreground">

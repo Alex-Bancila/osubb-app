@@ -427,7 +427,11 @@ function EmailQuotaEditor({
         className={cn(control, 'max-w-40 tabular-nums')}
         value={quota}
         disabled={disabled || pending}
-        onChange={(event) => setQuota(event.target.value)}
+        onChange={(event) => {
+          setQuota(event.target.value);
+          // A refusal was about the old value.
+          form.reset();
+        }}
         {...form.field('quota', hintId)}
       />
       <p id={hintId} className="m-0 text-sm text-muted-foreground">

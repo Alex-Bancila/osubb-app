@@ -488,6 +488,24 @@ it('shows and edits the daily email quota, refusing anything but 0-99999 (#932)'
   }
   expect(rpcCalls('set_org_setting')).toEqual([]);
 
+  // A server refusal clears once the value changes.
+  db.refuse.set('set_org_setting', 'org_settings_manage_forbidden');
+  await user.clear(field);
+  await user.type(field, '80');
+  await user.click(save);
+  expect(
+    await within(item).findByText(
+      'Doar BC și Moderatorul pot schimba setările organizației.',
+    ),
+  ).toBeVisible();
+  db.refuse.clear();
+  await user.type(field, '5');
+  expect(
+    within(item).queryByText(
+      'Doar BC și Moderatorul pot schimba setările organizației.',
+    ),
+  ).toBeNull();
+
   await user.clear(field);
   await user.type(field, ' 0 ');
   await user.click(save);
