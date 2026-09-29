@@ -92,7 +92,7 @@ export function FilterSearch({
       />
       <input
         type="search"
-        className="h-11 w-full min-w-0 rounded-lg border border-border bg-background pr-3 pl-9 text-sm text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none dark:border-input dark:bg-input/30"
+        className="h-11 w-full min-w-0 rounded-lg border border-border bg-background pr-3 pl-[2.5rem] text-sm text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none dark:border-input dark:bg-input/30"
         {...props}
       />
     </label>
