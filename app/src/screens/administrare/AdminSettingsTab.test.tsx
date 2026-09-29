@@ -73,6 +73,7 @@ beforeEach(() => {
     ['adunarea_generala_group_id', null],
     ['board_group_id', null],
     ['vote_retention_percent', '25'],
+    ['email_daily_quota', '90'],
   ]);
   db.refuse = new Map();
   db.rpc.mockReset();
@@ -148,6 +149,12 @@ it('groups the settings by purpose, each with its effect, value and one Editeaz�
       .getAllByRole('listitem')
       .map((item) => item.getAttribute('data-setting')),
   ).toEqual(['board_group_id']);
+  const emails = screen.getByRole('region', { name: 'Emailuri' });
+  expect(
+    within(emails)
+      .getAllByRole('listitem')
+      .map((item) => item.getAttribute('data-setting')),
+  ).toEqual(['email_daily_quota']);
   // The thresholds and shares live in Evaluări de rol (R28, R30).
   expect(
     within(promotions).getByRole('link', { name: /Praguri și procente/ }),
@@ -441,4 +448,65 @@ it('lets the editor be left when the Groups cannot be loaded', async () => {
     }),
   ).toHaveFocus();
   expect(rpcCalls('set_org_setting')).toEqual([]);
+});
+
+it('shows and edits the daily email quota, refusing anything but 0-99999 (#932)', async () => {
+  const user = userEvent.setup();
+  show();
+  const item = await row('Limita zilnică de emailuri');
+  // What it limits, read from claim_email_digests (#775).
+  expect(
+    within(item).getByText(
+      'Câte rezumate cu notificările necitite pleacă pe email într-o zi, la toți membrii la un loc; cele peste limită așteaptă ziua următoare.',
+    ),
+  ).toBeVisible();
+  expect(valueOf(item)).toHaveTextContent('90 pe zi');
+
+  await user.click(
+    within(item).getByRole('button', {
+      name: 'Editează Limita zilnică de emailuri',
+    }),
+  );
+  const field = within(item).getByRole('textbox', {
+    name: 'Limita zilnică de emailuri',
+  });
+  expect(field).toHaveFocus();
+  expect(field).toHaveValue('90');
+  expect(field).toHaveAttribute('inputmode', 'numeric');
+  expect(field).toHaveAccessibleDescription(/0 oprește rezumatele/);
+  const save = within(item).getByRole('button', { name: 'Salvează' });
+  expect(save).toBeDisabled();
+
+  // Blank, negative, decimal and too-large values never reach the server.
+  for (const bad of [' ', '-1', '2.5', '100000']) {
+    await user.clear(field);
+    await user.type(field, bad);
+    await user.click(save);
+    expect(
+      within(item).getByText('Scrie un număr întreg de la 0 la 99999.'),
+    ).toBeVisible();
+  }
+  expect(rpcCalls('set_org_setting')).toEqual([]);
+
+  await user.clear(field);
+  await user.type(field, ' 0 ');
+  await user.click(save);
+  await waitFor(() =>
+    expect(rpcCalls('set_org_setting').at(-1)).toEqual({
+      p_key: 'email_daily_quota',
+      p_value: '0',
+    }),
+  );
+  expect(await within(item).findByRole('status')).toHaveTextContent(
+    'Setare salvată.',
+  );
+  // 0 pauses the digest, and the row says so.
+  expect(
+    await within(valueOf(item)).findByText('Oprit: niciun rezumat pe email'),
+  ).toBeVisible();
+  expect(
+    within(item).getByRole('button', {
+      name: 'Editează Limita zilnică de emailuri',
+    }),
+  ).toHaveFocus();
 });

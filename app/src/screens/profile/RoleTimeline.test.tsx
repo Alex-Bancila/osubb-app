@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MemberIdentity } from '../../components/member/member-identity';
 import type { MyProfile } from '../../queries/profile';
 import type { RoleHistoryRow } from '../../queries/role-history';
-import { RoleTimeline } from './RoleTimeline';
+import { MemberRoleTimeline, RoleTimeline } from './RoleTimeline';
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock(
@@ -19,8 +19,13 @@ const historyMock = vi.hoisted(() => ({
   error: null as Error | null,
   refetch: vi.fn(),
 }));
+const memberHistory = vi.hoisted(() => ({ lastMemberId: '' }));
 vi.mock('../../queries/role-history', () => ({
   useMyRoleHistory: () => historyMock,
+  useMemberRoleHistory: (memberId: string) => {
+    memberHistory.lastMemberId = memberId;
+    return historyMock;
+  },
 }));
 
 const identitiesMock = vi.hoisted(() => ({
@@ -217,5 +222,63 @@ describe('RoleTimeline', () => {
     render(<RoleTimeline profile={profile} />);
 
     expect(items()[1]).toHaveTextContent('responsabil');
+  });
+});
+
+// #932: another Member's timeline on their Administrare page.
+describe('MemberRoleTimeline', () => {
+  beforeEach(() => {
+    historyMock.data = [];
+    historyMock.isPending = false;
+    historyMock.isError = false;
+    historyMock.error = null;
+    identitiesMock.data = undefined;
+    memberHistory.lastMemberId = '';
+  });
+
+  it("reads that Member's history and draws even a single Role", () => {
+    render(
+      <MemberRoleTimeline
+        memberId="m-7"
+        joinedAt="2025-10-01"
+        role="voluntar"
+      />,
+    );
+    expect(memberHistory.lastMemberId).toBe('m-7');
+    const list = screen.getByRole('list', { name: 'Istoric roluri' });
+    const rows = within(list).getAllByRole('listitem');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent('Voluntar');
+    expect(rows[0]).toHaveTextContent('din 1 oct. 2025');
+  });
+
+  it('starts from the join date BC set and names who decided a change', () => {
+    historyMock.data = [
+      {
+        from_role: 'recrut',
+        to_role: 'voluntar',
+        created_at: '2026-02-01T10:00:00Z',
+        actor_kind: 'human',
+        changed_by: 'bc-1',
+      },
+    ];
+    identitiesMock.data = new Map([
+      ['bc-1', { memberId: 'bc-1', fullName: 'Ioana Pop', nickname: 'Io' }],
+    ]);
+    render(
+      <MemberRoleTimeline
+        memberId="m-7"
+        joinedAt="2025-10-01"
+        role="voluntar"
+      />,
+    );
+    const [first, second] = within(
+      screen.getByRole('list', { name: 'Istoric roluri' }),
+    ).getAllByRole('listitem');
+    expect(first).toHaveTextContent('Recrut');
+    expect(first).toHaveTextContent('1 oct. 2025 – 1 feb. 2026');
+    expect(second).toHaveTextContent('Voluntar');
+    expect(second).toHaveTextContent('Decis de');
+    expect(second).toHaveTextContent('Io');
   });
 });
