@@ -73,3 +73,33 @@ it('pages the authority-filtered queue and rejects partial failures', async () =
   expect(calls).toBe(2);
   expect(api.rpc).toHaveBeenCalledWith('pending_request_decisions');
 });
+it('sends the Task as the decider shaped it, blank details as an empty text (#915)', async () => {
+  api.rpc.mockReset().mockResolvedValue({ data: { id: 1 }, error: null });
+  await decideRequest({
+    kind: 'approve',
+    requestId: 7,
+    difficulty: 3,
+    rating: 4,
+    note: 'Bine',
+    task: {
+      title: 'Stand la târg',
+      description: null,
+      groupId: 9,
+      link: { label: 'Poze', url: 'https://example.org' },
+      campaignId: null,
+    },
+  });
+  expect(api.rpc).toHaveBeenCalledWith('approve_completed_work_request', {
+    p_request_id: 7,
+    p_difficulty: 3,
+    p_rating: 4,
+    p_note: 'Bine',
+    p_title: 'Stand la târg',
+    // null would keep the Request's text; '' clears the details.
+    p_description: '',
+    p_group_id: 9,
+    p_link_label: 'Poze',
+    p_link_url: 'https://example.org',
+    p_campaign_id: null,
+  });
+});
