@@ -1723,7 +1723,8 @@ export type Database = {
           field: string
           from_value: number | null
           id: number
-          kind: string
+          kind: string | null
+          promotion_rule_id: number | null
           role_evaluation_id: number | null
           source: string
           to_value: number
@@ -1734,7 +1735,8 @@ export type Database = {
           field?: string
           from_value?: number | null
           id?: never
-          kind: string
+          kind?: string | null
+          promotion_rule_id?: number | null
           role_evaluation_id?: number | null
           source: string
           to_value: number
@@ -1745,7 +1747,8 @@ export type Database = {
           field?: string
           from_value?: number | null
           id?: never
-          kind?: string
+          kind?: string | null
+          promotion_rule_id?: number | null
           role_evaluation_id?: number | null
           source?: string
           to_value?: number
@@ -1799,6 +1802,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "promotion_thresholds"
             referencedColumns: ["kind"]
+          },
+          {
+            foreignKeyName: "promotion_threshold_changes_promotion_rule_id_fkey"
+            columns: ["promotion_rule_id"]
+            isOneToOne: false
+            referencedRelation: "promotion_rules"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "promotion_threshold_changes_role_evaluation_id_fkey"
@@ -4611,7 +4621,8 @@ export type Database = {
           field: string
           from_value: number | null
           id: number
-          kind: string
+          kind: string | null
+          promotion_rule_id: number | null
           role_evaluation_id: number | null
           source: string
           to_value: number
@@ -5036,6 +5047,30 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "groups"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_promotion_rule: {
+        Args: {
+          p_enabled: boolean
+          p_min_tenure_months: number
+          p_rule_id: number
+        }
+        Returns: {
+          created_at: string
+          enabled: boolean
+          from_role: Database["public"]["Enums"]["member_role"]
+          id: number
+          kind: string
+          min_tenure_months: number
+          percent: number | null
+          to_role: Database["public"]["Enums"]["member_role"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "promotion_rules"
           isOneToOne: true
           isSetofReturn: false
         }
