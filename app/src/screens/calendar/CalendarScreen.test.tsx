@@ -75,6 +75,12 @@ vi.mock('./EventManageControls', () => ({
     <span data-testid={`manage-${shown.id}`} />
   ),
 }));
+// Likewise Cine participă (#934): EventAttendance's suite decides who sees it.
+vi.mock('./EventAttendance', () => ({
+  EventAttendance: ({ event: shown }: { event: EventPresentation }) => (
+    <span data-testid={`attendance-${shown.id}`} />
+  ),
+}));
 
 import { filterButton, openFilters } from '../../test/filters';
 import CalendarScreen from './CalendarScreen';
@@ -479,6 +485,30 @@ describe('CalendarScreen', () => {
         name: 'Ședință de gestionat',
       });
       expect(within(card).getByTestId('manage-9')).toBeInTheDocument();
+      expect(within(card).getByTestId('attendance-9')).toBeInTheDocument();
+    });
+
+    it('asks no card for Cine participă on a deadline, which takes no answers', () => {
+      setEvents([event({ id: 10, type: 'deadline', title: 'Termen raport' })]);
+      renderCalendar();
+
+      const card = screen.getByRole('article', { name: 'Termen raport' });
+      expect(within(card).queryByTestId('attendance-10')).toBeNull();
+    });
+
+    it('keeps Cine participă on a cancelled Event: its answers are history', () => {
+      setEvents([
+        event({
+          id: 11,
+          title: 'Ședință anulată',
+          cancelledAt: '2026-10-19T10:00:00.000Z',
+          cancelReason: 'Sala nu mai este disponibilă.',
+        }),
+      ]);
+      renderCalendar();
+
+      const card = screen.getByRole('article', { name: 'Ședință anulată' });
+      expect(within(card).getByTestId('attendance-11')).toBeInTheDocument();
     });
 
     // Mutation this catches: delete the ancestor walk in groupAccentColor and
