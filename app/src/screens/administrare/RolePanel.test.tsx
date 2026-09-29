@@ -16,6 +16,8 @@ const state = vi.hoisted(() => ({
   groupIds: vi.fn(),
   mutate: vi.fn(),
 }));
+// MemberName's card reads through the client; no network here.
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../lib/auth', () => ({ useAuth: state.auth }));
 vi.mock('../../queries/groups-admin', () => ({
   useAppointableMembers: state.members,
