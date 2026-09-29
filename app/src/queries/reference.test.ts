@@ -240,6 +240,27 @@ describe('buildMemberGroups and resolveGroupRoleLabel', () => {
     expect(itResult?.role_label).toBe('Coordonator Tehnic');
   });
 
+  it('adds the Groups joined by Automatic Membership as "Automat", never the Organization Group (#929)', () => {
+    const result = buildMemberGroups(
+      [
+        {
+          group_id: itTeamGroup.id,
+          group_role: 'member' as const,
+          position_title: null,
+        },
+      ],
+      testMap,
+      // The Organization Group and an explicit Group are never doubled.
+      [agGroup.id, orgGroup.id, itTeamGroup.id],
+    );
+    expect(
+      result.map((g) => [g.name, g.role_label, g.automatic ?? false]),
+    ).toEqual([
+      ['Adunarea Generală', 'Automat', true],
+      ['Echipa IT', 'Membru', false],
+    ]);
+  });
+
   it('returns empty array when input is undefined or empty', () => {
     expect(buildMemberGroups(undefined, testMap)).toEqual([]);
     expect(buildMemberGroups([], testMap)).toEqual([]);

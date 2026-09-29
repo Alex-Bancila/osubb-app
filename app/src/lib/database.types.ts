@@ -4130,6 +4130,17 @@ export type Database = {
           position_title: string
         }[]
       }
+      group_roster: {
+        Args: { p_group_id?: number }
+        Returns: {
+          group_id: number
+          group_role: string
+          joined_at: string
+          member_id: string
+          position_title: string
+          source: string
+        }[]
+      }
       leadership_leaderboard: {
         Args: {
           p_campaign_id?: number

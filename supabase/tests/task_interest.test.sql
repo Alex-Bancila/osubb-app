@@ -916,7 +916,7 @@ reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(7));
 select lives_ok($$select public.express_task_interest((select id from g521_tasks where name='executor2'))$$,'task_interest: Executor persona 7 remains authorized');
 reset role;
-select ok(exists(select 1 from public.notifications where task_id=(select id from g521_tasks where name='executor2') and member_id=pg_temp.g521_uid(6)) and exists(select 1 from public.notifications where task_id=(select id from g521_tasks where name='executor2') and member_id=pg_temp.g521_uid(1)),'Manager-less peers and BC receive fallback work notifications');
+select ok(exists(select 1 from public.notifications where task_id=(select id from g521_tasks where name='executor2') and member_id=pg_temp.g521_uid(6)) and not exists(select 1 from public.notifications where task_id=(select id from g521_tasks where name='executor2') and member_id=pg_temp.g521_uid(1)),'Manager-less peers receive fallback work notifications, and BC does not (R32: no Task Notification through Group management)');
 reset role;
 select pg_temp.g521_task('executor3','dt',null,'todo','public');
 update public.tasks set created_by=pg_temp.g521_uid(8) where id=(select id from g521_tasks where name='executor3');

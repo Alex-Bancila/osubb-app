@@ -454,6 +454,33 @@ describe('ProfileScreen', () => {
     expect(screen.queryByText('Membru')).not.toBeInTheDocument();
   });
 
+  it('lists the Adunarea Generală joined by Automatic Membership, marked "Automat" (#929)', () => {
+    groupsQueryMock.data = [
+      ...defaultMemberGroups,
+      {
+        id: 62,
+        name: 'Adunarea Generală',
+        short: 'AG',
+        color: '#284C93',
+        category: 'team',
+        group_role: 'member',
+        position_title: null,
+        role_label: 'Automat',
+        automatic: true,
+      },
+    ];
+    render(<ProfileScreen />, { wrapper: wrapper() });
+
+    const card = screen.getByTestId('groups-card');
+    const link = within(card).getByRole('link', { name: 'Adunarea Generală' });
+    expect(link).toHaveAttribute('href', '/grupuri/62');
+    const row = link.closest('[data-slot="list-row"]');
+    expect(row).not.toBeNull();
+    expect(within(row as HTMLElement).getByText('Automat')).toBeInTheDocument();
+    // A plain explicit membership still carries no badge (B40).
+    expect(within(card).queryByText('Membru')).not.toBeInTheDocument();
+  });
+
   it('each Grupurile mele row opens its Group page (navigation D8)', () => {
     render(<ProfileScreen />, { wrapper: wrapper() });
 
@@ -796,19 +823,36 @@ describe('ProfileScreen', () => {
       groupsQueryMock.membershipRows = [];
     });
 
-    it('at level 5 there is no Groups panel and none of the joining parts (#824)', () => {
+    it('at level 5 Grupurile mele lists the Groups, the Adunarea Generală included, with none of the joining parts (#824, #929)', () => {
       authMock.claims = {
         member_role: 'bce',
         member_level: 5,
         group_ids: [10],
       };
       setTestProfile({ ...mockProfile, role: 'bce' });
+      groupsQueryMock.data = [
+        ...defaultMemberGroups,
+        {
+          id: 62,
+          name: 'Adunarea Generală',
+          short: 'AG',
+          color: '#284C93',
+          category: 'team',
+          group_role: 'member',
+          position_title: null,
+          role_label: 'Automat',
+          automatic: true,
+        },
+      ];
       render(<ProfileScreen />, { wrapper: wrapper() });
 
-      expect(screen.queryByTestId('groups-card')).not.toBeInTheDocument();
-      expect(screen.queryByText('Grupurile mele')).not.toBeInTheDocument();
-      expect(screen.queryByText('Grupuri')).not.toBeInTheDocument();
-      expect(screen.queryByText('Educațional')).not.toBeInTheDocument();
+      // #929 (Alex, 2026-09-29): BCE belongs to the Adunarea Generală by Role.
+      const card = screen.getByTestId('groups-card');
+      expect(
+        within(card).getByRole('link', { name: 'Adunarea Generală' }),
+      ).toHaveAttribute('href', '/grupuri/62');
+      expect(within(card).getByText('Automat')).toBeInTheDocument();
+      expect(screen.getByTestId('board-title')).toBeInTheDocument();
       expect(screen.queryByTestId('joining-section')).not.toBeInTheDocument();
       expect(screen.queryByText('Cereri în așteptare')).not.toBeInTheDocument();
       expect(
@@ -819,6 +863,21 @@ describe('ProfileScreen', () => {
       ).not.toBeInTheDocument();
       // A leader's Profil never asks for Applications at all.
       expect(applicationMocks.useGroupApplications).not.toHaveBeenCalled();
+    });
+
+    it('BC and the Moderator, members of every Group, get no Grupurile mele (R32)', () => {
+      for (const role of ['bc', 'moderator'] as const) {
+        authMock.claims = {
+          member_role: role,
+          member_level: role === 'bc' ? 6 : 9,
+          group_ids: [10],
+        };
+        setTestProfile({ ...mockProfile, role });
+        const { unmount } = render(<ProfileScreen />, { wrapper: wrapper() });
+        expect(screen.queryByTestId('groups-card')).not.toBeInTheDocument();
+        expect(screen.queryByText('Grupurile mele')).not.toBeInTheDocument();
+        unmount();
+      }
     });
   });
 
