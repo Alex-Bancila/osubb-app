@@ -28,7 +28,11 @@ export function useOrgSettings({ enabled = true }: { enabled?: boolean } = {}) {
 
 /** The settings Administrare → Setări edits (#825). */
 export type OrgSettingChange = {
-  key: 'adherence_form_url' | 'adunarea_generala_group_id' | 'board_group_id';
+  key:
+    | 'adherence_form_url'
+    | 'adunarea_generala_group_id'
+    | 'board_group_id'
+    | 'email_daily_quota';
   value: string | null;
 };
 

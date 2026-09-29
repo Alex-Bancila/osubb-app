@@ -1,3 +1,4 @@
+import type { UseQueryResult } from '@tanstack/react-query';
 import { ErrorState, Loading } from '../../components/states';
 import type { MemberIdentity } from '../../components/member/member-identity';
 import { MemberName } from '../../components/member/MemberName';
@@ -10,7 +11,11 @@ import {
 import { useMemberIdentities } from '../../queries/member-identities';
 import type { MyProfile } from '../../queries/profile';
 import { useRoles } from '../../queries/reference';
-import { useMyRoleHistory } from '../../queries/role-history';
+import {
+  useMemberRoleHistory,
+  useMyRoleHistory,
+  type RoleHistoryRow,
+} from '../../queries/role-history';
 
 /**
  * The Member's own Role timeline on Profil (#633, ruling R8): each Role held,
@@ -26,6 +31,57 @@ import { useMyRoleHistory } from '../../queries/role-history';
  */
 export function RoleTimeline({ profile }: { profile: MyProfile }) {
   const historyQuery = useMyRoleHistory();
+  return (
+    <TimelineBody
+      historyQuery={historyQuery}
+      joinedAt={profile.joined_at}
+      joinedYear={profile.joined_year}
+      role={profile.role}
+      label="Parcursul organizațional"
+    />
+  );
+}
+
+/**
+ * Another Member's Role timeline, the body of the **Istoric roluri** panel on
+ * their Administrare page (#932). Mounted for BC and the Moderator only —
+ * `role_history_read` answers another Member's rows to level 6 and up — and
+ * drawn even with a single Role, unlike Profil: BC opens the page to check it.
+ */
+export function MemberRoleTimeline({
+  memberId,
+  joinedAt,
+  role,
+}: {
+  memberId: string;
+  joinedAt: string | null;
+  role: string;
+}) {
+  const historyQuery = useMemberRoleHistory(memberId);
+  return (
+    <TimelineBody
+      historyQuery={historyQuery}
+      joinedAt={joinedAt}
+      joinedYear={null}
+      role={role}
+      label="Istoric roluri"
+    />
+  );
+}
+
+function TimelineBody({
+  historyQuery,
+  joinedAt,
+  joinedYear,
+  role,
+  label,
+}: {
+  historyQuery: UseQueryResult<RoleHistoryRow[]>;
+  joinedAt: string | null;
+  joinedYear: number | null;
+  role: string;
+  label: string;
+}) {
   const rolesQuery = useRoles();
   const rows = historyQuery.data ?? [];
   const actorIds = rows.flatMap((row) =>
@@ -46,15 +102,12 @@ export function RoleTimeline({ profile }: { profile: MyProfile }) {
     return <Loading label="Se încarcă parcursul…" />;
   }
 
-  const segments = buildRoleSegments(profile.joined_at, profile.role, rows);
-  const roleName = (role: string) => rolesQuery.data?.get(role)?.name ?? role;
+  const segments = buildRoleSegments(joinedAt, role, rows);
+  const roleName = (key: string) => rolesQuery.data?.get(key)?.name ?? key;
   const undated = segments.length === 1 && !segments[0]?.startDate;
 
   return (
-    <ol
-      className="space-y-4 border-l border-border pl-4"
-      aria-label="Parcursul organizațional"
-    >
+    <ol className="space-y-4 border-l border-border pl-4" aria-label={label}>
       {segments.map((segment, i) => {
         const isCurrent = segment.endDate === null;
         const period = formatSegmentPeriod(segment);
@@ -80,9 +133,9 @@ export function RoleTimeline({ profile }: { profile: MyProfile }) {
                 {duration && ` · ${duration}`}
               </p>
             )}
-            {undated && profile.joined_year && (
+            {undated && joinedYear && (
               <p className="text-xs text-muted-foreground">
-                Membru din {profile.joined_year}
+                Membru din {joinedYear}
               </p>
             )}
             {segment.openedBy && (

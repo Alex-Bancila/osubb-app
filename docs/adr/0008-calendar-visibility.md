@@ -7,6 +7,7 @@
 - **Amended:** 2026-09-20 — the relevant audience of an Event is its Group's Group Audience (Automatic Membership resolved, every Group below included); archiving a Group cancels its future Events
 - **Amended:** 2026-09-23 — past Events readable under the same Minimum Level rule; an Event may carry one Campaign; the month view and the Work Filter
 - **Amended:** 2026-09-28 — Other OSUBB Events are labelled by their Group's name ("Alt eveniment OSUBB" retired); a deadline Event offers no RSVP
+- **Amended:** 2026-09-29 — an Event's RSVPs are read by its managers (the people who may edit or cancel it), no longer by every BCE and above
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -119,3 +120,7 @@ An Event belongs to one Group. Organization behavior comes from `groups.is_organ
 **Every Event is labelled by its Group's name** (Alex, 2026-09-28). An Event card names the Group that owns it — a Child Group with its parent ("Echipa Aplicație · Diverse"), the Organization Group as "OSUBB" — never a category noun. This applies to Other OSUBB Events too: the "Alt eveniment OSUBB" label (§Month view and filter, 2026-09-23) is retired. Their grey treatment stays, and the Group's name is the cue that does not depend on colour.
 
 **A deadline Event offers no RSVP.** An Event of type `deadline` is a date to keep, not a gathering, so the Calendar shows no "Participi?" controls on it. §RSVP and capacity is otherwise unchanged; the server still accepts an RSVP on any visible future Event.
+
+## Amendment (2026-09-29) — who reads the RSVPs
+
+**An Event's RSVPs belong to its managers** (Alex, 2026-09-29, #934). The people who may edit or cancel an Event — BC and the Moderator; the Group Managers and Group Responsibles of its Group or of a Group above it while it is active; and, for an Organization Group Event, its creator — read every answer on it and see its counts and a "Cine participă" list in the Calendar. Every other Member reads only their own answer. This replaces the 2026-09-24 sentence "the attendance read threshold for other Members is level 5": no rank reads other Members' answers by itself. The rule is one server predicate, `private.can_manage_event`, which `update_event`, `cancel_event` and the attendance read policy all ask, so management and RSVP visibility cannot drift apart. A cancelled Event keeps its managers, who still read its preserved RSVP history.

@@ -175,7 +175,7 @@ A Task that groups Subtasks one level deep. It has no Executor, Candidate Queue,
 An ordinary Task whose Origin is inherited immutably from its Umbrella Task.
 
 **Task Manager**:
-The Member who created a Task, recorded by the server. They receive the Task's manager notifications; when they are the actor or no longer active, the Origin's managers receive them instead, never a BC member or the Moderator through that Group, and nobody when no such manager is left.
+The Member who created a Task, recorded by the server. They receive the Task's manager notifications; when they are the actor or no longer active, the Managers of the nearest Group on the Origin's path that has a Manager receive them instead (else its peer Responsibles), never a BC member or the Moderator through a Group, and nobody when no such manager is left.
 
 **Executor**:
 The one Member currently accountable for completing a Task.
