@@ -3,11 +3,16 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 import axe from 'axe-core';
-const state = vi.hoisted(() => ({ history: vi.fn(), options: vi.fn() }));
+const state = vi.hoisted(() => ({
+  history: vi.fn(),
+  options: vi.fn(),
+  total: vi.fn(),
+}));
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../queries/leadership', () => ({
   useLeadershipMemberTasks: state.history,
   useLeadershipFilters: state.options,
+  useLeadershipMemberTotal: state.total,
 }));
 vi.mock('../../queries/task-tabs', () => ({
   useTaskLeadership: () => ({ data: true }),
@@ -106,6 +111,7 @@ const budget = {
 beforeEach(() => {
   vi.clearAllMocks();
   state.history.mockReturnValue({ data: [workshop, budget] });
+  state.total.mockReturnValue({ data: 12, isPending: false, isError: false });
   state.options.mockReturnValue({
     data: {
       groups: [
@@ -346,4 +352,79 @@ it('lays the Assignment cards on the collection grid, each as tall as its own re
   expect(within(grid as HTMLElement).getAllByRole('article')).toHaveLength(
     cards().length,
   );
+});
+
+function total() {
+  return screen.getByRole('region', { name: 'Puncte' });
+}
+it("heads the page with the Member's total points, read for the whole record (#906)", () => {
+  view();
+  expect(state.total).toHaveBeenLastCalledWith(uid, {});
+  expect(total()).toHaveTextContent('12 puncte');
+  expect(total()).toHaveTextContent('din toate taskurile');
+  // At the top: the total sits in the Member panel, above the Work Filter.
+  const filter = screen.getByRole('button', { name: /^Filtrează/ });
+  expect(
+    total().compareDocumentPosition(filter) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+});
+it('re-reads the total with every Work Filter level, as Clasament does (#906)', async () => {
+  const user = userEvent.setup();
+  view(uid, '?grup=7&subgrup=9&campanie=3&de_la=2026-09-01&pana_la=2026-09-30');
+  // Unlike the Assignment list, the total sends the Group and the Campaign:
+  // Clasament's figure for this Member under this filter.
+  expect(state.total).toHaveBeenLastCalledWith(uid, {
+    p_group_id: 9,
+    p_campaign_id: 3,
+    p_from: '2026-08-31T21:00:00.000Z',
+    p_to: '2026-09-30T21:00:00.000Z',
+  });
+  expect(total()).toHaveTextContent(
+    'din filtrele alese · acordate între 1 septembrie 2026 și 30 septembrie 2026',
+  );
+  state.total.mockReturnValue({ data: 30, isPending: false, isError: false });
+  await user.click(screen.getByRole('button', { name: 'Șterge filtrele' }));
+  expect(state.total).toHaveBeenLastCalledWith(uid, {});
+  expect(total()).toHaveTextContent('30 de puncte');
+  expect(total()).toHaveTextContent('din toate taskurile');
+});
+it('says the range alone when only a period is chosen, and a negative total keeps its sign (#906)', () => {
+  state.total.mockReturnValue({ data: -2, isPending: false, isError: false });
+  view(uid, '?de_la=2026-09-01');
+  expect(total()).toHaveTextContent('−2 puncte');
+  expect(total()).toHaveTextContent('acordate din 1 septembrie 2026');
+  expect(total()).not.toHaveTextContent('filtrele alese');
+});
+it('shows 0 points as a figure, a loading line, and a retriable error for the total (#906)', async () => {
+  state.total.mockReturnValue({ data: 0, isPending: false, isError: false });
+  const first = view();
+  expect(total()).toHaveTextContent('0 puncte');
+  first.unmount();
+  state.total.mockReturnValue({ isPending: true, isError: false });
+  const second = view();
+  expect(within(total()).getByRole('status')).toHaveTextContent(
+    'Se încarcă punctele…',
+  );
+  second.unmount();
+  const retry = vi.fn();
+  state.total.mockReturnValue({
+    isPending: false,
+    isError: true,
+    error: new Error('private SQL'),
+    refetch: retry,
+  });
+  view();
+  expect(within(total()).getByRole('alert')).toHaveTextContent(
+    'Punctele nu s-au încărcat.',
+  );
+  expect(screen.queryByText('private SQL')).toBeNull();
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Reîncarcă punctele' }),
+  );
+  expect(retry).toHaveBeenCalled();
+});
+it('sends nothing for the total while the range is inverted (#906)', () => {
+  view(uid, '?de_la=2026-09-30&pana_la=2026-09-01');
+  expect(state.total).toHaveBeenLastCalledWith(uid, null);
+  expect(total()).toHaveTextContent('Corectează perioada ca să vezi punctele.');
 });

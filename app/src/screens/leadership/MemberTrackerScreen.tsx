@@ -10,18 +10,24 @@ import {
 } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
 import { ErrorState, Loading } from '../../components/states';
+import { Button } from '../../components/ui/button';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
 import { formatBucharestDay } from '../../lib/calendar-time';
-import { formatPoints } from '../../lib/format';
+import { formatDayMonthYear, formatPoints, pointWord } from '../../lib/format';
 import { isUuid } from '../../lib/ids';
 import { useWorkFilter } from '../../lib/use-work-filter';
-import { chosenGroupId } from '../../lib/work-filter';
+import {
+  chosenGroupId,
+  type WorkFilterParams,
+  type WorkFilterValue,
+} from '../../lib/work-filter';
 import {
   useLeadershipFilters,
   useLeadershipMemberTasks,
+  useLeadershipMemberTotal,
   type MemberTask,
 } from '../../queries/leadership';
-import { useMemberCard } from '../../queries/member-card';
+import { useMemberCard, type MemberCardGroup } from '../../queries/member-card';
 import { TaskCard } from '../tracker/TaskCard';
 import { LeadershipAccess } from './LeadershipAccess';
 import { DifficultyStars } from '../../components/tasks/DifficultyStars';
@@ -154,15 +160,112 @@ function AssignmentRecord({ task }: { task: MemberTask }) {
   );
 }
 
-/** The Member Card's summary (#676): Nickname, full name, Role and Groups. */
-function MemberSummary({ memberId }: { memberId: string }) {
+/**
+ * What the total counts (#906), in Clasament's words: the Group or Campaign
+ * chosen, and the period the Evaluations fall in — not the deadline range the
+ * Assignment list reads.
+ */
+function totalScope(value: WorkFilterValue): string {
+  const from = value.from && formatDayMonthYear(value.from);
+  const to = value.to && formatDayMonthYear(value.to);
+  const period =
+    from && to
+      ? `acordate între ${from} și ${to}`
+      : from
+        ? `acordate din ${from}`
+        : to
+          ? `acordate până la ${to}`
+          : null;
+  const narrowed =
+    chosenGroupId(value) !== undefined || value.campaignId !== undefined;
+  if (!narrowed && !period) return 'din toate taskurile';
+  return [narrowed && 'din filtrele alese', period].filter(Boolean).join(' · ');
+}
+
+/**
+ * The Member's Task points under the Work Filter (#906): Clasament's figure
+ * for the same Member and the same filter, read from the server.
+ */
+function MemberTotal({
+  memberId,
+  value,
+  params,
+}: {
+  memberId: string;
+  value: WorkFilterValue;
+  params: WorkFilterParams | null;
+}) {
+  const total = useLeadershipMemberTotal(memberId, params);
+  return (
+    <section
+      aria-label="Puncte"
+      data-slot="member-total"
+      className="flex min-w-0 flex-col gap-1 sm:row-span-2 sm:max-w-72 sm:items-end sm:text-right"
+    >
+      {!params ? (
+        <p className="m-0 text-sm text-muted-foreground">
+          Corectează perioada ca să vezi punctele.
+        </p>
+      ) : total.isPending ? (
+        <p className="m-0 text-sm text-muted-foreground" role="status">
+          Se încarcă punctele…
+        </p>
+      ) : total.isError ? (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-2 sm:justify-end"
+        >
+          <p className="m-0 text-sm text-muted-foreground">
+            Punctele nu s-au încărcat.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void total.refetch()}
+          >
+            Reîncarcă punctele
+          </Button>
+        </div>
+      ) : (
+        <p className="m-0 inline-flex items-baseline gap-1.5 leading-none">
+          <span
+            data-slot="member-total-value"
+            className="text-[length:var(--fs-xl)] font-extrabold tracking-[-0.03em] tabular-nums"
+          >
+            {formatPoints(total.data)}
+          </span>{' '}
+          <span className="text-sm font-semibold text-muted-foreground">
+            {pointWord(total.data)}
+          </span>
+        </p>
+      )}
+      <p className="m-0 text-xs text-muted-foreground">{totalScope(value)}</p>
+    </section>
+  );
+}
+
+/**
+ * The Member Card's summary (#676): Nickname, full name, Role and Groups,
+ * with the Member's points under the Work Filter beside them (#906).
+ */
+function MemberSummary({
+  memberId,
+  value,
+  params,
+}: {
+  memberId: string;
+  value: WorkFilterValue;
+  params: WorkFilterParams | null;
+}) {
   const card = useMemberCard(memberId);
   if (card.isPending) return <Loading label="Se încarcă profilul…" />;
   if (card.isError || !card.data)
     return <EmptyState>Profilul nu este disponibil.</EmptyState>;
   const member = card.data;
   return (
-    <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    // Phone: who, their points, their Groups — the total stays at the top.
+    // Wider: the total takes its own column beside the identity and Groups.
+    <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-6 sm:gap-y-2">
       <div className="min-w-0">
         <MemberName
           memberId={member.memberId}
@@ -175,27 +278,32 @@ function MemberSummary({ memberId }: { memberId: string }) {
           <p className="text-sm text-muted-foreground">{member.roleLabel}</p>
         )}
       </div>
-      {member.groups.length > 0 && (
-        <ul
-          aria-label="Grupuri"
-          className="flex min-w-0 flex-wrap gap-1.5 sm:justify-end"
-        >
-          {member.groups.map((group) => (
-            <li
-              key={group.id}
-              className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-xs font-medium"
-            >
-              <span
-                aria-hidden="true"
-                className="size-2 shrink-0 rounded-full"
-                style={{ backgroundColor: group.color ?? 'var(--brand-red)' }}
-              />
-              <span className="truncate">{group.label}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <MemberTotal memberId={memberId} value={value} params={params} />
+      {member.groups.length > 0 && <MemberGroups groups={member.groups} />}
     </div>
+  );
+}
+
+function MemberGroups({ groups }: { groups: MemberCardGroup[] }) {
+  return (
+    <ul
+      aria-label="Grupuri"
+      className="flex min-w-0 flex-wrap gap-1.5 sm:col-start-1"
+    >
+      {groups.map((group) => (
+        <li
+          key={group.id}
+          className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-xs font-medium"
+        >
+          <span
+            aria-hidden="true"
+            className="size-2 shrink-0 rounded-full"
+            style={{ backgroundColor: group.color ?? 'var(--brand-red)' }}
+          />
+          <span className="truncate">{group.label}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -240,7 +348,7 @@ function MemberHistory({ memberId }: { memberId: string }) {
         description="Toate atribuirile membrului, inclusiv cele încheiate și evaluările anulate."
       />
       <Panel aria-label="Membru">
-        <MemberSummary memberId={memberId} />
+        <MemberSummary memberId={memberId} value={value} params={params} />
       </Panel>
       <WorkFilter
         label="Filtre tracker"

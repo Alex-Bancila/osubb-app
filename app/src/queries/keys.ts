@@ -32,6 +32,17 @@ export const keys = {
         p_to?: string;
       } | null,
     ) => ['points', 'leadership', memberId, filters] as const,
+    /* #906: one Member's total on Trackerul membrului, under the same filter. */
+    leadershipMember: (
+      memberId: string | undefined,
+      targetId: string,
+      filters: {
+        p_group_id?: number;
+        p_campaign_id?: number;
+        p_from?: string;
+        p_to?: string;
+      } | null,
+    ) => ['points', 'leadership-member', memberId, targetId, filters] as const,
     leadershipCup: (
       memberId: string | undefined,
       filters: {
