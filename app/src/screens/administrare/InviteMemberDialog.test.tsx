@@ -71,6 +71,13 @@ const GROUPS = [
   group(5, 'Consiliu', { min_level: 5 }),
 ];
 
+/** A reason's copy; a reason without copy fails the test that reads it. */
+function copy(reason: string | undefined) {
+  const text = reasonCopy(reason);
+  if (text === undefined) throw new Error(`no copy for ${String(reason)}`);
+  return text;
+}
+
 /** A refusal as supabase-js hands it over: the function's Response inside. */
 function refusal(code: string, httpStatus = 400) {
   const context = new Response(JSON.stringify({ error: 'text', code }), {
@@ -238,11 +245,9 @@ describe('the invitation', () => {
       within(dialog).getByRole('button', { name: 'Trimite invitația' }),
     );
     expect(
-      await within(dialog).findByText(reasonCopy('email_invalid')!),
+      await within(dialog).findByText(copy('email_invalid')),
     ).toBeVisible();
-    expect(
-      within(dialog).getByText(reasonCopy('full_name_required')!),
-    ).toBeVisible();
+    expect(within(dialog).getByText(copy('full_name_required'))).toBeVisible();
     expect(api.invoke).not.toHaveBeenCalled();
   });
 
@@ -261,8 +266,8 @@ describe('the invitation', () => {
       await user.click(
         within(dialog).getByRole('button', { name: 'Trimite invitația' }),
       );
-      const copy = reasonCopy(INVITE_REASON[code])!;
-      expect(await within(dialog).findByText(copy)).toBeVisible();
+      const message = copy(INVITE_REASON[code]);
+      expect(await within(dialog).findByText(message)).toBeVisible();
       expect(within(dialog).queryByText(code)).toBeNull();
       expect(onInvited).not.toHaveBeenCalled();
     },
