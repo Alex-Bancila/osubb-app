@@ -99,7 +99,12 @@ function NewEventDialog({
             setOpen(false);
             // The create receipt sits on the new card, as #849's edit and
             // cancel receipts do (Audit D-11).
-            setEventReceipt(created.id, 'Evenimentul a fost creat.');
+            setEventReceipt(
+              created.id,
+              draft.announce
+                ? 'Evenimentul și anunțul au fost create.'
+                : 'Evenimentul a fost creat.',
+            );
             onCreated?.(created.id);
           }}
         />

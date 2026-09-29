@@ -2,11 +2,9 @@ import type { MyGroup } from '../../queries/my-groups';
 import type { Group } from '../../queries/reference';
 
 /** A server capability grants global writers every active Origin; otherwise only managed paths and the root. */
-export function announcementOrigins(
-  groups: readonly Group[],
-  roles: readonly MyGroup[],
-  globalWriter: boolean,
-): Group[] {
+export function announcementOrigins<
+  G extends Pick<Group, 'id' | 'name' | 'status' | 'is_organization'>,
+>(groups: readonly G[], roles: readonly MyGroup[], globalWriter: boolean): G[] {
   const holdsGroupRole = roles.some(
     (group) =>
       group.group_role === 'manager' || group.group_role === 'responsible',

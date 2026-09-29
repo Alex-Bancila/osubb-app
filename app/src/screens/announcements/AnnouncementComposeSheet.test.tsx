@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,7 +12,10 @@ const mock = vi.hoisted(() => ({
   create: vi.fn(),
 }));
 vi.mock('../../lib/auth', () => ({
-  useAuth: () => ({ session: { user: { id: 'member-1' } } }),
+  useAuth: () => ({
+    session: { user: { id: 'member-1' } },
+    claims: { member_level: 3 },
+  }),
 }));
 vi.mock('../../lib/capabilities', () => ({
   useCapabilities: mock.capabilities,
@@ -139,6 +142,10 @@ describe('Announcement composer', () => {
         body: 'Vineri la 18:00',
         group_id: 2,
         audience: 'org',
+        // No Termen typed: the Announcement has none (#909).
+        deadline: null,
+        // Everyone in the Audience unless a Minimum Level is chosen (#909).
+        min_level: 0,
       }),
     );
     // The server stamps the author and the date (security pass M1).
@@ -147,6 +154,84 @@ describe('Announcement composer', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(
       'Anunțul a fost publicat.',
     );
+  });
+
+  async function draftWithTermen(termen: string) {
+    const user = userEvent.setup();
+    render(<AnnouncementComposeSheet />);
+    await user.click(screen.getByRole('button', { name: 'Anunț nou' }));
+    const dialog = screen.getByRole('dialog', { name: 'Anunț nou' });
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'Titlu' }),
+      'Înscrieri',
+    );
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'Mesaj' }),
+      'Formularul se închide vineri.',
+    );
+    await user.selectOptions(
+      within(dialog).getByRole('combobox', { name: 'Grup de origine' }),
+      '2',
+    );
+    fireEvent.change(
+      within(dialog).getByLabelText('Termen (opțional) — ora României'),
+      { target: { value: termen } },
+    );
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Publică anunțul' }),
+    );
+    return dialog;
+  }
+
+  it('sends an optional Termen read in Romania (#909)', async () => {
+    await draftWithTermen('2099-10-02T23:59');
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ deadline: '2099-10-02T20:59:00.000Z' }),
+    );
+  });
+
+  it('offers "Cine îl vede" by Role name up to the author\'s level and sends it (#909)', async () => {
+    const user = userEvent.setup();
+    render(<AnnouncementComposeSheet />);
+    await user.click(screen.getByRole('button', { name: 'Anunț nou' }));
+    const dialog = screen.getByRole('dialog', { name: 'Anunț nou' });
+    const picker = within(dialog).getByRole('combobox', {
+      name: 'Cine îl vede',
+    }) as HTMLSelectElement;
+    expect(picker).toHaveValue('0');
+    expect(Array.from(picker.options).map((option) => option.text)).toEqual([
+      'Recrut',
+      'Voluntar',
+      'Voluntar Activ',
+      'Voluntar cu Drept de Vot',
+    ]);
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'Titlu' }),
+      'Adunare',
+    );
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'Mesaj' }),
+      'Doar pentru votanți.',
+    );
+    await user.selectOptions(
+      within(dialog).getByRole('combobox', { name: 'Grup de origine' }),
+      '2',
+    );
+    await user.selectOptions(picker, '3');
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Publică anunțul' }),
+    );
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ min_level: 3 }),
+    );
+  });
+
+  it('refuses a Termen in the past under its field (#909, R8)', async () => {
+    const dialog = await draftWithTermen('2020-01-01T10:00');
+    expect(mutateAsync).not.toHaveBeenCalled();
+    expect(
+      within(dialog).getByText('Termenul nu poate fi în trecut.'),
+    ).toBeInTheDocument();
   });
 
   it('explains a database refusal without losing the draft', async () => {

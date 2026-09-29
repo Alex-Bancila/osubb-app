@@ -29,6 +29,8 @@ import {
 } from '../../queries/leadership';
 import { useMemberCard, type MemberCardGroup } from '../../queries/member-card';
 import { TaskCard } from '../tracker/TaskCard';
+import { AddCompletedTaskForMember } from '../tracker/AddCompletedTaskControl';
+import { TaskActionSuccess } from '../../components/tasks/TaskActionSuccess';
 import { LeadershipAccess } from './LeadershipAccess';
 import { DifficultyStars } from '../../components/tasks/DifficultyStars';
 import {
@@ -315,6 +317,18 @@ function MemberHistory({ memberId }: { memberId: string }) {
     ...(params.p_to !== undefined && { p_to: params.p_to }),
   };
   const query = useLeadershipMemberTasks(memberId, range);
+  // #915: the Member as the completed-Task form names them, and its receipt.
+  const card = useMemberCard(memberId);
+  const volunteer = card.data
+    ? {
+        id: memberId,
+        nickname: card.data.nickname,
+        fullName: card.data.fullName,
+      }
+    : null;
+  const [added, setAdded] = useState<{ id: number; title: string } | null>(
+    null,
+  );
   const options = useLeadershipFilters();
   const [now] = useState(() => new Date());
   const groupsById = useMemo(
@@ -346,7 +360,21 @@ function MemberHistory({ memberId }: { memberId: string }) {
         eyebrow="Conducere"
         title="Trackerul membrului"
         description="Toate atribuirile membrului, inclusiv cele încheiate și evaluările anulate."
+        actions={
+          volunteer && (
+            <AddCompletedTaskForMember
+              volunteer={volunteer}
+              onAdded={({ id, title }) => setAdded({ id, title })}
+            />
+          )
+        }
       />
+      {added && (
+        <TaskActionSuccess key={added.id}>
+          Taskul finalizat „{added.title}” a fost adăugat și punctele au fost
+          acordate.
+        </TaskActionSuccess>
+      )}
       <Panel aria-label="Membru">
         <MemberSummary memberId={memberId} value={value} params={params} />
       </Panel>

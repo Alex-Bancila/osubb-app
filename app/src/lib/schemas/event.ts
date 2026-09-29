@@ -4,6 +4,7 @@ import { EVENT_MINIMUM_LEVELS } from '../minimum-level';
 import {
   EVENT_TYPE_CHOICES,
   eventCampaignsFor,
+  mayAnnounceEvent,
   type EventDraft,
   type EventFormOptions,
   type EventFormValues,
@@ -49,6 +50,7 @@ export function eventSchema(
       description: optionalText({ max: 2000, tooLong: 'description_too_long' }),
       minLevel: z.number(),
       campaignId: z.number().nullable(),
+      announce: z.boolean(),
     })
     .superRefine((values, ctx) => {
       const issue = (path: keyof EventFormValues, message: string) =>
@@ -107,6 +109,15 @@ export function eventSchema(
       description: values.description,
       minLevel: values.minLevel,
       campaignId: values.campaignId,
+      // #909: only a new Event, and only where the box is offered and enabled.
+      announce:
+        creating &&
+        values.announce &&
+        values.groupId !== null &&
+        mayAnnounceEvent(
+          options,
+          options.groups.find((item) => item.id === values.groupId) ?? null,
+        ),
     }));
 }
 

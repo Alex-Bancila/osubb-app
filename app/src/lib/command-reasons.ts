@@ -296,6 +296,25 @@ const REASON_COPY = new Map<string, string>([
     'Nu mai ai permisiunea de a decide această cerere.',
   ],
   ['request_not_found', 'Cererea nu mai este disponibilă.'],
+  /* ---- Completed Tasks: shaped on approval, or added directly (#915) ---- */
+  [
+    'task_evaluate_forbidden',
+    'Nu poți evalua munca acestui membru în grupul ales.',
+  ],
+  [
+    'executor_not_group_member',
+    'Voluntarul nu face parte din grupul ales sau din subgrupurile lui. Alege alt grup.',
+  ],
+  [
+    'executor_below_min_level',
+    'Voluntarul nu are nivelul minim al grupului ales. Alege alt grup.',
+  ],
+  [
+    'executor_role_excluded',
+    'BC și Moderatorul nu primesc taskuri. Alege alt voluntar.',
+  ],
+  /* browser */
+  ['executor_required', 'Alege voluntarul.'],
   ['description_required', 'Descrierea este obligatorie.'],
   ['invalid_origin', 'Alege un grup pentru această activitate.'],
   ['request_origin_forbidden', 'Nu mai faci parte din grupul ales.'],
@@ -321,6 +340,15 @@ const REASON_COPY = new Map<string, string>([
   [
     'calendar_manage_forbidden',
     'Nu mai ai permisiunea să gestionezi evenimentele acestui grup. Reîncarcă pagina și încearcă din nou.',
+  ],
+  /* ---- "Creează și un anunț" on create_event (#909) ---- */
+  [
+    'announcement_publish_forbidden',
+    'Nu ai permisiunea să publici un anunț din acest grup. Debifează „Creează și un anunț” și creează doar evenimentul.',
+  ],
+  [
+    'invalid_announcement_min_level',
+    'Alege cine vede anunțul dintre nivelurile din listă.',
   ],
   [
     'event_min_level_below_group',

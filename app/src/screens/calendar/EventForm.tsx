@@ -1,6 +1,8 @@
 import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { Button } from '../../components/ui/button';
+import { Checkbox } from '../../components/ui/checkbox';
+import { ChoiceRow } from '../../components/ui/radio-group';
 import { FieldError } from '../../components/ui/field';
 import {
   NativeSelect,
@@ -25,6 +27,7 @@ import {
   EVENT_TYPE_CHOICES,
   emptyEventFormValues,
   eventCampaignsFor,
+  mayAnnounceEvent,
   minimumLevelChoices,
   type EventDraft,
   type EventFormGroup,
@@ -90,6 +93,9 @@ export function EventForm({
   const selectedGroup =
     options.groups.find((group) => group.id === values.groupId) ?? null;
   const campaigns = eventCampaignsFor(selectedGroup, options.campaigns);
+  // #909: "Creează și un anunț" — a new Event only, where the viewer may publish.
+  const offersAnnouncement =
+    mode === 'create' && mayAnnounceEvent(options, selectedGroup);
   const levelChoices = minimumLevelChoices(
     selectedGroup?.minLevel ?? 0,
     actorLevel,
@@ -354,6 +360,26 @@ export function EventForm({
           </label>
           <FieldError {...form.errorProps('description')} />
         </div>
+
+        {offersAnnouncement && (
+          <div className="grid gap-0.5">
+            <ChoiceRow className="font-medium">
+              <Checkbox
+                checked={values.announce}
+                aria-describedby={`${id}-announce-hint`}
+                onCheckedChange={(next) => update({ announce: next === true })}
+              />
+              Creează și un anunț
+            </ChoiceRow>
+            <p
+              id={`${id}-announce-hint`}
+              className="pl-8 text-sm text-muted-foreground"
+            >
+              Publică în Anunțuri titlul, data, locul și descrierea, pentru cine
+              vede evenimentul, cu termen la începutul lui.
+            </p>
+          </div>
+        )}
 
         <FieldError>{form.formError}</FieldError>
 

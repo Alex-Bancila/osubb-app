@@ -84,10 +84,12 @@ export type Database = {
           body: string
           category: string | null
           created_by: string | null
+          deadline: string | null
           form_label: string | null
           form_url: string | null
           group_id: number
           id: number
+          min_level: number
           pinned: boolean
           priority: Database["public"]["Enums"]["announce_priority"]
           published_at: string
@@ -99,10 +101,12 @@ export type Database = {
           body: string
           category?: string | null
           created_by?: string | null
+          deadline?: string | null
           form_label?: string | null
           form_url?: string | null
           group_id: number
           id?: never
+          min_level?: number
           pinned?: boolean
           priority?: Database["public"]["Enums"]["announce_priority"]
           published_at?: string
@@ -114,10 +118,12 @@ export type Database = {
           body?: string
           category?: string | null
           created_by?: string | null
+          deadline?: string | null
           form_label?: string | null
           form_url?: string | null
           group_id?: number
           id?: never
+          min_level?: number
           pinned?: boolean
           priority?: Database["public"]["Enums"]["announce_priority"]
           published_at?: string
@@ -3359,10 +3365,16 @@ export type Database = {
       }
       approve_completed_work_request: {
         Args: {
+          p_campaign_id?: number
+          p_description?: string
           p_difficulty: number
+          p_group_id?: number
+          p_link_label?: string
+          p_link_url?: string
           p_note: string
           p_rating: number
           p_request_id: number
+          p_title?: string
         }
         Returns: {
           created_at: string
@@ -3661,6 +3673,24 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      completed_task_executors: {
+        Args: { p_group_id: number }
+        Returns: {
+          avatar_color: string
+          full_name: string
+          member_id: string
+          nickname: string
+        }[]
+      }
+      completed_task_groups: {
+        Args: { p_executor_id: string }
+        Returns: {
+          id: number
+          min_level: number
+          name: string
+          path: number[]
+        }[]
+      }
       convert_task_mode: {
         Args: {
           p_assignment_mode: string
@@ -3723,6 +3753,57 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_completed_task: {
+        Args: {
+          p_campaign_id: number
+          p_description: string
+          p_difficulty: number
+          p_executor_id: string
+          p_group_id: number
+          p_link_label: string
+          p_link_url: string
+          p_note: string
+          p_rating: number
+          p_title: string
+        }
+        Returns: {
+          assignment_mode: string | null
+          audience: string | null
+          campaign_id: number | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          deadline: string | null
+          description: string | null
+          difficulty: number | null
+          duplicated_from_task_id: number | null
+          group_id: number
+          id: number
+          kind: string
+          link_label: string | null
+          link_url: string | null
+          parent_task_id: number | null
+          queue_closed_at: string | null
+          queue_opened_at: string | null
+          rating: number | null
+          returned_to_progress_at: string | null
+          review_round: number
+          started_at: string | null
+          status: Database["public"]["Enums"]["task_status"]
+          submitted_at: string | null
+          title: string
+          type: string | null
+          unfulfilled_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "tasks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_completed_work_request: {
         Args: { p_description: string; p_group_id: number }
         Returns: {
@@ -3746,6 +3827,7 @@ export type Database = {
       }
       create_event: {
         Args: {
+          p_announce?: boolean
           p_campaign_id?: number
           p_capacity?: number
           p_description?: string

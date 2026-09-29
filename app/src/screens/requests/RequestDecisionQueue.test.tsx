@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import axe from 'axe-core';
@@ -25,7 +25,31 @@ vi.mock('../../queries/request-decisions', async (original) => ({
 vi.mock('../../queries/reference', () => ({
   useEvaluationScale: () => state.scale,
 }));
+// #915: where the approver may credit the requester -- the Request's Group
+// and a Child Group of it, each with its Campaigns.
+const groups = vi.hoisted(() => ({
+  read: vi.fn(),
+  data: {
+    groups: [
+      { id: 3, name: 'Ateliere', path: [3], min_level: 0 },
+      { id: 4, name: 'Ateliere Junior', path: [3, 4], min_level: 0 },
+    ],
+    groupNames: new Map([
+      [3, { name: 'Ateliere' }],
+      [4, { name: 'Ateliere Junior' }],
+    ]),
+    campaigns: [
+      { id: 11, name: 'Bun venit', group_id: 3 },
+      { id: 12, name: 'Doar juniori', group_id: 4 },
+    ],
+  },
+}));
+vi.mock('../../queries/completed-tasks', () => ({
+  useCompletedTaskGroups: groups.read,
+  useCompletedTaskExecutors: () => ({ data: [], isSuccess: true }),
+}));
 import { RequestDecisionQueue } from './RequestDecisionQueue';
+import { CommandError } from '../../lib/command-reasons';
 vi.mock(
   '../../queries/member-card',
   () => import('../../test/member-card-mock'),
@@ -43,6 +67,11 @@ const request = {
   created_at: '2026-09-19T12:00:00Z',
 };
 beforeEach(() => {
+  groups.read.mockReturnValue({
+    data: groups.data,
+    isPending: false,
+    isError: false,
+  });
   state.queue.mockReturnValue({ data: [request] });
   state.mutate.mockResolvedValue({ id: 7 });
 });
@@ -57,7 +86,9 @@ it('shares evaluation fields and retains success after the queue refetches empty
   );
   const view = render(<RequestDecisionQueue />);
   await user.click(screen.getByRole('button', { name: 'Evaluează cererea' }));
-  await user.click(screen.getByRole('button', { name: 'Aprobă cererea' }));
+  await user.click(
+    screen.getByRole('button', { name: 'Aprobă și acordă punctele' }),
+  );
   expect(state.mutate).not.toHaveBeenCalled();
   await user.click(screen.getByRole('radio', { name: '2 stele — Ușor' }));
   await user.click(
@@ -68,14 +99,24 @@ it('shares evaluation fields and retains success after the queue refetches empty
     screen.getByLabelText('Observații (obligatoriu)'),
     'Bine făcut',
   );
-  await user.dblClick(screen.getByRole('button', { name: 'Aprobă cererea' }));
+  await user.dblClick(
+    screen.getByRole('button', { name: 'Aprobă și acordă punctele' }),
+  );
   expect(state.mutate).toHaveBeenCalledTimes(1);
+  // Unchanged, the Task is the Request's own text on the Request's Group.
   expect(state.mutate).toHaveBeenCalledWith({
     kind: 'approve',
     requestId: 7,
     difficulty: 2,
     rating: 5,
     note: 'Bine făcut',
+    task: {
+      title: 'Am pregătit materialele.',
+      description: 'Am pregătit materialele.',
+      groupId: 3,
+      link: { label: null, url: null },
+      campaignId: null,
+    },
   });
   state.queue.mockReturnValue({ data: [] });
   view.rerender(<RequestDecisionQueue />);
@@ -84,7 +125,7 @@ it('shares evaluation fields and retains success after the queue refetches empty
     'Cererea a fost aprobată',
   );
   expect(screen.getByRole('status')).toHaveFocus();
-});
+}, 20_000);
 it('requires a rejection note, calls rejection only, and has no axe violations', async () => {
   const user = userEvent.setup();
   const { container } = render(<RequestDecisionQueue />);
@@ -126,18 +167,28 @@ it('evaluates in a dialog with the dialog header, listing the Request once (#855
       '[data-slot="dialog-header"] [data-slot="dialog-title"]',
     ),
   ).toHaveTextContent('Evaluează cererea');
-  // The form is not a second box with its own title inside the dialog.
-  expect(within(dialog).queryByRole('heading', { level: 3 })).toBeNull();
+  // The form is not a second box with its own title inside the dialog: its
+  // two blocks are the Task and its Evaluation (#915).
   expect(
     within(dialog)
-      .getByRole('button', { name: 'Aprobă cererea' })
+      .getAllByRole('heading', { level: 3 })
+      .map((heading) => heading.textContent),
+  ).toEqual(['Taskul', 'Evaluarea']);
+  expect(
+    within(dialog)
+      .getByRole('button', { name: 'Aprobă și acordă punctele' })
       .closest('[data-slot="dialog-footer"]'),
   ).not.toBeNull();
   // The Request under decision shows once in the dialog, and the list keeps
   // its one row instead of gaining a copy.
-  expect(within(dialog).getAllByText(request.description)).toHaveLength(1);
+  // (The Task's Detalii, prefilled from it, is a field, not a second copy.)
+  expect(
+    within(dialog).getAllByText(request.description, { selector: 'p' }),
+  ).toHaveLength(1);
   expect(screen.getAllByRole('listitem', { hidden: true })).toHaveLength(1);
-  expect(screen.getAllByText(request.description)).toHaveLength(2);
+  expect(
+    screen.getAllByText(request.description, { selector: 'p' }),
+  ).toHaveLength(2);
   await user.click(within(dialog).getByRole('button', { name: 'Renunță' }));
   expect(state.mutate).not.toHaveBeenCalled();
 });
@@ -202,4 +253,122 @@ it('names the Requester by Nickname as a button that opens their Member Card', a
   expect(name).not.toHaveTextContent('Ana Pop');
   await userEvent.click(name);
   expect(await screen.findByRole('dialog', { name: 'Ani' })).toBeVisible();
+});
+
+async function score(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('radio', { name: '2 stele — Ușor' }));
+  await user.click(
+    screen.getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
+  );
+  await user.keyboard('5');
+  await user.type(screen.getByLabelText('Observații (obligatoriu)'), 'Bine');
+}
+
+it('prefills the Task from the Request and approves it as the decider shaped it (#915)', async () => {
+  const user = userEvent.setup();
+  render(<RequestDecisionQueue />);
+  await user.click(screen.getByRole('button', { name: 'Evaluează cererea' }));
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Evaluează cererea',
+  });
+  expect(groups.read).toHaveBeenCalledWith('ana');
+  // The requester, as a Member Card button (the path rule for names).
+  // The requester is named once, by the Request summary, as a Member Card.
+  expect(
+    within(dialog).getAllByRole('button', {
+      name: 'Profilul membrului Ana Pop',
+    }),
+  ).toHaveLength(1);
+  expect(dialog.querySelector('[data-slot="completed-volunteer"]')).toBeNull();
+  const title = within(dialog).getByLabelText('Titlu (obligatoriu)');
+  expect(title).toHaveValue(request.description);
+  expect(within(dialog).getByLabelText('Detalii')).toHaveValue(
+    request.description,
+  );
+  expect(
+    within(dialog).getByRole('combobox', {
+      name: 'Grup principal (obligatoriu)',
+    }),
+  ).toHaveTextContent('Ateliere');
+  // No deadline and no Audience: a completed Task is no Opportunity.
+  expect(within(dialog).queryByLabelText(/Termen/)).toBeNull();
+  expect(within(dialog).queryByLabelText(/Audiență/)).toBeNull();
+
+  await user.clear(title);
+  await user.type(title, 'Materiale pentru atelier');
+  await user.clear(within(dialog).getByLabelText('Detalii'));
+  await user.selectOptions(
+    within(dialog).getByLabelText('Campanie (opțional)'),
+    '11',
+  );
+  // Moving the work to the Child Group keeps a Campaign owned above it.
+  await user.click(
+    within(dialog).getByRole('combobox', { name: 'Subgrup (opțional)' }),
+  );
+  await user.click(
+    await screen.findByRole('option', { name: /^Ateliere Junior/ }),
+  );
+  await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+  await user.type(within(dialog).getByLabelText('Etichetă link'), 'Poze');
+  await user.type(
+    within(dialog).getByLabelText('Adresă link'),
+    'https://example.org/poze',
+  );
+  await score(user);
+  await user.click(
+    screen.getByRole('button', { name: 'Aprobă și acordă punctele' }),
+  );
+  expect(state.mutate).toHaveBeenCalledWith({
+    kind: 'approve',
+    requestId: 7,
+    difficulty: 2,
+    rating: 5,
+    note: 'Bine',
+    task: {
+      title: 'Materiale pentru atelier',
+      description: null,
+      groupId: 4,
+      link: { label: 'Poze', url: 'https://example.org/poze' },
+      campaignId: 11,
+    },
+  });
+  // A long form: slow under the full parallel run.
+}, 20_000);
+
+it('shows a refusal about the requester under Grup, in Romanian (#915)', async () => {
+  const user = userEvent.setup();
+  state.mutate.mockRejectedValue(
+    new CommandError(
+      { code: 'PT409', message: 'executor_not_group_member' },
+      'fallback',
+    ),
+  );
+  render(<RequestDecisionQueue />);
+  await user.click(screen.getByRole('button', { name: 'Evaluează cererea' }));
+  await score(user);
+  await user.click(
+    screen.getByRole('button', { name: 'Aprobă și acordă punctele' }),
+  );
+  const group = await screen.findByRole('combobox', {
+    name: 'Grup principal (obligatoriu)',
+  });
+  await waitFor(() =>
+    expect(group).toHaveAccessibleDescription(
+      'Voluntarul nu face parte din grupul ales sau din subgrupurile lui. Alege alt grup.',
+    ),
+  );
+});
+
+it("always offers the Request's own Group, even when the read leaves it out (#915)", async () => {
+  const user = userEvent.setup();
+  groups.read.mockReturnValue({
+    data: { ...groups.data, groups: [groups.data.groups[1]] },
+    isPending: false,
+    isError: false,
+  });
+  render(<RequestDecisionQueue />);
+  await user.click(screen.getByRole('button', { name: 'Evaluează cererea' }));
+  expect(
+    screen.getByRole('combobox', { name: 'Grup principal (obligatoriu)' }),
+  ).toHaveTextContent('Ateliere');
 });

@@ -14,12 +14,9 @@ exports[`keeps the Evaluation dialog layout (snapshot) 1`] = `
   <p
     class="text-sm"
   >
-    Executor
-    : 
+    Executor: 
     Ana
-    .
-     
-    Evaluarea încheie taskul și acordă punctele acestei persoane.
+    . Evaluarea încheie taskul și acordă punctele acestei persoane.
   </p>
   <button
     aria-expanded="false"

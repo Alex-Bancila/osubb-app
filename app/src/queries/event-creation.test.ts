@@ -100,6 +100,27 @@ describe('Event form options', () => {
     expect(result.groups.some((group) => group.id === 21)).toBe(false);
   });
 
+  it('offers "Creează și un anunț" exactly where the compose sheet lets them publish (#909)', () => {
+    const leader = buildEventFormOptions(
+      managerCapabilities,
+      [myGroup(1, 'manager')],
+      readableGroups,
+    );
+    expect(leader.announceGroupIds).toEqual([1, 7]);
+    const member = buildEventFormOptions(
+      { ...managerCapabilities, managesAnyGroup: false },
+      [myGroup(1, 'member')],
+      readableGroups,
+    );
+    expect(member.announceGroupIds).toEqual([]);
+    const bc = buildEventFormOptions(
+      { ...managerCapabilities, createTopLevelGroups: true },
+      [],
+      readableGroups,
+    );
+    expect(bc.announceGroupIds).toEqual([1, 7, 12]);
+  });
+
   it('offers BC every readable active Group', () => {
     const result = buildEventFormOptions(
       { ...managerCapabilities, createTopLevelGroups: true },
@@ -205,6 +226,8 @@ describe('Event form options', () => {
       })),
       // #691: only an active Campaign may be attached to an Event.
       campaigns: [{ id: 3, name: 'Bun venit', group_id: 7 }],
+      // #909: no Group Role in my_groups(), so no Origin to publish from.
+      announceGroupIds: [],
     });
     expect(api.from).toHaveBeenCalledWith('groups');
     expect(select).toHaveBeenCalledWith(
@@ -229,6 +252,7 @@ describe('create Event command', () => {
     description: null,
     minLevel: 0,
     campaignId: 3,
+    announce: false,
   };
 
   it('calls only create_event with named arguments', async () => {
@@ -245,15 +269,37 @@ describe('create Event command', () => {
       p_description: null,
       p_min_level: 0,
       p_campaign_id: 3,
+      p_announce: false,
     });
+  });
+
+  it('asks create_event for the Announcement when the box is ticked (#909)', async () => {
+    api.rpc.mockResolvedValue({ data: { id: 45 }, error: null });
+    await createEvent({ ...draft, announce: true });
+    expect(api.rpc).toHaveBeenCalledWith(
+      'create_event',
+      expect.objectContaining({ p_announce: true }),
+    );
   });
 
   it('invalidates the Event family only after success', async () => {
     const client = { invalidateQueries: vi.fn() };
     const options = createEventMutationOptions(client as never);
-    await options.onSuccess();
+    await options.onSuccess(undefined, draft);
     expect(client.invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['events'],
+    });
+    expect(client.invalidateQueries).not.toHaveBeenCalledWith({
+      queryKey: ['announcements'],
+    });
+  });
+
+  it('refreshes Anunțuri too when an Announcement was published with the Event', async () => {
+    const client = { invalidateQueries: vi.fn() };
+    const options = createEventMutationOptions(client as never);
+    await options.onSuccess(undefined, { ...draft, announce: true });
+    expect(client.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['announcements'],
     });
   });
 });

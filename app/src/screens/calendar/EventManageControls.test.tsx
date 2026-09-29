@@ -50,6 +50,8 @@ const managerOptions = {
     { id: 7, name: 'Educațional' },
   ],
   campaigns: [{ id: 3, name: 'Bun venit', group_id: 7 }],
+  // #909: even where the viewer may publish, editing offers no Announcement.
+  announceGroupIds: [5, 7],
 };
 
 function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
@@ -175,6 +177,9 @@ describe('EventManageControls', () => {
     expect(within(dialog).getByLabelText('Loc (opțional)')).toHaveValue(
       'Sala 305',
     );
+    expect(
+      within(dialog).queryByRole('checkbox', { name: 'Creează și un anunț' }),
+    ).toBeNull();
     await user.clear(title);
     await user.type(title, 'Ședință mutată');
     await user.clear(within(dialog).getByLabelText('Loc (opțional)'));
@@ -196,6 +201,8 @@ describe('EventManageControls', () => {
         description: 'Planificarea lunii.',
         minLevel: 0,
         campaignId: 3,
+        // #909: an edit never publishes an Announcement.
+        announce: false,
       },
     });
     expect(await screen.findByRole('status')).toHaveTextContent(

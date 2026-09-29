@@ -26,6 +26,7 @@ import { parsePositiveInt } from '../../lib/ids';
 import { AvailableOpportunities } from './AvailableOpportunities';
 import { TaskDetailsSheet } from './TaskDetailsSheet';
 import { ManagerTaskList } from './ManagerTaskList';
+import { AddCompletedTaskControl } from './AddCompletedTaskControl';
 import { NewTaskControl } from './NewTaskControl';
 import { TaskCardGrid } from './TaskCardGrid';
 import { PersonalScoreHeader } from './PersonalScoreHeader';
@@ -162,7 +163,11 @@ export default function TrackerScreen() {
   // Taskurile mele, the same test as Acasă (B15).
   const leader = useCapability('seeLeadership').data === true;
   const [detailId, setDetailId] = useState<number | null>(null);
-  const [createdId, setCreatedId] = useState<number | null>(null);
+  // The Task this page just created or added, and what its details say (#915).
+  const [created, setCreated] = useState<{
+    id: number;
+    notice: string;
+  } | null>(null);
   // The give-up receipt lives on the list: the card leaves it (Audit D-3).
   // Keyed by the Task, so a second give-up announces itself afresh.
   const [gaveUp, setGaveUp] = useState<{
@@ -318,12 +323,24 @@ export default function TrackerScreen() {
         title="Taskuri"
         description="Lucrul tău și oportunitățile din OSUBB."
         actions={
-          <NewTaskControl
-            onCreated={(id) => {
-              setCreatedId(id);
-              setDetailId(id);
-            }}
-          />
+          <>
+            <NewTaskControl
+              onCreated={(id) => {
+                setCreated({ id, notice: 'Taskul a fost creat.' });
+                setDetailId(id);
+              }}
+            />
+            <AddCompletedTaskControl
+              onAdded={({ id }) => {
+                setCreated({
+                  id,
+                  notice:
+                    'Taskul finalizat a fost adăugat. Punctele au fost acordate.',
+                });
+                setDetailId(id);
+              }}
+            />
+          </>
         }
       />
       {management.isError && (
@@ -441,13 +458,11 @@ export default function TrackerScreen() {
         taskId={detailId}
         managedTaskIds={managedTaskIds}
         notice={
-          detailId !== null && detailId === createdId
-            ? 'Taskul a fost creat.'
-            : null
+          detailId !== null && detailId === created?.id ? created.notice : null
         }
         onClose={() => {
           setDetailId(null);
-          setCreatedId(null);
+          setCreated(null);
         }}
       />
     </Page>

@@ -240,7 +240,7 @@ A BCE/BC/Moderator view of Members ordered by Task Points only.
 A BCE/BC/Moderator comparison of Task Points earned in the top-level Groups set to compete and in every Group below them set to count toward them. Project and Independent-Team work never contributes.
 
 **Completed-work Request**:
-A Member’s request to recognize work already completed for one Origin. Approval creates the completed Task, Assignment, Evaluation, and Task Points together.
+A Member’s request to recognize work already completed for one Origin. Approval creates the completed Task, Assignment, Evaluation, and Task Points together; the decider may first change the Task's title, details, Group, Attached Link and Campaign. A Group's managers can also add such a completed Task for one of its members directly, without a Request.
 _Avoid_: Award request, new-task request, `task_requests`
 
 **Sanction**:
@@ -269,7 +269,7 @@ Informational attendance guidance for an Event. It does not reject an RSVP or cr
 ## Communication
 
 **Announcement**:
-An OSUBB message posted on behalf of one Group, its Origin, by one of that Group's Managers or Responsibles, with an Announcement Audience, a normal, important, or critical Priority, and an optional link to an external form. An Announcement of the Organization Group may be posted by anyone holding a Group Role.
+An OSUBB message posted on behalf of one Group, its Origin, by one of that Group's Managers or Responsibles, with an Announcement Audience, a normal, important, or critical Priority, an optional link to an external form, an optional **Termen** (the date by which its readers should act, never in the past when posted), and a Minimum Level: only Members of its Audience at or above it read the Announcement or are notified of it (everyone by default). An Announcement of the Organization Group may be posted by anyone holding a Group Role. Creating an Event may publish its Announcement in the same step, with the Event's Group, Audience and Minimum Level and Termen = the Event's start.
 _Avoid_: Post, news item, broadcast when the Audience is local
 
 **Announcement Audience**:

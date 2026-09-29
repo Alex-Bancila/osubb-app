@@ -31,7 +31,7 @@ drop policy announcements_delete on public.announcements;
 -- give it back its pre-#581 self-only check for this rollback replay.
 alter policy announcement_reads_manage_self on public.announcement_reads
   with check (public.auth_is_member() and member_id = (select auth.uid()));
-drop function private.can_read_announcement(bigint,text);
+drop function private.can_read_announcement(bigint,text,integer,uuid);
 -- #590 removed the final legacy column; restore it only for this historical replay.
 alter table public.announcements add column dept_id text;
 update public.announcements a set dept_id=g.legacy_dept_id from public.groups g where g.id=a.group_id;
