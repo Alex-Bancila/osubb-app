@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   mutate: vi.fn(),
   joined: vi.fn(),
   privacy: vi.fn(),
+  auth: vi.fn(),
 }));
 vi.mock('../../queries/admin-member', () => ({
   useAdminMember: state.member,
@@ -36,6 +37,7 @@ vi.mock('../profile/RoleTimeline', () => ({
     </p>
   ),
 }));
+vi.mock('../../lib/auth', () => ({ useAuth: state.auth }));
 vi.mock('../../lib/capabilities', () => ({
   useCapabilities: state.capabilities,
 }));
@@ -154,6 +156,10 @@ function member(patch: object = {}) {
 beforeEach(() => {
   state.member.mockReturnValue({ ...ready, data: member() });
   state.capabilities.mockReturnValue({ ...ready, data: { manageRoles: true } });
+  // The viewer is a BC, not the Member on the page.
+  state.auth.mockReturnValue({
+    session: { user: { id: '0b0c0000-0000-4000-8000-000000000006' } },
+  });
   state.groups.mockReturnValue({
     ...ready,
     data: [
@@ -662,4 +668,53 @@ it("shows BC the Member's Istoric roluri, from their Role and join date (#932)",
       'Timeline 7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d voluntar 2025-01-01',
     ),
   ).toBeVisible();
+});
+
+it("offers BC every edit on the Moderator's page, as on anyone's (#944, R31)", () => {
+  state.member.mockReturnValue({
+    ...ready,
+    data: member({ role: 'moderator', roleLabel: 'Moderator' }),
+  });
+  show();
+  expect(
+    screen.getByRole('button', { name: 'Editează data intrării' }),
+  ).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Salvează numele' })).toBeVisible();
+  expect(
+    screen.getByText('Retrimitere 7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d'),
+  ).toBeVisible();
+  expect(
+    screen.getByText('Editor rol 7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d'),
+  ).toBeVisible();
+});
+
+it('offers BC their own names and join date but no Role panel (#944)', () => {
+  // set_member_role and set_member_status refuse the actor as the target.
+  state.auth.mockReturnValue({
+    session: { user: { id: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d' } },
+  });
+  state.member.mockReturnValue({
+    ...ready,
+    data: member({ role: 'bc', roleLabel: 'BC' }),
+  });
+  show();
+  expect(
+    screen.getByRole('button', { name: 'Editează data intrării' }),
+  ).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Salvează numele' })).toBeVisible();
+  expect(screen.queryByText(/^Editor rol /)).toBeNull();
+});
+
+it('offers a viewer below BC no edit at all (#944)', () => {
+  state.capabilities.mockReturnValue({
+    ...ready,
+    data: { manageRoles: false },
+  });
+  show();
+  expect(
+    screen.queryByRole('button', { name: 'Editează data intrării' }),
+  ).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Salvează numele' })).toBeNull();
+  expect(screen.queryByText(/^Retrimitere /)).toBeNull();
+  expect(screen.queryByText(/^Editor rol /)).toBeNull();
 });

@@ -103,9 +103,9 @@ export function useAdminMember(memberId: string | undefined) {
 }
 
 /**
- * #675's write path for names: `profiles_update_self` lets the Moderator
- * update any row and a BC any row below level 6 (never the Moderator's or
- * another BC's; security pass M4), `guard_profile_privileged_columns` refuses a
+ * #675's write path for names: `profiles_update_self` lets a live BC or the
+ * Moderator update any row, a BC's or the Moderator's included (#944, R31;
+ * `memberEditRights` mirrors it), `guard_profile_privileged_columns` refuses a
  * changed full name below level 6, and `guard_profile_nickname` names the
  * reason a Nickname is refused. `.single()` requires the row back, so an RLS
  * refusal (zero rows) fails instead of looking like a save.
@@ -140,7 +140,7 @@ export function useUpdateMemberIdentity() {
 
 /**
  * #932's write path for the join date: the same `profiles_update_self` policy
- * (a BC updates any row below level 6, the Moderator any row) and the column
+ * (a live BC or the Moderator updates any row, #944) and the column
  * grant `update (joined_at)` from #160; `guard_profile_privileged_columns`
  * refuses the change below level 6. `.single()` turns an RLS refusal (zero
  * rows) into a failure instead of a silent no-op.

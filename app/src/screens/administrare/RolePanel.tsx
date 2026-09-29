@@ -18,6 +18,7 @@ import {
   NativeSelectOption,
 } from '../../components/ui/native-select';
 import { useAuth } from '../../lib/auth';
+import { memberEditRights } from '../../lib/member-edit-rights';
 import { commandErrorMessage } from '../../lib/command-reasons';
 import { isUuid } from '../../lib/ids';
 import {
@@ -293,7 +294,11 @@ export function RolePanel({
   // anyone or change their Status, leadership included (ruling R31).
   const leader =
     actor?.status === 'activ' && PROTECTED_ROLES.has(actorRole ?? '');
-  const canEditMember = Boolean(member && leader && !self);
+  // The member page's predicate (#944): the same viewer, never on themselves.
+  const canEditMember = memberEditRights(
+    { id: session?.user.id, leads: leader },
+    member?.memberId,
+  ).rankAndStatus;
   // Only what the viewer can save (B57): without live leadership the lists
   // name no BC or Moderator holder and stop at BCE.
   const roleOptions = useMemo(
