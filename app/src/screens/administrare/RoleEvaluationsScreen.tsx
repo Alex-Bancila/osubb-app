@@ -30,7 +30,7 @@ import {
 import { FieldError } from '../../components/ui/field';
 import { bucharestDayKey } from '../../lib/calendar-time';
 import { describeFailure } from '../../lib/command-reasons';
-import { formatPoints } from '../../lib/format';
+import { formatPointCount, formatPoints, pointWord } from '../../lib/format';
 import {
   percentFieldForReason,
   percentSchema,
@@ -64,10 +64,12 @@ import {
   type ThresholdChange,
 } from '../../queries/role-evaluations';
 import { ROLE_PANEL_MEMBER_PARAM } from './RolePanel';
+import { useReceiptTurn } from '../tracker/receipt-turn';
+import { ReceiptTurnScope } from '../tracker/ReceiptTurnScope';
 import {
   computedThresholdText,
+  defaultRangeStart,
   formatDay,
-  nextDay,
   promoteHref,
   runConsequences,
   runResultText,
@@ -167,17 +169,18 @@ function RunPanel({
   // x and y as the server holds them now (#866): the confirmation names the
   // shares the run will read, refreshed after every share edit.
   const percents = useEvaluationPercents();
-  // "De la" starts the day after the kind's last range; "Până la" is today.
-  const defaultFrom = (kind: RoleEvaluationKind) => {
-    const last = latestRun(evaluations, kind);
-    return last ? nextDay(last.period_to) : '';
-  };
+  // "De la" starts the day after the kind's last range, never after today;
+  // "Până la" is today.
+  const defaultFrom = (kind: RoleEvaluationKind) =>
+    defaultRangeStart(latestRun(evaluations, kind)?.period_to, today);
   const [kind, setKind] = useState<RoleEvaluationKind>('voluntar_activ');
   const [from, setFrom] = useState(() => defaultFrom('voluntar_activ'));
   const [to, setTo] = useState(today);
   const [name, setName] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  // One receipt at a time across the tab (F-11).
+  const turn = useReceiptTurn();
   const schema = useMemo(() => runSchema(today), [today]);
   const form = useFormValidation(
     schema,
@@ -223,8 +226,9 @@ function RunPanel({
           retentionSignals: result?.retentionSignals ?? 0,
         }),
       );
+      turn.claim();
       setName('');
-      setFrom(nextDay(values.to));
+      setFrom(defaultRangeStart(values.to, today));
       setTo(today);
     } catch (failure) {
       setConfirming(false);
@@ -252,7 +256,8 @@ function RunPanel({
             }))}
             value={kind}
             onChange={choose}
-            className="w-full *:flex-1 max-sm:*:px-2.5 sm:w-auto sm:justify-self-start"
+            // Under 640 px a long label wraps inside its pill, never past it (F-22).
+            className="w-full *:flex-1 max-sm:*:px-2.5 max-sm:*:text-center max-sm:*:leading-tight max-sm:*:whitespace-normal sm:w-auto sm:justify-self-start"
           />
           <FieldError {...form.errorProps('kind')} />
         </div>
@@ -321,7 +326,7 @@ function RunPanel({
             </p>
           )}
         </div>
-        {message && (
+        {message && turn.current && (
           <p role="status" className="m-0 text-sm font-medium">
             {message}
           </p>
@@ -401,6 +406,8 @@ function PercentEditor({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  // One receipt at a time across the tab (F-11).
+  const turn = useReceiptTurn();
   const form = useFormValidation(
     percentSchema,
     { percent: draft },
@@ -429,6 +436,7 @@ function PercentEditor({
       });
       setEditing(false);
       setMessage(`${label} a fost salvat.`);
+      turn.claim();
     } catch (failure) {
       form.fail(failure, 'Nu am putut salva procentul. Reîncearcă.');
     }
@@ -511,7 +519,7 @@ function PercentEditor({
           <FieldError>{form.formError}</FieldError>
         </form>
       )}
-      {message && (
+      {message && turn.current && (
         <p role="status" className="m-0 text-sm">
           {message}
         </p>
@@ -548,6 +556,8 @@ function ThresholdRow({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  // One receipt at a time across the tab (F-11).
+  const turn = useReceiptTurn();
   const form = useFormValidation(
     thresholdSchema,
     { threshold: draft },
@@ -573,6 +583,7 @@ function ThresholdRow({
       });
       setEditing(false);
       setMessage(`${label} a fost salvat.`);
+      turn.claim();
     } catch (failure) {
       form.fail(failure, 'Nu am putut salva pragul. Reîncearcă.');
     }
@@ -590,7 +601,7 @@ function ThresholdRow({
               <>
                 {formatPoints(current)}{' '}
                 <span className="text-sm font-medium text-muted-foreground">
-                  puncte
+                  {pointWord(current)}
                 </span>
               </>
             )}
@@ -660,7 +671,7 @@ function ThresholdRow({
           <FieldError>{form.formError}</FieldError>
         </form>
       )}
-      {message && (
+      {message && turn.current && (
         <p role="status" className="m-0 text-sm">
           {message}
         </p>
@@ -871,7 +882,7 @@ function RejectDialog({
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-sm">
             <Name memberId={candidate.memberId} identities={identities} />
             <span className="text-muted-foreground tabular-nums">
-              {formatPoints(candidate.taskPoints)} puncte · pragul{' '}
+              {formatPointCount(candidate.taskPoints)} · pragul{' '}
               {formatPoints(candidate.thresholdUsed)}
             </span>
           </div>
@@ -979,7 +990,7 @@ function CandidatesPanel({
                   identities={identities.data}
                 />
                 <p className="m-0 text-sm tabular-nums">
-                  {formatPoints(candidate.taskPoints)} puncte · pragul{' '}
+                  {formatPointCount(candidate.taskPoints)} · pragul{' '}
                   {formatPoints(candidate.thresholdUsed)} · vechime din{' '}
                   {formatDay(candidate.tenureSince)}
                 </p>
@@ -1063,7 +1074,7 @@ function SignalsSection({
                 <Name memberId={signal.memberId} identities={identities.data} />
                 <p className="m-0 text-sm text-muted-foreground tabular-nums">
                   {HOLDER_LABEL[signal.role] ?? signal.role} ·{' '}
-                  {formatPoints(signal.taskPoints)} puncte · locul {signal.rank}{' '}
+                  {formatPointCount(signal.taskPoints)} · locul {signal.rank}{' '}
                   din {signal.cohortSize}
                 </p>
               </ListRow>
@@ -1186,6 +1197,8 @@ function HistoryPanel({
         columns={columns}
         data={rows}
         emptyTitle="Nicio evaluare de rol încă."
+        // A name keeps at least a word at 375 px (F-22).
+        columnClassName={{ run_by: 'min-w-36' }}
       />
     </Panel>
   );
@@ -1221,7 +1234,7 @@ export default function RoleEvaluationsScreen() {
   // candidates, signals and history panels appear with their first row.
   const hasRun = evaluations.data.length > 0;
   return (
-    <>
+    <ReceiptTurnScope>
       <PageGrid columns={2} alignHeaders>
         <RunPanel
           evaluations={evaluations.data}
@@ -1243,6 +1256,6 @@ export default function RoleEvaluationsScreen() {
           <HistoryPanel evaluations={evaluations.data} />
         </PageGrid>
       )}
-    </>
+    </ReceiptTurnScope>
   );
 }

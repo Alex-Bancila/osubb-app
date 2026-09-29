@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { cn } from 'cn';
-import { History, Pencil, Users } from 'lucide-react';
+import { History, Pencil } from 'lucide-react';
 import { Link, useLocation, useParams } from 'react-router';
 import {
   BackLink,
@@ -38,6 +38,8 @@ import {
   useMemberAcknowledgement,
 } from '../../queries/privacy';
 import { statusLabel } from '../volunteers/directory-filters';
+import { useReceiptTurn } from '../tracker/receipt-turn';
+import { ReceiptTurnScope } from '../tracker/ReceiptTurnScope';
 import { ReinvitePanel } from './ReinvitePanel';
 import { RolePanel } from './RolePanel';
 
@@ -55,6 +57,7 @@ function IdentityEditor({ member }: { member: AdminMember }) {
   const [nickname, setNickname] = useState(member.nickname ?? '');
   const [fullName, setFullName] = useState(member.fullName);
   const [message, setMessage] = useState<string | null>(null);
+  const turn = useReceiptTurn();
   const change = useUpdateMemberIdentity();
   const form = useFormValidation(
     memberIdentitySchema,
@@ -75,6 +78,7 @@ function IdentityEditor({ member }: { member: AdminMember }) {
       setNickname(values.nickname ?? '');
       setFullName(values.fullName);
       setMessage('Numele a fost actualizat.');
+      turn.claim();
     } catch (failure) {
       form.fail(failure, SAVE_FAILED);
     }
@@ -125,7 +129,7 @@ function IdentityEditor({ member }: { member: AdminMember }) {
           {change.isPending ? 'Se salvează…' : 'Salvează numele'}
         </Button>
         <FieldError>{form.formError}</FieldError>
-        {message && <p role="status">{message}</p>}
+        {message && turn.current && <p role="status">{message}</p>}
       </form>
     </Panel>
   );
@@ -313,90 +317,90 @@ export default function MemberScreen() {
   // A Group page opened from here comes back here (navigation D4, A63).
   // A label, not the name: names render only through MemberName.
   const fromHere = backLinkState(location, 'Înapoi la membru');
+  const joined = formatDayMonthYear(data.joinedAt);
 
+  // One receipt at a time on the page: a new command's replaces the last
+  // (F-11, the D-16 rule of the Task sheet).
   return (
-    <Page>
-      <BackToAdministrare capabilities={capabilities.data} />
-      <PageHeader
-        eyebrow={EYEBROW}
-        title={
-          <span className="inline-flex max-w-full min-w-0 items-center gap-3">
-            <MemberAvatar
-              name={data.fullName}
-              avatarColor={data.avatarColor}
-              className="size-10 text-sm"
-            />
-            <span className="min-w-0">{name}</span>
-          </span>
-        }
-        description={name !== data.fullName ? data.fullName : undefined}
-      />
-      <dl className={`${panelBoxClass} grid gap-x-6 gap-y-4 sm:grid-cols-2`}>
-        <Fact label="Rol organizațional">
-          <span className="font-semibold">{data.roleLabel ?? '—'}</span>
-        </Fact>
-        <Fact label="Status">
-          {data.status ? statusLabel(data.status) : '—'}
-        </Fact>
-        <Fact label="Membru din">
-          {formatDayMonthYear(data.joinedAt) ?? '—'}
-        </Fact>
-        {data.contact?.email && (
-          <Fact label="Email" className="break-all">
-            {data.contact.email}
+    <ReceiptTurnScope key={data.memberId}>
+      <Page>
+        <BackToAdministrare capabilities={capabilities.data} />
+        <PageHeader
+          eyebrow={EYEBROW}
+          title={
+            <span className="inline-flex max-w-full min-w-0 items-center gap-3">
+              <MemberAvatar
+                name={data.fullName}
+                avatarColor={data.avatarColor}
+                className="size-10 text-sm"
+              />
+              <span className="min-w-0">{name}</span>
+            </span>
+          }
+          description={name !== data.fullName ? data.fullName : undefined}
+        />
+        <dl className={`${panelBoxClass} grid gap-x-6 gap-y-4 sm:grid-cols-2`}>
+          <Fact label="Rol organizațional">
+            <span className="font-semibold">{data.roleLabel ?? '—'}</span>
           </Fact>
-        )}
-        {data.contact?.phone && (
-          <Fact label="Telefon">{data.contact.phone}</Fact>
-        )}
+          <Fact label="Status">
+            {data.status ? statusLabel(data.status) : '—'}
+          </Fact>
+          {/* An imported Member who never signed in has no date yet (F-28). */}
+          {joined && <Fact label="Membru din">{joined}</Fact>}
+          {data.contact?.email && (
+            <Fact label="Email" className="break-all">
+              {data.contact.email}
+            </Fact>
+          )}
+          {data.contact?.phone && (
+            <Fact label="Telefon">{data.contact.phone}</Fact>
+          )}
+          {canEdit && (
+            <Fact label="Politica de confidențialitate">
+              {privacy.isPending
+                ? 'Se încarcă…'
+                : privacy.isError
+                  ? '—'
+                  : acknowledgementLabel(privacy.data)}
+            </Fact>
+          )}
+        </dl>
+        {canEdit && <IdentityEditor key={data.memberId} member={data} />}
         {canEdit && (
-          <Fact label="Politica de confidențialitate">
-            {privacy.isPending
-              ? 'Se încarcă…'
-              : privacy.isError
-                ? '—'
-                : acknowledgementLabel(privacy.data)}
-          </Fact>
+          <ReinvitePanel key={data.memberId} memberId={data.memberId} />
         )}
-      </dl>
-      {canEdit && <IdentityEditor key={data.memberId} member={data} />}
-      {canEdit && (
-        <ReinvitePanel key={data.memberId} memberId={data.memberId} />
-      )}
-      <Panel
-        eyebrow="Grupuri"
-        icon={Users}
-        title="Grupuri"
-        flush={visibleGroups.length > 0}
-      >
-        {!visibleGroups.length ? (
-          <Empty text="Nu există grupuri în aria ta de administrare." />
-        ) : (
-          <ul className={rowListClass}>
-            {visibleGroups.map((group) => (
-              <ListRow key={group.id}>
-                <Link
-                  className="font-semibold underline-offset-4 hover:underline"
-                  to={`/administrare/grupuri/${group.id}`}
-                  state={fromHere}
-                >
-                  {group.label}
-                </Link>
-                {/* A plain membership says nothing the list does not (B60). */}
-                {hasGroupRole(group) && (
-                  <p className="m-0 text-sm text-muted-foreground">
-                    Rol în grup: {group.roleLabel}
-                  </p>
-                )}
-              </ListRow>
-            ))}
-          </ul>
+        {/* No eyebrow: it would only repeat the title (ruling 2, F-24). */}
+        <Panel title="Grupuri" flush={visibleGroups.length > 0}>
+          {!visibleGroups.length ? (
+            <Empty text="Nu există grupuri în aria ta de administrare." />
+          ) : (
+            <ul className={rowListClass}>
+              {visibleGroups.map((group) => (
+                <ListRow key={group.id}>
+                  <Link
+                    className="font-semibold underline-offset-4 hover:underline"
+                    to={`/administrare/grupuri/${group.id}`}
+                    state={fromHere}
+                  >
+                    {group.label}
+                  </Link>
+                  {/* A plain membership says nothing the list does not (B60). */}
+                  {hasGroupRole(group) && (
+                    <p className="m-0 text-sm text-muted-foreground">
+                      Rol în grup: {group.roleLabel}
+                    </p>
+                  )}
+                </ListRow>
+              ))}
+            </ul>
+          )}
+        </Panel>
+        {canEdit && (
+          <RolePanel key={data.memberId} selectedMemberId={data.memberId} />
         )}
-      </Panel>
-      {canEdit && (
-        <RolePanel key={data.memberId} selectedMemberId={data.memberId} />
-      )}
-      <PointsPanel points={data.points} />
-    </Page>
+        <PointsPanel points={data.points} />
+      </Page>
+    </ReceiptTurnScope>
   );
 }

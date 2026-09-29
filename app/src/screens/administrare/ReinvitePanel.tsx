@@ -8,6 +8,7 @@ import {
   memberInvitationSchema,
 } from '../../lib/schemas/member-identity';
 import { useFormValidation } from '../../lib/use-form-validation';
+import { useReceiptTurn } from '../tracker/receipt-turn';
 import {
   invitationPending,
   REINVITE_FAILED,
@@ -28,6 +29,7 @@ function ReinviteForm({
 }) {
   const [email, setEmail] = useState(status.email);
   const [message, setMessage] = useState<string | null>(null);
+  const turn = useReceiptTurn();
   const reinvite = useReinviteMember();
   const form = useFormValidation(
     memberInvitationSchema,
@@ -45,6 +47,7 @@ function ReinviteForm({
       const sent = await reinvite.mutateAsync({ memberId, ...values });
       setEmail(sent.email);
       setMessage(`Invitația a fost retrimisă la ${sent.email}.`);
+      turn.claim();
     } catch (failure) {
       form.fail(failure, REINVITE_FAILED);
     }
@@ -83,7 +86,7 @@ function ReinviteForm({
           {reinvite.isPending ? 'Se trimite…' : 'Retrimite invitația'}
         </Button>
         <FieldError>{form.formError}</FieldError>
-        {message && <p role="status">{message}</p>}
+        {message && turn.current && <p role="status">{message}</p>}
       </form>
     </Panel>
   );

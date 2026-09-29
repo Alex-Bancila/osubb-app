@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import { useQueries } from '@tanstack/react-query';
 import {
   EmptyState,
   ListRow,
@@ -27,8 +28,31 @@ import type {
   GroupRole,
   RosterEntry,
 } from '../../queries/groups-admin';
+import { useAuth } from '../../lib/auth';
+import { fetchGroupCoordination } from '../../queries/group-applications';
 import { MemberPicker } from './MemberPicker';
-import { groupRoleLabel } from './group-tree';
+import { groupRoleLabel, positionCandidates } from './group-tree';
+
+/**
+ * The Members holding a position in a Group above this one: theirs flows
+ * down (ADR-0009), so they are no one to appoint here. An ancestor the
+ * viewer cannot read adds nobody; the server still decides.
+ */
+function useInheritedHolders(group: AdminGroup): string[] {
+  const viewer = useAuth().session?.user.id;
+  const ancestors = group.path.filter((id) => id !== group.id);
+  const results = useQueries({
+    queries: ancestors.map((groupId) => ({
+      // The key of useGroupCoordination, so a Group page's read is reused.
+      queryKey: ['groups', 'coordination', { memberId: viewer, groupId }],
+      queryFn: () => fetchGroupCoordination(groupId),
+      enabled: Boolean(viewer),
+    })),
+  });
+  return results.flatMap((result) =>
+    (result.data ?? []).map((row) => row.memberId),
+  );
+}
 
 const control =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
@@ -350,6 +374,15 @@ export function GroupRolesTab({
   const responsibles = roster.filter(
     (entry) => entry.groupRole === 'responsible',
   );
+  const inherited = useInheritedHolders(group);
+  const candidates = positionCandidates(
+    members,
+    group,
+    new Set([
+      ...inherited,
+      ...[...managers, ...responsibles].map((entry) => entry.memberId),
+    ]),
+  );
   const withdraw = (entry: RosterEntry) =>
     onRun({
       kind: 'setRole',
@@ -375,7 +408,7 @@ export function GroupRolesTab({
               description="Coordonatorul conduce grupul și toate subgrupurile lui."
               groupRole="manager"
               withTitle={false}
-              members={members}
+              members={candidates}
               busy={busy}
               error={error}
               onAppoint={(memberId) =>
@@ -413,7 +446,7 @@ export function GroupRolesTab({
               description="Responsabilul se ocupă de o parte din munca grupului, sub numele funcției pe care i-l dai."
               groupRole="responsible"
               withTitle
-              members={members}
+              members={candidates}
               busy={busy}
               error={error}
               onAppoint={(memberId, positionTitle) =>

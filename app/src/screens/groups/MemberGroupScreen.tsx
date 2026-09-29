@@ -30,7 +30,7 @@ import {
   useGroupCoordination,
   useGroupUpcomingEvents,
 } from '../../queries/group-applications';
-import { categoryLabel } from '../administrare/group-tree';
+import { categoryLabel, groupStatusLabel } from '../administrare/group-tree';
 import { ApplicationAction } from './ApplicationAction';
 import { ApplicationFormLink } from './ApplicationFormLink';
 import { acceptsApplication, applicationForm } from './application-eligibility';
@@ -135,7 +135,17 @@ export default function MemberGroupScreen() {
             {group.name}
           </span>
         }
-        badge={<PrivateGroupBadge isPrivate={group.is_private} />}
+        badge={
+          <>
+            <PrivateGroupBadge isPrivate={group.is_private} />
+            {/* As on the Administrare Group page (F-18). */}
+            {group.status !== 'active' && (
+              <Badge variant="secondary">
+                {groupStatusLabel(group.status)}
+              </Badge>
+            )}
+          </>
+        }
         description={
           <>
             {categoryLabel(group.category)}
@@ -177,9 +187,9 @@ export default function MemberGroupScreen() {
                   <ListRow
                     key={row.memberId}
                     value={
-                      // A long title wraps under 640 px rather than cutting
-                      // the name short.
-                      <span className="block max-w-28 text-sm whitespace-normal text-muted-foreground sm:max-w-none">
+                      // A long title wraps rather than cutting the name
+                      // short, at every width the panel is narrow (F-4).
+                      <span className="block max-w-28 text-sm whitespace-normal text-muted-foreground sm:max-w-40 xl:max-w-56">
                         {row.groupRole === 'manager'
                           ? (group.manager_title ?? 'Coordonator')
                           : (row.positionTitle ?? 'Responsabil')}

@@ -28,6 +28,20 @@ export function nextDay(iso: string): string {
     .slice(0, 10);
 }
 
+/**
+ * The "De la" a new run starts from: the day after the last range, unless
+ * that is after today (F-21) — a run that ended today leaves nothing to
+ * prefill, so the field stays empty rather than inverted.
+ */
+export function defaultRangeStart(
+  lastTo: string | null | undefined,
+  today: string,
+): string {
+  if (!lastTo) return '';
+  const start = nextDay(lastTo);
+  return start <= today ? start : '';
+}
+
 /** What the confirmation tells BC a run of this kind will do. */
 export function runConsequences({
   kind,

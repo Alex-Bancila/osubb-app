@@ -102,9 +102,8 @@ it('shows BC and the Moderator all seven tabs, in the order Alex listed', async 
   expect(
     screen.getByRole('heading', { level: 1, name: 'Administrare' }),
   ).toBeVisible();
-  expect(
-    document.querySelector('[data-slot="page-eyebrow"]'),
-  ).toHaveTextContent(/^Administrare$/);
+  // Administrare is the area itself: no eyebrow repeats the title (F-24).
+  expect(document.querySelector('[data-slot="page-eyebrow"]')).toBeNull();
   expect(
     screen.getByText(
       'Grupurile OSUBB, membrii, rolurile și setările organizației.',
@@ -126,13 +125,19 @@ it('shows a Group Manager or Responsible Grupuri and Cereri de aderare only', ()
 it('hides Cereri de aderare while none of the viewer’s Groups takes Applications or has one pending (B55)', () => {
   api.applications.mockReturnValue(false);
   const view = show('/administrare/grupuri', MANAGER);
-  expect(tabNames()).toEqual(['Grupuri']);
+  // One section needs no tab strip (F-24): the title and the page carry it.
+  expect(
+    screen.queryByRole('navigation', { name: 'Secțiunile administrării' }),
+  ).toBeNull();
+  expect(screen.getByTestId('where')).toHaveTextContent('/administrare/grupuri');
   view.unmount();
 
   // Not known yet: not shown, so it never appears and then vanishes.
   api.applications.mockReturnValue(undefined);
   const loading = show('/administrare/grupuri', MANAGER);
-  expect(tabNames()).toEqual(['Grupuri']);
+  expect(
+    screen.queryByRole('navigation', { name: 'Secțiunile administrării' }),
+  ).toBeNull();
   loading.unmount();
 
   // Opened by a link, the page keeps its tab.

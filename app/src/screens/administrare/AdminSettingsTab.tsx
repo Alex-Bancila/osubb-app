@@ -148,7 +148,7 @@ const ADUNAREA_GENERALA: GroupSetting = {
   icon: Landmark,
   title: 'Adunarea Generală',
   description:
-    'Managerii și responsabilii acestui grup văd clasamentele complete ale perioadelor și semnalele de retenție.',
+    'Managerii și responsabilii acestui grup văd clasamentul complet al evaluărilor de rol.',
   label: 'Grupul Adunării Generale',
   saved: 'Grupul Adunării Generale a fost salvat.',
   cleared: 'Grupul Adunării Generale a fost șters din setări.',
