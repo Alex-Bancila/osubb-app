@@ -179,7 +179,7 @@ export function InviteMemberDialog({
 
           <div className="grid gap-1.5">
             <label className="grid gap-1.5">
-              <span className="text-sm font-medium">Rang</span>
+              <span className="text-sm font-medium">Rol</span>
               <NativeSelect
                 value={rank}
                 disabled={pending || rankOptions.length === 0}
@@ -205,8 +205,8 @@ export function InviteMemberDialog({
                 id="invite-rank-hint"
                 className="text-sm text-muted-foreground"
               >
-                Rangul {rankName ?? rank} deschide Administrare: poate invita
-                membri și schimba rangul oricui.
+                Rolul {rankName ?? rank} deschide Administrare: poate invita
+                membri și schimba rolul oricui.
               </p>
             )}
           </div>

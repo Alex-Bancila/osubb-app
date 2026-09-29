@@ -238,7 +238,7 @@ it('confirms a sent invitation and marks the new Member in the list', async () =
   expect(screen.queryByText('Invitație trimisă')).toBeNull();
   await user.click(screen.getByRole('button', { name: 'Invită membru' }));
   expect(screen.getByRole('status')).toHaveTextContent(
-    'Invitația a fost trimisă la ana@osubb.ro. Ana Pop apare în listă; intră în cont când deschide linkul din email.',
+    'Invitația a fost trimisă la ana@osubb.ro. Membrul apare în listă cu „Invitație trimisă”; intră în cont când deschide linkul din email.',
   );
   const row = screen
     .getByRole('button', { name: /Ana Pop/ })

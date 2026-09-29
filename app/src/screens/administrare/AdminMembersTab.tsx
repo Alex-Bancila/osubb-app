@@ -160,8 +160,10 @@ function MembersPanel({ provision }: { provision: boolean }) {
     >
       {latest && (
         <p role="status" className="text-sm">
-          Invitația a fost trimisă la {latest.email}. {latest.name} apare în
-          listă; intră în cont când deschide linkul din email.
+          {/* No name here: a Member's name renders through MemberName, and
+              the row's badge already points at the new Member. */}
+          Invitația a fost trimisă la {latest.email}. Membrul apare în listă cu
+          „Invitație trimisă”; intră în cont când deschide linkul din email.
         </p>
       )}
       {members.isPending ? (

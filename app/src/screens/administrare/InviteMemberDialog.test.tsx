@@ -160,7 +160,7 @@ describe('rank and Group options', () => {
     const user = userEvent.setup();
     show();
     const dialog = await openAndFill(user, { email: '', name: '' });
-    const rank = within(dialog).getByLabelText('Rang');
+    const rank = within(dialog).getByLabelText('Rol');
     expect(rank).toHaveValue('recrut');
     expect(
       within(rank)
@@ -178,7 +178,7 @@ describe('rank and Group options', () => {
     expect(within(dialog).queryByText(/deschide Administrare/)).toBeNull();
     await user.selectOptions(rank, 'moderator');
     expect(rank).toHaveAccessibleDescription(
-      'Rangul Moderator deschide Administrare: poate invita membri și schimba rangul oricui.',
+      'Rolul Moderator deschide Administrare: poate invita membri și schimba rolul oricui.',
     );
   });
 });
@@ -192,7 +192,7 @@ describe('the invitation', () => {
     });
     const onInvited = show();
     const dialog = await openAndFill(user);
-    await user.selectOptions(within(dialog).getByLabelText('Rang'), 'bc');
+    await user.selectOptions(within(dialog).getByLabelText('Rol'), 'bc');
     await user.click(
       within(dialog).getByRole('button', { name: 'Trimite invitația' }),
     );
