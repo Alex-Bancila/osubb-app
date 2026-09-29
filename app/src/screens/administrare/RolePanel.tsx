@@ -127,8 +127,31 @@ function DeactivateDialog({
   );
 }
 
-/** One line of the replacement dialog: whose Role goes from what to what. */
-type RoleMove = { key: string; who: string; from: string; to: string };
+/**
+ * One line of the replacement dialog: whose Role goes from what to what. The
+ * viewer reads as "Tu"; anyone else is named through MemberName.
+ */
+type RoleMove = {
+  key: string;
+  who: MemberIdentity | 'self';
+  from: string;
+  to: string;
+};
+
+/** The identity MemberName needs, from a picker row. */
+function identityOf(row: {
+  memberId: string;
+  name: string;
+  nickname?: string | null;
+  avatarColor: string | null;
+}): MemberIdentity {
+  return {
+    memberId: row.memberId,
+    fullName: row.name,
+    nickname: row.nickname,
+    avatarColor: row.avatarColor,
+  };
+}
 
 /**
  * Removing the last Moderator or BC asks first (#905): the dialog names both
@@ -165,8 +188,12 @@ function ReplacementDialog({
         <ul className="m-0 flex list-none flex-col gap-2 p-0 text-sm">
           {moves.map((move) => (
             <li key={move.key}>
-              <span className="font-medium">{move.who}</span>: {move.from} →{' '}
-              <span className="font-medium">{move.to}</span>
+              {move.who === 'self' ? (
+                <span className="font-medium">Tu</span>
+              ) : (
+                <MemberName size="sm" {...move.who} />
+              )}
+              : {move.from} → <span className="font-medium">{move.to}</span>
             </li>
           ))}
         </ul>
@@ -418,13 +445,17 @@ export function RolePanel({
       ? [
           {
             key: 'replacement',
-            who: replacement.memberId === viewerId ? 'Tu' : replacement.name,
+            // The picker row reads "Eu"; the identity keeps the real name.
+            who:
+              replacement.memberId === viewerId
+                ? 'self'
+                : identityOf(replacement),
             from: roleName(replacement.roleId),
             to: roleName(guardedRank),
           },
           {
             key: 'target',
-            who: member.name,
+            who: identityOf(member),
             from: roleName(member.roleId),
             to: roleName(nextRole),
           },
@@ -609,9 +640,10 @@ export function RolePanel({
                       Înlocuitor
                     </SubHeading>
                     <p className="m-0 text-sm">
-                      {member.name} este {LAST_HOLDER[guardedRank]}. Alege cine
-                      preia rolul de {roleName(guardedRank)}; cele două
-                      schimbări se salvează împreună.
+                      <MemberName size="sm" {...identityOf(member)} /> este{' '}
+                      {LAST_HOLDER[guardedRank]}. Alege cine preia rolul de{' '}
+                      {roleName(guardedRank)}; cele două schimbări se salvează
+                      împreună.
                     </p>
                     {/* On the grid of the two columns above: as wide as the Role select. */}
                     <div className="grid min-w-0 gap-x-6 sm:grid-cols-2">

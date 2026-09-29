@@ -17,7 +17,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(42);
+select plan(48);
 
 -- ==================== 1. Structure ====================
 
@@ -46,6 +46,7 @@ select extensions.dblink_connect('r905_setup', format(
 select extensions.dblink_exec('r905_setup', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('r905_setup', $setup$
   drop function if exists public.test_905_demote(uuid, uuid);
+  drop function if exists public.test_905_deactivate(uuid, uuid);
   do $repair$
   begin
     if to_regclass('public.test_905_restore') is not null then
@@ -90,8 +91,21 @@ select extensions.dblink_exec('r905_setup', $setup$
     return sqlstate || ':' || sqlerrm;
   end;
   $fn$;
-  revoke execute on function public.test_905_demote(uuid, uuid) from public, anon, authenticated, service_role;
-  grant execute on function public.test_905_demote(uuid, uuid) to authenticated;
+  create function public.test_905_deactivate(p_member uuid, p_actor uuid) returns text
+  language plpgsql set search_path = '' as $fn$
+  begin
+    perform pg_catalog.set_config('request.jwt.claims', pg_catalog.jsonb_build_object(
+      'sub', p_actor, 'role', 'authenticated',
+      'app_metadata', pg_catalog.jsonb_build_object('member_role', 'moderator', 'member_level', 9))::text, true);
+    return (public.set_member_status(p_member, 'inactiv')).status::text;
+  exception when sqlstate 'PT409' then
+    return sqlstate || ':' || sqlerrm;
+  end;
+  $fn$;
+  revoke execute on function public.test_905_demote(uuid, uuid), public.test_905_deactivate(uuid, uuid)
+    from public, anon, authenticated, service_role;
+  grant execute on function public.test_905_demote(uuid, uuid), public.test_905_deactivate(uuid, uuid)
+    to authenticated;
 $setup$);
 
 select pg_temp.test_login('90500000-0000-0000-0000-0000000000a1',
@@ -115,8 +129,34 @@ select is(
       and role = 'bc' and status = 'activ'),
   1::bigint, 'one of the two is still a live BC member');
 
+-- The same pair of holders, both deactivated at once by the two Moderators:
+-- set_member_status takes the same leadership locks, so the second call waits
+-- for the first and then refuses to take the last BC out. (A rank removal
+-- against a deactivation proves nothing about the Status lock: the rank
+-- command's own lock already covers every holder.)
+select extensions.dblink_exec('r905_setup', $reset$
+  update public.profiles set role = 'bc', status = 'activ'
+   where id in ('90500000-0000-0000-0000-0000000000a2', '90500000-0000-0000-0000-0000000000a3');
+$reset$);
+select pg_temp.test_login('90500000-0000-0000-0000-0000000000a1',
+  '{"member_role": "moderator", "member_level": 9}'::jsonb);
+reset role;
+create temp table race905_status as
+  select * from pg_temp.test_race(
+    $$ select public.test_905_deactivate('90500000-0000-0000-0000-0000000000a2', '90500000-0000-0000-0000-0000000000a1') $$,
+    $$ select public.test_905_deactivate('90500000-0000-0000-0000-0000000000a3', '90500000-0000-0000-0000-0000000000a4') $$);
+select pg_temp.test_clear_jwt();
+
+select is((select result_a from race905_status), 'inactiv',
+  'deactivating one of the last two BC members commits');
+select ok((select b_waited from race905_status),
+  'a concurrent deactivation of the other waits on the same leadership locks');
+select is((select result_b from race905_status), 'PT409:last_bc_needs_replacement',
+  'and refuses to take the last BC out, with the rank command''s own reason');
+
 select extensions.dblink_exec('r905_setup', $cleanup$
   drop function public.test_905_demote(uuid, uuid);
+  drop function public.test_905_deactivate(uuid, uuid);
   update public.profiles set status = 'activ'
    where id in (select id from public.test_905_restore);
   drop table public.test_905_restore;
@@ -367,6 +407,24 @@ select is(
      (select string_agg(id::text, ',') from profiles where role = 'bc' and status = 'activ'))),
   '90500000-0000-0000-0000-000000000002|90500000-0000-0000-0000-000000000003',
   'after every change above the organization still has exactly one live Moderator and one live BC');
+
+-- ==================== 9. Status keeps the last holder ====================
+-- BC B is the only live BC; BC A (now Moderator) the only live Moderator.
+-- Status of a leadership holder stays the Moderator's, and it cannot take the
+-- last BC out either.
+
+select pg_temp.test_login_leadership('90500000-0000-0000-0000-000000000002');
+select throws_ok(
+  $$ select public.set_member_status('90500000-0000-0000-0000-000000000003', 'inactiv') $$,
+  'PT409', 'last_bc_needs_replacement',
+  'the Moderator cannot deactivate the last BC member');
+select is(
+  (select role::text from public.set_member_role('90500000-0000-0000-0000-000000000004', 'bc')),
+  'bc', 'once another BC member is named');
+select is(
+  (select status::text from public.set_member_status('90500000-0000-0000-0000-000000000003', 'inactiv')),
+  'inactiv', 'the former last BC member can be deactivated');
+reset role;
 
 select * from finish();
 rollback;

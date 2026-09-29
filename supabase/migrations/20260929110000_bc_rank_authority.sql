@@ -19,6 +19,9 @@
 --    is rebuilt from main's latest definition
 --    (20260928100000_notification_links.sql); the authority step loses the
 --    Moderator-only branch and gains the last-holder guard.
+-- 3. private.set_member_status_impl: deactivating or retiring a BC member or
+--    a Moderator stays the Moderator's alone, and now cannot take the last
+--    live holder out (the same reason string, the same leadership locks).
 --
 -- Locks: the target, the actor, the replacement and every live holder of bc
 -- and moderator are taken `for update` in one statement ordered by id, before
@@ -362,3 +365,128 @@ grant execute on function public.set_member_role(uuid, public.member_role, text,
   to authenticated;
 comment on function public.set_member_role(uuid, public.member_role, text, uuid) is
   'Sets a Member''s rank, callable only by a live active BC or Moderator and never on themselves; since ruling R31 (#905) that includes granting and removing bc and moderator, and changing a Member who holds either. Only the seven live ranks are accepted. The organization never loses its last Moderator or its last BC: a change that takes either rank from its last live active holder needs p_replacement_id, an active Member (the actor included -- the one self-change allowed) who is given that rank in the same transaction; without it the call answers PT409 last_moderator_needs_replacement / last_bc_needs_replacement, and a replacement named when no guard applies is PT400 replacement_not_needed. A replacement who is the last holder of the other leadership rank is PT409 replacement_is_last_bc / replacement_is_last_moderator unless the target takes that rank in the same call; an unknown one is PT404 replacement_not_found, an inactive one PT400 replacement_inactive, and the target itself PT400 replacement_is_target. Each change writes exactly one public.role_history row naming the real actor and one direct system Notification to its Member (never to the actor). It leaves Group Roles alone (ADR-0009 ruling R15): a promotion to BCE does not appoint a Department Group Manager and a demotion from it does not remove one -- a Group Manager or Responsible position is appointed and removed only by a Group command (#583). The single exception is Minimum Level: when the new rank falls below a Group''s min_level, the Member''s rows on that Group are deleted -- ordinary membership and Group Role alike -- because a Group states the rank its members must hold, and T13''s invariant (#586, no roster row below its Group''s Minimum Level) holds from this side because of it. An ancestor Group with a lower Minimum Level keeps its row and its authority still flows down through groups.path. Since #584 (ruling R30) the same demotion also withdraws the Member''s pending Applications to every Group whose Minimum Level now exceeds their rank, with the actor as decider. p_reason (#612), when non-blank, is stored trimmed as role_history.reason; omitted, null or all-whitespace falls back to a fixed string.';
+
+-- ---------------------------------------------------------------------------
+-- 3. Membership Status keeps the same guard
+-- ---------------------------------------------------------------------------
+-- Rebuilt from main's latest body (20260924061030_note_reason_limits.sql).
+-- Deactivating or retiring a BC member or a Moderator stays the Moderator's
+-- alone (R31 moved the ranks, not the Status), but it must not take the last
+-- live holder out either: the answer is the rank command's own reason
+-- (conventions section 3 -- one condition, one string), since the way out is
+-- to name another holder with set_member_role first. The locks are the rank
+-- command's, in the same single id-ordered statement, so a rank removal and a
+-- deactivation of the last two holders serialize against each other too.
+create or replace function private.set_member_status_impl(p_member_id uuid, p_status public.member_status, p_reason text default null::text)
+returns public.profiles
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_actor      uuid;
+  v_actor_role public.member_role;
+  v_from       public.member_status;
+  v_member     public.profiles%rowtype;
+begin
+  if p_status is null then
+    raise sqlstate 'PT400' using message = 'invalid_member_status';
+  end if;
+
+  -- #724 (ruling R8). Measured exactly as it is stored -- trimmed -- and
+  -- malformed for every caller, so it is answered before any authority
+  -- verdict; a blank reason still falls back to the fixed string below.
+  perform private.require_text_length('reason',
+    regexp_replace(p_reason, '^[[:space:]]+|[[:space:]]+$', '', 'g'), null, 1000);
+
+  begin
+    v_actor := private.require_active_member();
+  exception when insufficient_privilege then
+    raise exception using errcode = '42501', message = 'member_manage_forbidden';
+  end;
+  if private.actor_level(v_actor) < 6 or v_actor = p_member_id then
+    raise exception using errcode = '42501', message = 'member_manage_forbidden';
+  end if;
+
+  -- #905: the target, the actor and every live holder of bc and moderator,
+  -- in one statement ordered by id -- the lock set_member_role takes.
+  perform 1
+     from public.profiles as profile
+    where profile.id = p_member_id
+       or profile.id = v_actor
+       or (profile.role in ('bc', 'moderator') and profile.status = 'activ')
+    order by profile.id
+      for update;
+
+  select * into v_member
+    from public.profiles
+   where id = p_member_id;
+  if not found then
+    raise sqlstate 'PT404' using message = 'member_not_found';
+  end if;
+
+  select actor.role into v_actor_role
+    from public.profiles as actor
+   where actor.id = v_actor
+     and actor.status = 'activ';
+  if not found then
+    raise exception using errcode = '42501', message = 'member_manage_forbidden';
+  end if;
+
+  v_from := v_member.status;
+
+  -- Setting a BC member or the Moderator to `inactiv`/`alumni` removes their
+  -- authority as thoroughly as re-ranking them would, and reactivating them
+  -- restores it. Ruling R31 gave BC the ranks, not this: left open, one BC
+  -- could neutralize every other BC and the Moderator without the last-holder
+  -- guard set_member_role applies.
+  if v_member.role in ('bc', 'moderator') and v_actor_role <> 'moderator' then
+    raise exception using errcode = '42501', message = 'member_manage_forbidden';
+  end if;
+
+  if v_from = p_status then
+    raise sqlstate 'PT409' using message = 'nothing_to_update';
+  end if;
+
+  -- #905 (ruling R31): the last live holder of bc or moderator stays active.
+  if v_from = 'activ'
+     and p_status <> 'activ'
+     and v_member.role in ('bc', 'moderator')
+     and not exists (
+       select 1
+         from public.profiles as other
+        where other.role = v_member.role
+          and other.status = 'activ'
+          and other.id <> p_member_id
+     ) then
+    raise sqlstate 'PT409' using message = 'last_' || v_member.role::text || '_needs_replacement';
+  end if;
+
+  update public.profiles
+     set status = p_status
+   where id = p_member_id
+  returning * into v_member;
+
+  insert into public.role_history (
+    member_id, from_role, to_role, from_status, to_status,
+    changed_by, actor_kind, reason
+  ) values (
+    p_member_id, v_member.role, v_member.role, v_from, p_status,
+    v_actor, 'human',
+    coalesce(nullif(regexp_replace(p_reason, '^[[:space:]]+|[[:space:]]+$', '', 'g'), ''),
+      'Status changed by leadership (set_member_status)')
+  );
+
+  -- #603. The condition is on the *destination* Status, not on the direction
+  -- of travel: every non-`activ` Status ends the Member's access to the
+  -- organization, so `inactiv` and `alumni` both revoke. A change *to* `activ`
+  -- -- a reactivation, or any future path that lands there -- revokes nothing:
+  -- there is no security reason to sign a returning Member out of a session
+  -- they are once again entitled to hold.
+  if p_status <> 'activ' then
+    perform private.revoke_member_sessions(p_member_id);
+  end if;
+
+  return v_member;
+end;
+$function$;

@@ -225,7 +225,11 @@ it('asks for a replacement only when the change removes the last Moderator, and 
   expect(screen.queryByText('Înlocuitor')).toBeNull();
   await user.selectOptions(screen.getByLabelText('Rol organizațional'), 'bce');
   expect(screen.getByText('Înlocuitor')).toBeVisible();
-  expect(screen.getByText(/Mod Unic este ultimul Moderator/)).toBeVisible();
+  expect(screen.getByText(/este ultimul Moderator/)).toBeVisible();
+  // The target is named through MemberName, never as a plain string.
+  expect(
+    screen.getByRole('button', { name: 'Profilul membrului Mod Unic' }),
+  ).toBeVisible();
   const saveRole = screen.getByRole('button', { name: 'Salvează rolul' });
   expect(saveRole).toBeDisabled();
   // The viewer first, as "Eu"; never the target, never an inactive Member.
@@ -246,11 +250,14 @@ it('asks for a replacement only when the change removes the last Moderator, and 
   ).toEqual([]);
   await user.click(saveRole);
   const dialog = await screen.findByRole('dialog');
+  const [first, second] = within(dialog).getAllByRole('listitem');
+  expect(first).toHaveTextContent(/^Tu: BC → Moderator$/);
+  expect(second).toHaveTextContent(/Mod Unic: Moderator → BCE$/);
   expect(
-    within(dialog)
-      .getAllByRole('listitem')
-      .map((item) => item.textContent),
-  ).toEqual(['Tu: BC → Moderator', 'Mod Unic: Moderator → BCE']);
+    within(second as HTMLElement).getByRole('button', {
+      name: 'Profilul membrului Mod Unic',
+    }),
+  ).toBeVisible();
   expect(state.mutate).not.toHaveBeenCalled();
   await user.click(
     within(dialog).getByRole('button', { name: 'Salvează ambele schimbări' }),
@@ -293,7 +300,7 @@ it("never offers the last Moderator as the last BC's replacement, unless the tar
   renderPanel();
   await pick(user, 'BC Țintă');
   await user.selectOptions(screen.getByLabelText('Rol organizațional'), 'bce');
-  expect(screen.getByText(/BC Țintă este ultimul membru BC/)).toBeVisible();
+  expect(screen.getByText(/este ultimul membru BC/)).toBeVisible();
   await user.click(screen.getByRole('combobox', { name: 'Înlocuitor' }));
   expect((await listOptions()).map((option) => option.textContent)).toEqual([
     expect.stringContaining('Ana Pop'),
