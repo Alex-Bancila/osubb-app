@@ -278,3 +278,43 @@ it("offers only the report for an archived owner's Campaign", () => {
     within(activeRow).getByRole('button', { name: 'Redenumește' }),
   ).toBeVisible();
 });
+
+/* #908: without a Group the panel lists every readable Campaign, by owner and
+   name, offers no create (a Campaign needs a Group), and shows the rows of an
+   owner the caller does not manage by name only (the server refuses their
+   change and their report). */
+it('lists every Campaign without a Group, by owner, and only names the unmanaged ones', async () => {
+  const { container } = render(
+    <MemoryRouter initialEntries={['/administrare/campanii']}>
+      <CampaignsPanel
+        label="Toate grupurile"
+        groups={groups}
+        manages={(id) => id !== 4}
+      />
+    </MemoryRouter>,
+  );
+  const list = screen.getByRole('list', { name: 'Campanii active' });
+  expect(rowNames(list)).toEqual([
+    'Toamnă',
+    'Pe părinte',
+    'Mentorat',
+    'Pe frate',
+  ]);
+  expect(screen.queryByRole('button', { name: 'Campanie nouă' })).toBeNull();
+  const unmanaged = first(
+    within(list)
+      .getAllByRole('listitem')
+      .filter((item) => item.textContent?.includes('Pe frate')),
+  );
+  expect(unmanaged).toHaveTextContent('Grup: Tineret');
+  expect(within(unmanaged).queryAllByRole('button')).toEqual([]);
+  const managed = first(
+    within(list)
+      .getAllByRole('listitem')
+      .filter((item) => item.textContent?.includes('Pe părinte')),
+  );
+  expect(
+    within(managed).getByRole('button', { name: 'Vezi raportul' }),
+  ).toBeVisible();
+  await noViolations(container);
+});

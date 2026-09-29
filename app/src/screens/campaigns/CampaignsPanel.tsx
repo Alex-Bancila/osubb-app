@@ -230,6 +230,7 @@ function CampaignRow({
   onToggle,
   disabled,
   readOnly,
+  viewOnly,
 }: {
   campaign: Campaign;
   /** The owning Group's name. */
@@ -242,6 +243,8 @@ function CampaignRow({
   disabled: boolean;
   /** Only the report: an archived Group changes nothing (Audit D-10). */
   readOnly: boolean;
+  /** Neither change nor report: the caller does not manage the owner (#908). */
+  viewOnly: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const reportId = useId();
@@ -249,46 +252,48 @@ function CampaignRow({
     <ListRow
       stackAction
       action={
-        <>
-          {!readOnly && (
-            <>
-              <CampaignNameDialog
-                title="Redenumește campania"
-                label="Numele campaniei"
-                submitLabel="Salvează"
-                trigger="Redenumește"
-                initialName={campaign.name}
-                disabled={disabled}
-                onSave={(name) =>
-                  onRun({ kind: 'rename', id: campaign.id, name })
-                }
-              />
-              <Button
-                type="button"
-                variant="outline"
-                disabled={disabled}
-                onClick={() =>
-                  void onToggle({
-                    kind: 'active',
-                    id: campaign.id,
-                    active: !campaign.is_active,
-                  })
-                }
-              >
-                {campaign.is_active ? 'Dezactivează' : 'Activează'}
-              </Button>
-            </>
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            aria-expanded={open}
-            aria-controls={reportId}
-            onClick={() => setOpen((current) => !current)}
-          >
-            {open ? 'Ascunde raportul' : 'Vezi raportul'}
-          </Button>
-        </>
+        !viewOnly && (
+          <>
+            {!readOnly && (
+              <>
+                <CampaignNameDialog
+                  title="Redenumește campania"
+                  label="Numele campaniei"
+                  submitLabel="Salvează"
+                  trigger="Redenumește"
+                  initialName={campaign.name}
+                  disabled={disabled}
+                  onSave={(name) =>
+                    onRun({ kind: 'rename', id: campaign.id, name })
+                  }
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={disabled}
+                  onClick={() =>
+                    void onToggle({
+                      kind: 'active',
+                      id: campaign.id,
+                      active: !campaign.is_active,
+                    })
+                  }
+                >
+                  {campaign.is_active ? 'Dezactivează' : 'Activează'}
+                </Button>
+              </>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              aria-expanded={open}
+              aria-controls={reportId}
+              onClick={() => setOpen((current) => !current)}
+            >
+              {open ? 'Ascunde raportul' : 'Vezi raportul'}
+            </Button>
+          </>
+        )
       }
       footer={
         open && (
@@ -307,7 +312,8 @@ function CampaignRow({
 }
 
 /**
- * The Campaigns of one Group and every Group below it, each naming its owner:
+ * The Campaigns of one Group and every Group below it, each naming its owner —
+ * or, with no Group, every Campaign the caller may read (#908):
  * create (in the Group itself), rename, activate, and the report behind each
  * one. Shared by the Campanii screen (which picks the Group through the Work
  * Filter and passes its date range) and the Campanii tab of a Group in
@@ -321,8 +327,10 @@ export function CampaignsPanel({
   groups,
   range = {},
   readOnly = false,
+  manages = () => true,
 }: {
-  group: { id: number; name: string };
+  /** The chosen Group; absent lists every readable Campaign, with no create. */
+  group?: { id: number; name: string };
   label: string;
   /** Groups with their paths: the owners of the listed Campaigns and their names. */
   groups: readonly CampaignOwnerGroup[];
@@ -330,6 +338,12 @@ export function CampaignsPanel({
   range?: CampaignReportRange | null;
   /** An archived Group's Campaigns: reports only, no change (Audit D-10). */
   readOnly?: boolean;
+  /**
+   * Whether the caller manages a Campaign's owner. Any member reads every
+   * Campaign, but only its owner's managers change it or read its report
+   * (`campaign_report_forbidden`), so the others are listed by name only.
+   */
+  manages?: (groupId: number) => boolean;
 }) {
   const campaigns = useCampaigns();
   const mutation = useCampaignChange();
@@ -403,18 +417,23 @@ export function CampaignsPanel({
   );
   const listed = useMemo(
     () =>
-      subtreeCampaigns(campaigns.data ?? [], groups, group.id).filter(
+      subtreeCampaigns(campaigns.data ?? [], groups, group?.id).filter(
         (campaign) => campaign.is_active === (state === 'active'),
       ),
-    [campaigns.data, groups, group.id, state],
+    [campaigns.data, groups, group?.id, state],
   );
   return (
     <Panel
       eyebrow="Campanii"
       icon={Megaphone}
       title={label}
-      description={`Campaniile grupului și ale subgrupurilor lui. O campanie nouă aparține grupului ${group.name}.`}
+      description={
+        group
+          ? `Campaniile grupului și ale subgrupurilor lui. O campanie nouă aparține grupului ${group.name}.`
+          : 'O campanie etichetează taskurile unui grup și ale subgrupurilor lui. Alege un grup din filtre ca să creezi una.'
+      }
       control={
+        group &&
         !readOnly && (
           <CampaignNameDialog
             title="Campanie nouă"
@@ -471,21 +490,22 @@ export function CampaignsPanel({
               campaign={campaign}
               owner={
                 names.get(campaign.group_id) ??
-                (campaign.group_id === group.id ? group.name : 'Grup')
+                (campaign.group_id === group?.id ? group.name : 'Grup')
               }
               range={range}
               onRun={run}
               onToggle={toggle}
               disabled={mutation.isPending}
               readOnly={readOnly || archived.has(campaign.group_id)}
+              viewOnly={!manages(campaign.group_id)}
             />
           ))}
         </ul>
       ) : (
         <EmptyState>
-          {state === 'active'
-            ? 'Nicio campanie activă în acest grup sau în subgrupurile lui.'
-            : 'Nicio campanie inactivă în acest grup sau în subgrupurile lui.'}
+          {`Nicio campanie ${state === 'active' ? 'activă' : 'inactivă'}${
+            group ? ' în acest grup sau în subgrupurile lui' : ''
+          }.`}
         </EmptyState>
       )}
     </Panel>

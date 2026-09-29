@@ -32,6 +32,13 @@ vi.mock('../../lib/capabilities', () => ({
 // machine that can pass the 5 s default without anything being wrong.
 vi.setConfig({ testTimeout: 15_000 });
 const campaign = { id: 10, name: 'Toamnă', group_id: 2, is_active: true };
+// Readable by every member (RLS): one in a managed Group, one in Tineret, one
+// in the unmanaged Educațional.
+const readable = [
+  campaign,
+  { id: 11, name: 'Vară', group_id: 4, is_active: true },
+  { id: 12, name: 'Gala', group_id: 1, is_active: true },
+];
 beforeEach(() => {
   api.options.mockReturnValue({
     isSuccess: true,
@@ -47,7 +54,7 @@ beforeEach(() => {
       umbrellas: [],
     },
   });
-  api.campaigns.mockReturnValue({ data: [campaign] });
+  api.campaigns.mockReturnValue({ data: readable });
   api.mutate.mockResolvedValue(campaign);
   api.report.mockReturnValue({ isPending: true });
 });
@@ -72,6 +79,15 @@ function show(path = '/administrare/grupuri/2/campanii') {
   );
 }
 const where = () => screen.getByTestId('where').textContent;
+function first(elements: HTMLElement[]): HTMLElement {
+  const [element] = elements;
+  if (!element) throw new Error('no match');
+  return element;
+}
+const listed = () =>
+  within(screen.getByRole('list', { name: 'Campanii active' }))
+    .getAllByRole('listitem')
+    .map((item) => item.querySelector('.font-medium')?.textContent);
 const optionTexts = async () =>
   (await screen.findAllByRole('option')).map((option) => option.textContent);
 it('creates and renames in small pop-ups, and toggles, using the owning Group and command IDs', async () => {
@@ -126,26 +142,47 @@ it('creates and renames in small pop-ups, and toggles, using the owning Group an
     ).violations,
   ).toEqual([]);
 });
-it('explains that a Campaign is a reporting label and asks for a Group first', () => {
+it('lists every readable Campaign with no filter: no default Group, no create (#908)', () => {
   show('/administrare/campanii');
-  // The header is one sentence (K1); the explanation lives in the empty state.
+  expect(where()).toBe('/administrare/campanii');
   expect(
     screen.getByText(
-      'Campaniile grupurilor pe care le gestionezi, cu raportul fiecăreia.',
+      'Toate campaniile, cu raportul celor din grupurile pe care le gestionezi.',
     ),
   ).toBeVisible();
+  // Every fixture Campaign, by owner: the unmanaged Educațional's too.
+  expect(listed()).toEqual(['Toamnă', 'Gala', 'Vară']);
+  expect(screen.getByText('Grup: Educațional')).toBeVisible();
+  // A Campaign is a reporting label; creating one needs a Group.
   expect(
-    screen.getByText(
-      /^Alege un grup ca să-i vezi campaniile\. O campanie etichetează taskurile unui grup/,
-    ),
+    screen.getByText(/^O campanie etichetează taskurile unui grup/),
   ).toBeVisible();
   expect(
     screen.queryByRole('button', { name: 'Campanie nouă' }),
   ).not.toBeInTheDocument();
+  // Only the managed Groups' rows change or report.
+  expect(screen.getAllByRole('button', { name: 'Vezi raportul' })).toHaveLength(
+    2,
+  );
   // No Campaign level: the rows are the Campaigns.
   expect(
     screen.queryByRole('combobox', { name: 'Campanie' }),
   ).not.toBeInTheDocument();
+});
+it('narrows to the chosen Group and restores every Campaign when cleared', async () => {
+  const user = userEvent.setup();
+  show('/administrare/campanii');
+  await openFilters(user);
+  await user.click(screen.getByRole('combobox', { name: 'Grup principal' }));
+  await user.click(await screen.findByRole('option', { name: /^Tineret/ }));
+  await closeFilters(user);
+  expect(where()).toBe('/administrare/grupuri/4/campanii');
+  expect(listed()).toEqual(['Vară']);
+  await user.click(
+    first(screen.getAllByRole('button', { name: 'Șterge filtrele' })),
+  );
+  expect(where()).toBe('/administrare/campanii');
+  expect(listed()).toEqual(['Toamnă', 'Gala', 'Vară']);
 });
 it('cascades root → Group below over managed Groups only, carrying the Group in the route', async () => {
   const user = userEvent.setup();
@@ -185,9 +222,7 @@ it('restores the cascade and the dates from the URL, and clearing the root leave
     }),
   );
   expect(where()).toBe('/administrare/campanii?de_la=2026-09-01');
-  expect(
-    screen.getByText(/^Alege un grup ca să-i vezi campaniile\./),
-  ).toBeVisible();
+  expect(listed()).toEqual(['Toamnă', 'Gala', 'Vară']);
 });
 it('dates the report with the range, and reads nothing while it is inverted', async () => {
   const user = userEvent.setup();
@@ -267,7 +302,7 @@ it('names each contributor in the report as a button that opens their Member Car
   // The report row shows points; the Member Card never does.
   expect(card).not.toHaveTextContent('12');
 });
-it('opens the one topmost managed Group directly, keeping the query (D22)', async () => {
+it('never opens the one topmost managed Group by default (#908, was D22)', () => {
   api.options.mockReturnValue({
     isSuccess: true,
     data: {
@@ -276,13 +311,17 @@ it('opens the one topmost managed Group directly, keeping the query (D22)', asyn
         { id: 2, name: 'Echipa', path: [1, 2], min_level: 1 },
         { id: 3, name: 'Subechipa', path: [1, 2, 3], min_level: 1 },
       ],
-      groupNames: [{ id: 1, name: 'Educațional' }],
+      groupNames: [
+        { id: 1, name: 'Educațional' },
+        { id: 4, name: 'Tineret' },
+      ],
       campaigns: [],
       umbrellas: [],
     },
   });
   show('/administrare/campanii?stare=inactive');
-  expect(where()).toBe('/administrare/grupuri/2/campanii?stare=inactive');
-  expect(await screen.findByRole('heading', { name: /^Echipa/ })).toBeVisible();
-  expect(screen.queryByText(/Alege un grup/)).toBeNull();
+  expect(where()).toBe('/administrare/campanii?stare=inactive');
+  expect(
+    screen.getByRole('heading', { name: 'Toate grupurile' }),
+  ).toBeVisible();
 });
