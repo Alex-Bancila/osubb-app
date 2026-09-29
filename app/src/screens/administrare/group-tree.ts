@@ -82,6 +82,16 @@ export type TreeRow = {
   /** 0 for a top-level Group; one more for each ancestor shown above it. */
   depth: number;
   hasChildren: boolean;
+  /** The Group shown above it, for the "subgrup al …" label; null at the top. */
+  parentName: string | null;
+  /** Whether it is the last of its siblings: its rail ends in its elbow. */
+  last: boolean;
+  /**
+   * The tree guide's through-lines, one per ancestor rail left of its own
+   * elbow (length `depth - 1`): `true` where the ancestor one level down on
+   * this row's path still has a sibling below, so that rail runs on.
+   */
+  continues: boolean[];
 };
 
 /**
@@ -104,18 +114,129 @@ export function buildTree(groups: readonly AdminGroup[]): TreeRow[] {
   for (const siblings of children.values())
     siblings.sort((left, right) => left.name.localeCompare(right.name, 'ro'));
   const rows: TreeRow[] = [];
-  const walk = (parent: number | null, depth: number) => {
-    for (const group of children.get(parent) ?? []) {
+  const walk = (
+    parent: AdminGroup | null,
+    depth: number,
+    continues: boolean[],
+  ) => {
+    const siblings = children.get(parent?.id ?? null) ?? [];
+    siblings.forEach((group, index) => {
+      const last = index === siblings.length - 1;
       rows.push({
         group,
         depth,
         hasChildren: (children.get(group.id) ?? []).length > 0,
+        parentName: parent?.name ?? null,
+        last,
+        continues,
       });
-      walk(group.id, depth + 1);
-    }
+      // A top-level Group draws no elbow, so its children carry no
+      // through-line for it; below that, each level adds one.
+      walk(group, depth + 1, depth === 0 ? [] : [...continues, !last]);
+    });
   };
-  walk(null, 0);
+  walk(null, 0, []);
   return rows;
+}
+
+/** A Group Role the viewer holds on a Group, and whether it comes from above. */
+export type Lead = {
+  groupRole: 'manager' | 'responsible';
+  inherited: boolean;
+};
+
+/** One row of **Conduse de mine**: a led Group, or a greyed context parent. */
+export type LedRow = TreeRow & {
+  /** Null for a parent shown only as context for a led Child Group. */
+  lead: Lead | null;
+};
+
+/** The fields of a `my_groups()` row the led view reads. */
+export type LedSource = {
+  id: number;
+  name: string;
+  path: number[];
+  group_role: string;
+  explicit: boolean;
+  automatic: boolean;
+  category: string;
+  color: string | null;
+  min_level: number;
+  status: string;
+  is_organization: boolean;
+};
+
+/** A led Group the Group rows lack (a read racing an Appointment). */
+function fromLedSource(source: LedSource): AdminGroup {
+  return {
+    id: source.id,
+    name: source.name,
+    short: null,
+    color: source.color || null,
+    category: source.category,
+    path: source.path,
+    parent_id: source.path.length > 1 ? (source.path.at(-2) ?? null) : null,
+    min_level: source.min_level,
+    status: source.status,
+    is_organization: source.is_organization,
+    is_private: false,
+    manager_title: null,
+    automatic_membership: false,
+    accepts_applications: false,
+    application_level: null,
+    competes_in_cup: false,
+    counts_toward_parent_cup: false,
+    shared_work_visibility: false,
+    application_form_label: null,
+    application_form_url: null,
+    memberCount: 0,
+  };
+}
+
+/**
+ * **Conduse de mine** (#921): the Groups where the viewer holds a Group Role —
+ * their own position or one inherited from a Group above (ruling R14) — in
+ * tree order, with each led Group's readable ancestors kept as context, so a
+ * Child Group never floats without its parent. Plain membership leads
+ * nothing (relevance B47).
+ */
+export function ledTree(
+  groups: readonly AdminGroup[],
+  mine: readonly LedSource[],
+  rosterRows: readonly { group_id: number; group_role: string }[] | undefined,
+): LedRow[] {
+  const leads = new Map<number, Lead>();
+  const byId = new Map(groups.map((group) => [group.id, group]));
+  for (const row of mine) {
+    if (row.group_role !== 'manager' && row.group_role !== 'responsible')
+      continue;
+    leads.set(row.id, {
+      groupRole: row.group_role,
+      inherited: inheritsGroupRole(row, rosterRows),
+    });
+    if (!byId.has(row.id)) byId.set(row.id, fromLedSource(row));
+  }
+  const shown = new Map<number, AdminGroup>();
+  for (const id of leads.keys()) {
+    const group = byId.get(id);
+    if (!group) continue;
+    for (const ancestor of group.path) {
+      const found = byId.get(ancestor);
+      if (found) shown.set(found.id, found);
+    }
+    shown.set(group.id, group);
+  }
+  return buildTree([...shown.values()]).map((row) => ({
+    ...row,
+    lead: leads.get(row.group.id) ?? null,
+  }));
+}
+
+/** Whether the viewer holds any Group Role (the **Conduse de mine** test). */
+export function leadsAny(mine: readonly { group_role: string }[]): boolean {
+  return mine.some(
+    (row) => row.group_role === 'manager' || row.group_role === 'responsible',
+  );
 }
 
 /**
