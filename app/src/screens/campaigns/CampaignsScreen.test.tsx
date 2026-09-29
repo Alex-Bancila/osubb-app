@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 import axe from 'axe-core';
+import { closeFilters, openFilters } from '../../test/filters';
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 const api = vi.hoisted(() => ({
   options: vi.fn(),
@@ -149,6 +150,7 @@ it('explains that a Campaign is a reporting label and asks for a Group first', (
 it('cascades root → Group below over managed Groups only, carrying the Group in the route', async () => {
   const user = userEvent.setup();
   show('/administrare/campanii?stare=inactive');
+  await openFilters(user);
   const root = screen.getByRole('combobox', { name: 'Grup principal' });
   expect(screen.getByRole('combobox', { name: 'Subgrup' })).toBeDisabled();
   await user.click(root);
@@ -160,6 +162,7 @@ it('cascades root → Group below over managed Groups only, carrying the Group i
   expect(await optionTexts()).toEqual(['Subechipa· Echipa']);
   await user.click(screen.getByRole('option', { name: /^Subechipa/ }));
   expect(where()).toBe('/administrare/grupuri/3/campanii?stare=inactive');
+  await closeFilters(user);
   expect(
     await screen.findByRole('heading', { name: 'Subechipa · Echipa' }),
   ).toBeVisible();
@@ -167,6 +170,7 @@ it('cascades root → Group below over managed Groups only, carrying the Group i
 it('restores the cascade and the dates from the URL, and clearing the root leaves the Group', async () => {
   const user = userEvent.setup();
   show('/administrare/grupuri/3/campanii?de_la=2026-09-01');
+  await openFilters(user);
   expect(
     screen.getByRole('combobox', { name: 'Grup principal' }),
   ).toHaveTextContent('Echipa');
@@ -174,6 +178,7 @@ it('restores the cascade and the dates from the URL, and clearing the root leave
     'Subechipa',
   );
   expect(screen.getByLabelText('De la')).toHaveValue('2026-09-01');
+  await closeFilters(user);
   await user.click(
     screen.getByRole('button', {
       name: 'Elimină filtrul Grup principal: Echipa',
@@ -192,9 +197,11 @@ it('dates the report with the range, and reads nothing while it is inverted', as
     p_from: '2026-08-31T21:00:00.000Z',
     p_to: '2026-09-30T21:00:00.000Z',
   });
+  await openFilters(user);
   const from = screen.getByLabelText('De la');
   await user.clear(from);
   await user.type(from, '2026-10-05');
+  await closeFilters(user);
   expect(api.report).toHaveBeenLastCalledWith(10, null);
   expect(screen.getByText(/Corectează perioada/)).toBeVisible();
 });

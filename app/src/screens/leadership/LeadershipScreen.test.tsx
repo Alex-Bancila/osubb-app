@@ -37,6 +37,7 @@ vi.mock(
 vi.mock('../../lib/capabilities', () => ({
   useCapability: (name: string) => ({ data: name === 'seeLeadership' }),
 }));
+import { closeFilters, openFilters } from '../../test/filters';
 import { useMemberCard } from '../../test/member-card-mock';
 const uid = '35400000-0000-0000-0000-000000000001';
 
@@ -207,12 +208,14 @@ it('still works when this device cannot store the choice', async () => {
 it('hides Grup principal and Subgrup in the Cup view and keeps the Group in the URL for the way back', async () => {
   const user = userEvent.setup();
   renderPage('?vedere=cupa&grup=7&subgrup=9&campanie=3');
+  await openFilters(user);
   expect(screen.queryByRole('combobox', { name: 'Grup principal' })).toBeNull();
   expect(screen.queryByRole('combobox', { name: 'Subgrup' })).toBeNull();
   expect(screen.getByRole('combobox', { name: 'Campanie' })).toHaveTextContent(
     'Bun venit',
   );
   expect(state.cup).toHaveBeenLastCalledWith({ p_campaign_id: 3 });
+  await closeFilters(user);
   // No chip for a level the view hides; clearing keeps it for Clasament.
   expect(
     screen.queryByRole('button', { name: /Elimină filtrul Grup principal/ }),
@@ -225,6 +228,7 @@ it('hides Grup principal and Subgrup in the Cup view and keeps the Group in the 
 
   await user.click(choose('Clasament'));
   expect(state.board).toHaveBeenLastCalledWith({ p_group_id: 9 });
+  await openFilters(user);
   expect(
     screen.getByRole('combobox', { name: 'Grup principal' }),
   ).toHaveTextContent('Educație');
@@ -245,6 +249,7 @@ it('sends no Work Filter argument with no level set, then the chosen ones', asyn
   renderPage();
   expect(state.board).toHaveBeenLastCalledWith({});
   expect(screen.getByText('−1.234')).toBeInTheDocument();
+  await openFilters(user);
   await user.click(screen.getByRole('combobox', { name: 'Grup principal' }));
   await user.click(await screen.findByRole('option', { name: 'Educație' }));
   expect(state.board).toHaveBeenLastCalledWith({ p_group_id: 7 });
@@ -255,6 +260,7 @@ it('sends no Work Filter argument with no level set, then the chosen ones', asyn
     p_group_id: 7,
     p_campaign_id: 3,
   });
+  await closeFilters(user);
   // The Group narrows only the members' board, never the Cup.
   await user.click(choose('Cupa Departamentelor'));
   expect(state.cup).toHaveBeenLastCalledWith({ p_campaign_id: 3 });
@@ -268,7 +274,8 @@ it('sends no Work Filter argument with no level set, then the chosen ones', asyn
   expect(state.board).toHaveBeenLastCalledWith({});
 });
 
-it('restores all four levels from the URL and sends the midnight bounds', () => {
+it('restores all four levels from the URL and sends the midnight bounds', async () => {
+  const user = userEvent.setup();
   renderPage(
     '?grup=7&subgrup=9&campanie=3&de_la=2026-09-01&pana_la=2026-09-30',
   );
@@ -278,6 +285,7 @@ it('restores all four levels from the URL and sends the midnight bounds', () => 
     p_from: '2026-08-31T21:00:00.000Z',
     p_to: '2026-09-30T21:00:00.000Z',
   });
+  await openFilters(user);
   expect(
     screen.getByRole('combobox', { name: 'Grup principal' }),
   ).toHaveTextContent('Educație');
@@ -305,16 +313,19 @@ it('sends the Cup its Campaign and range from the URL, never the Group', () => {
   ).toBeInTheDocument();
 });
 
-it('sends nothing while Până la is before De la, on either board', () => {
+it('sends nothing while Până la is before De la, on either board', async () => {
+  const user = userEvent.setup();
   const { unmount } = renderPage('?de_la=2026-09-30&pana_la=2026-09-01');
   expect(state.board).toHaveBeenLastCalledWith(null);
   expect(state.cup).toHaveBeenLastCalledWith(null);
-  expect(screen.getByRole('alert')).toHaveTextContent(
-    'Data de sfârșit nu poate fi înaintea celei de început.',
-  );
   expect(
     screen.getByText('Corectează perioada din filtre ca să vezi rezultatele.'),
   ).toBeInTheDocument();
+  const sheet = await openFilters(user);
+  expect(within(sheet).getByRole('alert')).toHaveTextContent(
+    'Data de sfârșit nu poate fi înaintea celei de început.',
+  );
+  await closeFilters(user);
   unmount();
   renderPage('?vedere=cupa&de_la=2026-09-30&pana_la=2026-09-01');
   expect(state.cup).toHaveBeenLastCalledWith(null);

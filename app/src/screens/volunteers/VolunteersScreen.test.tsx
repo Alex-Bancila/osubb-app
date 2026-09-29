@@ -241,10 +241,14 @@ describe('Member directory', () => {
   it('adds Group, role and status filters in a Dialog and shows them as removable chips', async () => {
     const user = userEvent.setup();
     render(<VolunteersScreen />);
+    // Filtrează leads the toolbar, the search after it (#903).
+    const toolbar = screen.getByRole('group', { name: 'Filtre membri' });
+    expect(toolbar.firstElementChild).toHaveAccessibleName('Filtrează');
+    expect(
+      within(toolbar).getByRole('searchbox', { name: 'Caută un membru' }),
+    ).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Filtrează' }));
-    const dialog = await screen.findByRole('dialog', {
-      name: 'Filtrează membrii',
-    });
+    const dialog = await screen.findByRole('dialog', { name: 'Filtre' });
 
     // A parent Group finds the members of its Child Groups too: Ștefan is
     // only in Logistică, under Educațional.
@@ -273,14 +277,26 @@ describe('Member directory', () => {
     ).toHaveAttribute('aria-pressed', 'true');
     expect(names()).toEqual(['Ștefan Pop']);
 
-    await user.click(within(dialog).getByRole('button', { name: 'Gata' }));
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Vezi rezultatele' }),
+    );
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
-    const active = screen.getByRole('list', { name: 'Filtre active' });
-    expect(within(active).getAllByRole('button')).toHaveLength(2);
+    const active = screen.getByRole('group', { name: 'Filtre active' });
     expect(
-      screen.getByRole('button', { name: /Filtrează.*2 filtre active/ }),
-    ).toBeVisible();
+      within(active)
+        .getAllByRole('button')
+        .map((chip) => chip.getAttribute('aria-label') ?? chip.textContent),
+    ).toEqual([
+      'Elimină filtrul Grup: Educațional',
+      'Elimină filtrul Rol: Voluntar',
+      'Șterge filtrele',
+    ]);
+    const open = screen.getByRole('button', {
+      name: 'Filtrează, 2 filtre active',
+    });
+    // Closing the sheet hands focus back to the button.
+    expect(open).toHaveFocus();
     await user.click(
       screen.getByRole('button', { name: 'Elimină filtrul Rol: Voluntar' }),
     );
@@ -288,7 +304,8 @@ describe('Member directory', () => {
 
     await user.click(screen.getByRole('button', { name: 'Șterge filtrele' }));
     expect(names()).toHaveLength(3);
-    expect(screen.queryByRole('list', { name: 'Filtre active' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Filtre active' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Filtrează' })).toHaveFocus();
   });
 
   it('filters by status and says so when nothing matches', async () => {
@@ -578,7 +595,9 @@ describe('Member directory', () => {
     expect(within(dialog).getByRole('group', { name: 'Rol' })).toHaveClass(
       'grid-cols-2',
     );
-    await user.click(within(dialog).getByRole('button', { name: 'Gata' }));
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Vezi rezultatele' }),
+    );
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
     // Everyone active: Statut is no choice.

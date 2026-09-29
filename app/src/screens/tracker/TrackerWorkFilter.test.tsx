@@ -1,7 +1,9 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import type { WorkItem } from '../../lib/work-filter';
+import { openFilters } from '../../test/filters';
 
 vi.mock('../../queries/work-filter-options', () => ({
   useWorkFilterOptions: () => ({
@@ -35,9 +37,10 @@ function renderFilter(rows: WorkItem[]) {
 }
 
 describe('Tracker Work Filter hint (F-8)', () => {
-  it('speaks only of dates when no Group level shows', () => {
+  it('speaks only of dates when no Group level shows', async () => {
     // One Group with work: Rule W draws no Group level.
     renderFilter([{ group_id: 1, campaign_id: null }]);
+    await openFilters(userEvent.setup());
     expect(
       screen.queryByRole('combobox', { name: 'Grup principal' }),
     ).toBeNull();
@@ -45,11 +48,12 @@ describe('Tracker Work Filter hint (F-8)', () => {
     expect(screen.queryByText(/Grupul include/)).toBeNull();
   });
 
-  it('explains the Group level when one shows', () => {
+  it('explains the Group level when one shows', async () => {
     renderFilter([
       { group_id: 1, campaign_id: null },
       { group_id: 8, campaign_id: null },
     ]);
+    await openFilters(userEvent.setup());
     expect(
       screen.getByRole('combobox', { name: 'Grup principal' }),
     ).toBeInTheDocument();

@@ -1,19 +1,15 @@
 import { useMemo, type ReactNode } from 'react';
-import { CheckIcon, ListFilter, Search, XIcon } from 'lucide-react';
+import { CheckIcon, XIcon } from 'lucide-react';
 import { cn } from 'cn';
 import { SubHeading } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { GroupFilterCombobox } from '../../components/group/GroupFilterCombobox';
 import { groupOptionLabel } from '../../components/ui/combobox';
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../../components/ui/dialog';
+  FilterSearch,
+  FilterToolbar,
+  type FilterChip,
+} from '../../components/work-filter/FilterToolbar';
 import type { DirectoryMember } from '../../queries/member-directory';
 import { useGroups, type Group } from '../../queries/reference';
 import {
@@ -91,54 +87,19 @@ function RemovableChip({
 }
 
 /**
- * The "Filtrează" button, with the number of active filters. It lives in the
- * page header's action slot (ruling R27) and opens `DirectoryFilterBar`'s
- * Dialog.
- */
-export function DirectoryFilterButton({
-  count,
-  onOpen,
-}: {
-  count: number;
-  onOpen: () => void;
-}) {
-  return (
-    <Button
-      variant="outline"
-      aria-label={count ? `Filtrează, ${count} filtre active` : undefined}
-      onClick={onOpen}
-    >
-      <ListFilter aria-hidden="true" />
-      Filtrează
-      {count > 0 && (
-        <span className="grid min-w-5 place-items-center rounded-full bg-primary px-1.5 text-xs font-bold text-primary-foreground">
-          {count}
-          <span className="sr-only"> filtre active</span>
-        </span>
-      )}
-    </Button>
-  );
-}
-
-/**
- * The directory's filter controls: the search, a small Dialog (opened by
- * `DirectoryFilterButton`) for adding Group, role and status filters, and the
- * active filters as removable chips above the list.
+ * The directory's filter toolbar (#903): **Filtrează**, whose sheet adds
+ * Group, role and status filters, then the search, the active filters as
+ * removable chips, and the view switch at the end.
  */
 export function DirectoryFilterBar({
   members,
   filters,
   onChange,
-  open,
-  onOpenChange: setOpen,
   trailing,
 }: {
   members: DirectoryMember[];
   filters: DirectoryFilters;
   onChange: (filters: DirectoryFilters) => void;
-  /** Whether the filter Dialog is open. */
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   /** Controls that sit at the end of the toolbar (the view switch). */
   trailing?: ReactNode;
 }) {
@@ -180,47 +141,69 @@ export function DirectoryFilterBar({
   const count = activeFilterCount(filters);
   const clear = () => onChange({ ...emptyFilters, search: filters.search });
 
+  const roleLabel = (id: string) =>
+    roles.find((role) => role.value === id)?.label ?? id;
+  const chips: FilterChip[] = [
+    ...filters.groupIds.map((id): FilterChip => ({
+      key: `group-${id}`,
+      label: 'Grup',
+      text: groupLabel(id),
+      onRemove: () =>
+        onChange({
+          ...filters,
+          groupIds: filters.groupIds.filter((item) => item !== id),
+        }),
+    })),
+    ...filters.roleIds.map((id): FilterChip => ({
+      key: `role-${id}`,
+      label: 'Rol',
+      text: roleLabel(id),
+      onRemove: () =>
+        onChange({ ...filters, roleIds: toggle(filters.roleIds, id) }),
+    })),
+    ...filters.statuses.map((status): FilterChip => ({
+      key: `status-${status}`,
+      label: 'Statut',
+      text: statusLabel(status),
+      onRemove: () =>
+        onChange({ ...filters, statuses: toggle(filters.statuses, status) }),
+    })),
+  ];
+  // One option is no choice (Rule W): Rol and Statut show from two.
+  const showRoles = roles.length > 1 || filters.roleIds.length > 0;
+  const showStatuses = statuses.length > 1 || filters.statuses.length > 0;
+
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="relative min-w-56 flex-1 sm:max-w-sm">
-          <span className="sr-only">Caută un membru</span>
-          <Search
-            aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-          />
-          <input
-            type="search"
-            placeholder="Nume, grup, rol sau email"
-            className="min-h-11 w-full rounded-lg border border-input bg-background pr-3 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-ring"
-            value={filters.search}
-            onChange={(event) =>
-              onChange({ ...filters, search: event.target.value })
-            }
-          />
-        </label>
-        {trailing}
-      </div>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Filtrează membrii</DialogTitle>
-            <DialogDescription>
-              Alege grupurile, rolurile sau statutul membrilor pe care vrei să
-              îi vezi. Lista se actualizează pe loc.
-            </DialogDescription>
-          </DialogHeader>
-
+    <FilterToolbar
+      label="Filtre membri"
+      description="Alege grupurile, rolurile sau statutul membrilor pe care vrei să îi vezi. Lista se actualizează pe loc."
+      count={count}
+      chips={chips}
+      onClear={clear}
+      hidden={!groupOptions.length && !showRoles && !showStatuses && !count}
+      search={
+        <FilterSearch
+          label="Caută un membru"
+          placeholder="Nume, grup, rol sau email"
+          value={filters.search}
+          onChange={(event) =>
+            onChange({ ...filters, search: event.target.value })
+          }
+        />
+      }
+      trailing={trailing}
+    >
+      {(prefix) => (
+        <div className="grid gap-6">
           <div className="grid gap-2">
-            <SubHeading id="directory-filter-group">Grup</SubHeading>
+            <SubHeading id={`${prefix}-group`}>Grup</SubHeading>
             {groupsQuery.isError ? (
               <p role="alert" className="text-destructive">
                 Nu am putut încărca grupurile.
               </p>
             ) : (
               <GroupFilterCombobox
-                ariaLabelledBy="directory-filter-group"
+                ariaLabelledBy={`${prefix}-group`}
                 groups={groupOptions.filter(
                   (group) => !filters.groupIds.includes(group.id),
                 )}
@@ -236,7 +219,7 @@ export function DirectoryFilterBar({
                 placeholder="Adaugă un grup"
               />
             )}
-            <p className="m-0 text-muted-foreground">
+            <p className="m-0 text-sm text-muted-foreground">
               Un grup îi include și pe membrii grupurilor din el.
             </p>
             {filters.groupIds.length > 0 && (
@@ -263,12 +246,12 @@ export function DirectoryFilterBar({
             )}
           </div>
 
-          {(roles.length > 1 || filters.roleIds.length > 0) && (
+          {showRoles && (
             <div className="grid gap-2">
-              <SubHeading id="directory-filter-role">Rol</SubHeading>
+              <SubHeading id={`${prefix}-role`}>Rol</SubHeading>
               <div
                 role="group"
-                aria-labelledby="directory-filter-role"
+                aria-labelledby={`${prefix}-role`}
                 className={toggleChipRowClass}
               >
                 {roles.map((role) => (
@@ -289,13 +272,12 @@ export function DirectoryFilterBar({
             </div>
           )}
 
-          {/* One status is no choice (Rule W): Statut shows from two. */}
-          {(statuses.length > 1 || filters.statuses.length > 0) && (
+          {showStatuses && (
             <div className="grid gap-2">
-              <SubHeading id="directory-filter-status">Statut</SubHeading>
+              <SubHeading id={`${prefix}-status`}>Statut</SubHeading>
               <div
                 role="group"
-                aria-labelledby="directory-filter-status"
+                aria-labelledby={`${prefix}-status`}
                 className={toggleChipRowClass}
               >
                 {statuses.map((status) => (
@@ -315,64 +297,8 @@ export function DirectoryFilterBar({
               </div>
             </div>
           )}
-
-          <DialogFooter>
-            <Button variant="outline" disabled={!count} onClick={clear}>
-              Șterge filtrele
-            </Button>
-            <DialogClose render={<Button />}>Gata</DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {count > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <ul
-            className="m-0 flex min-w-0 list-none flex-wrap gap-2 p-0"
-            aria-label="Filtre active"
-          >
-            {filters.groupIds.map((id) => (
-              <RemovableChip
-                key={`group-${id}`}
-                kind="Grup"
-                text={groupLabel(id)}
-                onRemove={() =>
-                  onChange({
-                    ...filters,
-                    groupIds: filters.groupIds.filter((item) => item !== id),
-                  })
-                }
-              />
-            ))}
-            {filters.roleIds.map((id) => (
-              <RemovableChip
-                key={`role-${id}`}
-                kind="Rol"
-                text={roles.find((role) => role.value === id)?.label ?? id}
-                onRemove={() =>
-                  onChange({ ...filters, roleIds: toggle(filters.roleIds, id) })
-                }
-              />
-            ))}
-            {filters.statuses.map((status) => (
-              <RemovableChip
-                key={`status-${status}`}
-                kind="Statut"
-                text={statusLabel(status)}
-                onRemove={() =>
-                  onChange({
-                    ...filters,
-                    statuses: toggle(filters.statuses, status),
-                  })
-                }
-              />
-            ))}
-          </ul>
-          <Button variant="ghost" size="sm" onClick={clear}>
-            Șterge filtrele
-          </Button>
         </div>
       )}
-    </div>
+    </FilterToolbar>
   );
 }

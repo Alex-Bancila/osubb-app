@@ -76,6 +76,7 @@ vi.mock('./EventManageControls', () => ({
   ),
 }));
 
+import { filterButton, openFilters } from '../../test/filters';
 import CalendarScreen from './CalendarScreen';
 import { CALENDAR_VIEW_STORAGE_KEY } from './calendar-view';
 
@@ -854,6 +855,12 @@ describe('CalendarScreen', () => {
         ],
       });
       renderCalendar();
+      // Filtrează opens the toolbar under the header (#903).
+      expect(
+        screen.getByRole('group', { name: 'Filtre calendar' })
+          .firstElementChild,
+      ).toBe(filterButton());
+      const sheet = await openFilters(user);
       await user.click(
         screen.getByRole('combobox', { name: 'Grup principal' }),
       );
@@ -863,9 +870,9 @@ describe('CalendarScreen', () => {
       ).toEqual(['Educațional', 'Festival']);
       // One Campaign only: the level is not drawn.
       expect(screen.queryByRole('combobox', { name: 'Campanie' })).toBeNull();
-      expect(
-        screen.getByText('Grupul include subgrupurile sale.'),
-      ).toBeVisible();
+      expect(sheet).toHaveAccessibleDescription(
+        'Grupul include subgrupurile sale.',
+      );
     });
 
     it('shows a retry when the Events or deadlines behind the filter fail', async () => {

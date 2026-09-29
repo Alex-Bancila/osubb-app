@@ -21,14 +21,10 @@ import {
   useMemberDirectory,
   type DirectoryMember,
 } from '../../queries/member-directory';
-import {
-  DirectoryFilterBar,
-  DirectoryFilterButton,
-} from './DirectoryFilterBar';
+import { DirectoryFilterBar } from './DirectoryFilterBar';
 import { MemberGroups } from './MemberGroups';
 import { useMinWidth } from './use-min-width';
 import {
-  activeFilterCount,
   directoryColumns,
   emptyFilters,
   matchesFilters,
@@ -258,7 +254,6 @@ export default function VolunteersScreen() {
   const query = useMemberDirectory();
   const [filters, setFilters] = useState<DirectoryFilters>(emptyFilters);
   const [view, setView] = useState<View>('list');
-  const [filterOpen, setFilterOpen] = useState(false);
   const [selected, setSelected] = useState<DirectoryMember | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const openProfile = (member: DirectoryMember) => {
@@ -279,15 +274,6 @@ export default function VolunteersScreen() {
         eyebrow="Conducere"
         title="Voluntari"
         description="Caută un membru și vezi rolul, grupurile și punctele sale din taskuri."
-        actions={
-          !query.isPending &&
-          !query.isError && (
-            <DirectoryFilterButton
-              count={activeFilterCount(filters)}
-              onOpen={() => setFilterOpen(true)}
-            />
-          )
-        }
       />
       {query.isPending ? (
         <Loading label="Se încarcă membrii…" />
@@ -303,12 +289,9 @@ export default function VolunteersScreen() {
             members={members}
             filters={filters}
             onChange={setFilters}
-            open={filterOpen}
-            onOpenChange={setFilterOpen}
             trailing={
               <SegmentedToggle
                 label="Afișare"
-                className="ml-auto"
                 value={view}
                 onChange={setView}
                 options={[

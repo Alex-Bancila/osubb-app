@@ -380,9 +380,9 @@ describe('My tasks screen', () => {
       expect(
         screen.queryByRole('searchbox', { name: 'Caută după titlu' }),
       ).toBeNull();
-      expect(
-        screen.getByRole('region', { name: 'Filtre taskuri' }),
-      ).toBeVisible();
+      // The filter toolbar sits under the tab strip, Filtrează first (#903).
+      const toolbar = screen.getByRole('group', { name: 'Filtre taskuri' });
+      expect(toolbar.firstElementChild).toHaveAccessibleName('Filtrează');
       await user.click(screen.getByRole('button', { name: 'Viitor' }));
       expect(
         screen.getByRole('dialog', { name: 'Detalii task' }),

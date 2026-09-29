@@ -23,6 +23,7 @@ vi.mock('../../queries/work-filter-options', () => ({
     },
   }),
 }));
+import { closeFilters, filterButton, openFilters } from '../../test/filters';
 import { taskRow } from '../../test/task-fixtures';
 import { ManagerTaskList } from './ManagerTaskList';
 import { compareManagedTasks } from './manager-task-list';
@@ -133,7 +134,11 @@ describe('ManagerTaskList', () => {
   it('keeps overdue first when ordered by title', async () => {
     const user = userEvent.setup();
     renderList('', vi.fn(), sixRows);
+    await openFilters(user);
     await user.selectOptions(screen.getByLabelText('Ordonează după'), 'title');
+    await closeFilters(user);
+    // The order is no filter: nothing is counted.
+    expect(filterButton()).toHaveAccessibleName('Filtrează');
     expect(titles()).toEqual([
       'Z urgent',
       'Afișe pentru gală',
@@ -147,6 +152,7 @@ describe('ManagerTaskList', () => {
   it('filters by Stare, offering only the states the list holds', async () => {
     const user = userEvent.setup();
     renderList('', vi.fn(), sixRows);
+    await openFilters(user);
     const stare = screen.getByLabelText('Stare');
     expect(
       within(stare)
@@ -162,10 +168,19 @@ describe('ManagerTaskList', () => {
       'Finalizat cu întârziere',
     ]);
     await user.selectOptions(stare, 'feedback');
-    expect(titles()).toEqual(['Z urgent']);
     await user.selectOptions(stare, 'late');
+    await closeFilters(user);
     expect(titles()).toEqual(['Bilanț vechi']);
-    await user.selectOptions(stare, 'todo');
+    // The chosen Stare is a chip, counted on Filtrează.
+    expect(filterButton()).toHaveAccessibleName('Filtrează, 1 filtru activ');
+    expect(
+      screen.getByRole('button', {
+        name: 'Elimină filtrul Stare: Finalizat cu întârziere',
+      }),
+    ).toBeVisible();
+    await openFilters(user);
+    await user.selectOptions(screen.getByLabelText('Stare'), 'todo');
+    await closeFilters(user);
     expect(titles()).toEqual([
       'Afișe pentru gală',
       'Ședință de mentorat',
@@ -183,24 +198,24 @@ describe('ManagerTaskList', () => {
       'SEDINTA',
     );
     await waitFor(() => expect(titles()).toEqual(['Ședință de mentorat']));
-    // The phone's Filtre button counts the applied search.
-    expect(
-      screen.getByRole('button', { name: 'Filtre (1)' }),
-    ).toBeInTheDocument();
-    // Below six Tasks the search stops applying, and stops being counted.
+    // The search is visible in the toolbar, so Filtrează does not count it.
+    expect(filterButton()).toHaveAccessibleName('Filtrează');
+    // Below six Tasks the search is gone and stops applying.
     rerender(
       <MemoryRouter initialEntries={['/tracker']}>
         <ManagerTaskList rows={rows} now={now} />
       </MemoryRouter>,
     );
-    expect(screen.getByRole('button', { name: 'Filtre' })).toBeInTheDocument();
+    expect(screen.queryByRole('searchbox')).toBeNull();
     expect(titles()).toHaveLength(rows.length);
     rerender(
       <MemoryRouter initialEntries={['/tracker']}>
         <ManagerTaskList rows={sixRows} now={now} />
       </MemoryRouter>,
     );
+    await openFilters(user);
     await user.selectOptions(screen.getByLabelText('Stare'), 'completed');
+    await closeFilters(user);
     expect(
       screen.getByText('Niciun task nu corespunde filtrelor.'),
     ).toBeVisible();
@@ -223,37 +238,41 @@ describe('ManagerTaskList', () => {
     expect(titles()).toEqual(expected);
   });
 
-  it('puts Stare and the order inside the one Filtre panel, on the #842 select', () => {
-    const { container } = renderList('', vi.fn(), sixRows);
-    expect(screen.queryByLabelText('Origine')).toBeNull();
-    // The only native selects left are Stare and the order.
-    const selects = container.querySelectorAll('select');
+  it('puts Stare and the order in the filter sheet on the #842 select, the search in the toolbar', async () => {
+    const user = userEvent.setup();
+    renderList('', vi.fn(), sixRows);
+    const toolbar = screen.getByRole('group', { name: 'Filtre taskuri' });
+    // Filtrează first, then the title search (#903).
+    expect(toolbar.firstElementChild).toBe(filterButton());
+    expect(
+      within(toolbar).getByRole('searchbox', { name: 'Caută după titlu' }),
+    ).toBeVisible();
+    expect(screen.queryByLabelText('Stare')).toBeNull();
+    const sheet = await openFilters(user);
+    expect(within(sheet).queryByLabelText('Origine')).toBeNull();
+    // The only native selects are Stare and the order.
+    const selects = sheet.querySelectorAll('select');
     expect(selects).toHaveLength(2);
-    expect(screen.getByLabelText('Stare')).toBe(selects[0]);
-    expect(screen.getByLabelText('Ordonează după')).toBe(selects[1]);
-    const filter = screen.getByRole('region', { name: 'Filtre taskuri' });
-    // One filter band (layout T4): the list controls sit on the panel's grid.
-    const grid = filter.querySelector('[data-slot=work-filter-grid]');
-    expect(grid).toContainElement(screen.getByLabelText('Stare'));
-    expect(grid).toContainElement(
-      screen.getByRole('searchbox', { name: 'Caută după titlu' }),
-    );
-    expect(screen.getByLabelText('Stare')).toHaveAttribute(
+    expect(within(sheet).getByLabelText('Stare')).toBe(selects[0]);
+    expect(within(sheet).getByLabelText('Ordonează după')).toBe(selects[1]);
+    expect(within(sheet).getByLabelText('Stare')).toHaveAttribute(
       'data-slot',
       'native-select',
     );
     expect(
-      within(filter).getByRole('combobox', { name: 'Grup principal' }),
+      within(sheet).getByRole('combobox', { name: 'Grup principal' }),
     ).toBeVisible();
     expect(
-      within(filter).getByRole('combobox', { name: 'Campanie' }),
+      within(sheet).getByRole('combobox', { name: 'Campanie' }),
     ).toBeVisible();
   });
 
   it('drops a chosen Stare the list no longer holds instead of emptying it', async () => {
     const user = userEvent.setup();
     const { rerender } = renderList('', vi.fn(), sixRows);
+    await openFilters(user);
     await user.selectOptions(screen.getByLabelText('Stare'), 'completed');
+    await closeFilters(user);
     expect(titles()).toEqual(['Bilanț vechi']);
     const open = sixRows.filter((row) => row.status !== 'completed');
     const more = [...open, taskRow({ id: 9, title: 'Nou', group: edu })];
@@ -262,7 +281,7 @@ describe('ManagerTaskList', () => {
         <ManagerTaskList rows={more} now={now} />
       </MemoryRouter>,
     );
-    expect(screen.getByLabelText('Stare')).toHaveValue('');
+    expect(filterButton()).toHaveAccessibleName('Filtrează');
     expect(titles()).toHaveLength(more.length);
     // The state is cleared, not hidden: it does not return with its rows.
     rerender(
@@ -270,12 +289,15 @@ describe('ManagerTaskList', () => {
         <ManagerTaskList rows={sixRows} now={now} />
       </MemoryRouter>,
     );
-    expect(screen.getByLabelText('Stare')).toHaveValue('');
     expect(titles()).toHaveLength(sixRows.length);
+    await openFilters(user);
+    expect(screen.getByLabelText('Stare')).toHaveValue('');
   });
 
-  it('shows Stare, Caută and Ordonează only from six Tasks', () => {
+  it('shows Stare, Caută and Ordonează only from six Tasks', async () => {
+    const user = userEvent.setup();
     renderList();
+    await openFilters(user);
     expect(screen.queryByLabelText('Stare')).toBeNull();
     expect(screen.queryByRole('searchbox')).toBeNull();
     expect(screen.queryByLabelText('Ordonează după')).toBeNull();
@@ -284,6 +306,7 @@ describe('ManagerTaskList', () => {
   it('offers only the Groups and Campaigns of the managed Tasks (Rule W)', async () => {
     const user = userEvent.setup();
     renderList();
+    await openFilters(user);
     await user.click(screen.getByRole('combobox', { name: 'Grup principal' }));
     // The Adunarea Generală is readable but owns no Task here.
     expect(
