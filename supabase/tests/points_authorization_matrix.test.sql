@@ -247,8 +247,9 @@ select is((select points from public.my_points), -6, 'BCE: personal total remain
 select is((select count(*) from public.points_ledger), 12::bigint, 'BCE: complete global ledger');
 select results_eq(
   $$ select full_name, points, rank from public.leadership_leaderboard() $$,
-  $$ values ('Matrix Inactive'::text, 9, 1), ('Matrix Second', 9, 1), ('Matrix Voluntar', 6, 3) $$,
-  'BCE: exact Task-only Leaderboard, including inactive earner'
+  $$ values ('Matrix Inactive'::text, 9, 1), ('Matrix Second', 9, 1), ('Matrix Voluntar', 6, 3),
+            ('Matrix Activ', 0, 4), ('Matrix Recrut', 0, 4), ('Matrix Responsabil', 0, 4), ('Matrix Vot', 0, 4) $$,
+  'BCE: exact Task-only Leaderboard, including inactive earner and every active Member below BCE at 0 (#907) -- no sanction, no BCE, BC or Moderator'
 );
 select is((select points from public.department_cup() where group_id = pg_temp.dept_group('262-dept')), 9, 'BCE: exact Department Cup total');
 select is((select count(*) from public.leadership_member_tasks('26200000-0000-0000-0000-000000000001')), 1::bigint, 'BCE: member drill-down row');
@@ -260,7 +261,8 @@ select is((select points from public.my_points), -7, 'BC: personal total remains
 select is((select count(*) from public.points_ledger), 12::bigint, 'BC: complete global ledger');
 select results_eq(
   $$ select full_name, points, rank from public.leadership_leaderboard() $$,
-  $$ values ('Matrix Inactive'::text, 9, 1), ('Matrix Second', 9, 1), ('Matrix Voluntar', 6, 3) $$,
+  $$ values ('Matrix Inactive'::text, 9, 1), ('Matrix Second', 9, 1), ('Matrix Voluntar', 6, 3),
+            ('Matrix Activ', 0, 4), ('Matrix Recrut', 0, 4), ('Matrix Responsabil', 0, 4), ('Matrix Vot', 0, 4) $$,
   'BC: exact Task-only Leaderboard'
 );
 select is((select points from public.department_cup() where group_id = pg_temp.dept_group('262-dept')), 9, 'BC: exact Department Cup total');
@@ -273,7 +275,8 @@ select is((select points from public.my_points), -9, 'Moderator: personal total 
 select is((select count(*) from public.points_ledger), 12::bigint, 'Moderator: complete global ledger');
 select results_eq(
   $$ select full_name, points, rank from public.leadership_leaderboard() $$,
-  $$ values ('Matrix Inactive'::text, 9, 1), ('Matrix Second', 9, 1), ('Matrix Voluntar', 6, 3) $$,
+  $$ values ('Matrix Inactive'::text, 9, 1), ('Matrix Second', 9, 1), ('Matrix Voluntar', 6, 3),
+            ('Matrix Activ', 0, 4), ('Matrix Recrut', 0, 4), ('Matrix Responsabil', 0, 4), ('Matrix Vot', 0, 4) $$,
   'Moderator: exact Task-only Leaderboard'
 );
 select is((select points from public.department_cup() where group_id = pg_temp.dept_group('262-dept')), 9, 'Moderator: exact Department Cup total');

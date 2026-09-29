@@ -14,7 +14,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(74);
+select plan(83);
 create function pg_temp.g523_group(p_dept text default null, p_team text default null, p_project bigint default null)
 returns bigint language sql stable as $$
   select coalesce((select id from public.groups where id = pg_temp.dept_group(p_dept) or id = pg_temp.team_group(p_team) or id = pg_temp.project_group(p_project)),-1)
@@ -323,7 +323,7 @@ select is((select count(*)
             where board.member_id = '25800000-0000-0000-0000-000000000010'), 0::bigint,
   'no Department filter at all reaches an Independent Team''s work -- not one of them, not just 258-dept');
 select is((select count(*) from public.leadership_leaderboard(-1)), 0::bigint,
-  'an unknown Group id returns no work');
+  'an unknown Group id returns no work and no roster -- not the unfiltered board');
 
 -- ==================== 4. The Department filter ====================
 
@@ -396,35 +396,42 @@ select is((select points from public.leadership_leaderboard(null, 2580001)
 select is((select points from public.leadership_leaderboard(null, 2580002)
             where member_id = '25800000-0000-0000-0000-000000000002'), 15,
   'Campania B shows a different total for the same member -- the Campaign filter really discriminates');
-select is((select count(*) from public.leadership_leaderboard(null, 2580002)), 1::bigint,
+select is((select count(*) from public.leadership_leaderboard(null, 2580002) where points <> 0), 1::bigint,
   'nobody else earned under Campania B');
+-- #907: a Campaign alone never narrows the Members, only their points, so the
+-- board also carries every other Member at 0; Zoia (net zero) stands for them.
 select results_eq(
-  $$ select full_name, points, rank from public.leadership_leaderboard(null, 2580001) $$,
+  $ select full_name, points, rank from public.leadership_leaderboard(null, 2580001)
+      where points <> 0 or member_id = '25800000-0000-0000-0000-000000000008' $,
   $$ values ('Mihai Executor 258'::text, 12, 1),
             ('Ana Egalitate 258',        3,  2),
             ('Bogdan Dezactivat 258',    3,  2),
             ('Zoia Anulata 258',         0,  4) $$,
-  'Campania A ranks its own four earners with the tie sharing rank 2, the reversed award netting its member to zero at the bottom rather than off the board');
-select is((select count(*) from public.leadership_leaderboard(null, -1)), 0::bigint,
-  'an unknown Campaign id yields an empty board, not the unfiltered one');
+  'Campania A ranks its own earners with the tie sharing rank 2, the reversed award netting its member to zero at the shared last rank rather than off the board');
+select is((select count(*) from public.leadership_leaderboard(null, -1) where points <> 0), 0::bigint,
+  'an unknown Campaign id credits nobody');
+select set_eq(
+  $ select member_id from public.leadership_leaderboard(null, -1) $,
+  $ select member_id from public.leadership_leaderboard() $,
+  'and lists exactly the unfiltered board''s Members -- a Campaign narrows points, never Members (#907)');
 
--- ==================== 7b. BC and the Moderator are not ranked (#843) ====================
--- Alex's ruling of 2026-09-28: the Clasament ranks neither BC nor the
--- Moderator; BCE stays. rank() runs after the filter, so the ranks renumber.
+-- ==================== 7b. BCE, BC and the Moderator are not ranked (#843, #907) ====================
+-- Alex's ruling of 2026-09-28 left BC and the Moderator off the Clasament;
+-- #907 (2026-09-29) leaves BCE off too. rank() runs after the filter, so the
+-- ranks renumber.
 select results_eq(
-  $$ select full_name, points, rank
-       from public.leadership_leaderboard(pg_temp.g523_group(p_project => 2580006)) $$,
-  $$ values ('Radu Renumerotat 258'::text, 9, 1),
-            ('BCE 258',                    6, 2) $$,
-  'on a Project where BC (15) and the Moderator (12) out-earn everyone, the board ranks only the Voluntar Activ and BCE -- 1 and 2, renumbered without them');
+  $ select full_name, points, rank
+       from public.leadership_leaderboard(pg_temp.g523_group(p_project => 2580006)) $,
+  $ values ('Radu Renumerotat 258'::text, 9, 1) $,
+  'on a Project where BC (15), the Moderator (12) and BCE (6) earn beside him, the board ranks only the Voluntar Activ -- at 1, renumbered without them');
 select is((select count(*)
              from public.leadership_leaderboard() as board
              join public.profiles as member on member.id = board.member_id
-            where member.role in ('bc', 'moderator')), 0::bigint,
-  'the unfiltered board has no BC or Moderator row at all -- the seeded BC''s points included');
-select is((select points from public.leadership_leaderboard()
-            where member_id = '25800000-0000-0000-0000-000000000001'), 6,
-  'BCE stays ranked with its Task Points');
+            where member.role in ('bce', 'bc', 'moderator')), 0::bigint,
+  'the unfiltered board has no BCE, BC or Moderator row at all -- the seeded leadership''s points and rosters included');
+select is((select count(*) from public.leadership_leaderboard()
+            where member_id = '25800000-0000-0000-0000-000000000001'), 0::bigint,
+  'BCE is not ranked although it holds 6 Task Points (#907)');
 
 -- ==================== 8. Agreement with the Department Cup ====================
 -- The independent attribution query below must see every owned fixture row,
@@ -437,24 +444,34 @@ reset role;
 
 -- With every fixture link counting, each competing subtree has the same
 -- attribution on the Leaderboard and the Cup. Group settings define this set.
+-- #907: the subtree board also lists its roster at 0; the comparison reads
+-- only the Members with Task ledger rows in the subtree.
 select set_eq(
-  $$ select grp.id, board.member_id, board.points
+  $ select grp.id, board.member_id, board.points
        from public.groups grp
        cross join lateral public.leadership_leaderboard(grp.id) board
-      where grp.competes_in_cup $$,
+      where grp.competes_in_cup
+        and exists (select 1
+                      from public.groups origin
+                      join public.tasks task on task.group_id=origin.id
+                      join public.points_ledger entry on entry.task_id=task.id
+                     where origin.path @> array[grp.id]
+                       and entry.member_id=board.member_id
+                       and entry.reason in ('task','task_reversal')) $,
   $$ select grp.id, entry.member_id, sum(entry.delta)::int
        from public.groups grp
        join public.groups origin on origin.path @> array[grp.id]
        join public.tasks task on task.group_id=origin.id
        join public.points_ledger entry on entry.task_id=task.id
-       -- #843: BC and the Moderator are off the Leaderboard (not the Cup).
+       -- #843, #907: BCE, BC and the Moderator are off the Leaderboard (not the Cup).
        join public.profiles member on member.id=entry.member_id
       where grp.competes_in_cup and entry.reason in ('task','task_reversal')
-        and member.role not in ('bc','moderator')
-      group by grp.id,entry.member_id $$,
-  'each competing Group subtree includes the same members and net Task points, BC and the Moderator aside');
--- #843: the Cup still counts BC's and the Moderator's Task Points, which the
--- Leaderboard leaves out, so it equals the subtree board plus theirs.
+        and member.role not in ('bce','bc','moderator')
+      group by grp.id,entry.member_id $,
+  'each competing Group subtree includes the same earners and net Task points, BCE, BC and the Moderator aside');
+-- #843, #907: the Cup still counts the Task Points of BCE, BC and the
+-- Moderator, which the Leaderboard leaves out, so it equals the subtree board
+-- plus theirs.
 select set_eq(
   $$ select grp.id,
             (coalesce((select sum(board.points) from public.leadership_leaderboard(grp.id) board), 0)
@@ -465,11 +482,11 @@ select set_eq(
                            join public.profiles member on member.id=entry.member_id
                           where origin.path @> array[grp.id]
                             and entry.reason in ('task','task_reversal')
-                            and member.role in ('bc','moderator')), 0))::int
+                            and member.role in ('bce','bc','moderator')), 0))::int
        from public.groups grp
       where grp.competes_in_cup $$,
   $$ select group_id,points from public.department_cup() $$,
-  'Cup equals the subtree Leaderboard totals plus the BC and Moderator points the board leaves out, when every link counts');
+  'Cup equals the subtree Leaderboard totals plus the BCE, BC and Moderator points the board leaves out, when every link counts');
 
 select is((select points from public.leadership_leaderboard(pg_temp.g523_group('diverse'))
             where member_id = '25800000-0000-0000-0000-000000000012'), 6,
@@ -621,6 +638,71 @@ select throws_ok(
   'select * from private.leadership_leaderboard_impl(null, null, null, null)', '42501', null,
   'anon cannot reach the body behind it either');
 reset role;
+
+-- ==================== 10. Every Member below BCE, 0 points included (#907) ====================
+-- Alex, 2026-09-29: the Clasament lists every volunteer who is not BCE, BC or
+-- the Moderator. Four Members of this suite's own, none of whom earns:
+--   Vasile, an active Voluntar on the roster of 258-dept's child Team;
+--   Petra, a deactivated Voluntar on that same roster;
+--   BCE Roster 907, an active BCE on 258-dept's own roster;
+--   Olga, an active Recrut whose only row is a Group Role on the
+--   Organization Group (Automatic Membership).
+reset role;
+insert into auth.users (id, email) values
+  ('25800000-0000-0000-0000-000000000021', 'zero907@example.test'),
+  ('25800000-0000-0000-0000-000000000022', 'inactiva907@example.test'),
+  ('25800000-0000-0000-0000-000000000023', 'organizatie907@example.test'),
+  ('25800000-0000-0000-0000-000000000024', 'bceroster907@example.test');
+insert into public.profiles (id, full_name, email, role, status) values
+  ('25800000-0000-0000-0000-000000000021', 'Vasile Zero 907', 'zero907@example.test', 'voluntar', 'activ'),
+  ('25800000-0000-0000-0000-000000000022', 'Petra Inactiva 907', 'inactiva907@example.test', 'voluntar', 'inactiv'),
+  ('25800000-0000-0000-0000-000000000023', 'Olga Organizatie 907', 'organizatie907@example.test', 'recrut', 'activ'),
+  ('25800000-0000-0000-0000-000000000024', 'BCE Roster 907', 'bceroster907@example.test', 'bce', 'activ');
+insert into public.group_members (group_id, member_id, group_role) values
+  (pg_temp.team_group('258-dept-team'), '25800000-0000-0000-0000-000000000021', 'member'),
+  (pg_temp.team_group('258-dept-team'), '25800000-0000-0000-0000-000000000022', 'member'),
+  (pg_temp.dept_group('258-dept'),      '25800000-0000-0000-0000-000000000024', 'member'),
+  ((select id from public.groups where is_organization), '25800000-0000-0000-0000-000000000023', 'responsible');
+
+select pg_temp.test_login_leadership('25800000-0000-0000-0000-000000000001');
+
+select is((select points from public.leadership_leaderboard()
+            where member_id = '25800000-0000-0000-0000-000000000021'), 0,
+  'an active Voluntar who earned nothing is on the unfiltered board at 0 points');
+select is((select rank from public.leadership_leaderboard()
+            where member_id = '25800000-0000-0000-0000-000000000021'),
+          (select count(*)::int + 1 from public.leadership_leaderboard() where points > 0),
+  'the Members with no points share the rank right after every positive total');
+select is((select count(*) from public.leadership_leaderboard()
+            where member_id = '25800000-0000-0000-0000-000000000022'), 0::bigint,
+  'a deactivated Member who never earned is not on the board -- only Task history keeps an inactive Member');
+
+-- The Group filter: the subtree's roster (the child Team's included) plus its
+-- earners. Petra is on the roster but inactive; BCE Roster 907 is on it but BCE.
+select results_eq(
+  $ select full_name, points, rank from public.leadership_leaderboard(pg_temp.g523_group('258-dept')) $,
+  $ values ('Mihai Executor 258'::text, 27, 1),
+            ('Ana Egalitate 258',        3,  2),
+            ('Bogdan Dezactivat 258',    3,  2),
+            ('Vasile Zero 907',          0,  4),
+            ('Zoia Anulata 258',         0,  4) $,
+  'the Department board adds its subtree''s active roster at 0 beside its earners (the inactive earner kept), never an inactive non-earner or a BCE on the roster');
+select results_eq(
+  $ select full_name, points, rank from public.leadership_leaderboard(pg_temp.g523_group(p_team => '258-indep-team')) $,
+  $ values ('Ilinca Independenta 258'::text, 6, 1) $,
+  'another Group''s board does not list a Member who belongs only to 258-dept''s subtree');
+
+-- Automatic Membership never widens the roster: the Organization Group's
+-- subtree is every Group, yet Olga, whose only row is on that Group, is off it.
+select is((select count(*) from public.leadership_leaderboard()
+            where member_id = '25800000-0000-0000-0000-000000000023'), 1::bigint,
+  'Olga, an active Recrut, is on the unfiltered board -- her absence below is not vacuous');
+select is((select count(*) from public.leadership_leaderboard((select id from public.groups where is_organization))
+            where member_id = '25800000-0000-0000-0000-000000000023'), 0::bigint,
+  'the Organization Group filter does not list a Member through a row on an Automatic-Membership Group');
+select is((select points from public.leadership_leaderboard((select id from public.groups where is_organization))
+            where member_id = '25800000-0000-0000-0000-000000000021'), 0,
+  'while it lists the explicit roster of every Group below it');
 
 select * from finish();
 rollback;

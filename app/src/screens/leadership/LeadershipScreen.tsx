@@ -192,13 +192,16 @@ function Leaderboard({ rows }: { rows: LeaderboardRow[] }) {
   const viewerId = useAuth().session?.user.id;
   const identities = useLeaderboardIdentities(rows.map((row) => row.member_id));
   const [card, setCard] = useState<LeaderboardRow | null>(null);
+  // Every Member below BCE is a row, 0 points included (#907); only a Group
+  // with no such Member and no work leaves the board empty. A Campaign or a
+  // period narrows the points, never the Members.
   if (!rows.length)
     return (
       <EmptyState>
         <span className="block font-semibold text-foreground">
-          Nu există puncte pentru filtrele alese
+          Niciun membru pentru filtrele alese
         </span>
-        Încearcă alt grup, altă campanie sau altă perioadă.
+        Încearcă alt grup.
       </EmptyState>
     );
   return (
