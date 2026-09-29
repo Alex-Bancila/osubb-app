@@ -151,6 +151,7 @@ export function InviteMemberDialog({
               <input
                 className={control}
                 type="email"
+                required
                 autoComplete="off"
                 inputMode="email"
                 value={email}
@@ -167,6 +168,7 @@ export function InviteMemberDialog({
               <span className="text-sm font-medium">Numele complet</span>
               <input
                 className={control}
+                required
                 autoComplete="off"
                 value={fullName}
                 disabled={pending}

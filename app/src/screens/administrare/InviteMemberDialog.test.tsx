@@ -27,12 +27,12 @@ import { InviteMemberDialog } from './InviteMemberDialog';
 import { inviteGroupOptions, inviteRankOptions } from './invite-options';
 
 const ROLES = new Map([
-  ['vot', { name: 'Membru cu Drept de Vot', level: 3 }],
+  ['vot', { name: 'Voluntar cu Drept de Vot', level: 3 }],
   ['recrut', { name: 'Recrut', level: 0 }],
-  ['moderator', { name: 'Moderator', level: 7 }],
+  ['moderator', { name: 'Moderator', level: 9 }],
   ['voluntar', { name: 'Voluntar', level: 1 }],
   ['bc', { name: 'BC', level: 6 }],
-  ['activ', { name: 'Membru Activ', level: 2 }],
+  ['activ', { name: 'Voluntar Activ', level: 2 }],
   ['bce', { name: 'BCE', level: 5 }],
 ]);
 
@@ -69,6 +69,7 @@ const GROUPS = [
   group(3, 'Toți membrii', { automatic_membership: true }),
   group(4, 'OSUBB', { is_organization: true }),
   group(5, 'Consiliu', { min_level: 5 }),
+  group(6, 'Moderare', { min_level: 9 }),
 ];
 
 /** A reason's copy; a reason without copy fails the test that reads it. */
@@ -154,6 +155,11 @@ describe('rank and Group options', () => {
       'Consiliu',
       'Educație',
     ]);
+    expect(inviteGroupOptions(GROUPS, 9).map((row) => row.name)).toEqual([
+      'Consiliu',
+      'Educație',
+      'Moderare',
+    ]);
   });
 
   it('shows the ranks in the dialog, Recrut chosen, and names what a leadership rank opens', async () => {
@@ -169,13 +175,15 @@ describe('rank and Group options', () => {
     ).toEqual([
       'Recrut',
       'Voluntar',
-      'Membru Activ',
-      'Membru cu Drept de Vot',
+      'Voluntar Activ',
+      'Voluntar cu Drept de Vot',
       'BCE',
       'BC',
       'Moderator',
     ]);
     expect(within(dialog).queryByText(/deschide Administrare/)).toBeNull();
+    expect(within(dialog).getByLabelText('Adresa de email')).toBeRequired();
+    expect(within(dialog).getByLabelText('Numele complet')).toBeRequired();
     await user.selectOptions(rank, 'moderator');
     expect(rank).toHaveAccessibleDescription(
       'Rolul Moderator deschide Administrare: poate invita membri și schimba rolul oricui.',
