@@ -24,7 +24,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(77);
+select plan(78);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
@@ -796,6 +796,19 @@ select ok(
   (select count(*) from notifications
     where member_id = 'd0000000-0000-0000-0000-000000000002') >= 25,
   'the Voluntar has at least 25 notifications, more than one 20-row page of Notificări');
+
+-- #891 (F-3): the seed writes Task notifications directly, so it must copy
+-- the commands' Romanian text: "Termen:", never "Deadline:", and no raw
+-- column name in an edit notification.
+select ok(
+  exists (select 1 from notifications where kind = 'task' and title like 'Task nou:%')
+  and not exists (
+    select 1 from notifications
+     where kind = 'task'
+       and (body like '%Deadline%'
+            or body ~ '[a-z]+_[a-z]+'
+            or (title like 'Task nou:%' and body not like 'Ți-a fost atribuit acest task. Termen: %'))),
+  'the seeded Task notifications use the commands'' Romanian copy (Termen, field labels)');
 
 -- ==================== Calendar, feed, notifications ====================
 -- The calendar only demos well if switching accounts changes what you see.
