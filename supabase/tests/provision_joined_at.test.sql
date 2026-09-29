@@ -17,13 +17,14 @@
 --                                               tenure is reached
 --   I4 recrut,   provisioned 7 months back    -> tenured under the 6-month rule
 --
--- Mutation guards (each names the assertion that turns red):
---   * the coalesce dropped from provision_profile's insert (joined_at left
---     null, the pre-#933 body) -> "a Member provisioned without a date joins
---     on the provisioning day", "a Voluntar provisioned today enters the
---     Promotion Candidate cohort once the tenure is reached" and "a Recrut
---     provisioned today is promoted by the daily job once the rule's tenure
---     is reached";
+-- Mutation guards (run 2026-09-29 against the live database, reverted after;
+-- each names the assertions that turned red):
+--   * the coalesce replaced by null (joined_at left null, the pre-#933
+--     body) -> "a Member provisioned without a date joins on the
+--     provisioning day", "a Voluntar provisioned today enters the Promotion
+--     Candidate cohort once the tenure is reached", "a Recrut provisioned
+--     today is promoted by the daily job once the rule's tenure is reached",
+--     and the two given-date assertions below;
 --   * coalesce(p_joined_at, ...) replaced by the bare Bucharest date ->
 --     "a given join date is kept" and "a Recrut provisioned with a join date
 --     past the tenure is promoted by the daily job".
