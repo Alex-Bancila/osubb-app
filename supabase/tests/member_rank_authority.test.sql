@@ -511,7 +511,8 @@ select is(
                             coalesce(from_status::text, '-'), coalesce(to_status::text, '-'), changed_by, reason),
                      ' ; ' order by id)
      from role_history
-    where (member_id = '90500000-0000-0000-0000-000000000006' and to_role = 'moderator')
+    where (member_id = '90500000-0000-0000-0000-000000000006' and to_role = 'moderator'
+           and changed_by = '90500000-0000-0000-0000-000000000003')
        or (member_id = '90500000-0000-0000-0000-000000000002' and to_status is not null)),
   '90500000-0000-0000-0000-000000000006|voluntar>moderator|->-|90500000-0000-0000-0000-000000000003|Predare ; '
   || '90500000-0000-0000-0000-000000000002|moderator>moderator|activ>inactiv|90500000-0000-0000-0000-000000000003|Predare',
