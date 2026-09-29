@@ -19,7 +19,7 @@
 --    answers PT404 before it asks about authority -- a manager is always
 --    someone who can read the Event.
 -- 2. private.update_event_impl and private.cancel_event_impl: rebuilt from
---    main's latest bodies (20260928100000_notification_links.sql and
+--    main's latest bodies (20260929200000_group_member_set.sql and
 --    20260924132724_private_groups.sql). Only the source-authority step
 --    changes: it asks the predicate, holds the roster rows the answer rests on
 --    FOR SHARE, and asks again -- require_group_work_manager's discipline, so
@@ -70,7 +70,7 @@ grant execute on function private.can_manage_event(bigint) to authenticated;
 -- ==================== 2. update_event: the source authority through the predicate ====================
 
 CREATE OR REPLACE FUNCTION private.update_event_impl(p_event_id bigint, p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer, p_campaign_id bigint)
- RETURNS events
+ RETURNS public.events
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO ''
@@ -207,8 +207,10 @@ begin
   -- like every Event recipient, only those who can read the Event at its NEW
   -- Minimum Level (private.can_read_event, the events_read rule) -- and, since
   -- #756, in its NEW Group, so a move into a Private Group tells no outsider.
+  -- #929 (R32): the Group Audience that Notifications reach, so no BC or
+  -- Moderator hears of it through membership.
   select array_agg(member_id) into v_old_members
-    from private.group_audience(v_event.group_id) as member_id
+    from private.group_notification_audience(v_event.group_id) as member_id
    where private.can_read_event(p_group_id, p_min_level, member_id);
   -- #691: the Campaign is judged by events_validate_campaign against the Event's
   -- (possibly new) Group; a move carrying a Campaign off the new path, an unknown

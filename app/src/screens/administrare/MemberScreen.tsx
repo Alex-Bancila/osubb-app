@@ -1,6 +1,13 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { cn } from 'cn';
-import { History, Pencil } from 'lucide-react';
+import { GraduationCap, History, Pencil } from 'lucide-react';
 import { Link, useLocation, useParams } from 'react-router';
 import {
   BackLink,
@@ -21,14 +28,18 @@ import { FieldError } from '../../components/ui/field';
 import { useCapabilities, type Capabilities } from '../../lib/capabilities';
 import { formatDayMonthYear, formatPoints } from '../../lib/format';
 import { isUuid } from '../../lib/ids';
+import { bucharestDayKey } from '../../lib/calendar-time';
 import {
   fieldForReason,
+  joinedAtFieldForReason,
   memberIdentitySchema,
+  memberJoinedAtSchema,
 } from '../../lib/schemas/member-identity';
 import { useFormValidation } from '../../lib/use-form-validation';
 import {
   useAdminMember,
   useUpdateMemberIdentity,
+  useUpdateMemberJoinedAt,
   type AdminMember,
   type LedgerRow,
 } from '../../queries/admin-member';
@@ -41,12 +52,15 @@ import { statusLabel } from '../volunteers/directory-filters';
 import { useReceiptTurn } from '../tracker/receipt-turn';
 import { ReceiptTurnScope } from '../tracker/ReceiptTurnScope';
 import { ReinvitePanel } from './ReinvitePanel';
+import { MemberRoleTimeline } from '../profile/RoleTimeline';
 import { RolePanel } from './RolePanel';
 
 const control =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2';
 const SAVE_FAILED =
   'Nu am putut salva numele. Verifică permisiunile și reîncearcă.';
+const JOINED_SAVE_FAILED =
+  'Nu am putut salva data intrării. Verifică permisiunile și reîncearcă.';
 
 /**
  * The Nickname and the full name, for BC and the Moderator only (ruling R5).
@@ -210,6 +224,146 @@ function Fact({
   );
 }
 
+/**
+ * "Data intrării" for BC and the Moderator (#932): the date tenure counts
+ * from, with Editează → a date → Salvează / Renunță in place. The write is
+ * `profiles_update_self` plus the #160 column grant; the privileged-column
+ * guard refuses anyone below level 6 whatever the browser sends.
+ */
+function JoinDateFact({ member }: { member: AdminMember }) {
+  const hintId = useId();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(member.joinedAt ?? '');
+  const [message, setMessage] = useState<string | null>(null);
+  const turn = useReceiptTurn();
+  const change = useUpdateMemberJoinedAt();
+  const today = bucharestDayKey(new Date()) ?? '';
+  const form = useFormValidation(
+    memberJoinedAtSchema(today),
+    { joinedAt: draft },
+    joinedAtFieldForReason,
+  );
+  const editButton = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(false);
+  const joined = formatDayMonthYear(member.joinedAt);
+
+  // Back from the editor, focus returns to the button that opened it.
+  useEffect(() => {
+    if (wasEditing.current && !editing) editButton.current?.focus();
+    wasEditing.current = editing;
+  }, [editing]);
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    if (change.isPending) return;
+    const values = form.validate();
+    if (!values) return;
+    try {
+      await change.mutateAsync({
+        memberId: member.memberId,
+        joinedAt: values.joinedAt,
+      });
+      setMessage('Data intrării a fost salvată.');
+      turn.claim();
+      setEditing(false);
+    } catch (failure) {
+      form.fail(failure, JOINED_SAVE_FAILED);
+    }
+  }
+
+  return (
+    <div
+      data-slot="joined-at"
+      className={cn('grid min-w-0 gap-0.5', editing && 'sm:col-span-2')}
+    >
+      <dt className="text-[length:var(--fs-sm)] text-muted-foreground">
+        Data intrării
+      </dt>
+      <dd className="m-0 grid gap-2 text-[length:var(--fs-md)]">
+        {editing ? (
+          <form noValidate onSubmit={save} className="grid max-w-md gap-3">
+            <input
+              type="date"
+              aria-label="Data intrării"
+              className={control}
+              value={draft}
+              max={today || undefined}
+              disabled={change.isPending}
+              autoFocus
+              onChange={(event) => {
+                setDraft(event.target.value);
+                // A refusal was about the old date.
+                form.reset();
+              }}
+              {...form.field('joinedAt', hintId)}
+            />
+            <p id={hintId} className="m-0 text-sm text-muted-foreground">
+              Vechimea pentru promovări se numără de la această dată.
+            </p>
+            <FieldError {...form.errorProps('joinedAt')} />
+            <FieldError>{form.formError}</FieldError>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="submit"
+                className="flex-1 sm:flex-none"
+                disabled={change.isPending || draft === (member.joinedAt ?? '')}
+              >
+                {change.isPending ? 'Se salvează…' : 'Salvează'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 sm:flex-none"
+                disabled={change.isPending}
+                onClick={() => {
+                  setDraft(member.joinedAt ?? '');
+                  setEditing(false);
+                }}
+              >
+                Renunță
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+            {joined ? (
+              <span>{joined}</span>
+            ) : (
+              <span className="inline-flex min-h-7 w-fit items-center rounded-full border border-dashed border-border px-3 text-sm font-semibold text-muted-foreground">
+                Nesetată
+              </span>
+            )}
+            <Button
+              ref={editButton}
+              variant="outline"
+              size="sm"
+              aria-label="Editează data intrării"
+              onClick={() => {
+                setMessage(null);
+                setDraft(member.joinedAt ?? '');
+                setEditing(true);
+              }}
+            >
+              Editează
+            </Button>
+          </div>
+        )}
+        {/* Unset, the promotion job counts no tenure (#51). */}
+        {!editing && !joined && (
+          <p className="m-0 text-sm text-muted-foreground">
+            Fără ea, membrul nu acumulează vechime pentru promovări.
+          </p>
+        )}
+        {message && !editing && turn.current && (
+          <p role="status" className="m-0 text-sm font-medium">
+            {message}
+          </p>
+        )}
+      </dd>
+    </div>
+  );
+}
+
 function MemberUnavailable({
   capabilities,
 }: {
@@ -322,6 +476,7 @@ export default function MemberScreen() {
   // One receipt at a time on the page: a new command's replaces the last
   // (F-11, the D-16 rule of the Task sheet).
   return (
+    // Keyed by Member: opening another one remounts every editor below.
     <ReceiptTurnScope key={data.memberId}>
       <Page>
         <BackToAdministrare capabilities={capabilities.data} />
@@ -346,8 +501,14 @@ export default function MemberScreen() {
           <Fact label="Status">
             {data.status ? statusLabel(data.status) : '—'}
           </Fact>
-          {/* An imported Member who never signed in has no date yet (F-28). */}
-          {joined && <Fact label="Membru din">{joined}</Fact>}
+          {/* BC and the Moderator set the date tenure counts from (#932);
+              for anyone else an imported Member who never signed in has no
+              date yet (F-28). */}
+          {canEdit ? (
+            <JoinDateFact member={data} />
+          ) : (
+            joined && <Fact label="Membru din">{joined}</Fact>
+          )}
           {data.contact?.email && (
             <Fact label="Email" className="break-all">
               {data.contact.email}
@@ -366,10 +527,8 @@ export default function MemberScreen() {
             </Fact>
           )}
         </dl>
-        {canEdit && <IdentityEditor key={data.memberId} member={data} />}
-        {canEdit && (
-          <ReinvitePanel key={data.memberId} memberId={data.memberId} />
-        )}
+        {canEdit && <IdentityEditor member={data} />}
+        {canEdit && <ReinvitePanel memberId={data.memberId} />}
         {/* No eyebrow: it would only repeat the title (ruling 2, F-24). */}
         <Panel title="Grupuri" flush={visibleGroups.length > 0}>
           {!visibleGroups.length ? (
@@ -396,8 +555,16 @@ export default function MemberScreen() {
             </ul>
           )}
         </Panel>
-        {canEdit && (
-          <RolePanel key={data.memberId} selectedMemberId={data.memberId} />
+        {canEdit && <RolePanel selectedMemberId={data.memberId} />}
+        {/* role_history_read answers another Member's rows to level 6 only. */}
+        {canEdit && data.role && (
+          <Panel eyebrow="Parcurs" icon={GraduationCap} title="Istoric roluri">
+            <MemberRoleTimeline
+              memberId={data.memberId}
+              joinedAt={data.joinedAt}
+              role={data.role}
+            />
+          </Panel>
         )}
         <PointsPanel points={data.points} />
       </Page>

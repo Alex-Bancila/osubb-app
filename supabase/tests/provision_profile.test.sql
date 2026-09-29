@@ -26,15 +26,15 @@ select has_function('public', 'provision_profile', 'provision_profile() exists')
 
 select ok(
   has_function_privilege('service_role',
-    'public.provision_profile(uuid, text, text, member_role, bigint[], uuid)', 'execute'),
+    'public.provision_profile(uuid, text, text, member_role, bigint[], uuid, date)', 'execute'),
   'the server identity may provision');
 select ok(
   not has_function_privilege('authenticated',
-    'public.provision_profile(uuid, text, text, member_role, bigint[], uuid)', 'execute'),
+    'public.provision_profile(uuid, text, text, member_role, bigint[], uuid, date)', 'execute'),
   'a logged-in member may not provision');
 select ok(
   not has_function_privilege('anon',
-    'public.provision_profile(uuid, text, text, member_role, bigint[], uuid)', 'execute'),
+    'public.provision_profile(uuid, text, text, member_role, bigint[], uuid, date)', 'execute'),
   'anon may not provision');
 
 select is(

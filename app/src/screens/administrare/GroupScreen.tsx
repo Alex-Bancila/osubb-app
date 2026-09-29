@@ -25,6 +25,7 @@ import {
   useAdminGroups,
   useAppointableMembers,
   useGroupCommand,
+  explicitRoster,
   useGroupRoster,
   useMyGroupRoles,
   type AdminGroup,
@@ -274,7 +275,10 @@ export default function GroupScreen() {
     );
 
   const busy = command.isPending;
-  const roster = rosterQuery.data ?? [];
+  // Every member (#929, ruling R32) for the Roster tab; the explicit rows alone
+  // for Roluri and Setări, which act only on roster rows.
+  const everyMember = rosterQuery.data ?? [];
+  const roster = explicitRoster(everyMember);
   const activeLabel = tabs.find((item) => item.id === tab)?.label ?? '';
 
   return (
@@ -309,9 +313,8 @@ export default function GroupScreen() {
         description={
           <>
             Nivel minim: {minimumLevelText(group.min_level)}
-            {group.automatic_membership
-              ? ' · membri adăugați automat'
-              : ` · ${formatMemberCount(group.memberCount)}`}
+            {` · ${formatMemberCount(group.memberCount)}`}
+            {group.automatic_membership && ', adăugați automat'}
           </>
         }
       />
@@ -367,7 +370,7 @@ export default function GroupScreen() {
           ) : (
             <GroupRosterTab
               group={group}
-              roster={roster}
+              roster={everyMember}
               members={membersQuery.data ?? []}
               authority={authority}
               busy={busy}

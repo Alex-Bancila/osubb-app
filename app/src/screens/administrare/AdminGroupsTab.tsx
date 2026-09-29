@@ -292,8 +292,7 @@ function treeColumns(
   expanded: ReadonlySet<number>,
   toggle: (id: number) => void,
 ): DataTableColumn<TreeRow>[] {
-  const members = (row: TreeRow) =>
-    row.group.automatic_membership ? 'Automat' : row.group.memberCount;
+  const members = (row: TreeRow) => row.group.memberCount;
   const gutter = rows.some((row) => row.hasChildren);
   const next = new Map(shown.map((row, index) => [row, shown[index + 1]]));
   const columns: DataTableColumn<TreeRow>[] = [

@@ -82,6 +82,9 @@ export const keys = {
     /** A Member's Administrare page (#103): card, status and ledger rows. */
     admin: (memberId: string, viewerId: string | undefined) =>
       ['members', 'admin', { memberId, viewerId }] as const,
+    /** A Member's Role History on their Administrare page (#932). */
+    roleHistory: (memberId: string, viewerId: string | undefined) =>
+      ['members', 'roleHistory', { memberId, viewerId }] as const,
     /** Whether a Member ever signed in (#773), read by `reinvite-member`. */
     invitation: (memberId: string, viewerId: string | undefined) =>
       ['members', 'invitation', { memberId, viewerId }] as const,

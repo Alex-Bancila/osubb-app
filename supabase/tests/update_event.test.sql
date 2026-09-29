@@ -191,7 +191,8 @@ select ok((select group_id=(select id from gx where name='org') from public.even
 -- members belong by Automatic Membership -- so a move INTO it must reach every
 -- active Member but the actor, where the explicit-roster reading reached only
 -- the old Project's roster.
-select set_eq($q$select member_id from public.notifications where dedupe_key='event:'||(select id from ex2 where title='Move to org #248')||':group'$q$,$q$select id from public.profiles where status='activ' and id<>'24800000-0000-0000-0000-000000000002'$q$,'a move onto the Organization Group notifies every active Member except the actor');
+-- #929 (R32): BC and the Moderator are never notified through the Group Audience.
+select set_eq($q$select member_id from public.notifications where dedupe_key='event:'||(select id from ex2 where title='Move to org #248')||':group'$q$,$q$select p.id from public.profiles p join public.roles r on r.id=p.role where p.status='activ' and r.level<6 and p.id<>'24800000-0000-0000-0000-000000000002'$q$,'a move onto the Organization Group notifies every active Member except the actor, BC and the Moderator');
 select set_eq($q$select * from private.event_notification_recipients((select id from ex where title='Event a #248'))$q$,$q$select * from private.group_audience((select group_id from public.events where id=(select id from ex where title='Event a #248'))) union select member_id from public.event_attendance a join public.profiles p on p.id=a.member_id and p.status='activ' where a.event_id=(select id from ex where title='Event a #248') and a.status='going'$q$,'the recipient set is the Event Group''s Group Audience plus its active going attendees');
 reset role;
 select pg_temp.test_login_leadership('24800000-0000-0000-0000-000000000001');

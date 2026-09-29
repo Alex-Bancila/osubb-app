@@ -12,7 +12,12 @@ import {
   fetchUnreadAnnouncementsCount,
   markAnnouncementReadMutationOptions,
   unreadAnnouncementsCountQueryOptions,
-  AnnouncementPinRefusedError,
+  AnnouncementRefusedError,
+  deleteAnnouncement,
+  deleteAnnouncementMutationOptions,
+  isAnnouncementRefusal,
+  updateAnnouncement,
+  updateAnnouncementMutationOptions,
   setAnnouncementPinned,
   setAnnouncementPinnedMutationOptions,
   useAnnouncementReaders,
@@ -157,7 +162,7 @@ describe('announcements query layer', () => {
       answer({ data: [], error: null });
       await expect(
         setAnnouncementPinned({ id: 5, pinned: false }),
-      ).rejects.toBeInstanceOf(AnnouncementPinRefusedError);
+      ).rejects.toBeInstanceOf(AnnouncementRefusedError);
     });
 
     it('throws a server error as it is', async () => {
@@ -177,6 +182,67 @@ describe('announcements query layer', () => {
         keys.announcements.unread('m1'),
       ])
         expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+    });
+  });
+
+  describe('updateAnnouncement and deleteAnnouncement (#930)', () => {
+    function answer(result: { data: unknown; error: unknown }) {
+      const select = vi.fn().mockResolvedValue(result);
+      const eq = vi.fn().mockReturnValue({ select });
+      const update = vi.fn().mockReturnValue({ eq });
+      const remove = vi.fn().mockReturnValue({ eq });
+      (supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        update,
+        delete: remove,
+      });
+      return { update, remove, eq, select };
+    }
+
+    it('updates only the changed fields of the id and reads the row back', async () => {
+      const { update, eq, select } = answer({ data: [{ id: 5 }], error: null });
+      await updateAnnouncement({ id: 5, changes: { title: 'Nou' } });
+      expect(supabase.from).toHaveBeenCalledWith('announcements');
+      expect(update).toHaveBeenCalledWith({ title: 'Nou' });
+      expect(eq).toHaveBeenCalledWith('id', 5);
+      expect(select).toHaveBeenCalledWith('id');
+    });
+
+    it('deletes the id and reads the row back', async () => {
+      const { remove, eq, select } = answer({ data: [{ id: 5 }], error: null });
+      await deleteAnnouncement(5);
+      expect(remove).toHaveBeenCalledWith();
+      expect(eq).toHaveBeenCalledWith('id', 5);
+      expect(select).toHaveBeenCalledWith('id');
+    });
+
+    it('reads zero rows back as a refusal, and so does 42501', async () => {
+      answer({ data: [], error: null });
+      await expect(
+        updateAnnouncement({ id: 5, changes: { body: 'x' } }),
+      ).rejects.toBeInstanceOf(AnnouncementRefusedError);
+      await expect(deleteAnnouncement(5)).rejects.toBeInstanceOf(
+        AnnouncementRefusedError,
+      );
+      expect(isAnnouncementRefusal(new AnnouncementRefusedError())).toBe(true);
+      expect(isAnnouncementRefusal({ code: '42501' })).toBe(true);
+      expect(isAnnouncementRefusal({ code: '23514' })).toBe(false);
+    });
+
+    it('invalidates the feed and the unread count on success', async () => {
+      for (const options of [
+        updateAnnouncementMutationOptions,
+        deleteAnnouncementMutationOptions,
+      ]) {
+        const queryClient = new QueryClient();
+        queryClient.setQueryData(keys.announcements.feed('m1'), []);
+        queryClient.setQueryData(keys.announcements.unread('m1'), 2);
+        await options(queryClient).onSuccess();
+        for (const key of [
+          keys.announcements.feed('m1'),
+          keys.announcements.unread('m1'),
+        ])
+          expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+      }
     });
   });
 

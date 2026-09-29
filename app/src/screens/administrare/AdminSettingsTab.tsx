@@ -28,6 +28,8 @@ import { safeHttpUrl } from '../../lib/links';
 import {
   adherenceFormFieldForReason,
   adherenceFormSchema,
+  emailQuotaFieldForReason,
+  emailQuotaSchema,
 } from '../../lib/schemas/org-settings';
 import { useFormValidation } from '../../lib/use-form-validation';
 import { useAdminGroups, type AdminGroup } from '../../queries/groups-admin';
@@ -108,6 +110,18 @@ const BOARD: GroupSetting = {
     'Titlul fiecărui responsabil din acest grup privat apare pe Profilul lui, la Funcția în OSUBB.',
   unset: 'Profilul membrilor BC și BCE arată rolul, nu un titlu.',
   fits: (group) => group.is_private,
+};
+
+const EMAIL_QUOTA: Setting = {
+  key: 'email_daily_quota',
+  label: 'Limita zilnică de emailuri',
+  // `public.claim_email_digests` (#775) hands out at most this many Email
+  // Digests per UTC day; the rest stay due and go out once the day turns.
+  // 0 pauses them. Sign-in emails go through the same Resend account.
+  effect:
+    'Câte rezumate cu notificările necitite pleacă pe email într-o zi, la toți membrii la un loc; cele peste limită așteaptă ziua următoare.',
+  // Never null on the server; kept for the row's shape.
+  unset: 'Nu pleacă niciun rezumat pe email.',
 };
 
 /* ------------------------------------------------------------------------ */
@@ -363,6 +377,87 @@ function AdherenceFormValue({ current }: { current: string }) {
 }
 
 /* ------------------------------------------------------------------------ */
+/* The daily email quota (#775)                                              */
+/* ------------------------------------------------------------------------ */
+
+function EmailQuotaEditor({
+  current,
+  onSave,
+  labelId,
+  disabled,
+  onDone,
+}: EditorProps & { current: string | null; onSave: Save }) {
+  const hintId = useId();
+  const formRef = useFocusOnOpen();
+  const [quota, setQuota] = useState(current ?? '');
+  const [pending, setPending] = useState(false);
+  const form = useFormValidation(
+    emailQuotaSchema,
+    { quota },
+    emailQuotaFieldForReason,
+  );
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const values = form.validate();
+    if (!values) return;
+    setPending(true);
+    try {
+      await onSave({ key: 'email_daily_quota', value: values.quota });
+      onDone(true);
+    } catch (failure) {
+      form.fail(failure, SAVE_FAILED);
+      setPending(false);
+    }
+  }
+
+  return (
+    <form
+      ref={formRef}
+      onSubmit={submit}
+      noValidate
+      aria-labelledby={labelId}
+      className="flex max-w-xl flex-col gap-3"
+    >
+      <input
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        aria-labelledby={labelId}
+        className={cn(control, 'max-w-40 tabular-nums')}
+        value={quota}
+        disabled={disabled || pending}
+        onChange={(event) => {
+          setQuota(event.target.value);
+          // A refusal was about the old value.
+          form.reset();
+        }}
+        {...form.field('quota', hintId)}
+      />
+      <p id={hintId} className="m-0 text-sm text-muted-foreground">
+        0 oprește rezumatele. Emailurile de conectare folosesc aceeași limită
+        zilnică a furnizorului (100 pe planul gratuit): lasă loc pentru ele.
+      </p>
+      <FieldError {...form.errorProps('quota')} />
+      <FieldError>{form.formError}</FieldError>
+      <EditorActions
+        changed={quota.trim() !== (current ?? '')}
+        pending={pending || disabled}
+        onCancel={() => onDone(false)}
+      />
+    </form>
+  );
+}
+
+/** "90 pe zi", or that the digest is paused at 0. */
+function emailQuotaValue(current: string) {
+  const count = Number(current);
+  if (!Number.isInteger(count)) return current;
+  if (count === 0) return 'Oprit: niciun rezumat pe email';
+  return `${new Intl.NumberFormat('ro-RO').format(count)} pe zi`;
+}
+
+/* ------------------------------------------------------------------------ */
 /* A setting that names a Group: the Adunarea Generală (#512) and the board  */
 /* (#824, decision D1)                                                       */
 /* ------------------------------------------------------------------------ */
@@ -538,6 +633,7 @@ export default function AdminSettingsTab() {
     );
   const value = (key: SettingKey) => settings.data.get(key) ?? null;
   const adherence = value('adherence_form_url');
+  const quota = value('email_daily_quota');
   return (
     <PageGrid columns={1}>
       <Panel
@@ -573,6 +669,18 @@ export default function AdminSettingsTab() {
             current={value('board_group_id')}
             disabled={change.isPending}
             onSave={save}
+          />
+        </ul>
+      </Panel>
+      <Panel title="Emailuri" flush>
+        <ul className={rowListClass}>
+          <SettingRow
+            setting={EMAIL_QUOTA}
+            value={quota && emailQuotaValue(quota)}
+            disabled={change.isPending}
+            renderEditor={(props) => (
+              <EmailQuotaEditor {...props} current={quota} onSave={save} />
+            )}
           />
         </ul>
       </Panel>

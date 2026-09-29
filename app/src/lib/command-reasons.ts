@@ -419,6 +419,10 @@ const REASON_COPY = new Map<string, string>([
   ],
   /* browser */
   ['full_name_required', 'Scrie numele complet.'],
+  // #932: the join date BC sets on a Member's page.
+  ['joined_at_required', 'Alege data intrării.'],
+  ['joined_at_invalid', 'Alege o dată din calendar.'],
+  ['joined_at_in_future', 'Data intrării nu poate fi în viitor.'],
   ['invalid_avatar_color', 'Alege o culoare din listă.'],
   ['email_invalid', 'Scrie o adresă de email validă.'],
   // #632: the new sign-in address is the one the Member already has.
@@ -511,6 +515,8 @@ const REASON_COPY = new Map<string, string>([
     'Valoarea nu este acceptată: o adresă începe cu http:// sau https://, iar grupul ales trebuie să fie activ.',
   ],
   ['value_too_long', 'Valoarea are cel mult 2048 de caractere.'],
+  /* browser: #932's daily email quota */
+  ['email_daily_quota_invalid', 'Scrie un număr întreg de la 0 la 99999.'],
   ['org_setting_not_found', 'Setarea nu mai există. Reîncarcă pagina.'],
 
   /* ---- Web Push on this device (#704) ---- */

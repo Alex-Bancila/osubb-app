@@ -4,6 +4,7 @@ import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
+import { useMyGroupRoles } from './my-groups';
 
 /**
  * Reference data: the lookup tables every screen reads to turn an id into
@@ -88,6 +89,8 @@ export type MemberGroup = {
   group_role: 'manager' | 'responsible' | 'member';
   position_title: string | null;
   role_label: string;
+  /** In the Group by Automatic Membership, not by a roster row (#929). */
+  automatic?: boolean;
 };
 
 /**
@@ -112,15 +115,38 @@ export function resolveGroupRoleLabel(
 
 /**
  * Joins explicit `group_members` rows to `groups`, resolving the Group Role label,
- * and filtering out inactive and Organization groups (#108).
+ * and filtering out inactive and Organization groups (#108). The Groups the
+ * member belongs to by Automatic Membership — the Adunarea Generală for a
+ * Voluntar cu Drept de Vot — follow as `automatic` rows (#929), unless a roster
+ * row already names them; the Organization Group still says nothing (R16).
  */
 export function buildMemberGroups(
   membershipRows: GroupMemberRow[] | undefined,
   groupsMap: Map<number, Group> | undefined,
+  automaticGroupIds: Iterable<number> = [],
 ): MemberGroup[] {
   if (!membershipRows || !groupsMap) return [];
 
   const result: MemberGroup[] = [];
+  const explicit = new Set(membershipRows.map((row) => row.group_id));
+  for (const id of automaticGroupIds) {
+    const group = groupsMap.get(id);
+    if (!group || group.status !== 'active' || explicit.has(id)) continue;
+    // Only the Organization Group itself stays out: an Adunarea Generală
+    // filed under the organization category is still listed.
+    if (group.is_organization) continue;
+    result.push({
+      id: group.id,
+      name: group.name,
+      short: group.short,
+      color: group.color,
+      category: group.category,
+      group_role: 'member',
+      position_title: null,
+      role_label: 'Automat',
+      automatic: true,
+    });
+  }
   for (const row of membershipRows) {
     const group = groupsMap.get(row.group_id);
     if (!group || group.status !== 'active') continue;
@@ -193,18 +219,33 @@ export function useMyGroups() {
       : skipToken,
   });
 
+  // Automatic Membership, read live from my_groups() (#929): the level the
+  // Adunarea Generală follows is the Profile's, not a claim that can lag.
+  const rolesQuery = useMyGroupRoles();
+
   const data = useMemo(() => {
-    return buildMemberGroups(membershipQuery.data, groupsQuery.data);
-  }, [membershipQuery.data, groupsQuery.data]);
+    const automatic = (rolesQuery.data ?? [])
+      .filter((row) => row.automatic && !row.explicit)
+      .map((row) => row.id);
+    return buildMemberGroups(membershipQuery.data, groupsQuery.data, automatic);
+  }, [membershipQuery.data, groupsQuery.data, rolesQuery.data]);
 
   return {
     data,
     membershipRows: membershipQuery.data,
-    isPending: membershipQuery.isPending || groupsQuery.isPending,
-    isError: membershipQuery.isError || groupsQuery.isError,
-    error: membershipQuery.error ?? groupsQuery.error,
+    isPending:
+      membershipQuery.isPending ||
+      groupsQuery.isPending ||
+      rolesQuery.isPending,
+    isError:
+      membershipQuery.isError || groupsQuery.isError || rolesQuery.isError,
+    error: membershipQuery.error ?? groupsQuery.error ?? rolesQuery.error,
     refetch: async () => {
-      await Promise.all([membershipQuery.refetch(), groupsQuery.refetch()]);
+      await Promise.all([
+        membershipQuery.refetch(),
+        groupsQuery.refetch(),
+        rolesQuery.refetch(),
+      ]);
     },
   };
 }

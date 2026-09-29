@@ -30,7 +30,8 @@ export type DirectoryMember = {
   /** Higher is more senior; orders the role filter and sorting. */
   roleLevel: number;
   status: string;
-  /** Every explicit membership, kept only for the Group filter (path-based). */
+  /** Every membership — roster rows and Automatic Membership, never the membri
+   * de drept (#929) — kept only for the Group filter (path-based). */
   groups: DirectoryGroup[];
   /** The one chip Voluntari shows (R17): the earliest-joined top-level Group. */
   primaryGroup: PrimaryGroup | null;
@@ -122,10 +123,12 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
           .order('id')
           .range(from, to),
       ),
+      // The members of every Group (#929, ruling R32). The membri de drept
+      // are left out below: a Group filter never adds BC or the Moderator.
       readAllRows((from, to) =>
         supabase
-          .from('group_members')
-          .select('member_id, group_id, created_at')
+          .rpc('group_roster', {})
+          .select('member_id, group_id, source, joined_at')
           .order('group_id')
           .order('member_id')
           .range(from, to),
@@ -163,6 +166,7 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
     const group = groupById.get(membership.group_id);
     // Archived Groups and the Organization Group say nothing about a member.
     if (!group || group.status !== 'active' || group.is_organization) continue;
+    if (membership.source === 'board') continue;
     const list = groupsByMember.get(membership.member_id) ?? [];
     list.push({
       id: group.id,
@@ -173,13 +177,16 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
     });
     groupsByMember.set(membership.member_id, list);
 
+    // The chip (R17) is the earliest-joined Group: only a roster row has a
+    // joining date, so Automatic Membership filters but never names the chip.
+    if (membership.source !== 'roster') continue;
     const candidates = membershipsByMember.get(membership.member_id) ?? [];
     candidates.push({
       id: group.id,
       name: group.name,
       color: group.color,
       parentId: group.parent_id,
-      createdAt: membership.created_at,
+      createdAt: membership.joined_at,
     });
     membershipsByMember.set(membership.member_id, candidates);
   }

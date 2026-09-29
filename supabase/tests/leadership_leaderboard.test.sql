@@ -320,8 +320,8 @@ select is((select points from public.leadership_leaderboard(pg_temp.g523_group(p
 select is((select count(*)
              from pg_temp.fixture_departments as department
              left join lateral public.leadership_leaderboard(pg_temp.g523_group(department.id)) as board on true
-            where board.member_id = '25800000-0000-0000-0000-000000000010'), 0::bigint,
-  'no Department filter at all reaches an Independent Team''s work -- not one of them, not just 258-dept');
+            where board.member_id = '25800000-0000-0000-0000-000000000010' and board.points <> 0), 0::bigint,
+  'no Department filter at all reaches an Independent Team''s work -- not one of them, not just 258-dept (the Organization Group lists its every active member at 0, #929)');
 select is((select count(*) from public.leadership_leaderboard(-1)), 0::bigint,
   'an unknown Group id returns no work and no roster -- not the unfiltered board');
 
@@ -702,14 +702,14 @@ select results_eq(
   $$ values ('Ilinca Independenta 258'::text, 6, 1) $$,
   'another Group''s board does not list a Member who belongs only to 258-dept''s subtree');
 
--- Automatic Membership never widens the roster: the Organization Group's
--- subtree is every Group, yet Olga, whose only row is on that Group, is off it.
+-- #929 (R32): a Group filter lists the members of the Group's subtree -- roster,
+-- Automatic Membership and all -- so the Organization Group lists every active Member below BCE.
 select is((select count(*) from public.leadership_leaderboard()
             where member_id = '25800000-0000-0000-0000-000000000023'), 1::bigint,
-  'Olga, an active Recrut, is on the unfiltered board -- her absence below is not vacuous');
+  'Olga, an active Recrut, is on the unfiltered board');
 select is((select count(*) from public.leadership_leaderboard((select id from public.groups where is_organization))
-            where member_id = '25800000-0000-0000-0000-000000000023'), 0::bigint,
-  'the Organization Group filter does not list a Member through a row on an Automatic-Membership Group');
+            where member_id = '25800000-0000-0000-0000-000000000023'), 1::bigint,
+  'the Organization Group filter lists her: every active Member is a member of the Organization Group (#929, R32)');
 select is((select points from public.leadership_leaderboard((select id from public.groups where is_organization))
             where member_id = '25800000-0000-0000-0000-000000000021'), 0,
   'while it lists the explicit roster of every Group below it');
