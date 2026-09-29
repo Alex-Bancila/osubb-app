@@ -53,6 +53,8 @@ export const memberInviteSchema = z.object({
     max: 120,
     tooLong: 'full_name_too_long',
   }),
+  // The chosen Group's id, so a Group refusal clears once another is chosen.
+  group: z.number().int().nullable(),
 });
 
 /** Where each reason about a new invitation is shown. */

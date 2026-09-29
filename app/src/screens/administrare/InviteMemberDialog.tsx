@@ -60,7 +60,7 @@ export function InviteMemberDialog({
   const invite = useInviteMember();
   const form = useFormValidation(
     memberInviteSchema,
-    { email, fullName },
+    { email, fullName, group: group?.id ?? null },
     inviteFieldForReason,
   );
 

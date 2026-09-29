@@ -296,6 +296,24 @@ describe('the invitation', () => {
     );
   });
 
+  it('clears a Group refusal once another Group is chosen', async () => {
+    const user = userEvent.setup();
+    api.invoke.mockResolvedValue(refusal('provision_failed'));
+    show();
+    const dialog = await openAndFill(user);
+    await user.click(within(dialog).getByRole('combobox', { name: /Grup/ }));
+    await user.click(await screen.findByRole('option', { name: /Educație/ }));
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Trimite invitația' }),
+    );
+    const message = copy('invite_group_refused');
+    expect(await within(dialog).findByText(message)).toBeVisible();
+    await user.selectOptions(within(dialog).getByLabelText('Rol'), 'bce');
+    await user.click(within(dialog).getByRole('combobox', { name: /Grup/ }));
+    await user.click(await screen.findByRole('option', { name: /Consiliu/ }));
+    expect(within(dialog).queryByText(message)).toBeNull();
+  });
+
   it('falls back to its own message when the gateway answers without a body', async () => {
     const user = userEvent.setup();
     api.invoke.mockResolvedValue({
