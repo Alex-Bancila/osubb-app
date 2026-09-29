@@ -435,14 +435,14 @@ Deno.test("a malformed new address is refused before anything changes", async ()
   assertEquals(mutations(calls), []);
 });
 
-// ==================== the rank ceiling (H2) ====================
-// A pending BC or Moderator account is the Moderator's to re-invite. Without
-// this a BC could move it to an address they control and sign in as that
-// person — exactly the state of every leadership account during the bootstrap.
+// ==================== leadership targets (H2, ruling R31) ====================
+// H2 kept a pending BC or Moderator account for the Moderator to re-invite.
+// Since #917 a BC member has the same authority over leadership accounts, so
+// only the level-6 gate stands between a caller and a leadership target.
 
-Deno.test("a BC cannot re-invite a pending BC or Moderator, and nothing changes", async () => {
+Deno.test("a BCE cannot re-invite a pending BC or Moderator, and nothing about them is read", async () => {
   for (const role of ["bc", "moderator"]) {
-    const { deps, calls } = fakeDeps({ level: 6, profile: { role } });
+    const { deps, calls } = fakeDeps({ level: 5, profile: { role } });
 
     const res = await handleReinvite(
       request({ member_id: MEMBER, email: "preluat@osubb.local" }),
@@ -452,20 +452,31 @@ Deno.test("a BC cannot re-invite a pending BC or Moderator, and nothing changes"
 
     assertEquals(res.status, 403);
     assertEquals(payload.code, "member_manage_forbidden");
-    assertEquals(mutations(calls), []);
-    assertEquals(calls.includes("emailTaken"), false);
+    assertEquals(calls, ["callerId", "memberLevel"]);
   }
 });
 
-Deno.test("the rank refusal comes before the target's sign-in state is disclosed", async () => {
+Deno.test("a BC re-invites a pending BC or Moderator (ruling R31, #917)", async () => {
+  for (const role of ["bc", "moderator"]) {
+    const { deps, calls } = fakeDeps({ level: 6, profile: { role } });
+    const res = await handleReinvite(
+      request({ member_id: MEMBER, email: "corect@osubb.local" }),
+      deps,
+    );
+    assertEquals(res.status, 200);
+    assertEquals(calls.includes("inviteByEmail:corect@osubb.local"), true);
+  }
+});
+
+Deno.test("a BC gets the ordinary state answer for a signed-in leadership target", async () => {
   const { deps } = fakeDeps({
     level: 6,
     profile: { role: "moderator" },
     account: { lastSignInAt: "2026-09-20T10:00:00Z" },
   });
   const res = await handleReinvite(request({ member_id: MEMBER }), deps);
-  assertEquals(res.status, 403);
-  assertEquals((await res.json()).code, "member_manage_forbidden");
+  assertEquals(res.status, 409);
+  assertEquals((await res.json()).code, "already_active");
 });
 
 Deno.test("a BC still re-invites ranks below BC, BCE included", async () => {

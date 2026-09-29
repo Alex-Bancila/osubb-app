@@ -30,7 +30,10 @@ export interface MemberProfile {
   email: string;
   fullName: string;
   status: string;
-  /** `profiles.role`: a BC or Moderator target is the Moderator's to re-invite. */
+  /**
+   * `profiles.role`. It gated a BC or Moderator target to the Moderator (H2)
+   * until ruling R31 (#917); the handler no longer branches on it.
+   */
   role: string;
 }
 

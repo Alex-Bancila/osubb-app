@@ -1,23 +1,8 @@
-/** public.roles level of the Moderator — the only rank at 9. */
-export const MODERATOR_LEVEL = 9;
-
-/**
- * The leadership ranks only the Moderator may re-invite (security pass
- * 2026-09-27, H2); `reinvite-member` refuses first so the caller gets a 403
- * before any Auth user is moved. Creating an account at these ranks is no
- * longer reserved: since ruling R31 (#917) every live BC member provisions at
- * `bc` or `moderator`, as `set_member_role` lets them grant it, so
- * `invite-member` needs no rank check beyond its level-6 gate.
- */
-export function isReservedRole(role: string): boolean {
-  const normalized = role.trim().toLowerCase();
-  return normalized === "bc" || normalized === "moderator";
-}
-
-/** True when a caller at `callerLevel` may re-invite a Member holding `role`. */
-export function mayHandleRole(role: string, callerLevel: number): boolean {
-  return !isReservedRole(role) || callerLevel >= MODERATOR_LEVEL;
-}
+// No rank is reserved here any more. The security pass of 2026-09-27 (H1/H2)
+// kept creating and re-inviting a `bc` or `moderator` account for the
+// Moderator; ruling R31 (#917) gives every live BC member the same authority,
+// so `invite-member` and `reinvite-member` check only their level-6 gate, and
+// `public.provision_profile` still checks a leadership appointer live.
 
 export interface ProvisionArgs {
   userId: string;
