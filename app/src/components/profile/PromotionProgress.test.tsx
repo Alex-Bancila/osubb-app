@@ -187,7 +187,7 @@ describe('PromotionProgress (#634)', () => {
       expect(bar).toHaveAttribute('aria-valuenow', '12');
       expect(bar).toHaveAttribute('aria-valuetext', '12 din 30 de puncte');
       expect(
-        screen.getByText('de la ultima evaluare (1 iulie 2026)'),
+        screen.getByText('din 1 iulie 2026 (după ultima evaluare)'),
       ).toBeInTheDocument();
       expect(
         screen.getByText('Mai ai 18 puncte până la pragul Voluntar Activ'),
@@ -195,6 +195,41 @@ describe('PromotionProgress (#634)', () => {
       expect(
         screen.queryByText(/poți deveni voluntar activ/i),
       ).not.toBeInTheDocument();
+    });
+
+    // F-6 (#893): `since` is the day AFTER the last range, so a Role
+    // Evaluation ending today makes it tomorrow. It was printed as the
+    // evaluation's own date ("de la ultima evaluare (30 septembrie 2026)")
+    // over a "0 / 30" that read as points lost.
+    it('after a Role Evaluation ending today: when the count starts, no "0 / 30"', () => {
+      setup('voluntar', progress({ since: '2026-09-30', points: 0 }), {
+        today: new Date(2026, 8, 29, 18, 0),
+      });
+
+      expect(
+        screen.getByText(
+          'Punctele pentru următoarea evaluare se numără din 30 septembrie 2026.',
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('Pragul în vigoare: 30 de puncte'),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      expect(screen.queryByText(/0 \/ 30/)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/de la ultima evaluare/),
+      ).not.toBeInTheDocument();
+    });
+
+    it('on the day the count starts, the bar is back', () => {
+      setup('voluntar', progress({ since: '2026-09-30', points: 0 }), {
+        today: new Date(2026, 8, 30, 0, 1),
+      });
+
+      expect(screen.getByRole('progressbar')).toBeInTheDocument();
+      expect(
+        screen.getByText('din 30 septembrie 2026 (după ultima evaluare)'),
+      ).toBeInTheDocument();
     });
 
     it('one point short says "1 punct"', () => {
@@ -294,7 +329,7 @@ describe('PromotionProgress (#634)', () => {
 
       expect(screen.getByText('12')).toBeInTheDocument();
       expect(
-        screen.getByText('puncte de la ultima evaluare (1 iulie 2026)'),
+        screen.getByText('puncte din 1 iulie 2026 (după ultima evaluare)'),
       ).toBeInTheDocument();
       expect(
         screen.getByText('Pragul în vigoare: 30 de puncte'),
@@ -304,6 +339,22 @@ describe('PromotionProgress (#634)', () => {
       ).toBeInTheDocument();
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       expect(screen.queryByText(/mai ai|depășit/i)).not.toBeInTheDocument();
+    });
+
+    it('after a Role Evaluation ending today: when the count starts, not "0 puncte"', () => {
+      setup(role, progress({ since: '2026-09-30', points: 0 }), {
+        today: new Date(2026, 8, 29, 18, 0),
+      });
+
+      expect(
+        screen.getByText(
+          'Punctele pentru următoarea evaluare se numără din 30 septembrie 2026.',
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('Pragul în vigoare: 30 de puncte'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('0')).not.toBeInTheDocument();
     });
 
     it('before any Role Evaluation the figure is the total, never "în total"', () => {
@@ -376,7 +427,7 @@ describe('PromotionProgress (#634)', () => {
 describe('PromotionPanel with the total', () => {
   afterEach(cleanup);
 
-  it('after a Role Evaluation: the total leads, the bar reads "de la ultima evaluare"', () => {
+  it('after a Role Evaluation: the total leads, the bar says when its count started', () => {
     render(
       <PromotionPanel
         state={{
@@ -394,7 +445,7 @@ describe('PromotionPanel with the total', () => {
 
     expect(screen.getByTestId('points-total')).toHaveTextContent('20de puncte');
     expect(
-      screen.getByText('de la ultima evaluare (1 iulie 2026)'),
+      screen.getByText('din 1 iulie 2026 (după ultima evaluare)'),
     ).toBeInTheDocument();
     expect(screen.queryByText(/în total/)).not.toBeInTheDocument();
   });

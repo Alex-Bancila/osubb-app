@@ -36,7 +36,9 @@ import {
  * #859 (B38): Profil's one points panel. Given the Member's total, the panel
  * leads with it, once: before any Role Evaluation the bar's or the
  * reference's figure *is* the total, so it is not printed twice; after one,
- * the figure below reads "de la ultima evaluare", never "în total".
+ * the figure below reads "din <day> (după ultima evaluare)", never "în
+ * total"; while that day is still ahead, the panel says when the count
+ * starts instead of a 0 (F-6, #893).
  *
  * #824 lifts the gate to the page: `usePromotionProgressState` says whether
  * the panel exists at all (`hidden`, in `promotion-state.ts`), and
@@ -113,6 +115,9 @@ function PromotionBody({
     );
   }
   const { view } = state;
+  if (view.kind !== 'tenure' && view.startsLater && view.since) {
+    return <CountStartsLater since={view.since} threshold={view.threshold} />;
+  }
   switch (view.kind) {
     case 'tenure':
       return (
@@ -131,9 +136,36 @@ function PromotionBody({
   }
 }
 
-/** "de la ultima evaluare (1 iulie 2026)" — the figure's period. */
+/**
+ * "din 1 iulie 2026 (după ultima evaluare)" — the figure's period. `since` is
+ * the day after the last range, so it is named as the day the count starts,
+ * never as the evaluation's date (F-6, #893).
+ */
 function sinceText(since: string): string {
-  return `de la ultima evaluare (${since})`;
+  return `din ${since} (după ultima evaluare)`;
+}
+
+/**
+ * A Role Evaluation whose range ended today: the count starts tomorrow, so
+ * there is no figure yet — a "0 / 30" would read as points lost (F-6).
+ */
+function CountStartsLater({
+  since,
+  threshold,
+}: {
+  since: string;
+  threshold: number;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="m-0 text-sm font-medium text-foreground">
+        Punctele pentru următoarea evaluare se numără din {since}.
+      </p>
+      <p className="m-0 text-sm text-muted-foreground">
+        Pragul în vigoare: {formatPointCount(threshold)}
+      </p>
+    </div>
+  );
 }
 
 function Reference({

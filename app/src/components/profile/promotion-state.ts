@@ -54,18 +54,31 @@ export function usePromotionProgressState(): PromotionState {
 const LADDER_ROLES = new Set(['recrut', 'voluntar', 'activ', 'vot']);
 
 /**
- * `since` is the last Role Evaluation's date, formatted ('1 iulie 2026'),
- * or null before any: then `points` is the Member's total, and the panel
- * says it once rather than as a second 'total' (#859 B38).
+ * `since` is the first day the points count from, formatted ('1 iulie
+ * 2026'): the day AFTER the last Role Evaluation's range, never the
+ * evaluation's own date (F-6, #893). Null before any Role Evaluation: then
+ * `points` is the Member's total, and the panel says it once rather than as
+ * a second 'total' (#859 B38).
+ *
+ * `startsLater`: `since` is still ahead (a Role Evaluation whose range ended
+ * today), so nothing counts yet; the panel says when the count starts
+ * rather than showing 0 as a result.
  */
 export type View =
   | { kind: 'tenure'; text: string }
-  | { kind: 'bar'; points: number; threshold: number; since: string | null }
+  | {
+      kind: 'bar';
+      points: number;
+      threshold: number;
+      since: string | null;
+      startsLater?: boolean;
+    }
   | {
       kind: 'reference';
       points: number;
       threshold: number;
       since: string | null;
+      startsLater?: boolean;
     }
   | null;
 
@@ -82,6 +95,8 @@ function viewFor(
   // The bar needs a target; without one it is hidden, never faked.
   const measurable = threshold !== null;
   const sinceDate = since ? (formatDayMonthYear(since) ?? since) : null;
+  const sinceDay = parseLocalDate(since);
+  const startsLater = sinceDay !== null && sinceDay > startOfToday();
 
   if (role === 'recrut') {
     const date = tenureDate(joinedAt, progress.voluntarTenureMonths);
@@ -97,7 +112,7 @@ function viewFor(
     const date = tenureDate(joinedAt, progress.activTenureMonths);
     if (!date) return null;
     if (measurable && startOfToday() >= date) {
-      return { kind: 'bar', points, threshold, since: sinceDate };
+      return { kind: 'bar', points, threshold, since: sinceDate, startsLater };
     }
     return {
       kind: 'tenure',
@@ -112,6 +127,7 @@ function viewFor(
         points,
         threshold,
         since: sinceDate,
+        startsLater,
       }
     : null;
 }

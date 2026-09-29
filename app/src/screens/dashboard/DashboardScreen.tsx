@@ -74,6 +74,8 @@ export default function DashboardScreen() {
         title={`Salut${name ? `, ${name}` : ''} 👋`}
         actions={capabilities.data && !leader ? <PointsStat /> : undefined}
       />
+      {/* F-1 (#893): every `equalHeights` row below is Alex's 2026-09-29
+          exception to the content-height rule — keep it. */}
       {capabilities.isPending ? (
         <Loading />
       ) : capabilities.isError ? (

@@ -221,8 +221,12 @@ function viewer(data: { seeLeadership: boolean; manageTasks: boolean }) {
 function panels(): string[] {
   const grid = document.querySelector('[data-slot="page-grid"]');
   if (!grid) return [];
+  // The accessible name: De evaluat's title also carries its count badge.
   return Array.from(grid.children).map(
-    (panel) => panel.querySelector('h2')?.textContent ?? '',
+    (panel) =>
+      panel.getAttribute('aria-label') ??
+      panel.querySelector('h2')?.textContent ??
+      '',
   );
 }
 
@@ -367,6 +371,35 @@ describe('De evaluat', () => {
       within(review).getByRole('link', { name: 'Evaluează' }),
     ).toHaveAttribute('href', '/tracker?task=31');
     expect(hooks.useAwaitingMyReview).toHaveBeenCalledWith(true);
+  });
+
+  // F-10 (#893): the count was a description line under the title, so the
+  // title sat ~22 px above Următorul eveniment's and the actions on
+  // different lines. It is a badge on the title now; neither header in the
+  // row has a second line, and the row keeps its equal heights (F-1).
+  it('puts the count on the title, so its header has the same one line as its neighbour', () => {
+    hooks.useAwaitingMyReview.mockReturnValue(
+      query({ task: taskRow({ id: 31, status: 'in_review' }), count: 3 }),
+    );
+    renderDashboard();
+
+    const review = slot('De evaluat');
+    const badge = within(review).getByTestId('awaiting-review-count');
+    expect(within(review).getByRole('heading', { level: 2 })).toContainElement(
+      badge,
+    );
+    expect(badge).toHaveTextContent('3');
+
+    const grid = document.querySelector('[data-slot="page-grid"]');
+    expect(grid).toHaveAttribute('data-equal-heights');
+    const headers = Array.from(
+      grid?.querySelectorAll('[data-slot="section-header"]') ?? [],
+    );
+    expect(headers).toHaveLength(2);
+    // No description line (a `p` that is not the eyebrow) in either header.
+    for (const header of headers) {
+      expect(header.querySelectorAll('p:not([data-slot])')).toHaveLength(0);
+    }
   });
 
   it('says one Task in the singular', () => {
