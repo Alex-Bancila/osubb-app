@@ -59,7 +59,7 @@ function DirectoryName({ member }: { member: DirectoryMember }) {
   );
 }
 
-/** A member's Task points; BC and the Moderator have none (ruling 1). */
+/** A member's Task points; BCE, BC and the Moderator have none (ruling 1, #907). */
 function Points({ points }: { points: number | null }) {
   if (points === null)
     return (
@@ -135,7 +135,7 @@ function columnsFor(
     },
     {
       id: 'points',
-      // `undefined` sorts last both ways: BC and the Moderator have no points.
+      // `undefined` sorts last both ways: BCE, BC and the Moderator have no points.
       accessorFn: (row) => row.points ?? undefined,
       sortUndefined: 'last',
       header: 'Puncte',

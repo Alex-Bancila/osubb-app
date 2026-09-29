@@ -37,11 +37,17 @@ async function pages<T>(
     if (page.data.length < 500) return rows;
   }
 }
+/**
+ * Every Member below BCE, 0 points included (#907): points descending, then
+ * by name as the server ranks them, so the many Members sharing the last
+ * rank read alphabetically; `member_id` keeps the pages stable.
+ */
 export function fetchLeadershipLeaderboard(filters: LeadershipFilters) {
   return pages<LeaderboardRow>((from, to) =>
     supabase
       .rpc('leadership_leaderboard', filters)
       .order('points', { ascending: false })
+      .order('full_name')
       .order('member_id')
       .range(from, to),
   );

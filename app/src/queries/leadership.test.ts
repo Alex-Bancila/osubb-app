@@ -32,7 +32,12 @@ it('sends the Work Filter arguments to the authoritative leaderboard', async () 
   };
   await fetchLeadershipLeaderboard(filters);
   expect(api.rpc).toHaveBeenCalledWith('leadership_leaderboard', filters);
-  expect(order).toHaveBeenCalledWith('member_id');
+  // Points, then name (#907: the Members on 0 share a rank), then the id.
+  expect(order.mock.calls).toEqual([
+    ['points', { ascending: false }],
+    ['full_name'],
+    ['member_id'],
+  ]);
 });
 it('pages all results with stable ordering and rejects a partial answer', async () => {
   range
