@@ -39,6 +39,8 @@ export type AdminMemberRows = MemberCardRows & {
 };
 
 export type AdminMember = MemberCardData & {
+  /** The Role key (`voluntar`, …) the Role timeline starts from (#932). */
+  role: string | null;
   status: string | null;
   points: LedgerRow[];
 };
@@ -89,7 +91,12 @@ export function useAdminMember(memberId: string | undefined) {
     if (!rows.data) return undefined;
     const card = toMemberCardData(rows.data, roles.data, groups.data);
     return card
-      ? { ...card, status: rows.data.status, points: rows.data.points }
+      ? {
+          ...card,
+          role: rows.data.card?.role ?? null,
+          status: rows.data.status,
+          points: rows.data.points,
+        }
       : null;
   }, [rows.data, roles.data, groups.data]);
   return { data, isPending: rows.isPending, isError: rows.isError };
@@ -124,6 +131,42 @@ export function useUpdateMemberIdentity() {
     onSuccess: async () => {
       await Promise.all(
         [keys.members.all, keys.groups.all, keys.profile.all].map((queryKey) =>
+          client.invalidateQueries({ queryKey }),
+        ),
+      );
+    },
+  });
+}
+
+/**
+ * #932's write path for the join date: the same `profiles_update_self` policy
+ * (a BC updates any row below level 6, the Moderator any row) and the column
+ * grant `update (joined_at)` from #160; `guard_profile_privileged_columns`
+ * refuses the change below level 6. `.single()` turns an RLS refusal (zero
+ * rows) into a failure instead of a silent no-op.
+ */
+export async function updateMemberJoinedAt(input: {
+  memberId: string;
+  joinedAt: string;
+}) {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ joined_at: input.joinedAt })
+    .eq('id', input.memberId)
+    .select('id')
+    .single();
+  if (error) throw error;
+}
+
+export function useUpdateMemberJoinedAt() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: updateMemberJoinedAt,
+    // Tenure counts from the date: the Member Card, Profil and the promotion
+    // progress bars all read it.
+    onSuccess: async () => {
+      await Promise.all(
+        [keys.members.all, keys.profile.all, keys.points.all].map((queryKey) =>
           client.invalidateQueries({ queryKey }),
         ),
       );

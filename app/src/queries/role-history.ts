@@ -6,6 +6,18 @@ import { keys } from './keys';
 
 export type RoleHistoryRow = RoleHistoryInput;
 
+/** One Member's `role_history` rows, oldest first. */
+async function fetchRoleHistory(memberId: string): Promise<RoleHistoryRow[]> {
+  const { data, error } = await supabase
+    .from('role_history')
+    .select('from_role, to_role, created_at, actor_kind, changed_by')
+    .eq('member_id', memberId)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
 /**
  * The caller's own `role_history` rows (#633), oldest first.
  *
@@ -25,17 +37,21 @@ export function useMyRoleHistory() {
 
   return useQuery({
     queryKey: keys.profile.roleHistory(id),
-    queryFn: id
-      ? async (): Promise<RoleHistoryRow[]> => {
-          const { data, error } = await supabase
-            .from('role_history')
-            .select('from_role, to_role, created_at, actor_kind, changed_by')
-            .eq('member_id', id)
-            .order('created_at', { ascending: true })
-            .order('id', { ascending: true });
-          if (error) throw error;
-          return data;
-        }
-      : skipToken,
+    queryFn: id ? () => fetchRoleHistory(id) : skipToken,
+  });
+}
+
+/**
+ * Another Member's `role_history` rows, for their Administrare page (#932).
+ * `role_history_read` answers them to a level-6 reader only, so the page
+ * mounts its reader for BC and the Moderator alone. Under `members`, keyed by viewer:
+ * a Role change from the page's Role panel invalidates `members` and so
+ * refreshes this too.
+ */
+export function useMemberRoleHistory(memberId: string) {
+  const viewerId = useAuth().session?.user.id;
+  return useQuery({
+    queryKey: keys.members.roleHistory(memberId, viewerId),
+    queryFn: viewerId ? () => fetchRoleHistory(memberId) : skipToken,
   });
 }

@@ -542,6 +542,8 @@ export function buildPlan({ members, tasks, resumeFrom }) {
         p_role: member.role,
         p_group_ids: member.group ? [member.group.id] : [],
         p_appointed_by: member.appointedBy ? id(ctx, member.appointedBy) : null,
+        // #933: provisioning stamps the join date; null means the provisioning day.
+        p_joined_at: member.joinedAt,
       });
       steps.push({
         reversible: true,
@@ -555,7 +557,6 @@ export function buildPlan({ members, tasks, resumeFrom }) {
       });
       const fields = {};
       if (member.phone) fields.phone = member.phone;
-      if (member.joinedAt) fields.joined_at = member.joinedAt;
       if (Object.keys(fields).length > 0) {
         steps.push({
           reversible: true,

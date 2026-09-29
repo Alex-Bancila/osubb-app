@@ -168,12 +168,10 @@ test('a dry run prints every call of the real run, in order, and writes nothing'
   assert.match(plan[0], /create user moderator@example\.com.*members row 2 \(Moderator\)/);
   assert.match(
     plan[1],
-    /rpc provision_profile .*"p_role":"moderator","p_group_ids":\[9\],"p_appointed_by":null/,
+    /rpc provision_profile .*"p_role":"moderator","p_group_ids":\[9\],"p_appointed_by":null,"p_joined_at":"2023-10-01"/,
   );
-  assert.match(
-    plan[2],
-    /patch profiles <id of moderator@example\.com> \{"phone":"\+40730655145","joined_at":"2023-10-01"\}/,
-  );
+  // #933: the join date travels with the provisioning call, never a later patch.
+  assert.match(plan[2], /patch profiles <id of moderator@example\.com> \{"phone":"\+40730655145"\}$/);
   // Everyone after the Moderator is appointed by the Moderator unless the row names a BC.
   const provisions = plan.filter((line) => line.includes('provision_profile'));
   assert.equal(provisions.length, 5);

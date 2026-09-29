@@ -62,8 +62,8 @@ insert into pg_temp.fixture_member_departments (member_id, dept_id) values
 -- 'RSVP imagine' carries min_level 3 (#519 retires min_level 4) specifically
 -- to stay the one Event hidden from a level-1 Voluntar below (the fixture
 -- this file needs for "a member cannot RSVP to an event hidden by event
--- RLS"); since #593 it is level >= 5 (Corina with a level-5 token) that reads
--- every attendance row, and a stale level-4 token reads only its own.
+-- RLS"). Colleague attendance is read by an Event's managers since #934
+-- (event_rsvp_managers.test.sql); no rank reads it here, whatever the token says.
 insert into events (title, type, group_id, min_level, starts_at) values
   ('RSVP organizație', 'sedinta', pg_temp.dept_group('org'), 0, now() + interval '1 day'),
   ('RSVP educațional', 'sedinta', pg_temp.dept_group('edu'), 0, now() + interval '2 days'),
@@ -148,13 +148,14 @@ select pg_temp.test_login('c3000000-0000-0000-0000-000000000063', '{"member_role
 select is((select count(*) from event_attendance),0::bigint,'level 4 cannot read colleague attendance');
 reset role;
 -- M4: the level is read from the live Profile, so a level-5 token over a vot
--- Profile reads nothing; once the Profile really is BCE the same token reads all.
+-- Profile reads nothing. Since #934 a real BCE Profile reads nothing either:
+-- colleague answers belong to the Event's managers (event_rsvp_managers.test.sql).
 select pg_temp.test_login('c3000000-0000-0000-0000-000000000063', '{"member_role":"bce","member_level":5}');
 select is((select count(*) from event_attendance),0::bigint,'a stale level-5 token over a vot Profile reads no colleague attendance');
 reset role;
 update profiles set role = 'bce' where id = 'c3000000-0000-0000-0000-000000000063';
 select pg_temp.test_login('c3000000-0000-0000-0000-000000000063', '{"member_role":"bce","member_level":5}');
-select is((select count(*) from event_attendance),4::bigint,'level 5 reads attendance across visible events');
+select is((select count(*) from event_attendance),0::bigint,'#934: a live BCE who manages none of these Events reads no colleague attendance -- the level >= 5 limb is gone');
 
 update event_attendance set status = 'going'
  where member_id = 'b2000000-0000-0000-0000-000000000063'

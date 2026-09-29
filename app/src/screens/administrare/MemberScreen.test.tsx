@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   groups: vi.fn(),
   mine: vi.fn(),
   mutate: vi.fn(),
+  joined: vi.fn(),
   privacy: vi.fn(),
 }));
 vi.mock('../../queries/admin-member', () => ({
@@ -18,6 +19,22 @@ vi.mock('../../queries/admin-member', () => ({
     mutateAsync: state.mutate,
     isPending: false,
   }),
+  useUpdateMemberJoinedAt: () => ({
+    mutateAsync: state.joined,
+    isPending: false,
+  }),
+}));
+// The shared timeline has its own tests; here only what the page hands it.
+vi.mock('../profile/RoleTimeline', () => ({
+  MemberRoleTimeline: (props: {
+    memberId: string;
+    role: string;
+    joinedAt: string | null;
+  }) => (
+    <p>
+      Timeline {props.memberId} {props.role} {props.joinedAt ?? 'fără dată'}
+    </p>
+  ),
 }));
 vi.mock('../../lib/capabilities', () => ({
   useCapabilities: state.capabilities,
@@ -92,6 +109,7 @@ function member(patch: object = {}) {
     nickname: 'Nana',
     fullName: 'Ana Pop',
     roleLabel: 'Voluntar',
+    role: 'voluntar',
     joinedAt: '2025-01-01',
     avatarColor: null,
     primaryGroup: null,
@@ -147,6 +165,7 @@ beforeEach(() => {
   state.mine.mockReturnValue({ ...ready, data: [] });
   state.privacy.mockReturnValue({ ...ready, data: null });
   state.mutate.mockReset().mockResolvedValue(undefined);
+  state.joined.mockReset().mockResolvedValue(undefined);
 });
 
 it('BC sees the Nickname over the full name, every Group Role and both editors', async () => {
@@ -304,9 +323,14 @@ it('shows one receipt at a time: a second command replaces the first (F-11)', as
 });
 
 it('leaves out "Membru din" for an imported Member with no date yet (F-28)', () => {
+  state.capabilities.mockReturnValue({
+    ...ready,
+    data: { manageRoles: false },
+  });
   state.member.mockReturnValue({ ...ready, data: member({ joinedAt: null }) });
   show();
   expect(screen.queryByText('Membru din')).toBeNull();
+  expect(screen.queryByText('Data intrării')).toBeNull();
   expect(screen.queryByText('—')).toBeNull();
   expect(screen.getByText('Rol organizațional')).toBeVisible();
 });
@@ -441,7 +465,7 @@ it('sends a Group page opened from here back to this member (D4, A63)', async ()
 
 it('sets the identity facts as a muted label over a larger value (AD2)', () => {
   show();
-  const label = screen.getByText('Membru din');
+  const label = screen.getByText('Data intrării');
   expect(label.tagName).toBe('DT');
   expect(label).toHaveClass('text-muted-foreground');
   expect(label.nextElementSibling).toHaveClass('text-[length:var(--fs-md)]');
@@ -521,4 +545,121 @@ it('keeps the confirmation and the stored names when the page refetches', async 
     'Numele a fost actualizat.',
   );
   expect(screen.getByLabelText('Pseudonim')).toHaveValue('Anuța');
+});
+
+it('shows a Member who is not BC the join date read-only, as "Membru din" (#932)', () => {
+  state.capabilities.mockReturnValue({
+    ...ready,
+    data: { manageRoles: false },
+  });
+  show();
+  expect(screen.getByText('Membru din').nextElementSibling).toHaveTextContent(
+    '1 ianuarie 2025',
+  );
+  expect(screen.queryByText('Data intrării')).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Editează data intrării' }),
+  ).toBeNull();
+  // role_history_read answers another Member's rows to level 6 only.
+  expect(screen.queryByRole('heading', { name: 'Istoric roluri' })).toBeNull();
+  expect(screen.queryByText(/^Timeline /)).toBeNull();
+});
+
+it('lets BC set a join date that was never recorded (#932)', async () => {
+  const user = userEvent.setup();
+  state.member.mockReturnValue({ ...ready, data: member({ joinedAt: null }) });
+  show();
+  const fact = screen.getByText('Data intrării').nextElementSibling;
+  expect(fact).toHaveTextContent('Nesetată');
+  expect(fact).toHaveTextContent(
+    'Fără ea, membrul nu acumulează vechime pentru promovări.',
+  );
+  await user.click(
+    screen.getByRole('button', { name: 'Editează data intrării' }),
+  );
+  const input = screen.getByLabelText('Data intrării', { selector: 'input' });
+  expect(input).toHaveFocus();
+  expect(input).toHaveAttribute('type', 'date');
+  expect(input).toHaveAccessibleDescription(
+    'Vechimea pentru promovări se numără de la această dată.',
+  );
+  // Nothing chosen yet: nothing to save.
+  expect(screen.getByRole('button', { name: 'Salvează' })).toBeDisabled();
+  await user.type(input, '2024-10-01');
+  await user.click(screen.getByRole('button', { name: 'Salvează' }));
+  expect(state.joined).toHaveBeenCalledWith({
+    memberId: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+    joinedAt: '2024-10-01',
+  });
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Data intrării a fost salvată.',
+  );
+  // Back from the editor, focus returns to the button that opened it.
+  expect(
+    screen.getByRole('button', { name: 'Editează data intrării' }),
+  ).toHaveFocus();
+});
+
+it('refuses a join date in the future before sending (#932)', async () => {
+  const user = userEvent.setup();
+  show();
+  expect(
+    screen.getByText('Data intrării').nextElementSibling,
+  ).toHaveTextContent('1 ianuarie 2025');
+  await user.click(
+    screen.getByRole('button', { name: 'Editează data intrării' }),
+  );
+  const input = screen.getByLabelText('Data intrării', { selector: 'input' });
+  expect(input).toHaveValue('2025-01-01');
+  await user.clear(input);
+  await user.type(input, '2999-01-01');
+  await user.click(screen.getByRole('button', { name: 'Salvează' }));
+  expect(state.joined).not.toHaveBeenCalled();
+  expect(
+    screen.getByText('Data intrării nu poate fi în viitor.'),
+  ).toBeVisible();
+});
+
+it('puts a refused join-date write in the editor and keeps it open (#932)', async () => {
+  const user = userEvent.setup();
+  state.joined.mockRejectedValue(new Error('permission denied'));
+  show();
+  await user.click(
+    screen.getByRole('button', { name: 'Editează data intrării' }),
+  );
+  const input = screen.getByLabelText('Data intrării', { selector: 'input' });
+  await user.clear(input);
+  await user.type(input, '2024-03-15');
+  await user.click(screen.getByRole('button', { name: 'Salvează' }));
+  expect(
+    screen.getByText(
+      'Nu am putut salva data intrării. Verifică permisiunile și reîncearcă.',
+    ),
+  ).toBeVisible();
+  expect(input).toBeVisible();
+  // Changing the date drops the refusal about the old one.
+  await user.clear(input);
+  await user.type(input, '2024-03-16');
+  expect(
+    screen.queryByText(
+      'Nu am putut salva data intrării. Verifică permisiunile și reîncearcă.',
+    ),
+  ).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Renunță' }));
+  expect(
+    screen.getByRole('button', { name: 'Editează data intrării' }),
+  ).toHaveFocus();
+  expect(
+    screen.getByText('Data intrării').nextElementSibling,
+  ).toHaveTextContent('1 ianuarie 2025');
+});
+
+it("shows BC the Member's Istoric roluri, from their Role and join date (#932)", () => {
+  show();
+  expect(screen.getByRole('heading', { name: 'Istoric roluri' })).toBeVisible();
+  expect(
+    screen.getByText(
+      'Timeline 7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d voluntar 2025-01-01',
+    ),
+  ).toBeVisible();
 });
