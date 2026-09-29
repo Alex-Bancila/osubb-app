@@ -67,7 +67,7 @@ describe('WorkFilter', () => {
     await openFilters(user);
     const sub = screen.getByRole('combobox', { name: 'Subgrup' });
     expect(sub).toHaveTextContent('Toate subgrupurile');
-    expect(sub).toBeDisabled();
+    expect(sub).toBeEnabled();
 
     await user.click(screen.getByRole('combobox', { name: 'Grup principal' }));
     expect(await options()).toEqual(['OSUBB', 'Comunicare', 'Educațional']);
@@ -83,6 +83,66 @@ describe('WorkFilter', () => {
     ]);
     await user.click(screen.getByRole('option', { name: /^Mentorat/ }));
     expect(search()).toBe('?grup=1&subgrup=2');
+  });
+
+  it('offers every Subgrup before a Grup principal, and choosing one sets both (#919)', async () => {
+    const user = userEvent.setup();
+    renderFilter('?campanie=14&de_la=2026-09-01');
+    await openFilters(user);
+    await user.click(screen.getByRole('combobox', { name: 'Subgrup' }));
+    // Every Group below a root, in tree order, each with its parent.
+    expect(await options()).toEqual([
+      'Social media· Comunicare',
+      'Mentorat· Educațional',
+      'Grupa A· Mentorat',
+      'Traineri· Educațional',
+    ]);
+    await user.click(screen.getByRole('option', { name: /^Grupa A/ }));
+    // The root joins it; the Campaign depended on the Group, the range did not.
+    expect(search()).toBe('?grup=1&subgrup=3&de_la=2026-09-01');
+    expect(
+      screen.getByRole('combobox', { name: 'Grup principal' }),
+    ).toHaveTextContent('Educațional');
+    await closeFilters(user);
+    const chips = screen.getByRole('group', { name: 'Filtre active' });
+    expect(
+      within(chips).getByRole('button', {
+        name: 'Elimină filtrul Grup principal: Educațional',
+      }),
+    ).toBeVisible();
+    expect(
+      within(chips).getByRole('button', {
+        name: 'Elimină filtrul Subgrup: Grupa A',
+      }),
+    ).toBeVisible();
+  });
+
+  it('narrows the Subgrup to the chosen root and clears one the new root does not hold (#919)', async () => {
+    const user = userEvent.setup();
+    renderFilter('?grup=1&subgrup=2');
+    await openFilters(user);
+    await user.click(screen.getByRole('combobox', { name: 'Grup principal' }));
+    await user.click(await screen.findByRole('option', { name: 'Comunicare' }));
+    expect(search()).toBe('?grup=8');
+    await user.click(screen.getByRole('combobox', { name: 'Subgrup' }));
+    expect(await options()).toEqual(['Social media· Comunicare']);
+  });
+
+  it('does not draw the Subgrup when no Group sits below a root (#919)', async () => {
+    const user = userEvent.setup();
+    const flat = groups.filter((group) => group.path.length === 1);
+    render(
+      <MemoryRouter initialEntries={['/clasament']}>
+        <WorkFilter groups={flat} campaigns={campaigns} />
+      </MemoryRouter>,
+    );
+    const sheet = await openFilters(user);
+    expect(
+      within(sheet).getByRole('combobox', { name: 'Grup principal' }),
+    ).toBeVisible();
+    expect(
+      within(sheet).queryByRole('combobox', { name: 'Subgrup' }),
+    ).toBeNull();
   });
 
   it('offers the Campaigns on the chosen Group, its ancestors and below it', async () => {
@@ -270,6 +330,26 @@ describe('WorkFilter', () => {
       expect(
         within(sheet).queryByRole('combobox', { name: 'Campanie' }),
       ).toBeNull();
+    });
+
+    it('sets the only root with a Subgrup picked under it (#919)', async () => {
+      const user = userEvent.setup();
+      // Only Educațional has work: Grup principal is not drawn.
+      renderFilter('', undefined, [
+        { group_id: 3, campaign_id: 11 },
+        { group_id: 4, campaign_id: 13 },
+      ]);
+      const sheet = await openFilters(user);
+      expect(
+        within(sheet).queryByRole('combobox', { name: 'Grup principal' }),
+      ).toBeNull();
+      await user.click(
+        within(sheet).getByRole('combobox', { name: 'Subgrup' }),
+      );
+      await user.click(
+        await screen.findByRole('option', { name: /^Traineri/ }),
+      );
+      expect(search()).toBe('?grup=1&subgrup=4');
     });
 
     it('keeps a Group the shared URL carries though it owns nothing', async () => {

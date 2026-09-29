@@ -3,12 +3,15 @@ import {
   matchesWorkFilter,
   campaignsFor,
   groupsBelow,
+  groupsBelowAny,
   parseWorkFilter,
   placeGroup,
   rangeBounds,
   rootGroups,
+  rootOf,
   serializeWorkFilter,
   setWorkFilterLevel,
+  setWorkFilterSubgroup,
   hiddenWorkFilter,
   visibleWorkFilter,
   workFilterParams,
@@ -129,6 +132,25 @@ describe('setWorkFilterLevel', () => {
   });
 });
 
+describe('setWorkFilterSubgroup (#919)', () => {
+  it('sets both Group keys in one write and clears the Campaign, keeping the dates', () => {
+    const value = setWorkFilterSubgroup(
+      { campaignId: 14, from: '2026-09-01' },
+      1,
+      3,
+    );
+    expect(value).toEqual({ rootGroupId: 1, groupId: 3, from: '2026-09-01' });
+    expect(serializeWorkFilter(value).toString()).toBe(
+      'grup=1&subgrup=3&de_la=2026-09-01',
+    );
+  });
+
+  it('keeps the Campaign when neither Group changes', () => {
+    const full = { rootGroupId: 1, groupId: 3, campaignId: 12 };
+    expect(setWorkFilterSubgroup(full, 1, 3)).toEqual(full);
+  });
+});
+
 describe('Group options', () => {
   it('offers every active top-level Group, OSUBB first and labelled OSUBB', () => {
     const roots = rootGroups(groups);
@@ -145,6 +167,14 @@ describe('Group options', () => {
     expect(groupsBelow(groups, 8)).toEqual([]);
     expect(groupsBelow(groups, undefined)).toEqual([]);
   });
+  it('offers every active Group below any root, in tree order, with no root chosen (#919)', () => {
+    const roots = rootGroups(groups);
+    expect(ids(groupsBelowAny(groups, roots))).toEqual([2, 3, 4]);
+    expect(rootOf(groups[1] as WorkFilterGroup, roots)).toBe(1);
+    // Only Comunicare as a root: nothing below it.
+    expect(groupsBelowAny(groups, roots.slice(1, 2))).toEqual([]);
+  });
+
   it('roots a managed-only list at its topmost Groups (Campanii, R13)', () => {
     // A Manager of Mentorat and of Comunicare: no top-level Educațional.
     const managed = groups.filter((group) => [2, 3, 8].includes(group.id));
@@ -227,8 +257,11 @@ describe('Rule W', () => {
     const choices = workFilterChoices(withAg, campaigns, {}, { work });
     expect(ids(choices.roots)).toEqual([8, 1]);
     expect(choices.showRoot).toBe(true);
-    // No root chosen: nothing below to offer yet.
-    expect(choices.showSub).toBe(false);
+    // No root chosen: every Subgrup with work below any root (#919) —
+    // one Subgrup narrows, since two roots are shown.
+    expect(ids(choices.below)).toEqual([2, 3]);
+    expect(choices.showSub).toBe(true);
+    expect(choices.rootId).toBeUndefined();
     // One Campaign labels an item: the level is hidden.
     expect(ids(choices.campaigns)).toEqual([12]);
     expect(choices.showCampaign).toBe(false);
@@ -248,6 +281,74 @@ describe('Rule W', () => {
     expect(choices.showSub).toBe(true);
     expect(ids(choices.campaigns)).toEqual([11, 13]);
     expect(choices.showCampaign).toBe(true);
+  });
+
+  it('narrows the Subgrup options to the chosen root, and hides a lone one that narrows nothing (#919)', () => {
+    const spread = [
+      { group_id: 2, campaign_id: null },
+      { group_id: 4, campaign_id: null },
+      { group_id: 8, campaign_id: null },
+    ];
+    const withSub: WorkFilterGroup[] = [
+      ...withAg,
+      { id: 20, name: 'Social media', path: [8, 20], status: 'active' },
+    ];
+    const everyRoot = workFilterChoices(
+      withSub,
+      campaigns,
+      {},
+      { work: [...spread, { group_id: 20, campaign_id: null }] },
+    );
+    expect(ids(everyRoot.below)).toEqual([20, 2, 4]);
+    const underOne = workFilterChoices(
+      withSub,
+      campaigns,
+      { rootGroupId: 1 },
+      { work: [...spread, { group_id: 20, campaign_id: null }] },
+    );
+    expect(ids(underOne.below)).toEqual([2, 4]);
+    expect(underOne.showSub).toBe(true);
+    // Under Comunicare only Social media, holding all its items: not drawn.
+    const onlySub = [
+      ...spread.slice(0, 2),
+      { group_id: 20, campaign_id: null },
+    ];
+    const lone = workFilterChoices(
+      withSub,
+      campaigns,
+      { rootGroupId: 8 },
+      { work: onlySub },
+    );
+    expect(ids(lone.below)).toEqual([20]);
+    expect(lone.showSub).toBe(false);
+    // Comunicare owning a Task itself: Social media narrows, so it is drawn.
+    expect(
+      workFilterChoices(
+        withSub,
+        campaigns,
+        { rootGroupId: 8 },
+        { work: [...spread, { group_id: 20, campaign_id: null }] },
+      ).showSub,
+    ).toBe(true);
+    // A chosen lone Subgrup keeps its control.
+    expect(
+      workFilterChoices(
+        withSub,
+        campaigns,
+        { rootGroupId: 8, groupId: 20 },
+        { work: onlySub },
+      ).showSub,
+    ).toBe(true);
+  });
+
+  it('hides the Subgrup when no option has a Group below a root (#919)', () => {
+    const flat = [
+      { group_id: 1, campaign_id: null },
+      { group_id: 8, campaign_id: null },
+    ];
+    const choices = workFilterChoices(withAg, campaigns, {}, { work: flat });
+    expect(choices.below).toEqual([]);
+    expect(choices.showSub).toBe(false);
   });
 
   it('narrows the Campaigns to the items under the chosen Group', () => {
@@ -281,11 +382,17 @@ describe('Rule W', () => {
   it('offers every given option and draws every level without work (Campanii)', () => {
     const choices = workFilterChoices(withAg, campaigns, {});
     expect(ids(choices.roots)).toEqual([5, 9, 8, 1]);
+    // No root chosen: every Group below one (#919).
+    expect(ids(choices.below)).toEqual([2, 3, 4]);
     expect([choices.showRoot, choices.showSub, choices.showCampaign]).toEqual([
       true,
       true,
       true,
     ]);
+    // A root with nothing below it: the Subgrup is not drawn, never disabled.
+    expect(
+      workFilterChoices(withAg, campaigns, { rootGroupId: 8 }).showSub,
+    ).toBe(false);
   });
 });
 

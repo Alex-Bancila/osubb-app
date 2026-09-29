@@ -114,6 +114,24 @@ export function setWorkFilterLevel<L extends WorkFilterLevel>(
 }
 
 /**
+ * Choose a **Subgrup** together with the **Grup principal** it sits under
+ * (#919): one write, so both URL keys (`grup`, `subgrup`) land together and
+ * the chips and the rest of the cascade stay consistent. A changed root or
+ * Group clears the Campaign, as `setWorkFilterLevel` does.
+ */
+export function setWorkFilterSubgroup(
+  value: WorkFilterValue,
+  rootGroupId: number,
+  groupId: number,
+): WorkFilterValue {
+  return setWorkFilterLevel(
+    setWorkFilterLevel(value, 'rootGroupId', rootGroupId),
+    'groupId',
+    groupId,
+  );
+}
+
+/**
  * Which levels a page filters by; every level counts unless it is `false`.
  * `group: false` hides both Group levels (Grup principal and Subgrup) — the
  * Cupa Departamentelor ranks Groups, so a Group narrows nothing there (#823).
@@ -341,6 +359,34 @@ export function groupsBelow<G extends WorkFilterGroup>(
 }
 
 /**
+ * **Subgrup** options with no Grup principal chosen (#919): every active
+ * Group below any of the given roots, at any depth, in tree order.
+ */
+export function groupsBelowAny<G extends WorkFilterGroup>(
+  groups: readonly G[],
+  roots: readonly WorkFilterGroup[],
+): G[] {
+  const rootIds = new Set(roots.map((root) => root.id));
+  return inTreeOrder(
+    groups.filter(
+      (group) =>
+        group.status === 'active' &&
+        !rootIds.has(group.id) &&
+        group.path.some((id) => rootIds.has(id)),
+    ),
+    groups,
+  );
+}
+
+/** The Grup principal a Subgrup option sits under, among the root options. */
+export function rootOf(
+  group: WorkFilterGroup,
+  roots: readonly WorkFilterGroup[],
+): number | undefined {
+  return roots.find((root) => group.path.includes(root.id))?.id;
+}
+
+/**
  * **Campanie** options for the chosen Group (the Subgrup when set, else the
  * root): the Campaigns able to tag a Task there — owned by the Group itself or
  * one of its ancestors (`campaign.group_id ∈ chosen.path`, the predicate
@@ -377,9 +423,50 @@ export type WorkFilterChoices<
   /**
    * The root the Subgrup options hang from: the chosen one, or — when the
    * Grup principal level is hidden because it has one option — that option.
+   * Unset, the Subgrup options span every root (#919), and choosing one sets
+   * its root too (`setWorkFilterSubgroup`).
    */
   rootId: number | undefined;
 };
+
+/**
+ * **Subgrup** options: below the chosen (or only) root, or — with none —
+ * below every root option (#919), so the level is offered before a Grup
+ * principal is chosen.
+ */
+function subgroupOptions<G extends WorkFilterGroup>(
+  groups: readonly G[],
+  rootOptions: readonly G[],
+  rootId: number | undefined,
+): G[] {
+  return rootId === undefined
+    ? groupsBelowAny(groups, rootOptions)
+    : groupsBelow(groups, rootId);
+}
+
+/**
+ * Whether the **Subgrup** level is drawn under Rule W (#919): with no root,
+ * whenever any Subgrup is offered — several roots are shown, so even one
+ * narrows. Under a root, when there are several, when the URL's Subgrup is
+ * among them (its control never vanishes), or when the lone one leaves out
+ * some of the root's items (those the root owns itself); a lone Subgrup
+ * holding everything the root shows would narrow nothing.
+ */
+function subgroupNarrows(
+  work: readonly WorkItem[],
+  groups: readonly WorkFilterGroup[],
+  value: WorkFilterValue,
+  rootId: number | undefined,
+  below: readonly WorkFilterGroup[],
+): boolean {
+  if (rootId === undefined) return below.length > 0;
+  const [lone, ...rest] = below;
+  if (!lone) return false;
+  if (rest.length > 0 || below.some((group) => group.id === value.groupId))
+    return true;
+  const underRoot = itemsInGroup(work, groups, rootId);
+  return itemsInGroup(underRoot, groups, lone.id).length < underRoot.length;
+}
 
 /**
  * The options of every level. With `work` (the items the page can show),
@@ -387,7 +474,7 @@ export type WorkFilterChoices<
  * values are kept, and a level with one option or none is hidden — one
  * option means the page already shows only that Group or Campaign. Without
  * `work` (Campanii, R13: the caller's managed Groups), every given option
- * is offered and the levels stay as they were.
+ * is offered and every level is drawn, bar a Subgrup with no option.
  */
 export function workFilterChoices<
   G extends WorkFilterGroup,
@@ -401,16 +488,19 @@ export function workFilterChoices<
     roots = 'top-level',
   }: { work?: readonly WorkItem[]; roots?: WorkFilterRoots } = {},
 ): WorkFilterChoices<G, C> {
-  if (!work)
+  if (!work) {
+    const rootOptions = rootGroups(groups, roots);
+    const below = subgroupOptions(groups, rootOptions, value.rootGroupId);
     return {
-      roots: rootGroups(groups, roots),
-      below: groupsBelow(groups, value.rootGroupId),
+      roots: rootOptions,
+      below,
       campaigns: campaignsFor(campaigns, groups, chosenGroupId(value)),
       showRoot: true,
-      showSub: true,
+      showSub: below.length > 0,
       showCampaign: true,
       rootId: value.rootGroupId,
     };
+  }
   const offered = groupsWithWork(
     groups,
     work.map((item) => item.group_id),
@@ -420,7 +510,7 @@ export function workFilterChoices<
   const rootId =
     value.rootGroupId ??
     (rootOptions.length === 1 ? rootOptions[0]?.id : undefined);
-  const below = groupsBelow(offered, rootId);
+  const below = subgroupOptions(offered, rootOptions, rootId);
   const campaignOptions = campaignsWithWork(
     campaigns,
     itemsInGroup(work, groups, value.groupId ?? rootId).map(
@@ -433,7 +523,7 @@ export function workFilterChoices<
     below,
     campaigns: campaignOptions,
     showRoot: rootOptions.length > 1,
-    showSub: below.length > 1,
+    showSub: subgroupNarrows(work, groups, value, rootId, below),
     showCampaign: campaignOptions.length > 1,
     rootId,
   };

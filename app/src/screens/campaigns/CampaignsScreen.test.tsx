@@ -189,7 +189,10 @@ it('cascades root → Group below over managed Groups only, carrying the Group i
   show('/administrare/campanii?stare=inactive');
   await openFilters(user);
   const root = screen.getByRole('combobox', { name: 'Grup principal' });
-  expect(screen.getByRole('combobox', { name: 'Subgrup' })).toBeDisabled();
+  // Before a root is chosen, the Subgrup offers every managed Group below one (#919).
+  await user.click(screen.getByRole('combobox', { name: 'Subgrup' }));
+  expect(await optionTexts()).toEqual(['Subechipa· Echipa']);
+  await user.keyboard('{Escape}');
   await user.click(root);
   // The topmost managed Groups; the unmanaged Educațional names Echipa's parent only.
   expect(await optionTexts()).toEqual(['Echipa· Educațional', 'Tineret']);
@@ -203,6 +206,17 @@ it('cascades root → Group below over managed Groups only, carrying the Group i
   expect(
     await screen.findByRole('heading', { name: 'Subechipa · Echipa' }),
   ).toBeVisible();
+});
+it('routes to a Subgrup chosen before any root, and shows its root (#919)', async () => {
+  const user = userEvent.setup();
+  show('/administrare/campanii?de_la=2026-09-01');
+  await openFilters(user);
+  await user.click(screen.getByRole('combobox', { name: 'Subgrup' }));
+  await user.click(await screen.findByRole('option', { name: /^Subechipa/ }));
+  expect(where()).toBe('/administrare/grupuri/3/campanii?de_la=2026-09-01');
+  expect(
+    screen.getByRole('combobox', { name: 'Grup principal' }),
+  ).toHaveTextContent('Echipa');
 });
 it('restores the cascade and the dates from the URL, and clearing the root leaves the Group', async () => {
   const user = userEvent.setup();
