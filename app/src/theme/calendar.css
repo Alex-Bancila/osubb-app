@@ -684,18 +684,12 @@
   margin: 0;
 }
 
-.event-attendance-label,
-.event-attendance-toggle {
+/* The label reads as the section's heading; the toggle (a ghost button) takes
+   the same type through its utility classes, which win over this sheet. */
+.event-attendance-label {
   color: var(--text);
   font-size: var(--fs-sm);
   font-weight: var(--fw-extrabold);
-}
-
-/* A ghost button that reads as the section's heading: flush with the card's
-   text, its target still 44 px tall. */
-.event-attendance-toggle {
-  margin-inline-start: calc(-1 * var(--s-2));
-  padding-inline: var(--s-2);
 }
 
 .event-attendance-tally {

@@ -54,7 +54,9 @@ export function EventAttendance({ event }: { event: EventPresentation }) {
           <Button
             type="button"
             variant="ghost"
-            className="event-attendance-toggle"
+            // Flush with the card's text, as heavy as a heading; open is said
+            // by the chevron and aria-expanded, not by a filled pill.
+            className="event-attendance-toggle -ms-2 px-2 text-sm font-extrabold text-foreground aria-expanded:bg-transparent"
             aria-expanded={open}
             aria-controls={listId}
             onClick={() => setOpen((current) => !current)}

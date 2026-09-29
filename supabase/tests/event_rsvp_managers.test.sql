@@ -31,11 +31,11 @@ insert into pg_temp.fixture_projects (name, leader_id, created_by) values
   ('RSVP A #934', '93400000-0000-0000-0000-000000000002', '93400000-0000-0000-0000-000000000001'),
   ('RSVP B #934', null, '93400000-0000-0000-0000-000000000001');
 insert into pg_temp.fixture_project_members (project_id, member_id, project_role)
-select id, '93400000-0000-0000-0000-000000000003', 'responsible' from pg_temp.fixture_projects where name = 'RSVP A #934'
+select id, '93400000-0000-0000-0000-000000000003'::uuid, 'responsible' from pg_temp.fixture_projects where name = 'RSVP A #934'
 union all
-select id, '93400000-0000-0000-0000-000000000004', 'member' from pg_temp.fixture_projects where name = 'RSVP A #934'
+select id, '93400000-0000-0000-0000-000000000004'::uuid, 'member' from pg_temp.fixture_projects where name = 'RSVP A #934'
 union all
-select id, '93400000-0000-0000-0000-000000000009', 'responsible' from pg_temp.fixture_projects where name = 'RSVP B #934';
+select id, '93400000-0000-0000-0000-000000000009'::uuid, 'responsible' from pg_temp.fixture_projects where name = 'RSVP B #934';
 insert into pg_temp.fixture_teams (id, name, dept_id) values ('t934', 'Echipa RSVP #934', 'edu');
 insert into pg_temp.fixture_member_departments (member_id, dept_id) values
   ('93400000-0000-0000-0000-000000000010', 'edu');
