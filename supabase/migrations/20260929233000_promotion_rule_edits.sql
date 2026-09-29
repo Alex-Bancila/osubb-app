@@ -30,8 +30,11 @@
 -- then the rule's row `for no key update` (the parent row of the log it
 -- writes -- conventions section 2), so a change never lands between a run's
 -- read of the tenure (the ranking) and its read of enabled (the candidates).
--- The daily job (52, 1) reads the time rule once, in one statement, and takes
--- no rule lock; a change commits either before its read or after it.
+-- It then takes the daily job's pg_advisory_xact_lock(52, 1), so a change
+-- never commits between the job's detection (private.detect_promotions) and
+-- its application of what it detected: an edit applies from the next daily
+-- run. The job takes (52, 1) alone and never (47, 1), so the order
+-- (47, 1) -> (52, 1) -> the rule row cannot deadlock with it.
 
 -- ---------------------------------------------------------------------------
 -- 1. The log learns rule edits.
@@ -127,8 +130,10 @@ begin
   end if;
 
   -- 3. Serialised with every run and every threshold or share edit, in their
-  --    lock order: (47, 1), then the rule's row.
+  --    lock order: (47, 1), the daily job's (52, 1), then the rule's row.
   perform pg_catalog.pg_advisory_xact_lock(47, 1);
+  -- The daily job's lock: never between its detection and its application.
+  perform pg_catalog.pg_advisory_xact_lock(52, 1);
   select * into v_rule
     from public.promotion_rules as rule
    where rule.id = p_rule_id
@@ -169,7 +174,7 @@ end;
 $$;
 
 comment on function private.update_promotion_rule_impl(bigint, integer, boolean) is
-  '#935: body of public.update_promotion_rule. PT400 invalid_tenure_months (null, below 0 or above 120), invalid_promotion_rule_enabled (null) before the gate; private.require_active_member() and live level >= 6, every refusal 42501 promotion_rule_manage_forbidden; pg_advisory_xact_lock(47, 1), shared with run_role_evaluation, set_promotion_threshold and set_evaluation_percent, then the rule''s row for no key update -- PT404 promotion_rule_not_found for an unknown or null id; PT409 nothing_to_update when both values are unchanged. Writes one promotion_threshold_changes row per changed value (field tenure: months; field enabled: 0 off, 1 on; source manual, changed_by the caller, promotion_rule_id the rule, no kind), then both values; returns the rule.';
+  '#935: body of public.update_promotion_rule. PT400 invalid_tenure_months (null, below 0 or above 120), invalid_promotion_rule_enabled (null) before the gate; private.require_active_member() and live level >= 6, every refusal 42501 promotion_rule_manage_forbidden; pg_advisory_xact_lock(47, 1), shared with run_role_evaluation, set_promotion_threshold and set_evaluation_percent, then the daily job''s (52, 1), then the rule''s row for no key update -- PT404 promotion_rule_not_found for an unknown or null id; PT409 nothing_to_update when both values are unchanged. Writes one promotion_threshold_changes row per changed value (field tenure: months; field enabled: 0 off, 1 on; source manual, changed_by the caller, promotion_rule_id the rule, no kind), then both values; returns the rule.';
 
 create function public.update_promotion_rule(
   p_rule_id bigint,

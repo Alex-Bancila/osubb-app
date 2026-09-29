@@ -6,7 +6,7 @@
 -- rule); the daily job and a Voluntar Activ Role Evaluation reading the
 -- edited values.
 --
--- In order: a held-lock probe of (47, 1), first -- before this transaction
+-- In order: held-lock probes of (47, 1) and (52, 1), first -- before this transaction
 -- takes the lock or writes a row the remote session would then wait on
 -- (which would make the probe pass without the advisory lock); the
 -- functions and their privileges; the values, answered before the gate; the
@@ -47,7 +47,8 @@
 --     one enabled row";
 --   * the update removed -> "the time rule now asks 2 months" and "the daily
 --     job ... promotes R1".
---   (The held-lock probe runs in a remote session, which sees only committed
+--   (The held-lock probes of (47, 1) and (52, 1) run in a remote session,
+--   which sees only committed
 --   code, so it was not run as a mutation: without the (47, 1) call the
 --   remote change meets no held lock and completes, so the probe
 --   discriminates.)
@@ -58,7 +59,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(57);
+select plan(58);
 
 -- ==================== 1. The lock ====================
 
@@ -97,6 +98,21 @@ select throws_ok(
        as result (id text) $$,
   '55P03', 'canceling statement due to lock timeout',
   'a rule edit waits on the (47, 1) advisory lock a run_role_evaluation call or a threshold or share edit holds');
+select extensions.dblink_exec('pr_retry', 'rollback;');
+select extensions.dblink_exec('pr_lock', 'rollback;');
+-- The daily job's (52, 1): an edit never commits between its detection and
+-- its application.
+select extensions.dblink_exec('pr_lock',
+  'begin; do $lock$ begin perform pg_catalog.pg_advisory_xact_lock(52, 1); end $lock$;');
+select extensions.dblink_exec('pr_retry', format(
+  'begin; set local lock_timeout = ''250ms''; select set_config(''request.jwt.claims'', %L, true); set local role authenticated;',
+  current_setting('request.jwt.claims')));
+select throws_ok(
+  $$ select * from extensions.dblink('pr_retry',
+       'select (public.update_promotion_rule((select id from public.promotion_rules where kind = ''time''), 7, true)).id::text')
+       as result (id text) $$,
+  '55P03', 'canceling statement due to lock timeout',
+  'a rule edit waits on the (52, 1) advisory lock the daily osubb-apply-promotions run holds');
 select extensions.dblink_exec('pr_retry', 'rollback;');
 select extensions.dblink_exec('pr_lock', 'rollback;');
 select extensions.dblink_disconnect('pr_retry');
