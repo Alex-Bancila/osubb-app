@@ -1,11 +1,21 @@
-import { useId, useMemo, useState, type FormEvent } from 'react';
 import {
-  FileSignature,
-  Landmark,
-  UsersRound,
-  type LucideIcon,
-} from 'lucide-react';
-import { PageGrid, Panel } from '../../components/layout';
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
+import { ExternalLink } from 'lucide-react';
+import { cn } from 'cn';
+import {
+  focusRingClass,
+  PageGrid,
+  Panel,
+  rowListClass,
+  SubHeading,
+} from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
@@ -31,130 +41,55 @@ const control =
   'h-11 w-full min-w-0 rounded-lg border border-border bg-background px-4 text-sm dark:border-input dark:bg-input/30';
 
 type Save = (change: OrgSettingChange) => Promise<void>;
+type SettingKey = OrgSettingChange['key'];
+
+/** The receipt every setting shows after a save (#923). */
+const SAVED_RECEIPT = 'Setare salvată.';
+const SAVE_FAILED = 'Nu am putut salva setarea. Reîncearcă.';
 
 /* ------------------------------------------------------------------------ */
-/* Formular de adeziune                                                      */
+/* The settings, by purpose (#923). Each sentence says what the setting      */
+/* really does, checked against the command or migration that reads it.      */
 /* ------------------------------------------------------------------------ */
 
-function AdherenceFormPanel({
-  current,
-  disabled,
-  onSave,
-}: {
-  current: string | null;
-  disabled: boolean;
-  onSave: Save;
-}) {
-  const inputId = useId();
-  const hintId = useId();
-  const currentUrl = safeHttpUrl(current);
-  const [url, setUrl] = useState(current ?? '');
-  const [message, setMessage] = useState<string | null>(null);
-  const form = useFormValidation(
-    adherenceFormSchema,
-    { url },
-    adherenceFormFieldForReason,
-  );
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setMessage(null);
-    const values = form.validate();
-    if (!values) return;
-    try {
-      await onSave({ key: 'adherence_form_url', value: values.url });
-      setMessage(
-        values.url === null
-          ? 'Adresa formularului a fost ștearsă.'
-          : 'Adresa formularului a fost salvată.',
-      );
-    } catch (failure) {
-      form.fail(failure, 'Nu am putut salva setarea. Reîncearcă.');
-    }
-  }
-
-  return (
-    <Panel
-      eyebrow="Roluri"
-      icon={FileSignature}
-      title="Formular de adeziune"
-      description="Linkul pe care îl primește un membru promovat Voluntar Activ."
-    >
-      {/* The saved address is the field's value: shown once (AD4). */}
-      <form onSubmit={submit} noValidate className="flex flex-col gap-2">
-        <label htmlFor={inputId} className="text-sm font-medium">
-          Adresa formularului
-        </label>
-        <input
-          id={inputId}
-          type="url"
-          inputMode="url"
-          className={control}
-          value={url}
-          disabled={disabled}
-          onChange={(event) => setUrl(event.target.value)}
-          {...form.field('url', hintId)}
-        />
-        <p id={hintId} className="m-0 text-sm text-muted-foreground">
-          Începe cu http:// sau https://. Lasă gol ca să ștergi adresa.
-          {currentUrl && (
-            <>
-              {' '}
-              <a
-                href={currentUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium text-foreground underline underline-offset-4"
-              >
-                Deschide formularul salvat
-              </a>
-            </>
-          )}
-        </p>
-        <FieldError {...form.errorProps('url')} />
-        <FieldError>{form.formError}</FieldError>
-        <Button type="submit" block className="self-start" disabled={disabled}>
-          Salvează
-        </Button>
-        {message && (
-          <p role="status" className="m-0">
-            {message}
-          </p>
-        )}
-      </form>
-    </Panel>
-  );
-}
-
-/* ------------------------------------------------------------------------ */
-/* A setting that names a Group: the Adunarea Generală (#512) and the board  */
-/* (#824, decision D1)                                                       */
-/* ------------------------------------------------------------------------ */
-
-type GroupSetting = {
-  key: 'adunarea_generala_group_id' | 'board_group_id';
-  icon: LucideIcon;
-  title: string;
-  description: string;
+type Setting = {
+  key: SettingKey;
   label: string;
-  saved: string;
-  cleared: string;
+  /** What the setting does, in one sentence. */
+  effect: string;
+  /** What happens while it is unset. */
+  unset: string;
+};
+
+type GroupSetting = Setting & {
+  key: 'adunarea_generala_group_id' | 'board_group_id';
   /** Which active Groups can hold the setting at all (B59). */
   fits: (group: AdminGroup) => boolean;
 };
 
+const ADHERENCE_FORM: Setting = {
+  key: 'adherence_form_url',
+  label: 'Formular de adeziune',
+  // `set_member_role` puts the address in the Notification of a Member
+  // promoted Voluntar Activ (#681, #826); unset, it says BC sends the form.
+  effect:
+    'Membrii promovați Voluntar Activ primesc acest link în notificare, ca să completeze adeziunea.',
+  unset:
+    'Membrii promovați nu primesc niciun link: află doar că formularul vine de la BC.',
+};
+
 const ADUNAREA_GENERALA: GroupSetting = {
   key: 'adunarea_generala_group_id',
-  icon: Landmark,
-  title: 'Adunarea Generală',
-  description:
-    'Managerii și responsabilii acestui grup văd clasamentul complet al evaluărilor de rol.',
   label: 'Grupul Adunării Generale',
-  saved: 'Grupul Adunării Generale a fost salvat.',
-  cleared: 'Grupul Adunării Generale a fost șters din setări.',
+  // `private.can_read_evaluation_rankings` (#512): the Group's Managers and
+  // Responsibles and those of its ancestors; unset, only level 6 and up.
+  // Ruling R28: no Periods; Retention Signals stay with level 5 and up (F-14).
+  effect:
+    'Managerii și responsabilii acestui grup și ai grupurilor de deasupra lui văd clasamentul complet al evaluărilor de rol.',
+  unset: 'Doar BC și Moderatorul văd clasamentul complet.',
   // The Adunarea Generală's shape (CONTEXT.md): a public top-level Team with
   // Automatic Membership at Minimum Level 3 — not OSUBB, a Department or a
-  // Project, which the list used to offer too.
+  // Project.
   fits: (group) =>
     group.category === 'team' &&
     group.parent_id === null &&
@@ -166,17 +101,359 @@ const ADUNAREA_GENERALA: GroupSetting = {
 
 const BOARD: GroupSetting = {
   key: 'board_group_id',
-  icon: UsersRound,
-  title: 'Biroul de Conducere',
-  description:
-    'Titlul fiecărui responsabil din acest grup privat apare pe Profil, la Funcția în OSUBB.',
   label: 'Grupul Biroului de Conducere',
-  saved: 'Grupul Biroului de Conducere a fost salvat.',
-  cleared: 'Grupul Biroului de Conducere a fost șters din setări.',
+  // #824: only Profil reads it, for BC/BCE's "Funcția în OSUBB", and falls
+  // back to the Role label; it confers nothing.
+  effect:
+    'Titlul fiecărui responsabil din acest grup privat apare pe Profilul lui, la Funcția în OSUBB.',
+  unset: 'Profilul membrilor BC și BCE arată rolul, nu un titlu.',
   fits: (group) => group.is_private,
 };
 
-function GroupSettingPanel({
+/* ------------------------------------------------------------------------ */
+/* One setting row: label, effect, the value in force and one edit pattern.  */
+/* ------------------------------------------------------------------------ */
+
+type EditorProps = {
+  labelId: string;
+  disabled: boolean;
+  /** Close the editor; `saved` shows the receipt. */
+  onDone: (saved: boolean) => void;
+};
+
+function SettingRow({
+  setting,
+  value,
+  disabled,
+  renderEditor,
+}: {
+  setting: Setting;
+  /** The value in force, read-only; `null` reads "Nesetat". */
+  value: ReactNode | null;
+  disabled: boolean;
+  renderEditor: (props: EditorProps) => ReactNode;
+}) {
+  const labelId = useId();
+  const [editing, setEditing] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const editButton = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(false);
+
+  // Back from the editor, focus returns to the button that opened it.
+  useEffect(() => {
+    if (wasEditing.current && !editing) editButton.current?.focus();
+    wasEditing.current = editing;
+  }, [editing]);
+
+  return (
+    <li
+      data-slot="setting-row"
+      data-setting={setting.key}
+      data-editing={editing || undefined}
+      aria-labelledby={labelId}
+      className={cn(
+        'grid gap-x-6 gap-y-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,15rem)_auto] sm:items-start',
+        editing && 'bg-muted/40',
+      )}
+    >
+      <div className="flex min-w-0 flex-col gap-1">
+        <SubHeading as="h3" variant="label" id={labelId}>
+          {setting.label}
+        </SubHeading>
+        <p className="m-0 text-[length:var(--fs-sm)] text-muted-foreground">
+          {setting.effect}
+        </p>
+      </div>
+      {/* Phone: the value and its button share a line; from sm, grid cells. */}
+      <div className="flex min-w-0 items-start justify-between gap-3 sm:contents">
+        <div
+          data-slot="setting-value"
+          className="flex min-w-0 flex-1 flex-col gap-1"
+        >
+          <span className="sr-only">Valoare actuală: </span>
+          {value === null ? (
+            <>
+              <span className="inline-flex min-h-7 w-fit items-center rounded-full border border-dashed border-border px-3 text-sm font-semibold text-muted-foreground">
+                Nesetat
+              </span>
+              <p className="m-0 text-[length:var(--fs-sm)] text-muted-foreground">
+                {setting.unset}
+              </p>
+            </>
+          ) : (
+            <span className="min-w-0 text-sm leading-7 font-medium text-foreground">
+              {value}
+            </span>
+          )}
+          {/* Always mounted, so the receipt is announced when it appears. */}
+          <p role="status" className="m-0 text-sm font-medium empty:hidden">
+            {saved && !editing ? SAVED_RECEIPT : null}
+          </p>
+        </div>
+        {!editing && (
+          <Button
+            ref={editButton}
+            variant="outline"
+            aria-label={`Editează ${setting.label}`}
+            disabled={disabled}
+            onClick={() => {
+              setSaved(false);
+              setEditing(true);
+            }}
+          >
+            Editează
+          </Button>
+        )}
+      </div>
+      {editing && (
+        <div className="min-w-0 sm:col-span-full">
+          {renderEditor({
+            labelId,
+            disabled,
+            onDone: (didSave) => {
+              setSaved(didSave);
+              setEditing(false);
+            },
+          })}
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** Salvează and Renunță, the same in every editor. */
+function EditorActions({
+  changed,
+  pending,
+  onCancel,
+}: {
+  changed: boolean;
+  pending: boolean;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button
+        type="submit"
+        className="flex-1 sm:flex-none"
+        disabled={!changed || pending}
+      >
+        Salvează
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        className="flex-1 sm:flex-none"
+        disabled={pending}
+        onClick={onCancel}
+      >
+        Renunță
+      </Button>
+    </div>
+  );
+}
+
+/** Focus the editor's control when it opens. */
+function useFocusOnOpen() {
+  const form = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    form.current?.querySelector<HTMLElement>('input, select')?.focus();
+  }, []);
+  return form;
+}
+
+/* ------------------------------------------------------------------------ */
+/* The adherence form's address                                              */
+/* ------------------------------------------------------------------------ */
+
+function AdherenceFormEditor({
+  current,
+  onSave,
+  labelId,
+  disabled,
+  onDone,
+}: EditorProps & { current: string | null; onSave: Save }) {
+  const hintId = useId();
+  const formRef = useFocusOnOpen();
+  const [url, setUrl] = useState(current ?? '');
+  const [pending, setPending] = useState(false);
+  const form = useFormValidation(
+    adherenceFormSchema,
+    { url },
+    adherenceFormFieldForReason,
+  );
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const values = form.validate();
+    if (!values) return;
+    setPending(true);
+    try {
+      await onSave({ key: 'adherence_form_url', value: values.url });
+      onDone(true);
+    } catch (failure) {
+      form.fail(failure, SAVE_FAILED);
+      setPending(false);
+    }
+  }
+
+  return (
+    <form
+      ref={formRef}
+      onSubmit={submit}
+      noValidate
+      aria-labelledby={labelId}
+      className="flex max-w-xl flex-col gap-3"
+    >
+      <input
+        type="url"
+        inputMode="url"
+        aria-labelledby={labelId}
+        placeholder="https://"
+        className={control}
+        value={url}
+        disabled={disabled || pending}
+        onChange={(event) => setUrl(event.target.value)}
+        {...form.field('url', current ? hintId : undefined)}
+      />
+      {/* How to clear it, only when there is something to clear. */}
+      {current && (
+        <p id={hintId} className="m-0 text-sm text-muted-foreground">
+          Lasă câmpul gol ca să nu mai trimiți niciun link.
+        </p>
+      )}
+      <FieldError {...form.errorProps('url')} />
+      <FieldError>{form.formError}</FieldError>
+      <EditorActions
+        changed={url.trim() !== (current ?? '')}
+        pending={pending || disabled}
+        onCancel={() => onDone(false)}
+      />
+    </form>
+  );
+}
+
+function AdherenceFormValue({ current }: { current: string }) {
+  const href = safeHttpUrl(current);
+  // A value written outside the server's guard is shown, never linked.
+  if (!href)
+    return (
+      <span className="block truncate" title={current}>
+        {current}
+      </span>
+    );
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={current}
+      className={cn(
+        'inline-flex max-w-full items-center gap-1.5 rounded-sm underline underline-offset-4',
+        focusRingClass,
+      )}
+    >
+      <span className="truncate">
+        {current.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+      </span>
+      <ExternalLink aria-hidden="true" className="size-3.5 shrink-0" />
+      <span className="sr-only"> (se deschide într-o filă nouă)</span>
+    </a>
+  );
+}
+
+/* ------------------------------------------------------------------------ */
+/* A setting that names a Group: the Adunarea Generală (#512) and the board  */
+/* (#824, decision D1)                                                       */
+/* ------------------------------------------------------------------------ */
+
+function GroupEditor({
+  setting,
+  current,
+  groups,
+  onSave,
+  labelId,
+  disabled,
+  onDone,
+}: EditorProps & {
+  setting: GroupSetting;
+  current: string | null;
+  groups: AdminGroup[];
+  onSave: Save;
+}) {
+  const formRef = useFocusOnOpen();
+  const [chosen, setChosen] = useState(current ?? '');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const currentGroup = groups.find((group) => String(group.id) === current);
+  const choices = useMemo(
+    () =>
+      groups
+        .filter((group) => group.status === 'active' && setting.fits(group))
+        .sort((a, b) => a.name.localeCompare(b.name, 'ro')),
+    [groups, setting],
+  );
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    setPending(true);
+    try {
+      // A blank choice clears the setting on the server.
+      await onSave({ key: setting.key, value: chosen === '' ? null : chosen });
+      onDone(true);
+    } catch (failure) {
+      setError(describeFailure(failure, SAVE_FAILED).message);
+      setPending(false);
+    }
+  }
+
+  return (
+    <form
+      ref={formRef}
+      onSubmit={submit}
+      aria-labelledby={labelId}
+      className="flex max-w-xl flex-col gap-3"
+    >
+      <NativeSelect
+        aria-labelledby={labelId}
+        value={chosen}
+        disabled={disabled || pending}
+        onChange={(event) => {
+          setChosen(event.target.value);
+          setError(null);
+        }}
+      >
+        <NativeSelectOption value="">
+          {current === null ? 'Alege un grup' : 'Niciun grup'}
+        </NativeSelectOption>
+        {current !== null &&
+          !choices.some((group) => String(group.id) === current) && (
+            <NativeSelectOption value={current}>
+              {currentGroup?.name ?? 'Grupul actual'}
+            </NativeSelectOption>
+          )}
+        {choices.map((group) => (
+          <NativeSelectOption key={group.id} value={String(group.id)}>
+            {group.name}
+          </NativeSelectOption>
+        ))}
+      </NativeSelect>
+      {error && (
+        <p role="alert" className="m-0 text-sm text-destructive">
+          {error}
+        </p>
+      )}
+      <EditorActions
+        changed={chosen !== (current ?? '')}
+        pending={pending || disabled}
+        onCancel={() => onDone(false)}
+      />
+    </form>
+  );
+}
+
+function GroupSettingRow({
   setting,
   current,
   disabled,
@@ -187,115 +464,46 @@ function GroupSettingPanel({
   disabled: boolean;
   onSave: Save;
 }) {
-  const selectId = useId();
   const groups = useAdminGroups();
-  // null = untouched, so an explicit blank choice ("Niciun grup") is not
-  // mistaken for "keep the current Group".
-  const [draft, setDraft] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const currentGroup = groups.data?.find(
     (group) => String(group.id) === current,
   );
-  const choices = useMemo(
-    () =>
-      (groups.data ?? [])
-        .filter((group) => group.status === 'active' && setting.fits(group))
-        .sort((a, b) => a.name.localeCompare(b.name, 'ro')),
-    [groups.data, setting],
-  );
-  const chosen = draft ?? current ?? '';
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setMessage(null);
-    setError(null);
-    try {
-      // A blank choice clears the setting on the server.
-      await onSave({ key: setting.key, value: chosen === '' ? null : chosen });
-      // The saved value comes back as `current`; a stale draft must not win.
-      setDraft(null);
-      setMessage(chosen === '' ? setting.cleared : setting.saved);
-    } catch (failure) {
-      setError(
-        describeFailure(failure, 'Nu am putut salva setarea. Reîncearcă.')
-          .message,
-      );
-    }
-  }
-
   return (
-    <Panel
-      eyebrow="Grupuri"
-      icon={setting.icon}
-      title={setting.title}
-      description={setting.description}
-    >
-      {groups.isPending ? (
-        <Loading label="Se încarcă grupurile…" />
-      ) : groups.isError ? (
-        <ErrorState text="Nu am putut încărca grupurile." />
-      ) : (
-        // The Group in force is the select's value: named once (B59).
-        <form onSubmit={submit} className="flex flex-col gap-2">
-          <label htmlFor={selectId} className="text-sm font-medium">
-            {setting.label}
-          </label>
-          <NativeSelect
-            id={selectId}
-            value={chosen}
-            disabled={disabled}
-            onChange={(event) => {
-              setDraft(event.target.value);
-              setMessage(null);
-              setError(null);
-            }}
-          >
-            <NativeSelectOption value="">
-              {current === null ? 'Alege un grup' : 'Niciun grup'}
-            </NativeSelectOption>
-            {current !== null &&
-              !choices.some((group) => String(group.id) === current) && (
-                <NativeSelectOption value={current}>
-                  {currentGroup?.name ?? 'Grupul actual'}
-                </NativeSelectOption>
-              )}
-            {choices.map((group) => (
-              <NativeSelectOption key={group.id} value={String(group.id)}>
-                {group.name}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-          {error && (
-            <p role="alert" className="m-0 text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          <Button
-            type="submit"
-            block
-            className="self-start"
-            disabled={disabled || chosen === (current ?? '')}
-          >
-            Salvează
-          </Button>
-          {message && (
-            <p role="status" className="m-0">
-              {message}
-            </p>
-          )}
-        </form>
-      )}
-    </Panel>
+    <SettingRow
+      setting={setting}
+      value={
+        current === null
+          ? null
+          : groups.isPending
+            ? 'Se încarcă…'
+            : (currentGroup?.name ?? 'Grup indisponibil')
+      }
+      disabled={disabled || groups.isPending}
+      renderEditor={(props) =>
+        groups.isError ? (
+          <ErrorState text="Nu am putut încărca grupurile." />
+        ) : (
+          <GroupEditor
+            {...props}
+            setting={setting}
+            current={current}
+            groups={groups.data ?? []}
+            onSave={onSave}
+          />
+        )
+      }
+    />
   );
 }
 
 /**
- * Administrare → Setări (#825): the organization settings BC keeps — the
- * adherence form a new Voluntar Activ receives, the Group that is the
- * Adunarea Generală (#681, #512) and the Private Group whose Responsibles'
- * titles are the board titles on Profil (#824). Mounted behind `manageRoles`;
- * `set_org_setting` decides again on the server (level 6).
+ * Administrare → Setări (#825, #923): the organization settings BC keeps,
+ * grouped by what they are for. Each row names its effect and the value in
+ * force ("Nesetat" and what that means when empty); "Editează" opens the same
+ * inline editor everywhere — Salvează, enabled once the value changed, and
+ * Renunță. Mounted behind `manageRoles`; `set_org_setting` decides again on
+ * the server (level 6). The Role Evaluation thresholds and shares are edited
+ * in Evaluări de rol (R28, R30), which the first panel links to.
  */
 export default function AdminSettingsTab() {
   const settings = useOrgSettings();
@@ -312,27 +520,46 @@ export default function AdminSettingsTab() {
         onRetry={() => void settings.refetch()}
       />
     );
+  const value = (key: SettingKey) => settings.data.get(key) ?? null;
+  const adherence = value('adherence_form_url');
   return (
-    // One column at reading width: a select or an address needs the room a
-    // third of the page never gave it (AD4).
-    <PageGrid columns={1} className="max-w-3xl">
-      <AdherenceFormPanel
-        current={settings.data.get('adherence_form_url') ?? null}
-        disabled={change.isPending}
-        onSave={save}
-      />
-      <GroupSettingPanel
-        setting={ADUNAREA_GENERALA}
-        current={settings.data.get('adunarea_generala_group_id') ?? null}
-        disabled={change.isPending}
-        onSave={save}
-      />
-      <GroupSettingPanel
-        setting={BOARD}
-        current={settings.data.get('board_group_id') ?? null}
-        disabled={change.isPending}
-        onSave={save}
-      />
+    <PageGrid columns={1}>
+      <Panel
+        title="Promovări și evaluări"
+        action={{ label: 'Praguri și procente', to: '/administrare/evaluari' }}
+        flush
+      >
+        <ul className={rowListClass}>
+          <SettingRow
+            setting={ADHERENCE_FORM}
+            value={adherence && <AdherenceFormValue current={adherence} />}
+            disabled={change.isPending}
+            renderEditor={(props) => (
+              <AdherenceFormEditor
+                {...props}
+                current={adherence}
+                onSave={save}
+              />
+            )}
+          />
+          <GroupSettingRow
+            setting={ADUNAREA_GENERALA}
+            current={value('adunarea_generala_group_id')}
+            disabled={change.isPending}
+            onSave={save}
+          />
+        </ul>
+      </Panel>
+      <Panel title="Profilul membrilor" flush>
+        <ul className={rowListClass}>
+          <GroupSettingRow
+            setting={BOARD}
+            current={value('board_group_id')}
+            disabled={change.isPending}
+            onSave={save}
+          />
+        </ul>
+      </Panel>
     </PageGrid>
   );
 }
