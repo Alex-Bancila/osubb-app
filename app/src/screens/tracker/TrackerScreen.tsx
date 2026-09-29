@@ -31,7 +31,7 @@ import { TaskCardGrid } from './TaskCardGrid';
 import { PersonalScoreHeader } from './PersonalScoreHeader';
 import type { TaskPresentationRow } from './task-presentation';
 import { TaskActionSuccess } from './TaskActionSuccess';
-import type { OnGaveUp } from './TaskGiveUpControl';
+import type { OnGaveUp } from './give-up-receipt';
 
 /** The loading and retry states every Tracker list shares. */
 function TaskQueryStates<Row>({

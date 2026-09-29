@@ -29,11 +29,8 @@ import { TaskActionSuccess } from './TaskActionSuccess';
 import { TaskInterestControls } from './TaskInterestControls';
 import { TaskQueueStatus } from './TaskQueueStatus';
 import { TaskStageSummary } from './TaskStageSummary';
-import {
-  gaveUpReceipt,
-  TaskGiveUpControl,
-  type OnGaveUp,
-} from './TaskGiveUpControl';
+import { TaskGiveUpControl } from './TaskGiveUpControl';
+import { gaveUpReceipt, type OnGaveUp } from './give-up-receipt';
 import { useReceiptTurn } from './receipt-turn';
 import { SubmitForReviewDialog } from './SubmitForReviewDialog';
 import { SubmissionNote } from './SubmissionNote';

@@ -3,7 +3,7 @@ import { PageGrid } from '../../components/layout';
 import { useAuth } from '../../lib/auth';
 import { useTaskProgress } from '../../queries/task-progress';
 import { TaskCard } from './TaskCard';
-import type { OnGaveUp } from './TaskGiveUpControl';
+import type { OnGaveUp } from './give-up-receipt';
 import {
   toTaskPresentation,
   type TaskPresentationRow,
