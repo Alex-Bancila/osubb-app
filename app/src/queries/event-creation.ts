@@ -17,6 +17,7 @@ import type {
   EventFormGroup,
   EventFormOptions,
 } from '../screens/calendar/event-form-model';
+import { announcementOrigins } from '../screens/announcements/announcement-origins';
 import { fetchCampaigns } from './campaigns';
 import { keys } from './keys';
 import { fetchMyGroups, type MyGroup } from './my-groups';
@@ -73,6 +74,13 @@ export function buildEventFormOptions(
     groups: groups.map(toFormGroup),
     groupNames: active.map((group) => ({ id: group.id, name: group.name })),
     campaigns: [...campaigns],
+    // #909: the compose sheet's own Origin rule, so the Event form offers
+    // "Creează și un anunț" exactly where "Anunț nou" would let them publish.
+    announceGroupIds: announcementOrigins(
+      readable,
+      mine,
+      capabilities.createTopLevelGroups === true,
+    ).map((group) => group.id),
   };
 }
 
@@ -120,6 +128,7 @@ export async function createEvent(draft: EventDraft) {
     p_description: draft.description,
     p_min_level: draft.minLevel,
     p_campaign_id: draft.campaignId,
+    p_announce: draft.announce,
   };
   // PostgreSQL accepts NULL for optional values while generated optional RPC
   // properties omit nullability. Keep that generated-type mismatch local.
@@ -134,7 +143,14 @@ export async function createEvent(draft: EventDraft) {
 export function createEventMutationOptions(client: QueryClient) {
   return {
     mutationFn: createEvent,
-    onSuccess: () => client.invalidateQueries({ queryKey: keys.events.all }),
+    onSuccess: (_created: unknown, draft: EventDraft) =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: keys.events.all }),
+        // #909: the Announcement published with it belongs in Anunțuri now.
+        draft.announce
+          ? client.invalidateQueries({ queryKey: keys.announcements.all })
+          : undefined,
+      ]),
   };
 }
 

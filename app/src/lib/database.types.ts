@@ -84,10 +84,12 @@ export type Database = {
           body: string
           category: string | null
           created_by: string | null
+          deadline: string | null
           form_label: string | null
           form_url: string | null
           group_id: number
           id: number
+          min_level: number
           pinned: boolean
           priority: Database["public"]["Enums"]["announce_priority"]
           published_at: string
@@ -99,10 +101,12 @@ export type Database = {
           body: string
           category?: string | null
           created_by?: string | null
+          deadline?: string | null
           form_label?: string | null
           form_url?: string | null
           group_id: number
           id?: never
+          min_level?: number
           pinned?: boolean
           priority?: Database["public"]["Enums"]["announce_priority"]
           published_at?: string
@@ -114,10 +118,12 @@ export type Database = {
           body?: string
           category?: string | null
           created_by?: string | null
+          deadline?: string | null
           form_label?: string | null
           form_url?: string | null
           group_id?: number
           id?: never
+          min_level?: number
           pinned?: boolean
           priority?: Database["public"]["Enums"]["announce_priority"]
           published_at?: string
@@ -3746,6 +3752,7 @@ export type Database = {
       }
       create_event: {
         Args: {
+          p_announce?: boolean
           p_campaign_id?: number
           p_capacity?: number
           p_description?: string

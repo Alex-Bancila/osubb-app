@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Group } from '../../queries/reference';
 import {
+  describeTermen,
+  minLevelLabel,
   countUnreadAnnouncements,
   formatAnnouncementDate,
   getUnreadCriticalAnnouncement,
@@ -80,6 +82,8 @@ function rawRow(
     form_label: null,
     form_url: null,
     published_at: '2026-09-18T15:00:00.000Z',
+    deadline: null,
+    min_level: 0,
     created_by: 'd0000000-0000-0000-0000-000000000007',
     announcement_reads: [],
     ...overrides,
@@ -537,5 +541,69 @@ describe('announcements-presentation', () => {
       ).toBe(true);
       expect(mayPinAnnouncement(orgWide, none)).toBe(false);
     });
+  });
+});
+
+describe('describeTermen (#909)', () => {
+  // Tuesday 29 September 2026, 12:00 in Romania (UTC+3).
+  const now = new Date('2026-09-29T09:00:00.000Z');
+
+  it('reads a later Termen as the day and time in Romania', () => {
+    expect(describeTermen('2026-10-02T20:59:00.000Z', now)).toEqual({
+      state: 'upcoming',
+      label: 'Termen',
+      when: 'vineri, 2 octombrie, 23:59',
+    });
+  });
+
+  it('emphasises a Termen within 48 hours and says today or tomorrow', () => {
+    expect(describeTermen('2026-09-29T20:59:00.000Z', now)).toEqual({
+      state: 'soon',
+      label: 'Termen',
+      when: 'azi, 23:59',
+    });
+    expect(describeTermen('2026-09-30T15:40:00.000Z', now)?.when).toBe(
+      'mâine, 18:40',
+    );
+    // 47 hours away, the day after tomorrow: soon, but named by its day.
+    expect(describeTermen('2026-10-01T08:00:00.000Z', now)).toMatchObject({
+      state: 'soon',
+      when: 'joi, 1 octombrie, 11:00',
+    });
+    expect(describeTermen('2026-10-01T09:00:01.000Z', now)?.state).toBe(
+      'upcoming',
+    );
+  });
+
+  it('reads a passed Termen as expired, never as today', () => {
+    expect(describeTermen('2026-09-29T08:00:00.000Z', now)).toEqual({
+      state: 'expired',
+      label: 'Termen expirat',
+      when: 'marți, 29 septembrie, 11:00',
+    });
+  });
+
+  it('names the year only when it is not this one', () => {
+    expect(describeTermen('2027-01-15T10:00:00.000Z', now)?.when).toBe(
+      'vineri, 15 ianuarie 2027, 12:00',
+    );
+    expect(describeTermen('not a date', now)).toBeNull();
+  });
+});
+
+describe('minLevelLabel (#909)', () => {
+  it('says nothing for everyone and names the Role above it (R29b)', () => {
+    expect(minLevelLabel(0)).toBeNull();
+    expect(minLevelLabel(2)).toBe('Nivel minim: Voluntar Activ');
+    expect(minLevelLabel(5)).toBe('Nivel minim: BCE');
+  });
+
+  it("carries the row's level into the presentation", () => {
+    const item = toAnnouncementPresentation(
+      rawRow({ min_level: 3 }),
+      groupsById,
+    );
+    expect(item.minLevel).toBe(3);
+    expect(item.minLevelLabel).toBe('Nivel minim: Voluntar cu Drept de Vot');
   });
 });

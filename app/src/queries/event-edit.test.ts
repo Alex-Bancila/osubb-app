@@ -218,6 +218,7 @@ describe('the edit form', () => {
       description: 'Planificarea lunii.',
       minLevel: 3,
       campaignId: 3,
+      announce: false,
     });
     expect(
       eventFormValuesFor(
@@ -279,6 +280,7 @@ describe('the edit form', () => {
       description: null,
       minLevel: 3,
       campaignId: null,
+      announce: false,
     };
     expect(keepUntouchedTimes(draft, initial, initial, event())).toMatchObject({
       startsAt: '2030-10-01T15:00:31.021Z',
@@ -316,6 +318,7 @@ describe('the commands', () => {
         description: null,
         minLevel: 0,
         campaignId: 4,
+        announce: false,
       },
     });
     expect(api.rpc).toHaveBeenCalledWith('update_event', {

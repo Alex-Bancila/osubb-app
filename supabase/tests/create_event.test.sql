@@ -51,8 +51,8 @@ begin
  '{"member_role":"bc","member_level":6}'::jsonb);
 end; $$;
 select hasnt_function('public','create_event',array['text','text','text','timestamp with time zone','timestamp with time zone','text','integer','text','text','text'],'legacy overload is removed');
-select ok(not (select prosecdef from pg_proc where oid='public.create_event(text,text,bigint,timestamptz,timestamptz,text,integer,text,integer,bigint)'::regprocedure),'wrapper is invoker');
-select ok((select prosecdef from pg_proc where oid='private.create_event_impl(text,text,bigint,timestamptz,timestamptz,text,integer,text,integer,bigint)'::regprocedure),'implementation is definer');
+select ok(not (select prosecdef from pg_proc where oid='public.create_event(text,text,bigint,timestamptz,timestamptz,text,integer,text,integer,bigint,boolean)'::regprocedure),'wrapper is invoker');
+select ok((select prosecdef from pg_proc where oid='private.create_event_impl(text,text,bigint,timestamptz,timestamptz,text,integer,text,integer,bigint,boolean)'::regprocedure),'implementation is definer');
 -- #691: one signature per name -- PostgREST cannot choose between overloads.
 select is((select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
            where (n.nspname,p.proname) in (('public','create_event'),('private','create_event_impl'))),

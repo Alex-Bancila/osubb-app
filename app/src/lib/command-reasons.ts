@@ -322,6 +322,15 @@ const REASON_COPY = new Map<string, string>([
     'calendar_manage_forbidden',
     'Nu mai ai permisiunea să gestionezi evenimentele acestui grup. Reîncarcă pagina și încearcă din nou.',
   ],
+  /* ---- "Creează și un anunț" on create_event (#909) ---- */
+  [
+    'announcement_publish_forbidden',
+    'Nu ai permisiunea să publici un anunț din acest grup. Debifează „Creează și un anunț” și creează doar evenimentul.',
+  ],
+  [
+    'invalid_announcement_min_level',
+    'Alege cine vede anunțul dintre nivelurile din listă.',
+  ],
   [
     'event_min_level_below_group',
     'Nivelul ales este sub nivelul minim al grupului.',

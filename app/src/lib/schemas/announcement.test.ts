@@ -11,6 +11,7 @@ const valid = {
   body: 'Corp',
   groupId: 3,
   link: { label: '', url: '' },
+  deadline: null as string | null,
 };
 const check = (patch: Partial<typeof valid>) => {
   const result = announcementSchema.safeParse({ ...valid, ...patch });
@@ -31,7 +32,13 @@ it('trims every text, as announcements_guard_text does', () => {
     body: 'b'.repeat(2000),
     groupId: 3,
     link: { label: 'l'.repeat(60), url: 'https://osubb.ro/f' },
+    deadline: null,
   });
+  // #909: a future Termen passes as the ISO instant the form produced.
+  expect(
+    announcementSchema.parse({ ...valid, deadline: '2099-10-02T20:59:00.000Z' })
+      .deadline,
+  ).toBe('2099-10-02T20:59:00.000Z');
 });
 
 it.each([
@@ -49,6 +56,9 @@ it.each([
     { link: { label: 'Formular', url: 'osubb.ro/formular' } },
     ['link.url: link_url_invalid'],
   ],
+  // #909: announcements_guard_deadline's rule, and a wall time Romania skips.
+  [{ deadline: '2020-01-01T10:00:00.000Z' }, ['deadline: deadline_in_past']],
+  [{ deadline: '' }, ['deadline: deadline_invalid']],
 ])('refuses %j with the guard’s reason', (patch, expected) => {
   expect(check(patch)).toEqual(expected);
 });
@@ -56,7 +66,7 @@ it.each([
 it('maps every reason the announcement guard raises to its field', () => {
   expectMapComplete(
     fieldForReason,
-    ['title', 'body', 'groupId', 'link.label', 'link.url'],
+    ['title', 'body', 'groupId', 'link.label', 'link.url', 'deadline'],
     [
       'title_required',
       'title_too_short',
@@ -66,6 +76,7 @@ it('maps every reason the announcement guard raises to its field', () => {
       'link_label_too_long',
       'link_url_invalid',
       'link_url_too_long',
+      'deadline_in_past',
     ],
   );
 });
