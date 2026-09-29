@@ -94,9 +94,11 @@ do $$ begin perform pg_temp.seed_password(); end $$;
 -- request whose approval created a demo Task pins that Task; the requests go
 -- BEFORE the Tasks. `campaigns` go after them for the mirror-image reason —
 -- `tasks_campaign_id_fkey` pins a Campaign while any Task still carries it.
--- Final order: ledger → evaluations → activity → candidates → assignments →
--- requests → tasks → campaigns → events → announcements → projects → teams →
--- auth.users.
+-- Final order (#901 put the Role Evaluation graph first): Candidate/Retention
+-- Notifications → Promotion Candidates → threshold changes → Role Evaluations
+-- → settings authors → role_history → ledger → evaluations → activity →
+-- candidates → assignments → requests → tasks → campaigns → events →
+-- announcements → projects → teams → auth.users.
 
 -- Do not silently remove demo-held positions in a real Member's Group.
 do $$
@@ -115,6 +117,86 @@ begin
   end if;
 end;
 $$;
+
+-- #901: Role Evaluations and Role history before the demo profiles. None of
+-- `role_evaluations.run_by`, `promotion_candidates.member_id`/`decided_by`,
+-- `promotion_threshold_changes.changed_by`, `promotion_thresholds.updated_by`,
+-- `org_settings.updated_by` or `role_history.member_id`/`changed_by` has an
+-- `on delete` clause, so a demo persona who ran an Evaluation, edited a
+-- threshold or a share, or was promoted (by BC, or by the daily
+-- osubb-apply-promotions time rule) pins the demo cohort. Demo-owned here
+-- means: a run a demo account ran, with its Candidates, threshold hand-overs
+-- and Notifications; a Candidate or Role change of a demo Member or decided by
+-- one (the ledger's `awarded_by` rule); a threshold or share change a demo
+-- account made. The two settings tables are reference data: their rows keep
+-- their values and only forget the demo author.
+--
+-- The Candidate and Retention Signal Notifications carry no foreign key:
+-- their dedupe key `<kind>:<run>:<member>` names the run and the Member.
+delete from notifications notification
+ where notification.dedupe_key ~ '^(promotion_candidate|retention_signal):[0-9]+:[0-9a-f-]{36}$'
+   and (split_part(notification.dedupe_key, ':', 2) in (
+          select evaluation.id::text
+            from role_evaluations evaluation
+            join profiles runner on runner.id = evaluation.run_by
+           where runner.email like '%@demo.osubb')
+        or split_part(notification.dedupe_key, ':', 3) in (
+          select p.id::text from profiles p where p.email like '%@demo.osubb')
+        -- A Candidate a demo account decided goes below, so its Notification
+        -- goes with it.
+        or (notification.dedupe_key like 'promotion_candidate:%'
+            and exists (
+              select 1
+                from promotion_candidates candidate
+                join profiles decider on decider.id = candidate.decided_by
+               where decider.email like '%@demo.osubb'
+                 and candidate.role_evaluation_id::text = split_part(notification.dedupe_key, ':', 2)
+                 and candidate.member_id::text = split_part(notification.dedupe_key, ':', 3))));
+
+delete from promotion_candidates candidate
+ where exists (select 1
+                 from role_evaluations evaluation
+                 join profiles runner on runner.id = evaluation.run_by
+                where evaluation.id = candidate.role_evaluation_id
+                  and runner.email like '%@demo.osubb')
+    or exists (select 1 from profiles p
+                where p.email like '%@demo.osubb'
+                  and p.id in (candidate.member_id, candidate.decided_by));
+
+delete from promotion_threshold_changes change
+ where exists (select 1
+                 from role_evaluations evaluation
+                 join profiles runner on runner.id = evaluation.run_by
+                where evaluation.id = change.role_evaluation_id
+                  and runner.email like '%@demo.osubb')
+    or exists (select 1 from profiles p
+                where p.email like '%@demo.osubb' and p.id = change.changed_by);
+
+delete from role_evaluations evaluation
+ using profiles runner
+ where runner.id = evaluation.run_by and runner.email like '%@demo.osubb';
+
+update promotion_thresholds threshold
+   set updated_by = null
+  from profiles p
+ where p.id = threshold.updated_by and p.email like '%@demo.osubb';
+
+update org_settings setting
+   set updated_by = null
+  from profiles p
+ where p.id = setting.updated_by and p.email like '%@demo.osubb';
+
+-- `private.guard_role_history()` rejects every DELETE, as the Task history
+-- guards below do; the same owner-only window, re-enabled at once, and safe
+-- for the same reason (one transaction).
+alter table role_history disable trigger role_history_guard;
+
+delete from role_history history
+ where exists (select 1 from profiles p
+                where p.email like '%@demo.osubb'
+                  and p.id in (history.member_id, history.changed_by));
+
+alter table role_history enable trigger role_history_guard;
 
 -- Ledger and Assignment history before Tasks: neither Task reference
 -- cascades. Delete only history for demo-owned Tasks, leaving independent
