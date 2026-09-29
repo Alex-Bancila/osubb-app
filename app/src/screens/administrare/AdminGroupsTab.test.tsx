@@ -2,7 +2,13 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as axe from 'axe-core';
-import { MemoryRouter, Route, Routes, useParams } from 'react-router';
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useLocation,
+  useParams,
+} from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { AdminGroup } from '../../queries/groups-admin';
 import type { MyGroup } from '../../queries/my-groups';
@@ -126,12 +132,19 @@ function GroupPage() {
   return <h1>Grupul {groupId}</h1>;
 }
 
+/** Where the router is, so a test reads the URL state (`?vedere=`). */
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location">{location.search}</div>;
+}
+
 /** The tab inside the Administrare layout, whose header carries its action. */
-function show() {
+function show(entry = '/administrare/grupuri') {
   const client = new QueryClient();
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={['/administrare/grupuri']}>
+      <MemoryRouter initialEntries={[entry]}>
+        <LocationProbe />
         <Routes>
           <Route path="/administrare" element={<AdministrareLayout />}>
             <Route path="grupuri" element={<AdminGroupsTab />} />
@@ -182,15 +195,14 @@ it('shows BC the whole tree, collapsed, and expands one Group at a time', async 
   const { container } = show();
   expect(screen.getByRole('link', { name: 'Educațional' })).toBeVisible();
   expect(screen.getByRole('link', { name: 'Balul Bobocilor' })).toBeVisible();
-  expect(screen.queryByRole('link', { name: 'Logistică' })).toBeNull();
+  expect(screen.queryByRole('link', { name: /^Logistică/ })).toBeNull();
 
   await user.click(
     screen.getByRole('button', { name: 'Extinde subgrupurile Educațional' }),
   );
-  expect(screen.getByRole('link', { name: 'Logistică' })).toHaveAttribute(
-    'href',
-    '/administrare/grupuri/2',
-  );
+  expect(
+    screen.getByRole('link', { name: 'Logistică, subgrup al Educațional' }),
+  ).toHaveAttribute('href', '/administrare/grupuri/2');
   // Category, Minimum Level and member count ride along with each row.
   expect(screen.getAllByText('Departament').length).toBeGreaterThan(0);
   expect(screen.getByText('Proiect')).toBeVisible();
@@ -198,7 +210,7 @@ it('shows BC the whole tree, collapsed, and expands one Group at a time', async 
   await user.click(
     screen.getByRole('button', { name: 'Restrânge subgrupurile Educațional' }),
   );
-  expect(screen.queryByRole('link', { name: 'Logistică' })).toBeNull();
+  expect(screen.queryByRole('link', { name: /^Logistică/ })).toBeNull();
 
   expect(
     (
@@ -265,13 +277,24 @@ it('shows a Group Manager their own Groups instead, with the inherited role mark
   expect(screen.getByRole('region', { name: 'Grupurile mele' })).toBeVisible();
   expect(screen.getByText('Grupurile în care ai o funcție.')).toBeVisible();
   expect(screen.queryByRole('link', { name: 'OSUBB' })).toBeNull();
-  expect(screen.getByRole('link', { name: 'Logistică' })).toHaveAttribute(
-    'href',
-    '/administrare/grupuri/2',
-  );
-  expect(screen.getByRole('link', { name: 'Foto' })).toBeVisible();
+  expect(
+    screen.getByRole('link', { name: 'Logistică, subgrup al Educațional' }),
+  ).toHaveAttribute('href', '/administrare/grupuri/2');
+  expect(
+    screen.getByRole('link', { name: 'Foto, subgrup al Logistică' }),
+  ).toBeVisible();
   // The Child Group reached only through an ancestor says so (ruling R14).
-  expect(screen.getByText('din grupul de deasupra')).toBeVisible();
+  expect(screen.getAllByText('moștenit')).toHaveLength(1);
+  const foto = screen
+    .getByRole('link', { name: /^Foto/ })
+    .closest('tr') as HTMLElement;
+  expect(within(foto).getByText('moștenit')).toBeVisible();
+  // Educațional, led by someone else, stays as greyed context: no link, no
+  // function (#921).
+  expect(screen.queryByRole('link', { name: 'Educațional' })).toBeNull();
+  const context = screen.getByText('Educațional').closest('tr') as HTMLElement;
+  expect(context).toHaveClass('text-muted-foreground');
+  expect(within(context).queryByText('Coordonator')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Creează Grup' })).toBeNull();
 });
 
@@ -294,13 +317,13 @@ it('marks an inherited role even when the Manager is a plain member there too (F
   });
   show();
   const child = screen
-    .getByRole('link', { name: 'Logistică' })
+    .getByRole('link', { name: /^Logistică/ })
     .closest('tr') as HTMLElement;
   const parent = screen
     .getByRole('link', { name: 'Educațional' })
     .closest('tr') as HTMLElement;
-  expect(within(child).getByText('din grupul de deasupra')).toBeVisible();
-  expect(within(parent).queryByText('din grupul de deasupra')).toBeNull();
+  expect(within(child).getByText('moștenit')).toBeVisible();
+  expect(within(parent).queryByText('moștenit')).toBeNull();
 });
 
 it('offers "Creează Grup" only with the capability, and creates through the command', async () => {
@@ -440,7 +463,7 @@ it("marks a Private Group in a Manager's own list too (#757)", () => {
   });
   show();
   const row = screen
-    .getByRole('link', { name: 'Logistică' })
+    .getByRole('link', { name: /^Logistică/ })
     .closest('tr') as HTMLElement;
   expect(within(row).getByText('Privat')).toBeVisible();
 });
@@ -512,6 +535,8 @@ it('shows each Minimum Level in the tree by its Role name, never the number (R29
 
 it("shows a Manager's own Groups' Minimum Level by Role name (R29b)", () => {
   capabilities({ createTopLevelGroups: false });
+  // Nothing readable beyond `my_groups()`: the list still stands on it.
+  api.groups.mockReturnValue({ data: [], isPending: false, isError: false });
   api.myGroups.mockReturnValue({
     data: [
       myGroup(2, 'Logistică', 'manager', { path: [1, 2], min_level: 2 }),
@@ -574,4 +599,124 @@ it('opens the Group from anywhere on its row, and the name is a 44 px target (AD
   expect(
     await screen.findByRole('heading', { name: 'Grupul 3' }),
   ).toBeVisible();
+});
+
+it('draws a subgroup as a subgroup: rail, ring, regular weight and its parent named (#921)', async () => {
+  const user = userEvent.setup();
+  show();
+  await user.click(screen.getByRole('button', { name: 'Extinde tot' }));
+  const parent = screen.getByRole('link', { name: 'Educațional' });
+  const child = screen.getByRole('link', {
+    name: 'Logistică, subgrup al Educațional',
+  });
+  expect(parent).toHaveClass('font-semibold');
+  expect(child).toHaveClass('font-normal');
+  expect(child).not.toHaveClass('font-semibold');
+
+  const parentRow = parent.closest('tr') as HTMLElement;
+  const childRow = child.closest('tr') as HTMLElement;
+  // A full dot on top, a ring below; the elbow only into the child.
+  const node = (row: HTMLElement) =>
+    row.querySelector('[data-slot=group-node]') as HTMLElement;
+  expect(node(parentRow)).not.toHaveClass('border-[1.5px]');
+  expect(node(childRow)).toHaveClass('border-[1.5px]');
+  expect(parentRow.querySelector('[data-slot=tree-elbow]')).toBeNull();
+  expect(childRow.querySelector('[data-slot=tree-elbow]')).not.toBeNull();
+  // The parent's rail leaves its node while its children show.
+  expect(
+    parentRow.querySelectorAll('[data-slot=tree-guide] > span'),
+  ).toHaveLength(1);
+  // The child's details step back with it.
+  expect(childRow).toHaveClass('text-muted-foreground');
+  expect(parentRow).not.toHaveClass('text-muted-foreground');
+});
+
+const LED_BY_BC: MyGroup[] = [
+  myGroup(2, 'Logistică', 'responsible', { path: [1, 2] }),
+  myGroup(9, 'OSUBB', 'member', { automatic: true }),
+];
+
+it('offers BC who leads a Group "Toate | Conduse de mine", and narrows the tree by URL (#921)', async () => {
+  const user = userEvent.setup();
+  api.myGroups.mockReturnValue({
+    data: LED_BY_BC,
+    isPending: false,
+    isError: false,
+  });
+  api.rosterRows.mockReturnValue({
+    membershipRows: [
+      { group_id: 2, group_role: 'responsible', position_title: null },
+    ],
+    isPending: false,
+    isError: false,
+  });
+  show();
+  const toggle = screen.getByRole('group', { name: 'Grupuri afișate' });
+  expect(within(toggle).getByRole('button', { name: 'Toate' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  expect(screen.getByRole('link', { name: 'Balul Bobocilor' })).toBeVisible();
+
+  await user.click(
+    within(toggle).getByRole('button', { name: 'Conduse de mine' }),
+  );
+  expect(screen.getByTestId('location')).toHaveTextContent('?vedere=conduse');
+  expect(screen.getByRole('region', { name: 'Grupurile mele' })).toBeVisible();
+  // Only what BC leads, its parent kept as greyed context.
+  expect(screen.queryByRole('link', { name: 'Balul Bobocilor' })).toBeNull();
+  expect(screen.queryByRole('link', { name: 'OSUBB' })).toBeNull();
+  const led = screen
+    .getByRole('link', { name: 'Logistică, subgrup al Educațional' })
+    .closest('tr') as HTMLElement;
+  expect(within(led).getByText('Responsabil')).toBeVisible();
+  expect(screen.queryByRole('link', { name: 'Educațional' })).toBeNull();
+  expect(screen.getByText('Educațional')).toBeVisible();
+
+  await user.click(screen.getByRole('button', { name: 'Toate' }));
+  expect(screen.getByTestId('location')).toBeEmptyDOMElement();
+  expect(screen.getByRole('link', { name: 'Balul Bobocilor' })).toBeVisible();
+});
+
+it('opens Conduse de mine from the link itself (#921)', () => {
+  api.myGroups.mockReturnValue({
+    data: LED_BY_BC,
+    isPending: false,
+    isError: false,
+  });
+  show('/administrare/grupuri?vedere=conduse');
+  expect(
+    screen.getByRole('button', { name: 'Conduse de mine' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.queryByRole('link', { name: 'Balul Bobocilor' })).toBeNull();
+  expect(
+    screen.getByRole('link', { name: 'Logistică, subgrup al Educațional' }),
+  ).toBeVisible();
+});
+
+it('hides the switch from BC who leads no Group, and ignores the key (#921)', () => {
+  api.myGroups.mockReturnValue({
+    data: [myGroup(9, 'OSUBB', 'member', { automatic: true })],
+    isPending: false,
+    isError: false,
+  });
+  show('/administrare/grupuri?vedere=conduse');
+  expect(screen.queryByRole('group', { name: 'Grupuri afișate' })).toBeNull();
+  expect(
+    screen.getByRole('region', { name: 'Structura grupurilor' }),
+  ).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Balul Bobocilor' })).toBeVisible();
+});
+
+it('shows a Manager their led Groups with no switch: the page already is that view (#921)', () => {
+  capabilities({ createTopLevelGroups: false });
+  api.myGroups.mockReturnValue({
+    data: LED_BY_BC,
+    isPending: false,
+    isError: false,
+  });
+  show();
+  expect(screen.queryByRole('group', { name: 'Grupuri afișate' })).toBeNull();
+  expect(screen.getByRole('region', { name: 'Grupurile mele' })).toBeVisible();
+  expect(screen.queryByRole('link', { name: 'Balul Bobocilor' })).toBeNull();
 });
