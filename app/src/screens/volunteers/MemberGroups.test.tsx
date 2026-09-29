@@ -39,6 +39,22 @@ describe('MemberGroups', () => {
     expect(screen.queryByRole('button', { name: /^\+/ })).toBeNull();
   });
 
+  it('lets the chip grow to its name and truncate only when the row runs out (F-9)', () => {
+    render(
+      <MemberGroups
+        primaryGroup={{ id: 4, name: 'Resurse Umane', color: null }}
+        otherMemberships={2}
+        memberName="Ana Ionescu"
+        onOpen={vi.fn()}
+      />,
+    );
+    const chip = screen.getByRole('button', { name: /^Grupul Resurse Umane/ });
+    // No fixed 128 px cap: the row, not the chip, sets the limit.
+    expect(chip.className).not.toMatch(/(^|\s)max-w-(\d|\[)/);
+    expect(chip).toHaveClass('max-w-full', 'shrink', 'min-w-11');
+    expect(screen.getByText('Resurse Umane')).toHaveClass('truncate');
+  });
+
   it('adds "+n" for other explicit memberships, both opening the Member Card', async () => {
     const user = userEvent.setup();
     const onOpen = vi.fn();
