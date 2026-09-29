@@ -1,16 +1,15 @@
 import { useMemo } from 'react';
-import { Navigate, useLocation } from 'react-router';
-import { EmptyState, Page, PageHeader } from '../../components/layout';
+import { Page, PageHeader } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
 import { groupOptionLabel } from '../../components/ui/combobox';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
-import { rootGroups, type WorkFilterGroup } from '../../lib/work-filter';
+import type { WorkFilterGroup } from '../../lib/work-filter';
 import { useTaskFormOptions } from '../../queries/task-form-options';
 import { groupLookup, groupOptions } from '../tracker/task-form-model';
 import { CampaignsPanel } from './CampaignsPanel';
+import type { CampaignOwnerGroup } from './campaign-list';
 import {
   CAMPAIGNS_FILTER_LEVELS,
-  campaignsPath,
   useCampaignsFilter,
 } from './use-campaigns-filter';
 
@@ -21,8 +20,9 @@ import {
  * Group; the date range dates each Campaign's report. The page's gate
  * (`manageTasks`) lives in `App.tsx`.
  *
- * With one topmost managed Group there is nothing to choose: the bare page
- * opens that Group's Campaigns directly (navigation D22).
+ * With no Group chosen the page lists every Campaign the caller may read
+ * (#908) — never a redirect or a default Group: filters only narrow. Rows of
+ * Groups the caller does not manage show their name and owner only.
  */
 export default function CampaignsScreen() {
   const options = useTaskFormOptions();
@@ -43,19 +43,29 @@ export default function CampaignsScreen() {
         : new Map<number, { name: string }>(),
     [options.data],
   );
+  // Every readable Group names a Campaign's owner; the managed ones carry
+  // their paths. Only those may change a Campaign or read its report.
+  const owners = useMemo<CampaignOwnerGroup[]>(() => {
+    const ids = new Set(managed.map((row) => row.id));
+    return [
+      ...managed,
+      ...(options.data?.groupNames ?? [])
+        .filter((row) => !ids.has(row.id))
+        .map((row) => ({ id: row.id, name: row.name, path: [] })),
+    ];
+  }, [managed, options.data]);
+  const managedIds = useMemo(
+    () => new Set(managed.map((row) => row.id)),
+    [managed],
+  );
   const filter = useCampaignsFilter(groups);
-  const { search } = useLocation();
   const group = managed.find((row) => row.id === filter.routeGroupId);
-  const roots = useMemo(() => rootGroups(groups, 'topmost'), [groups]);
-  const only = roots.length === 1 ? roots[0] : undefined;
-  if (filter.routeGroupId === undefined && only)
-    return <Navigate to={`${campaignsPath(only.id)}${search}`} replace />;
   return (
     <Page width="reading">
       <PageHeader
         eyebrow="Administrare"
         title="Campanii"
-        description="Campaniile grupurilor pe care le gestionezi, cu raportul fiecăreia."
+        description="Toate campaniile, cu raportul celor din grupurile pe care le gestionezi."
       />
       {options.isPending ? (
         <Loading label="Se încarcă grupurile…" />
@@ -66,21 +76,19 @@ export default function CampaignsScreen() {
           retryLabel="Reîncearcă"
           onRetry={() => void options.refetch()}
         />
-      ) : !groups.length ? (
-        <EmptyState bare>
-          Nu ai grupuri pentru care poți gestiona campanii.
-        </EmptyState>
       ) : (
-        <WorkFilter
-          label="Filtre campanii"
-          groups={groups}
-          groupNames={options.data?.groupNames}
-          campaigns={[]}
-          levels={CAMPAIGNS_FILTER_LEVELS}
-          roots="topmost"
-          state={filter}
-          hint="Grupul include toate subgrupurile sale. Perioada, după data acordării punctelor, se aplică raportului fiecărei campanii."
-        />
+        groups.length > 0 && (
+          <WorkFilter
+            label="Filtre campanii"
+            groups={groups}
+            groupNames={options.data?.groupNames}
+            campaigns={[]}
+            levels={CAMPAIGNS_FILTER_LEVELS}
+            roots="topmost"
+            state={filter}
+            hint="Grupul include toate subgrupurile sale. Perioada, după data acordării punctelor, se aplică raportului fiecărei campanii."
+          />
+        )
       )}
       {filter.routeGroupId !== undefined && options.isSuccess && !group && (
         <p role="alert">
@@ -96,12 +104,13 @@ export default function CampaignsScreen() {
         />
       ) : (
         filter.routeGroupId === undefined &&
-        groups.length > 0 && (
-          <EmptyState bare>
-            Alege un grup ca să-i vezi campaniile. O campanie etichetează
-            taskurile unui grup și ale subgrupurilor lui; una inactivă nu mai
-            poate fi aleasă pentru taskuri noi, dar rămâne pe cele existente.
-          </EmptyState>
+        options.isSuccess && (
+          <CampaignsPanel
+            label="Toate grupurile"
+            groups={owners}
+            range={filter.params}
+            manages={(id) => managedIds.has(id)}
+          />
         )
       )}
     </Page>

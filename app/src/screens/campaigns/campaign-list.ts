@@ -18,23 +18,28 @@ const collator = new Intl.Collator('ro-RO', { sensitivity: 'base' });
 /**
  * The Campaigns owned by `groupId` or any Group below it (a Group means its
  * whole subtree, R13): the chosen Group's own first, then by owner and name.
+ * Without a Group it is every Campaign the caller may read (#908): filters
+ * only narrow, so no Group chosen means nothing is left out.
  */
 export function subtreeCampaigns<C extends Campaign>(
   campaigns: readonly C[],
   groups: readonly CampaignOwnerGroup[],
-  groupId: number,
+  groupId: number | undefined,
 ): C[] {
   const byId = new Map(groups.map((group) => [group.id, group]));
   const owner = (campaign: C) => byId.get(campaign.group_id);
+  const own = (campaign: C) =>
+    groupId !== undefined && campaign.group_id === groupId;
   return campaigns
     .filter(
       (campaign) =>
-        campaign.group_id === groupId ||
+        groupId === undefined ||
+        own(campaign) ||
         (owner(campaign)?.path.includes(groupId) ?? false),
     )
     .sort(
       (a, b) =>
-        Number(a.group_id !== groupId) - Number(b.group_id !== groupId) ||
+        Number(!own(a)) - Number(!own(b)) ||
         collator.compare(owner(a)?.name ?? '', owner(b)?.name ?? '') ||
         collator.compare(a.name, b.name) ||
         a.id - b.id,
