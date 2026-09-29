@@ -6,6 +6,7 @@
 - **Amended:** 2026-09-20 — Moderator is a transferable Role, not a fixed account; a manual Role change notifies the Member and, when it drops them below a Group's Minimum Level, removes them from that Group
 - **Amended:** 2026-09-21 — profile grilling: Voluntar → Voluntar Activ has two doors behind one tenure gate (the top x% at a Period's close, or the Promotion Threshold during the following Period); a Retention Signal to BC replaces any downward automation for Voluntar Activ and Drept de Vot; AG Eligibility follows from the Voluntar Activ Role alone; BC seeds the first threshold (superseded 2026-09-27)
 - **Amended:** 2026-09-27 — ruling R28: no Period is opened or closed; BC runs Role Evaluations over a chosen date range, of two kinds with one BC-editable Promotion Threshold each; Voluntar → Voluntar Activ is BC-confirmed from a list of Promotion Candidates; only Recrut → Voluntar stays automatic
+- **Amended:** 2026-09-29 — ruling R31: every BC member, not only the Moderator, grants and removes the BC and Moderator Roles; whoever removes the last active Moderator or BC member names the replacement in the same change
 - **Deciders:** Alex Băncilă (IT Coordinator)
 - **Supersedes:** —
 - **Superseded by:** —
@@ -75,3 +76,9 @@ Ruling R28 (`docs/superpowers/plans/2026-09-23-prod-readiness-grill.md`). It sup
 **Retention Signals.** The Voluntar Activ kind raises one for each Voluntar Activ below the top x%; the Adunarea Generală kind ranks only current Voluntar cu Drept de Vot holders and raises one for each below the top y%, with no promotion path. Decision 3 stands: nothing lowers a Role automatically.
 
 **AG Eligibility** still follows from the Voluntar Activ Role alone; no threshold leads to Drept de Vot, which only BC's confirmation grants.
+
+## Amendment (2026-09-29) — BC shares the leadership ranks (ruling R31)
+
+Supersedes the 2026-09-20 amendment's "only a Moderator may change the Role … of a Member holding BC or Moderator". **Every active BC member, like the Moderator, grants and removes the BC and Moderator Roles** and changes the Role of a Member who holds either. Nobody changes their own Role, with one exception below. The Status of a BC member or a Moderator stays the Moderator's alone, and even the Moderator cannot deactivate the last active holder of either rank; provisioning a new account at either rank also stays the Moderator's.
+
+**The seats can never be emptied.** A change that takes BC or Moderator from its last active holder must name a replacement in the same save: any active Member, the person making the change included (the one self-change allowed). The replacement is given the rank first, then the change applies, in one transaction; each writes its own `role_history` row and Notification naming the real actor. A replacement who is the last holder of the other leadership rank is refused, unless the Member being changed takes that rank in the same save (the two swap seats). Two such changes made at the same moment are serialized, so neither can count on a holder the other is removing. The Moderator seat's transfer reads as before, and may now be made by BC as well.

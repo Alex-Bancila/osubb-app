@@ -158,6 +158,25 @@ it('keeps the reasons the per-feature tables used to translate (#674)', () => {
 });
 
 /*
+ * Every reason #905's set_member_role (ruling R31) adds for the last
+ * Moderator or BC and the replacement named for them.
+ */
+it.each([
+  'last_moderator_needs_replacement',
+  'last_bc_needs_replacement',
+  'replacement_not_needed',
+  'replacement_is_last_moderator',
+  'replacement_is_last_bc',
+  'replacement_not_found',
+  'replacement_inactive',
+  'replacement_is_target',
+])('has Romanian copy for the Role replacement reason %s', (reason) => {
+  const copy = reasonCopy(reason);
+  expect(copy).toBeDefined();
+  expect(copy).not.toMatch(/_/);
+});
+
+/*
  * What update_task (#627 moving a Task) and private.require_attached_link
  * (#684) raise beyond the constraints kit — folded into this table with the
  * Task form (#688), so the tracker keeps no reason table of its own.
