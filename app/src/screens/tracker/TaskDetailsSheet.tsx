@@ -52,6 +52,21 @@ import {
  */
 function ReturnNote({ taskId }: { taskId: number }) {
   const history = useTaskHistory(taskId);
+  // A failed read must not look like "no note": say so and offer a retry.
+  if (history.isError)
+    return (
+      <div role="alert" className="space-y-2 text-sm">
+        <p>Nu am putut încărca modificările cerute.</p>
+        <Button
+          type="button"
+          variant="outline"
+          className="min-h-11"
+          onClick={() => void history.refetch()}
+        >
+          Reîncarcă modificările cerute
+        </Button>
+      </div>
+    );
   const latest = history.data
     ?.filter((row) => row.kind === 'returned_to_progress')
     .at(-1);

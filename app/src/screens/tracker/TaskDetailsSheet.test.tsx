@@ -66,7 +66,9 @@ vi.mock('../../queries/task-give-up', () => ({
   }),
 }));
 const taskHistory = vi.hoisted(() =>
-  vi.fn((): { data: unknown[] } => ({ data: [] })),
+  vi.fn((): { data?: unknown[]; isError?: boolean; refetch?: () => void } => ({
+    data: [],
+  })),
 );
 vi.mock('../../queries/task-history', () => ({ useTaskHistory: taskHistory }));
 vi.mock('./TaskHistory', () => ({
@@ -579,6 +581,35 @@ describe('Task details sheet', () => {
       });
       expect(within(note).getByText('Adaugă sursele.')).toBeVisible();
       expect(screen.queryByText('Prima rundă.')).toBeNull();
+    } finally {
+      taskHistory.mockReturnValue({ data: [] });
+    }
+  });
+
+  it('says so, with a retry, when the return note cannot be read', async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn();
+    taskHistory.mockReturnValue({ isError: true, refetch });
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({
+          status: 'in_progress',
+          review_round: 1,
+          visibleExecutor: { memberId: 'member', fullName: 'Eu' },
+        }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    try {
+      render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+      expect(
+        await screen.findByText('Nu am putut încărca modificările cerute.'),
+      ).toBeVisible();
+      await user.click(
+        screen.getByRole('button', { name: 'Reîncarcă modificările cerute' }),
+      );
+      expect(refetch).toHaveBeenCalledOnce();
     } finally {
       taskHistory.mockReturnValue({ data: [] });
     }
