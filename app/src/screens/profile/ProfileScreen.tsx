@@ -99,16 +99,22 @@ export default function ProfileScreen() {
     0;
 
   const onBoard = memberLevel >= BOARD_LEVEL;
+  // F-7 (#893, Alex 2026-09-29): the Moderator is not a board position; the
+  // function is the Role, with no board title to look up or miss.
+  // The loaded Profile is current; a claim can lag a Role change.
+  const isModerator = profile?.role === 'moderator';
   // Points total applies only to level <= 4 (ruling R13)
   const isPointsEligible = !onBoard;
   const pointsQuery = useMyPoints({ enabled: isPointsEligible });
   // D1: the board title's Group is named by an organization setting.
-  const settingsQuery = useOrgSettings({ enabled: onBoard });
+  const settingsQuery = useOrgSettings({ enabled: onBoard && !isModerator });
   const promotion = usePromotionProgressState();
   const timelineShown = useRoleTimelineShown(profileQuery.data);
 
   const { theme, toggleTheme } = useTheme();
   const [editOpen, setEditOpen] = useState(false);
+  // F-19 (#893): a saved profile says so on the page the sheet closes onto.
+  const [saved, setSaved] = useState(false);
 
   const isPending =
     profileQuery.isPending ||
@@ -175,7 +181,10 @@ export default function ProfileScreen() {
       ? `Membru din ${profile.joined_year}`
       : 'Membru OSUBB';
 
-  const openEdit = () => setEditOpen(true);
+  const openEdit = () => {
+    setSaved(false);
+    setEditOpen(true);
+  };
 
   return (
     <Page className="pb-12">
@@ -212,6 +221,14 @@ export default function ProfileScreen() {
       {/* PageGrid is m-0, which cancels the Page's space-y between rows;
           the rows keep the grid's own gap between them instead. */}
       <div className="flex flex-col gap-4 md:gap-6">
+        {/* Always mounted, so the receipt is announced when it appears
+            (as the joining card's); empty, it takes no room. */}
+        <p
+          role="status"
+          className="m-0 text-sm text-muted-foreground empty:hidden"
+        >
+          {saved && 'Profilul a fost actualizat.'}
+        </p>
         {/* A like pair, each ending in its Editează button: one height. */}
         <PageGrid columns={2} equalHeights>
           <Panel eyebrow="Cont" icon={UserRound} title="Identitate">
@@ -322,9 +339,12 @@ export default function ProfileScreen() {
           {onBoard ? (
             <Panel
               eyebrow={
-                profile.role === 'bce'
-                  ? 'Biroul de Conducere Extins'
-                  : 'Biroul de Conducere'
+                // No area for the Moderator (ruling 2: no eyebrow then).
+                isModerator
+                  ? undefined
+                  : profile.role === 'bce'
+                    ? 'Biroul de Conducere Extins'
+                    : 'Biroul de Conducere'
               }
               icon={Landmark}
               title="Funcția în OSUBB"
@@ -332,11 +352,20 @@ export default function ProfileScreen() {
               // nothing beside it reads as a missing neighbour.
               className={timelineShown ? undefined : 'md:col-span-2'}
             >
-              <BoardTitle
-                roleLabel={roleLabel}
-                settings={settingsQuery}
-                membershipRows={groupsQuery.membershipRows}
-              />
+              {isModerator ? (
+                <p
+                  data-testid="board-title"
+                  className="text-[length:var(--fs-xl)] leading-tight font-extrabold wrap-anywhere text-foreground"
+                >
+                  {roleLabel}
+                </p>
+              ) : (
+                <BoardTitle
+                  roleLabel={roleLabel}
+                  settings={settingsQuery}
+                  membershipRows={groupsQuery.membershipRows}
+                />
+              )}
             </Panel>
           ) : (
             <Panel eyebrow="Grupuri" icon={Users} title="Grupurile mele">
@@ -413,6 +442,7 @@ export default function ProfileScreen() {
       <EditProfileSheet
         open={editOpen}
         onClose={() => setEditOpen(false)}
+        onSaved={() => setSaved(true)}
         profile={profile}
       />
     </Page>

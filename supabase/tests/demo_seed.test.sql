@@ -24,7 +24,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(75);
+select plan(78);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
@@ -781,6 +781,43 @@ select ok((select count(*) from tasks
               and assignment_mode = 'public'
               and queue_closed_at is null) >= 2,
   'at least two organization-wide Opportunities are open for the "Deschise" tab');
+
+-- #891 (final QA audit F37, F66): the two rows the audit could not run.
+select ok(
+  exists (
+    select 1 from tasks task
+     where task.status = 'in_progress' and task.kind = 'task'
+       and task.deadline < now()
+       and exists (select 1 from task_assignments a where a.task_id = task.id and a.ended_at is null)
+       and private.group_role_of(task.group_id, 'd0000000-0000-0000-0000-000000000005') = 'manager'),
+  'an overdue in-progress Task with an Executor sits in a Group the Manager persona manages, so "Marchează nerealizat" is reachable');
+
+select ok(
+  (select count(*) from notifications
+    where member_id = 'd0000000-0000-0000-0000-000000000002') >= 25,
+  'the Voluntar has at least 25 notifications, more than one 20-row page of Notificări');
+
+-- #891 (F-3): the seed writes Task notifications directly, so it must copy
+-- the commands' Romanian text: "Termen:", never "Deadline:", and no raw
+-- column name in an edit notification: every edit body lists only the
+-- Romanian labels private.task_field_labels writes.
+select ok(
+  (select count(*) from notifications
+    where member_id = 'd0000000-0000-0000-0000-000000000002'
+      and kind = 'task' and title like 'Task nou:%') = 2
+  and (select count(*) from notifications
+        where member_id = 'd0000000-0000-0000-0000-000000000002'
+          and kind = 'task' and title like 'Task actualizat:%') >= 20
+  and not exists (
+    select 1 from notifications
+     where kind = 'task'
+       and (body like '%Deadline%'
+            or body ~ '[a-z]+_[a-z]+'
+            or (title like 'Task nou:%' and body not like 'Ți-a fost atribuit acest task. Termen: %')
+            or (title like 'Task actualizat:%'
+                and body !~ replace('^Modificat: (L)(, (L))*\.$', 'L',
+                  'titlu|descriere|termen|grup|campanie|audiență|atribuire|etichetă link|adresă link')))),
+  'the seeded Task notifications use the commands'' Romanian copy (Termen, field labels)');
 
 -- ==================== Calendar, feed, notifications ====================
 -- The calendar only demos well if switching accounts changes what you see.

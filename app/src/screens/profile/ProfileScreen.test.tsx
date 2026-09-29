@@ -196,6 +196,7 @@ const referenceMocks = vi.hoisted(() => {
     ['vot', { name: 'Membru cu Drept de Vot', level: 3 }],
     ['bce', { name: 'BCE', level: 5 }],
     ['bc', { name: 'BC', level: 6 }],
+    ['moderator', { name: 'Moderator', level: 6 }],
   ]);
 
   const defaultMemberGroups: MemberGroup[] = [
@@ -592,6 +593,49 @@ describe('ProfileScreen', () => {
     expect(screen.getByTestId('profile-full-name')).toHaveTextContent(
       'Maria Enache',
     );
+  });
+
+  // F-19 (#893): the sheet closed with no word that anything was saved.
+  it('a successful save closes the sheet and Profil says the profile was updated', async () => {
+    const user = userEvent.setup();
+    render(<ProfileScreen />, { wrapper: wrapper() });
+
+    expect(
+      screen.queryByText('Profilul a fost actualizat.'),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Editează profilul' }));
+    await user.type(screen.getByLabelText('Pseudonim'), 'Mara');
+    await user.click(screen.getByRole('button', { name: /salvează/i }));
+
+    const receipt = await screen.findByText('Profilul a fost actualizat.');
+    expect(receipt).toHaveAttribute('role', 'status');
+    expect(
+      screen.queryByRole('heading', { name: /editează profilul/i }),
+    ).not.toBeInTheDocument();
+
+    // Opening the sheet again starts a new edit: the old receipt goes.
+    await user.click(screen.getByRole('button', { name: 'Editează profilul' }));
+    expect(
+      screen.queryByText('Profilul a fost actualizat.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('a failed save keeps the sheet open and shows no receipt', async () => {
+    updateProfileMock.mutateAsync.mockRejectedValueOnce(new Error('boom'));
+    const user = userEvent.setup();
+    render(<ProfileScreen />, { wrapper: wrapper() });
+
+    await user.click(screen.getByRole('button', { name: 'Editează profilul' }));
+    await user.type(screen.getByLabelText('Pseudonim'), 'Mara');
+    await user.click(screen.getByRole('button', { name: /salvează/i }));
+
+    expect(
+      await screen.findByText('Nu am putut salva modificările.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Profilul a fost actualizat.'),
+    ).not.toBeInTheDocument();
   });
 
   it('shows the Nickname as the heading with the full name underneath', () => {
@@ -1075,6 +1119,31 @@ describe('ProfileScreen', () => {
       ).toBeInTheDocument();
       expect(
         within(panel).queryByText(/Coordonator|Casier/),
+      ).not.toBeInTheDocument();
+    });
+
+    // F-7 (#893, Alex 2026-09-29): the Moderator is not a board position.
+    it('a Moderator sees only "Moderator": no "not set" line, no Biroul de Conducere eyebrow', () => {
+      authMock.claims = {
+        member_role: 'moderator',
+        member_level: 6,
+        group_ids: [],
+      };
+      setTestProfile({ ...mockProfile, role: 'moderator' });
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      const panel = screen.getByRole('region', { name: 'Funcția în OSUBB' });
+      expect(within(panel).getByTestId('board-title')).toHaveTextContent(
+        /^Moderator$/,
+      );
+      expect(
+        within(panel).queryByText('Funcția nu este setată încă.'),
+      ).not.toBeInTheDocument();
+      expect(
+        within(panel).queryByText(/Biroul de Conducere/),
+      ).not.toBeInTheDocument();
+      expect(
+        panel.querySelector('[data-slot="section-eyebrow"]'),
       ).not.toBeInTheDocument();
     });
 

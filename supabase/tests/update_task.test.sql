@@ -13,7 +13,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(141);
+select plan(151);
 
 -- ==================== Fixtures ====================
 create function pg_temp.u(n integer) returns uuid language sql immutable as $$
@@ -234,6 +234,18 @@ begin
 end;
 $$;
 
+-- #891 (F-3): the Romanian label each changed field carries in the Executor's
+-- notification -- the words the Task history shows (TaskHistory.tsx), written
+-- out here rather than read from private.task_field_labels, so a wrong or
+-- missing entry in the helper fails this suite.
+create function pg_temp.expected_label(p_field text) returns text language sql immutable as $$
+  select case p_field
+    when 'title' then 'titlu' when 'description' then 'descriere' when 'deadline' then 'termen'
+    when 'group_id' then 'grup' when 'campaign_id' then 'campanie' when 'audience' then 'audiență'
+    when 'assignment_mode' then 'atribuire' when 'link_label' then 'etichetă link'
+    when 'link_url' then 'adresă link' end
+$$;
+
 create function pg_temp.field_check(p_name text, p_field text) returns text language sql stable as $$
   select format('%s|%s|%s|%s',
     case p_field
@@ -251,7 +263,7 @@ create function pg_temp.field_check(p_name text, p_field text) returns text lang
     (select count(*) from public.notifications as notification
       where notification.task_id = task.id and notification.member_id = pg_temp.u(2)
         and notification.title = 'Task actualizat: ' || task.title
-        and notification.body = 'Modificat: ' || p_field || '.'))
+        and notification.body = 'Modificat: ' || pg_temp.expected_label(p_field) || '.'))
     from public.tasks as task where task.id = pg_temp.t(p_name)
 $$;
 
@@ -406,7 +418,7 @@ select is((select format('%s|%s', a.member_id, a.ended_at is null) from public.t
   format('%s|t', pg_temp.u(2)), 'the Executor keeps the Task');
 select is((select count(*) from public.notifications as n
             where n.task_id = pg_temp.t('p2d') and n.member_id = pg_temp.u(2)
-              and n.body = 'Modificat: audience, assignment_mode.'), 1::bigint,
+              and n.body = 'Modificat: audiență, atribuire.'), 1::bigint,
   'the Executor is told the Audience and the Assignment Mode changed');
 select is(pg_temp.activity_consequences('p2d'), (select consequences from previews where name = 'p2d'),
   'the command applied exactly the consequence set the preview showed');
@@ -487,7 +499,7 @@ select is((select format('%s|%s', a.member_id, a.ended_at is null) from public.t
   format('%s|t', pg_temp.u(2)), 'the member Executor keeps the Task');
 select is((select string_agg(right(n.member_id::text, 1) || ':' || n.body, ',' order by n.member_id)
              from public.notifications as n where n.task_id = pg_temp.t('r8:keep')),
-  '2:Modificat: audience.,5:Nu mai poți fi selectat pentru acest task.',
+  '2:Modificat: audiență.,5:Nu mai poți fi selectat pentru acest task.',
   'the Executor hears about the edit, the removed Candidate about the queue');
 select is(pg_temp.activity_consequences('r8:keep'), (select consequences from previews where name = 'r8:keep'),
   'the command applied exactly the consequence set the preview showed');
@@ -535,6 +547,57 @@ select is((select format('%s|%s|%s|%s|%s', task.title, task.assignment_mode,
              from public.tasks as task where task.id = pg_temp.t('pv')),
   'T626 pv|public|1|0|0', 'the preview changed nothing, logged nothing and notified nobody');
 
+
+-- ==================== 8a. #891 The Executor reads the changed fields in Romanian ====================
+-- The notification names each changed field by the label the Task history
+-- uses (TaskHistory.tsx), lower-cased, in the server's order -- never by its
+-- column name (final QA audit F-3).
+reset role;
+select pg_temp.mk('ro:two', 'in_progress', 'direct', 'local', pg_temp.u(2));
+select pg_temp.mk('ro:link', 'in_progress', 'direct', 'local', pg_temp.u(2));
+select pg_temp.test_login_leadership(pg_temp.u(1));
+select lives_ok(format('select public.update_task(%s)',
+  pg_temp.args('ro:two', p_title => 'T626 ro:two nou', p_deadline => '2027-04-01 09:00:00+00')),
+  '#891: the manager changes a Task''s title and deadline in one edit');
+select lives_ok(format('select public.update_task(%s)',
+  pg_temp.args('ro:link', p_link_label => 'Brief', p_link_url => 'https://example.org/brief')),
+  '#891: the manager adds an Attached Link');
+reset role;
+select is((select string_agg(n.body, ' | ') from public.notifications as n
+            where n.task_id = pg_temp.t('ro:two') and n.member_id = pg_temp.u(2)),
+  'Modificat: titlu, termen.',
+  '#891: a title and deadline edit tells the Executor exactly "Modificat: titlu, termen."');
+select is((select string_agg(n.body, ' | ') from public.notifications as n
+            where n.task_id = pg_temp.t('ro:link') and n.member_id = pg_temp.u(2)),
+  'Modificat: etichetă link, adresă link.',
+  '#891: the Attached Link pair reads "etichetă link, adresă link"');
+select is(private.task_field_labels(array['title', 'description', 'deadline', 'group_id', 'campaign_id',
+                                          'audience', 'assignment_mode', 'link_label', 'link_url']),
+  'titlu, descriere, termen, grup, campanie, audiență, atribuire, etichetă link, adresă link',
+  '#891: every changeable field has its Romanian label, listed in the order given');
+select is(private.task_field_labels(array['deadline', 'review_round', 'title']), 'termen, titlu',
+  '#891: a name without a label is left out, never printed raw');
+select is(private.task_field_labels(array['review_round']), 'detalii',
+  '#891: a list with no labelled name reads "detalii", never an empty "Modificat: ."');
+-- Every name either edit body can put in `changed`, read from their source,
+-- so a field added later without a label fails here rather than reaching a
+-- Member as a column name.
+select is((select array_agg(distinct field.name order by field.name)
+             from pg_proc as proc
+            cross join lateral regexp_matches(proc.prosrc, 'array_append\(v_changed, ''([a-z_]+)''\)', 'g') as m
+            cross join lateral (select m[1] as name) as field
+            where proc.pronamespace = 'private'::regnamespace
+              and proc.proname in ('plan_task_update', 'update_task_content_impl')
+              and private.task_field_labels(array[field.name]) = 'detalii'),
+  null::text[],
+  '#891: every field name plan_task_update or update_task_content_impl can emit has a Romanian label');
+select ok((select count(distinct m[1]) from pg_proc as proc
+            cross join lateral regexp_matches(proc.prosrc, 'array_append\(v_changed, ''([a-z_]+)''\)', 'g') as m
+            where proc.pronamespace = 'private'::regnamespace and proc.proname = 'plan_task_update') = 9,
+  '#891: the source probe above finds all nine changeable fields (it is not vacuous)');
+select is((select count(*) from public.notifications as n
+            where n.title like 'Task actualizat:%' and n.body ~ '[a-z]+_[a-z]+'), 0::bigint,
+  '#891: no Task edit notification in this suite carries a raw column name');
 
 -- ==================== 8b. #684 The Attached Link is part of the full state ====================
 -- The link pair carries no defaults (OD5): the current values leave it alone,

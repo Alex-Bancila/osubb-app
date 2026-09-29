@@ -1,5 +1,6 @@
 import { EmptyState, Panel } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
+import { Badge } from '../../components/ui/badge';
 import { formatTaskCount } from '../../lib/format';
 import { useAwaitingMyReview } from '../../queries/task-review';
 import { TaskCard } from '../tracker/TaskCard';
@@ -12,6 +13,11 @@ import { toTaskPresentation } from '../tracker/task-presentation';
  * on De gestionat with the Task's details sheet, where the Evaluation
  * control is; the card itself only reads. No eyebrow: the title and its
  * link already say where it lives (B7).
+ *
+ * The count is a badge on the title, as the navigation's unread counts are,
+ * never a description line: a second header line put this title about
+ * 22 px above its row neighbour's and its action on another line (F-10,
+ * #893). The header is then one line, like every other card's on Acasă.
  */
 export default function AwaitingReviewCard({
   now,
@@ -26,11 +32,23 @@ export default function AwaitingReviewCard({
 
   return (
     <Panel
-      title="De evaluat"
-      className={className}
-      description={
-        task ? `${formatTaskCount(count)} așteaptă evaluarea ta` : undefined
+      aria-label="De evaluat"
+      title={
+        task ? (
+          <span className="inline-flex items-center gap-2">
+            De evaluat
+            <Badge variant="destructive" data-testid="awaiting-review-count">
+              <span aria-hidden="true">{count}</span>
+              <span className="sr-only">
+                {`${formatTaskCount(count)} așteaptă evaluarea ta`}
+              </span>
+            </Badge>
+          </span>
+        ) : (
+          'De evaluat'
+        )
       }
+      className={className}
       action={
         task
           ? { to: `/tracker?task=${task.id}`, label: 'Evaluează' }

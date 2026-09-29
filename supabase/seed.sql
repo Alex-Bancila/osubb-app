@@ -429,6 +429,8 @@ select set_config('request.jwt.claims','',true);
 -- Scenario matrix (one Task key per row unless noted):
 --
 --   direct, in progress ............ edu-in-progress
+--   in progress, past its deadline . project-overdue       (#891: the Manager persona can
+--                                                           mark it unfulfilled)
 --   public, open queue, no Executor  pr-open-queue, hr-open-queue (both 0 candidates)
 --   public, Executor + 2 pending ... edu-public-queue
 --   in review, once returned ....... project-in-review
@@ -594,6 +596,14 @@ insert into demo_task_seed values
    'Centralizarea partenerilor și a sumelor confirmate.', 'admin', null, null, 'Festivalul Studențesc 2026',
    'task', 'local', 'direct', null, null,
    pg_temp.demo_deadline(4), 'd0000000-0000-0000-0000-000000000005', now() - interval '14 days'),
+
+  -- #891 (final QA audit F37): in progress with its deadline two days past,
+  -- in the Project the Manager persona (responsabil@) manages, so
+  -- "Marchează nerealizat" is reachable for her (and for BC/Moderator).
+  ('project-overdue', 'Lista sponsorilor pentru afișul festivalului',
+   'Logo-urile și numele complete ale sponsorilor confirmați.', 'admin', null, null, 'Festivalul Studențesc 2026',
+   'task', 'local', 'direct', null, null,
+   pg_temp.demo_deadline(-2), 'd0000000-0000-0000-0000-000000000005', now() - interval '6 days'),
 
   -- Department Team origin (`it` sits under Diverse), completed before its deadline.
   ('it-completed', 'Migrare bază de date',
@@ -856,6 +866,9 @@ update tasks
 update tasks set status = 'in_progress', started_at = now() - interval '8 days'
  where id = pg_temp.demo_task_id('hr-in-progress');
 
+update tasks set status = 'in_progress', started_at = now() - interval '5 days'
+ where id = pg_temp.demo_task_id('project-overdue');
+
 -- Approved completed-work: no `started_at`, no `submitted_at` — the work was
 -- done outside the Tracker and the Task is created already finished.
 update tasks
@@ -903,6 +916,8 @@ select fixture.key, fixture.task_key, fixture.member_id, fixture.assigned_at,
      now() - interval '5 days', 'd0000000-0000-0000-0000-000000000007', null, null, null),
     ('project-in-review', 'project-in-review', 'd0000000-0000-0000-0000-000000000002',
      now() - interval '14 days', 'd0000000-0000-0000-0000-000000000005', null, null, null),
+    ('project-overdue', 'project-overdue', 'd0000000-0000-0000-0000-000000000002',
+     now() - interval '6 days', 'd0000000-0000-0000-0000-000000000005', null, null, null),
     ('it-completed', 'it-completed', 'd0000000-0000-0000-0000-000000000008',
      now() - interval '20 days', 'd0000000-0000-0000-0000-000000000006', null, 'completed', null),
     ('edu-completed-late', 'edu-completed-late', 'd0000000-0000-0000-0000-000000000001',
@@ -1152,6 +1167,20 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
      interval '9 days' - interval '2 seconds'),
     ('edu-in-progress', 'started', 'd0000000-0000-0000-0000-000000000002', 'edu-in-progress',
      'todo', 'in_progress', null, '{}'::jsonb, interval '7 days'),
+
+    -- ---- project-overdue (#891, F37): direct, in progress, deadline past
+    ('project-overdue', 'created', 'd0000000-0000-0000-0000-000000000005', null,
+     null, 'todo', null,
+     jsonb_build_object('kind', 'task', 'audience', 'local', 'assignment_mode', 'direct',
+                        'campaign_id', null, 'parent_task_id', null,
+                        'executor_id', 'd0000000-0000-0000-0000-000000000002'),
+     interval '6 days'),
+    ('project-overdue', 'executor_assigned', 'd0000000-0000-0000-0000-000000000005', 'project-overdue',
+     null, null, null,
+     jsonb_build_object('via', 'create', 'member_id', 'd0000000-0000-0000-0000-000000000002'),
+     interval '6 days' - interval '2 seconds'),
+    ('project-overdue', 'started', 'd0000000-0000-0000-0000-000000000002', 'project-overdue',
+     'todo', 'in_progress', null, '{}'::jsonb, interval '5 days'),
 
     -- ---- pr-open-queue: public, open, no Candidate and no Executor
     ('pr-open-queue', 'created', 'd0000000-0000-0000-0000-000000000007', null,
@@ -1573,7 +1602,7 @@ select fixture.title, fixture.type::public.event_type,
   ('Recrutare de toamnă — stand','recrutare', 'hr',   null,       0,
    now() + interval '3 days',  now() + interval '3 days 6 hours',  'Campus FSEGA',      null,
    'Stand de promovare, două ture.',                  'd0000000-0000-0000-0000-000000000005'),
-  ('Deadline: raport trimestrial','deadline', 'fin',  null,       0,
+  ('Termen: raport trimestrial',  'deadline', 'fin',  null,       0,
    now() + interval '7 days',  null::timestamptz,                   null,               null,
    'Trimiterea raportului către BC.',                 'd0000000-0000-0000-0000-000000000007')
   ) as fixture (title, type, dept, team, min_level, starts_at, ends_at, location, capacity, description, created_by);
@@ -1673,18 +1702,50 @@ select fixture.member_id, fixture.kind, fixture.icon, fixture.title, fixture.bod
   ('d0000000-0000-0000-0000-000000000007', 'announce', '📢', 'Recrutarea de toamnă începe luni',  'Standul are nevoie de voluntari.', false, false, null, now() - interval '2 days')
   ) as fixture (member_id, kind, icon, title, body, critical, read, link, created_at);
 
--- The one Task-kind notification is rebuilt from its command source rather
--- than hand-written (#296 fix round 1): `edu-in-progress` was created with an
--- Executor, so `private.create_task_impl` calls
--- `private.open_task_assignment(..., 'create')`, which sends exactly this
--- body — copied verbatim from the migration — with no dedupe_key and
--- link/task_id derived the way `private.notify` derives them.
+-- The Task-kind notifications are rebuilt from their command source rather
+-- than hand-written (#296 fix round 1). `edu-in-progress` and
+-- `project-overdue` were created with an Executor, so
+-- `private.create_task_impl` calls `private.open_task_assignment(..., 'create')`,
+-- which sends exactly this body — copied verbatim from the migration (#891:
+-- "Termen:", not "Deadline:") — with no dedupe_key and link/task_id derived
+-- the way `private.notify` derives them.
 insert into notifications (member_id, kind, icon, title, body, critical, read, link, task_id, created_at)
 select 'd0000000-0000-0000-0000-000000000002'::uuid, 'task'::public.noti_kind, '✅',
        'Task nou: ' || task.title,
-       'Ți-a fost atribuit acest task. Deadline: ' ||
-         to_char(task.deadline at time zone 'Europe/Bucharest', 'DD.MM.YYYY HH24:MI') || '.',
-       false, false, '/tracker?task=' || task.id::text, task.id,
-       now() - (interval '9 days' - interval '2 seconds')
-  from tasks task
- where task.id = pg_temp.demo_task_id('edu-in-progress');
+       'Ți-a fost atribuit acest task. Termen: ' ||
+         coalesce(to_char(task.deadline at time zone 'Europe/Bucharest', 'DD.MM.YYYY HH24:MI'), '—') || '.',
+       false, fixture.read, '/tracker?task=' || task.id::text, task.id,
+       now() - fixture.ago
+  from (values
+    ('edu-in-progress', false, interval '9 days' - interval '2 seconds'),
+    ('project-overdue', true,  interval '6 days' - interval '2 seconds')
+  ) as fixture (task_key, read, ago)
+  join tasks task on task.id = pg_temp.demo_task_id(fixture.task_key);
+
+-- #891 (final QA audit F66): Notificări pages 20 rows at a time
+-- (app/src/queries/notifications.ts), so one persona needs more than a page
+-- for "Încarcă mai multe" to show. The Voluntar gets an older, already-read
+-- run of edit notifications on the Tasks she is the active Executor of: four
+-- per Task, spread evenly between her Assignment and yesterday, each in the
+-- exact text `private.update_task_impl` sends ("Task actualizat: <title>",
+-- "Modificat: <Romanian field labels>.") with the link and task_id
+-- `private.notify` derives. With the rows above and the Group commands'
+-- own notifications she has more than 25.
+insert into notifications (member_id, kind, icon, title, body, critical, read, link, task_id, created_at)
+select assignment.member_id, 'task'::public.noti_kind, '✅',
+       'Task actualizat: ' || task.title,
+       case edit.n when 1 then 'Modificat: descriere.'
+                   when 2 then 'Modificat: termen.'
+                   when 3 then 'Modificat: titlu, termen.'
+                   else 'Modificat: etichetă link, adresă link.' end,
+       false, true, '/tracker?task=' || task.id::text, task.id,
+       assignment.assigned_at
+         + (now() - interval '1 day' - assignment.assigned_at) * edit.n / 5
+  from task_assignments as assignment
+  join tasks as task on task.id = assignment.task_id
+  join profiles as creator on creator.id = task.created_by
+  cross join generate_series(1, 4) as edit (n)
+ where assignment.member_id = 'd0000000-0000-0000-0000-000000000002'
+   and assignment.ended_at is null
+   and task.kind = 'task'
+   and creator.email like '%@demo.osubb';
