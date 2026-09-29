@@ -476,12 +476,28 @@ function GroupSettingRow({
           ? null
           : groups.isPending
             ? 'Se încarcă…'
-            : (currentGroup?.name ?? 'Grup indisponibil')
+            : groups.isError
+              ? 'Numele grupului nu s-a putut încărca.'
+              : (currentGroup?.name ?? 'Grup indisponibil')
       }
       disabled={disabled || groups.isPending}
       renderEditor={(props) =>
         groups.isError ? (
-          <ErrorState text="Nu am putut încărca grupurile." />
+          // No list to choose from: retry it, or leave the editor.
+          <div className="flex max-w-xl flex-col gap-3">
+            <ErrorState
+              text="Nu am putut încărca grupurile."
+              onRetry={() => void groups.refetch()}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className="self-start"
+              onClick={() => props.onDone(false)}
+            >
+              Renunță
+            </Button>
+          </div>
         ) : (
           <GroupEditor
             {...props}

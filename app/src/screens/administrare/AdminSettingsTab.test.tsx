@@ -405,3 +405,40 @@ it('points the board setting at an active Private Group and clears it (#824)', a
     ),
   ).toBeVisible();
 });
+
+it('lets the editor be left when the Groups cannot be loaded', async () => {
+  const user = userEvent.setup();
+  const refetch = vi.fn();
+  db.settings.set('adunarea_generala_group_id', '5');
+  db.groups.mockReturnValue({
+    data: undefined,
+    isPending: false,
+    isError: true,
+    refetch,
+  });
+  show();
+  const item = await row('Grupul Adunării Generale');
+  expect(
+    within(valueOf(item)).getByText('Numele grupului nu s-a putut încărca.'),
+  ).toBeVisible();
+  await user.click(
+    within(item).getByRole('button', {
+      name: 'Editează Grupul Adunării Generale',
+    }),
+  );
+  expect(within(item).getByRole('alert')).toHaveTextContent(
+    'Nu am putut încărca grupurile.',
+  );
+  await user.click(
+    within(item).getByRole('button', { name: 'Încearcă din nou' }),
+  );
+  expect(refetch).toHaveBeenCalled();
+  await user.click(within(item).getByRole('button', { name: 'Renunță' }));
+  expect(within(item).queryByRole('alert')).toBeNull();
+  expect(
+    within(item).getByRole('button', {
+      name: 'Editează Grupul Adunării Generale',
+    }),
+  ).toHaveFocus();
+  expect(rpcCalls('set_org_setting')).toEqual([]);
+});
