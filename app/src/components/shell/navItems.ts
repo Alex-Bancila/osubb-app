@@ -86,6 +86,13 @@ export const NAV_ITEMS: NavItem[] = [
     capability: 'seeLeadership',
     activeOn: ['/clasament', '/tracker/membru/:id'],
   },
+  // Directly under Clasament: the two pages about the members themselves (#910).
+  {
+    path: '/voluntari',
+    label: 'Voluntari',
+    icon: Users,
+    capability: 'seeDirectory',
+  },
   { path: '/grupuri', label: 'Grupuri', icon: Users },
   {
     path: '/cereri',
@@ -119,12 +126,6 @@ export const NAV_ITEMS: NavItem[] = [
     onTabBar: true,
   },
   { path: NOTIFICATIONS_PATH, label: 'Notificări', icon: Bell },
-  {
-    path: '/voluntari',
-    label: 'Voluntari',
-    icon: Users,
-    capability: 'seeDirectory',
-  },
   { path: '/profil', label: 'Profil', icon: UserRound, onTabBar: true },
   {
     path: '/administrare',
