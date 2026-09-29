@@ -9,12 +9,15 @@ import {
   currentGroupTab,
   groupStatusLabel,
   groupTabs,
+  leadsAny,
+  ledTree,
   membersBelowLevel,
   minLevelChoices,
   rosterBackState,
   unfinishedTasksPath,
   varies,
   visibleRows,
+  type LedSource,
 } from './group-tree';
 
 function group(
@@ -79,6 +82,99 @@ it('treats a Group whose parent the caller cannot read as a root of what they se
     ['Amfiteatru', 0],
     ['Foto', 1],
   ]);
+});
+
+it('gives each subgroup its parent and the rail it draws (#921)', () => {
+  const rows = buildTree(tree).map((row) => ({
+    name: row.group.name,
+    parentName: row.parentName,
+    last: row.last,
+    continues: row.continues,
+  }));
+  expect(rows).toEqual([
+    { name: 'Balul Bobocilor', parentName: null, last: false, continues: [] },
+    { name: 'Educațional', parentName: null, last: true, continues: [] },
+    // Logistică follows Amfiteatru, so Amfiteatru's rail runs on past Foto.
+    {
+      name: 'Amfiteatru',
+      parentName: 'Educațional',
+      last: false,
+      continues: [],
+    },
+    { name: 'Foto', parentName: 'Amfiteatru', last: true, continues: [true] },
+    { name: 'Logistică', parentName: 'Educațional', last: true, continues: [] },
+  ]);
+  // Once Amfiteatru is the last child, nothing runs past its subtree.
+  const lastBranch = buildTree(tree.filter((g) => g.name !== 'Logistică'));
+  expect(
+    lastBranch.find((row) => row.group.name === 'Foto')?.continues,
+  ).toEqual([false]);
+});
+
+function mine(
+  id: number,
+  name: string,
+  path: number[],
+  groupRole: string,
+  extra: Partial<LedSource> = {},
+): LedSource {
+  return {
+    id,
+    name,
+    path,
+    group_role: groupRole,
+    explicit: true,
+    automatic: false,
+    category: 'team',
+    color: '',
+    min_level: 0,
+    status: 'active',
+    is_organization: false,
+    ...extra,
+  };
+}
+
+it('lists exactly the led Groups, inherited ones marked, parents kept as context (#921)', () => {
+  const rows = ledTree(
+    tree,
+    [
+      // Coordonator of Amfiteatru on its own roster row …
+      mine(3, 'Amfiteatru', [1, 3], 'manager'),
+      // … and so of Foto below it, from above (ruling R14).
+      mine(5, 'Foto', [1, 3, 5], 'manager', { explicit: false }),
+      // A plain membership leads nothing (B47).
+      mine(4, 'Balul Bobocilor', [4], 'member'),
+    ],
+    [
+      { group_id: 3, group_role: 'manager' },
+      { group_id: 4, group_role: 'member' },
+    ],
+  );
+  expect(rows.map((row) => [row.group.name, row.depth, row.lead])).toEqual([
+    ['Educațional', 0, null],
+    ['Amfiteatru', 1, { groupRole: 'manager', inherited: false }],
+    ['Foto', 2, { groupRole: 'manager', inherited: true }],
+  ]);
+});
+
+it('keeps a led Group the Group rows have not caught up with (#921)', () => {
+  const rows = ledTree(
+    [],
+    [mine(9, 'Echipa nouă', [9], 'responsible')],
+    [{ group_id: 9, group_role: 'responsible' }],
+  );
+  expect(rows.map((row) => [row.group.name, row.lead?.groupRole])).toEqual([
+    ['Echipa nouă', 'responsible'],
+  ]);
+});
+
+it('says whether the viewer leads any Group (#921)', () => {
+  expect(leadsAny([{ group_role: 'member' }])).toBe(false);
+  expect(leadsAny([])).toBe(false);
+  expect(
+    leadsAny([{ group_role: 'member' }, { group_role: 'responsible' }]),
+  ).toBe(true);
+  expect(leadsAny([{ group_role: 'manager' }])).toBe(true);
 });
 
 it('hides every Group under a collapsed ancestor, not just its direct children', () => {

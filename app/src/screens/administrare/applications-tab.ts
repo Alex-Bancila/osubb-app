@@ -7,6 +7,7 @@ import {
   type AdminGroup,
 } from '../../queries/groups-admin';
 import type { MyGroup } from '../../queries/my-groups';
+import { groupRoleLabel, inheritsGroupRole } from './group-tree';
 
 /**
  * Whether the Cereri de aderare tab can hold anything for this viewer
@@ -70,4 +71,134 @@ export function useApplicationsTabShown(
     applications.data,
     applications.isError,
   ]);
+}
+
+/** One Group of the Cereri de aderare list (#922). */
+export type ApplicationGroup = {
+  id: number;
+  name: string;
+  /** The parent's name, for a subgroup whose parent the viewer can read. */
+  parentName: string | null;
+  color: string | null;
+  /** The viewer's Group Role here, as the Group names it; null for none. */
+  roleLabel: string | null;
+  /** The role comes from a Group above (Manager/Responsible flow down). */
+  inherited: boolean;
+  /** Pending Applications the viewer may decide here; 0 is kept. */
+  pending: number;
+};
+
+type ApplicationGroupRow = Pick<
+  AdminGroup,
+  'id' | 'name' | 'color' | 'path' | 'parent_id' | 'manager_title'
+>;
+
+/** Tree order, as `my_groups()` sorts: by path, then id. */
+function comparePaths(
+  left: readonly number[] | undefined,
+  right: readonly number[] | undefined,
+): number {
+  if (!left || !right) return left ? -1 : right ? 1 : 0;
+  for (let i = 0; i < Math.min(left.length, right.length); i += 1)
+    if (left[i] !== right[i]) return (left[i] ?? 0) - (right[i] ?? 0);
+  return left.length - right.length;
+}
+
+/**
+ * The Groups the Cereri de aderare page lists (#922), in tree order. The same
+ * rule the server decides on (`private.can_manage_group_work`, which both
+ * `group_applications_read` and `decide_group_application` apply):
+ *
+ * - every ACTIVE Group where the viewer is Group Manager or Group Responsible,
+ *   here or inherited from an ancestor (`my_groups()`), each with its pending
+ *   count — 0 included;
+ * - every Group that has a pending Application the viewer may read, which for
+ *   BC and the Moderator (who decide on every Group) is every Group with one.
+ *
+ * Counts come from the queue itself, so a Group never shows a request the
+ * viewer cannot open.
+ */
+export function applicationGroups({
+  applications,
+  myGroups,
+  groups,
+  rosterRows,
+}: {
+  applications: readonly { group_id: number; group: { name: string } }[];
+  // `my_groups()` rows; its generated type misses that `color` may be null.
+  myGroups: readonly (Pick<
+    MyGroup,
+    'id' | 'name' | 'path' | 'status' | 'group_role' | 'explicit' | 'automatic'
+  > & { color: string | null })[];
+  groups: readonly ApplicationGroupRow[];
+  rosterRows?: readonly { group_id: number; group_role: string }[];
+}): ApplicationGroup[] {
+  const byId = new Map(groups.map((group) => [group.id, group]));
+  const pending = new Map<number, number>();
+  const names = new Map<number, string>();
+  for (const row of applications) {
+    pending.set(row.group_id, (pending.get(row.group_id) ?? 0) + 1);
+    names.set(row.group_id, row.group.name);
+  }
+  const listed = new Map<
+    number,
+    ApplicationGroup & { path: readonly number[] | undefined }
+  >();
+  const entry = (
+    id: number,
+    name: string,
+    color: string | null,
+    path: readonly number[] | undefined,
+  ) => {
+    const group = byId.get(id);
+    const parent =
+      group?.parent_id != null ? byId.get(group.parent_id) : undefined;
+    return {
+      id,
+      name,
+      parentName: parent?.name ?? null,
+      color,
+      roleLabel: null,
+      inherited: false,
+      pending: pending.get(id) ?? 0,
+      path,
+    };
+  };
+  for (const mine of myGroups) {
+    if (mine.group_role !== 'manager' && mine.group_role !== 'responsible')
+      continue;
+    if (mine.status !== 'active' && !pending.has(mine.id)) continue;
+    listed.set(mine.id, {
+      ...entry(mine.id, mine.name, mine.color, mine.path),
+      roleLabel: groupRoleLabel(
+        mine.group_role,
+        byId.get(mine.id)?.manager_title,
+      ),
+      inherited: inheritsGroupRole(mine, rosterRows),
+    });
+  }
+  for (const [id, name] of names) {
+    if (listed.has(id)) continue;
+    const group = byId.get(id);
+    listed.set(
+      id,
+      entry(id, group?.name ?? name, group?.color ?? null, group?.path),
+    );
+  }
+  return [...listed.values()]
+    .sort(
+      (left, right) =>
+        comparePaths(left.path, right.path) || left.id - right.id,
+    )
+    .map(({ path: _path, ...group }) => group);
+}
+
+/** "1 cerere", "2 cereri", "20 de cereri" — 0 is "0 cereri". */
+export function applicationCount(count: number): string {
+  if (count === 1) return '1 cerere';
+  const rest = count % 100;
+  // Romanian takes "de" from 20 on, except after 1–19 (101 cereri).
+  return count >= 20 && (rest === 0 || rest >= 20)
+    ? `${count} de cereri`
+    : `${count} cereri`;
 }
