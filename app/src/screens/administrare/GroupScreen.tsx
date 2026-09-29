@@ -41,6 +41,7 @@ import { GroupSettingsTab } from './GroupSettingsTab';
 import {
   categoryLabel,
   currentGroupTab,
+  groupCreatedReceipt,
   groupPathNames,
   groupStatusLabel,
   groupTabs,
@@ -237,7 +238,11 @@ export default function GroupScreen() {
     try {
       await command.mutateAsync(next);
       setLastReason(undefined);
-      setMessage(SUCCESS[next.kind]);
+      setMessage(
+        next.kind === 'create'
+          ? groupCreatedReceipt(next, membersQuery.data ?? [])
+          : SUCCESS[next.kind],
+      );
       return true;
     } catch (failure) {
       const known = failure instanceof CommandError;

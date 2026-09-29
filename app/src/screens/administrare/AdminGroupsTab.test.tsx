@@ -10,7 +10,7 @@ import {
   useParams,
 } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
-import type { AdminGroup } from '../../queries/groups-admin';
+import type { AdminGroup, AppointableMember } from '../../queries/groups-admin';
 import type { MyGroup } from '../../queries/my-groups';
 
 const api = vi.hoisted(() => ({
@@ -370,6 +370,144 @@ it('offers "Creează Grup" only with the capability, and creates through the com
   });
   await waitFor(() =>
     expect(screen.getByText('Grupul a fost creat.')).toBeVisible(),
+  );
+});
+
+function appointable(
+  memberId: string,
+  name: string,
+  roleId: string,
+  roleLabel: string,
+  level: number,
+  status = 'activ',
+): AppointableMember {
+  return {
+    memberId,
+    name,
+    avatarColor: null,
+    status,
+    roleId,
+    roleLabel,
+    level,
+  };
+}
+
+const APPOINTABLE = [
+  appointable('ana', 'Ana Pop', 'bce', 'BCE', 5),
+  appointable('bc', 'Cristina Șerban', 'bc', 'BC', 6),
+  appointable('mod', 'Moderator OSUBB', 'moderator', 'Moderator', 9),
+  appointable('rec', 'Radu Recrut', 'recrut', 'Recrut', 0),
+  appointable(
+    'old',
+    'Oana Plecată',
+    'vot',
+    'Voluntar cu Drept de Vot',
+    3,
+    'inactiv',
+  ),
+];
+
+it('names no direct Manager by default, and never offers the Moderator (#951)', async () => {
+  const user = userEvent.setup();
+  api.members.mockReturnValue({ data: APPOINTABLE });
+  show();
+  await user.click(screen.getByRole('button', { name: 'Creează Grup' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Grup nou' });
+  // The category titles the position: BCE for a Department.
+  const picker = within(dialog).getByRole('combobox', {
+    name: 'Manager direct (BCE)',
+  });
+  expect(picker).toHaveTextContent('Fără manager direct');
+  expect(dialog).toHaveTextContent(
+    'Opțional. Fără el, grupul este condus de BC și Moderator.',
+  );
+
+  await user.click(picker);
+  const options = within(await screen.findByRole('listbox'))
+    .getAllByRole('option')
+    .map((option) => option.textContent);
+  expect(options).toEqual([
+    'Fără manager direct',
+    'APAna PopBCE',
+    'CȘCristina ȘerbanBC',
+    'RRRadu RecrutRecrut',
+  ]);
+  await user.keyboard('{Escape}');
+
+  await user.type(within(dialog).getByLabelText('Numele grupului'), 'Interne');
+  await user.click(within(dialog).getByRole('button', { name: 'Creează' }));
+  expect(api.mutate).toHaveBeenCalledWith(
+    expect.objectContaining({ kind: 'create', managerId: null }),
+  );
+  await waitFor(() =>
+    expect(screen.getByText('Grupul a fost creat.')).toBeVisible(),
+  );
+});
+
+it('appoints the chosen direct Manager with the Group and says so (#951)', async () => {
+  const user = userEvent.setup();
+  api.members.mockReturnValue({ data: APPOINTABLE });
+  show();
+  await user.click(screen.getByRole('button', { name: 'Creează Grup' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Grup nou' });
+  await user.type(within(dialog).getByLabelText('Numele grupului'), 'Gala');
+  await user.selectOptions(
+    within(dialog).getByLabelText('Categorie'),
+    'project',
+  );
+  const picker = within(dialog).getByRole('combobox', {
+    name: 'Manager direct (Coordonator Principal)',
+  });
+  await user.click(picker);
+  await user.click(await screen.findByRole('option', { name: /Ana Pop/ }));
+  expect(picker).toHaveTextContent('Ana Pop');
+
+  // Taken back through the same list: the empty choice sends nobody.
+  await user.click(picker);
+  await user.click(
+    await screen.findByRole('option', { name: 'Fără manager direct' }),
+  );
+  expect(picker).toHaveTextContent('Fără manager direct');
+  await user.click(picker);
+  await user.click(await screen.findByRole('option', { name: /Ana Pop/ }));
+
+  await user.click(within(dialog).getByRole('button', { name: 'Creează' }));
+  expect(api.mutate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      kind: 'create',
+      name: 'Gala',
+      category: 'project',
+      managerId: 'ana',
+    }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByText(
+        'Grupul a fost creat, cu Ana Pop ca Coordonator Principal.',
+      ),
+    ).toBeVisible(),
+  );
+});
+
+it('drops a direct Manager the raised Minimum Level rules out (#951)', async () => {
+  const user = userEvent.setup();
+  api.members.mockReturnValue({ data: APPOINTABLE });
+  api.roles.mockReturnValue({ data: LADDER_WITH_MODERATOR });
+  show();
+  await user.click(screen.getByRole('button', { name: 'Creează Grup' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Grup nou' });
+  await user.type(within(dialog).getByLabelText('Numele grupului'), 'Audit');
+  const picker = within(dialog).getByRole('combobox', {
+    name: 'Manager direct (BCE)',
+  });
+  await user.click(picker);
+  await user.click(await screen.findByRole('option', { name: /Radu Recrut/ }));
+  await user.selectOptions(within(dialog).getByLabelText('Nivel minim'), '5');
+  expect(picker).toHaveTextContent('Fără manager direct');
+
+  await user.click(within(dialog).getByRole('button', { name: 'Creează' }));
+  expect(api.mutate).toHaveBeenCalledWith(
+    expect.objectContaining({ minLevel: 5, managerId: null }),
   );
 });
 

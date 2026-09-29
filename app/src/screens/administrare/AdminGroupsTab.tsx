@@ -38,6 +38,7 @@ import {
   categoryLabel,
   expandableIds,
   groupRoleLabel,
+  groupCreatedReceipt,
   groupStatusLabel,
   leadsAny,
   ledTree,
@@ -580,7 +581,11 @@ export default function AdminGroupsTab() {
     setMessage(null);
     try {
       await command.mutateAsync(next);
-      setMessage('Grupul a fost creat.');
+      setMessage(
+        next.kind === 'create'
+          ? groupCreatedReceipt(next, membersQuery.data ?? [])
+          : 'Grupul a fost creat.',
+      );
       return true;
     } catch (failure) {
       if (onFailure) onFailure(failure);

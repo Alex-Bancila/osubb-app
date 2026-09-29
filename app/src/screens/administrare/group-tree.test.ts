@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import type { AdminGroup } from '../../queries/groups-admin';
+import type { AdminGroup, AppointableMember } from '../../queries/groups-admin';
 import {
   buildTree,
   categoryLabel,
@@ -7,6 +7,9 @@ import {
   groupPathNames,
   groupRoleLabel,
   currentGroupTab,
+  directManagerCandidates,
+  groupCreatedReceipt,
+  managerTitleFor,
   groupStatusLabel,
   groupTabs,
   leadsAny,
@@ -323,4 +326,54 @@ it('sends the member page back to the Roster tab (D4)', () => {
   expect(rosterBackState(7)).toEqual({
     from: { to: '/administrare/grupuri/7?tab=roster', label: 'Înapoi la grup' },
   });
+});
+
+function appointable(
+  memberId: string,
+  roleId: string,
+  level: number,
+  status = 'activ',
+): AppointableMember {
+  return {
+    memberId,
+    name: `Membru ${memberId}`,
+    avatarColor: null,
+    status,
+    roleId,
+    roleLabel: roleId,
+    level,
+  };
+}
+
+it("titles a new Group's direct Manager after its category (#951)", () => {
+  expect(managerTitleFor('department')).toBe('BCE');
+  expect(managerTitleFor('project')).toBe('Coordonator Principal');
+  expect(managerTitleFor('team')).toBe('Coordonator');
+});
+
+it('offers as direct Manager every eligible active Member but the Moderator (#951)', () => {
+  const members = [
+    appointable('voluntar', 'voluntar', 1),
+    appointable('recrut', 'recrut', 0),
+    appointable('bc', 'bc', 6),
+    appointable('moderator', 'moderator', 9),
+    appointable('plecat', 'vot', 3, 'inactiv'),
+  ];
+  expect(
+    directManagerCandidates(members, 0).map((member) => member.memberId),
+  ).toEqual(['voluntar', 'recrut', 'bc']);
+  // At or above the new Group's Minimum Level, as create_group requires.
+  expect(
+    directManagerCandidates(members, 1).map((member) => member.memberId),
+  ).toEqual(['voluntar', 'bc']);
+});
+
+it('names the direct Manager in the receipt only when one was chosen (#951)', () => {
+  const members = [appointable('ana', 'bce', 5)];
+  expect(
+    groupCreatedReceipt({ category: 'department', managerId: null }, members),
+  ).toBe('Grupul a fost creat.');
+  expect(
+    groupCreatedReceipt({ category: 'project', managerId: 'ana' }, members),
+  ).toBe('Grupul a fost creat, cu Membru ana ca Coordonator Principal.');
 });
