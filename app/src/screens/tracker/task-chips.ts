@@ -5,7 +5,7 @@ export const CHIP_GAP = 6;
  * The narrowest the last chip on the line may truncate to and still say what
  * it is ("Campanie: Școala…"). A chip narrower than this keeps its own width.
  */
-export const MIN_TRUNCATED_CHIP = 120;
+export const MIN_TRUNCATED_CHIP = 96;
 
 /**
  * How many chips fit on one line: all of them, or the first ones plus room

@@ -29,7 +29,7 @@ describe('Chips that fit stay on the line (F-5)', () => {
     expect(chipsThatFit([201, 233], 435)).toBe(2);
   });
   it('folds a chip only when too little of it would be left', () => {
-    // At 375 the line is 290 px: 201 + 6 + 120 does not fit.
+    // At 375 the line is 290 px: 201 + 6 + 96 does not fit.
     expect(chipsThatFit([201, 233], 290)).toBe(1);
   });
 });
