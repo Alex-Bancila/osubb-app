@@ -9,7 +9,8 @@
 -- Mutation proof: rebuilding private.task_managers from 20260929200000 (the walk in
 -- private.group_managers stopping at a BC/Moderator Manager, then filtered) turns the
 -- "BC/Moderator never stop the walk" assertions red; confining the walk to the Task's
--- own Group turns the parent and grandparent assertions red.
+-- own Group turns the parent and grandparent assertions red; skipping the Task's own
+-- Group turns the own-Group assertion red.
 --
 -- Personas (prefix 941):
 --    1 bc        activ    Manager of Mid C and Root D; Responsible of Root E
@@ -34,7 +35,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(12);
+select plan(13);
 
 create function pg_temp.u941(n integer) returns uuid language sql immutable as $$
   select ('94100000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -97,6 +98,15 @@ select set_eq(
   $$select * from private.task_managers(pg_temp.t941('B'), null)$$,
   $$values (pg_temp.u941(3))$$,
   'with no live Manager in the Group or its parent (only an inactive one), the grandparent''s Manager is notified');
+
+update public.group_members set group_role = 'manager'
+ where member_id = pg_temp.u941(9) and group_id = (select id from public.groups where name = 'Leaf A #941');
+select set_eq(
+  $$select * from private.task_managers(pg_temp.t941('A'), null)$$,
+  $$values (pg_temp.u941(9))$$,
+  'the Task''s own Group comes first: its live Manager is notified, never the parent''s or the grandparent''s');
+update public.group_members set group_role = 'member'
+ where member_id = pg_temp.u941(9) and group_id = (select id from public.groups where name = 'Leaf A #941');
 
 -- ==================== BC and the Moderator never stop the walk ====================
 
