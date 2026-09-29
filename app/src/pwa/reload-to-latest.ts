@@ -29,25 +29,29 @@ function installed(worker: ServiceWorker): Promise<void> {
 
 export async function reloadToLatestVersion(): Promise<void> {
   const reload = () => window.location.reload();
+  const container = navigator.serviceWorker as
+    ServiceWorkerContainer | undefined;
+  let registration: ServiceWorkerRegistration | undefined;
+  const takeOver = (waiting: ServiceWorker | null | undefined) => {
+    if (!container || !waiting) return false;
+    container.addEventListener('controllerchange', reload, { once: true });
+    // Should the new worker never take over, reload all the same.
+    window.setTimeout(reload, TAKEOVER_WAIT_MS);
+    waiting.postMessage({ type: 'SKIP_WAITING' });
+    return true;
+  };
   try {
-    const container = navigator.serviceWorker as
-      ServiceWorkerContainer | undefined;
-    const registration = await container?.getRegistration();
-    if (container && registration) {
+    registration = await container?.getRegistration();
+    if (registration) {
       await registration.update();
       if (!registration.waiting && registration.installing)
         await installed(registration.installing);
-      const waiting = registration.waiting;
-      if (waiting) {
-        container.addEventListener('controllerchange', reload, { once: true });
-        // Should the new worker never take over, reload all the same.
-        window.setTimeout(reload, TAKEOVER_WAIT_MS);
-        waiting.postMessage({ type: 'SKIP_WAITING' });
-        return;
-      }
+      if (takeOver(registration.waiting)) return;
     }
   } catch {
-    // An update check that fails (offline, no worker) still reloads.
+    // A failed update check (offline) can still hand over to a build that
+    // was already downloaded and is waiting; otherwise it simply reloads.
+    if (takeOver(registration?.waiting)) return;
   }
   reload();
 }

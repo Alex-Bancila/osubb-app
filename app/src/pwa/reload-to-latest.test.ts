@@ -76,6 +76,29 @@ it('reloads anyway when the waiting build never takes over', async () => {
   expect(reload).toHaveBeenCalledTimes(1);
 });
 
+it('still hands over to a waiting build when the update check fails', async () => {
+  vi.useFakeTimers();
+  let onControllerChange: (() => void) | undefined;
+  const postMessage = vi.fn();
+  withServiceWorker({
+    getRegistration: async () => ({
+      update: async () => {
+        throw new Error('offline');
+      },
+      waiting: { postMessage },
+      installing: null,
+    }),
+    addEventListener: (type: string, listener: () => void) => {
+      if (type === 'controllerchange') onControllerChange = listener;
+    },
+  });
+  await reloadToLatestVersion();
+  expect(postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
+  expect(reload).not.toHaveBeenCalled();
+  onControllerChange?.();
+  expect(reload).toHaveBeenCalledTimes(1);
+});
+
 it('reloads all the same when the update check fails', async () => {
   withServiceWorker({
     getRegistration: async () => {
