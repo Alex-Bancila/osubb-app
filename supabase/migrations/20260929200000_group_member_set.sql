@@ -174,25 +174,31 @@ as $$
   -- Visibility restates group_members_read, applied to every row of the member set:
   -- the caller's own membership, the whole set for BCE+, or the set of a Group whose
   -- roster they may read (a Manager or Responsible on its path) -- always only in a
-  -- Group they can see (#756).
-  select grp.id,
+  -- Group they can see (#756). The Group-level half is judged once per Group, before
+  -- any member set is computed, so a Group the caller cannot see costs nothing.
+  with visible as materialized (
+    select grp.id,
+           ((select private.caller_level()) >= 5
+            or private.can_read_group_roster(grp.id)) as whole_roster
+      from public.groups as grp
+     where (p_group_id is null or grp.id = p_group_id)
+       and public.auth_is_member()
+       and private.can_see_group(grp.id, (select auth.uid()))
+  )
+  select visible.id,
          member_set.member_id,
          member_set.source,
          membership.group_role,
          membership.position_title,
          membership.created_at
-    from public.groups as grp
-   cross join lateral private.group_member_set(grp.id) as member_set
+    from visible
+   cross join lateral private.group_member_set(visible.id) as member_set
     left join public.group_members as membership
-      on membership.group_id = grp.id
+      on membership.group_id = visible.id
      and membership.member_id = member_set.member_id
-   where (p_group_id is null or grp.id = p_group_id)
-     and public.auth_is_member()
-     and private.can_see_group(grp.id, (select auth.uid()))
-     and ((member_set.member_id = (select auth.uid()) and (select private.caller_level()) >= 0)
-          or (select private.caller_level()) >= 5
-          or private.can_read_group_roster(grp.id))
-   order by grp.id, member_set.member_id;
+   where visible.whole_roster
+      or (member_set.member_id = (select auth.uid()) and (select private.caller_level()) >= 0)
+   order by visible.id, member_set.member_id;
 $$;
 
 comment on function private.group_roster_impl(bigint) is
