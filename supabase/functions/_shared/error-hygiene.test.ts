@@ -140,9 +140,16 @@ Deno.test("invite-member: no error body carries database or setting text", async
       inviteDeps(),
     ],
     [
-      "reserved role",
+      // Since ruling R31 (#917) the function gives a BC caller every rank;
+      // provision_profile's rank ceiling is the refusal left to hide.
+      "leadership rank refused by the database",
       browserPost(INVITE, { ...INVITE_BODY, role: "bc" }),
-      inviteDeps(),
+      inviteDeps({
+        provision: () =>
+          Promise.resolve({
+            error: { code: "42501", message: "member_manage_forbidden" },
+          }),
+      }),
     ],
     [
       "missing group",

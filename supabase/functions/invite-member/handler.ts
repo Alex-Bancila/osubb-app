@@ -6,9 +6,9 @@
 // POST { email, full_name, role?, group_ids? }
 //   201 { user_id }        invited and provisioned
 //   400                    bad input
-//   401 / 403              not signed in / not BC (level < 6)
-//   403 member_manage_forbidden
-//                          role bc or moderator from anyone but the Moderator
+//   401 / 403              not signed in / not BC or Moderator (level < 6);
+//                          since ruling R31 (#917) that caller may give any
+//                          rank, bc and moderator included
 //   409 already_exists     that email already has an account
 //
 // Every error body is { code, error } (_shared/errors.ts): a stable reason
@@ -30,7 +30,7 @@ import {
   json,
   refusal,
 } from "../_shared/cors.ts";
-import { inviteMember, mayHandleRole } from "../_shared/member-invite.ts";
+import { inviteMember } from "../_shared/member-invite.ts";
 import type { InviteDeps } from "./deps.ts";
 
 const INVITE_LEVEL = 6; // BC and above — capability manageRoles (spec §4.1)
@@ -179,18 +179,12 @@ export async function handleInvite(
   }
   const groupIds = rawGroupIds as number[];
 
-  // Only the Moderator creates a BC or Moderator account (H1) — the rule
-  // set_member_role applies. provision_profile refuses it too; answering here
-  // means no Auth user is ever created for a refused rank.
+  // A BC or Moderator account is created by leadership (H1, widened by ruling
+  // R31, #917) — the actor set_member_role accepts. The caller passed the
+  // INVITE_LEVEL gate above, so every rank is theirs to give; below it no
+  // Auth user is ever created. provision_profile checks the appointer again,
+  // live and under a lock.
   const role = body.role ?? "recrut";
-  if (!mayHandleRole(role, callerLevel)) {
-    return refusal(
-      "member_manage_forbidden",
-      "Doar Moderatorul poate crea conturi de BC sau Moderator.",
-      403,
-      origin,
-    );
-  }
 
   try {
     const result = await inviteMember({

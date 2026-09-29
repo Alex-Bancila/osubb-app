@@ -25,7 +25,7 @@ select plan(119);
 
 select has_function('public', 'set_member_role', array['uuid', 'member_role', 'text', 'uuid'],
   'the rank command exists with #612''s optional reason and #905''s optional replacement');
-select has_function('public', 'set_member_status', array['uuid', 'member_status', 'text'],
+select has_function('public', 'set_member_status', array['uuid', 'member_status', 'text', 'uuid'],
   'the status command exists with the optional-reason signature #612 specifies');
 
 -- ADR-0009 ruling R15: rank and position decouple. The comment is the durable
@@ -57,15 +57,15 @@ select matches(
 -- because it is the only place a reader is told the access token still lives
 -- out its hour.
 select matches(
-  obj_description('public.set_member_status(uuid, public.member_status, text)'::regprocedure, 'pg_proc'),
+  obj_description('public.set_member_status(uuid, public.member_status, text, uuid)'::regprocedure, 'pg_proc'),
   'revokes the Member''s Auth sessions in this same transaction',
   'set_member_status''s comment states that a non-activ Status revokes sessions here, in this transaction (#603)');
 select matches(
-  obj_description('public.set_member_status(uuid, public.member_status, text)'::regprocedure, 'pg_proc'),
+  obj_description('public.set_member_status(uuid, public.member_status, text, uuid)'::regprocedure, 'pg_proc'),
   'at most jwt_expiry \(one hour\)',
   'and still states the ADR-0003 window the revoke bounds but cannot close — the issued access token expires on its own');
 select matches(
-  obj_description('public.set_member_status(uuid, public.member_status, text)'::regprocedure, 'pg_proc'),
+  obj_description('public.set_member_status(uuid, public.member_status, text, uuid)'::regprocedure, 'pg_proc'),
   'never touches group_members',
   'and states that deactivation leaves every roster row and Group Role in place');
 
@@ -463,14 +463,14 @@ select throws_ok(
   'anon cannot even execute the status command');
 reset role;
 
--- Deactivating a BC stays the Moderator's alone: ruling R31 (#905) gave BC the
--- ranks, not the Membership Status of a BC or Moderator. The target is the BC
--- the Moderator appointed above — still sitting.
+-- Since ruling R31 (#917) a BC sets a BC or Moderator holder's Status too, so
+-- with no rank branch left to refuse a BC, only the self-rule can be answering
+-- here. member_rank_authority.test.sql asserts what a BC may now do.
 select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000002');
 select throws_ok(
-  $$ select public.set_member_status('58000000-0000-0000-0000-00000000000c', 'inactiv') $$,
+  $$ select public.set_member_status('58000000-0000-0000-0000-000000000002', 'inactiv') $$,
   '42501', 'member_manage_forbidden',
-  'BC cannot deactivate a sitting BC — that is unseating by another name');
+  'a BC member does not set their own Status');
 
 -- ==================== set_member_status: malformed input ====================
 
@@ -634,15 +634,15 @@ select is(has_function_privilege('anon', 'private.set_member_role_impl(uuid, pub
 select is(has_function_privilege('public', 'private.set_member_role_impl(uuid, public.member_role, text, uuid)', 'execute'), false, 'public execute on private role command is false');
 select is(has_function_privilege('service_role', 'private.set_member_role_impl(uuid, public.member_role, text, uuid)', 'execute'), false, 'service_role execute on private role command is false');
 select is(has_function_privilege('authenticated', 'private.set_member_role_impl(uuid, public.member_role, text, uuid)', 'execute'), true, 'authenticated execute on private role command is true');
-select has_function('private', 'set_member_status_impl', array['uuid', 'member_status', 'text'], 'the status implementation accepts a reason');
-select is(has_function_privilege('anon', 'public.set_member_status(uuid, public.member_status, text)', 'execute'), false, 'anon execute on public status command is false');
-select is(has_function_privilege('public', 'public.set_member_status(uuid, public.member_status, text)', 'execute'), false, 'public execute on public status command is false');
-select is(has_function_privilege('service_role', 'public.set_member_status(uuid, public.member_status, text)', 'execute'), false, 'service_role execute on public status command is false');
-select is(has_function_privilege('authenticated', 'public.set_member_status(uuid, public.member_status, text)', 'execute'), true, 'authenticated execute on public status command is true');
-select is(has_function_privilege('anon', 'private.set_member_status_impl(uuid, public.member_status, text)', 'execute'), false, 'anon execute on private status command is false');
-select is(has_function_privilege('public', 'private.set_member_status_impl(uuid, public.member_status, text)', 'execute'), false, 'public execute on private status command is false');
-select is(has_function_privilege('service_role', 'private.set_member_status_impl(uuid, public.member_status, text)', 'execute'), false, 'service_role execute on private status command is false');
-select is(has_function_privilege('authenticated', 'private.set_member_status_impl(uuid, public.member_status, text)', 'execute'), true, 'authenticated execute on private status command is true');
+select has_function('private', 'set_member_status_impl', array['uuid', 'member_status', 'text', 'uuid'], 'the status implementation accepts a reason');
+select is(has_function_privilege('anon', 'public.set_member_status(uuid, public.member_status, text, uuid)', 'execute'), false, 'anon execute on public status command is false');
+select is(has_function_privilege('public', 'public.set_member_status(uuid, public.member_status, text, uuid)', 'execute'), false, 'public execute on public status command is false');
+select is(has_function_privilege('service_role', 'public.set_member_status(uuid, public.member_status, text, uuid)', 'execute'), false, 'service_role execute on public status command is false');
+select is(has_function_privilege('authenticated', 'public.set_member_status(uuid, public.member_status, text, uuid)', 'execute'), true, 'authenticated execute on public status command is true');
+select is(has_function_privilege('anon', 'private.set_member_status_impl(uuid, public.member_status, text, uuid)', 'execute'), false, 'anon execute on private status command is false');
+select is(has_function_privilege('public', 'private.set_member_status_impl(uuid, public.member_status, text, uuid)', 'execute'), false, 'public execute on private status command is false');
+select is(has_function_privilege('service_role', 'private.set_member_status_impl(uuid, public.member_status, text, uuid)', 'execute'), false, 'service_role execute on private status command is false');
+select is(has_function_privilege('authenticated', 'private.set_member_status_impl(uuid, public.member_status, text, uuid)', 'execute'), true, 'authenticated execute on private status command is true');
 
 insert into auth.users (id, email) values
   ('61200000-0000-0000-0000-000000000001', 'reason612@test.local');

@@ -228,22 +228,21 @@ Deno.test("a signed-in Member reaches no Auth write at all", async () => {
   assertEquals(log.some((line) => line.includes(".update(")), false);
 });
 
-Deno.test("the real wiring reads the target's Role: a BC cannot move a pending BC's address (H2)", async () => {
-  const { create, log } = fakeClients({ lastSignInAt: null, role: "bc" });
-  const req = request({ member_id: MEMBER, email: "preluat@osubb.local" });
+Deno.test("the real wiring lets a BC re-invite a pending BC (ruling R31, #917)", async () => {
+  const { create, log } = fakeClients({
+    lastSignInAt: null,
+    role: "bc",
+    callerLevel: 6,
+  });
+  const req = request({ member_id: MEMBER, email: "corect@osubb.local" });
 
   const res = await handleReinvite(req, realDeps(req, ENV, create));
 
-  assertEquals(res.status, 403);
-  assertEquals((await res.json()).code, "member_manage_forbidden");
-  assertEquals(
-    log.includes(
-      `profiles.select(email, full_name, status, role).eq(id,${MEMBER})`,
-    ),
-    true,
-  );
-  assertEquals(authAdminWrites(log), []);
-  assertEquals(log.some((line) => line.startsWith("profiles.update")), false);
+  assertEquals(res.status, 200);
+  assertEquals(authAdminWrites(log), [
+    `auth.admin.updateUserById("${MEMBER}",{"email":"corect@osubb.local"})`,
+    `auth.admin.inviteUserByEmail("corect@osubb.local")`,
+  ]);
 });
 
 Deno.test("the real wiring lets the Moderator re-invite a pending BC", async () => {

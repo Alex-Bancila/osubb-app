@@ -40,9 +40,9 @@ type MemberStatus = Database['public']['Enums']['member_status'];
 const control =
   'min-h-11 w-full rounded-lg border border-border bg-background px-4 py-2 text-sm dark:border-input dark:bg-input/30';
 /**
- * The leadership ranks. Since ruling R31 (#905) every BC member grants and
- * removes them, as the Moderator does; only the Moderator changes a holder's
- * Status. Their live holders are the only viewers who change Roles at all.
+ * The leadership ranks. Since ruling R31 (#905, #917) every BC member grants
+ * and removes them and changes a holder's Status, as the Moderator does. Their
+ * live holders are the only viewers who change Roles or Status at all.
  */
 const PROTECTED_ROLES: ReadonlySet<string> = new Set(['bc', 'moderator']);
 /** How the panel names the one holder a leadership rank is left with. */
@@ -154,20 +154,23 @@ function identityOf(row: {
 }
 
 /**
- * Removing the last Moderator or BC asks first (#905): the dialog names both
+ * Removing the last Moderator or BC asks first (#905), whether the save takes
+ * their rank or, since #917, their `activ` Status: the dialog names both
  * changes the one save makes, the replacement's first, as the server applies
- * them.
+ * them. `note` carries the deactivation warning when the Status changes.
  */
 function ReplacementDialog({
   open,
   onOpenChange,
   moves,
+  note,
   disabled,
   onConfirm,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   moves: RoleMove[];
+  note?: string;
   disabled: boolean;
   onConfirm: () => Promise<boolean>;
 }) {
@@ -197,6 +200,7 @@ function ReplacementDialog({
             </li>
           ))}
         </ul>
+        {note && <p className="m-0 text-sm text-muted-foreground">{note}</p>}
         <DialogFooter>
           <Button
             type="button"
@@ -269,7 +273,8 @@ export function RolePanel({
   );
   const [statusDraft, setStatusDraft] = useState('');
   const [replacementId, setReplacementId] = useState('');
-  const [confirming, setConfirming] = useState(false);
+  // Which guarded save the replacement dialog confirms, if any.
+  const [confirming, setConfirming] = useState<'role' | 'status' | null>(null);
   const [reason, setReason] = useState(
     requested && !selectedMemberId
       ? reasonParam.trim().slice(0, REASON_MAX)
@@ -284,15 +289,11 @@ export function RolePanel({
   const actor = members.data?.find((row) => row.memberId === session?.user.id);
   const actorRole = actor?.roleId;
   const self = memberId !== '' && memberId === session?.user.id;
-  const protectedMember = PROTECTED_ROLES.has(member?.roleId ?? '');
   // A live active BC or Moderator: the only viewer the server lets re-rank
-  // anyone, leadership included (ruling R31).
+  // anyone or change their Status, leadership included (ruling R31).
   const leader =
     actor?.status === 'activ' && PROTECTED_ROLES.has(actorRole ?? '');
-  const moderator = leader && actorRole === 'moderator';
   const canEditMember = Boolean(member && leader && !self);
-  // A BC or Moderator holder's Status stays the Moderator's alone.
-  const canEditStatusOf = canEditMember && (moderator || !protectedMember);
   // Only what the viewer can save (B57): without live leadership the lists
   // name no BC or Moderator holder and stop at BCE.
   const roleOptions = useMemo(
@@ -313,13 +314,12 @@ export function RolePanel({
     [members.data, leader],
   );
   const nextRole = roleDraft || member?.roleId || '';
-  // Ruling R31: the change takes a leadership rank from its last live holder,
-  // so the same save must name who takes it. `null` when no guard applies.
-  const guardedRank = useMemo(() => {
+  const nextStatus = statusDraft || member?.status || '';
+  // The leadership rank the Member is the last live holder of, if any.
+  const lastHolderRank = useMemo(() => {
     const rank = member?.roleId ?? '';
     if (!member || member.status !== 'activ' || !PROTECTED_ROLES.has(rank))
       return null;
-    if (nextRole === rank) return null;
     const others = (members.data ?? []).some(
       (row) =>
         row.memberId !== member.memberId &&
@@ -327,11 +327,20 @@ export function RolePanel({
         row.status === 'activ',
     );
     return others ? null : rank;
-  }, [member, members.data, nextRole]);
+  }, [member, members.data]);
+  // Ruling R31: a change that takes that rank away (#905) or takes its holder
+  // out of `activ` (#917) must name who takes it in the same save. `null`
+  // when no guard applies.
+  const roleGuard =
+    lastHolderRank && nextRole !== lastHolderRank ? lastHolderRank : null;
+  const statusGuard =
+    lastHolderRank && nextStatus !== 'activ' ? lastHolderRank : null;
+  const guardedRank = roleGuard ?? statusGuard;
   const viewerId = session?.user.id;
   // Who may take it: any active Member but the target, the viewer first as
   // "Eu" — less the last holder of the other leadership rank, whom the server
-  // refuses unless the target takes that rank in the same save.
+  // refuses unless a rank change hands the target that rank in the same save
+  // (a Status change keeps the target's rank, so there is no swap).
   const replacementOptions = useMemo(() => {
     if (!guardedRank || !member) return [];
     const rows = members.data ?? [];
@@ -348,7 +357,7 @@ export function RolePanel({
           row.memberId !== member.memberId &&
           !(
             row.roleId === other &&
-            nextRole !== other &&
+            (statusGuard !== null || nextRole !== other) &&
             soleOther(row.memberId)
           ),
       )
@@ -364,7 +373,7 @@ export function RolePanel({
             ? 1
             : a.name.localeCompare(b.name, 'ro'),
       );
-  }, [guardedRank, member, members.data, nextRole, viewerId]);
+  }, [guardedRank, statusGuard, member, members.data, nextRole, viewerId]);
   const replacement = replacementOptions.find(
     (row) => row.memberId === replacementId,
   );
@@ -385,19 +394,19 @@ export function RolePanel({
       )
       .sort((a, b) => a.name.localeCompare(b.name, 'ro'));
   }, [groups.data, member, memberships, nextLevel]);
-  const nextStatus = statusDraft || member?.status || '';
   const canSaveRole =
     canEditMember &&
     nextRole !== member?.roleId &&
     roleOptions.some(([id]) => id === nextRole) &&
-    (!guardedRank || replacement !== undefined) &&
+    (!roleGuard || replacement !== undefined) &&
     groups.isSuccess &&
     groupIds.isSuccess &&
     !change.isPending;
   const canSaveStatus =
-    canEditStatusOf &&
+    canEditMember &&
     nextStatus !== member?.status &&
     statusOptions.includes(nextStatus) &&
+    (!statusGuard || replacement !== undefined) &&
     !change.isPending;
 
   async function save(next: MemberChange): Promise<boolean> {
@@ -434,14 +443,25 @@ export function RolePanel({
     memberId,
     role: nextRole as MemberRole,
     reason: reason.trim() || null,
-    ...(guardedRank && replacement
+    ...(roleGuard && replacement
+      ? { replacementId: replacement.memberId }
+      : {}),
+  };
+  const statusChange: MemberChange = {
+    kind: 'status',
+    memberId,
+    status: nextStatus as MemberStatus,
+    reason: reason.trim() || null,
+    ...(statusGuard && replacement
       ? { replacementId: replacement.memberId }
       : {}),
   };
   const roleName = (id: string | null | undefined) =>
     (id && roles.data?.get(id)?.name) || '—';
+  // The dialog's two lines: the replacement's rank first, as the server
+  // applies it, then the target's own change — their rank or their Status.
   const moves: RoleMove[] =
-    guardedRank && replacement && member
+    confirming && guardedRank && replacement && member
       ? [
           {
             key: 'replacement',
@@ -453,12 +473,19 @@ export function RolePanel({
             from: roleName(replacement.roleId),
             to: roleName(guardedRank),
           },
-          {
-            key: 'target',
-            who: identityOf(member),
-            from: roleName(member.roleId),
-            to: roleName(nextRole),
-          },
+          confirming === 'status'
+            ? {
+                key: 'target',
+                who: identityOf(member),
+                from: statusLabel(member.status),
+                to: statusLabel(nextStatus),
+              }
+            : {
+                key: 'target',
+                who: identityOf(member),
+                from: roleName(member.roleId),
+                to: roleName(nextRole),
+              },
         ]
       : [];
 
@@ -606,34 +633,26 @@ export function RolePanel({
                       </div>
                     )}
                 </div>
-                {canEditStatusOf ? (
-                  <div className="flex min-w-0 flex-col gap-2">
-                    <SubHeading>
-                      <label htmlFor={statusId}>Status</label>
-                    </SubHeading>
-                    <NativeSelect
-                      id={statusId}
-                      value={nextStatus}
-                      disabled={change.isPending}
-                      onChange={(event) => setStatusDraft(event.target.value)}
-                    >
-                      {statusOptions.map((status) => (
-                        <NativeSelectOption key={status} value={status}>
-                          {statusLabel(status)}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
-                    {nextStatus === 'inactiv' &&
-                      nextStatus !== member.status && (
-                        <p className="m-0 text-sm">{DEACTIVATION_WARNING}</p>
-                      )}
-                  </div>
-                ) : (
-                  <p className="m-0 text-sm text-muted-foreground">
-                    Statusul unui membru BC sau Moderator îl schimbă numai
-                    Moderatorul.
-                  </p>
-                )}
+                <div className="flex min-w-0 flex-col gap-2">
+                  <SubHeading>
+                    <label htmlFor={statusId}>Status</label>
+                  </SubHeading>
+                  <NativeSelect
+                    id={statusId}
+                    value={nextStatus}
+                    disabled={change.isPending}
+                    onChange={(event) => setStatusDraft(event.target.value)}
+                  >
+                    {statusOptions.map((status) => (
+                      <NativeSelectOption key={status} value={status}>
+                        {statusLabel(status)}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                  {nextStatus === 'inactiv' && nextStatus !== member.status && (
+                    <p className="m-0 text-sm">{DEACTIVATION_WARNING}</p>
+                  )}
+                </div>
                 {guardedRank && (
                   <div className="flex min-w-0 flex-col gap-2 sm:col-span-2">
                     <SubHeading as="p" id={replacementHeadingId}>
@@ -682,61 +701,60 @@ export function RolePanel({
                     block
                     disabled={!canSaveRole}
                     onClick={() =>
-                      guardedRank ? setConfirming(true) : void save(roleChange)
+                      roleGuard ? setConfirming('role') : void save(roleChange)
                     }
                   >
                     Salvează rolul
                   </Button>
-                  <ReplacementDialog
-                    open={confirming && moves.length > 0}
-                    onOpenChange={setConfirming}
-                    moves={moves}
-                    disabled={change.isPending}
-                    onConfirm={() => save(roleChange)}
-                  />
                 </div>
-                {canEditStatusOf && (
-                  <div className="min-w-0">
-                    {nextStatus === 'inactiv' &&
+                <div className="min-w-0">
+                  {statusGuard ? (
+                    // The last holder leaving `activ`: the replacement dialog
+                    // names both changes and repeats the warning.
+                    <Button
+                      type="button"
+                      block
+                      disabled={!canSaveStatus}
+                      onClick={() => setConfirming('status')}
+                    >
+                      {nextStatus === 'inactiv'
+                        ? 'Dezactivează'
+                        : 'Salvează statusul'}
+                    </Button>
+                  ) : nextStatus === 'inactiv' &&
                     nextStatus !== member.status ? (
-                      <DeactivateDialog
-                        member={{
-                          memberId: member.memberId,
-                          fullName: member.name,
-                          nickname: member.nickname,
-                          avatarColor: member.avatarColor,
-                        }}
-                        disabled={!canSaveStatus}
-                        onConfirm={() =>
-                          save({
-                            kind: 'status',
-                            memberId,
-                            status: 'inactiv',
-                            reason: reason.trim() || null,
-                          })
-                        }
-                      />
-                    ) : (
-                      <Button
-                        type="button"
-                        block
-                        disabled={!canSaveStatus}
-                        onClick={() =>
-                          void save({
-                            kind: 'status',
-                            memberId,
-                            status: nextStatus as MemberStatus,
-                            reason: reason.trim() || null,
-                          })
-                        }
-                      >
-                        {nextStatus !== member.status && nextStatus === 'activ'
-                          ? 'Reactivează'
-                          : 'Salvează statusul'}
-                      </Button>
-                    )}
-                  </div>
-                )}
+                    <DeactivateDialog
+                      member={identityOf(member)}
+                      disabled={!canSaveStatus}
+                      onConfirm={() => save(statusChange)}
+                    />
+                  ) : (
+                    <Button
+                      type="button"
+                      block
+                      disabled={!canSaveStatus}
+                      onClick={() => void save(statusChange)}
+                    >
+                      {nextStatus !== member.status && nextStatus === 'activ'
+                        ? 'Reactivează'
+                        : 'Salvează statusul'}
+                    </Button>
+                  )}
+                </div>
+                <ReplacementDialog
+                  open={confirming !== null && moves.length > 0}
+                  onOpenChange={(open) => {
+                    if (!open) setConfirming(null);
+                  }}
+                  moves={moves}
+                  note={
+                    confirming === 'status' ? DEACTIVATION_WARNING : undefined
+                  }
+                  disabled={change.isPending}
+                  onConfirm={() =>
+                    save(confirming === 'status' ? statusChange : roleChange)
+                  }
+                />
               </div>
             )}
             {message && turn.current && (

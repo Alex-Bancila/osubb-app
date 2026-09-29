@@ -8,13 +8,13 @@ The shared language for the OSUBB app. Use these terms consistently in product d
 Organizația Studenților din Universitatea Babeș-Bolyai, the student NGO whose internal work this application supports.
 
 **BC**:
-Biroul de Conducere, the organization’s highest operational leadership group. Every active BC member, like the Moderator, grants and removes the BC and Moderator Roles. The organization always keeps at least one active BC member: whoever removes the last one names who replaces them in the same change.
+Biroul de Conducere, the organization’s highest operational leadership group. Every active BC member, like the Moderator, grants and removes the BC and Moderator Roles, changes the Membership Status of a Member holding either, and invites new Members at either rank. The organization always keeps at least one active BC member: whoever removes the last one names who replaces them in the same change.
 
 **BCE**:
 Biroul de Conducere Extins, the extended leadership group immediately below BC.
 
 **Moderator**:
-The highest Role, a transferable seat held by the IT Coordinator. BC members and the Moderator grant and remove it, never on themselves; the organization always keeps at least one active Moderator, so whoever removes the last one names the replacement in the same change, and may name themselves. Only the Moderator changes the Membership Status of a BC member or a Moderator, and never takes the last active holder of either rank out.
+The highest Role, a transferable seat held by the IT Coordinator. BC members and the Moderator grant and remove it, never on themselves; the organization always keeps at least one active Moderator, so whoever removes the last one names the replacement in the same change, and may name themselves. BC members and the Moderator change the Membership Status of a BC member or a Moderator; taking the last active holder of either rank out of Activ names the replacement the same way.
 
 **AG / AGO**:
 Adunarea Generală / Adunarea Generală Ordinară, where voting members make organization decisions. In the application the Adunarea Generală is a Group with Automatic Membership at Minimum Level 3, created and named by BC; a Member joins it by gaining Drept de Vot and leaves it only when BC withdraws that Role.

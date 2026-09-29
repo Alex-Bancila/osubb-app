@@ -4,6 +4,11 @@
 -- Moderator or its last live BC: whoever removes the last holder names the
 -- replacement (p_replacement_id) in the same call, the actor included.
 --
+-- #917 extends the same ruling to Membership Status: a BC member sets a BC or
+-- Moderator holder's Status (sections 9 to 12), and moving the last live
+-- holder of either rank out of activ names the replacement the same way.
+-- Provisioning at those ranks is provision_profile_rank_cap.test.sql.
+--
 -- Section 2 is a real two-session race and therefore commits: its fixtures
 -- are written through a setup connection and removed at the end, and every
 -- other live BC in the database (the seeded demo BC) is deactivated for the
@@ -17,7 +22,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(48);
+select plan(71);
 
 -- ==================== 1. Structure ====================
 
@@ -408,23 +413,161 @@ select is(
   '90500000-0000-0000-0000-000000000002|90500000-0000-0000-0000-000000000003',
   'after every change above the organization still has exactly one live Moderator and one live BC');
 
--- ==================== 9. Status keeps the last holder ====================
+-- ==================== 9. Status: who may not (#917) ====================
 -- BC B is the only live BC; BC A (now Moderator) the only live Moderator.
--- Status of a leadership holder stays the Moderator's, and it cannot take the
--- last BC out either.
+-- Since ruling R31 was extended (#917) a BC member sets a BC or Moderator
+-- holder's Status too; below BC nobody does, and nobody sets their own.
 
-select pg_temp.test_login_leadership('90500000-0000-0000-0000-000000000002');
+select has_function('public', 'set_member_status', array['uuid', 'member_status', 'text', 'uuid'],
+  'set_member_status takes an optional replacement (#917)');
+select hasnt_function('public', 'set_member_status', array['uuid', 'member_status', 'text'],
+  'and the three-argument overload is gone, so PostgREST resolves one function');
+
+select pg_temp.test_login_leadership('90500000-0000-0000-0000-000000000004');
+select throws_ok(
+  $$ select public.set_member_status('90500000-0000-0000-0000-000000000002', 'inactiv') $$,
+  '42501', 'member_manage_forbidden',
+  'a BCE does not deactivate the Moderator');
+select throws_ok(
+  $$ select public.set_member_status('90500000-0000-0000-0000-000000000002', 'inactiv', null,
+       '90500000-0000-0000-0000-000000000004') $$,
+  '42501', 'member_manage_forbidden',
+  'not even by naming themselves as the replacement');
+reset role;
+
+select pg_temp.test_login('90500000-0000-0000-0000-000000000009', jsonb_build_object(
+  'member_role', 'bc', 'member_level', 6, 'group_ids', '[]'::jsonb));
+select throws_ok(
+  $$ select public.set_member_status('90500000-0000-0000-0000-000000000006', 'inactiv') $$,
+  '42501', 'member_manage_forbidden',
+  'a deactivated BC holding a still-valid level-6 token sets no Status');
+reset role;
+
+select pg_temp.test_login_leadership('90500000-0000-0000-0000-000000000003');
 select throws_ok(
   $$ select public.set_member_status('90500000-0000-0000-0000-000000000003', 'inactiv') $$,
-  'PT409', 'last_bc_needs_replacement',
-  'the Moderator cannot deactivate the last BC member');
-select is(
-  (select role::text from public.set_member_role('90500000-0000-0000-0000-000000000004', 'bc')),
-  'bc', 'once another BC member is named');
-select is(
-  (select status::text from public.set_member_status('90500000-0000-0000-0000-000000000003', 'inactiv')),
-  'inactiv', 'the former last BC member can be deactivated');
+  '42501', 'member_manage_forbidden',
+  'a BC member does not deactivate themselves');
+select throws_ok(
+  $$ select public.set_member_status('90500000-0000-0000-0000-000000000003', 'inactiv', null,
+       '90500000-0000-0000-0000-000000000005') $$,
+  '42501', 'member_manage_forbidden',
+  'not even while naming somebody else as the replacement');
+
+-- ==================== 10. Status: the last Moderator, by a BC member ====================
+
+select throws_ok(
+  $$ select public.set_member_status('90500000-0000-0000-0000-000000000002', 'inactiv') $$,
+  'PT409', 'last_moderator_needs_replacement',
+  'a BC member deactivating the last Moderator without a replacement is refused');
+select throws_ok(
+  $$ select public.set_member_status('90500000-0000-0000-0000-000000000002', 'alumni') $$,
+  'PT409', 'last_moderator_needs_replacement',
+  'and so is moving them to alumni');
+select throws_ok(
+  $$ select public.set_member_status('90500000-0000-0000-0000-000000000002', 'inactiv', null,
+       '90500000-0000-0000-0000-000000000003') $$,
+  'PT409', 'replacement_is_last_bc',
+  'the last BC cannot become the replacement Moderator — the target keeps their rank, so there is no swap');
+select throws_ok(
+  $$ select public.set_member_status('90500000-0000-0000-0000-000000000002', 'inactiv', null,
+       '90500000-0000-0000-0000-000000000007') $$,
+  'PT400', 'replacement_inactive',
+  'an inactive replacement is refused');
+select throws_ok(
+  $$ select public.set_member_status('90500000-0000-0000-0000-000000000002', 'inactiv', null,
+       '90500000-0000-0000-0000-0000000000ff') $$,
+  'PT404', 'replacement_not_found',
+  'an unknown replacement is refused');
+select throws_ok(
+  $$ select public.set_member_status('90500000-0000-0000-0000-000000000002', 'inactiv', null,
+       '90500000-0000-0000-0000-000000000002') $$,
+  'PT400', 'replacement_is_target',
+  'the Member leaving activ cannot be their own replacement');
+select throws_ok(
+  $$ select public.set_member_status('90500000-0000-0000-0000-000000000005', 'inactiv', null,
+       '90500000-0000-0000-0000-000000000006') $$,
+  'PT400', 'replacement_not_needed',
+  'a replacement named for an ordinary Member''s Status is refused');
 reset role;
+select is(
+  (select format('%s|%s|%s', status, role, (select count(*) from role_history
+                                             where member_id = '90500000-0000-0000-0000-000000000002'
+                                               and to_status is not null))
+     from profiles where id = '90500000-0000-0000-0000-000000000002'),
+  'activ|moderator|0', 'a refused call changed nothing and wrote no Status history');
+
+select pg_temp.test_login_leadership('90500000-0000-0000-0000-000000000003');
+select is(
+  (select status::text from public.set_member_status('90500000-0000-0000-0000-000000000002', 'inactiv',
+     'Predare', '90500000-0000-0000-0000-000000000006')),
+  'inactiv', 'with a replacement a BC member deactivates the last Moderator (#917)');
+reset role;
+select is(
+  (select role::text from profiles where id = '90500000-0000-0000-0000-000000000006'),
+  'moderator', 'and the replacement holds Moderator');
+select is(
+  (select string_agg(format('%s|%s>%s|%s>%s|%s|%s', member_id, from_role, to_role,
+                            coalesce(from_status::text, '-'), coalesce(to_status::text, '-'), changed_by, reason),
+                     ' ; ' order by id)
+     from role_history
+    where (member_id = '90500000-0000-0000-0000-000000000006' and to_role = 'moderator'
+           and changed_by = '90500000-0000-0000-0000-000000000003')
+       or (member_id = '90500000-0000-0000-0000-000000000002' and to_status is not null)),
+  '90500000-0000-0000-0000-000000000006|voluntar>moderator|->-|90500000-0000-0000-0000-000000000003|Predare ; '
+  || '90500000-0000-0000-0000-000000000002|moderator>moderator|activ>inactiv|90500000-0000-0000-0000-000000000003|Predare',
+  'two role_history rows, the replacement''s rank first, then the Status, each naming the real actor');
+select is(
+  (select body from notifications
+    where member_id = '90500000-0000-0000-0000-000000000006' order by id desc limit 1),
+  'Rolul tău în OSUBB este acum Moderator.', 'the replacement is told of their new Role');
+
+-- ==================== 11. Status: the last BC, the actor as replacement ====================
+-- Voluntar B is the only live Moderator and BC B the only live BC. A second
+-- Moderator (the BCE, granted by BC B) deactivates BC B and names themselves.
+
+select pg_temp.test_login_leadership('90500000-0000-0000-0000-000000000003');
+select is(
+  (select role::text from public.set_member_role('90500000-0000-0000-0000-000000000004', 'moderator')),
+  'moderator', 'a second Moderator is granted');
+reset role;
+select pg_temp.test_login_leadership('90500000-0000-0000-0000-000000000004');
+select is(
+  (select status::text from public.set_member_status('90500000-0000-0000-0000-000000000003', 'inactiv',
+     null, '90500000-0000-0000-0000-000000000004')),
+  'inactiv', 'the actor may name themselves as the replacement for the last BC');
+reset role;
+select is(
+  (select format('%s|%s>%s|%s|%s', profile.role, history.from_role, history.to_role, history.changed_by, history.reason)
+     from profiles as profile
+     join role_history as history on history.member_id = profile.id
+    where profile.id = '90500000-0000-0000-0000-000000000004'
+    order by history.id desc limit 1),
+  'bc|moderator>bc|90500000-0000-0000-0000-000000000004|Named replacement for the last bc (set_member_status)',
+  'the actor now holds BC, with their own history row and the Status command''s fallback reason');
+
+-- ==================== 12. Status: reactivation and a holder who is not the last ====================
+-- BCE-turned-BC is the only live BC; Voluntar B the only live Moderator.
+
+select pg_temp.test_login_leadership('90500000-0000-0000-0000-000000000004');
+select throws_ok(
+  $$ select public.set_member_status('90500000-0000-0000-0000-000000000002', 'activ', null,
+       '90500000-0000-0000-0000-000000000005') $$,
+  'PT400', 'replacement_not_needed',
+  'reactivating a holder needs no replacement, and naming one is refused');
+select is(
+  (select status::text from public.set_member_status('90500000-0000-0000-0000-000000000002', 'activ')),
+  'activ', 'a BC member reactivates a Moderator (#917)');
+select is(
+  (select status::text from public.set_member_status('90500000-0000-0000-0000-000000000006', 'alumni')),
+  'alumni', 'and moves a Moderator who is not the last to alumni with no replacement');
+reset role;
+select is(
+  (select format('%s|%s',
+     (select string_agg(id::text, ',') from profiles where role = 'moderator' and status = 'activ'),
+     (select string_agg(id::text, ',') from profiles where role = 'bc' and status = 'activ'))),
+  '90500000-0000-0000-0000-000000000002|90500000-0000-0000-0000-000000000004',
+  'after every Status change above the organization still has exactly one live Moderator and one live BC');
 
 select * from finish();
 rollback;

@@ -10,10 +10,9 @@
 // POST { member_id, email? }                     (action "reinvite", default)
 //   200 { member_id, email, email_changed }      invitation sent again
 //   400                    bad input
-//   401 / 403              not signed in / not BC or Moderator (level < 6)
-//   403 member_manage_forbidden
-//                          re-inviting a BC or the Moderator: the Moderator's
-//                          alone (a BC re-invites ranks below BC only)
+//   401 / 403              not signed in / not BC or Moderator (level < 6);
+//                          since ruling R31 (#917) that caller re-invites any
+//                          rank, bc and moderator included
 //   404 member_not_found   no such Member
 //   409 already_active     the Member has signed in: nothing to re-send
 //   409 member_inactive    the profile is not activ: an invitation would
@@ -37,7 +36,6 @@ import {
   json,
   refusal,
 } from "../_shared/cors.ts";
-import { mayHandleRole } from "../_shared/member-invite.ts";
 import type { ReinviteDeps } from "./deps.ts";
 
 const REINVITE_LEVEL = 6; // BC and the Moderator — capability manageRoles
@@ -184,19 +182,11 @@ export async function handleReinvite(
       );
     }
 
-    // Authority before state (H2): re-inviting a BC or the Moderator is the
-    // Moderator's alone, as appointing one is. Otherwise a BC could move a
-    // pending leadership account to an address they control and sign in as
-    // that person. Answered before the sign-in checks, so the refusal says
-    // nothing about the target's state.
-    if (!mayHandleRole(profile.role, callerLevel)) {
-      return refusal(
-        "member_manage_forbidden",
-        "Doar Moderatorul poate retrimite invitația unui membru BC sau Moderator.",
-        403,
-        origin,
-      );
-    }
+    // H2 reserved re-inviting a BC or the Moderator to the Moderator. Ruling
+    // R31 (#917) gives BC the same authority over leadership accounts that
+    // set_member_role, set_member_status and provision_profile give them, so
+    // the REINVITE_LEVEL gate above is the whole authority check: a BC could
+    // create the same leadership account outright.
 
     // First, before anything changes: a Member who has signed in owns their
     // address, and an invitation would only be a stray sign-in link.
