@@ -205,7 +205,7 @@ select is((select format('%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s', task.status, task.k
 select is((select format('%s|%s|%s', assignment.member_id, assignment.ended_at is not null, assignment.end_reason)
              from public.task_assignments as assignment
             where assignment.task_id = pg_temp.t915('Task finalizat #915')),
-  pg_temp.u915(4) || '|true|completed',
+  pg_temp.u915(4) || '|t|completed',
   'one Assignment credits the volunteer and is ended as completed');
 select is((select evaluation.points from public.task_evaluations as evaluation
             where evaluation.task_id = pg_temp.t915('Task finalizat #915')),
@@ -349,7 +349,7 @@ select is((select format('%s|%s|%s|%s|%s|%s|%s', task.status, task.group_id, tas
   'the approved Task carries exactly the decider''s values, on the Group they chose');
 select is((select format('%s|%s', request.status, request.task_id = pg_temp.t915('Stand targ editat #915'))
              from public.completed_work_requests as request where request.id = pg_temp.q915('Q1')),
-  'approved|true', 'the Request is approved and names that Task');
+  'approved|t', 'the Request is approved and names that Task');
 select is((select format('%s|%s', ledger.member_id, ledger.delta) from public.points_ledger as ledger
             where ledger.task_id = pg_temp.t915('Stand targ editat #915')),
   pg_temp.u915(4) || '|' || (3 * public.rating_mult(4)),
