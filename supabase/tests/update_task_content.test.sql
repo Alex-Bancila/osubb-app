@@ -461,7 +461,7 @@ select is((select format('%s|%s', notification.title, notification.body)
              from public.notifications as notification
              join public.tasks as task on task.id = notification.task_id
             where task.title = 'Executor notificat #328'),
-  'Task actualizat: Executor notificat #328|Modificat: title.',
+  'Task actualizat: Executor notificat #328|Modificat: titlu.',
   'the Executor notification uses the pinned Romanian title and names the changed field');
 select is((select count(*) from public.notifications as notification
              join public.tasks as task on task.id = notification.task_id

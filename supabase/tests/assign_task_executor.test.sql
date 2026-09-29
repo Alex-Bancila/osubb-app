@@ -22,7 +22,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(61);
+select plan(63);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -240,7 +240,7 @@ select set_eq(
 select is((select format('%s|%s', notification.title, notification.body)
              from public.notifications as notification
             where notification.task_id = (select direct_task_id from f342)),
-  'Task nou: Asignare directa #342|Ți-a fost atribuit acest task. Deadline: 01.05.2027 12:00.',
+  'Task nou: Asignare directa #342|Ți-a fost atribuit acest task. Termen: 01.05.2027 12:00.',
   'the new-Executor notification uses the pinned Romanian copy from open_task_assignment');
 select is((select status from public.tasks where id = (select direct_task_id from f342)),
   'todo', 'assigning an Executor does not itself change the Task''s status');
@@ -574,6 +574,28 @@ reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
 select throws_ok($$select public.assign_task_executor((select id from g521_tasks where name='command3'),pg_temp.g521_uid(10))$$,'42501','task_manage_forbidden','assign_task_executor: Group persona 8 in dt');
 reset role;
+
+-- ==================== #891: "Termen", never "Deadline" ====================
+-- Every command requires a deadline now, so the "—" fallback is reached only
+-- by an older row without one; it is driven through the shared assignment
+-- helper directly, as the owner.
+insert into public.tasks
+  (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
+select 'Fara termen #891', 'Rand fara termen', null, task.group_id, 'local', 'direct', 'todo', task.created_by
+  from public.tasks as task where task.title = 'Asignare directa #342';
+select private.open_task_assignment((select id from public.tasks where title = 'Fara termen #891'),
+  '34200000-0000-0000-0000-000000000002', '34200000-0000-0000-0000-000000000001', 'assign');
+select is((select notification.body from public.notifications as notification
+             join public.tasks as task on task.id = notification.task_id
+            where task.title = 'Fara termen #891'),
+  'Ți-a fost atribuit acest task. Termen: —.',
+  '#891: without a deadline the assignment notification reads "Termen: —."');
+select ok(
+  exists (select 1 from public.notifications where title like 'Task nou:%')
+  and not exists (select 1 from public.notifications
+                   where title like 'Task nou:%'
+                     and (body not like 'Ți-a fost atribuit acest task. Termen: %' or body like '%Deadline%')),
+  '#891: every assignment notification starts "Ți-a fost atribuit acest task. Termen: " and none says "Deadline"');
 
 select * from finish();
 rollback;

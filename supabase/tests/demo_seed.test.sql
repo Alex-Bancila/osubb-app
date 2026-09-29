@@ -24,7 +24,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(75);
+select plan(77);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
@@ -781,6 +781,21 @@ select ok((select count(*) from tasks
               and assignment_mode = 'public'
               and queue_closed_at is null) >= 2,
   'at least two organization-wide Opportunities are open for the "Deschise" tab');
+
+-- #891 (final QA audit F37, F66): the two rows the audit could not run.
+select ok(
+  exists (
+    select 1 from tasks task
+     where task.status = 'in_progress' and task.kind = 'task'
+       and task.deadline < now()
+       and exists (select 1 from task_assignments a where a.task_id = task.id and a.ended_at is null)
+       and private.group_role_of(task.group_id, 'd0000000-0000-0000-0000-000000000005') = 'manager'),
+  'an overdue in-progress Task with an Executor sits in a Group the Manager persona manages, so "Marchează nerealizat" is reachable');
+
+select ok(
+  (select count(*) from notifications
+    where member_id = 'd0000000-0000-0000-0000-000000000002') >= 25,
+  'the Voluntar has at least 25 notifications, more than one 20-row page of Notificări');
 
 -- ==================== Calendar, feed, notifications ====================
 -- The calendar only demos well if switching accounts changes what you see.
