@@ -345,6 +345,13 @@ values ('voluntar_activ', 'Evaluare reală #901', current_date - 30, current_dat
         'e2750000-0000-0000-0000-000000000001', 1, 0);
 insert into promotion_threshold_changes (kind, from_value, to_value, source, changed_by)
 values ('voluntar_activ', null, 7, 'manual', 'e2750000-0000-0000-0000-000000000001');
+insert into promotion_candidates (role_evaluation_id, member_id, task_points, tenure_since)
+select id, 'e2750000-0000-0000-0000-000000000001', 7, current_date
+  from role_evaluations where name = 'Evaluare reală #901';
+insert into notifications (member_id, kind, title, dedupe_key)
+select 'e2750000-0000-0000-0000-000000000001', 'system', 'Candidat la promovare #901',
+       'promotion_candidate:' || id || ':e2750000-0000-0000-0000-000000000001'
+  from role_evaluations where name = 'Evaluare reală #901';
 select 'evaluation-before:' || format('%s:%s:%s:%s',
   (select count(*) from role_evaluations e join profiles p on p.id = e.run_by
     where p.email like '%@demo.osubb' and e.name like '%demo #901'),
@@ -355,7 +362,7 @@ select 'evaluation-before:' || format('%s:%s:%s:%s',
 SQL
 )
 evaluation_check=$(cat <<'SQL'
-select 'evaluation-after:' || format('%s:%s:%s:%s:%s:%s:%s',
+select 'evaluation-after:' || format('%s:%s:%s:%s:%s:%s:%s:%s:%s',
   (select count(*) from profiles where email like '%@demo.osubb'),
   (select count(*) from role_evaluations e join profiles p on p.id = e.run_by where p.email like '%@demo.osubb'),
   (select count(*) from role_history h join profiles p on p.id in (h.member_id, h.changed_by) where p.email like '%@demo.osubb'),
@@ -363,7 +370,10 @@ select 'evaluation-after:' || format('%s:%s:%s:%s:%s:%s:%s',
                                          and split_part(dedupe_key, ':', 2) not in (select id::text from role_evaluations)),
   (select count(*) from role_evaluations where run_by = 'e2750000-0000-0000-0000-000000000001' and name = 'Evaluare reală #901'),
   (select count(*) from promotion_threshold_changes where changed_by = 'e2750000-0000-0000-0000-000000000001' and to_value = 7),
-  (select count(*) from promotion_thresholds where threshold is not null));
+  (select count(*) from promotion_thresholds where threshold is not null),
+  (select count(*) from promotion_candidates where member_id = 'e2750000-0000-0000-0000-000000000001' and task_points = 7),
+  (select count(*) from notifications where member_id = 'e2750000-0000-0000-0000-000000000001'
+                                        and title = 'Candidat la promovare #901'));
 SQL
 )
 out=$({
@@ -382,9 +392,9 @@ case "$out" in
 esac
 # 8 demo Members back; no demo run, demo role_history or orphaned Candidate /
 # Retention Signal Notification left; the non-demo run and threshold change
-# kept; both thresholds keep their values (only the demo author is forgotten).
+# kept with its Candidate and Notification; both thresholds keep their values.
 case "$out" in
-  *evaluation-after:8:0:0:0:1:1:2*) ;;
-  *) echo "::error::Re-seeding after a Role Evaluation left the wrong rows (expected evaluation-after:8:0:0:0:1:1:2): $(printf '%s' "$out" | grep -m1 'evaluation-after' || printf '%s' "$out" | tail -3)" >&2; exit 1 ;;
+  *evaluation-after:8:0:0:0:1:1:2:1:1*) ;;
+  *) echo "::error::Re-seeding after a Role Evaluation left the wrong rows (expected evaluation-after:8:0:0:0:1:1:2:1:1): $(printf '%s' "$out" | grep -m1 'evaluation-after' || printf '%s' "$out" | tail -3)" >&2; exit 1 ;;
 esac
 echo "seed.sql re-runs after the demo Moderator ran a Role Evaluation of each kind."

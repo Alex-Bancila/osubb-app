@@ -141,7 +141,17 @@ delete from notifications notification
             join profiles runner on runner.id = evaluation.run_by
            where runner.email like '%@demo.osubb')
         or split_part(notification.dedupe_key, ':', 3) in (
-          select p.id::text from profiles p where p.email like '%@demo.osubb'));
+          select p.id::text from profiles p where p.email like '%@demo.osubb')
+        -- A Candidate a demo account decided goes below, so its Notification
+        -- goes with it.
+        or (notification.dedupe_key like 'promotion_candidate:%'
+            and exists (
+              select 1
+                from promotion_candidates candidate
+                join profiles decider on decider.id = candidate.decided_by
+               where decider.email like '%@demo.osubb'
+                 and candidate.role_evaluation_id::text = split_part(notification.dedupe_key, ':', 2)
+                 and candidate.member_id::text = split_part(notification.dedupe_key, ':', 3))));
 
 delete from promotion_candidates candidate
  where exists (select 1
