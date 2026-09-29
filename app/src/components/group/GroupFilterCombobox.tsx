@@ -50,7 +50,7 @@ export function GroupFilterCombobox<G extends GroupFilterOption>({
   /** Defaults to `<GroupOption />`; override to add extra per-row content
    *  (e.g. an "arhivat" badge) beside the name and parent. */
   renderItem?: (group: G) => ReactNode;
-  /** Nothing to choose yet, e.g. a Subgrup before its root is chosen. */
+  /** The picker cannot change now (e.g. while its form saves). */
   disabled?: boolean;
 }) {
   const stringLabel =

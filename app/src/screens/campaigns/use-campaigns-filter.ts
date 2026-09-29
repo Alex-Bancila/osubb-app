@@ -8,6 +8,7 @@ import {
   placeGroup,
   serializeWorkFilter,
   setWorkFilterLevel,
+  setWorkFilterSubgroup,
   withoutGroup,
   type WorkFilterGroup,
   type WorkFilterLevel,
@@ -77,6 +78,12 @@ export function useCampaignsFilter(
     [dates, go, value],
   );
 
+  const setSubgroup = useCallback(
+    (groupId: number, rootGroupId: number) =>
+      go(setWorkFilterSubgroup(value, rootGroupId, groupId)),
+    [go, value],
+  );
+
   const clear = useCallback(() => go({}), [go]);
 
   return useMemo(
@@ -86,9 +93,18 @@ export function useCampaignsFilter(
       rangeError: dates.rangeError,
       active: isWorkFilterActive(value),
       set,
+      setSubgroup,
       clear,
       routeGroupId,
     }),
-    [value, dates.params, dates.rangeError, set, clear, routeGroupId],
+    [
+      value,
+      dates.params,
+      dates.rangeError,
+      set,
+      setSubgroup,
+      clear,
+      routeGroupId,
+    ],
   );
 }

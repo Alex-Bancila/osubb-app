@@ -15,6 +15,7 @@ import { FieldError } from '../ui/field';
 import { formatDayMonthYear } from '../../lib/format';
 import { useWorkFilter, type WorkFilterState } from '../../lib/use-work-filter';
 import {
+  rootOf,
   workFilterChoices,
   workFilterGroupName,
   type WorkFilterCampaign,
@@ -62,7 +63,7 @@ function WorkFilterFields({
   showDates,
   fields,
 }: FieldsProps) {
-  const { value, set } = filter;
+  const { value, set, setSubgroup } = filter;
   const rootLabel = `${id}-root`;
   const subLabel = `${id}-sub`;
   const campaignLabel = `${id}-campaign`;
@@ -102,9 +103,16 @@ function WorkFilterFields({
             groups={choices.below}
             groupsById={groupsById}
             value={sub ?? null}
-            onValueChange={(group) => set('groupId', group?.id)}
+            onValueChange={(group) => {
+              // With no Grup principal (#919), the Subgrup brings its own.
+              const rootId =
+                group && choices.rootId === undefined
+                  ? rootOf(group, choices.roots)
+                  : undefined;
+              if (group && rootId !== undefined) setSubgroup(group.id, rootId);
+              else set('groupId', group?.id);
+            }}
             placeholder="Toate subgrupurile"
-            disabled={!choices.below.length}
           />
         </div>
       )}

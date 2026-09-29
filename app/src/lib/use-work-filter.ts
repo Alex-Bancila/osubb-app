@@ -8,6 +8,7 @@ import {
   parseWorkFilter,
   serializeWorkFilter,
   setWorkFilterLevel,
+  setWorkFilterSubgroup,
   visibleWorkFilter,
   workFilterParams,
   type WorkFilterLevel,
@@ -34,6 +35,11 @@ export type WorkFilterState = {
     level: L,
     next: WorkFilterValue[L] | undefined,
   ) => void;
+  /**
+   * Choose a Subgrup and the Grup principal it sits under in one write
+   * (#919): the Subgrup offered before any Grup principal is chosen.
+   */
+  setSubgroup: (groupId: number, rootGroupId: number) => void;
   /** Remove every level the page shows (hidden levels and the page's own query keys stay). */
   clear: () => void;
 };
@@ -79,6 +85,23 @@ export function useWorkFilter(levels: WorkFilterLevels = {}): WorkFilterState {
     [setSearchParams],
   );
 
+  const setSubgroup = useCallback(
+    (groupId: number, rootGroupId: number) =>
+      setSearchParams(
+        (current) =>
+          serializeWorkFilter(
+            setWorkFilterSubgroup(
+              parseWorkFilter(current),
+              rootGroupId,
+              groupId,
+            ),
+            current,
+          ),
+        { replace: true },
+      ),
+    [setSearchParams],
+  );
+
   // Clearing removes what the page shows; a level it hides (the Group in
   // the Cupa view) stays in the URL for the view that shows it.
   const clear = useCallback(
@@ -106,7 +129,8 @@ export function useWorkFilter(levels: WorkFilterLevels = {}): WorkFilterState {
       rangeError: reasonCopy(dateRangeReason(value)),
       active: isWorkFilterActive(value),
       set,
+      setSubgroup,
       clear,
     };
-  }, [value, set, clear]);
+  }, [value, set, setSubgroup, clear]);
 }
