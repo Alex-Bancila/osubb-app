@@ -22,6 +22,13 @@ export type EventFormOptions = {
   groupNames: Array<{ id: number; name: string }>;
   /** Active Campaigns; `eventCampaignsFor` narrows them to the chosen Group. */
   campaigns: EventFormCampaign[];
+  /**
+   * Groups the viewer may publish an Announcement from (#909), the compose
+   * sheet's own rule (`announcementOrigins`, the client copy of
+   * `announcements_create`). Absent when editing: only a new Event offers
+   * "Creează și un anunț".
+   */
+  announceGroupIds?: number[];
 };
 
 export type EventFormValues = {
@@ -35,6 +42,8 @@ export type EventFormValues = {
   description: string;
   minLevel: number;
   campaignId: number | null;
+  /** "Creează și un anunț" (#909): unticked until the author ticks it. */
+  announce: boolean;
 };
 
 /** The Event dialog: a full screen on a phone, a wide dialog above it. */
@@ -52,6 +61,7 @@ export const emptyEventFormValues: EventFormValues = {
   description: '',
   minLevel: 0,
   campaignId: null,
+  announce: false,
 };
 
 export type EventDraft = {
@@ -65,6 +75,8 @@ export type EventDraft = {
   description: string | null;
   minLevel: number;
   campaignId: number | null;
+  /** Publish the matching Announcement in the same call (#909). */
+  announce: boolean;
 };
 
 export const EVENT_TYPE_CHOICES: ReadonlyArray<{
@@ -120,4 +132,22 @@ export function eventCampaignsFor(
   return group
     ? campaigns.filter((campaign) => group.path.includes(campaign.group_id))
     : [];
+}
+
+/**
+ * Whether "Creează și un anunț" may be offered for this Group (#909): the
+ * viewer may publish from it, and the Event is not raised above the Group's
+ * Minimum Level — an Announcement reaches the whole Group, so the server
+ * refuses one for a restricted Event (`announcement_event_restricted`).
+ * Presentation only: `create_event` decides.
+ */
+export function eventAnnouncementState(
+  options: Pick<EventFormOptions, 'announceGroupIds'>,
+  group: Pick<EventFormGroup, 'id' | 'minLevel'> | null,
+  minLevel: number,
+): 'hidden' | 'restricted' | 'available' {
+  const ids = options.announceGroupIds ?? [];
+  if (group ? !ids.includes(group.id) : ids.length === 0) return 'hidden';
+  if (group && minLevel > group.minLevel) return 'restricted';
+  return 'available';
 }

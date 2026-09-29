@@ -78,6 +78,7 @@ function presentation(
     formUrl: null,
     publishedAt: '2026-09-18T15:00:00.000Z',
     publishedLabel: '18 septembrie 2026, 18:00',
+    deadline: null,
     isRead: false,
     ...overrides,
   };

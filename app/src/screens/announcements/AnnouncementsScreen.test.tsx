@@ -95,6 +95,7 @@ function createRow(
     group_id: 10,
     audience: 'local',
     published_at: '2026-09-18T10:00:00Z',
+    deadline: null,
     created_by: null,
     form_label: null,
     form_url: null,

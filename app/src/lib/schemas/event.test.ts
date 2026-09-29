@@ -46,6 +46,7 @@ const valid: EventFormValues = {
   description: '  Stabilim pașii următori.  ',
   minLevel: 0,
   campaignId: null,
+  announce: false,
 };
 const schema = (actorLevel = 5) => eventSchema(options, actorLevel, { now });
 const check = (patch: Partial<EventFormValues>, actorLevel = 5) => {
@@ -67,6 +68,7 @@ describe('eventSchema', () => {
       description: 'Stabilim pașii următori.',
       minLevel: 0,
       campaignId: null,
+      announce: false,
     });
   });
 

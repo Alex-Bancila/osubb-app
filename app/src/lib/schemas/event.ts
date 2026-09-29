@@ -3,6 +3,7 @@ import { bucharestWallTimeToIso } from '../calendar-time';
 import { EVENT_MINIMUM_LEVELS } from '../minimum-level';
 import {
   EVENT_TYPE_CHOICES,
+  eventAnnouncementState,
   eventCampaignsFor,
   type EventDraft,
   type EventFormOptions,
@@ -49,6 +50,7 @@ export function eventSchema(
       description: optionalText({ max: 2000, tooLong: 'description_too_long' }),
       minLevel: z.number(),
       campaignId: z.number().nullable(),
+      announce: z.boolean(),
     })
     .superRefine((values, ctx) => {
       const issue = (path: keyof EventFormValues, message: string) =>
@@ -107,6 +109,16 @@ export function eventSchema(
       description: values.description,
       minLevel: values.minLevel,
       campaignId: values.campaignId,
+      // #909: only a new Event, and only where the box is offered and enabled.
+      announce:
+        creating &&
+        values.announce &&
+        eventAnnouncementState(
+          options,
+          options.groups.find((item) => item.id === values.groupId) ?? null,
+          values.minLevel,
+        ) === 'available' &&
+        values.groupId !== null,
     }));
 }
 

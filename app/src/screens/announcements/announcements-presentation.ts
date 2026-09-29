@@ -1,9 +1,6 @@
 import { ro } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
-import {
-  BUCHAREST_TIME_ZONE,
-  bucharestDayKey,
-} from '../../lib/calendar-time';
+import { BUCHAREST_TIME_ZONE, bucharestDayKey } from '../../lib/calendar-time';
 import type { Database } from '../../lib/database.types';
 import type { MemberIdentity } from '../../components/member/member-identity';
 import type { Group } from '../../queries/reference';

@@ -63,6 +63,7 @@ export function eventFormValuesFor(event: EventPresentation): EventFormValues {
     description: event.description ?? '',
     minLevel: event.minLevel,
     campaignId: event.campaignId,
+    announce: false,
   };
 }
 

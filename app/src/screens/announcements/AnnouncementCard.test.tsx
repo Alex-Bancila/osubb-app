@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock(
@@ -31,6 +31,7 @@ function presentation(
     formUrl: null,
     publishedAt: '2026-09-18T15:00:00.000Z',
     publishedLabel: '18 septembrie 2026, 18:00',
+    deadline: null,
     isRead: false,
     ...overrides,
   };
@@ -346,5 +347,62 @@ describe('AnnouncementCard', () => {
     );
     expect(await screen.findByRole('dialog', { name: 'Ani' })).toBeVisible();
     expect(onOpen).not.toHaveBeenCalled();
+  });
+});
+
+describe('the Termen on the card (#909)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+  const at = (iso: string) => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(iso));
+  };
+  const termen = () =>
+    document.querySelector('[data-slot="announcement-termen"]');
+
+  it('shows no Termen row when the Announcement has none', () => {
+    render(<AnnouncementCard announcement={presentation()} onOpen={vi.fn()} />);
+    expect(termen()).toBeNull();
+  });
+
+  it('shows a later Termen on its own row, apart from the meta line', () => {
+    at('2026-09-29T09:00:00.000Z');
+    render(
+      <AnnouncementCard
+        announcement={presentation({ deadline: '2026-10-02T20:59:00.000Z' })}
+        onOpen={vi.fn()}
+      />,
+    );
+    expect(termen()).toHaveAttribute('data-state', 'upcoming');
+    expect(termen()).toHaveTextContent('Termen:vineri, 2 octombrie, 23:59');
+    expect(termen()?.closest('[data-slot="announcement-meta"]')).toBeNull();
+    expect(termen()?.className).toMatch('border-l-');
+  });
+
+  it('emphasises a Termen within 48 hours', () => {
+    at('2026-09-29T09:00:00.000Z');
+    render(
+      <AnnouncementCard
+        announcement={presentation({ deadline: '2026-09-30T15:40:00.000Z' })}
+        onOpen={vi.fn()}
+      />,
+    );
+    expect(termen()).toHaveAttribute('data-state', 'soon');
+    expect(termen()).toHaveTextContent('mâine, 18:40');
+    expect(termen()?.className).toMatch('bg-primary');
+  });
+
+  it('reads "Termen expirat" in a muted tone once it has passed', () => {
+    at('2026-10-05T09:00:00.000Z');
+    render(
+      <AnnouncementCard
+        announcement={presentation({ deadline: '2026-10-02T20:59:00.000Z' })}
+        onOpen={vi.fn()}
+      />,
+    );
+    expect(termen()).toHaveAttribute('data-state', 'expired');
+    expect(termen()).toHaveTextContent('Termen expirat');
+    expect(termen()?.className).toMatch('text-muted-foreground');
   });
 });
