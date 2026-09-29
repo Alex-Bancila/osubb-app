@@ -283,7 +283,7 @@ describe('Rule W', () => {
     expect(choices.showCampaign).toBe(true);
   });
 
-  it('narrows the Subgrup options to the chosen root, and hides a lone one (#919)', () => {
+  it('narrows the Subgrup options to the chosen root, and hides a lone one that narrows nothing (#919)', () => {
     const spread = [
       { group_id: 2, campaign_id: null },
       { group_id: 4, campaign_id: null },
@@ -308,15 +308,37 @@ describe('Rule W', () => {
     );
     expect(ids(underOne.below)).toEqual([2, 4]);
     expect(underOne.showSub).toBe(true);
-    // Under Comunicare only Social media: one option, not drawn.
+    // Under Comunicare only Social media, holding all its items: not drawn.
+    const onlySub = [
+      ...spread.slice(0, 2),
+      { group_id: 20, campaign_id: null },
+    ];
     const lone = workFilterChoices(
       withSub,
       campaigns,
       { rootGroupId: 8 },
-      { work: [...spread, { group_id: 20, campaign_id: null }] },
+      { work: onlySub },
     );
     expect(ids(lone.below)).toEqual([20]);
     expect(lone.showSub).toBe(false);
+    // Comunicare owning a Task itself: Social media narrows, so it is drawn.
+    expect(
+      workFilterChoices(
+        withSub,
+        campaigns,
+        { rootGroupId: 8 },
+        { work: [...spread, { group_id: 20, campaign_id: null }] },
+      ).showSub,
+    ).toBe(true);
+    // A chosen lone Subgrup keeps its control.
+    expect(
+      workFilterChoices(
+        withSub,
+        campaigns,
+        { rootGroupId: 8, groupId: 20 },
+        { work: onlySub },
+      ).showSub,
+    ).toBe(true);
   });
 
   it('hides the Subgrup when no option has a Group below a root (#919)', () => {

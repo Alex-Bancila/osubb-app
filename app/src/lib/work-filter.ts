@@ -445,6 +445,30 @@ function subgroupOptions<G extends WorkFilterGroup>(
 }
 
 /**
+ * Whether the **Subgrup** level is drawn under Rule W (#919): with no root,
+ * whenever any Subgrup is offered — several roots are shown, so even one
+ * narrows. Under a root, when there are several, when the URL's Subgrup is
+ * among them (its control never vanishes), or when the lone one leaves out
+ * some of the root's items (those the root owns itself); a lone Subgrup
+ * holding everything the root shows would narrow nothing.
+ */
+function subgroupNarrows(
+  work: readonly WorkItem[],
+  groups: readonly WorkFilterGroup[],
+  value: WorkFilterValue,
+  rootId: number | undefined,
+  below: readonly WorkFilterGroup[],
+): boolean {
+  if (rootId === undefined) return below.length > 0;
+  const [lone, ...rest] = below;
+  if (!lone) return false;
+  if (rest.length > 0 || below.some((group) => group.id === value.groupId))
+    return true;
+  const underRoot = itemsInGroup(work, groups, rootId);
+  return itemsInGroup(underRoot, groups, lone.id).length < underRoot.length;
+}
+
+/**
  * The options of every level. With `work` (the items the page can show),
  * Rule W applies: only Groups and Campaigns with work are offered, the URL's
  * values are kept, and a level with one option or none is hidden — one
@@ -499,9 +523,7 @@ export function workFilterChoices<
     below,
     campaigns: campaignOptions,
     showRoot: rootOptions.length > 1,
-    // Under one root, a lone Subgrup is all that root shows; across every
-    // root (none chosen, several offered) even one Subgrup narrows (#919).
-    showSub: below.length > (rootId === undefined ? 0 : 1),
+    showSub: subgroupNarrows(work, groups, value, rootId, below),
     showCampaign: campaignOptions.length > 1,
     rootId,
   };
