@@ -109,6 +109,64 @@ describe('Event form options', () => {
     expect(result.groups.map((group) => group.id)).toEqual([1, 7, 12]);
   });
 
+  describe('offers the Groups in one order for every viewer (F-15)', () => {
+    // Creation order (ids) scrambles the names; the Organization comes last.
+    const scrambled = [
+      [2, 'Imagine & PR', [2]],
+      [3, 'Tineret', [3]],
+      [5, 'Financiar', [5]],
+      [4, 'Resurse Umane', [4]],
+      [40, 'Achiziții', [5, 40]],
+      [30, 'OSUBB', [30]],
+    ].map(([id, name, path]) => ({
+      id: id as number,
+      name: name as string,
+      path: path as number[],
+      min_level: 0,
+      status: 'active',
+      is_organization: id === 30,
+    }));
+    const role = (id: number): MyGroup => ({
+      ...(scrambled.find((group) => group.id === id) as (typeof scrambled)[0]),
+      short: '',
+      category: 'department',
+      color: '',
+      group_role: 'manager',
+      explicit: true,
+      automatic: false,
+    });
+
+    it('BC (and the Moderator): OSUBB first, then the tree by name', () => {
+      const result = buildEventFormOptions(
+        { ...managerCapabilities, createTopLevelGroups: true },
+        [],
+        scrambled,
+      );
+      expect(result.groups.map((group) => group.name)).toEqual([
+        'OSUBB',
+        'Financiar',
+        'Achiziții',
+        'Imagine & PR',
+        'Resurse Umane',
+        'Tineret',
+      ]);
+    });
+
+    it('BCE: the same order over the Groups it manages', () => {
+      const result = buildEventFormOptions(
+        managerCapabilities,
+        [role(3), role(40), role(5)],
+        scrambled,
+      );
+      expect(result.groups.map((group) => group.name)).toEqual([
+        'OSUBB',
+        'Financiar',
+        'Achiziții',
+        'Tineret',
+      ]);
+    });
+  });
+
   it('does not turn ordinary membership into Event management', () => {
     const result = buildEventFormOptions(
       { ...managerCapabilities, managesAnyGroup: false, manageTasks: false },

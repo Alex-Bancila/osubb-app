@@ -285,6 +285,34 @@ describe('NewEventControl', () => {
     expect(screen.getByRole('dialog', { name: 'Eveniment nou' })).toBeVisible();
   });
 
+  it('shows every missing field on the first empty submit and focuses Titlu (F-16)', async () => {
+    const user = setup();
+    await open(user);
+    await user.click(
+      screen.getByRole('button', { name: 'Creează evenimentul' }),
+    );
+    expect(
+      await screen.findByText('Scrie titlul evenimentului.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Alege grupul evenimentului.')).toBeInTheDocument();
+    expect(
+      screen.getByLabelText('Începe — ora României'),
+    ).toHaveAccessibleDescription('Alege ora de început.');
+    await waitFor(() => expect(screen.getByLabelText('Titlu')).toHaveFocus());
+    expect(state.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('asks for the Group before "Cine îl vede", whose choices depend on it (F-16)', async () => {
+    const user = setup();
+    await open(user);
+    const group = screen.getByRole('combobox', { name: 'Grup' });
+    const audience = screen.getByLabelText('Cine îl vede');
+    expect(
+      group.compareDocumentPosition(audience) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('blocks a locally invalid draft without calling the RPC', async () => {
     const user = setup();
     await open(user);
