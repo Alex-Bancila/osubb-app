@@ -11,6 +11,7 @@ import {
   relevanceColor,
   type EventRelevance,
 } from './calendar-presentation';
+import { EventAttendance } from './EventAttendance';
 import { EventManageControls } from './EventManageControls';
 import EventRsvpControls from './EventRsvpControls';
 
@@ -30,7 +31,8 @@ type EventCardProps = {
   showDay?: boolean;
   /**
    * Offer **Editează** / **Anulează evenimentul** to those the commands accept
-   * (#849): on the Calendar's cards, not on Acasă's preview.
+   * (#849), and **Cine participă** (#934), to the Event's managers: on the
+   * Calendar's cards, not on Acasă's preview.
    */
   manageable?: boolean;
 };
@@ -139,6 +141,10 @@ export default function EventCard({
           <EventRsvpControls eventId={event.id} eventTitle={event.title} />
         ))
       )}
+
+      {/* Cine participă (#934): the Event's managers read every answer —
+          history too, on a past or cancelled Event. A deadline takes none. */}
+      {manageable && takesRsvp && <EventAttendance event={event} />}
 
       {manageable && <EventManageControls event={event} groups={groups} />}
     </article>

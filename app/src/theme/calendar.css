@@ -662,6 +662,113 @@
   margin-top: 0;
 }
 
+/* Cine participă (#934): the managers' read of every answer. The tally is the
+   sentence; the bar under it only draws the same split — Particip in the
+   Event's colour, Nu particip in ink, as the pressed "Nu particip" button. */
+.event-attendance {
+  margin-top: var(--s-4);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--border-soft);
+}
+
+.event-attendance-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-1) var(--s-3);
+}
+
+.event-attendance-label,
+.event-attendance-tally {
+  margin: 0;
+}
+
+.event-attendance-label,
+.event-attendance-toggle {
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-extrabold);
+}
+
+/* A ghost button that reads as the section's heading: flush with the card's
+   text, its target still 44 px tall. */
+.event-attendance-toggle {
+  margin-inline-start: calc(-1 * var(--s-2));
+  padding-inline: var(--s-2);
+}
+
+.event-attendance-tally {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.event-attendance-bar {
+  height: 4px;
+  margin-top: var(--s-2);
+  border-radius: var(--r-pill);
+  background: linear-gradient(
+    90deg,
+    var(--event-accent) var(--going-share),
+    color-mix(in srgb, var(--text) 70%, transparent) var(--going-share)
+  );
+}
+
+.event-attendance-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--s-4);
+  margin-top: var(--s-4);
+}
+
+.event-attendance-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-2);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-extrabold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.event-attendance-group.is-going .event-attendance-group-head {
+  color: var(--event-accent);
+}
+
+.event-attendance-count {
+  min-width: 1.5rem;
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.event-attendance-names {
+  display: grid;
+  gap: var(--s-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.event-attendance-note {
+  margin: var(--s-2) 0 0;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+
+.event-attendance-group .event-attendance-note {
+  margin-top: 0;
+}
+
 /* RSVP is a response strip, not a second card. Keeping it inside the event
    boundary makes the choice unambiguous while the thin rule preserves the
    agenda's visual hierarchy. */
@@ -853,5 +960,11 @@
 }
 
 :root[data-theme='dark'] .event-details dt {
+  color: color-mix(in srgb, var(--event-accent) 55%, white);
+}
+
+:root[data-theme='dark']
+  .event-attendance-group.is-going
+  .event-attendance-group-head {
   color: color-mix(in srgb, var(--event-accent) 55%, white);
 }

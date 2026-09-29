@@ -207,6 +207,9 @@ export const keys = {
       ['events', 'work', { memberId }] as const,
     rsvp: (eventId: number, memberId: string) =>
       ['events', 'rsvp', { eventId, memberId }] as const,
+    /* Every answer on one Event, which only its managers read (#934). */
+    attendance: (eventId: number, memberId: string | undefined) =>
+      ['events', 'attendance', { eventId, memberId }] as const,
     /* The Events I answered "Vin" to: an Other OSUBB Event turns to colour. */
     going: (memberId: string) => ['events', 'going', { memberId }] as const,
   },
