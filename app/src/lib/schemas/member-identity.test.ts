@@ -4,7 +4,12 @@ import {
   expectRoutable,
   issues,
 } from '../../test/schema-issues';
-import { fieldForReason, memberIdentitySchema } from './member-identity';
+import {
+  fieldForReason,
+  joinedAtFieldForReason,
+  memberIdentitySchema,
+  memberJoinedAtSchema,
+} from './member-identity';
 
 const valid = { nickname: '', fullName: 'Ana Pop' };
 const check = (patch: object) => {
@@ -55,4 +60,21 @@ it('maps every name reason to its field', () => {
       'full_name_too_long',
     ],
   );
+});
+
+it('takes a join date that is a real day, not after today in Bucharest (#932)', () => {
+  const schema = memberJoinedAtSchema('2026-09-29');
+  const judge = (joinedAt: string) => {
+    const result = schema.safeParse({ joinedAt });
+    expectRoutable(result, joinedAtFieldForReason);
+    return issues(result);
+  };
+  expect(schema.parse({ joinedAt: '2026-09-29' })).toEqual({
+    joinedAt: '2026-09-29',
+  });
+  expect(judge('2019-10-01')).toEqual([]);
+  expect(judge('')).toEqual(['joinedAt: joined_at_required']);
+  expect(judge('2025-02-30')).toEqual(['joinedAt: joined_at_invalid']);
+  expect(judge('2026-09-30')).toEqual(['joinedAt: joined_at_in_future']);
+  expectMapComplete(joinedAtFieldForReason, ['joinedAt'], []);
 });
