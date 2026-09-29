@@ -308,7 +308,7 @@ The date range, from one day to another, that BC chooses for one Role Evaluation
 _Avoid_: Season, scoring window, semester when the ranking window is meant, open Period
 
 **Promotion Rule**:
-A BC-set rule about moving a Member to a higher Role. Automatic only for Recrut to Voluntar (tenure). Voluntar to Voluntar Activ needs the required tenure counted from the join date plus Task Points at or above the Voluntar Activ Promotion Threshold at a Role Evaluation, which makes the Member a Promotion Candidate; BC then promotes by hand. Voluntar Activ to Voluntar cu Drept de Vot is human-confirmed; nothing is automatic downward. A Member below the required tenure is neither a Promotion Candidate nor notified.
+A BC-set rule about moving a Member to a higher Role. Automatic only for Recrut to Voluntar (tenure). Voluntar to Voluntar Activ needs the required tenure counted from the join date plus Task Points at or above the Voluntar Activ Promotion Threshold at a Role Evaluation, which makes the Member a Promotion Candidate; BC then promotes by hand. Voluntar Activ to Voluntar cu Drept de Vot is human-confirmed; nothing is automatic downward. A Member below the required tenure is neither a Promotion Candidate nor notified. BC edits each rule's required tenure (whole months) and turns it on or off at any time, every change audited; a rule turned off promotes nobody (Recrut to Voluntar) and lists no Promotion Candidate (Voluntar to Voluntar Activ).
 _Avoid_: Auto-promotion, level-up, threshold alone
 
 **Promotion Candidate**:

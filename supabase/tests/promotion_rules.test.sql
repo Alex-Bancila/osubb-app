@@ -205,7 +205,7 @@ select throws_ok(
 select throws_ok(
   $$ update public.promotion_rules set percent = 40 where kind = 'top_percent' $$,
   '42501', 'permission denied for table promotion_rules',
-  'BC cannot update a rule directly -- no command edits promotion_rules'' shape, only promotion_thresholds'' value');
+  'BC cannot update a rule directly -- only the audited commands write it (set_evaluation_percent the percent, update_promotion_rule the tenure and on/off)');
 select throws_ok(
   $$ delete from public.promotion_rules where kind = 'time' $$,
   '42501', 'permission denied for table promotion_rules',

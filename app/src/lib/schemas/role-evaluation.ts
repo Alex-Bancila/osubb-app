@@ -129,6 +129,30 @@ export const percentFieldForReason: Readonly<Record<string, 'percent'>> = {
 };
 
 /**
+ * A Promotion Rule as `update_promotion_rule` (#935) takes it: the tenure, a
+ * whole number of months from 0 to 120 (the field is text, so the digits are
+ * checked first), and whether the rule is on.
+ */
+export const promotionRuleSchema = z.object({
+  months: z
+    .string()
+    .trim()
+    .superRefine((value, ctx) => {
+      if (!/^\d{1,3}$/.test(value) || Number(value) > 120)
+        ctx.addIssue({ code: 'custom', message: 'invalid_tenure_months' });
+    })
+    .transform(Number),
+  enabled: z.boolean(),
+});
+
+export const promotionRuleFieldForReason: Readonly<
+  Record<string, 'months' | 'enabled'>
+> = {
+  invalid_tenure_months: 'months',
+  invalid_promotion_rule_enabled: 'enabled',
+};
+
+/**
  * The reason BC gives for rejecting a Promotion Candidate
  * (`reject_promotion_candidate`): required, trimmed, at most 500 characters.
  * The limit is half the shared 1000 of `reason_too_long`, so the browser says

@@ -272,6 +272,9 @@ export const keys = {
     ) => ['evaluation', 'ranking', range, { memberId }] as const,
     percents: (memberId: string | undefined) =>
       ['evaluation', 'percents', { memberId }] as const,
+    /* The two Promotion Rules: tenure and on/off (#935). */
+    rules: (memberId: string | undefined) =>
+      ['evaluation', 'rules', { memberId }] as const,
   },
   /* The organization settings (#681): every row, read by every Member. */
   orgSettings: {

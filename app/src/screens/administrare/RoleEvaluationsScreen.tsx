@@ -1,4 +1,11 @@
-import { useId, useMemo, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
 import { Link } from 'react-router';
 import { Gauge, History, Play, TriangleAlert, UserCheck } from 'lucide-react';
 import { cn } from 'cn';
@@ -28,12 +35,20 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog';
 import { FieldError } from '../../components/ui/field';
+import { SwitchRow } from '../../components/ui/switch';
 import { bucharestDayKey } from '../../lib/calendar-time';
 import { describeFailure } from '../../lib/command-reasons';
-import { formatPointCount, formatPoints, pointWord } from '../../lib/format';
+import {
+  formatMonthCount,
+  formatPointCount,
+  formatPoints,
+  pointWord,
+} from '../../lib/format';
 import {
   percentFieldForReason,
   percentSchema,
+  promotionRuleFieldForReason,
+  promotionRuleSchema,
   rejectionFieldForReason,
   rejectionSchema,
   runFieldForReason,
@@ -50,6 +65,7 @@ import {
   retentionSignals,
   useEvaluationPercents,
   usePromotionCandidates,
+  usePromotionRules,
   usePromotionThresholds,
   useRoleEvaluationCommand,
   useRoleEvaluationRanking,
@@ -57,6 +73,7 @@ import {
   useThresholdChanges,
   type EvaluationPercent,
   type PromotionCandidate,
+  type PromotionRule,
   type PromotionThreshold,
   type RoleEvaluation,
   type RoleEvaluationCommand,
@@ -687,6 +704,341 @@ function ThresholdRow({
   );
 }
 
+/* ------------------------------------------------------------------------ */
+/* Reguli de promovare (#935): each rule's tenure and on/off                 */
+/* ------------------------------------------------------------------------ */
+
+/** The Roles a Promotion Rule joins, as the tab names them. */
+const ROLE_NAME: Record<string, string> = {
+  recrut: 'Recrut',
+  voluntar: 'Voluntar',
+  activ: 'Voluntar Activ',
+  vot: 'Voluntar cu Drept de Vot',
+};
+
+function ruleLabel(rule: Pick<PromotionRule, 'fromRole' | 'toRole'>): string {
+  return `${ROLE_NAME[rule.fromRole] ?? rule.fromRole} → ${ROLE_NAME[rule.toRole] ?? rule.toRole}`;
+}
+
+/**
+ * What each rule does, on and off, and when an edit takes effect — checked
+ * against the daily job (`time`) and `run_role_evaluation` (`top_percent`).
+ */
+type RuleText = { on: string; off: string; applies: string };
+
+const TIME_RULE_TEXT: RuleText = {
+  on: 'Zilnic, fiecare Recrut care a împlinit vechimea devine automat Voluntar.',
+  off: 'Oprită: niciun Recrut nu mai devine Voluntar automat.',
+  applies: 'Se aplică de la următoarea rulare zilnică.',
+};
+
+const TOP_PERCENT_RULE_TEXT: RuleText = {
+  on: 'La o evaluare Voluntar Activ, un Voluntar cu această vechime și cel puțin pragul devine candidat la promovare.',
+  off: 'Oprită: evaluările Voluntar Activ nu mai propun candidați.',
+  applies:
+    'Se aplică de la următoarea evaluare Voluntar Activ; evaluările rulate nu se recalculează.',
+};
+
+function ruleText(kind: string): RuleText {
+  return kind === 'time' ? TIME_RULE_TEXT : TOP_PERCENT_RULE_TEXT;
+}
+
+/** A rule's on/off state: the word carries it, the dot only repeats it. */
+function RuleState({ enabled }: { enabled: boolean }) {
+  return enabled ? (
+    <span className="inline-flex min-h-7 items-center gap-1.5 rounded-full bg-muted px-3 text-sm font-semibold">
+      <span aria-hidden="true" className="size-2 rounded-full bg-primary" />
+      Pornită
+    </span>
+  ) : (
+    <span className="inline-flex min-h-7 items-center rounded-full border border-dashed border-border px-3 text-sm font-semibold text-muted-foreground">
+      Oprită
+    </span>
+  );
+}
+
+/**
+ * One Promotion Rule with #923's edit pattern: the value in force, Editează,
+ * then the tenure and the on/off switch with Salvează (only once something
+ * changed) and Renunță; focus goes back to Editează and the receipt is
+ * announced.
+ */
+function RuleRow({
+  rule,
+  lastChange,
+  identities,
+  disabled,
+  onRun,
+}: {
+  rule: PromotionRule;
+  /** The rule's latest change in the log, if any. */
+  lastChange: ThresholdChange | undefined;
+  identities: Identities;
+  disabled: boolean;
+  onRun: Run;
+}) {
+  const labelId = useId();
+  const monthsId = useId();
+  const hintId = useId();
+  const label = ruleLabel(rule);
+  const text = ruleText(rule.kind);
+  const [editing, setEditing] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [months, setMonths] = useState('');
+  const [enabled, setEnabled] = useState(rule.enabled);
+  const [pending, setPending] = useState(false);
+  const editButton = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(false);
+  const form = useFormValidation(
+    promotionRuleSchema,
+    { months, enabled },
+    promotionRuleFieldForReason,
+  );
+
+  // Opening focuses the tenure; closing returns focus to Editează (#923).
+  useEffect(() => {
+    if (editing) document.getElementById(monthsId)?.focus();
+    else if (wasEditing.current) editButton.current?.focus();
+    wasEditing.current = editing;
+  }, [editing, monthsId]);
+
+  const changed =
+    months.trim() !== String(rule.tenureMonths) || enabled !== rule.enabled;
+
+  function open() {
+    setMonths(String(rule.tenureMonths));
+    setEnabled(rule.enabled);
+    setSaved(false);
+    form.reset();
+    setEditing(true);
+  }
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    const values = form.validate();
+    if (!values) return;
+    setPending(true);
+    try {
+      await onRun({
+        kind: 'rule',
+        ruleId: rule.id,
+        tenureMonths: values.months,
+        enabled: values.enabled,
+      });
+      setSaved(true);
+      setEditing(false);
+    } catch (failure) {
+      form.fail(failure, 'Nu am putut salva regula. Reîncearcă.');
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const busy = disabled || pending;
+  return (
+    <li
+      data-slot="rule-row"
+      data-rule={rule.kind}
+      aria-labelledby={labelId}
+      className={cn(
+        'grid gap-2 py-3 first:pt-0',
+        editing && '-mx-3 rounded-lg bg-muted/40 px-3 first:pt-3',
+      )}
+    >
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-2">
+        <div className="grid min-w-0 gap-1">
+          <SubHeading as="h4" variant="label" id={labelId}>
+            {label}
+          </SubHeading>
+          <p className="m-0 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="sr-only">Vechime cerută: </span>
+            <span className="text-2xl leading-tight font-bold tabular-nums">
+              {formatMonthCount(rule.tenureMonths)}
+            </span>
+            <span className="sr-only">. Stare: </span>
+            <RuleState enabled={rule.enabled} />
+          </p>
+          <p className="m-0 text-sm text-muted-foreground">
+            {rule.enabled ? text.on : text.off}
+          </p>
+          {lastChange?.changed_by && (
+            <p className="m-0 flex flex-wrap items-center gap-x-1 text-sm text-muted-foreground">
+              schimbată de
+              <Name memberId={lastChange.changed_by} identities={identities} />
+            </p>
+          )}
+          {/* Always mounted, so the receipt is announced when it appears. */}
+          <p role="status" className="m-0 text-sm font-medium empty:hidden">
+            {saved && !editing ? 'Regula a fost salvată.' : null}
+          </p>
+        </div>
+        {!editing && (
+          <Button
+            ref={editButton}
+            type="button"
+            variant="outline"
+            disabled={disabled}
+            onClick={open}
+            aria-label={`Editează regula ${label}`}
+          >
+            Editează
+          </Button>
+        )}
+      </div>
+      {editing && (
+        <form
+          onSubmit={save}
+          noValidate
+          aria-labelledby={labelId}
+          className="grid gap-3"
+        >
+          <div className="grid gap-1.5">
+            <label htmlFor={monthsId} className="text-sm font-medium">
+              Vechime cerută
+            </label>
+            <div className="relative w-32">
+              <input
+                id={monthsId}
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={120}
+                step={1}
+                className={cn(control, 'pr-12')}
+                value={months}
+                disabled={busy}
+                onChange={(event) => setMonths(event.target.value)}
+                {...form.field('months', hintId)}
+              />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground"
+              >
+                luni
+              </span>
+            </div>
+            <p id={hintId} className="m-0 text-sm text-muted-foreground">
+              Luni întregi de la data intrării în OSUBB, de la 0 la 120.{' '}
+              {text.applies}
+            </p>
+            <FieldError {...form.errorProps('months')} />
+          </div>
+          <div {...form.slot('enabled')}>
+            <SwitchRow
+              label="Regula este pornită"
+              description={enabled ? text.on : text.off}
+              checked={enabled}
+              disabled={busy}
+              onCheckedChange={(next) => setEnabled(next)}
+            />
+            <FieldError {...form.errorProps('enabled')} />
+          </div>
+          <FieldError>{form.formError}</FieldError>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="submit"
+              className="flex-1 sm:flex-none"
+              disabled={!changed || busy}
+            >
+              Salvează
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 sm:flex-none"
+              disabled={busy}
+              onClick={() => setEditing(false)}
+            >
+              Renunță
+            </Button>
+          </div>
+        </form>
+      )}
+    </li>
+  );
+}
+
+function RulesSection({
+  changes,
+  identities,
+  disabled,
+  onRun,
+}: {
+  changes: readonly ThresholdChange[] | undefined;
+  identities: Identities;
+  disabled: boolean;
+  onRun: Run;
+}) {
+  const titleId = useId();
+  const rules = usePromotionRules();
+  return (
+    <section
+      aria-labelledby={titleId}
+      className="grid gap-2 border-t border-(--border-soft) pt-3"
+    >
+      <SubHeading id={titleId} variant="label">
+        Reguli de promovare
+      </SubHeading>
+      {rules.isPending ? (
+        <Loading label="Se încarcă regulile de promovare…" />
+      ) : rules.isError ? (
+        <ErrorState
+          text="Nu am putut încărca regulile de promovare."
+          onRetry={() => void rules.refetch()}
+        />
+      ) : (
+        <ul className={rowListClass} aria-labelledby={titleId}>
+          {rules.data.map((rule) => (
+            <RuleRow
+              key={rule.id}
+              rule={rule}
+              lastChange={changes?.find(
+                (change) => change.promotion_rule_id === rule.id,
+              )}
+              identities={identities}
+              disabled={disabled}
+              onRun={onRun}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** The log's subject: a kind (threshold, share) or a rule (tenure, on/off). */
+function changeSubject(
+  change: ThresholdChange,
+  rules: readonly PromotionRule[] | undefined,
+): string {
+  if (change.promotion_rule_id !== null) {
+    const rule = rules?.find((row) => row.id === change.promotion_rule_id);
+    const name = rule ? ruleLabel(rule) : 'Regulă de promovare';
+    return `${name} · ${change.field === 'enabled' ? 'stare' : 'vechime'}`;
+  }
+  const kind = change.kind ?? '';
+  return `${KIND_LABEL[kind] ?? kind}${change.field === 'percent' ? ' · procent' : ''}`;
+}
+
+/** The log's before → after, in each value's own unit. */
+function changeValues(change: ThresholdChange): string {
+  switch (change.field) {
+    case 'percent':
+      return `${change.from_value ?? '—'} % → ${change.to_value} %`;
+    case 'tenure':
+      return `${change.from_value ?? '—'} → ${formatMonthCount(change.to_value)}`;
+    case 'enabled': {
+      const state = (value: number | null) =>
+        value === 1 ? 'pornită' : 'oprită';
+      return `${state(change.from_value)} → ${state(change.to_value)}`;
+    }
+    default:
+      return `${
+        change.from_value === null ? 'nesetat' : formatPoints(change.from_value)
+      } → ${formatPoints(change.to_value)}`;
+  }
+}
+
 function ThresholdsPanel({
   thresholds,
   evaluations,
@@ -700,6 +1052,8 @@ function ThresholdsPanel({
 }) {
   const changes = useThresholdChanges();
   const percents = useEvaluationPercents();
+  // Shared with RulesSection through the query cache: the log names each rule.
+  const rules = usePromotionRules();
   const memberIds = useMemo(
     () =>
       (changes.data ?? []).flatMap((change) =>
@@ -716,7 +1070,7 @@ function ThresholdsPanel({
       eyebrow="Evaluări de rol"
       icon={Gauge}
       title="Praguri"
-      description="Punctele de task cu care fiecare tip de evaluare compară membrii și procentul din clasament din care calculează pragul următor."
+      description="Punctele de task cu care fiecare tip de evaluare compară membrii, procentul din clasament din care calculează pragul următor și vechimea cerută de fiecare regulă de promovare."
       boxClassName="grid content-start gap-3"
     >
       <ul className={rowListClass}>
@@ -726,7 +1080,7 @@ function ThresholdsPanel({
             kind={kind}
             row={thresholds.find((row) => row.kind === kind)}
             source={changes.data?.find(
-              (change) => change.kind === kind && change.field !== 'percent',
+              (change) => change.kind === kind && change.field === 'threshold',
             )}
             percent={percents.data?.find((row) => row.kind === kind)}
             runName={runName}
@@ -736,39 +1090,38 @@ function ThresholdsPanel({
           />
         ))}
       </ul>
+      <RulesSection
+        changes={changes.data}
+        identities={identities.data}
+        disabled={disabled}
+        onRun={onRun}
+      />
       {/* The log appears with its first change (B58): an empty "Nicio
           schimbare încă" block tells BC nothing before anything happened. */}
       {!(changes.isSuccess && changes.data.length === 0) && (
         <div className="grid gap-2 border-t border-(--border-soft) pt-3">
-          <SubHeading variant="label">Istoricul pragurilor</SubHeading>
+          <SubHeading variant="label">Istoricul modificărilor</SubHeading>
           {changes.isPending ? (
-            <Loading label="Se încarcă istoricul pragurilor…" />
+            <Loading label="Se încarcă istoricul modificărilor…" />
           ) : changes.isError ? (
             <ErrorState
-              text="Nu am putut încărca istoricul pragurilor."
+              text="Nu am putut încărca istoricul modificărilor."
               onRetry={() => void changes.refetch()}
             />
           ) : (
             <ul
               className={cn(rowListClass, 'max-h-80 overflow-y-auto text-sm')}
-              aria-label="Istoricul pragurilor"
+              aria-label="Istoricul modificărilor"
             >
               {changes.data.map((change) => (
                 <li key={change.id} className="grid min-w-0 gap-0.5 py-2">
                   <span className="text-muted-foreground tabular-nums">
                     {formatInstantDay(change.changed_at)} ·{' '}
-                    {KIND_LABEL[change.kind] ?? change.kind}
-                    {change.field === 'percent' && ' · procent'}
+                    {changeSubject(change, rules.data)}
                   </span>
                   <span className="flex min-w-0 flex-wrap items-center gap-x-1.5">
                     <span className="font-semibold tabular-nums">
-                      {change.field === 'percent'
-                        ? `${change.from_value ?? '—'} % → ${change.to_value} %`
-                        : `${
-                            change.from_value === null
-                              ? 'nesetat'
-                              : formatPoints(change.from_value)
-                          } → ${formatPoints(change.to_value)}`}
+                      {changeValues(change)}
                     </span>
                     <span aria-hidden="true" className="text-muted-foreground">
                       ·
