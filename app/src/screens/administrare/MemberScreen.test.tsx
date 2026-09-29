@@ -31,11 +31,32 @@ vi.mock('../../queries/privacy', async (original) => ({
   ...(await original<object>()),
   useMemberAcknowledgement: state.privacy,
 }));
-vi.mock('./RolePanel', () => ({
-  RolePanel: ({ selectedMemberId }: { selectedMemberId: string }) => (
-    <p>Editor rol {selectedMemberId}</p>
-  ),
-}));
+// A stand-in command with a receipt, taking its turn like the real panel.
+vi.mock('./RolePanel', async () => {
+  const { useState } = await import('react');
+  const { useReceiptTurn } = await import('../tracker/receipt-turn');
+  return {
+    RolePanel: ({ selectedMemberId }: { selectedMemberId: string }) => {
+      const turn = useReceiptTurn();
+      const [message, setMessage] = useState('');
+      return (
+        <>
+          <p>Editor rol {selectedMemberId}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setMessage('Rolul a fost schimbat.');
+              turn.claim();
+            }}
+          >
+            Schimbă rolul
+          </button>
+          {message && turn.current && <p role="status">{message}</p>}
+        </>
+      );
+    },
+  };
+});
 vi.mock('./ReinvitePanel', () => ({
   ReinvitePanel: ({ memberId }: { memberId: string }) => (
     <p>Retrimitere {memberId}</p>
@@ -265,6 +286,29 @@ it('sends the trimmed names and puts a Nickname refusal under its field', async 
   expect(await screen.findByRole('status')).toHaveTextContent(
     'Numele a fost actualizat.',
   );
+});
+
+it('shows one receipt at a time: a second command replaces the first (F-11)', async () => {
+  const user = userEvent.setup();
+  state.mutate.mockResolvedValue(undefined);
+  show();
+  await user.click(screen.getByRole('button', { name: 'Salvează numele' }));
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    'Numele a fost actualizat.',
+  );
+  await user.click(screen.getByRole('button', { name: 'Schimbă rolul' }));
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Rolul a fost schimbat.',
+  );
+  expect(screen.queryByText('Numele a fost actualizat.')).toBeNull();
+});
+
+it('leaves out "Membru din" for an imported Member with no date yet (F-28)', () => {
+  state.member.mockReturnValue({ ...ready, data: member({ joinedAt: null }) });
+  show();
+  expect(screen.queryByText('Membru din')).toBeNull();
+  expect(screen.queryByText('—')).toBeNull();
+  expect(screen.getByText('Rol organizațional')).toBeVisible();
 });
 
 it('clears the Nickname to none and refuses a blank full name before sending', async () => {

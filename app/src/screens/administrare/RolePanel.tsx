@@ -2,7 +2,17 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { UserCog } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router';
 import { Panel, SubHeading } from '../../components/layout';
+import { MemberName } from '../../components/member/MemberName';
+import type { MemberIdentity } from '../../components/member/member-identity';
 import { Button } from '../../components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
 import {
   NativeSelect,
   NativeSelectOption,
@@ -23,6 +33,7 @@ import {
 import { statusLabel, statusLabels } from '../volunteers/directory-filters';
 import type { Database } from '../../lib/database.types';
 import { MemberPicker } from './MemberPicker';
+import { useReceiptTurn } from '../tracker/receipt-turn';
 
 type MemberRole = Database['public']['Enums']['member_role'];
 type MemberStatus = Database['public']['Enums']['member_status'];
@@ -38,6 +49,72 @@ function changeError(error: unknown) {
   return commandErrorMessage(
     error,
     'Nu am putut salva modificarea. Încearcă din nou.',
+  );
+}
+
+const DEACTIVATION_WARNING =
+  'Dezactivarea revocă sesiunile de reîmprospătare. Un token deja emis poate rămâne valabil cel mult o oră.';
+
+/**
+ * "Dezactivează" asks first (F-11), like "Scoate" on a Roster: the dialog
+ * repeats the warning and only its own button sends the change.
+ */
+function DeactivateDialog({
+  member,
+  disabled,
+  onConfirm,
+}: {
+  member: MemberIdentity;
+  disabled: boolean;
+  onConfirm: () => Promise<boolean>;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!disabled) setOpen(next);
+      }}
+    >
+      <Button
+        type="button"
+        block
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+      >
+        Dezactivează
+      </Button>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Dezactivezi acest membru?</DialogTitle>
+          <DialogDescription>{DEACTIVATION_WARNING}</DialogDescription>
+        </DialogHeader>
+        {/* The name through MemberName, in the body: a title holds no button. */}
+        <MemberName size="sm" {...member} />
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={disabled}
+            onClick={() => setOpen(false)}
+          >
+            Renunță
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={disabled}
+            onClick={async () => {
+              // A refusal closes it too: the panel shows the reason.
+              await onConfirm();
+              setOpen(false);
+            }}
+          >
+            Dezactivează membrul
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -93,6 +170,8 @@ export function RolePanel({
   );
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // On a Member's page, one receipt at a time with the other panels (F-11).
+  const turn = useReceiptTurn();
   const groupIds = useMemberGroupIds(memberId || null);
   const member = members.data?.find((row) => row.memberId === memberId);
   const actor = members.data?.find((row) => row.memberId === session?.user.id);
@@ -158,7 +237,7 @@ export function RolePanel({
     statusOptions.includes(nextStatus) &&
     !change.isPending;
 
-  async function save(next: MemberChange) {
+  async function save(next: MemberChange): Promise<boolean> {
     setError(null);
     setMessage(null);
     try {
@@ -170,11 +249,14 @@ export function RolePanel({
             ? 'Membrul a fost dezactivat. Sesiunile de reîmprospătare au fost revocate.'
             : 'Membrul a fost reactivat și schimbarea a fost înregistrată.',
       );
+      turn.claim();
       setReason('');
       setRoleDraft('');
       setStatusDraft('');
+      return true;
     } catch (failure) {
       setError(changeError(failure));
+      return false;
     }
   }
 
@@ -342,10 +424,7 @@ export function RolePanel({
                     ))}
                   </NativeSelect>
                   {nextStatus === 'inactiv' && nextStatus !== member.status && (
-                    <p className="m-0 text-sm">
-                      Dezactivarea revocă sesiunile de reîmprospătare. Un token
-                      deja emis poate rămâne valabil cel mult o oră.
-                    </p>
+                    <p className="m-0 text-sm">{DEACTIVATION_WARNING}</p>
                   )}
                 </div>
                 <div className="flex min-w-0 flex-col gap-2 sm:col-span-2">
@@ -380,31 +459,47 @@ export function RolePanel({
                   </Button>
                 </div>
                 <div className="min-w-0">
-                  <Button
-                    type="button"
-                    block
-                    disabled={!canSaveStatus}
-                    onClick={() =>
-                      void save({
-                        kind: 'status',
-                        memberId,
-                        status: nextStatus as MemberStatus,
-                        reason: reason.trim() || null,
-                      })
-                    }
-                  >
-                    {nextStatus === member.status
-                      ? 'Salvează statusul'
-                      : nextStatus === 'inactiv'
-                        ? 'Dezactivează'
-                        : nextStatus === 'activ'
-                          ? 'Reactivează'
-                          : 'Salvează statusul'}
-                  </Button>
+                  {nextStatus === 'inactiv' && nextStatus !== member.status ? (
+                    <DeactivateDialog
+                      member={{
+                        memberId: member.memberId,
+                        fullName: member.name,
+                        nickname: member.nickname,
+                        avatarColor: member.avatarColor,
+                      }}
+                      disabled={!canSaveStatus}
+                      onConfirm={() =>
+                        save({
+                          kind: 'status',
+                          memberId,
+                          status: 'inactiv',
+                          reason: reason.trim() || null,
+                        })
+                      }
+                    />
+                  ) : (
+                    <Button
+                      type="button"
+                      block
+                      disabled={!canSaveStatus}
+                      onClick={() =>
+                        void save({
+                          kind: 'status',
+                          memberId,
+                          status: nextStatus as MemberStatus,
+                          reason: reason.trim() || null,
+                        })
+                      }
+                    >
+                      {nextStatus !== member.status && nextStatus === 'activ'
+                        ? 'Reactivează'
+                        : 'Salvează statusul'}
+                    </Button>
+                  )}
                 </div>
               </div>
             )}
-            {message && (
+            {message && turn.current && (
               <p role="status" className="m-0">
                 {message}
               </p>

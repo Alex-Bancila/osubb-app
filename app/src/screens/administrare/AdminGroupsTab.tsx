@@ -14,7 +14,11 @@ import { useCapabilities } from '../../lib/capabilities';
 import { CommandError } from '../../lib/command-reasons';
 import { useAuth } from '../../lib/auth';
 import { minimumLevelText } from '../../lib/minimum-level';
-import { useRoles } from '../../queries/reference';
+import {
+  useMyGroups,
+  useRoles,
+  type GroupMemberRow,
+} from '../../queries/reference';
 import type { MyGroup } from '../../queries/my-groups';
 import {
   useAdminGroups,
@@ -33,6 +37,7 @@ import {
   expandableIds,
   groupRoleLabel,
   groupStatusLabel,
+  inheritsGroupRole,
   varies,
   visibleRows,
   type TreeRow,
@@ -167,6 +172,7 @@ function treeColumns(
 function myGroupColumns(
   groups: readonly MyGroup[],
   privateIds: ReadonlySet<number>,
+  rosterRows: readonly GroupMemberRow[] | undefined,
 ): DataTableColumn<MyGroup>[] {
   const columns: DataTableColumn<MyGroup>[] = [
     {
@@ -204,7 +210,10 @@ function myGroupColumns(
         <Badge variant="outline">
           {groupRoleLabel(row.original.group_role)}
         </Badge>
-        {!row.original.explicit && !row.original.automatic && (
+        {/* Keyed on the position, not on the roster row: a Coordonator
+            from above who is also a plain member here still inherits it
+            (F-17). */}
+        {inheritsGroupRole(row.original, rosterRows) && (
           <span className="text-xs text-muted-foreground">
             din grupul de deasupra
           </span>
@@ -293,13 +302,15 @@ function GroupTree({ groups }: { groups: AdminGroup[] }) {
 function MyGroupsTable({
   groups,
   privateIds,
+  rosterRows,
 }: {
   groups: MyGroup[];
   privateIds: ReadonlySet<number>;
+  rosterRows: readonly GroupMemberRow[] | undefined;
 }) {
   const columns = useMemo(
-    () => myGroupColumns(groups, privateIds),
-    [groups, privateIds],
+    () => myGroupColumns(groups, privateIds, rosterRows),
+    [groups, privateIds, rosterRows],
   );
   const navigate = useNavigate();
   return (
@@ -331,6 +342,10 @@ export default function AdminGroupsTab() {
   const createTopLevel = capabilities.data?.createTopLevelGroups === true;
   const groupsQuery = useAdminGroups();
   const myGroupsQuery = useMyGroupRoles();
+  // The viewer's own roster rows: which position is held here, not above.
+  // Grupurile mele waits for them, so no role is classed without them.
+  const rosterQuery = useMyGroups();
+  const rosterRows = rosterQuery.membershipRows;
   const rolesQuery = useRoles();
   const membersQuery = useAppointableMembers(createTopLevel);
   const command = useGroupCommand();
@@ -396,12 +411,16 @@ export default function AdminGroupsTab() {
 
   const pending = createTopLevel
     ? groupsQuery.isPending
-    : myGroupsQuery.isPending;
-  const failed = createTopLevel ? groupsQuery.isError : myGroupsQuery.isError;
+    : myGroupsQuery.isPending || rosterQuery.isPending;
+  const failed = createTopLevel
+    ? groupsQuery.isError
+    : myGroupsQuery.isError || rosterQuery.isError;
   const actionSlot = useAdministrareActionSlot();
   const title = createTopLevel ? 'Structura grupurilor' : 'Grupurile mele';
   const retry = () =>
-    void (createTopLevel ? groupsQuery.refetch() : myGroupsQuery.refetch());
+    void (createTopLevel
+      ? groupsQuery.refetch()
+      : Promise.all([myGroupsQuery.refetch(), rosterQuery.refetch()]));
 
   return (
     <>
@@ -443,7 +462,11 @@ export default function AdminGroupsTab() {
         <GroupTree groups={groups} />
       ) : (
         <Panel eyebrow="Grupuri" icon={Network} title={title}>
-          <MyGroupsTable groups={withRole} privateIds={privateIds} />
+          <MyGroupsTable
+            groups={withRole}
+            privateIds={privateIds}
+            rosterRows={rosterRows}
+          />
         </Panel>
       )}
     </>

@@ -21,7 +21,11 @@ import {
 import { useGroupApplications } from '../../queries/group-applications';
 import { isMemberOf, type MyGroup } from '../../queries/my-groups';
 import { useMyGroups } from '../../queries/reference';
-import { categoryLabel, groupRoleLabel } from '../administrare/group-tree';
+import {
+  categoryLabel,
+  groupRoleLabel,
+  inheritsGroupRole,
+} from '../administrare/group-tree';
 import { ApplicationAction } from './ApplicationAction';
 import { ApplicationFormLink } from './ApplicationFormLink';
 import { acceptsApplication, applicationForm } from './application-eligibility';
@@ -111,6 +115,7 @@ export default function GroupsScreen() {
                   row={row}
                   group={group}
                   positionTitle={positionTitle(group.id)}
+                  inherited={inheritsGroupRole(row, rosterRows.membershipRows)}
                 />
               ))}
             </ul>
@@ -172,15 +177,20 @@ function OwnGroupRow({
   row,
   group,
   positionTitle,
+  inherited,
 }: {
   row: MyGroup;
   group: AdminGroup;
   positionTitle: string | null | undefined;
+  /** The position comes from a Group above, not from this roster (F-17). */
+  inherited: boolean;
 }) {
   // Ordinary membership is what the section already says; only a position
-  // (Coordonator, a Responsible's display name) earns a label.
+  // held here (Coordonator, a Responsible's display name) earns a label. One
+  // inherited from above belongs to that Group's row, not this one.
   const role =
-    row.group_role === 'manager' || row.group_role === 'responsible'
+    !inherited &&
+    (row.group_role === 'manager' || row.group_role === 'responsible')
       ? groupRoleLabel(row.group_role, group.manager_title, positionTitle)
       : null;
   return (

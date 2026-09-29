@@ -1,5 +1,7 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import * as axe from 'axe-core';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { BackLink } from '../../components/layout';
@@ -22,7 +24,16 @@ const api = vi.hoisted(() => ({
   roles: vi.fn(),
   applications: vi.fn(),
   level: { value: 6 },
+  coordination: vi.fn(),
 }));
+
+/** The Roluri tab reads the Groups above through TanStack Query. */
+function withClient({ children }: { children: ReactNode }) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../lib/capabilities', () => ({
   useCapabilities: api.capabilities,
@@ -44,6 +55,8 @@ vi.mock('../../queries/groups-admin', async (original) => ({
 }));
 // The real Cereri tab, over mocked reads: the tab's rows are what it shows.
 vi.mock('../../queries/group-applications', () => ({
+  // The Roluri pickers read the coordinators of the Groups above (F-27).
+  fetchGroupCoordination: api.coordination,
   useGroupApplications: api.applications,
   useApplicationCommand: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
@@ -179,6 +192,8 @@ beforeEach(() => {
   api.mutate.mockReset();
   api.mutate.mockResolvedValue({ id: 1 });
   api.level.value = 6;
+  api.coordination.mockReset();
+  api.coordination.mockResolvedValue([]);
   api.groups.mockReturnValue({ data: tree, isPending: false, isError: false });
   api.myGroups.mockReturnValue({ data: [], isPending: false, isError: false });
   api.roster.mockReturnValue({ data: roster, isPending: false });
@@ -239,6 +254,7 @@ function show(id: number | string = 2, state?: unknown) {
         <Route path="/administrare/membri/:memberId" element={<MemberPage />} />
       </Routes>
     </MemoryRouter>,
+    { wrapper: withClient },
   );
 }
 
@@ -626,6 +642,100 @@ it('appoints a Manager one level up and a Responsible under a display name', asy
     groupRole: 'responsible',
     positionTitle: 'Responsabil Logistică',
   });
+});
+
+it('offers the position pickers only Members who could take the position (F-27)', async () => {
+  const person = (
+    memberId: string,
+    name: string,
+    extra: Partial<AppointableMember> = {},
+  ): AppointableMember => ({
+    memberId,
+    name,
+    avatarColor: null,
+    status: 'activ',
+    roleId: 'voluntar',
+    roleLabel: 'Voluntar',
+    level: 1,
+    ...extra,
+  });
+  api.members.mockReturnValue({
+    data: [
+      ...members,
+      // Logistică's own Coordonator.
+      person('b', 'Bogdan Ion', { roleId: 'bce', roleLabel: 'BCE', level: 5 }),
+      // Coordonator of Educațional, above: the position flows down.
+      person('i', 'Irina Vlad', { roleId: 'bce', roleLabel: 'BCE', level: 5 }),
+      person('d', 'Dan BC', { roleId: 'bc', roleLabel: 'BC', level: 6 }),
+      person('m', 'Mara Mod', {
+        roleId: 'moderator',
+        roleLabel: 'Moderator',
+        level: 7,
+      }),
+      person('x', 'Xenia Inactivă', { status: 'inactiv' }),
+      person('r', 'Rareș Recrut', { roleId: 'recrut', level: 0 }),
+    ],
+  });
+  api.coordination.mockImplementation((groupId: number) =>
+    Promise.resolve(
+      groupId === 1
+        ? [
+            {
+              memberId: 'i',
+              fullName: 'Irina Vlad',
+              nickname: null,
+              groupRole: 'manager',
+              positionTitle: null,
+            },
+          ]
+        : [],
+    ),
+  );
+  const user = userEvent.setup();
+  show();
+  await user.click(tab('Roluri'));
+  for (const [button, title] of [
+    ['Numește un responsabil', 'Responsabil în Logistică'],
+    ['Numește un coordonator', 'Coordonator pentru Logistică'],
+  ]) {
+    await user.click(screen.getByRole('button', { name: button }));
+    const dialog = await screen.findByRole('dialog', { name: title });
+    await user.click(within(dialog).getByRole('combobox', { name: 'Membru' }));
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole('option').map((option) => option.textContent),
+      ).toEqual(['CRCarmen RaduVoluntar']),
+    );
+    await user.keyboard('{Escape}');
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  }
+});
+
+it('offers no appointment until the positions above are known (F-27)', async () => {
+  api.coordination.mockReturnValue(new Promise(() => {}));
+  const user = userEvent.setup();
+  show();
+  await user.click(tab('Roluri'));
+  expect(
+    screen.getByRole('button', { name: 'Numește un responsabil' }),
+  ).toBeDisabled();
+  expect(
+    screen.getByRole('button', { name: 'Numește un coordonator' }),
+  ).toBeDisabled();
+});
+
+it('says so and offers no appointment when the positions above cannot be read (F-27)', async () => {
+  api.coordination.mockRejectedValue(new Error('offline'));
+  const user = userEvent.setup();
+  show();
+  await user.click(tab('Roluri'));
+  expect(
+    (await screen.findAllByText(/Nu am putut verifica funcțiile/)).length,
+  ).toBeGreaterThan(0);
+  expect(
+    screen.getByRole('button', { name: 'Numește un responsabil' }),
+  ).toBeDisabled();
 });
 
 it("never offers a Child Group's Manager the appointment that belongs one level up", async () => {

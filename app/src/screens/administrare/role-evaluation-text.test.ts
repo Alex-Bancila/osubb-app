@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 import {
   computedThresholdText,
+  defaultRangeStart,
   runConsequences,
   runResultText,
 } from './role-evaluation-text';
@@ -63,5 +64,25 @@ describe('Role Evaluation words', () => {
         retentionSignals: 1,
       }),
     ).toBe('Evaluarea „AG” a rulat: 1 semnal de retenție.');
+  });
+
+  it('never prefills a range that starts after today (F-21)', () => {
+    expect(defaultRangeStart('2026-06-30', '2026-09-28')).toBe('2026-07-01');
+    expect(defaultRangeStart('2026-09-27', '2026-09-28')).toBe('2026-09-28');
+    expect(defaultRangeStart('2026-09-28', '2026-09-28')).toBe('');
+    expect(defaultRangeStart(null, '2026-09-28')).toBe('');
+  });
+
+  it('names a one-point threshold in the singular (F-20)', () => {
+    const text = runConsequences({
+      kind: 'voluntar_activ',
+      from: '2026-01-01',
+      to: '2026-09-28',
+      threshold: 1,
+      x: '30',
+      y: '25',
+    });
+    expect(text).toContain('cel puțin 1 punct devin');
+    expect(text).not.toContain('1 puncte');
   });
 });

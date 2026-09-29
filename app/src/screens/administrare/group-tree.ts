@@ -1,6 +1,10 @@
 import { isMinimumLevel } from '../../lib/minimum-level';
 import type { BackLinkState } from '../../components/layout';
-import type { AdminGroup, GroupAuthority } from '../../queries/groups-admin';
+import type {
+  AdminGroup,
+  AppointableMember,
+  GroupAuthority,
+} from '../../queries/groups-admin';
 
 /**
  * Turning the flat `groups` rows into the tree the panel shows, and the small
@@ -48,6 +52,29 @@ export function groupRoleLabel(
   if (groupRole === 'responsible')
     return positionTitle?.trim() || 'Responsabil';
   return 'Membru';
+}
+
+/**
+ * Whether the viewer's Group Role here comes from a Group above (F-17): a
+ * Manager or Responsible position their own roster row on this Group does not
+ * hold. Being on the roster as a plain member does not make it explicit.
+ * Without the roster rows yet, `explicit`/`automatic` decide as before.
+ */
+export function inheritsGroupRole(
+  row: {
+    id: number;
+    group_role: string;
+    explicit: boolean;
+    automatic: boolean;
+  },
+  rosterRows: readonly { group_id: number; group_role: string }[] | undefined,
+): boolean {
+  if (row.group_role !== 'manager' && row.group_role !== 'responsible')
+    return false;
+  if (!rosterRows) return !row.explicit && !row.automatic;
+  return !rosterRows.some(
+    (own) => own.group_id === row.id && own.group_role === row.group_role,
+  );
 }
 
 export type TreeRow = {
@@ -256,4 +283,27 @@ export function rosterBackState(groupId: number): BackLinkState {
       label: 'Înapoi la grup',
     },
   };
+}
+
+/** Ranks the position pickers never offer (Alex, 2026-09-29, F-27). */
+const OUTSIDE_POSITIONS: ReadonlySet<string> = new Set(['bc', 'moderator']);
+
+/**
+ * Who the Coordonator and Responsabil pickers offer (F-27), one rule for
+ * both: a live active Member at or above the Group's Minimum Level, not BC or
+ * the Moderator, who holds no position here yet — on this roster or
+ * inherited from a Group above. The Roster's add picker keeps its own list.
+ */
+export function positionCandidates(
+  members: readonly AppointableMember[],
+  group: Pick<AdminGroup, 'min_level'>,
+  holders: ReadonlySet<string>,
+): AppointableMember[] {
+  return members.filter(
+    (member) =>
+      member.status === 'activ' &&
+      member.level >= group.min_level &&
+      !OUTSIDE_POSITIONS.has(member.roleId ?? '') &&
+      !holders.has(member.memberId),
+  );
 }

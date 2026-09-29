@@ -331,6 +331,12 @@ it('offers the Adunarea Generală only top-level Teams with automatic membership
     await screen.findByRole('heading', { name: 'Adunarea Generală' })
   ).closest('section') as HTMLElement;
   const select = within(section).getByLabelText('Grupul Adunării Generale');
+  // Ruling R28: the setting grants the Role Evaluation ranking; there are no
+  // Periods, and Retention Signals stay with level 5 and up (F-14).
+  expect(section).toHaveTextContent(
+    'Managerii și responsabilii acestui grup văd clasamentul complet al evaluărilor de rol.',
+  );
+  expect(section).not.toHaveTextContent(/perioad|semnal/i);
   // Not OSUBB, a Department, a child Team, a Team with a roster or one at
   // another Minimum Level than 3.
   expect(

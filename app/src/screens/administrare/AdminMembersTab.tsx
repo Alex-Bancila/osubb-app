@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { Users } from 'lucide-react';
 import { Link, useNavigate } from 'react-router';
 import { cn } from 'cn';
 import {
@@ -116,7 +115,7 @@ function MembersPanel() {
   const data = useMemo(() => members.data ?? [], [members.data]);
   const columns = useMemo(() => memberColumns(data), [data]);
   return (
-    <Panel eyebrow="Membri" icon={Users} title="Membri">
+    <Panel title="Membri">
       {members.isPending ? (
         <Loading label="Se încarcă membrii…" />
       ) : members.isError ? (

@@ -53,8 +53,8 @@ export default function AdministrareLayout() {
 
   return (
     <Page>
+      {/* No eyebrow: Administrare is the area itself (ruling 2, F-24). */}
       <PageHeader
-        eyebrow="Administrare"
         title="Administrare"
         description={
           capabilities.data?.createTopLevelGroups === true
@@ -71,10 +71,13 @@ export default function AdministrareLayout() {
           ) : undefined
         }
       />
-      <PageTabs
-        label="Secțiunile administrării"
-        tabs={tabs.map((tab) => ({ to: tab.path, label: tab.label }))}
-      />
+      {/* One section needs no strip: the title and the page carry it. */}
+      {tabs.length > 1 && (
+        <PageTabs
+          label="Secțiunile administrării"
+          tabs={tabs.map((tab) => ({ to: tab.path, label: tab.label }))}
+        />
+      )}
       <Outlet context={context} />
     </Page>
   );

@@ -185,8 +185,12 @@ it('asks for both halves, on blur and on save, under the half left empty', async
 it('limits the label to 60 characters, checked on blur', async () => {
   const user = userEvent.setup();
   show();
-  await user.type(urlField(), FORM_URL);
-  await user.type(labelField(), 'e'.repeat(61));
+  // Pasted, not typed: each keystroke re-renders the whole Setări form, and
+  // ~150 of them ran into the 5 s timeout under a loaded suite.
+  await user.click(urlField());
+  await user.paste(FORM_URL);
+  await user.click(labelField());
+  await user.paste('e'.repeat(61));
   await user.tab();
   expect(labelField()).toHaveAccessibleDescription(
     'Eticheta are cel mult 60 de caractere.',
@@ -194,7 +198,7 @@ it('limits the label to 60 characters, checked on blur', async () => {
   await save();
   expect(run).not.toHaveBeenCalled();
   await user.clear(labelField());
-  await user.type(labelField(), 'e'.repeat(60));
+  await user.paste('e'.repeat(60));
   await save();
   expect(run).toHaveBeenCalledTimes(1);
 });

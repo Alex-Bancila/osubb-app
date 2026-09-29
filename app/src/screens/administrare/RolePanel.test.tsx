@@ -1,4 +1,10 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -10,6 +16,8 @@ const state = vi.hoisted(() => ({
   groupIds: vi.fn(),
   mutate: vi.fn(),
 }));
+// MemberName's card reads through the client; no network here.
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../lib/auth', () => ({ useAuth: state.auth }));
 vi.mock('../../queries/groups-admin', () => ({
   useAppointableMembers: state.members,
@@ -277,7 +285,20 @@ it('deactivates through the atomic Status command and explains the token window'
   await pick(user, 'Ana Pop');
   await user.selectOptions(screen.getByLabelText('Status'), 'inactiv');
   expect(screen.getByText(/cel mult o oră/)).toBeVisible();
+  // It asks first (F-11): the dialog repeats the warning, nothing is sent.
   await user.click(screen.getByRole('button', { name: 'Dezactivează' }));
+  const dialog = await screen.findByRole('dialog');
+  expect(within(dialog).getByText(/cel mult o oră/)).toBeVisible();
+  expect(state.mutate).not.toHaveBeenCalled();
+  await user.click(within(dialog).getByRole('button', { name: 'Renunță' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(state.mutate).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: 'Dezactivează' }));
+  await user.click(
+    within(await screen.findByRole('dialog')).getByRole('button', {
+      name: 'Dezactivează membrul',
+    }),
+  );
   expect(state.mutate).toHaveBeenCalledWith({
     kind: 'status',
     memberId: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
@@ -407,6 +428,11 @@ it('keeps the target and reason on a refused command', async () => {
   await user.selectOptions(screen.getByLabelText('Status'), 'inactiv');
   await user.type(screen.getByLabelText('Motiv (opțional)'), 'Verificare');
   await user.click(screen.getByRole('button', { name: 'Dezactivează' }));
+  await user.click(
+    within(await screen.findByRole('dialog')).getByRole('button', {
+      name: 'Dezactivează membrul',
+    }),
+  );
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Nu mai ai permisiunea',
   );

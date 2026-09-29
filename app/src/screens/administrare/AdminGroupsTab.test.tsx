@@ -14,6 +14,7 @@ const api = vi.hoisted(() => ({
   members: vi.fn(),
   mutate: vi.fn(),
   roles: vi.fn(),
+  rosterRows: vi.fn(),
 }));
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../lib/capabilities', () => ({
@@ -25,7 +26,10 @@ vi.mock('../../lib/auth', () => ({
     session: { user: { id: 'me' } },
   }),
 }));
-vi.mock('../../queries/reference', () => ({ useRoles: api.roles }));
+vi.mock('../../queries/reference', () => ({
+  useRoles: api.roles,
+  useMyGroups: api.rosterRows,
+}));
 vi.mock('../../queries/groups-admin', async (original) => ({
   ...(await original<object>()),
   useAdminGroups: api.groups,
@@ -101,6 +105,12 @@ beforeEach(() => {
   api.groups.mockReturnValue({ data: tree, isPending: false, isError: false });
   api.myGroups.mockReturnValue({ data: [], isPending: false, isError: false });
   api.members.mockReturnValue({ data: [] });
+  api.rosterRows.mockReturnValue({
+    membershipRows: [],
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  });
   api.roles.mockReturnValue({
     data: new Map([
       ['voluntar', { name: 'Voluntar', level: 1 }],
@@ -242,6 +252,14 @@ it('shows a Group Manager their own Groups instead, with the inherited role mark
     isPending: false,
     isError: false,
   });
+  // Coordonator of Logistică on its own roster row; Foto has none.
+  api.rosterRows.mockReturnValue({
+    membershipRows: [
+      { group_id: 2, group_role: 'manager', position_title: null },
+    ],
+    isPending: false,
+    isError: false,
+  });
   show();
 
   expect(screen.getByRole('region', { name: 'Grupurile mele' })).toBeVisible();
@@ -255,6 +273,34 @@ it('shows a Group Manager their own Groups instead, with the inherited role mark
   // The Child Group reached only through an ancestor says so (ruling R14).
   expect(screen.getByText('din grupul de deasupra')).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Creează Grup' })).toBeNull();
+});
+
+it('marks an inherited role even when the Manager is a plain member there too (F-17)', () => {
+  capabilities({ createTopLevelGroups: false });
+  api.myGroups.mockReturnValue({
+    data: [
+      myGroup(1, 'Educațional', 'manager'),
+      // On the roster as a plain member, Coordonator from Educațional.
+      myGroup(2, 'Logistică', 'manager', { path: [1, 2], explicit: true }),
+    ],
+    isPending: false,
+    isError: false,
+  });
+  api.rosterRows.mockReturnValue({
+    membershipRows: [
+      { group_id: 1, group_role: 'manager', position_title: null },
+      { group_id: 2, group_role: 'member', position_title: null },
+    ],
+  });
+  show();
+  const child = screen
+    .getByRole('link', { name: 'Logistică' })
+    .closest('tr') as HTMLElement;
+  const parent = screen
+    .getByRole('link', { name: 'Educațional' })
+    .closest('tr') as HTMLElement;
+  expect(within(child).getByText('din grupul de deasupra')).toBeVisible();
+  expect(within(parent).queryByText('din grupul de deasupra')).toBeNull();
 });
 
 it('offers "Creează Grup" only with the capability, and creates through the command', async () => {
@@ -459,7 +505,7 @@ it('shows each Minimum Level in the tree by its Role name, never the number (R29
   ).toBeVisible();
   const project = screen
     .getByRole('link', { name: 'Balul Bobocilor' })
-    .closest('tr');
+    .closest('tr') as HTMLElement;
   expect(within(project as HTMLElement).getByText('BC')).toBeVisible();
   expect(within(project as HTMLElement).queryByText('6')).toBeNull();
 });

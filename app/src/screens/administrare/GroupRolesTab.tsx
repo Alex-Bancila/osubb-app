@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import { useQueries } from '@tanstack/react-query';
 import {
   EmptyState,
   ListRow,
@@ -27,8 +28,42 @@ import type {
   GroupRole,
   RosterEntry,
 } from '../../queries/groups-admin';
+import { useAuth } from '../../lib/auth';
+import { fetchGroupCoordination } from '../../queries/group-applications';
 import { MemberPicker } from './MemberPicker';
-import { groupRoleLabel } from './group-tree';
+import { groupRoleLabel, positionCandidates } from './group-tree';
+
+/**
+ * The Members holding a position in a Group above this one: theirs flows
+ * down (ADR-0009), so they are no one to appoint here. An ancestor the
+ * viewer cannot read adds nobody; the server still decides. Until every
+ * ancestor has answered, `ready` is false and nothing is offered — an
+ * unanswered lookup is not an empty one.
+ */
+function useInheritedHolders(group: AdminGroup): {
+  ids: string[];
+  ready: boolean;
+  failed: boolean;
+} {
+  const viewer = useAuth().session?.user.id;
+  const ancestors = group.path.filter((id) => id !== group.id);
+  const results = useQueries({
+    queries: ancestors.map((groupId) => ({
+      // The key of useGroupCoordination, so a Group page's read is reused.
+      queryKey: ['groups', 'coordination', { memberId: viewer, groupId }],
+      queryFn: () => fetchGroupCoordination(groupId),
+      enabled: Boolean(viewer),
+    })),
+  });
+  // Manager and Responsible both flow down the path (private.group_role_of).
+  return {
+    ids: results.flatMap((result) =>
+      (result.data ?? []).map((row) => row.memberId),
+    ),
+    ready: results.every((result) => result.isSuccess),
+    failed: results.some((result) => result.isError),
+  };
+}
 
 const control =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
@@ -350,6 +385,20 @@ export function GroupRolesTab({
   const responsibles = roster.filter(
     (entry) => entry.groupRole === 'responsible',
   );
+  const inherited = useInheritedHolders(group);
+  const candidates = positionCandidates(
+    members,
+    group,
+    new Set([
+      ...inherited.ids,
+      ...[...managers, ...responsibles].map((entry) => entry.memberId),
+    ]),
+  );
+  // No appointment while the positions above are unknown (see above).
+  const appointBusy = busy || !inherited.ready;
+  const lookupFailed = inherited.failed
+    ? 'Nu am putut verifica funcțiile din grupurile de deasupra. Reîncarcă pagina ca să numești pe cineva.'
+    : undefined;
   const withdraw = (entry: RosterEntry) =>
     onRun({
       kind: 'setRole',
@@ -366,6 +415,7 @@ export function GroupRolesTab({
     <PageGrid columns={2} alignHeaders>
       <Panel
         title={group.manager_title?.trim() || 'Coordonatori'}
+        description={authority.appointManager ? lookupFailed : undefined}
         flush={managers.length > 0}
         control={
           authority.appointManager && (
@@ -375,8 +425,8 @@ export function GroupRolesTab({
               description="Coordonatorul conduce grupul și toate subgrupurile lui."
               groupRole="manager"
               withTitle={false}
-              members={members}
-              busy={busy}
+              members={candidates}
+              busy={appointBusy}
               error={error}
               onAppoint={(memberId) =>
                 onRun({
@@ -404,6 +454,7 @@ export function GroupRolesTab({
 
       <Panel
         title="Responsabili"
+        description={authority.manageGroup ? lookupFailed : undefined}
         flush={responsibles.length > 0}
         control={
           authority.manageGroup && (
@@ -413,8 +464,8 @@ export function GroupRolesTab({
               description="Responsabilul se ocupă de o parte din munca grupului, sub numele funcției pe care i-l dai."
               groupRole="responsible"
               withTitle
-              members={members}
-              busy={busy}
+              members={candidates}
+              busy={appointBusy}
               error={error}
               onAppoint={(memberId, positionTitle) =>
                 onRun({
