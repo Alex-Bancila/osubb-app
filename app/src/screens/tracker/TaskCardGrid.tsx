@@ -3,6 +3,7 @@ import { PageGrid } from '../../components/layout';
 import { useAuth } from '../../lib/auth';
 import { useTaskProgress } from '../../queries/task-progress';
 import { TaskCard } from './TaskCard';
+import type { OnGaveUp } from './TaskGiveUpControl';
 import {
   toTaskPresentation,
   type TaskPresentationRow,
@@ -33,7 +34,7 @@ export function TaskCardGrid<Row extends TaskPresentationRow>({
   /** Per-row card options: interest controls, heading level. */
   card?: (row: Row) => CardOptions;
   /** Taskurile mele: the give-up receipt outlives the card (Audit D-3). */
-  onGaveUp?: (taskId: number) => void;
+  onGaveUp?: OnGaveUp;
 }) {
   const progress = useTaskProgress();
   const { session } = useAuth();

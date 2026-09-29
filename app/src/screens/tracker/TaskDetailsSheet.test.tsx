@@ -65,6 +65,10 @@ vi.mock('../../queries/task-give-up', () => ({
     isPending: false,
   }),
 }));
+const taskHistory = vi.hoisted(() =>
+  vi.fn((): { data: unknown[] } => ({ data: [] })),
+);
+vi.mock('../../queries/task-history', () => ({ useTaskHistory: taskHistory }));
 vi.mock('./TaskHistory', () => ({
   TaskHistory: () => <p>Istoric autorizat</p>,
 }));
@@ -131,7 +135,7 @@ describe('Task details sheet', () => {
     render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
     await screen.findByRole('dialog', { name: 'Detalii task' });
     const row = screen.getByText('Audiență').closest('div') as HTMLElement;
-    expect(within(row).getByText('În tot OSUBB')).toBeVisible();
+    expect(within(row).getByText('Toți membrii OSUBB')).toBeVisible();
     // Once: the card copy in the sheet drops its OSUBB chip (B20).
     expect(screen.queryByText('OSUBB')).toBeNull();
   });
@@ -304,7 +308,7 @@ describe('Task details sheet', () => {
   it('shows candidate selection only for a Task authorized by the live management query', async () => {
     useTaskDetails.mockReturnValue({
       data: {
-        task: taskRow(),
+        task: taskRow({ assignment_mode: 'public' }),
         executorName: 'Executor actual',
         subtasks: [],
       },
@@ -368,6 +372,48 @@ describe('Task details sheet', () => {
     );
     await screen.findByText('Istoricul taskului');
     expect(screen.queryByText('Coada taskului')).not.toBeInTheDocument();
+  });
+
+  it.each(['todo', 'in_progress'] as const)(
+    'shows no queue section at all on a direct Task (%s, F-2)',
+    async (status) => {
+      useTaskDetails.mockReturnValue({
+        data: {
+          task: taskRow({ status, assignment_mode: 'direct' }),
+          executorName: 'Executor actual',
+          subtasks: [],
+        },
+      });
+      render(
+        <TaskDetailsSheet
+          taskId={1}
+          managedTaskIds={new Set([1])}
+          onClose={vi.fn()}
+        />,
+      );
+      await screen.findByText('Istoricul taskului');
+      expect(screen.queryByText('Coada taskului')).not.toBeInTheDocument();
+      expect(screen.queryByText(/persoană înscrisă în coadă/)).toBeNull();
+      expect(screen.queryByText(/Nu există persoane în coadă/)).toBeNull();
+    },
+  );
+
+  it('keeps the queue section on a public Task in progress', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({ status: 'in_progress', assignment_mode: 'public' }),
+        executorName: 'Executor actual',
+        subtasks: [],
+      },
+    });
+    render(
+      <TaskDetailsSheet
+        taskId={1}
+        managedTaskIds={new Set([1])}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText('Coada taskului')).toBeVisible();
   });
 
   it.each(['completed', 'unfulfilled', 'cancelled'] as const)(
@@ -478,6 +524,66 @@ describe('Task details sheet', () => {
     // Focus returns to the sheet title, so the reader starts at the top.
     expect(screen.getByRole('heading', { name: 'Detalii task' })).toHaveFocus();
   });
+  it('states no Atribuire for an Umbrella, which has no Assignment (F-28)', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({ kind: 'umbrella', assignment_mode: null }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    expect(await screen.findByText('Subtaskuri vizibile')).toBeVisible();
+    expect(screen.queryByText('Atribuire')).toBeNull();
+    expect(screen.queryByText('Indisponibilă')).toBeNull();
+  });
+
+  it('shows the Executor the note of the latest return for changes (F-23)', async () => {
+    taskHistory.mockReturnValue({
+      data: [
+        {
+          id: 1,
+          kind: 'returned_to_progress',
+          note: 'Prima rundă.',
+          occurred_at: '2026-09-14T10:00:00Z',
+        },
+        {
+          id: 2,
+          kind: 'submitted',
+          note: 'Gata.',
+          occurred_at: '2026-09-15T10:00:00Z',
+        },
+        {
+          id: 3,
+          kind: 'returned_to_progress',
+          note: 'Adaugă sursele.',
+          occurred_at: '2026-09-16T10:00:00Z',
+        },
+      ],
+    });
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({
+          status: 'in_progress',
+          review_round: 2,
+          visibleExecutor: { memberId: 'member', fullName: 'Eu' },
+        }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    try {
+      render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+      const note = await screen.findByRole('region', {
+        name: 'Modificări cerute',
+      });
+      expect(within(note).getByText('Adaugă sursele.')).toBeVisible();
+      expect(screen.queryByText('Prima rundă.')).toBeNull();
+    } finally {
+      taskHistory.mockReturnValue({ data: [] });
+    }
+  });
+
   it('never offers duplication for an Umbrella even to its manager', async () => {
     useTaskDetails.mockReturnValue({
       data: {

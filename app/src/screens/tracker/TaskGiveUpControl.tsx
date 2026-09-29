@@ -6,15 +6,26 @@ import { useFormValidation } from '../../lib/use-form-validation';
 import { useGiveUpTask } from '../../queries/task-give-up';
 import { useReceiptTurn } from './receipt-turn';
 
-/** The receipt a give-up leaves (Audit D-3). */
-export const GAVE_UP_RECEIPT =
-  'Ai renunțat la task. Taskul revine la „De făcut”; managerul alege alt executor din coadă.';
+/**
+ * The receipt a give-up leaves (Audit D-3). Only a public Task has a queue
+ * to choose from; a direct Task's manager just picks someone (F-13).
+ */
+export function gaveUpReceipt(assignmentMode: 'direct' | 'public' | null) {
+  return assignmentMode === 'public'
+    ? 'Ai renunțat la task. Taskul revine la „De făcut”; managerul alege alt executor din coadă.'
+    : 'Ai renunțat la task. Taskul revine la „De făcut”; managerul alege alt executor.';
+}
+
+/** Tells the list which Task was given up and the receipt to show for it. */
+export type OnGaveUp = (taskId: number, receipt: string) => void;
 
 export function TaskGiveUpControl({
   taskId,
+  assignmentMode,
   onGaveUp,
 }: {
   taskId: number;
+  assignmentMode: 'direct' | 'public' | null;
   /**
    * The list the card sits in shows the receipt: the card itself leaves
    * Taskurile mele once the Task is no longer the Member's (Audit D-3).
@@ -41,7 +52,7 @@ export function TaskGiveUpControl({
       setOpen(false);
       if (onGaveUp) onGaveUp();
       else {
-        setMessage(GAVE_UP_RECEIPT);
+        setMessage(gaveUpReceipt(assignmentMode));
         turn.claim();
       }
     } catch (failure) {

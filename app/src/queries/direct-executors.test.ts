@@ -58,3 +58,40 @@ it('fails closed when a paged read fails instead of returning a partial director
   });
   await expect(fetchDirectExecutors()).rejects.toThrow('offline');
 });
+
+it('never offers BC or the Moderator as a direct Executor (F-27, Alex 2026-09-29)', async () => {
+  const profiles = [
+    { id: 'vol', full_name: 'Voluntar', role: 'voluntar', status: 'activ' },
+    { id: 'bce', full_name: 'Membru BCE', role: 'bce', status: 'activ' },
+    { id: 'bc', full_name: 'Membru BC', role: 'bc', status: 'activ' },
+    { id: 'mod', full_name: 'Moderator', role: 'moderator', status: 'activ' },
+  ];
+  const roles = [
+    { id: 'voluntar', level: 1 },
+    { id: 'bce', level: 5 },
+    { id: 'bc', level: 6 },
+    { id: 'moderator', level: 7 },
+  ];
+  api.from.mockImplementation((table: string) => {
+    const builder = {
+      select: () => builder,
+      eq: () => builder,
+      order: () => builder,
+      range: async () => ({
+        data:
+          table === 'profiles_directory'
+            ? profiles
+            : table === 'roles'
+              ? roles
+              : [],
+        error: null,
+      }),
+    };
+    return builder;
+  });
+  const result = await fetchDirectExecutors();
+  expect(result.members.map((member) => member.id).sort()).toEqual([
+    'bce',
+    'vol',
+  ]);
+});

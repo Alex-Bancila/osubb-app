@@ -20,6 +20,16 @@ async function allPages<T>(
   }
 }
 
+/**
+ * Roles never offered as a direct Task's Executor (F-27, Alex 2026-09-29):
+ * BC and the Moderator hold no Task work and are off the Clasament (ruling 1,
+ * 2026-09-28).
+ */
+const ROLES_WITHOUT_TASK_WORK: ReadonlySet<string> = new Set([
+  'bc',
+  'moderator',
+]);
+
 export async function fetchDirectExecutors() {
   const [profiles, roles, groups, memberships] = await Promise.all([
     allPages((from, to) =>
@@ -54,7 +64,10 @@ export async function fetchDirectExecutors() {
     members: profiles
       .flatMap((profile) => {
         const level = profile.role ? levels.get(profile.role) : undefined;
-        return profile.id && profile.status === 'activ' && level !== undefined
+        return profile.id &&
+          profile.status === 'activ' &&
+          level !== undefined &&
+          !ROLES_WITHOUT_TASK_WORK.has(profile.role ?? '')
           ? [
               {
                 id: profile.id,

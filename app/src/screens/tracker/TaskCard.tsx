@@ -29,7 +29,11 @@ import { TaskActionSuccess } from './TaskActionSuccess';
 import { TaskInterestControls } from './TaskInterestControls';
 import { TaskQueueStatus } from './TaskQueueStatus';
 import { TaskStageSummary } from './TaskStageSummary';
-import { GAVE_UP_RECEIPT, TaskGiveUpControl } from './TaskGiveUpControl';
+import {
+  gaveUpReceipt,
+  TaskGiveUpControl,
+  type OnGaveUp,
+} from './TaskGiveUpControl';
 import { useReceiptTurn } from './receipt-turn';
 import { SubmitForReviewDialog } from './SubmitForReviewDialog';
 import { SubmissionNote } from './SubmissionNote';
@@ -76,7 +80,7 @@ type TaskCardProps = {
    */
   inSheet?: boolean;
   /** The list shows the give-up receipt; the card leaves it (Audit D-3). */
-  onGaveUp?: (taskId: number) => void;
+  onGaveUp?: OnGaveUp;
 };
 
 const chipClass =
@@ -197,6 +201,9 @@ function TaskChips({
 
   const visible = extras.slice(0, Math.max(0, shown - 1));
   const hidden = extras.slice(visible.length);
+  // While measuring every chip keeps its natural width. After, only the last
+  // chip shown gives way (truncates); the ones before it keep theirs (F-5).
+  const fixed = (last: boolean) => measuring || !last;
   return (
     <div
       ref={lineRef}
@@ -206,12 +213,16 @@ function TaskChips({
       <TaskGroupChip
         task={task}
         truncate={!measuring}
-        className={measuring ? 'shrink-0' : undefined}
+        className={fixed(visible.length === 0) ? 'shrink-0' : undefined}
       />
-      {visible.map((chip) => (
+      {visible.map((chip, index) => (
         <span
           key={chip.key}
-          className={measuring ? `${chipClass} shrink-0` : chipClass}
+          title={chip.label}
+          className={cn(
+            chipClass,
+            fixed(index === visible.length - 1) && 'shrink-0',
+          )}
         >
           <span className="min-w-0 truncate">{chip.label}</span>
         </span>
@@ -514,12 +525,15 @@ export function TaskCard({
             {canGiveUp && (
               <TaskGiveUpControl
                 taskId={task.id}
-                onGaveUp={() =>
+                assignmentMode={task.assignmentMode}
+                onGaveUp={() => {
                   // The list shows the receipt when it holds the card; the
                   // sheet's card keeps it, since the control leaves with the
                   // Executor's actions (Audit D-3).
-                  onGaveUp ? onGaveUp(task.id) : setNotice(GAVE_UP_RECEIPT)
-                }
+                  const receipt = gaveUpReceipt(task.assignmentMode);
+                  if (onGaveUp) onGaveUp(task.id, receipt);
+                  else setNotice(receipt);
+                }}
               />
             )}
           </CardFooter>

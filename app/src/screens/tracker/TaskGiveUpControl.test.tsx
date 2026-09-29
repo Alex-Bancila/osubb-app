@@ -22,7 +22,7 @@ describe('Task give-up control', () => {
 
   it('requires a reason and never calls the command for whitespace', async () => {
     const user = userEvent.setup();
-    render(<TaskGiveUpControl taskId={17} />);
+    render(<TaskGiveUpControl taskId={17} assignmentMode="public" />);
 
     await user.click(screen.getByRole('button', { name: 'Renunță la task' }));
     await user.type(screen.getByLabelText('Motivul renunțării'), '   ');
@@ -36,7 +36,7 @@ describe('Task give-up control', () => {
 
   it('submits the reason, reports success and closes the form', async () => {
     const user = userEvent.setup();
-    render(<TaskGiveUpControl taskId={17} />);
+    render(<TaskGiveUpControl taskId={17} assignmentMode="public" />);
 
     await user.click(screen.getByRole('button', { name: 'Renunță la task' }));
     await user.type(
@@ -61,12 +61,29 @@ describe('Task give-up control', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('says no queue on a direct Task, which has none (F-13)', async () => {
+    const user = userEvent.setup();
+    render(<TaskGiveUpControl taskId={17} assignmentMode="direct" />);
+
+    await user.click(screen.getByRole('button', { name: 'Renunță la task' }));
+    await user.type(screen.getByLabelText('Motivul renunțării'), 'Examen');
+    await user.click(
+      screen.getByRole('button', { name: 'Confirmă renunțarea' }),
+    );
+
+    const receipt = await screen.findByRole('status');
+    expect(receipt).toHaveTextContent(
+      'Ai renunțat la task. Taskul revine la „De făcut”; managerul alege alt executor.',
+    );
+    expect(receipt).not.toHaveTextContent('din coadă');
+  });
+
   it('preserves the reason and shows a safe command failure', async () => {
     const user = userEvent.setup();
     mutation.mutateAsync.mockRejectedValue(
       new CommandError(null, 'Taskul s-a schimbat.'),
     );
-    render(<TaskGiveUpControl taskId={17} />);
+    render(<TaskGiveUpControl taskId={17} assignmentMode="public" />);
 
     await user.click(screen.getByRole('button', { name: 'Renunță la task' }));
     const reason = screen.getByLabelText('Motivul renunțării');
@@ -83,7 +100,9 @@ describe('Task give-up control', () => {
 
   it('is keyboard accessible', async () => {
     const user = userEvent.setup();
-    const { container } = render(<TaskGiveUpControl taskId={17} />);
+    const { container } = render(
+      <TaskGiveUpControl taskId={17} assignmentMode="public" />,
+    );
 
     await user.tab();
     expect(
