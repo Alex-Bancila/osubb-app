@@ -1,6 +1,5 @@
 import { useId, useState, type FormEvent } from 'react';
 import { Plus } from 'lucide-react';
-import { AttachedLinkFields } from '../../components/attached-link/AttachedLinkFields';
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
 import { FieldError } from '../../components/ui/field';
@@ -38,12 +37,14 @@ import { useCreateAnnouncement } from '../../queries/announcements';
 import { useMyGroupRoles } from '../../queries/my-groups';
 import { useGroups } from '../../queries/reference';
 import { announcementOrigins } from './announcement-origins';
-
-const inputClass =
-  'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-ring';
-const fieldClass = 'block space-y-1.5 text-sm font-medium text-foreground';
-
-type Priority = 'normal' | 'important' | 'critical';
+import {
+  EMPTY_ANNOUNCEMENT_DRAFT,
+  type AnnouncementDraft,
+} from './announcement-draft';
+import {
+  AnnouncementFields,
+  announcementFieldClass,
+} from './AnnouncementFields';
 
 export default function AnnouncementComposeSheet() {
   const { session, claims } = useAuth();
@@ -53,19 +54,14 @@ export default function AnnouncementComposeSheet() {
   const create = useCreateAnnouncement();
   const [open, setOpen] = useState(false);
   const audienceLabelId = useId();
-  const linkGroupLabelId = useId();
   const [originId, setOriginId] = useState('');
   const [audience, setAudience] = useState<'local' | 'org'>('local');
-  const [priority, setPriority] = useState<Priority>('normal');
   const [pinned, setPinned] = useState(false);
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [linkLabel, setLinkLabel] = useState('');
-  const [linkUrl, setLinkUrl] = useState('');
-  // The Termen as the datetime-local input holds it, read in Romania (#909).
-  const [deadline, setDeadline] = useState('');
-  // #909: who reads it, by the Role names of ruling R29b; everyone by default.
-  const [minLevel, setMinLevel] = useState(0);
+  // The draft as its inputs hold it: the Termen read in Romania (#909), who
+  // reads it by the Role names of ruling R29b (everyone by default).
+  const [draft, setDraft] = useState<AnnouncementDraft>(
+    EMPTY_ANNOUNCEMENT_DRAFT,
+  );
   const actorLevel = claims?.member_level ?? 0;
   const levelChoices = minimumLevelOptions(
     GROUP_MINIMUM_LEVELS,
@@ -77,11 +73,13 @@ export default function AnnouncementComposeSheet() {
   const form = useFormValidation(
     announcementSchema,
     {
-      title,
-      body,
+      title: draft.title,
+      body: draft.body,
       groupId: originId ? Number(originId) : null,
-      link: { label: linkLabel, url: linkUrl },
-      deadline: deadline ? (bucharestWallTimeToIso(deadline) ?? '') : null,
+      link: { label: draft.linkLabel, url: draft.linkUrl },
+      deadline: draft.deadline
+        ? (bucharestWallTimeToIso(draft.deadline) ?? '')
+        : null,
     },
     fieldForReason,
   );
@@ -96,14 +94,8 @@ export default function AnnouncementComposeSheet() {
   function clear() {
     setOriginId('');
     setAudience('local');
-    setPriority('normal');
     setPinned(false);
-    setTitle('');
-    setBody('');
-    setLinkLabel('');
-    setLinkUrl('');
-    setDeadline('');
-    setMinLevel(0);
+    setDraft(EMPTY_ANNOUNCEMENT_DRAFT);
     form.reset();
   }
 
@@ -125,12 +117,12 @@ export default function AnnouncementComposeSheet() {
         body: values.body,
         group_id: selected.id,
         audience,
-        priority,
+        priority: draft.priority,
         pinned,
         form_label: values.link.label,
         form_url: values.link.url,
         deadline: values.deadline,
-        min_level: minLevel,
+        min_level: draft.minLevel,
       });
       setPublished(true);
       setOpen(false);
@@ -190,155 +182,81 @@ export default function AnnouncementComposeSheet() {
             noValidate
             className="flex flex-1 flex-col gap-4"
           >
-            <div className="space-y-1.5">
-              <label className={fieldClass}>
-                Titlu
-                <input
-                  className={inputClass}
-                  name="title"
-                  required
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  {...form.field('title')}
-                />
-              </label>
-              <FieldError {...form.errorProps('title')} />
-            </div>
-            <div className="space-y-1.5">
-              <label className={fieldClass}>
-                Mesaj
-                <textarea
-                  className={`${inputClass} min-h-24 resize-y`}
-                  name="body"
-                  required
-                  value={body}
-                  onChange={(event) => setBody(event.target.value)}
-                  {...form.field('body')}
-                />
-              </label>
-              <FieldError {...form.errorProps('body')} />
-            </div>
-            <div className="space-y-1.5">
-              <label className={fieldClass}>
-                Termen (opțional) — ora României
-                <input
-                  className={inputClass}
-                  name="deadline"
-                  type="datetime-local"
-                  value={deadline}
-                  onChange={(event) => setDeadline(event.target.value)}
-                  {...form.field('deadline')}
-                />
-              </label>
-              <FieldError {...form.errorProps('deadline')} />
-            </div>
-            <div className="space-y-1.5">
-              <label className={fieldClass}>
-                Grup de origine
-                <NativeSelect
-                  value={originId}
-                  onChange={(event) => setOriginId(event.target.value)}
-                  required
-                  disabled={
-                    myGroups.isPending ||
-                    myGroups.isError ||
-                    groups.isPending ||
-                    groups.isError
-                  }
-                  {...form.field('groupId')}
-                >
-                  <NativeSelectOption value="">Alege grupul</NativeSelectOption>
-                  {origins.map((group) => (
-                    <NativeSelectOption key={group.id} value={group.id}>
-                      {group.is_organization ? 'OSUBB' : group.name}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </label>
-              <FieldError {...form.errorProps('groupId')} />
-            </div>
-            {(myGroups.isError || groups.isError) && (
-              <p role="alert" className="text-sm text-destructive">
-                Nu am putut încărca grupurile. Încearcă din nou.
-              </p>
-            )}
-            <div className="space-y-1">
-              <span id={audienceLabelId} className="text-sm font-medium">
-                Audiență
-              </span>
-              <RadioGroup
-                aria-labelledby={audienceLabelId}
-                value={audience}
-                onValueChange={(next: 'local' | 'org') => setAudience(next)}
-                className="flex flex-wrap gap-x-6 gap-y-0"
-              >
-                <ChoiceRow>
-                  <RadioGroupItem value="local" />
-                  Doar grupul
+            <AnnouncementFields
+              draft={draft}
+              onChange={(patch) =>
+                setDraft((current) => ({ ...current, ...patch }))
+              }
+              form={form}
+              levelChoices={levelChoices}
+              origin={
+                <>
+                  <div className="space-y-1.5">
+                    <label className={announcementFieldClass}>
+                      Grup de origine
+                      <NativeSelect
+                        value={originId}
+                        onChange={(event) => setOriginId(event.target.value)}
+                        required
+                        disabled={
+                          myGroups.isPending ||
+                          myGroups.isError ||
+                          groups.isPending ||
+                          groups.isError
+                        }
+                        {...form.field('groupId')}
+                      >
+                        <NativeSelectOption value="">
+                          Alege grupul
+                        </NativeSelectOption>
+                        {origins.map((group) => (
+                          <NativeSelectOption key={group.id} value={group.id}>
+                            {group.is_organization ? 'OSUBB' : group.name}
+                          </NativeSelectOption>
+                        ))}
+                      </NativeSelect>
+                    </label>
+                    <FieldError {...form.errorProps('groupId')} />
+                  </div>
+                  {(myGroups.isError || groups.isError) && (
+                    <p role="alert" className="text-sm text-destructive">
+                      Nu am putut încărca grupurile. Încearcă din nou.
+                    </p>
+                  )}
+                  <div className="space-y-1">
+                    <span id={audienceLabelId} className="text-sm font-medium">
+                      Audiență
+                    </span>
+                    <RadioGroup
+                      aria-labelledby={audienceLabelId}
+                      value={audience}
+                      onValueChange={(next: 'local' | 'org') =>
+                        setAudience(next)
+                      }
+                      className="flex flex-wrap gap-x-6 gap-y-0"
+                    >
+                      <ChoiceRow>
+                        <RadioGroupItem value="local" />
+                        Doar grupul
+                      </ChoiceRow>
+                      <ChoiceRow>
+                        <RadioGroupItem value="org" />
+                        Toată organizația
+                      </ChoiceRow>
+                    </RadioGroup>
+                  </div>
+                </>
+              }
+              extra={
+                <ChoiceRow className="font-medium">
+                  <Checkbox
+                    checked={pinned}
+                    onCheckedChange={(next) => setPinned(next === true)}
+                  />
+                  Fixează anunțul
                 </ChoiceRow>
-                <ChoiceRow>
-                  <RadioGroupItem value="org" />
-                  Toată organizația
-                </ChoiceRow>
-              </RadioGroup>
-            </div>
-            <label className={fieldClass}>
-              Cine îl vede
-              <NativeSelect
-                name="min_level"
-                value={minLevel}
-                onChange={(event) => setMinLevel(Number(event.target.value))}
-              >
-                {levelChoices.map((choice) => (
-                  <NativeSelectOption key={choice.level} value={choice.level}>
-                    {choice.label}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </label>
-            <label className={fieldClass}>
-              Prioritate
-              <NativeSelect
-                name="priority"
-                value={priority}
-                onChange={(event) =>
-                  setPriority(event.target.value as Priority)
-                }
-              >
-                <NativeSelectOption value="normal">Normală</NativeSelectOption>
-                <NativeSelectOption value="important">
-                  Importantă
-                </NativeSelectOption>
-                <NativeSelectOption value="critical">
-                  Critică
-                </NativeSelectOption>
-              </NativeSelect>
-            </label>
-            <ChoiceRow className="font-medium">
-              <Checkbox
-                checked={pinned}
-                onCheckedChange={(next) => setPinned(next === true)}
-              />
-              Fixează anunțul
-            </ChoiceRow>
-            <div
-              role="group"
-              aria-labelledby={linkGroupLabelId}
-              className="space-y-3 rounded-md border p-4"
-            >
-              <p id={linkGroupLabelId} className="text-sm font-medium">
-                Link atașat (opțional)
-              </p>
-              <AttachedLinkFields
-                value={{ label: linkLabel, url: linkUrl }}
-                onChange={(next) => {
-                  setLinkLabel(next.label);
-                  setLinkUrl(next.url);
-                }}
-                form={form}
-                name="link"
-              />
-            </div>
+              }
+            />
             <FieldError>{form.formError}</FieldError>
             <SheetFooter>
               <Button

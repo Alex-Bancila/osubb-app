@@ -7,7 +7,7 @@ import {
   formatAnnouncementDate,
   getUnreadCriticalAnnouncement,
   mayAskForReaders,
-  mayPinAnnouncement,
+  mayManageAnnouncement,
   originLabel,
   priorityMeta,
   readersSummary,
@@ -506,7 +506,7 @@ describe('announcements-presentation', () => {
     });
   });
 
-  describe('mayPinAnnouncement (#857, announcements_update)', () => {
+  describe('mayManageAnnouncement (#857, #930: announcements_update and _delete)', () => {
     const origin = { groupId: 7, group: { id: 7, name: 'Educațional' } };
     const orgWide = {
       groupId: 1,
@@ -514,10 +514,35 @@ describe('announcements-presentation', () => {
     };
     const none = { bcOrModerator: false, managesAnyGroup: false, groups: [] };
 
+    it('lets a Responsible inherited from a Group above manage it', () => {
+      // my_groups() lists the Origin with the Role held on its parent.
+      expect(
+        mayManageAnnouncement(origin, {
+          ...none,
+          managesAnyGroup: true,
+          groups: [
+            { id: 3, group_role: 'responsible', status: 'active' },
+            { id: 7, group_role: 'responsible', status: 'active' },
+          ],
+        }),
+      ).toBe(true);
+    });
+
+    it('grants the author nothing by itself, nor a plain Member', () => {
+      // The author of a local Announcement who no longer holds a Role there.
+      expect(
+        mayManageAnnouncement(origin, {
+          ...none,
+          groups: [{ id: 7, group_role: 'member', status: 'active' }],
+        }),
+      ).toBe(false);
+      expect(mayManageAnnouncement(origin, none)).toBe(false);
+    });
+
     it('lets BC/Moderator pin anything', () => {
-      expect(mayPinAnnouncement(origin, { ...none, bcOrModerator: true })).toBe(
-        true,
-      );
+      expect(
+        mayManageAnnouncement(origin, { ...none, bcOrModerator: true }),
+      ).toBe(true);
     });
 
     it("lets a Manager or Responsible of an active Origin pin, not a plain member or another Group's", () => {
@@ -526,20 +551,20 @@ describe('announcements-presentation', () => {
         managesAnyGroup: group_role !== 'member',
         groups: [{ id, group_role, status }],
       });
-      expect(mayPinAnnouncement(origin, role('responsible'))).toBe(true);
-      expect(mayPinAnnouncement(origin, role('manager'))).toBe(true);
-      expect(mayPinAnnouncement(origin, role('member'))).toBe(false);
-      expect(mayPinAnnouncement(origin, role('manager', 9))).toBe(false);
-      expect(mayPinAnnouncement(origin, role('manager', 7, 'archived'))).toBe(
-        false,
-      );
+      expect(mayManageAnnouncement(origin, role('responsible'))).toBe(true);
+      expect(mayManageAnnouncement(origin, role('manager'))).toBe(true);
+      expect(mayManageAnnouncement(origin, role('member'))).toBe(false);
+      expect(mayManageAnnouncement(origin, role('manager', 9))).toBe(false);
+      expect(
+        mayManageAnnouncement(origin, role('manager', 7, 'archived')),
+      ).toBe(false);
     });
 
     it('lets any Group Role holder pin an Organization Group Announcement', () => {
       expect(
-        mayPinAnnouncement(orgWide, { ...none, managesAnyGroup: true }),
+        mayManageAnnouncement(orgWide, { ...none, managesAnyGroup: true }),
       ).toBe(true);
-      expect(mayPinAnnouncement(orgWide, none)).toBe(false);
+      expect(mayManageAnnouncement(orgWide, none)).toBe(false);
     });
   });
 });
