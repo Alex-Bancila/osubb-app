@@ -56,14 +56,15 @@ select ok(coalesce((select 'security_invoker=on' = any (reloptions)
 
 -- ==================== 5. an Announcement keeps its Group and Audience ====================
 truncate announcements, announcement_reads cascade;
--- Personas (prefix 93): 01 BC. BC may update any Announcement, so a refusal
+-- Personas (prefix 93): 01 BC. BC reads and may update any org-Audience
+-- Announcement of a public Group, so a refusal
 -- can only come from the guard.
 insert into auth.users(id, email) values
   ('93600000-0000-0000-0000-000000000001', 'retired-936-bc@test.local');
 insert into profiles(id, full_name, email, role) values
   ('93600000-0000-0000-0000-000000000001', 'BC 936', 'retired-936-bc@test.local', 'bc');
 insert into announcements(title, body, group_id, audience)
-select 'Origin #936', 'Stays where it was published.', id, 'local'
+select 'Origin #936', 'Stays where it was published.', id, 'org'
   from groups where name = 'Educațional';
 
 select pg_temp.test_login_leadership('93600000-0000-0000-0000-000000000001');
@@ -73,7 +74,7 @@ select throws_ok(
   '23514', 'announcement_group_immutable',
   'moving an Announcement to another Group is refused, even for BC');
 select throws_ok(
-  $$update announcements set audience = 'org' where title = 'Origin #936'$$,
+  $$update announcements set audience = 'local' where title = 'Origin #936'$$,
   '23514', 'announcement_audience_immutable',
   'changing an Announcement''s Audience is refused, even for BC');
 select lives_ok(
@@ -83,13 +84,14 @@ reset role;
 select results_eq(
   $$select grp.name, a.audience, a.min_level from announcements a join groups grp on grp.id = a.group_id
      where a.title = 'Origin #936 edited'$$,
-  $$values ('Educațional'::text, 'local'::text, 2)$$,
+  $$values ('Educațional'::text, 'org'::text, 2)$$,
   'the edit landed and the Group and Audience are unchanged');
 
 -- A write with no signed-in caller (a migration, seed.sql) passes, as for the
 -- other Announcement guards.
-update announcements set audience = 'org' where title = 'Origin #936 edited';
-select is((select audience from announcements where title = 'Origin #936 edited'), 'org',
+select pg_temp.test_clear_jwt();
+update announcements set audience = 'local' where title = 'Origin #936 edited';
+select is((select audience from announcements where title = 'Origin #936 edited'), 'local',
   'a write without auth.uid() is not judged');
 
 select * from finish();

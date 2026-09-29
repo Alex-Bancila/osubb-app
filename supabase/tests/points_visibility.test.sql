@@ -108,8 +108,8 @@ select pg_temp.test_login('f3000000-0000-0000-0000-0000000000f3', jsonb_build_ob
     'dept_ids', '["pr"]'::jsonb,
     'team_ids', '[]'::jsonb
   ));
-select is((select count(*) from public.leadership_leaderboard()), 5::bigint,
-  'BCE reads the global leaderboard');
+select is((select count(*) from public.leadership_leaderboard()), 2::bigint,
+  'BCE reads the leadership leaderboard: the two ranked Members (BCE, BC and the Moderator are not ranked, #907)');
 select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 5::bigint,
   'BCE reads all five Department Cup rows');
 reset role;
@@ -120,8 +120,8 @@ select pg_temp.test_login('f4000000-0000-0000-0000-0000000000f4', jsonb_build_ob
     'dept_ids', '["fin"]'::jsonb,
     'team_ids', '[]'::jsonb
   ));
-select is((select count(*) from public.leadership_leaderboard()), 5::bigint,
-  'BC reads the global leaderboard');
+select is((select count(*) from public.leadership_leaderboard()), 2::bigint,
+  'BC reads the leadership leaderboard: the two ranked Members (BCE, BC and the Moderator are not ranked, #907)');
 select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 5::bigint,
   'BC reads all five Department Cup rows');
 select is(
@@ -137,8 +137,8 @@ select pg_temp.test_login('f5000000-0000-0000-0000-0000000000f5', jsonb_build_ob
     'dept_ids', '["hr"]'::jsonb,
     'team_ids', '[]'::jsonb
   ));
-select is((select count(*) from public.leadership_leaderboard()), 5::bigint,
-  'Moderator reads the global leaderboard');
+select is((select count(*) from public.leadership_leaderboard()), 2::bigint,
+  'Moderator reads the leadership leaderboard: the two ranked Members (BCE, BC and the Moderator are not ranked, #907)');
 select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 5::bigint,
   'Moderator reads all five Department Cup rows');
 reset role;
