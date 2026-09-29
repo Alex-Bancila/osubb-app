@@ -71,7 +71,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(88);
+select plan(89);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -410,8 +410,13 @@ select is((select format('%s|%s|%s', notification.title, notification.body,
                          (notification.dedupe_key is null)::text)
              from public.notifications as notification
             where notification.task_id = (select empty_slot_task_id from f333)),
-  'Task nou: Slot gol #333|Ți-a fost atribuit acest task. Deadline: 01.09.2027 12:00.|true',
+  'Task nou: Slot gol #333|Ți-a fost atribuit acest task. Termen: 01.09.2027 12:00.|true',
   'the selected Candidate gets the pinned "Task nou" notification from private.open_task_assignment, uncoalesced');
+select ok((select notification.body like 'Ți-a fost atribuit acest task. Termen: %'
+                  and notification.body not like '%Deadline%'
+             from public.notifications as notification
+            where notification.task_id = (select empty_slot_task_id from f333)),
+  '#891: the selected Candidate reads "Termen", never "Deadline"');
 
 -- ==================== 3. Replacing an Executor and closing the rest ====================
 -- p_close_remaining = true on a Task that already has an Executor: the

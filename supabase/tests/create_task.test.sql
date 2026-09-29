@@ -29,7 +29,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(157);
+select plan(158);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -456,10 +456,16 @@ select is((select notification.body
              from public.notifications as notification
              join public.tasks as task on task.id = notification.task_id
             where task.title = 'Direct #327'),
-  (select 'Ți-a fost atribuit acest task. Deadline: '
+  (select 'Ți-a fost atribuit acest task. Termen: '
        || to_char(task.deadline at time zone 'Europe/Bucharest', 'DD.MM.YYYY HH24:MI') || '.'
      from public.tasks as task where task.title = 'Direct #327'),
   'the Executor notification body is the exact pinned-format deadline message');
+select ok((select notification.body like 'Ți-a fost atribuit acest task. Termen: %'
+                  and notification.body not like '%Deadline%'
+             from public.notifications as notification
+             join public.tasks as task on task.id = notification.task_id
+            where task.title = 'Direct #327'),
+  '#891: a direct Task''s Executor reads "Termen", never "Deadline"');
 
 -- A denied create writes nothing at all.
 select pg_temp.test_login('32700000-0000-0000-0000-000000000008', jsonb_build_object(

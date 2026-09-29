@@ -389,7 +389,7 @@ select is((select format('%s|%s', notification.title, notification.body)
              from public.notifications as notification
             where notification.task_id = (select queue_task_id from f332)
               and notification.member_id = '33200000-0000-0000-0000-000000000004'),
-  'Task nou: Renuntare cu coada #332|Ți-a fost atribuit acest task. Deadline: 01.07.2027 12:00.',
+  'Task nou: Renuntare cu coada #332|Ți-a fost atribuit acest task. Termen: 01.07.2027 12:00.',
   'the chosen Member gets the pinned "Task nou" notification');
 
 -- ==================== 3. A direct Task ends with no Executor, then #342 fills it ====================
