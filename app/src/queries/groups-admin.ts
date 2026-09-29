@@ -45,7 +45,10 @@ export type AdminGroup = Pick<
   | 'application_form_label'
   | 'application_form_url'
 > & {
-  /** Roster rows. An Automatic-Membership Group has none by design. */
+  /**
+   * The members of the Group (#929, ruling R32): its roster, its Automatic
+   * Membership and every active BC member and Moderator.
+   */
   memberCount: number;
 };
 
@@ -76,11 +79,14 @@ export async function fetchAdminGroups(): Promise<AdminGroup[]> {
     readAllRows((from, to) =>
       supabase.from('groups').select(GROUP_FIELDS).order('id').range(from, to),
     ),
+    // The members of every Group (#929, ruling R32): roster rows, Automatic
+    // Membership and the membri de drept, one row each, under the roster rule.
     readAllRows((from, to) =>
       supabase
-        .from('group_members')
-        .select('group_id')
+        .rpc('group_roster', {})
+        .select('group_id, member_id')
         .order('group_id')
+        .order('member_id')
         .range(from, to),
     ),
   ]);
@@ -121,22 +127,41 @@ export function useMyGroupRoles() {
 
 export type GroupRole = 'manager' | 'responsible' | 'member';
 
-/** One roster row, with everything the Roster and Roluri tabs show about it. */
+/**
+ * Why a member belongs to the Group (#929, ruling R32): a roster row, the
+ * Group's Automatic Membership, or their BC/Moderator Role (membri de drept).
+ * Only a roster row can be removed or given a Group Role here.
+ */
+export type MembershipSource = 'roster' | 'automatic' | 'board';
+
+/** One member of the Group, with everything the Roster and Roluri tabs show. */
 export type RosterEntry = {
   memberId: string;
   name: string;
   avatarColor: string | null;
   groupRole: GroupRole;
   positionTitle: string | null;
+  source: MembershipSource;
   /** Membership Status (ruling R22): deactivation never edits a roster. */
   status: string;
+  /** The OSUBB Role id (`bc`, `moderator`, …). */
+  roleId: string | null;
   roleLabel: string;
   /** The member's own Level — what a raised Minimum Level is compared against. */
   level: number;
 };
 
-function asGroupRole(value: string): GroupRole {
+function asGroupRole(value: string | null): GroupRole {
   return value === 'manager' || value === 'responsible' ? value : 'member';
+}
+
+function asSource(value: string): MembershipSource {
+  return value === 'automatic' || value === 'board' ? value : 'roster';
+}
+
+/** The explicit roster rows alone: what Roluri and Setări act on. */
+export function explicitRoster(roster: readonly RosterEntry[]): RosterEntry[] {
+  return roster.filter((entry) => entry.source === 'roster');
 }
 
 export async function fetchGroupRoster(
@@ -144,9 +169,8 @@ export async function fetchGroupRoster(
 ): Promise<RosterEntry[]> {
   const memberships = await readAllRows((from, to) =>
     supabase
-      .from('group_members')
-      .select('member_id, group_role, position_title')
-      .eq('group_id', groupId)
+      .rpc('group_roster', { p_group_id: groupId })
+      .select('member_id, group_role, position_title, source')
       .order('member_id')
       .range(from, to),
   );
@@ -179,7 +203,9 @@ export async function fetchGroupRoster(
         avatarColor: profile?.avatar_color ?? null,
         groupRole: asGroupRole(row.group_role),
         positionTitle: row.position_title,
+        source: asSource(row.source),
         status: profile?.status ?? '—',
+        roleId: profile?.role ?? null,
         roleLabel: role?.name ?? '—',
         level: role?.level ?? 0,
       };

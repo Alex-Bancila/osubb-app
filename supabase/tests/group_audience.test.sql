@@ -167,8 +167,8 @@ select id, pg_temp.u601(8), 'declined' from e601 where name = 'dept';
 
 select set_eq(
   $q$select * from private.event_notification_recipients((select id from e601 where name = 'org'))$q$,
-  $q$select id from public.profiles where status = 'activ'$q$,
-  'an Organization Group Event''s recipient set is every active Member');
+  $q$select p.id from public.profiles as p join public.roles as r on r.id = p.role where p.status = 'activ' and r.level < 6$q$,
+  'an Organization Group Event''s recipient set is every active Member except BC and the Moderator (R32)');
 
 select pg_temp.test_login_leadership(pg_temp.u601(1));
 select lives_ok(
@@ -179,8 +179,8 @@ reset role;
 select set_eq(
   $q$select member_id from public.notifications
       where dedupe_key = 'event:' || (select id from e601 where name = 'org') || ':location'$q$,
-  $q$select id from public.profiles where status = 'activ' and id <> pg_temp.u601(1)$q$,
-  'an important change to an Organization Group Event notifies every active Member except the actor');
+  $q$select p.id from public.profiles as p join public.roles as r on r.id = p.role where p.status = 'activ' and r.level < 6 and p.id <> pg_temp.u601(1)$q$,
+  'an important change to an Organization Group Event notifies every active Member except the actor, BC and the Moderator (R32)');
 
 select pg_temp.test_login_leadership(pg_temp.u601(1));
 select lives_ok(
@@ -224,8 +224,8 @@ select id, pg_temp.u601(n), 'going' from h601, unnest(array[4, 11]) n where name
 select set_eq(
   $q$select * from private.event_notification_recipients((select id from h601 where name = 'org'))$q$,
   $q$select p.id from public.profiles as p join public.roles as r on r.id = p.role
-      where p.status = 'activ' and r.level >= 3$q$,
-  'an Organization Group Event at Minimum Level 3 has only the active Members at level >= 3 as recipients');
+      where p.status = 'activ' and r.level >= 3 and r.level < 6$q$,
+  'an Organization Group Event at Minimum Level 3 has only the active Members at level 3 to 5 as recipients -- never BC or the Moderator (R32)');
 select set_eq(
   $q$select * from private.event_notification_recipients((select id from h601 where name = 'dept'))$q$,
   $q$select pg_temp.u601(6)$q$,
@@ -254,8 +254,8 @@ select set_eq(
   $q$select member_id from public.notifications
       where dedupe_key = 'event:' || (select id from h601 where name = 'org') || ':cancelled'$q$,
   $q$select p.id from public.profiles as p join public.roles as r on r.id = p.role
-      where p.status = 'activ' and r.level >= 3 and p.id <> pg_temp.u601(1)$q$,
-  'cancelling a Minimum Level 3 Organization Group Event reaches every active Member at level >= 3 except the actor, nobody below');
+      where p.status = 'activ' and r.level >= 3 and r.level < 6 and p.id <> pg_temp.u601(1)$q$,
+  'cancelling a Minimum Level 3 Organization Group Event reaches every active Member at level 3 to 5 except the actor, nobody below and no BC or Moderator (R32)');
 
 select * from finish();
 rollback;

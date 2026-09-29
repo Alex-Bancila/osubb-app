@@ -1,6 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { Panel } from '../../components/layout';
+import {
+  ListRow,
+  Panel,
+  rowListClass,
+  SubHeading,
+} from '../../components/layout';
 import {
   DataTable,
   type DataTableColumn,
@@ -236,17 +241,23 @@ function rosterColumns({
       accessorFn: (row) =>
         groupRoleLabel(row.groupRole, group.manager_title, row.positionTitle),
       header: 'Funcție în grup',
-      cell: ({ row }) => (
-        <Badge
-          variant={row.original.groupRole === 'member' ? 'outline' : 'default'}
-        >
-          {groupRoleLabel(
-            row.original.groupRole,
-            group.manager_title,
-            row.original.positionTitle,
-          )}
-        </Badge>
-      ),
+      cell: ({ row }) =>
+        // Automatic Membership (#929): in the Group by Role, never by hand.
+        row.original.source === 'automatic' ? (
+          <Badge variant="secondary">{AUTOMATIC_LABEL}</Badge>
+        ) : (
+          <Badge
+            variant={
+              row.original.groupRole === 'member' ? 'outline' : 'default'
+            }
+          >
+            {groupRoleLabel(
+              row.original.groupRole,
+              group.manager_title,
+              row.original.positionTitle,
+            )}
+          </Badge>
+        ),
     },
     { id: 'role', accessorFn: (row) => row.roleLabel, header: 'Rol OSUBB' },
     {
@@ -262,33 +273,91 @@ function rosterColumns({
       id: 'actions',
       header: 'Acțiuni',
       enableSorting: false,
-      cell: ({ row }) =>
-        // A position is ended by the authority that granted it, never by a
-        // roster removal — so a Manager or Responsible is demoted first, and
-        // the hint shows only to whoever may withdraw that position
-        // (relevance B50): a Manager's by the level above, a Responsible's
-        // by the Group's Managers.
-        row.original.groupRole === 'member' ? (
-          <RemoveMemberDialog
-            entry={row.original}
-            group={group}
-            busy={busy}
-            error={error}
-            onRemove={() =>
-              onRun({
-                kind: 'removeMember',
-                groupId: group.id,
-                memberId: row.original.memberId,
-              })
-            }
-          />
-        ) : canWithdraw(row.original.groupRole, authority) ? (
-          <span className="text-sm text-muted-foreground">
-            Retrage întâi funcția
-          </span>
-        ) : null,
+      cell: ({ row }) => rosterAction(row.original),
     },
   ];
+
+  function rosterAction(entry: RosterEntry) {
+    // An automatic member follows their Role: nothing to remove (#929).
+    if (entry.source !== 'roster') return null;
+    // A position is ended by the authority that granted it, never by a
+    // roster removal — so a Manager or Responsible is demoted first, and
+    // the hint shows only to whoever may withdraw that position
+    // (relevance B50): a Manager's by the level above, a Responsible's
+    // by the Group's Managers.
+    return entry.groupRole === 'member' ? (
+      <RemoveMemberDialog
+        entry={entry}
+        group={group}
+        busy={busy}
+        error={error}
+        onRemove={() =>
+          onRun({
+            kind: 'removeMember',
+            groupId: group.id,
+            memberId: entry.memberId,
+          })
+        }
+      />
+    ) : canWithdraw(entry.groupRole, authority) ? (
+      <span className="text-sm text-muted-foreground">
+        Retrage întâi funcția
+      </span>
+    ) : null;
+  }
+}
+
+/** How a Member in the Group by Automatic Membership is marked (#929). */
+const AUTOMATIC_LABEL = 'Automat';
+
+/**
+ * The membri de drept (#929, ruling R32): every active BC member and the
+ * Moderator belong to every Group by their Role. They close the roster in
+ * their own list, named and marked by Role, with nothing to remove — a Role,
+ * not an Appointment, puts them here.
+ */
+function BoardMembers({
+  group,
+  entries,
+}: {
+  group: AdminGroup;
+  entries: RosterEntry[];
+}) {
+  return (
+    <section
+      aria-labelledby="membri-de-drept"
+      data-testid="board-members"
+      className="flex flex-col gap-1 border-t border-(--border-soft) pt-4"
+    >
+      {/* The page header already counts them among the members. */}
+      <SubHeading id="membri-de-drept" className="px-3">
+        Biroul de Conducere · membri de drept
+      </SubHeading>
+      <p className="m-0 px-3 text-sm text-muted-foreground">
+        Fac parte din fiecare grup prin rolul lor și nu primesc notificări de la
+        grup.
+      </p>
+      <ul className={rowListClass}>
+        {entries.map((entry) => (
+          <ListRow
+            key={entry.memberId}
+            leading={
+              <MemberAvatar name={entry.name} avatarColor={entry.avatarColor} />
+            }
+            value={<Badge variant="outline">{entry.roleLabel}</Badge>}
+          >
+            <Link
+              className="inline-flex min-h-11 max-w-full items-center truncate text-sm font-medium underline underline-offset-4"
+              to={`/administrare/membri/${entry.memberId}`}
+              state={rosterBackState(group.id)}
+            >
+              {entry.name}
+            </Link>
+          </ListRow>
+        ))}
+      </ul>
+    </section>
+  );
 }
 
 /** Whether the viewer may end this Group Role (Roluri's own rule). */
@@ -323,8 +392,25 @@ export function GroupRosterTab({
   error: string | null;
   onRun: (command: GroupCommand) => Promise<boolean>;
 }) {
+  // The table lists the roster and the automatic members; the membri de drept
+  // close the panel in their own list (#929).
+  const listed = useMemo(
+    () => roster.filter((entry) => entry.source !== 'board'),
+    [roster],
+  );
+  const board = useMemo(
+    () => roster.filter((entry) => entry.source === 'board'),
+    [roster],
+  );
+  // Only a roster row keeps a Member out of the picker: a BC member may still
+  // be added by hand, and then leaves the membri de drept for the table.
   const inGroup = useMemo(
-    () => new Set(roster.map((entry) => entry.memberId)),
+    () =>
+      new Set(
+        roster
+          .filter((entry) => entry.source === 'roster')
+          .map((entry) => entry.memberId),
+      ),
     [roster],
   );
   const candidates = useMemo(
@@ -339,6 +425,7 @@ export function GroupRosterTab({
   return (
     <Panel
       aria-label="Roster"
+      stack={4}
       control={
         authority.manageWork &&
         !group.automatic_membership && (
@@ -356,7 +443,7 @@ export function GroupRosterTab({
     >
       <DataTable
         columns={columns}
-        data={roster}
+        data={listed}
         initialSorting={[{ id: 'name', desc: false }]}
         // Under 640 px the name, the function and the action fit; the
         // OSUBB Role waits for the member page.
@@ -364,9 +451,10 @@ export function GroupRosterTab({
         emptyTitle={
           group.automatic_membership
             ? 'Membrii acestui grup se adaugă automat, după nivel.'
-            : 'Grupul nu are încă membri.'
+            : 'Grupul nu are încă membri adăugați.'
         }
       />
+      {board.length > 0 && <BoardMembers group={group} entries={board} />}
     </Panel>
   );
 }
