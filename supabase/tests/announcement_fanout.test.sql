@@ -35,13 +35,13 @@ select 'Local #68','Body #68',id,'local',pg_temp.u68(1)
 from groups where name='Root #68';
 select set_eq(
 $$select member_id from notifications where title='Anunț nou: Local #68' and member_id::text like '68000000-%'$$,
-$$select pg_temp.u68(n) from (values (2),(3),(6),(8)) v(n)$$,
-'local fan-out reaches root and descendant roster/Automatic Members, including BC');
+$$select pg_temp.u68(n) from (values (2),(3),(6)) v(n)$$,
+'local fan-out reaches root and descendant roster/Automatic Members, never BC (u68(8), level 6 and an Automatic Member) -- R32');
 select is((select count(*) from notifications where title='Anunț nou: Local #68'),
-  4 + (select count(*) from profiles p join roles r on r.id=p.role
-       where p.email like '%@demo.osubb' and p.status='activ' and r.level>=3
+  3 + (select count(*) from profiles p join roles r on r.id=p.role
+       where p.email like '%@demo.osubb' and p.status='activ' and r.level>=3 and r.level<6
          and not exists (select 1 from notif_suppression s where s.role=p.role and s.kind='announce')),
-'local broadcast includes every seeded Automatic Member exactly once as well as the four fixture recipients');
+'local broadcast includes every seeded Automatic Member below BC exactly once as well as the three fixture recipients (R32: no BC or Moderator)');
 select is((select count(*) from notifications where title='Anunț nou: Local #68' and member_id=pg_temp.u68(1)),0::bigint,
 'author receives no local Notification');
 select is((select count(*) from notifications where title='Anunț nou: Local #68' and member_id=pg_temp.u68(4)),0::bigint,
@@ -57,14 +57,15 @@ select 'Org #68','Org body',id,'org',pg_temp.u68(1)
 from groups where name='Root #68';
 select set_eq(
 $$select member_id from notifications where title='Anunț nou: Org #68' and member_id::text like '68000000-%'$$,
-$$select pg_temp.u68(n) from (values (2),(3),(6),(7),(8)) v(n)$$,
-'org Audience reaches every active fixture Member except author and suppressed BCE');
+$$select pg_temp.u68(n) from (values (2),(3),(6),(7)) v(n)$$,
+'org Audience reaches every active fixture Member except author, suppressed BCE and BC (R32)');
 select is((select count(*) from notifications where title='Anunț nou: Org #68'),
 (select count(*) from private.group_audience((select id from groups where is_organization)) as r(member_id)
  join profiles p on p.id=r.member_id
- where r.member_id<>pg_temp.u68(1)
+ join roles rl on rl.id=p.role
+ where r.member_id<>pg_temp.u68(1) and rl.level<6
    and not exists (select 1 from notif_suppression s where s.role=p.role and s.kind='announce')),
-'org fan-out total exactly equals the shared Group Audience minus author and suppression');
+'org fan-out total exactly equals the shared Group Audience minus author, suppression, BC and the Moderator (R32)');
 select is((select group_id from announcements where title='Org #68'),
 (select id from groups where name='Root #68'),
 'organization Audience leaves the Origin Group unchanged');
@@ -75,8 +76,8 @@ insert into announcements(title,body,group_id,audience,created_by)
 select 'Unsuppressed #68','Body',id,'local',pg_temp.u68(1)
 from groups where name='Root #68';
 select is((select count(*) from notifications where title='Anunț nou: Unsuppressed #68'),
-  5 + (select count(*) from profiles p join roles r on r.id=p.role
-       where p.email like '%@demo.osubb' and p.status='activ' and r.level>=3),
+  4 + (select count(*) from profiles p join roles r on r.id=p.role
+       where p.email like '%@demo.osubb' and p.status='activ' and r.level>=3 and r.level<6),
 'removing suppression restores BCE delivery while retaining all seeded Automatic Members');
 select is((select count(*) from notifications where title='Anunț nou: Unsuppressed #68' and member_id=pg_temp.u68(4)),1::bigint,
 'BCE receives the broadcast when its suppression row is absent');

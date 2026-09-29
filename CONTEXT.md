@@ -8,13 +8,13 @@ The shared language for the OSUBB app. Use these terms consistently in product d
 Organizația Studenților din Universitatea Babeș-Bolyai, the student NGO whose internal work this application supports.
 
 **BC**:
-Biroul de Conducere, the organization’s highest operational leadership group. Every active BC member, like the Moderator, grants and removes the BC and Moderator Roles, changes the Membership Status of a Member holding either, and invites new Members at either rank. The organization always keeps at least one active BC member: whoever removes the last one names who replaces them in the same change.
+Biroul de Conducere, the organization’s highest operational leadership group. Every active BC member, like the Moderator, grants and removes the BC and Moderator Roles, changes the Membership Status of a Member holding either, and invites new Members at either rank. The organization always keeps at least one active BC member: whoever removes the last one names who replaces them in the same change. Every active BC member is a member of every Group by that Role (a Membru de drept), yet receives no Task, Event or Announcement Notification through Group membership, Group Audience or Group management; only what asks them to decide or concerns them personally reaches them.
 
 **BCE**:
 Biroul de Conducere Extins, the extended leadership group immediately below BC.
 
 **Moderator**:
-The highest Role, a transferable seat held by the IT Coordinator. BC members and the Moderator grant and remove it, never on themselves; the organization always keeps at least one active Moderator, so whoever removes the last one names the replacement in the same change, and may name themselves. BC members and the Moderator change the Membership Status of a BC member or a Moderator; taking the last active holder of either rank out of Activ names the replacement the same way.
+The highest Role, a transferable seat held by the IT Coordinator. BC members and the Moderator grant and remove it, never on themselves; the organization always keeps at least one active Moderator, so whoever removes the last one names the replacement in the same change, and may name themselves. BC members and the Moderator change the Membership Status of a BC member or a Moderator; taking the last active holder of either rank out of Activ names the replacement the same way. Like a BC member, the Moderator is a Membru de drept of every Group and receives no Notification through membership.
 
 **AG / AGO**:
 Adunarea Generală / Adunarea Generală Ordinară, where voting members make organization decisions. In the application the Adunarea Generală is a Group with Automatic Membership at Minimum Level 3, created and named by BC; a Member joins it by gaining Drept de Vot and leaves it only when BC withdraws that Role.
@@ -89,15 +89,23 @@ A Group setting under which every member sees every Task of the Group, not only 
 _Avoid_: Team visibility, open board, transparency mode
 
 **Automatic Membership**:
-A Group setting under which every active Member at or above the Group's Minimum Level belongs to it. The roster follows each Member's Role, is never edited by hand, and accepts no Applications; Group Roles are still appointed.
+A Group setting under which every active Member at or above the Group's Minimum Level belongs to it. The roster follows each Member's Role, is never edited by hand, and accepts no Applications; Group Roles are still appointed. Automatic members are members everywhere a membership shows (the roster and its count, Grupurile mele, the Group filters), marked Automat.
 _Avoid_: Derived roster, virtual group, implicit membership
 
 **Private Group**:
 A Group setting under which the Group, every Group below it, and their Tasks and Events are visible only to their members, to the Group Managers and Group Responsibles on its path, and to BC and Moderator. A Private Group accepts no Applications and offers no organization-wide Opportunity; a Member enters it by Appointment and sees it from that moment.
 _Avoid_: Hidden group, secret group, invite-only group
 
+**Group Members**:
+The members of a Group: its roster rows, its automatic members under Automatic Membership, and every active BC member and the Moderator as Membri de drept. One definition serves every roster, count and Group filter; the Clasament still ranks only the Roles below BCE.
+_Avoid_: Roster when the automatic members or the Membri de drept are meant
+
+**Membru de drept**:
+A BC member or the Moderator in their standing as a member of every Group by their Role, listed apart at the end of each roster and never removed from it. It carries no Notification: a Membru de drept is not in the Group Audience that Notifications reach.
+_Avoid_: Ex officio member, board member of the Group
+
 **Group Audience**:
-Every active Member of a Group or of any Group below it, whether through a roster row or through Automatic Membership. A Group's Announcements and the important changes to its Events reach its Group Audience, and a Member's Relevant Events are those of the Groups whose Audience they are in. Task notifications never use it; they target the Executor, the Task Manager, and the Candidates.
+Every active Member of a Group or of any Group below it, whether through a roster row or through Automatic Membership; the Membri de drept are not part of it. A Group's Announcements and the important changes to its Events reach its Group Audience, except BC members and the Moderator, who are never notified through it, and a Member's Relevant Events are those of the Groups whose Audience they are in. Task notifications never use it; they target the Executor, the Task Manager, and the Candidates.
 _Avoid_: Recipients, subscribers, the roster when Automatic Membership is meant
 
 **Organization Group**:
@@ -167,7 +175,7 @@ A Task that groups Subtasks one level deep. It has no Executor, Candidate Queue,
 An ordinary Task whose Origin is inherited immutably from its Umbrella Task.
 
 **Task Manager**:
-The Member who created a Task, recorded by the server. They receive the Task's manager notifications; when they are the actor or no longer active, the Origin's managers receive them instead.
+The Member who created a Task, recorded by the server. They receive the Task's manager notifications; when they are the actor or no longer active, the Origin's managers receive them instead, never a BC member or the Moderator through that Group, and nobody when no such manager is left.
 
 **Executor**:
 The one Member currently accountable for completing a Task.

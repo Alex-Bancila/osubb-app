@@ -832,7 +832,7 @@ reset role;
 -- rows above all have a live creator who is not the actor, so they only exercise the
 -- creator-first arm. This one makes the actor the creator, which is the only way to reach
 -- ruling D4: on a Manager-less chain private.task_managers returns the chain's live
--- Responsibles PLUS every live BC/Moderator, minus the actor.
+-- Responsibles, minus the actor -- and, since #929 (R32), never BC or the Moderator.
 select pg_temp.g521_task('command4','ind',null,'todo','direct','umbrella');
 update public.tasks set created_by=pg_temp.g521_uid(6) where id=(select id from g521_tasks where name='command4');
 insert into public.tasks(title,group_id,parent_task_id,status,cancelled_at,cancel_reason,audience,assignment_mode,created_by)
@@ -843,9 +843,9 @@ select lives_ok($$select public.complete_umbrella_task((select id from g521_task
 reset role;
 select ok(
   exists(select 1 from public.notifications where task_id=(select id from g521_tasks where name='command4') and member_id=pg_temp.g521_uid(7))
-  and exists(select 1 from public.notifications where task_id=(select id from g521_tasks where name='command4') and member_id=pg_temp.g521_uid(1))
+  and not exists(select 1 from public.notifications where task_id=(select id from g521_tasks where name='command4') and member_id=pg_temp.g521_uid(1))
   and not exists(select 1 from public.notifications where task_id=(select id from g521_tasks where name='command4') and member_id=pg_temp.g521_uid(6)),
-  'the Umbrella rollup reaches the Manager-less chain''s peer Responsible and BC, never the actor (ruling D4)');
+  'the Umbrella rollup reaches the Manager-less chain''s peer Responsible, never the actor (ruling D4) and never BC (R32)');
 reset role;
 
 select * from finish();
