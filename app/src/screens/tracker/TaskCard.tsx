@@ -29,7 +29,7 @@ import { TaskActionSuccess } from './TaskActionSuccess';
 import { TaskInterestControls } from './TaskInterestControls';
 import { TaskQueueStatus } from './TaskQueueStatus';
 import { TaskStageSummary } from './TaskStageSummary';
-import { TaskGiveUpControl } from './TaskGiveUpControl';
+import { GAVE_UP_RECEIPT, TaskGiveUpControl } from './TaskGiveUpControl';
 import { useReceiptTurn } from './receipt-turn';
 import { SubmitForReviewDialog } from './SubmitForReviewDialog';
 import { SubmissionNote } from './SubmissionNote';
@@ -514,7 +514,12 @@ export function TaskCard({
             {canGiveUp && (
               <TaskGiveUpControl
                 taskId={task.id}
-                onGaveUp={onGaveUp && (() => onGaveUp(task.id))}
+                onGaveUp={() =>
+                  // The list shows the receipt when it holds the card; the
+                  // sheet's card keeps it, since the control leaves with the
+                  // Executor's actions (Audit D-3).
+                  onGaveUp ? onGaveUp(task.id) : setNotice(GAVE_UP_RECEIPT)
+                }
               />
             )}
           </CardFooter>

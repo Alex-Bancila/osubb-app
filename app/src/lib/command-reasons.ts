@@ -59,6 +59,8 @@ const REASON_COPY = new Map<string, string>([
   ],
   ['invalid_position_title', 'Scrie un nume de funcție valid.'],
   ['position_title_required', 'Scrie cum se numește funcția responsabilului.'],
+  // Client-side: an appointment names its member (Audit D-16).
+  ['member_required', 'Alege un membru.'],
   ['invalid_application_level', 'Alege un nivel valid pentru cereri.'],
   [
     'application_level_below_min_level',

@@ -1193,7 +1193,9 @@ it('names what an appointment is missing and confirms a withdrawal', async () =>
   expect(title).not.toBeRequired();
   await user.click(within(dialog).getByRole('button', { name: 'Numește' }));
   expect(within(dialog).getByText('Alege un membru.')).toBeVisible();
-  expect(title).toHaveAccessibleDescription('Scrie numele funcției.');
+  expect(title).toHaveAccessibleDescription(
+    'Scrie cum se numește funcția responsabilului.',
+  );
   expect(api.mutate).not.toHaveBeenCalled();
   await user.click(within(dialog).getByRole('button', { name: 'Renunță' }));
 
@@ -1204,10 +1206,22 @@ it('names what an appointment is missing and confirms a withdrawal', async () =>
     name: 'Retragi funcția lui Radu Mihai?',
   });
   expect(api.mutate).not.toHaveBeenCalled();
+  // A refusal keeps the dialog open with its reason, so the BC can retry.
+  api.mutate.mockRejectedValueOnce(
+    new CommandError(
+      { code: '42501', message: 'group_manage_forbidden' },
+      'nope',
+    ),
+  );
   await user.click(
     within(confirm).getByRole('button', { name: 'Retrage funcția' }),
   );
-  expect(api.mutate).toHaveBeenCalledWith({
+  expect(await within(confirm).findByRole('alert')).toBeVisible();
+  expect(confirm).toBeInTheDocument();
+  await user.click(
+    within(confirm).getByRole('button', { name: 'Retrage funcția' }),
+  );
+  expect(api.mutate).toHaveBeenLastCalledWith({
     kind: 'setRole',
     groupId: 2,
     memberId: 'r',

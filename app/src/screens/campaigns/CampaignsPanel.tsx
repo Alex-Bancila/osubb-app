@@ -390,6 +390,17 @@ export function CampaignsPanel({
     () => new Map(groups.map((row) => [row.id, row.name])),
     [groups],
   );
+  // The server refuses any change to an archived Group's Campaign
+  // (can_manage_group_work reads the owner's status): report only.
+  const archived = useMemo(
+    () =>
+      new Set(
+        groups
+          .filter((row) => row.status !== undefined && row.status !== 'active')
+          .map((row) => row.id),
+      ),
+    [groups],
+  );
   const listed = useMemo(
     () =>
       subtreeCampaigns(campaigns.data ?? [], groups, group.id).filter(
@@ -466,7 +477,7 @@ export function CampaignsPanel({
               onRun={run}
               onToggle={toggle}
               disabled={mutation.isPending}
-              readOnly={readOnly}
+              readOnly={readOnly || archived.has(campaign.group_id)}
             />
           ))}
         </ul>

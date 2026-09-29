@@ -9,6 +9,8 @@ export type CampaignOwnerGroup = {
   id: number;
   name: string;
   path: readonly number[];
+  /** An archived owner's Campaigns only report (Audit D-10). */
+  status?: string;
 };
 
 const collator = new Intl.Collator('ro-RO', { sensitivity: 'base' });

@@ -8,6 +8,8 @@ import {
 } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
+import { reasonCopy } from '../../lib/command-reasons';
+import { appointmentSchema } from '../../lib/schemas/group';
 import { MemberAvatar } from '../../components/ui/combobox';
 import {
   Dialog,
@@ -158,19 +160,24 @@ function AppointDialog({
             type="button"
             disabled={busy}
             onClick={async () => {
-              const next = {
-                member: member ? undefined : 'Alege un membru.',
-                title:
-                  withTitle && !positionTitle.trim()
-                    ? 'Scrie numele funcției.'
-                    : undefined,
-              };
-              setMissing(next);
-              if (!member || next.title) return;
+              const parsed = appointmentSchema(withTitle).safeParse({
+                memberId: member?.memberId ?? null,
+                positionTitle,
+              });
+              const issue = (field: string) =>
+                reasonCopy(
+                  parsed.error?.issues.find((item) => item.path[0] === field)
+                    ?.message,
+                );
+              setMissing({
+                member: issue('memberId'),
+                title: issue('positionTitle'),
+              });
+              if (!parsed.success || !member) return;
               setAttempted(true);
               const done = await onAppoint(
                 member.memberId,
-                withTitle ? positionTitle : null,
+                parsed.data.positionTitle,
               );
               if (done) setOpen(false);
             }}

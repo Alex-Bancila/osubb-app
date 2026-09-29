@@ -47,6 +47,26 @@ const color = optional.superRefine((value, ctx) => {
 const level = (reason: string) =>
   z.number().refine((value) => LEVELS.includes(value), reason);
 
+/**
+ * Appointing into a position (Audit D-16): a member is always chosen, and a
+ * Group Responsible always carries a title of at most 80 characters.
+ */
+export function appointmentSchema(withTitle: boolean) {
+  return z.object({
+    memberId: z
+      .string()
+      .nullable()
+      .refine((value) => value !== null, 'member_required'),
+    positionTitle: withTitle
+      ? requiredText({
+          required: 'position_title_required',
+          max: 80,
+          tooLong: 'position_title_too_long',
+        })
+      : z.string().transform(() => null),
+  });
+}
+
 export const groupCreateSchema = z.object({
   name: groupName,
   category: z
