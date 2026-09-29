@@ -48,10 +48,9 @@
 --   * the update removed -> "the time rule now asks 2 months" and "the daily
 --     job ... promotes R1".
 --   (The held-lock probes of (47, 1) and (52, 1) run in a remote session,
---   which sees only committed
---   code, so it was not run as a mutation: without the (47, 1) call the
---   remote change meets no held lock and completes, so the probe
---   discriminates.)
+--   which sees only committed code, so they were not run as mutations:
+--   without either lock call the remote change meets no held lock and
+--   completes, so each probe discriminates.)
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
