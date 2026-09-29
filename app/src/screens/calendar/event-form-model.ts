@@ -22,6 +22,13 @@ export type EventFormOptions = {
   groupNames: Array<{ id: number; name: string }>;
   /** Active Campaigns; `eventCampaignsFor` narrows them to the chosen Group. */
   campaigns: EventFormCampaign[];
+  /**
+   * Groups the viewer may publish an Announcement from (#909), the compose
+   * sheet's own rule (`announcementOrigins`, the client copy of
+   * `announcements_create`). Absent when editing: only a new Event offers
+   * "Creează și un anunț".
+   */
+  announceGroupIds?: number[];
 };
 
 export type EventFormValues = {
@@ -35,6 +42,8 @@ export type EventFormValues = {
   description: string;
   minLevel: number;
   campaignId: number | null;
+  /** "Creează și un anunț" (#909): unticked until the author ticks it. */
+  announce: boolean;
 };
 
 /** The Event dialog: a full screen on a phone, a wide dialog above it. */
@@ -52,6 +61,7 @@ export const emptyEventFormValues: EventFormValues = {
   description: '',
   minLevel: 0,
   campaignId: null,
+  announce: false,
 };
 
 export type EventDraft = {
@@ -65,6 +75,8 @@ export type EventDraft = {
   description: string | null;
   minLevel: number;
   campaignId: number | null;
+  /** Publish the matching Announcement in the same call (#909). */
+  announce: boolean;
 };
 
 export const EVENT_TYPE_CHOICES: ReadonlyArray<{
@@ -120,4 +132,18 @@ export function eventCampaignsFor(
   return group
     ? campaigns.filter((campaign) => group.path.includes(campaign.group_id))
     : [];
+}
+
+/**
+ * Whether "Creează și un anunț" may be offered for this Group (#909): the
+ * viewer may publish from it. The Announcement copies the Event's Minimum
+ * Level, so every Event may carry one. Before a Group is chosen it is offered
+ * when any Group would allow it. Presentation only: `create_event` decides.
+ */
+export function mayAnnounceEvent(
+  options: Pick<EventFormOptions, 'announceGroupIds'>,
+  group: Pick<EventFormGroup, 'id'> | null,
+): boolean {
+  const ids = options.announceGroupIds ?? [];
+  return group ? ids.includes(group.id) : ids.length > 0;
 }

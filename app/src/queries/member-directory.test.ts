@@ -162,7 +162,7 @@ describe('directory reads', () => {
     expect(pages.range).toHaveBeenCalledWith(500, 999);
     expect(ranking.range).toHaveBeenCalledWith(500, 999);
   });
-  it('shows no points for BC and the Moderator whatever the ranking returns, and keeps BCE’s (ruling 1)', async () => {
+  it('shows no points for BCE, BC and the Moderator whatever the ranking returns (ruling 1, #907)', async () => {
     mocks.from.mockImplementation((name: string) =>
       name === 'profiles_directory'
         ? query([
@@ -189,7 +189,7 @@ describe('directory reads', () => {
     expect(members.map((member) => [member.id, member.points])).toEqual([
       ['bc', null],
       ['mod', null],
-      ['bce', 5],
+      ['bce', null],
       ['v', 0],
     ]);
   });

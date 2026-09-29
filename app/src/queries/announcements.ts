@@ -28,6 +28,8 @@ const ANNOUNCEMENT_FIELDS = `
   form_label,
   form_url,
   published_at,
+  deadline,
+  min_level,
   created_by,
   announcement_reads (
     read_at
@@ -158,6 +160,8 @@ export type CreateAnnouncementInput = Pick<
   | 'pinned'
   | 'form_label'
   | 'form_url'
+  | 'deadline'
+  | 'min_level'
 >;
 
 /** No RETURNING: a global writer can post a local item outside their own read audience. */

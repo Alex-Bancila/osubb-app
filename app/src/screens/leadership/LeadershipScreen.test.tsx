@@ -477,7 +477,7 @@ it('shows loading and empty states without inventing totals', () => {
   state.board.mockReturnValue({ data: [] });
   const second = renderPage();
   expect(
-    screen.getByText('Nu există puncte pentru filtrele alese'),
+    screen.getByText('Niciun membru pentru filtrele alese'),
   ).toBeInTheDocument();
   second.unmount();
   state.cup.mockReturnValue({ data: [] });
@@ -485,6 +485,29 @@ it('shows loading and empty states without inventing totals', () => {
   expect(
     screen.getByText('Nu există grupuri înscrise în Cupă.'),
   ).toBeInTheDocument();
+});
+
+it('draws the Members with 0 points as rows sharing the last rank, not as an empty board (#907)', () => {
+  state.board.mockReturnValue({
+    data: [
+      { member_id: uid, full_name: 'Ioana Popescu', points: 12, rank: 1 },
+      { member_id: 'andrei', full_name: 'Andrei Pop', points: 0, rank: 2 },
+      { member_id: 'raluca', full_name: 'Raluca Dan', points: 0, rank: 2 },
+    ],
+  });
+  renderPage();
+  expect(screen.getByText('3 membri')).toBeInTheDocument();
+  expect(screen.queryByText('Niciun membru pentru filtrele alese')).toBeNull();
+  const rows = within(
+    screen.getByRole('list', { name: 'Clasamentul membrilor' }),
+  ).getAllByRole('listitem');
+  expect(rows).toHaveLength(3);
+  for (const row of rows.slice(1)) {
+    expect(row).toHaveTextContent('Locul 2');
+    expect(row.querySelector('[data-slot="list-row-value"]')).toHaveTextContent(
+      '0 pct.',
+    );
+  }
 });
 
 it('mounts no metric queries when the live leadership gate denies stale claims', () => {

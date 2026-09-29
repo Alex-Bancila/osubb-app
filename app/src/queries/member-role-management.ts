@@ -14,7 +14,18 @@ type MemberRole = Database['public']['Enums']['member_role'];
 type MemberStatus = Database['public']['Enums']['member_status'];
 
 export type MemberChange =
-  | { kind: 'role'; memberId: string; role: MemberRole; reason: string | null }
+  | {
+      kind: 'role';
+      memberId: string;
+      role: MemberRole;
+      reason: string | null;
+      /**
+       * Ruling R31 (#905): who takes the rank when the change removes the last
+       * live Moderator or BC. Sent only when named; the server refuses one
+       * named where no guard applies.
+       */
+      replacementId?: string | null;
+    }
   | {
       kind: 'status';
       memberId: string;
@@ -30,6 +41,7 @@ export async function changeMember(change: MemberChange) {
           p_member_id: change.memberId,
           p_role: change.role,
           p_reason: change.reason ?? undefined,
+          p_replacement_id: change.replacementId ?? undefined,
         })
       : await supabase.rpc('set_member_status', {
           p_member_id: change.memberId,

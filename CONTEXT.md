@@ -8,10 +8,13 @@ The shared language for the OSUBB app. Use these terms consistently in product d
 Organizația Studenților din Universitatea Babeș-Bolyai, the student NGO whose internal work this application supports.
 
 **BC**:
-Biroul de Conducere, the organization’s highest operational leadership group.
+Biroul de Conducere, the organization’s highest operational leadership group. Every active BC member, like the Moderator, grants and removes the BC and Moderator Roles. The organization always keeps at least one active BC member: whoever removes the last one names who replaces them in the same change.
 
 **BCE**:
 Biroul de Conducere Extins, the extended leadership group immediately below BC.
+
+**Moderator**:
+The highest Role, a transferable seat held by the IT Coordinator. BC members and the Moderator grant and remove it, never on themselves; the organization always keeps at least one active Moderator, so whoever removes the last one names the replacement in the same change, and may name themselves. Only the Moderator changes the Membership Status of a BC member or a Moderator, and never takes the last active holder of either rank out.
 
 **AG / AGO**:
 Adunarea Generală / Adunarea Generală Ordinară, where voting members make organization decisions. In the application the Adunarea Generală is a Group with Automatic Membership at Minimum Level 3, created and named by BC; a Member joins it by gaining Drept de Vot and leaves it only when BC withdraws that Role.
@@ -266,7 +269,7 @@ Informational attendance guidance for an Event. It does not reject an RSVP or cr
 ## Communication
 
 **Announcement**:
-An OSUBB message posted on behalf of one Group, its Origin, by one of that Group's Managers or Responsibles, with an Announcement Audience, a normal, important, or critical Priority, and an optional link to an external form. An Announcement of the Organization Group may be posted by anyone holding a Group Role.
+An OSUBB message posted on behalf of one Group, its Origin, by one of that Group's Managers or Responsibles, with an Announcement Audience, a normal, important, or critical Priority, an optional link to an external form, an optional **Termen** (the date by which its readers should act, never in the past when posted), and a Minimum Level: only Members of its Audience at or above it read the Announcement or are notified of it (everyone by default). An Announcement of the Organization Group may be posted by anyone holding a Group Role. Creating an Event may publish its Announcement in the same step, with the Event's Group, Audience and Minimum Level and Termen = the Event's start.
 _Avoid_: Post, news item, broadcast when the Audience is local
 
 **Announcement Audience**:

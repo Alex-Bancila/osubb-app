@@ -375,4 +375,87 @@ describe('NewEventControl receipt', () => {
     expect(receipt.result.current).toBe('Evenimentul a fost creat.');
     clearEventReceipts();
   });
+
+  describe('"Creează și un anunț" (#909)', () => {
+    const announceBox = () =>
+      screen.queryByRole('checkbox', { name: 'Creează și un anunț' });
+
+    beforeEach(() => {
+      state.options.mockReturnValue({
+        data: { ...formOptions, announceGroupIds: [1, 7] },
+      });
+      state.mutateAsync.mockResolvedValue({ id: 45 });
+    });
+
+    it('starts unticked and publishes no Announcement unless ticked', async () => {
+      const user = setup();
+      await open(user);
+      await fillRequired(user);
+      expect(announceBox()).not.toBeChecked();
+      expect(
+        screen.getByText(/Publică în Anunțuri titlul, data, locul/),
+      ).toBeVisible();
+      await user.click(
+        screen.getByRole('button', { name: 'Creează evenimentul' }),
+      );
+      await waitFor(() =>
+        expect(state.mutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({ announce: false }),
+        ),
+      );
+    });
+
+    it('asks for the Announcement when ticked and says both were created', async () => {
+      const user = setup();
+      await open(user);
+      await fillRequired(user);
+      await user.click(announceBox() as HTMLElement);
+      await user.click(
+        screen.getByRole('button', { name: 'Creează evenimentul' }),
+      );
+      await waitFor(() =>
+        expect(state.mutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({ groupId: 7, announce: true }),
+        ),
+      );
+      const receipt = renderHook(() => useEventReceipt(45));
+      expect(receipt.result.current).toBe(
+        'Evenimentul și anunțul au fost create.',
+      );
+      clearEventReceipts();
+    });
+
+    it('is hidden for a Group the viewer may not publish from', async () => {
+      const user = setup();
+      await open(user);
+      expect(announceBox()).not.toBeNull();
+      await chooseGroup(user, /Social Media/);
+      expect(announceBox()).toBeNull();
+    });
+
+    it('is hidden when the viewer may publish from no Group', async () => {
+      state.options.mockReturnValue({ data: formOptions });
+      const user = setup();
+      await open(user);
+      expect(announceBox()).toBeNull();
+    });
+
+    it("stays available for an Event above its Group's Minimum Level: the Announcement takes that level", async () => {
+      const user = setup();
+      await open(user);
+      await fillRequired(user);
+      await user.click(announceBox() as HTMLElement);
+      await user.selectOptions(screen.getByLabelText('Cine îl vede'), '3');
+      expect(announceBox()).not.toHaveAttribute('aria-disabled', 'true');
+      expect(announceBox()).toBeChecked();
+      await user.click(
+        screen.getByRole('button', { name: 'Creează evenimentul' }),
+      );
+      await waitFor(() =>
+        expect(state.mutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({ minLevel: 3, announce: true }),
+        ),
+      );
+    });
+  });
 });

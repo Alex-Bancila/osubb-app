@@ -21,6 +21,7 @@ import {
 } from '../../queries/announcements';
 import { useMyGroupRoles } from '../../queries/my-groups';
 import { AnnouncementMeta } from './AnnouncementMeta';
+import { AnnouncementTermen } from './AnnouncementTermen';
 import {
   mayPinAnnouncement,
   type AnnouncementPresentation,
@@ -104,6 +105,10 @@ function AnnouncementDetails({
             {announcement.publishedLabel}
           </time>
         </SheetDescription>
+        <AnnouncementTermen
+          deadline={announcement.deadline}
+          className="self-start"
+        />
         <div className="flex min-w-0 items-center text-xs pointer-coarse:-my-1.5">
           {announcement.authorMember ? (
             <MemberName

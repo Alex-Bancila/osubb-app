@@ -79,11 +79,12 @@ export function primaryGroupOf(rows: MembershipCandidate[]): {
 }
 
 /**
- * The Roles that show no Task points (ruling 1, 2026-09-28): BC and the
- * Moderator are off the Clasament and the Voluntari points column; BCE keeps
- * its points.
+ * The Roles that show no Task points (ruling 1, 2026-09-28, amended by #907 on
+ * 2026-09-29): BCE, BC and the Moderator are off the Clasament and the
+ * Voluntari points column. The ranking no longer returns them, so a figure
+ * here would be a false 0.
  */
-const rolesWithoutPoints = new Set(['bc', 'moderator']);
+const rolesWithoutPoints = new Set(['bce', 'bc', 'moderator']);
 
 // Supabase caps each response at 1,000 rows. Memberships can exceed that
 // before the directory does, so every projection is read in stable pages.

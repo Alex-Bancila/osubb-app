@@ -37,6 +37,32 @@ it('sends Drept de Vot confirmation and withdrawal through audited Role command'
   );
 });
 
+it('names the replacement for the last Moderator or BC in the same call (#905)', async () => {
+  await changeMember({
+    kind: 'role',
+    memberId: 'moderator',
+    role: 'bce',
+    reason: null,
+    replacementId: 'successor',
+  });
+  expect(api.rpc).toHaveBeenLastCalledWith('set_member_role', {
+    p_member_id: 'moderator',
+    p_role: 'bce',
+    p_reason: undefined,
+    p_replacement_id: 'successor',
+  });
+  // Without a guard the key travels empty, so PostgREST sends no replacement.
+  await changeMember({
+    kind: 'role',
+    memberId: 'member',
+    role: 'activ',
+    reason: null,
+  });
+  expect(api.rpc.mock.lastCall?.[1]).toMatchObject({
+    p_replacement_id: undefined,
+  });
+});
+
 it('deactivates through the atomic Status command that revokes refresh sessions', async () => {
   await changeMember({
     kind: 'status',
