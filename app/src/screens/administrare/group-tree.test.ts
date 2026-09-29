@@ -8,7 +8,7 @@ import {
   groupRoleLabel,
   currentGroupTab,
   directManagerCandidates,
-  groupCreatedReceipt,
+  createdGroupManager,
   managerTitleFor,
   groupStatusLabel,
   groupTabs,
@@ -371,9 +371,9 @@ it('offers as direct Manager every eligible active Member but the Moderator (#95
 it('names the direct Manager in the receipt only when one was chosen (#951)', () => {
   const members = [appointable('ana', 'bce', 5)];
   expect(
-    groupCreatedReceipt({ category: 'department', managerId: null }, members),
-  ).toBe('Grupul a fost creat.');
+    createdGroupManager({ category: 'department', managerId: null }, members),
+  ).toBeNull();
   expect(
-    groupCreatedReceipt({ category: 'project', managerId: 'ana' }, members),
-  ).toBe('Grupul a fost creat, cu Membru ana ca Coordonator Principal.');
+    createdGroupManager({ category: 'project', managerId: 'ana' }, members),
+  ).toEqual({ member: members[0], title: 'Coordonator Principal' });
 });

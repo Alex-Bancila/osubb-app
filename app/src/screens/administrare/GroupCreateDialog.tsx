@@ -24,8 +24,10 @@ import type {
   AppointableMember,
   RunGroupCommand,
 } from '../../queries/groups-admin';
+import { MemberName } from '../../components/member/MemberName';
 import { MemberPicker } from './MemberPicker';
 import {
+  createdGroupManager,
   directManagerCandidates,
   GROUP_CATEGORIES,
   managerTitleFor,
@@ -115,13 +117,24 @@ export function GroupCreateDialog({
   );
   // The direct Manager (#951) is chosen, never assumed: nobody by default,
   // and only among those `create_group` accepts at the new Group's Minimum
-  // Level. A choice the Minimum Level later rules out is dropped, not sent.
-  const newMinLevel =
-    minLevel === '' ? (effectiveParent?.min_level ?? 0) : Number(minLevel);
-  const managerChoices = directManagerCandidates(members, newMinLevel);
+  // Level. A choice the Minimum Level rules out is dropped for good: a later
+  // lowering does not bring it back unasked.
+  const minLevelOf = (level: string, above: AdminGroup | null) =>
+    level === '' ? (above?.min_level ?? 0) : Number(level);
+  const managerChoices = directManagerCandidates(
+    members,
+    minLevelOf(minLevel, effectiveParent),
+  );
   const chosenManager =
     managerChoices.find((member) => member.memberId === manager?.memberId) ??
     null;
+  function dropIneligibleManager(nextMinLevel: number) {
+    if (
+      manager &&
+      directManagerCandidates([manager], nextMinLevel).length === 0
+    )
+      setManager(null);
+  }
 
   function reset() {
     setName('');
@@ -233,7 +246,10 @@ export function GroupCreateDialog({
                 groups={groups}
                 groupsById={groupsById}
                 value={chosenParent}
-                onValueChange={setChosenParent}
+                onValueChange={(next) => {
+                  setChosenParent(next);
+                  dropIneligibleManager(minLevelOf(minLevel, next));
+                }}
                 placeholder="Fără grup părinte"
               />
             </div>
@@ -245,7 +261,12 @@ export function GroupCreateDialog({
               <NativeSelect
                 value={minLevel}
                 disabled={disabled}
-                onChange={(event) => setMinLevel(event.target.value)}
+                onChange={(event) => {
+                  setMinLevel(event.target.value);
+                  dropIneligibleManager(
+                    minLevelOf(event.target.value, effectiveParent),
+                  );
+                }}
                 {...form.field('minLevel')}
               >
                 <NativeSelectOption value="">
@@ -357,5 +378,30 @@ export function GroupCreateDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * The receipt after a Group is created (#951): the direct Manager appointed
+ * with it, named through MemberName like every Member, under their title.
+ */
+export function GroupCreatedReceipt({
+  manager,
+}: {
+  manager: ReturnType<typeof createdGroupManager>;
+}) {
+  if (!manager) return <>Grupul a fost creat.</>;
+  return (
+    <>
+      Grupul a fost creat, cu{' '}
+      <MemberName
+        size="sm"
+        memberId={manager.member.memberId}
+        fullName={manager.member.name}
+        nickname={manager.member.nickname}
+        avatarColor={manager.member.avatarColor}
+      />{' '}
+      ca {manager.title}.
+    </>
   );
 }

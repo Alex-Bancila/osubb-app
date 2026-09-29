@@ -461,15 +461,16 @@ export function directManagerCandidates(
   );
 }
 
-/** The receipt after a Group is created, naming its direct Manager (#951). */
-export function groupCreatedReceipt(
+/**
+ * Who a created Group's receipt names (#951): the direct Manager appointed
+ * with it and the title they hold, or `null` when none was chosen.
+ */
+export function createdGroupManager(
   command: { category: string; managerId: string | null },
   members: readonly AppointableMember[],
-): string {
-  const manager = command.managerId
-    ? members.find((member) => member.memberId === command.managerId)
+): { member: AppointableMember; title: string } | null {
+  const member = command.managerId
+    ? members.find((candidate) => candidate.memberId === command.managerId)
     : undefined;
-  return manager
-    ? `Grupul a fost creat, cu ${manager.name} ca ${managerTitleFor(command.category)}.`
-    : 'Grupul a fost creat.';
+  return member ? { member, title: managerTitleFor(command.category) } : null;
 }

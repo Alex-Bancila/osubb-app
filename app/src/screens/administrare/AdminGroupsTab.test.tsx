@@ -393,7 +393,7 @@ function appointable(
 }
 
 const APPOINTABLE = [
-  appointable('ana', 'Ana Pop', 'bce', 'BCE', 5),
+  { ...appointable('ana', 'Ana Pop', 'bce', 'BCE', 5), nickname: 'Ani' },
   appointable('bc', 'Cristina Șerban', 'bc', 'BC', 6),
   appointable('mod', 'Moderator OSUBB', 'moderator', 'Moderator', 9),
   appointable('rec', 'Radu Recrut', 'recrut', 'Recrut', 0),
@@ -480,12 +480,37 @@ it('appoints the chosen direct Manager with the Group and says so (#951)', async
       managerId: 'ana',
     }),
   );
-  await waitFor(() =>
-    expect(
-      screen.getByText(
-        'Grupul a fost creat, cu Ana Pop ca Coordonator Principal.',
-      ),
-    ).toBeVisible(),
+  // Named through MemberName, by Nickname, under the position's title.
+  const receipt = await screen.findByText(/^Grupul a fost creat, cu/);
+  expect(receipt).toHaveTextContent(
+    'Grupul a fost creat, cu APAni ca Coordonator Principal.',
+  );
+  expect(
+    within(receipt).getByRole('button', { name: 'Profilul membrului Ani' }),
+  ).toBeVisible();
+});
+
+it('keeps a direct Manager dropped by the Minimum Level dropped when it is lowered again (#951)', async () => {
+  const user = userEvent.setup();
+  api.members.mockReturnValue({ data: APPOINTABLE });
+  api.roles.mockReturnValue({ data: LADDER_WITH_MODERATOR });
+  show();
+  await user.click(screen.getByRole('button', { name: 'Creează Grup' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Grup nou' });
+  await user.type(within(dialog).getByLabelText('Numele grupului'), 'Audit');
+  const picker = within(dialog).getByRole('combobox', {
+    name: 'Manager direct (BCE)',
+  });
+  await user.click(picker);
+  await user.click(await screen.findByRole('option', { name: /Radu Recrut/ }));
+  const level = within(dialog).getByLabelText('Nivel minim');
+  await user.selectOptions(level, '5');
+  await user.selectOptions(level, '');
+  expect(picker).toHaveTextContent('Fără manager direct');
+
+  await user.click(within(dialog).getByRole('button', { name: 'Creează' }));
+  expect(api.mutate).toHaveBeenCalledWith(
+    expect.objectContaining({ minLevel: null, managerId: null }),
   );
 });
 
