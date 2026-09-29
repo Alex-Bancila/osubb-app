@@ -470,11 +470,29 @@ const REASON_COPY = new Map<string, string>([
   ],
   [
     'invite_group_unavailable',
-    'Grupul ales nu mai există. Alege alt grup sau niciunul.',
+    'Unul dintre grupurile alese nu mai există și a ieșit din listă. Nu s-a trimis nicio invitație; verifică grupurile și trimite din nou.',
+  ],
+  /* #949: several Groups, each asked before the mail leaves. The picker
+     reloads, so a Group that no longer fits drops out of the list. */
+  [
+    'invite_group_archived',
+    'Unul dintre grupurile alese a fost arhivat între timp și a ieșit din listă. Nu s-a trimis nicio invitație; verifică grupurile și trimite din nou.',
+  ],
+  [
+    'invite_group_below_rank',
+    'Unul dintre grupurile alese cere acum un rol mai mare decât cel ales și a ieșit din listă. Nu s-a trimis nicio invitație; verifică grupurile și trimite din nou.',
+  ],
+  [
+    'invite_group_automatic',
+    'Unul dintre grupurile alese își primește acum membrii automat, după rol, și a ieșit din listă. Nu s-a trimis nicio invitație; verifică grupurile și trimite din nou.',
+  ],
+  [
+    'invite_role_unavailable',
+    'Rolul ales nu mai există. Reîncarcă pagina și alege din nou.',
   ],
   [
     'invite_group_refused',
-    'Membrul nu poate fi adăugat în grupul ales: e arhivat, își adaugă membrii automat sau cere un rol mai mare. Nu s-a adăugat niciun membru; alege alt grup sau niciunul.',
+    'Membrul nu poate fi adăugat în grupurile alese: unul e arhivat, își primește membrii automat sau cere un rol mai mare. Nu s-a adăugat niciun membru; verifică grupurile și trimite din nou.',
   ],
 
   /* ---- Role Evaluations, Promotion Thresholds and Candidates (#826, #827) ---- */

@@ -98,6 +98,7 @@ function inviteDeps(overrides: Partial<InviteDeps> = {}): InviteDeps {
     callerId: () => Promise.resolve("caller-1"),
     memberLevel: () => Promise.resolve(6),
     missingGroupIds: () => Promise.resolve([]),
+    groupRefusal: () => Promise.resolve({ refusal: null }),
     profileExists: () => Promise.resolve(false),
     inviteByEmail: () => Promise.resolve({ userId: "new-user-1" }),
     provision: () => Promise.resolve({}),
@@ -155,6 +156,51 @@ Deno.test("invite-member: no error body carries database or setting text", async
       "missing group",
       browserPost(INVITE, { ...INVITE_BODY, group_ids: [999] }),
       inviteDeps({ missingGroupIds: () => Promise.resolve([999]) }),
+    ],
+    [
+      "ineligible group",
+      browserPost(INVITE, { ...INVITE_BODY, group_ids: [4, 7] }),
+      inviteDeps({
+        groupRefusal: () =>
+          Promise.resolve({
+            refusal: { groupId: 7, reason: "group_member_below_min_level" },
+          }),
+      }),
+    ],
+    [
+      "screen answers an unknown group",
+      browserPost(INVITE, { ...INVITE_BODY, group_ids: [7] }),
+      inviteDeps({
+        groupRefusal: () =>
+          Promise.resolve({
+            refusal: { groupId: 7, reason: "group_manage_forbidden" },
+          }),
+      }),
+    ],
+    [
+      "unknown rank",
+      browserPost(INVITE, { ...INVITE_BODY, role: "rege" }),
+      inviteDeps({
+        groupRefusal: () =>
+          Promise.resolve({ error: { code: "22P02", message: LEAK } }),
+      }),
+    ],
+    [
+      "screen fails",
+      browserPost(INVITE, INVITE_BODY),
+      inviteDeps({
+        groupRefusal: () => Promise.resolve({ error: dbError }),
+      }),
+    ],
+    [
+      "group refused after the screen",
+      browserPost(INVITE, INVITE_BODY),
+      inviteDeps({
+        provision: () =>
+          Promise.resolve({
+            error: { code: "PT400", message: "group_archived" },
+          }),
+      }),
     ],
     [
       "existing profile",

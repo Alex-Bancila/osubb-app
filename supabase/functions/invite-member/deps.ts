@@ -18,6 +18,7 @@ import { requireSecretKey } from "../_shared/secret-keys.ts";
 
 export type {
   DbError,
+  GroupRefusal,
   InviteDeps,
   ProvisionArgs,
 } from "../_shared/member-invite.ts";
@@ -112,6 +113,21 @@ export function realDeps(
       );
       if (error) throw error;
       return ids.filter((id) => !data?.some((row) => row.id === id));
+    },
+
+    async groupRefusal(role, groupIds) {
+      // #949: public.provision_group_refusal asks each Group the Appointment
+      // core's questions for a new Member of this rank, writing nothing.
+      const { data, error } = await admin.rpc("provision_group_refusal", {
+        p_role: role,
+        p_group_ids: groupIds,
+      });
+      if (error) return { error };
+      const row = (data as { group_id: number; reason: string }[] | null)
+        ?.[0];
+      return {
+        refusal: row ? { groupId: row.group_id, reason: row.reason } : null,
+      };
     },
 
     activeGroups() {

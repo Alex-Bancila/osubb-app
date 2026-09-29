@@ -102,8 +102,35 @@ function show(onInvited = vi.fn()) {
       <InviteMemberDialog onInvited={onInvited} />
     </QueryClientProvider>,
   );
-  return onInvited;
+  return Object.assign(onInvited, { client });
 }
+
+/** Ticks a Group in the "Grupuri" picker, opening it when it is closed. */
+async function choose(
+  user: ReturnType<typeof userEvent.setup>,
+  dialog: HTMLElement,
+  name: RegExp,
+) {
+  if (!screen.queryByRole('listbox'))
+    await user.click(within(dialog).getByRole('combobox', { name: 'Grupuri' }));
+  await user.click(await screen.findByRole('option', { name }));
+}
+
+async function closePicker(user: ReturnType<typeof userEvent.setup>) {
+  if (screen.queryByRole('listbox')) await user.keyboard('{Escape}');
+  await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+}
+
+function send(user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement) {
+  return user.click(
+    within(dialog).getByRole('button', { name: 'Trimite invitația' }),
+  );
+}
+
+const SENT = {
+  data: { user_id: 'new-1', email: 'ana.pop@osubb.ro' },
+  error: null,
+};
 
 async function openAndFill(
   user: ReturnType<typeof userEvent.setup>,
@@ -184,6 +211,15 @@ describe('rank and Group options', () => {
     expect(within(dialog).queryByText(/deschide Administrare/)).toBeNull();
     expect(within(dialog).getByLabelText('Adresa de email')).toBeRequired();
     expect(within(dialog).getByLabelText('Numele complet')).toBeRequired();
+    // #949: Rol and Grupuri are the optional part, under their own legend.
+    const optional = within(dialog).getByRole('group', { name: 'Opțional' });
+    expect(within(optional).getByLabelText('Rol')).toBe(rank);
+    expect(
+      within(optional).getByRole('combobox', { name: 'Grupuri' }),
+    ).toHaveAccessibleDescription(
+      'Fără grup: membrul intră doar în OSUBB și își alege departamentul mai târziu.',
+    );
+    expect(within(optional).queryByLabelText('Adresa de email')).toBeNull();
     await user.selectOptions(rank, 'moderator');
     expect(rank).toHaveAccessibleDescription(
       'Rolul Moderator deschide Administrare: poate invita membri și schimba rolul oricui.',
@@ -192,18 +228,12 @@ describe('rank and Group options', () => {
 });
 
 describe('the invitation', () => {
-  it('sends the address, name and rank, with no Group unless one is chosen', async () => {
+  it('with only the address and name, invites a Recrut in no Group (OSUBB only)', async () => {
     const user = userEvent.setup();
-    api.invoke.mockResolvedValue({
-      data: { user_id: 'new-1', email: 'ana.pop@osubb.ro' },
-      error: null,
-    });
+    api.invoke.mockResolvedValue(SENT);
     const onInvited = show();
     const dialog = await openAndFill(user);
-    await user.selectOptions(within(dialog).getByLabelText('Rol'), 'bc');
-    await user.click(
-      within(dialog).getByRole('button', { name: 'Trimite invitația' }),
-    );
+    await send(user, dialog);
     await waitFor(() =>
       expect(onInvited).toHaveBeenCalledWith({
         userId: 'new-1',
@@ -212,7 +242,12 @@ describe('the invitation', () => {
       }),
     );
     expect(api.invoke).toHaveBeenCalledWith('invite-member', {
-      body: { email: 'ana.pop@osubb.ro', full_name: 'Ana Pop', role: 'bc' },
+      body: {
+        email: 'ana.pop@osubb.ro',
+        full_name: 'Ana Pop',
+        role: 'recrut',
+        group_ids: [],
+      },
     });
     await waitFor(() =>
       expect(screen.queryByRole('dialog', { name: 'Invită membru' })).toBe(
@@ -221,19 +256,91 @@ describe('the invitation', () => {
     );
   });
 
-  it('appoints the new Member to the chosen Group', async () => {
+  it('sends the chosen rank', async () => {
     const user = userEvent.setup();
-    api.invoke.mockResolvedValue({
-      data: { user_id: 'new-1', email: 'ana.pop@osubb.ro' },
-      error: null,
-    });
+    api.invoke.mockResolvedValue(SENT);
     const onInvited = show();
     const dialog = await openAndFill(user);
-    await user.click(within(dialog).getByRole('combobox', { name: /Grup/ }));
-    await user.click(await screen.findByRole('option', { name: /Educație/ }));
+    await user.selectOptions(within(dialog).getByLabelText('Rol'), 'bc');
+    await send(user, dialog);
+    await waitFor(() => expect(onInvited).toHaveBeenCalled());
+    expect(api.invoke).toHaveBeenCalledWith('invite-member', {
+      body: {
+        email: 'ana.pop@osubb.ro',
+        full_name: 'Ana Pop',
+        role: 'bc',
+        group_ids: [],
+      },
+    });
+  });
+
+  it('places the new Member in several Groups, each removable before sending', async () => {
+    const user = userEvent.setup();
+    api.invoke.mockResolvedValue(SENT);
+    const onInvited = show();
+    const dialog = await openAndFill(user);
+    await user.selectOptions(within(dialog).getByLabelText('Rol'), 'moderator');
+    await choose(user, dialog, /Educație/);
+    await choose(user, dialog, /Consiliu/);
+    await choose(user, dialog, /Moderare/);
+    await closePicker(user);
+    const picker = within(dialog).getByRole('combobox', { name: 'Grupuri' });
+    expect(picker).toHaveTextContent('3 grupuri alese');
+    // The OSUBB hint names the default; with Groups chosen it is gone.
+    expect(within(dialog).queryByText(/Fără grup/)).toBeNull();
+    const chips = within(dialog).getByRole('list', { name: 'Grupuri alese' });
+    expect(
+      within(chips)
+        .getAllByRole('button')
+        .map((chip) => chip.getAttribute('aria-label')),
+    ).toEqual([
+      'Scoate grupul Educație',
+      'Scoate grupul Consiliu',
+      'Scoate grupul Moderare',
+    ]);
     await user.click(
-      within(dialog).getByRole('button', { name: 'Trimite invitația' }),
+      within(chips).getByRole('button', { name: 'Scoate grupul Consiliu' }),
     );
+    // Focus moves to the chip now in its place.
+    expect(
+      within(chips).getByRole('button', { name: 'Scoate grupul Moderare' }),
+    ).toHaveFocus();
+    await send(user, dialog);
+    await waitFor(() => expect(onInvited).toHaveBeenCalled());
+    expect(api.invoke).toHaveBeenCalledWith('invite-member', {
+      body: {
+        email: 'ana.pop@osubb.ro',
+        full_name: 'Ana Pop',
+        role: 'moderator',
+        group_ids: [1, 6],
+      },
+    });
+  });
+
+  it('offers only the Groups the chosen rank may join, and drops the rest from the choice', async () => {
+    const user = userEvent.setup();
+    api.invoke.mockResolvedValue(SENT);
+    const onInvited = show();
+    const dialog = await openAndFill(user);
+    const rank = within(dialog).getByLabelText('Rol');
+    await user.click(within(dialog).getByRole('combobox', { name: 'Grupuri' }));
+    expect(
+      within(await screen.findByRole('listbox'))
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['Educație']);
+    await closePicker(user);
+
+    await user.selectOptions(rank, 'bce');
+    await choose(user, dialog, /Consiliu/);
+    await choose(user, dialog, /Educație/);
+    await closePicker(user);
+    await user.selectOptions(rank, 'recrut');
+    // Consiliu wants level 5: it leaves the choice with the rank.
+    expect(
+      within(dialog).queryByRole('button', { name: 'Scoate grupul Consiliu' }),
+    ).toBeNull();
+    await send(user, dialog);
     await waitFor(() => expect(onInvited).toHaveBeenCalled());
     expect(api.invoke).toHaveBeenCalledWith('invite-member', {
       body: {
@@ -296,22 +403,55 @@ describe('the invitation', () => {
     );
   });
 
-  it('clears a Group refusal once another Group is chosen', async () => {
+  it('puts a Group refusal under Grupuri and clears it once the choice changes', async () => {
     const user = userEvent.setup();
     api.invoke.mockResolvedValue(refusal('provision_failed'));
     show();
     const dialog = await openAndFill(user);
-    await user.click(within(dialog).getByRole('combobox', { name: /Grup/ }));
-    await user.click(await screen.findByRole('option', { name: /Educație/ }));
-    await user.click(
-      within(dialog).getByRole('button', { name: 'Trimite invitația' }),
-    );
+    await choose(user, dialog, /Educație/);
+    await closePicker(user);
+    await send(user, dialog);
     const message = copy('invite_group_refused');
     expect(await within(dialog).findByText(message)).toBeVisible();
-    await user.selectOptions(within(dialog).getByLabelText('Rol'), 'bce');
-    await user.click(within(dialog).getByRole('combobox', { name: /Grup/ }));
-    await user.click(await screen.findByRole('option', { name: /Consiliu/ }));
+    expect(
+      within(dialog).getByRole('combobox', { name: 'Grupuri' }),
+    ).toHaveAccessibleDescription(message);
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Scoate grupul Educație' }),
+    );
     expect(within(dialog).queryByText(message)).toBeNull();
+  });
+
+  it('reloads the Groups after a refusal and keeps saying why a Group left the list', async () => {
+    const user = userEvent.setup();
+    api.invoke.mockResolvedValue(refusal('group_archived'));
+    const { client } = show();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const dialog = await openAndFill(user);
+    await choose(user, dialog, /Educație/);
+    await closePicker(user);
+    // Educație was archived after the list loaded; the reload says so.
+    api.groups.mockReturnValue({
+      data: GROUPS.map((row) =>
+        row.id === 1 ? { ...row, status: 'archived' } : row,
+      ),
+    });
+    await send(user, dialog);
+    const message = copy('invite_group_archived');
+    expect(await within(dialog).findByText(message)).toBeVisible();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['groups'] });
+    expect(
+      within(dialog).queryByRole('button', { name: 'Scoate grupul Educație' }),
+    ).toBeNull();
+    expect(within(dialog).getByText(message)).toBeVisible();
+    expect(api.invoke).toHaveBeenLastCalledWith('invite-member', {
+      body: {
+        email: 'ana.pop@osubb.ro',
+        full_name: 'Ana Pop',
+        role: 'recrut',
+        group_ids: [1],
+      },
+    });
   });
 
   it('falls back to its own message when the gateway answers without a body', async () => {
@@ -330,10 +470,12 @@ describe('the invitation', () => {
     expect(await within(dialog).findByText(INVITE_FAILED)).toBeVisible();
   });
 
-  it('has no axe violations when open', async () => {
+  it('has no axe violations when open, with Groups chosen', async () => {
     const user = userEvent.setup();
     show();
     const dialog = await openAndFill(user, { email: '', name: '' });
+    await choose(user, dialog, /Educație/);
+    await closePicker(user);
     const results = await axe.run(dialog, {
       rules: { 'color-contrast': { enabled: false } },
     });

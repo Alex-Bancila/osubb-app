@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { UserPlus } from 'lucide-react';
-import { GroupFilterCombobox } from '../../components/group/GroupFilterCombobox';
+import { GroupMultiCombobox } from '../../components/group/GroupMultiCombobox';
+import { SubHeading } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import {
   Dialog,
@@ -40,10 +41,13 @@ const LEADERSHIP_RANKS: ReadonlySet<string> = new Set(['bc', 'moderator']);
 export type InvitedMember = { userId: string; email: string; name: string };
 
 /**
- * "Invită membru" (#931): one invitation through `invite-member` — address,
- * full name, rank and an optional first Group. The function sends the magic
- * link and provisions the Member in one request; a refusal leaves no account.
- * Mounted only behind `provisionMembers`, the function's own level-6 gate.
+ * "Invită membru" (#931, #949): one invitation through `invite-member`. The
+ * address and full name are required; the rank (Recrut unless chosen) and
+ * the Groups (none: OSUBB only, by Automatic Membership) are optional. The
+ * function asks every chosen Group before it sends the magic link, then
+ * places the Member in all of them or in none. Group Roles are appointed
+ * from the Group's own page, never here. Mounted only behind
+ * `provisionMembers`, the function's own level-6 gate.
  */
 export function InviteMemberDialog({
   onInvited,
@@ -54,15 +58,10 @@ export function InviteMemberDialog({
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [rank, setRank] = useState(DEFAULT_RANK);
-  const [group, setGroup] = useState<AdminGroup | null>(null);
+  const [chosen, setChosen] = useState<AdminGroup[]>([]);
   const roles = useRoles();
   const groups = useAdminGroups();
   const invite = useInviteMember();
-  const form = useFormValidation(
-    memberInviteSchema,
-    { email, fullName, group: group?.id ?? null },
-    inviteFieldForReason,
-  );
 
   const rankOptions = useMemo(
     () => inviteRankOptions(roles.data),
@@ -77,21 +76,31 @@ export function InviteMemberDialog({
     () => new Map((groups.data ?? []).map((row) => [row.id, row])),
     [groups.data],
   );
+  // Only what the list still offers stays chosen: a Group the rank no longer
+  // reaches, or one archived since (the list reloads after a refusal), drops
+  // out of the choice and out of the payload.
+  const selected = useMemo(() => {
+    const offered = new Set(groupOptions.map((row) => row.id));
+    return chosen.filter((row) => offered.has(row.id));
+  }, [chosen, groupOptions]);
+  // The refusal is judged against the CHOICE, not what the reloaded list
+  // still offers: the Group that dropped out keeps its message on screen,
+  // saying why it went, until the choice itself changes. One array per
+  // choice, since a message stays while its value is the same object.
+  const chosenIds = useMemo(() => chosen.map((row) => row.id), [chosen]);
+  const form = useFormValidation(
+    memberInviteSchema,
+    { email, fullName, groups: chosenIds },
+    inviteFieldForReason,
+  );
   const pending = invite.isPending;
 
   function reset() {
     setEmail('');
     setFullName('');
     setRank(DEFAULT_RANK);
-    setGroup(null);
+    setChosen([]);
     form.reset();
-  }
-
-  function chooseRank(next: string) {
-    setRank(next);
-    // A Group closed to the new rank would only be refused: drop it.
-    const level = roles.data?.get(next)?.level ?? 0;
-    if (group && group.min_level > level) setGroup(null);
   }
 
   async function submit(event: FormEvent) {
@@ -104,7 +113,7 @@ export function InviteMemberDialog({
         email: values.email,
         fullName: values.fullName,
         role: rank,
-        groupId: group?.id ?? null,
+        groupIds: selected.map((row) => row.id),
       });
       setOpen(false);
       onInvited({ ...sent, name: values.fullName });
@@ -115,6 +124,13 @@ export function InviteMemberDialog({
   }
 
   const rankName = roles.data?.get(rank)?.name;
+  const groupsDescribedBy =
+    [
+      selected.length === 0 ? 'invite-groups-hint' : null,
+      form.error('groups') ? form.errorId('groups') : null,
+    ]
+      .filter(Boolean)
+      .join(' ') || undefined;
 
   return (
     <Dialog
@@ -127,6 +143,7 @@ export function InviteMemberDialog({
     >
       <Button
         type="button"
+        className="w-full"
         onClick={() => {
           reset();
           setOpen(true);
@@ -135,7 +152,7 @@ export function InviteMemberDialog({
         <UserPlus aria-hidden="true" />
         Invită membru
       </Button>
-      <DialogContent>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-cols-[minmax(0,1fr)] overflow-y-auto">
         <form onSubmit={submit} noValidate className="grid gap-4">
           <DialogHeader>
             <DialogTitle>Invită membru</DialogTitle>
@@ -179,58 +196,71 @@ export function InviteMemberDialog({
             <FieldError {...form.errorProps('fullName')} />
           </div>
 
-          <div className="grid gap-1.5">
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium">Rol</span>
-              <NativeSelect
-                value={rank}
-                disabled={pending || rankOptions.length === 0}
-                aria-describedby={
-                  LEADERSHIP_RANKS.has(rank) ? 'invite-rank-hint' : undefined
-                }
-                onChange={(event) => chooseRank(event.target.value)}
-              >
-                {rankOptions.length === 0 && (
-                  <NativeSelectOption value={DEFAULT_RANK}>
-                    Recrut
-                  </NativeSelectOption>
-                )}
-                {rankOptions.map(([id, role]) => (
-                  <NativeSelectOption key={id} value={id}>
-                    {role.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </label>
-            {LEADERSHIP_RANKS.has(rank) && (
-              <p
-                id="invite-rank-hint"
-                className="text-sm text-muted-foreground"
-              >
-                Rolul {rankName ?? rank} deschide Administrare: poate invita
-                membri și schimba rolul oricui.
-              </p>
-            )}
-          </div>
+          <fieldset className="m-0 grid min-w-0 gap-4 border-0 border-t border-border p-0 pt-4">
+            <legend className="float-left w-full p-0">
+              <SubHeading as="p">Opțional</SubHeading>
+            </legend>
 
-          <div className="grid gap-1.5" {...form.slot('group')}>
-            <span id="invite-member-group" className="text-sm font-medium">
-              Grup{' '}
-              <span className="font-normal text-muted-foreground">
-                (opțional)
+            <div className="grid gap-1.5">
+              <label className="grid gap-1.5">
+                <span className="text-sm font-medium">Rol</span>
+                <NativeSelect
+                  value={rank}
+                  disabled={pending || rankOptions.length === 0}
+                  aria-describedby={
+                    LEADERSHIP_RANKS.has(rank) ? 'invite-rank-hint' : undefined
+                  }
+                  onChange={(event) => setRank(event.target.value)}
+                >
+                  {rankOptions.length === 0 && (
+                    <NativeSelectOption value={DEFAULT_RANK}>
+                      Recrut
+                    </NativeSelectOption>
+                  )}
+                  {rankOptions.map(([id, role]) => (
+                    <NativeSelectOption key={id} value={id}>
+                      {role.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </label>
+              {LEADERSHIP_RANKS.has(rank) && (
+                <p
+                  id="invite-rank-hint"
+                  className="text-sm text-muted-foreground"
+                >
+                  Rolul {rankName ?? rank} deschide Administrare: poate invita
+                  membri și schimba rolul oricui.
+                </p>
+              )}
+            </div>
+
+            <div className="grid gap-1.5" {...form.slot('groups')}>
+              <span id="invite-member-groups" className="text-sm font-medium">
+                Grupuri
               </span>
-            </span>
-            <GroupFilterCombobox
-              ariaLabelledBy="invite-member-group"
-              groups={groupOptions}
-              groupsById={groupsById}
-              value={group}
-              onValueChange={setGroup}
-              placeholder="Fără grup deocamdată"
-              disabled={pending}
-            />
-            <FieldError {...form.errorProps('group')} />
-          </div>
+              <GroupMultiCombobox
+                ariaLabelledBy="invite-member-groups"
+                ariaDescribedBy={groupsDescribedBy}
+                groups={groupOptions}
+                groupsById={groupsById}
+                value={selected}
+                onValueChange={setChosen}
+                placeholder="Niciun grup"
+                disabled={pending}
+              />
+              {selected.length === 0 && (
+                <p
+                  id="invite-groups-hint"
+                  className="text-sm text-muted-foreground"
+                >
+                  Fără grup: membrul intră doar în OSUBB și își alege
+                  departamentul mai târziu.
+                </p>
+              )}
+              <FieldError {...form.errorProps('groups')} />
+            </div>
+          </fieldset>
 
           <FieldError>{form.formError}</FieldError>
 

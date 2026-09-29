@@ -15,8 +15,12 @@ vi.mock('../../queries/groups-admin', async (original) => ({
   ...(await original<object>()),
   useAppointableMembers: api.members,
 }));
-vi.mock('./CsvImportPanel', () => ({
-  CsvImportPanel: () => <h2>Import CSV</h2>,
+vi.mock('./CsvImportDialog', () => ({
+  CsvImportDialog: () => (
+    <button type="button" className="w-full">
+      Import CSV
+    </button>
+  ),
 }));
 vi.mock('./InviteMemberDialog', () => ({
   InviteMemberDialog: ({
@@ -171,16 +175,28 @@ it('finds a Member by name, blind to case and diacritics, and says when none mat
   expect(screen.getByText('Niciun membru găsit.')).toBeVisible();
 });
 
-it('shows the CSV import only to whoever may provision Members', () => {
+/* #949: the two ways a Member comes in sit together, as a matched pair, in
+   the Membri header — not the CSV import in a panel of its own. */
+it('pairs "Invită membru" with "Import CSV" in the Membri header, for whoever may provision', () => {
   const view = show();
-  expect(screen.getByRole('heading', { name: 'Import CSV' })).toBeVisible();
+  const panel = screen.getByRole('region', { name: 'Membri' });
+  const pair = within(panel).getByRole('group', { name: 'Adaugă membri' });
+  expect(pair).toHaveClass('grid', 'grid-cols-2');
+  expect(
+    within(pair)
+      .getAllByRole('button')
+      .map((button) => button.textContent),
+  ).toEqual(['Invită membru', 'Import CSV']);
+  expect(pair.closest('[data-slot=section-header]')).not.toBeNull();
+  expect(screen.getAllByRole('region')).toHaveLength(1);
   view.unmount();
 
   api.capabilities.mockReturnValue({
     data: { manageRoles: true, provisionMembers: false },
   });
   show();
-  expect(screen.queryByRole('heading', { name: 'Import CSV' })).toBeNull();
+  expect(screen.queryByRole('group', { name: 'Adaugă membri' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Import CSV' })).toBeNull();
 });
 
 /* Audit D-13: Rol sorts by rank, not alphabetically (BC, BCE, Moderator…). */

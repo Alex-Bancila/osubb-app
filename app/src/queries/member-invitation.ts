@@ -124,6 +124,12 @@ export const INVITE_REASON: Readonly<Record<string, string>> = {
   member_manage_forbidden: 'invite_forbidden',
   already_exists: 'invite_email_taken',
   invalid_reference: 'invite_group_unavailable',
+  // #949: a Group the Appointment core would refuse, named before any mail
+  // leaves. The shared copy speaks of one Group; here several may be chosen.
+  group_archived: 'invite_group_archived',
+  group_member_below_min_level: 'invite_group_below_rank',
+  automatic_group_has_no_roster_members: 'invite_group_automatic',
+  invalid_role: 'invite_role_unavailable',
   provision_failed: 'invite_group_refused',
   invite_failed: 'invite_failed',
   permission_check_failed: 'invite_failed',
@@ -139,14 +145,14 @@ export type InviteMemberInput = {
   email: string;
   fullName: string;
   role: string;
-  /** The one Group the new Member is appointed to, if any. */
-  groupId: number | null;
+  /** The Groups the new Member is appointed to; none means OSUBB only. */
+  groupIds: readonly number[];
 };
 
 /**
- * "Invită membru" (#931): one `invite-member` call. The function sends the
- * magic link and provisions the Profile (and the Group's Appointment) in the
- * same request, and rolls the account back when provisioning is refused.
+ * "Invită membru" (#931, #949): one `invite-member` call. The function asks
+ * every chosen Group before it sends the magic link, then provisions the
+ * Profile and every Appointment in one transaction: all of them or none.
  */
 export async function inviteMember(
   input: InviteMemberInput,
@@ -156,7 +162,7 @@ export async function inviteMember(
       email: input.email,
       full_name: input.fullName,
       role: input.role,
-      ...(input.groupId === null ? {} : { group_ids: [input.groupId] }),
+      group_ids: [...input.groupIds],
     },
   });
   if (result.error)
@@ -172,6 +178,9 @@ export function useInviteMember() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: inviteMember,
+    // A refused Group was archived, raised or made Automatic since the list
+    // loaded: reload it, so the picker drops what no longer fits.
+    onError: () => client.invalidateQueries({ queryKey: keys.groups.all }),
     onSuccess: async () => {
       // The new Member joins the Membri list (`groups.appointable`), the
       // directory, and — with a Group — that Group's roster and counts.

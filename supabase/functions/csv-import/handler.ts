@@ -1,6 +1,7 @@
-import type {
-  InviteMemberInput,
-  InviteMemberResult,
+import {
+  GROUP_REFUSAL_MESSAGES,
+  type InviteMemberInput,
+  type InviteMemberResult,
 } from "../_shared/member-invite.ts";
 import {
   corsHeaders,
@@ -244,6 +245,23 @@ export async function handleCsvImport(
         field: "row",
         code: "provision_failed",
         message: "Crearea profilului a eșuat.",
+      });
+    } else if (result.kind === "group_refused") {
+      errors.push({
+        row: row.row,
+        email: row.email,
+        field: "row",
+        code: result.reason,
+        message: GROUP_REFUSAL_MESSAGES[result.reason],
+      });
+    } else if (result.kind === "invalid_role") {
+      // Unreachable while every row is a recrut; answered, never dropped.
+      errors.push({
+        row: row.row,
+        email: row.email,
+        field: "row",
+        code: "invalid_role",
+        message: "Rol inexistent.",
       });
     } else if (result.kind === "invalid_reference") {
       errors.push({
