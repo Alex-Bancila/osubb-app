@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(41);
+select plan(39);
 
 -- ==================== Every table has RLS enabled ====================
 select is(
@@ -316,10 +316,14 @@ select is((select count(*) from points_ledger),  0::bigint, 'claimless: points_l
 select is((select count(*) from privacy_notice_acknowledgements), 0::bigint,
   'claimless: Privacy Acknowledgements hidden');
 
--- Views are security_invoker, so they inherit the tables' answers.
-select is((select count(*) from member_points),  0::bigint, 'claimless: member_points empty');
-select is((select count(*) from leaderboard),    0::bigint, 'claimless: leaderboard empty');
-select is((select count(*) from dept_cup),       0::bigint, 'claimless: dept_cup empty');
+-- #936: member_points and leaderboard (views) are dropped, along with the
+-- security_invoker read this comment used to describe; their surviving
+-- successors below are BCE+-gated functions instead, each with its own
+-- claims check that gives the same zero rows -- no drop-in for member_points
+-- itself (leadership_leaderboard and department_cup already cover the same
+-- gate on two other surfaces).
+select is((select count(*) from public.leadership_leaderboard()), 0::bigint, 'claimless: leadership_leaderboard empty');
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 0::bigint, 'claimless: department_cup empty');
 
 -- …and writes nothing either. #345 retired the two legacy tables these
 -- attempts used to target; their successors are commands, so the attempt is
@@ -346,18 +350,20 @@ select ok(not auth_is_member(),
 select is(pg_temp.tables_visible_to_claimless(), '{}'::text[],
   'real claimless user: no public table is readable, including owned rows');
 
--- These views are protected independently of their source tables: two run
--- with owner rights, while the others inherit RLS through security_invoker.
+-- These views are protected independently of their source tables:
+-- profiles_contact runs with owner rights, profiles_directory inherits RLS
+-- through security_invoker. #936: member_points and leaderboard (the other
+-- owner-rights and security_invoker views this section used to cover) are
+-- dropped; leadership_leaderboard and department_cup below hold the same
+-- claims check on the surviving read surface.
 select is((select count(*) from profiles_directory), 0::bigint,
   'real claimless user: profiles_directory is empty');
 select is((select count(*) from profiles_contact), 0::bigint,
   'real claimless user: profiles_contact is empty');
-select is((select count(*) from member_points), 0::bigint,
-  'real claimless user: member_points is empty');
-select is((select count(*) from leaderboard), 0::bigint,
-  'real claimless user: leaderboard is empty');
-select is((select count(*) from dept_cup), 0::bigint,
-  'real claimless user: dept_cup is empty');
+select is((select count(*) from public.leadership_leaderboard()), 0::bigint,
+  'real claimless user: leadership_leaderboard is empty');
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 0::bigint,
+  'real claimless user: department_cup is empty');
 
 select throws_ok(
   $$ select public.create_completed_work_request('real-uid-sneaky', pg_temp.dept_group('edu')) $$,

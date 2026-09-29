@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(19);
+select plan(17);
 
 
 -- Remove the demo members and every dependent row inside this rolled-back
@@ -53,29 +53,23 @@ select pg_temp.test_credit_task(task.id, participant.member_id,
   ) as participant (title, member_id)
   join public.tasks task on task.title = participant.title;
 
-select ok(
-  exists (
-    select 1 from pg_class
-     where relname = 'dept_cup'
-       and 'security_invoker=on' = any (reloptions)
-  ),
-  'dept_cup remains a security-invoker view');
-
+-- #936: the dept_cup view is dropped; the same rows come from
+-- public.department_cup(null, null, null) (unbounded Campaign and date range).
 select pg_temp.test_login_leadership('c1000000-0000-0000-0000-000000000001');
 
-select is((select count(*) from public.dept_cup), 5::bigint,
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 5::bigint,
   'BCE sees all five canonical departments');
-select is((select points from public.dept_cup where group_id = pg_temp.dept_group('edu')), 0,
+select is((select points from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) where group_id = pg_temp.dept_group('edu')), 0,
   'current Department membership does not redirect another Origin''s Task Points');
-select is((select members from public.dept_cup where group_id = pg_temp.dept_group('edu')), 1::bigint,
+select is((select members from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) where group_id = pg_temp.dept_group('edu')), 1::bigint,
   'the cup counts the active member');
-select is((select points from public.dept_cup where group_id = pg_temp.dept_group('pr')), 0,
+select is((select points from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) where group_id = pg_temp.dept_group('pr')), 0,
   'a Department that owns no Task shows zero, regardless of its members'' status');
-select is((select members from public.dept_cup where group_id = pg_temp.dept_group('pr')), 0::bigint,
+select is((select members from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) where group_id = pg_temp.dept_group('pr')), 0::bigint,
   'an inactive member is not counted');
-select is((select points from public.dept_cup where group_id = pg_temp.dept_group('hr')), 15,
+select is((select points from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) where group_id = pg_temp.dept_group('hr')), 15,
   'Task Points follow the Department Task Origin regardless of Executor membership status');
-select is((select members from public.dept_cup where group_id = pg_temp.dept_group('hr')), 0::bigint,
+select is((select members from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) where group_id = pg_temp.dept_group('hr')), 0::bigint,
   'an alumni member is not counted');
 -- ADR-0007 keeps anyone with completed Task history eligible regardless of
 -- profile status: the inactive and alumni Executors' own credits are exactly
@@ -89,11 +83,11 @@ select is(
       and task.group_id = pg_temp.dept_group('hr')),
   10,
   'the inactive and alumni Executors'' own Task credits (5 each) are what carry hr to 15, not merely the active member''s');
-select is((select points from public.dept_cup where group_id = pg_temp.dept_group('fin')), 0,
+select is((select points from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) where group_id = pg_temp.dept_group('fin')), 0,
   'a department without any member remains visible with zero points');
 
 select results_eq(
-  $$ select group_id from public.dept_cup $$,
+  $$ select group_id from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) order by points desc, name asc $$,
   $$ values (pg_temp.dept_group('hr')), (pg_temp.dept_group('edu')), (pg_temp.dept_group('fin')),
             (pg_temp.dept_group('pr')), (pg_temp.dept_group('youth')) $$,
   'standings sort by points descending and then by department name');
@@ -102,15 +96,14 @@ reset role;
 
 select pg_temp.test_clear_jwt();
 set local role authenticated;
-select is((select count(*) from public.dept_cup), 0::bigint,
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 0::bigint,
   'a claimless authenticated session still sees no standings');
 reset role;
 
-select results_eq($$select column_name::text collate "C" from information_schema.columns where table_schema='public' and table_name='dept_cup' order by ordinal_position$$,
-  $$select unnest(array['group_id','name','points','members']::text[]) collate "C"$$,
-  'the Cup is keyed by Group alone -- the compatibility dept_id column went with the bridge (#579)');
+-- #936: the dept_id-column check (view had no compatibility column) tested the
+-- dropped view's schema and has no equivalent over a function; not ported.
 
--- #677: the view is the unbounded read; the Work Filter's award date range
+-- #677: department_cup(null, null, null) is the unbounded read; the Work Filter's award date range
 -- narrows department_cup only. One more hr award (2 x 1 = 2), dated
 -- 2001-03-10 10:00Z by its Evaluation, far from the three awarded at now().
 insert into public.tasks (title, difficulty, group_id) values ('cup-dated', 2, pg_temp.dept_group('hr'));
@@ -122,8 +115,8 @@ select pg_temp.test_credit_task(task.id, 'c1000000-0000-0000-0000-000000000001',
   from public.tasks task where task.title = 'cup-dated';
 
 select pg_temp.test_login_leadership('c1000000-0000-0000-0000-000000000001');
-select is((select points from public.dept_cup where group_id = pg_temp.dept_group('hr')), 17,
-  'the dept_cup view carries every award whenever it was made (15 + 2) -- it takes no range');
+select is((select points from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) where group_id = pg_temp.dept_group('hr')), 17,
+  'department_cup(null, null, null) carries every award whenever it was made (15 + 2) -- unbounded takes no range');
 select is((select points from public.department_cup(null, '2001-03-10 10:00:00+00', '2001-03-11 10:00:00+00')
             where group_id = pg_temp.dept_group('hr')), 2,
   'department_cup over [T1, T1 + 1 day) holds only the award evaluated at T1');
@@ -133,20 +126,20 @@ select is((select points from public.department_cup(null, '2001-03-11 10:00:00+0
 reset role;
 
 -- #861 (Audit D-10): an archived Group has left the Cup, even with points
--- and the competes_in_cup flag still set -- in the view and in every range
+-- and the competes_in_cup flag still set -- unbounded and in every range
 -- and Campaign of department_cup.
 update public.groups set status = 'archived' where id = pg_temp.dept_group('hr');
 select pg_temp.test_login_leadership('c1000000-0000-0000-0000-000000000001');
 select is(
-  (select count(*) from public.dept_cup where group_id = pg_temp.dept_group('hr')), 0::bigint,
-  '#861: an archived competing Group is absent from the dept_cup view despite its 17 points');
+  (select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) where group_id = pg_temp.dept_group('hr')), 0::bigint,
+  '#861: an archived competing Group is absent from department_cup(null, null, null) despite its 17 points');
 select is(
   (select count(*) from public.department_cup(null, '2001-03-10 10:00:00+00', '2001-03-11 10:00:00+00')
     where group_id = pg_temp.dept_group('hr'))
   + (select count(*) from public.department_cup(-861) where group_id = pg_temp.dept_group('hr')),
   0::bigint,
   '#861: an archived competing Group is absent from department_cup for a date range and for a Campaign');
-select is((select count(*) from public.dept_cup), 4::bigint,
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 4::bigint,
   '#861: the four active Departments still compete');
 reset role;
 select * from finish();

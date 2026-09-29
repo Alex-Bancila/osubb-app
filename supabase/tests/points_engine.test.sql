@@ -22,7 +22,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(35);
+select plan(29);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -35,7 +35,7 @@ insert into profiles (id, full_name, email, role) values
   ('bbbbbbbb-0000-0000-0000-000000000002', 'Bogdan Test', 'bogdan.points@test.local', 'voluntar'),
   ('cccccccc-0000-0000-0000-000000000003', 'Carmen Test', 'carmen.points@test.local', 'vot');
 
--- Own throwaway department so dept_cup assertions stay exact even after
+-- Own throwaway department so department_cup assertions stay exact even after
 -- Epic 5.2 seeds demo members into the real departments.
 insert into pg_temp.fixture_departments (id, name, short, color, kind)
   values ('tst', 'Test Dept', 'TST', '#123456', 'department');
@@ -52,8 +52,8 @@ select is(rating_mult(5),  3, 'rating 5 → multiplier 3');
 -- ==================== The retired engine is gone ====================
 select hasnt_column('public', 'tasks', 'points',
   'tasks no longer carries a generated points column — points live on the Evaluation');
-select hasnt_column('public', 'tasks_with_overdue', 'points',
-  'tasks_with_overdue was recreated when tasks.points was dropped, so it carries no stale column either');
+-- #936: tasks_with_overdue is dropped outright; public.tasks is the only
+-- Task read surface and never carried this column either.
 
 select ok(
   (select count(*) from pg_trigger trigger
@@ -114,9 +114,11 @@ select is(
   1::bigint,
   'only the evaluated Executor is credited — one Evaluation, one ledger row');
 
+-- #936: member_points is dropped; as postgres (no RLS) a direct ledger sum
+-- is the same total the owner-rights view computed.
 select is(
-  (select points from member_points where member_id = 'aaaaaaaa-0000-0000-0000-000000000001'),
-  6, 'member_points sums the ledger');
+  (select coalesce(sum(delta), 0)::int from points_ledger where member_id = 'aaaaaaaa-0000-0000-0000-000000000001'),
+  6, 'the ledger sums to the Evaluation credit (#936, was member_points)');
 
 -- Re-rating the Task afterwards is exactly the edit that used to rewrite the
 -- credit in place. It must now leave the recorded history alone.
@@ -147,8 +149,8 @@ select lives_ok(
   'a task_reversal row may stand beside the task row it reverses');
 
 select is(
-  (select points from member_points where member_id = 'aaaaaaaa-0000-0000-0000-000000000001'),
-  0, 'the reversal nets the credit back to zero without deleting it');
+  (select coalesce(sum(delta), 0)::int from points_ledger where member_id = 'aaaaaaaa-0000-0000-0000-000000000001'),
+  0, 'the reversal nets the credit back to zero without deleting it (#936, was member_points)');
 
 select is(
   (select count(*) from points_ledger l join tasks t on t.id = l.task_id
@@ -216,8 +218,8 @@ select is(
   -2, 'rating 1 subtracts points (2 × -1)');
 
 select is(
-  (select points from member_points where member_id = 'aaaaaaaa-0000-0000-0000-000000000001'),
-  -2, 'a penalty lowers the member total (0 - 2)');
+  (select coalesce(sum(delta), 0)::int from points_ledger where member_id = 'aaaaaaaa-0000-0000-0000-000000000001'),
+  -2, 'a penalty lowers the member total (0 - 2) (#936, was member_points)');
 
 -- ==================== A rating of 2 still records a zero-point credit ====================
 insert into tasks (title, difficulty, rating, status, completed_at, group_id)
@@ -231,34 +233,33 @@ select is(
   0, 'rating 2 records a zero-point credit (the grade is visible, no points)');
 
 select is(
-  (select points from member_points where member_id = 'bbbbbbbb-0000-0000-0000-000000000002'),
-  0, 'a zero-point credit does not change the total');
+  (select coalesce(sum(delta), 0)::int from points_ledger where member_id = 'bbbbbbbb-0000-0000-0000-000000000002'),
+  0, 'a zero-point credit does not change the total (#936, was member_points)');
 
 -- ==================== Sanctions reduce totals ====================
 insert into points_ledger (member_id, delta, reason, note)
   values ('aaaaaaaa-0000-0000-0000-000000000001', -5, 'sanction', 'test sanction');
 
 select is(
-  (select points from member_points where member_id = 'aaaaaaaa-0000-0000-0000-000000000001'),
-  -7, 'a sanction reduces the member total (-2 - 5)');
+  (select coalesce(sum(delta), 0)::int from points_ledger where member_id = 'aaaaaaaa-0000-0000-0000-000000000001'),
+  -7, 'a sanction reduces the member total (-2 - 5) (#936, was member_points)');
+
+-- #936: leaderboard is dropped. leadership_leaderboard is not a substitute
+-- for this section's ranking check: it sums only 'task'/'task_reversal'
+-- ledger rows (never the 'sanction' row just inserted above), and its BCE+
+-- gate has no trusted-server-role bypass, so it would see no rows at all
+-- under this file's postgres session (no test_login call is ever made here).
+-- The ranking behaviour itself (rank() over points desc, shared ranks on
+-- ties) is proven live in leadership_leaderboard.test.sql instead.
 
 -- ==================== Views ====================
 select is(
-  (select points from leaderboard where member_id = 'aaaaaaaa-0000-0000-0000-000000000001'),
-  -7, 'leaderboard reflects the ledger sums');
-
-select ok(
-  (select rank from leaderboard where member_id = 'bbbbbbbb-0000-0000-0000-000000000002')
-  < (select rank from leaderboard where member_id = 'aaaaaaaa-0000-0000-0000-000000000001'),
-  'higher total ranks higher (Bogdan 0 over Ana -7)');
+  (select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) where group_id = pg_temp.dept_group('tst')),
+  0::bigint, 'the database owner sees no department_cup row for tst either -- this suite''s own extra department competes under a real BCE+ session (department_cup_task_origins.test.sql), the owner just never sees any row at all (next assertion) (#936, was dept_cup)');
 
 select is(
-  (select count(*) from dept_cup where group_id = pg_temp.dept_group('tst')),
-  0::bigint, 'the database owner sees no dept_cup row for tst either -- this suite''s own extra department competes under a real BCE+ session (department_cup_task_origins.test.sql), the owner just never sees any row at all (next assertion)');
-
-select is(
-  (select count(*) from dept_cup),
-  0::bigint, 'the database owner does not bypass the authenticated BCE+ Department Cup gate');
+  (select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)),
+  0::bigint, 'the database owner does not bypass the authenticated BCE+ Department Cup gate (#936, was dept_cup)');
 
 -- ==================== Security posture ====================
 select ok(
@@ -266,32 +267,11 @@ select ok(
     where relname = 'points_ledger' and relnamespace = 'public'::regnamespace),
   'RLS is enabled on points_ledger');
 
--- The two views a member reads directly run as the caller, so the policies on
--- profiles and member_departments still decide who gets rows at all.
-select ok(
-  exists (select 1 from pg_class
-           where relname = 'leaderboard'
-             and relnamespace = 'public'::regnamespace
-             and 'security_invoker=on' = any (reloptions)),
-  'leaderboard runs with security_invoker (caller''s RLS applies)');
-select ok(
-  exists (select 1 from pg_class
-           where relname = 'dept_cup'
-             and relnamespace = 'public'::regnamespace
-             and 'security_invoker=on' = any (reloptions)),
-  'dept_cup runs with security_invoker (caller''s RLS applies)');
-
--- `member_points` is the deliberate exception (1.4b): owner rights, so a total
--- is summed over the whole ledger rather than over the rows the caller happens
--- to be allowed to read. Totals are public inside the org; the ledger behind
--- them is not. Its own auth_is_member() clause is what keeps it gated, and
--- points_visibility.test.sql is where that behaviour is proven.
-select ok(
-  not exists (select 1 from pg_class
-               where relname = 'member_points'
-                 and relnamespace = 'public'::regnamespace
-                 and 'security_invoker=on' = any (reloptions)),
-  'member_points deliberately runs with owner rights (1.4b)');
+-- #936: leaderboard, dept_cup and member_points are dropped, along with the
+-- reloptions checks that pinned their security posture as views. The
+-- function-level equivalent (public.department_cup's `security invoker`
+-- against private.department_cup_rows's `security definer`) is pinned in
+-- department_cup_task_origins.test.sql instead.
 
 select * from finish();
 rollback;

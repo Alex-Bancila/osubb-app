@@ -6,30 +6,13 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(26);
+select plan(15);
 
-
-select ok(
-  not exists (
-    select 1 from pg_class
-     where relname = 'member_points'
-       and 'security_invoker=on' = any (reloptions)
-  ),
-  'member_points keeps owner rights so it can aggregate the protected ledger');
-select ok(
-  exists (
-    select 1 from pg_class
-     where relname = 'leaderboard'
-       and 'security_invoker=on' = any (reloptions)
-  ),
-  'leaderboard remains a security-invoker view');
-select ok(
-  exists (
-    select 1 from pg_class
-     where relname = 'dept_cup'
-       and 'security_invoker=on' = any (reloptions)
-  ),
-  'dept_cup remains a security-invoker view');
+-- #936: member_points, leaderboard and dept_cup are dropped views; their own
+-- reloptions pins go with them. The surviving function-level split
+-- (public.department_cup security invoker over private.department_cup_rows
+-- security definer, same for leadership_leaderboard) is pinned in
+-- department_cup_task_origins.test.sql and leadership_leaderboard.test.sql.
 
 truncate public.profiles cascade;
 -- TRUNCATE also empties the Group mirror; restore every reference competitor,
@@ -88,11 +71,12 @@ select pg_temp.test_login('f1000000-0000-0000-0000-0000000000f1', jsonb_build_ob
     'dept_ids', '["edu"]'::jsonb,
     'team_ids', '[]'::jsonb
   ));
-select is((select count(*) from public.member_points), 0::bigint,
-  'a voluntar reads no global member totals');
-select is((select count(*) from public.leaderboard), 0::bigint,
+-- #936: member_points dropped, no ported equivalent -- leadership_leaderboard
+-- and department_cup below already pin this exact BCE+ gate on two other
+-- surfaces.
+select is((select count(*) from public.leadership_leaderboard()), 0::bigint,
   'a voluntar reads no leaderboard rows');
-select is((select count(*) from public.dept_cup), 0::bigint,
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 0::bigint,
   'a voluntar reads no Department Cup rows');
 select is(
   (select count(*) from public.points_ledger
@@ -111,11 +95,9 @@ select pg_temp.test_login('f2000000-0000-0000-0000-0000000000f2', jsonb_build_ob
     'dept_ids', '["edu"]'::jsonb,
     'team_ids', '[]'::jsonb
   ));
-select is((select count(*) from public.member_points), 0::bigint,
-  'a Responsabil reads no global member totals');
-select is((select count(*) from public.leaderboard), 0::bigint,
+select is((select count(*) from public.leadership_leaderboard()), 0::bigint,
   'a Responsabil reads no leaderboard rows');
-select is((select count(*) from public.dept_cup), 0::bigint,
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 0::bigint,
   'a Responsabil reads no Department Cup rows');
 reset role;
 
@@ -126,11 +108,9 @@ select pg_temp.test_login('f3000000-0000-0000-0000-0000000000f3', jsonb_build_ob
     'dept_ids', '["pr"]'::jsonb,
     'team_ids', '[]'::jsonb
   ));
-select is((select count(*) from public.member_points), 5::bigint,
-  'BCE reads every member total');
-select is((select count(*) from public.leaderboard), 5::bigint,
+select is((select count(*) from public.leadership_leaderboard()), 5::bigint,
   'BCE reads the global leaderboard');
-select is((select count(*) from public.dept_cup), 5::bigint,
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 5::bigint,
   'BCE reads all five Department Cup rows');
 reset role;
 
@@ -140,11 +120,9 @@ select pg_temp.test_login('f4000000-0000-0000-0000-0000000000f4', jsonb_build_ob
     'dept_ids', '["fin"]'::jsonb,
     'team_ids', '[]'::jsonb
   ));
-select is((select count(*) from public.member_points), 5::bigint,
-  'BC reads every member total');
-select is((select count(*) from public.leaderboard), 5::bigint,
+select is((select count(*) from public.leadership_leaderboard()), 5::bigint,
   'BC reads the global leaderboard');
-select is((select count(*) from public.dept_cup), 5::bigint,
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 5::bigint,
   'BC reads all five Department Cup rows');
 select is(
   (select count(*) from public.points_ledger
@@ -159,11 +137,9 @@ select pg_temp.test_login('f5000000-0000-0000-0000-0000000000f5', jsonb_build_ob
     'dept_ids', '["hr"]'::jsonb,
     'team_ids', '[]'::jsonb
   ));
-select is((select count(*) from public.member_points), 5::bigint,
-  'Moderator reads every member total');
-select is((select count(*) from public.leaderboard), 5::bigint,
+select is((select count(*) from public.leadership_leaderboard()), 5::bigint,
   'Moderator reads the global leaderboard');
-select is((select count(*) from public.dept_cup), 5::bigint,
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 5::bigint,
   'Moderator reads all five Department Cup rows');
 reset role;
 
@@ -178,21 +154,17 @@ select set_config(
   true
 );
 set local role authenticated;
-select is((select count(*) from public.member_points), 0::bigint,
-  'a claimless real user reads no member totals');
-select is((select count(*) from public.leaderboard), 0::bigint,
+select is((select count(*) from public.leadership_leaderboard()), 0::bigint,
   'a claimless real user reads no leaderboard rows');
-select is((select count(*) from public.dept_cup), 0::bigint,
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 0::bigint,
   'a claimless real user reads no Department Cup rows');
 reset role;
 
--- Trusted server-side roles still support promotion and maintenance jobs.
-select is((select count(*) from public.member_points), 5::bigint,
-  'the database owner can still aggregate member totals');
-select is((select points from public.member_points
-           where member_id = 'f5000000-0000-0000-0000-0000000000f5'),
-           5,
-  'the owner-rights aggregate preserves the real total');
+-- #936: member_points is dropped along with the owner-rights bypass it gave
+-- postgres/service_role. Neither department_cup nor leadership_leaderboard
+-- has a trusted-role escape hatch -- as postgres, both now see no rows at
+-- all (pinned in points_engine.test.sql and department_cup_task_origins.test.sql),
+-- so there is nothing left here for the database owner to still aggregate.
 
 select * from finish();
 rollback;

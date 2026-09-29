@@ -24,7 +24,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(78);
+select plan(76);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
@@ -683,22 +683,12 @@ select is(
   'every task_reversal row undoes exactly the reversed Evaluation it names');
 
 -- ==================== The four points views still agree (#317 AC) ====================
--- member_points is the base sum; leaderboard and dept_cup are derived from
--- it, and my_points is one member's own row of it. Together the next two
--- assertions are the #296 reconciliation: for every member,
--- sum(points_ledger.delta) is what member_points holds and what leaderboard
--- shows.
-select is(
-  (select count(*) from member_points mp
-     where mp.points is distinct from coalesce(
-       (select sum(l.delta)::int from points_ledger l where l.member_id = mp.member_id), 0)),
-  0::bigint, 'member_points equals the raw ledger sum for every member');
-
-select is(
-  (select count(*) from leaderboard lb
-     join member_points mp on mp.member_id = lb.member_id
-    where lb.points is distinct from mp.points),
-  0::bigint, 'leaderboard reports member_points unchanged');
+-- #936: member_points and leaderboard are dropped, along with the #296
+-- reconciliation this section used to run between them and a raw ledger sum
+-- -- there is no surviving whole-org, per-member aggregate to reconcile
+-- against (leadership_leaderboard sums only 'task'/'task_reversal' rows, and
+-- department_cup groups by Department, not member). department_cup and
+-- my_points still agree with the ledger below.
 
 -- #259 changed what the Cup means. It is no longer "sum the whole ledgers of
 -- whoever is in this Department today" but "sum the Task Points whose Task
@@ -723,17 +713,21 @@ grant select on demo_cup_expected to authenticated;
 
 select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000006');
 select results_eq(
-  $$ select group_id, points from public.dept_cup order by group_id $$,
+  $$ select group_id, points from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) order by group_id $$,
   $$ select group_id, points from demo_cup_expected order by group_id $$,
-  'dept_cup totals the seeded Task Points whose Task Group is that competing Group or one below it');
+  'department_cup(null, null, null) totals the seeded Task Points whose Task Group is that competing Group or one below it (#936, was dept_cup)');
 reset role;
 
--- my_points is the ordinary member's own-total endpoint, and member_points is
--- leadership-only, so the two can never be compared from one session:
--- capture the leadership totals here, as the owner, and compare from inside
+-- my_points is the ordinary member's own-total endpoint, and a leadership
+-- read is BCE+-only, so the two can never be compared from one session:
+-- capture the ledger totals here, as the owner, and compare from inside
 -- each member's own session below.
+-- #936: member_points is dropped; a straight per-member ledger sum is the
+-- same total that owner-rights view computed.
 create temp table demo_totals as
-  select member_id, points from member_points;
+  select member_id, coalesce(sum(delta), 0)::int as points
+    from points_ledger
+   group by member_id;
 grant select on demo_totals to authenticated;
 
 -- Andrei holds task credit only; Vlad holds credit and a sanction, which is
@@ -745,7 +739,7 @@ select results_eq(
   $$ select points from public.my_points $$,
   $$ select points from demo_totals
       where member_id = 'd0000000-0000-0000-0000-000000000001' $$,
-  'my_points returns the same total member_points holds for that member');
+  'my_points returns the same total the ledger sum holds for that member (#936, was member_points)');
 reset role;
 
 select pg_temp.test_login('d0000000-0000-0000-0000-000000000003', jsonb_build_object(
@@ -766,7 +760,7 @@ select ok(
 -- hides half of the scoring guide.
 select ok(
   exists (select 1 from points_ledger where reason = 'task' and delta < 0),
-  'at least one task was graded 1, so the leaderboard shows a real penalty');
+  'at least one task was graded 1, so a member''s point total shows a real penalty');
 
 -- ==================== The demo has to look alive ====================
 -- These are about the *demo*, not the engine: a leaderboard where everyone

@@ -12,6 +12,8 @@ set local client_min_messages = warning;
 -- Reconstruct the pre-#160 schema. The view enumerates columns, so it goes first.
 drop view public.profiles_directory;
 alter table public.profiles drop column joined_at;
+-- #936 dropped profiles.tier on main; the pre-#160 view and guard still name it.
+alter table public.profiles add column tier text;
 create view public.profiles_directory with (security_invoker = on) as
   select id, full_name, role, status, avatar_color, tier, joined_year, created_at
     from public.profiles;
