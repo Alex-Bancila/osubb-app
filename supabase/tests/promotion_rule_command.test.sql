@@ -26,7 +26,7 @@
 --     Candidate (threshold 15) once the top_percent rule asks 2 months and
 --     is on; not ranked at 6 months.
 --
--- Mutation guards (run as in-transaction redefinitions of
+-- Mutation guards (run 2026-09-30 as in-transaction redefinitions of
 -- private.update_promotion_rule_impl, reverted after), each turning the
 -- named assertion red:
 --   * the months bounds narrowed to null only -> "-1 month is

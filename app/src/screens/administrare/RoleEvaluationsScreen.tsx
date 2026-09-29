@@ -845,7 +845,7 @@ function RuleRow({
         editing && '-mx-3 rounded-lg bg-muted/40 px-3 first:pt-3',
       )}
     >
-      <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-2">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3">
         <div className="grid min-w-0 gap-1">
           <SubHeading as="h4" variant="label" id={labelId}>
             {label}
