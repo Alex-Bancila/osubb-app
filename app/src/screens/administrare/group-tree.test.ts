@@ -10,6 +10,7 @@ import {
   directManagerCandidates,
   createdGroupManager,
   managerTitleFor,
+  positionCandidates,
   groupStatusLabel,
   groupTabs,
   leadsAny,
@@ -345,8 +346,8 @@ function appointable(
   };
 }
 
-it("titles a new Group's direct Manager after its category (#951)", () => {
-  expect(managerTitleFor('department')).toBe('BCE');
+it("titles a new Group's direct Manager after its category (#951, #957)", () => {
+  expect(managerTitleFor('department')).toBe('Vicepreședinte');
   expect(managerTitleFor('project')).toBe('Coordonator Principal');
   expect(managerTitleFor('team')).toBe('Coordonator');
 });
@@ -366,6 +367,36 @@ it('offers as direct Manager every eligible active Member but the Moderator (#95
   expect(
     directManagerCandidates(members, 1).map((member) => member.memberId),
   ).toEqual(['voluntar', 'bc']);
+});
+
+it('offers BC as Coordonator but never as Responsabil, and the Moderator as neither (#957)', () => {
+  const members = [
+    appointable('voluntar', 'voluntar', 1),
+    appointable('bce', 'bce', 5),
+    appointable('bc', 'bc', 6),
+    appointable('moderator', 'moderator', 9),
+    appointable('plecat', 'bc', 6, 'inactiv'),
+  ];
+  const scope = { min_level: 0 };
+  const offered = (list: readonly { memberId: string }[]) =>
+    list.map((member) => member.memberId);
+
+  expect(
+    offered(positionCandidates(members, scope, new Set(), 'manager')),
+  ).toEqual(['voluntar', 'bce', 'bc']);
+  expect(
+    offered(positionCandidates(members, scope, new Set(), 'responsible')),
+  ).toEqual(['voluntar', 'bce']);
+  // A holder is offered for neither position, whatever the rank.
+  expect(
+    offered(positionCandidates(members, scope, new Set(['bc']), 'manager')),
+  ).toEqual(['voluntar', 'bce']);
+  // The Group's Minimum Level binds both pickers alike.
+  expect(
+    offered(
+      positionCandidates(members, { min_level: 6 }, new Set(), 'manager'),
+    ),
+  ).toEqual(['bc']);
 });
 
 it('names the direct Manager in the receipt only when one was chosen (#951)', () => {

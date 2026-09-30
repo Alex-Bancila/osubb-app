@@ -386,13 +386,22 @@ export function GroupRolesTab({
     (entry) => entry.groupRole === 'responsible',
   );
   const inherited = useInheritedHolders(group);
-  const candidates = positionCandidates(
+  const holders = new Set([
+    ...inherited.ids,
+    ...[...managers, ...responsibles].map((entry) => entry.memberId),
+  ]);
+  // Two lists, not one (#957): BC may be a Coordonator, never a Responsabil.
+  const managerCandidates = positionCandidates(
     members,
     group,
-    new Set([
-      ...inherited.ids,
-      ...[...managers, ...responsibles].map((entry) => entry.memberId),
-    ]),
+    holders,
+    'manager',
+  );
+  const responsibleCandidates = positionCandidates(
+    members,
+    group,
+    holders,
+    'responsible',
   );
   // No appointment while the positions above are unknown (see above).
   const appointBusy = busy || !inherited.ready;
@@ -425,7 +434,7 @@ export function GroupRolesTab({
               description="Coordonatorul conduce grupul și toate subgrupurile lui."
               groupRole="manager"
               withTitle={false}
-              members={candidates}
+              members={managerCandidates}
               busy={appointBusy}
               error={error}
               onAppoint={(memberId) =>
@@ -464,7 +473,7 @@ export function GroupRolesTab({
               description="Responsabilul se ocupă de o parte din munca grupului, sub numele funcției pe care i-l dai."
               groupRole="responsible"
               withTitle
-              members={candidates}
+              members={responsibleCandidates}
               busy={appointBusy}
               error={error}
               onAppoint={(memberId, positionTitle) =>

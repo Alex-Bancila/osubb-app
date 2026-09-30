@@ -406,36 +406,50 @@ export function rosterBackState(groupId: number): BackLinkState {
   };
 }
 
-/** Ranks the position pickers never offer (Alex, 2026-09-29, F-27). */
-const OUTSIDE_POSITIONS: ReadonlySet<string> = new Set(['bc', 'moderator']);
+/**
+ * Ranks a position picker never offers (Alex, 2026-09-29, F-27; amended
+ * 2026-09-30, #957): the Moderator holds no Group position at all, and a BC
+ * member — a Department's Vicepreședinte — may be a Group Manager of any
+ * Group but never a Group Responsible, the position the BCE members hold.
+ */
+const OUTSIDE_POSITIONS: Record<
+  'manager' | 'responsible',
+  ReadonlySet<string>
+> = {
+  manager: new Set(['moderator']),
+  responsible: new Set(['bc', 'moderator']),
+};
 
 /**
- * Who the Coordonator and Responsabil pickers offer (F-27), one rule for
- * both: a live active Member at or above the Group's Minimum Level, not BC or
- * the Moderator, who holds no position here yet — on this roster or
+ * Who the Coordonator or the Responsabil picker offers (F-27, #957): a live
+ * active Member at or above the Group's Minimum Level, not of a rank kept
+ * outside that position, who holds no position here yet — on this roster or
  * inherited from a Group above. The Roster's add picker keeps its own list.
  */
 export function positionCandidates(
   members: readonly AppointableMember[],
   group: Pick<AdminGroup, 'min_level'>,
   holders: ReadonlySet<string>,
+  position: 'manager' | 'responsible',
 ): AppointableMember[] {
+  const outside = OUTSIDE_POSITIONS[position];
   return members.filter(
     (member) =>
       member.status === 'activ' &&
       member.level >= group.min_level &&
-      !OUTSIDE_POSITIONS.has(member.roleId ?? '') &&
+      !outside.has(member.roleId ?? '') &&
       !holders.has(member.memberId),
   );
 }
 
 /**
  * The direct Manager's title a new Group's category pre-fills (#951), the
- * titles the Groups of that category carry: BCE for a Department, Coordonator
- * Principal for a Project, Coordonator for a Team.
+ * titles the Groups of that category carry: Vicepreședinte for a Department
+ * (#957 — its Manager is a BC member; the BCE members are its Responsabili),
+ * Coordonator Principal for a Project, Coordonator for a Team.
  */
 const MANAGER_TITLES: Record<string, string> = {
-  department: 'BCE',
+  department: 'Vicepreședinte',
   project: 'Coordonator Principal',
   team: 'Coordonator',
 };

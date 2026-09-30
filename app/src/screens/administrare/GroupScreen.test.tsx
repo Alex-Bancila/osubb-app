@@ -698,17 +698,27 @@ it('offers the position pickers only Members who could take the position (F-27)'
   const user = userEvent.setup();
   show();
   await user.click(tab('Roluri'));
-  for (const [button, title] of [
-    ['Numește un responsabil', 'Responsabil în Logistică'],
-    ['Numește un coordonator', 'Coordonator pentru Logistică'],
-  ]) {
+  // #957: a BC member is offered as Coordonator, never as Responsabil; the
+  // Moderator, the inactive and the holders above are offered for neither.
+  for (const [button, title, offered] of [
+    [
+      'Numește un responsabil',
+      'Responsabil în Logistică',
+      ['CRCarmen RaduVoluntar'],
+    ],
+    [
+      'Numește un coordonator',
+      'Coordonator pentru Logistică',
+      ['CRCarmen RaduVoluntar', 'DBDan BCBC'],
+    ],
+  ] as const) {
     await user.click(screen.getByRole('button', { name: button }));
     const dialog = await screen.findByRole('dialog', { name: title });
     await user.click(within(dialog).getByRole('combobox', { name: 'Membru' }));
     await waitFor(() =>
       expect(
         screen.getAllByRole('option').map((option) => option.textContent),
-      ).toEqual(['CRCarmen RaduVoluntar']),
+      ).toEqual(offered),
     );
     await user.keyboard('{Escape}');
     await user.keyboard('{Escape}');
