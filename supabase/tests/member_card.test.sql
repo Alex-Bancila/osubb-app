@@ -2,14 +2,15 @@
 -- Card projection (R6) whose chip rule is R17's. Persona matrix, chip
 -- selection against an earlier Child-Group membership and a later top-level
 -- one, exclusion of the Organization Group and an archived Group, and the
--- absence of any contact, points or rank column on the return type.
+-- absence of any contact, points or rank column on the return type. #963
+-- adds board_title after role (board_title_directory.test.sql owns its rule).
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(26);
+select plan(27);
 
 -- ==================== 1. Surface, shape and grants ====================
 
@@ -28,8 +29,8 @@ select ok(
   'the body is stable, security definer, and pins search_path');
 select is(
   pg_get_function_result('public.member_card(uuid)'::regprocedure),
-  'TABLE(member_id uuid, nickname text, full_name text, role member_role, joined_at date, avatar_color text, primary_group_id bigint, primary_group_name text, primary_group_color text, other_memberships integer, memberships jsonb)',
-  'the projection returns exactly the Member Card columns');
+  'TABLE(member_id uuid, nickname text, full_name text, role member_role, board_title text, joined_at date, avatar_color text, primary_group_id bigint, primary_group_name text, primary_group_color text, other_memberships integer, memberships jsonb)',
+  'the projection returns exactly the Member Card columns (#963: board_title after role)');
 -- R6: contact only for viewers who can already read profiles_contact, never
 -- here; never points or rank. Asserted on both functions' declared columns.
 select is(
@@ -126,6 +127,10 @@ select is(
 select is(
   (select avatar_color from public.member_card('67510000-0000-0000-0000-000000000002')),
   '#284C93', 'and the avatar colour');
+select is(
+  (select board_title from public.member_card('67510000-0000-0000-0000-000000000002')),
+  null,
+  'and no Board Title for a Member who is not a Group Responsible of the board (#963; board_title_directory.test.sql owns the rule)');
 select is(
   (select format('%s|%s', primary_group_name, primary_group_color)
      from public.member_card('67510000-0000-0000-0000-000000000002')),
