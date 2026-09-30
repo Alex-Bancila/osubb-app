@@ -10,6 +10,7 @@ const row = {
   nickname: 'Ani',
   full_name: 'Ana Pop',
   role: 'activ',
+  board_title: null,
   joined_at: '2024-03-12',
   avatar_color: null,
   primary_group_id: 1,
@@ -120,6 +121,7 @@ it('turns the row into the card: role name, Group labels and roles, contact gate
     nickname: null,
     fullName: 'Ana Pop',
     roleLabel: 'Voluntar Activ',
+    rankLabel: 'Voluntar Activ',
     primaryGroup: {
       id: 1,
       name: 'Educațional',
@@ -160,4 +162,34 @@ it('turns the row into the card: role name, Group labels and roles, contact gate
     },
   ]);
   expect(toMemberCardData({ card: null, contact: null })).toBeNull();
+});
+
+it('names a BC or BCE member by their Board Title and keeps the rank beside it (#963)', () => {
+  const roles = new Map([
+    ['bc', { name: 'BC' }],
+    ['activ', { name: 'Voluntar Activ' }],
+  ]);
+  expect(
+    toMemberCardData(
+      {
+        card: { ...row, role: 'bc', board_title: 'Președinte' },
+        contact: null,
+      },
+      roles,
+    ),
+  ).toMatchObject({ roleLabel: 'Președinte', rankLabel: 'BC' });
+  // No title: the Role names them, as before.
+  expect(
+    toMemberCardData(
+      { card: { ...row, board_title: '  ' }, contact: null },
+      roles,
+    ),
+  ).toMatchObject({ roleLabel: 'Voluntar Activ', rankLabel: 'Voluntar Activ' });
+  // Before the Roles load, the enum value stands in for the rank.
+  expect(
+    toMemberCardData({
+      card: { ...row, role: 'bce', board_title: 'Coordonator IT' },
+      contact: null,
+    }),
+  ).toMatchObject({ roleLabel: 'Coordonator IT', rankLabel: 'bce' });
 });

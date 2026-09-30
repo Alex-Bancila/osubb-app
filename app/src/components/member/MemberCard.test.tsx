@@ -33,6 +33,7 @@ const card: MemberCardData = {
   nickname: 'Ani',
   fullName: 'Ana Pop',
   roleLabel: 'Voluntar Activ',
+  rankLabel: 'Voluntar Activ',
   joinedAt: '2024-03-12',
   avatarColor: '#284C93',
   primaryGroup: {
@@ -123,6 +124,21 @@ it('shows the Nickname, full name, Role, join date, first Department + n and the
   expect(groups).toHaveTextContent('Coordonator');
   expect(groups).toHaveTextContent('Responsabil logistică');
   expect((await axe.run(dialog)).violations).toEqual([]);
+});
+
+it('names a board member by their Board Title, with the Role beside it (#963)', async () => {
+  answer({ roleLabel: 'Președinte', rankLabel: 'BC' });
+  const dialog = await openCard();
+  expect(dialog).toHaveTextContent(
+    'Președinte · BC · Membru din 12 martie 2024',
+  );
+});
+
+it('says the Role once when there is no Board Title (#963)', async () => {
+  answer({ roleLabel: 'BC', rankLabel: 'BC' });
+  const dialog = await openCard();
+  expect(dialog).toHaveTextContent('BC · Membru din 12 martie 2024');
+  expect(dialog).not.toHaveTextContent('BC · BC');
 });
 
 it('marks a Private Group in the Groups list, and no public one (#757)', async () => {

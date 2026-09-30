@@ -140,6 +140,7 @@ describe('directory reads', () => {
     expect(members[0]).toMatchObject({
       name: 'Ana',
       role: 'Voluntar',
+      rankLabel: 'Voluntar',
       roleId: 'voluntar',
       roleLevel: 1,
       // Archived Groups and the Organization Group are left out; the
@@ -175,6 +176,43 @@ describe('directory reads', () => {
     expect(mocks.from).not.toHaveBeenCalledWith('group_members');
     expect(mocks.rpc).toHaveBeenCalledWith('group_roster', {});
     expect(mocks.rpc).toHaveBeenCalledWith('leadership_leaderboard', {});
+  });
+  it('names a BC or BCE member by their Board Title, keeping the Role for filters and sorting (#963)', async () => {
+    const directory = query([
+      {
+        id: 'a',
+        full_name: 'Ana',
+        role: 'voluntar',
+        status: 'activ',
+        board_title: null,
+      },
+      {
+        id: 'b',
+        full_name: 'Bogdan',
+        role: 'bc',
+        status: 'activ',
+        board_title: 'Președinte',
+      },
+    ]);
+    mocks.from.mockImplementation((name: string) =>
+      name === 'profiles_directory' ? directory : query(fixtures[name] ?? []),
+    );
+    const members = await fetchMemberDirectory();
+    expect(directory.select).toHaveBeenCalledWith(
+      expect.stringContaining('board_title'),
+    );
+    expect(members[1]).toMatchObject({
+      role: 'Președinte',
+      rankLabel: 'BC',
+      roleId: 'bc',
+      roleLevel: 6,
+    });
+    expect(members[0]).toMatchObject({
+      role: 'Voluntar',
+      rankLabel: 'Voluntar',
+      roleId: 'voluntar',
+      roleLevel: 1,
+    });
   });
   it('surfaces a denied point read rather than displaying fabricated zero totals', async () => {
     const error = { code: '42501', message: 'denied' };

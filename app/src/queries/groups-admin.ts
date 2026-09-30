@@ -4,6 +4,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import { memberRoleLabel } from '../components/member/member-identity';
 import { useAuth } from '../lib/auth';
 import { CommandError } from '../lib/command-reasons';
 import type { Database } from '../lib/database.types';
@@ -146,6 +147,7 @@ export type RosterEntry = {
   status: string;
   /** The OSUBB Role id (`bc`, `moderator`, …). */
   roleId: string | null;
+  /** The Role's name, or the Member's Board Title when they hold one (#963). */
   roleLabel: string;
   /** The member's own Level — what a raised Minimum Level is compared against. */
   level: number;
@@ -179,7 +181,7 @@ export async function fetchGroupRoster(
     readAllRows((from, to) =>
       supabase
         .from('profiles_directory')
-        .select('id, full_name, status, avatar_color, role')
+        .select('id, full_name, status, avatar_color, role, board_title')
         .order('id')
         .range(from, to),
     ),
@@ -206,7 +208,7 @@ export async function fetchGroupRoster(
         source: asSource(row.source),
         status: profile?.status ?? '—',
         roleId: profile?.role ?? null,
-        roleLabel: role?.name ?? '—',
+        roleLabel: memberRoleLabel(role?.name, profile?.board_title),
         level: role?.level ?? 0,
       };
     })
@@ -233,6 +235,7 @@ export type AppointableMember = {
   avatarColor: string | null;
   status: string;
   roleId: string | null;
+  /** The Role's name, or the Member's Board Title when they hold one (#963). */
   roleLabel: string;
   level: number;
 };
@@ -242,7 +245,9 @@ export async function fetchAppointableMembers(): Promise<AppointableMember[]> {
     readAllRows((from, to) =>
       supabase
         .from('profiles_directory')
-        .select('id, full_name, nickname, status, avatar_color, role')
+        .select(
+          'id, full_name, nickname, status, avatar_color, role, board_title',
+        )
         .order('id')
         .range(from, to),
     ),
@@ -267,7 +272,7 @@ export async function fetchAppointableMembers(): Promise<AppointableMember[]> {
           avatarColor: profile.avatar_color,
           status: profile.status ?? '—',
           roleId: profile.role,
-          roleLabel: role?.name ?? '—',
+          roleLabel: memberRoleLabel(role?.name, profile.board_title),
           level: role?.level ?? 0,
         },
       ];

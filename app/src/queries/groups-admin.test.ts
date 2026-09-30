@@ -7,6 +7,7 @@ vi.mock('../lib/supabase', () => ({ supabase: api }));
 import {
   explicitRoster,
   fetchAdminGroups,
+  fetchAppointableMembers,
   fetchGroupRoster,
   groupAuthority,
   runGroupCommand,
@@ -259,6 +260,8 @@ it('shows each Member beside their Membership Status and their own Level', async
         status: 'activ',
         avatar_color: null,
         role: 'bc',
+        // #963: a Board Title names the Role; the Level stays the rank's.
+        board_title: 'Președinte',
       },
     ],
     roles: [
@@ -316,7 +319,7 @@ it('shows each Member beside their Membership Status and their own Level', async
       source: 'board',
       status: 'activ',
       roleId: 'bc',
-      roleLabel: 'BC',
+      roleLabel: 'Președinte',
       level: 6,
     },
   ]);
@@ -324,6 +327,64 @@ it('shows each Member beside their Membership Status and their own Level', async
   expect(explicitRoster(roster).map((entry) => entry.memberId)).toEqual([
     'a',
     'b',
+  ]);
+});
+
+it('names an appointable BC or BCE member by their Board Title, the Level staying the rank (#963)', async () => {
+  const selects: string[] = [];
+  const builder = (rows: unknown[]) => {
+    const chain = {
+      select: (columns: string) => {
+        selects.push(columns);
+        return chain;
+      },
+      order: () => chain,
+      range: (from: number) =>
+        Promise.resolve({ data: from === 0 ? rows : [], error: null }),
+    };
+    return chain;
+  };
+  api.from.mockImplementation((table: string) =>
+    builder(
+      table === 'roles'
+        ? [
+            { id: 'bce', name: 'BCE', level: 5 },
+            { id: 'bc', name: 'BC', level: 6 },
+          ]
+        : [
+            {
+              id: 'c',
+              full_name: 'Cristina Șerban',
+              nickname: null,
+              status: 'activ',
+              avatar_color: null,
+              role: 'bc',
+              board_title: 'Președinte',
+            },
+            {
+              id: 'b',
+              full_name: 'Bogdan Ion',
+              nickname: null,
+              status: 'activ',
+              avatar_color: null,
+              role: 'bce',
+              board_title: null,
+            },
+          ],
+    ),
+  );
+  const members = await fetchAppointableMembers();
+  expect(selects).toContainEqual(expect.stringContaining('board_title'));
+  expect(
+    members.map(({ memberId, roleId, roleLabel, level }) => ({
+      memberId,
+      roleId,
+      roleLabel,
+      level,
+    })),
+  ).toEqual([
+    { memberId: 'b', roleId: 'bce', roleLabel: 'BCE', level: 5 },
+    { memberId: 'c', roleId: 'bc', roleLabel: 'Președinte', level: 6 },
   ]);
 });
 

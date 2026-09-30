@@ -78,6 +78,8 @@ function MemberCardBody({
   const joined = data ? formatDayMonthYear(data.joinedAt) : null;
   const facts = [
     data?.roleLabel,
+    // A Board Title names the Role (#963); the rank stays beside it.
+    data?.rankLabel !== data?.roleLabel ? data?.rankLabel : null,
     joined ? `Membru din ${joined}` : null,
   ].filter(Boolean);
   const ring = data?.primaryGroup?.color ?? 'var(--border)';

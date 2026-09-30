@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { memberRoleLabel } from '../components/member/member-identity';
 import { groupOptionLabel } from '../components/ui/combobox';
 import { useAuth } from '../lib/auth';
 import { useCapability } from '../lib/capabilities';
@@ -26,7 +27,13 @@ export type DirectoryMember = {
   nickname: string | null;
   avatarColor: string | null;
   roleId: string | null;
+  /**
+   * How Voluntari names the Role: the Board Title when a BC or BCE member
+   * holds one (#963), the Role name otherwise.
+   */
   role: string;
+  /** The Role name alone, for the Rol filter's options (never a title). */
+  rankLabel: string;
   /** Higher is more senior; orders the role filter and sorting. */
   roleLevel: number;
   status: string;
@@ -112,7 +119,9 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
       readAllRows((from, to) =>
         supabase
           .from('profiles_directory')
-          .select('id, full_name, nickname, role, status, avatar_color')
+          .select(
+            'id, full_name, nickname, role, status, avatar_color, board_title',
+          )
           .order('id')
           .range(from, to),
       ),
@@ -193,6 +202,7 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
   return profiles.flatMap((profile) => {
     if (!profile.id) return [];
     const role = profile.role ? roleById.get(profile.role) : undefined;
+    const rankLabel = memberRoleLabel(role?.name ?? profile.role, null);
     const { primaryGroup, otherMemberships } = primaryGroupOf(
       membershipsByMember.get(profile.id) ?? [],
     );
@@ -203,7 +213,8 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
         nickname: profile.nickname?.trim() || null,
         avatarColor: profile.avatar_color,
         roleId: profile.role,
-        role: role?.name ?? profile.role ?? '—',
+        role: memberRoleLabel(rankLabel, profile.board_title),
+        rankLabel,
         roleLevel: role?.level ?? -1,
         primaryGroup,
         otherMemberships,

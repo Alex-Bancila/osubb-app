@@ -48,6 +48,8 @@ export function matchesFilters(
         member.name,
         member.nickname ?? '',
         member.role,
+        // A Board Title names the Role (#963): "BC" still finds its holder.
+        member.rankLabel,
         member.contact?.email ?? '',
         ...member.groups.map((group) => group.label),
       ].join(' '),

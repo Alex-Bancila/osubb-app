@@ -61,6 +61,7 @@ const members: DirectoryMember[] = [
     avatarColor: null,
     roleId: 'voluntar',
     role: 'Voluntar',
+    rankLabel: 'Voluntar',
     roleLevel: 1,
     status: 'activ',
     groups: [g(1), g(2)],
@@ -76,6 +77,7 @@ const members: DirectoryMember[] = [
     avatarColor: '#284C93',
     roleId: 'bc',
     role: 'BC',
+    rankLabel: 'BC',
     roleLevel: 6,
     status: 'inactiv',
     groups: [g(4)],
@@ -92,6 +94,7 @@ const members: DirectoryMember[] = [
     avatarColor: null,
     roleId: 'vot',
     role: 'Membru cu Drept de Vot',
+    rankLabel: 'Membru cu Drept de Vot',
     roleLevel: 3,
     status: 'activ',
     groups: [g(1), g(4), g(3), g(5), g(6), g(7), g(8)],
@@ -306,6 +309,45 @@ describe('Member directory', () => {
     expect(names()).toHaveLength(3);
     expect(screen.queryByRole('group', { name: 'Filtre active' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Filtrează' })).toHaveFocus();
+  });
+
+  it('names a board member by their Board Title while Rol keeps filtering by Role (#963)', async () => {
+    const user = userEvent.setup();
+    mock.useMemberDirectory.mockReturnValue(
+      result({
+        data: members.map((member) =>
+          member.id === 'b' ? { ...member, role: 'Președinte' } : member,
+        ),
+      }),
+    );
+    render(<VolunteersScreen />);
+    expect(rowOf('Ana Ionescu')).toHaveTextContent('Președinte');
+    expect(rowOf('Ana Ionescu')).not.toHaveTextContent('BC');
+
+    // The search finds her by the title and by the Role.
+    const search = screen.getByRole('searchbox', { name: 'Caută un membru' });
+    await user.type(search, 'presedinte');
+    expect(names()).toEqual(['Ana Ionescu']);
+    await user.clear(search);
+    await user.type(search, 'bc');
+    expect(names()).toEqual(['Ana Ionescu']);
+    await user.clear(search);
+
+    // The Rol filter lists Role names, never a title.
+    await user.click(screen.getByRole('button', { name: 'Filtrează' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Filtre' });
+    const roles = within(within(dialog).getByRole('group', { name: 'Rol' }))
+      .getAllByRole('button')
+      .map((button) => button.textContent);
+    expect(roles).toEqual(['BC', 'Membru cu Drept de Vot', 'Voluntar']);
+    await user.click(within(dialog).getByRole('button', { name: 'BC' }));
+    expect(names()).toEqual(['Ana Ionescu']);
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Vezi rezultatele' }),
+    );
+    expect(
+      screen.getByRole('button', { name: 'Elimină filtrul Rol: BC' }),
+    ).toBeVisible();
   });
 
   it('filters by status and says so when nothing matches', async () => {

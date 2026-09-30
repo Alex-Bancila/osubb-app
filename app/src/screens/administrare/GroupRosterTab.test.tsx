@@ -136,6 +136,40 @@ it('closes the roster with the membri de drept, named by Role, with no controls'
   ).toHaveAttribute('href', '/administrare/membri/c');
 });
 
+it('names board members by their Board Title in Rol OSUBB and among the membri de drept (#963)', () => {
+  renderRoster(adunarea, [
+    entry('a', 'Alex Băncilă', 'roster', {
+      groupRole: 'responsible',
+      positionTitle: 'Responsabil Adunarea Generală',
+      roleId: 'bce',
+      roleLabel: 'Coordonator IT',
+      level: 5,
+    }),
+    entry('m', 'Maria Dobre', 'automatic'),
+    entry('c', 'Cristina Șerban', 'board', {
+      roleId: 'bc',
+      roleLabel: 'Președinte',
+      level: 6,
+    }),
+  ]);
+  const alex = within(screen.getByRole('table')).getByRole('row', {
+    name: /Alex Băncilă/,
+  });
+  // The Group Role and the Board Title side by side, each in its column.
+  expect(
+    within(alex).getByText('Responsabil Adunarea Generală'),
+  ).toBeInTheDocument();
+  expect(within(alex).getByText('Coordonator IT')).toBeInTheDocument();
+  const board = screen.getByRole('region', {
+    name: 'Biroul de Conducere · membri de drept',
+  });
+  expect(
+    within(board)
+      .getAllByRole('listitem')
+      .map((row) => row.textContent),
+  ).toEqual(['CȘCristina ȘerbanPreședinte']);
+});
+
 it('offers a roster member of a plain Group a removal, and never a membru de drept', () => {
   const team = {
     ...adunarea,

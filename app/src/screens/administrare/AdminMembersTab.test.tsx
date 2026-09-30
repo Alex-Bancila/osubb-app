@@ -130,6 +130,46 @@ it('lists every Member with Rol and Status, the row opening their page', async (
   );
 });
 
+it('names a board member by their Board Title in Rol, still sorted by rank (#963)', async () => {
+  const user = userEvent.setup();
+  api.members.mockReturnValue({
+    isPending: false,
+    isError: false,
+    data: [
+      member('cristina', 'Cristina Șerban', {
+        roleId: 'bc',
+        roleLabel: 'Președinte',
+        level: 6,
+      }),
+      member('ana', 'Ana Pop'),
+      member('alex', 'Alex Băncilă', {
+        roleId: 'bce',
+        roleLabel: 'Coordonator IT',
+        level: 5,
+      }),
+    ],
+  });
+  show();
+  const panel = screen.getByRole('region', { name: 'Membri' });
+  const row = within(panel)
+    .getByRole('button', { name: 'Profilul membrului Cristina Șerban' })
+    .closest('tr') as HTMLElement;
+  expect(row).toHaveTextContent('Președinte');
+  await user.click(
+    screen.getByRole('button', { name: 'Sortează Rol crescător' }),
+  );
+  // By rank — Voluntar, BCE, BC — never by the title's alphabet.
+  expect(
+    within(panel)
+      .getAllByRole('button', { name: /^Profilul membrului / })
+      .map((button) => button.getAttribute('aria-label')),
+  ).toEqual([
+    'Profilul membrului Ana Pop',
+    'Profilul membrului Alex Băncilă',
+    'Profilul membrului Cristina Șerban',
+  ]);
+});
+
 it('shows Status only when a Member who is not active is listed (B62)', () => {
   api.members.mockReturnValue({
     isPending: false,
