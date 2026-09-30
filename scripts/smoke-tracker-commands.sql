@@ -165,6 +165,32 @@ begin
 end;
 $$;
 
+-- #936 retired update_task_content; its edits now go through the full-state
+-- update_task. This builds that call for one Task with only the description
+-- changed, every other field as stored. Security definer so the Task's current
+-- state is read past RLS; the returned SQL is then run as the CURRENT role
+-- (smoke_run below, or smoke_denied / smoke_refused), so it lends nothing.
+create function pg_temp.smoke_edit_sql(p_task bigint, p_description text)
+returns text
+language sql
+security definer
+as $$
+  select format('select public.update_task(%s, %L, %L, %L, %L::timestamptz, %L, %L, %L, %L, %L)',
+                task.id, task.group_id, task.title, p_description, task.deadline,
+                task.campaign_id, task.assignment_mode, task.audience,
+                task.link_label, task.link_url)
+    from public.tasks as task where task.id = p_task;
+$$;
+
+create function pg_temp.smoke_run(p_sql text)
+returns void
+language plpgsql
+as $$
+begin
+  execute p_sql;
+end;
+$$;
+
 create function pg_temp.smoke_points(p_member uuid)
 returns integer
 language sql
@@ -795,7 +821,7 @@ reset role;
 select id as project_task from public.tasks where title = 'SMOKE Group manager delivery' \gset
 select pg_temp.test_login_leadership(:'ordinary');
 select pg_temp.smoke_denied(
-  format($sql$select public.update_task_content(%s, %L, null, now() + interval '5 days', null)$sql$, :project_task, 'Unauthorized edit'),
+  pg_temp.smoke_edit_sql(:project_task, 'Unauthorized edit'),
   'step 20: ordinary Project member cannot manage their Task');
 select public.start_task(:project_task);
 select public.submit_task_for_review(:project_task);
@@ -813,7 +839,7 @@ select pg_temp.smoke_eq(pg_temp.smoke_points(:'ordinary'), :project_points_befor
 -- Since #579 every create names its Group by id (p_group_id) -- the legacy
 -- Origin arguments and the bridge that translated them are gone. This half
 -- creates with named arguments, the shape the Wave 3 client uses.
--- It also runs the Coordonator's *manage* commands (update content, assign,
+-- It also runs the Coordonator's *manage* commands (edit through update_task, assign,
 -- close the queue); complete_task_review above only proves the evaluator side.
 select pg_temp.test_login_leadership(:'coordinator');
 select public.create_task(
@@ -829,8 +855,7 @@ select pg_temp.smoke_assert(
      from public.tasks where id = :group_side_task),
   'step 20: a create by Group id alone lands on that Group');
 select pg_temp.test_login_leadership(:'coordinator');
-select public.update_task_content(:group_side_task, 'SMOKE Group-side Origin',
-  'Managed through the Group Role', now() + interval '6 days', null);
+select pg_temp.smoke_run(pg_temp.smoke_edit_sql(:group_side_task, 'Managed through the Group Role'));
 select public.assign_task_executor(:group_side_task, :'ordinary');
 reset role;
 select pg_temp.smoke_assert(
@@ -870,6 +895,11 @@ select public.create_task('SMOKE Ordinary review', 'Ordinary member work', now()
 reset role;
 select id as manager_task from public.tasks where title = 'SMOKE Manager protected' \gset
 select id as ordinary_task from public.tasks where title = 'SMOKE Ordinary review' \gset
+-- update_task edits only until review (ADR-0007 amended 2026-09-21), so the
+-- Responsible prepares the ordinary Task while it is still todo (#936).
+select pg_temp.test_login_leadership(:'responsible');
+select pg_temp.smoke_run(pg_temp.smoke_edit_sql(:ordinary_task, 'Responsible prepared review'));
+reset role;
 select pg_temp.test_login_leadership(:'coordinator');
 select public.start_task(:manager_task);
 select public.submit_task_for_review(:manager_task);
@@ -879,11 +909,10 @@ select public.start_task(:ordinary_task);
 select public.submit_task_for_review(:ordinary_task);
 reset role;
 select pg_temp.test_login_leadership(:'responsible');
-select pg_temp.smoke_denied(format($sql$select public.update_task_content(%s, %L, null, now() + interval '5 days', null)$sql$, :manager_task, 'Forbidden'),
+select pg_temp.smoke_denied(pg_temp.smoke_edit_sql(:manager_task, 'Forbidden'),
   'step 21: Responsible cannot edit the Group Manager''s Task');
 select pg_temp.smoke_denied(format('select public.complete_task_review(%s, 2, 3, %L)', :manager_task, 'Forbidden'),
   'step 21: Responsible cannot evaluate the Group Manager''s Task');
-select public.update_task_content(:ordinary_task, 'SMOKE Ordinary review', 'Responsible prepared review', now() + interval '5 days', null);
 select public.complete_task_review(:ordinary_task, 2, 3, 'Responsible confirmed ordinary member work.');
 reset role;
 select pg_temp.smoke_assert(
@@ -904,7 +933,7 @@ select pg_temp.smoke_refused(
   '42501', 'task_manage_forbidden',
   'step 21: cancelling the Group Manager''s Task is refused as task_manage_forbidden');
 select pg_temp.smoke_refused(
-  format($sql$select public.update_task_content(%s, %L, null, now() + interval '5 days', null)$sql$, :manager_task, 'Forbidden'),
+  pg_temp.smoke_edit_sql(:manager_task, 'Forbidden'),
   '42501', 'task_manage_forbidden',
   'step 21: editing the Group Manager''s Task is refused as task_manage_forbidden');
 select pg_temp.smoke_refused(
@@ -926,12 +955,16 @@ select public.create_task('SMOKE Independent peers', 'Peer planned work', now() 
   'local', 'direct', :'bc_peer', p_group_id => :team_group);
 reset role;
 select id as peer_task from public.tasks where title = 'SMOKE Independent peers' \gset
+-- The peer manages the teammate's Task while it is still editable (#936:
+-- update_task edits only until review).
+select pg_temp.test_login_leadership(:'peer');
+select pg_temp.smoke_run(pg_temp.smoke_edit_sql(:peer_task, 'Peer manages teammate work'));
+reset role;
 select pg_temp.test_login_leadership(:'bc_peer');
 select public.start_task(:peer_task);
 select public.submit_task_for_review(:peer_task);
 reset role;
 select pg_temp.test_login_leadership(:'peer');
-select public.update_task_content(:peer_task, 'SMOKE Independent peers', 'Peer manages teammate work', now() + interval '5 days', null);
 select pg_temp.smoke_denied(format('select public.complete_task_review(%s, 1, 3, %L)', :peer_task, 'Peer cannot evaluate'),
   'step 22: an Independent-Team Responsible cannot evaluate a teammate');
 reset role;
@@ -969,13 +1002,14 @@ select public.create_task(
   p_group_id => :team_group);
 reset role;
 select id as pair_task from public.tasks where title = 'SMOKE Independent peer pair' \gset
+select pg_temp.test_login_leadership(:'peer');
+select pg_temp.smoke_run(pg_temp.smoke_edit_sql(:pair_task, 'Peer manages a non-BC teammate'));
+reset role;
 select pg_temp.test_login_leadership(:'third_peer');
 select public.start_task(:pair_task);
 select public.submit_task_for_review(:pair_task);
 reset role;
 select pg_temp.test_login_leadership(:'peer');
-select public.update_task_content(:pair_task, 'SMOKE Independent peer pair',
-  'Peer manages a non-BC teammate', now() + interval '5 days', null);
 select pg_temp.smoke_refused(
   format('select public.complete_task_review(%s, 1, 3, %L)', :pair_task, 'Peer cannot evaluate'),
   '42501', 'task_evaluate_forbidden',

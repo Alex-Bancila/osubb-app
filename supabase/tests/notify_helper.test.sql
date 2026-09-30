@@ -605,16 +605,16 @@ end;
 $fn$;
 
 alter table public.announcements disable trigger announcements_fan_out;
-insert into public.announcements (title, body, author, priority, category, published_at, created_by, group_id, audience)
-values ('NH anunț #843', 'Corp #843', 'BC', 'normal', 'organizatoric', now() - interval '1 hour',
+insert into public.announcements (title, body, priority, published_at, created_by, group_id, audience)
+values ('NH anunț #843', 'Corp #843', 'normal', now() - interval '1 hour',
         '32000000-0000-0000-0000-000000000602', (select id from public.groups where is_organization), 'org');
 -- Two Announcements sharing a title: a Notification written at one's
 -- published_at is that one's; a Notification matching neither instant is
 -- ambiguous and keeps the feed link.
-insert into public.announcements (title, body, author, priority, category, published_at, created_by, group_id, audience)
-values ('NH dublu #843', 'Corp A', 'BC', 'normal', 'organizatoric', now() - interval '3 hours',
+insert into public.announcements (title, body, priority, published_at, created_by, group_id, audience)
+values ('NH dublu #843', 'Corp A', 'normal', now() - interval '3 hours',
         '32000000-0000-0000-0000-000000000602', (select id from public.groups where is_organization), 'org'),
-       ('NH dublu #843', 'Corp B', 'BC', 'normal', 'organizatoric', now() - interval '2 hours',
+       ('NH dublu #843', 'Corp B', 'normal', now() - interval '2 hours',
         '32000000-0000-0000-0000-000000000602', (select id from public.groups where is_organization), 'org');
 alter table public.announcements enable trigger announcements_fan_out;
 

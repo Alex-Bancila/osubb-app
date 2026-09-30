@@ -3,7 +3,7 @@
 -- search_path to the empty string, nothing in public or private is
 -- executable by anon (trigger functions included), no trigger function or
 -- require_* helper is executable by authenticated either, every view runs as
--- the caller except the two documented owner-rights exceptions, and the
+-- the caller except the one documented owner-rights exception, and the
 -- private schema is invisible to anon and service_role. Each check returns
 -- the offending objects by name, so a red run says what to fix. Supabase-
 -- owned schemas (graphql, auth, storage) are out of scope. This suite does
@@ -66,7 +66,7 @@ language sql as $$
     join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'v'
      and coalesce(array_to_string(c.reloptions, ','), '') !~* '(^|,)security_invoker=(on|true|yes|1)(,|$)'
-     and c.relname not in ('member_points', 'profiles_contact');
+     and c.relname not in ('profiles_contact');
 $$;
 
 select is(pg_temp.definers_without_empty_search_path(), '{}'::text[],
@@ -76,20 +76,20 @@ select is(pg_temp.anon_executable_functions(), '{}'::text[],
 select is(pg_temp.authenticated_executable_internals(), '{}'::text[],
   'authenticated cannot execute any trigger function or require_* helper');
 select is(pg_temp.owner_rights_views(), '{}'::text[],
-  'every view is security_invoker except the two documented owner-rights exceptions');
+  'every view is security_invoker except the one documented owner-rights exception (profiles_contact; #936 dropped member_points)');
 select is(has_schema_privilege('anon', 'private', 'usage'), false,
   'anon has no usage on the private schema');
 select is(has_schema_privilege('service_role', 'private', 'usage'), false,
   'service_role has no usage on private either — commands go through public wrappers');
--- The allow-list stays honest: both exceptions must still exist and still be
+-- The allow-list stays honest: the exception must still exist and still be
 -- owner-rights. Retire an entry here the day the view goes invoker.
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind = 'v'
-      and c.relname in ('member_points', 'profiles_contact')
+      and c.relname in ('profiles_contact')
       and coalesce(array_to_string(c.reloptions, ','), '') !~* '(^|,)security_invoker=(on|true|yes|1)(,|$)'),
-  2::bigint,
-  'member_points and profiles_contact are the two owner-rights views');
+  1::bigint,
+  'profiles_contact is the one owner-rights view');
 
 -- The sweep is not hollow. A throwaway definer created the way a careless
 -- migration would — no search_path, no revoke — must be named by BOTH checks:

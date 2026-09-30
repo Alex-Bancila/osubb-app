@@ -175,7 +175,7 @@ A Task that groups Subtasks one level deep. It has no Executor, Candidate Queue,
 An ordinary Task whose Origin is inherited immutably from its Umbrella Task.
 
 **Task Manager**:
-The Member who created a Task, recorded by the server. They receive the Task's manager notifications; when they are the actor or no longer active, the Origin's managers receive them instead, never a BC member or the Moderator through that Group, and nobody when no such manager is left.
+The Member who created a Task, recorded by the server. They receive the Task's manager notifications; when they are the actor or no longer active, the Managers of the nearest Group on the Origin's path that has a Manager receive them instead (else its peer Responsibles), never a BC member or the Moderator through a Group, and nobody when no such manager is left.
 
 **Executor**:
 The one Member currently accountable for completing a Task.
@@ -308,7 +308,7 @@ The date range, from one day to another, that BC chooses for one Role Evaluation
 _Avoid_: Season, scoring window, semester when the ranking window is meant, open Period
 
 **Promotion Rule**:
-A BC-set rule about moving a Member to a higher Role. Automatic only for Recrut to Voluntar (tenure). Voluntar to Voluntar Activ needs the required tenure counted from the join date plus Task Points at or above the Voluntar Activ Promotion Threshold at a Role Evaluation, which makes the Member a Promotion Candidate; BC then promotes by hand. Voluntar Activ to Voluntar cu Drept de Vot is human-confirmed; nothing is automatic downward. A Member below the required tenure is neither a Promotion Candidate nor notified.
+A BC-set rule about moving a Member to a higher Role. Automatic only for Recrut to Voluntar (tenure). Voluntar to Voluntar Activ needs the required tenure counted from the join date plus Task Points at or above the Voluntar Activ Promotion Threshold at a Role Evaluation, which makes the Member a Promotion Candidate; BC then promotes by hand. Voluntar Activ to Voluntar cu Drept de Vot is human-confirmed; nothing is automatic downward. A Member below the required tenure is neither a Promotion Candidate nor notified. BC edits each rule's required tenure (whole months) and turns it on or off at any time, every change audited; a rule turned off promotes nobody (Recrut to Voluntar) and lists no Promotion Candidate (Voluntar to Voluntar Activ).
 _Avoid_: Auto-promotion, level-up, threshold alone
 
 **Promotion Candidate**:

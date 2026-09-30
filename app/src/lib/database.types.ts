@@ -37,20 +37,6 @@ export type Database = {
             foreignKeyName: "announcement_reads_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "announcement_reads_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "announcement_reads_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
             referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
@@ -80,9 +66,7 @@ export type Database = {
       announcements: {
         Row: {
           audience: string
-          author: string | null
           body: string
-          category: string | null
           created_by: string | null
           deadline: string | null
           form_label: string | null
@@ -97,9 +81,7 @@ export type Database = {
         }
         Insert: {
           audience?: string
-          author?: string | null
           body: string
-          category?: string | null
           created_by?: string | null
           deadline?: string | null
           form_label?: string | null
@@ -114,9 +96,7 @@ export type Database = {
         }
         Update: {
           audience?: string
-          author?: string | null
           body?: string
-          category?: string | null
           created_by?: string | null
           deadline?: string | null
           form_label?: string | null
@@ -130,20 +110,6 @@ export type Database = {
           title?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "announcements_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "announcements_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
           {
             foreignKeyName: "announcements_created_by_fkey"
             columns: ["created_by"]
@@ -210,20 +176,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "campaigns_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "campaigns_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
           {
             foreignKeyName: "campaigns_created_by_fkey"
             columns: ["created_by"]
@@ -303,20 +255,6 @@ export type Database = {
             foreignKeyName: "completed_work_requests_decided_by_fkey"
             columns: ["decided_by"]
             isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "completed_work_requests_decided_by_fkey"
-            columns: ["decided_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "completed_work_requests_decided_by_fkey"
-            columns: ["decided_by"]
-            isOneToOne: false
             referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
@@ -347,20 +285,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "groups"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "completed_work_requests_requester_id_fkey"
-            columns: ["requester_id"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "completed_work_requests_requester_id_fkey"
-            columns: ["requester_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
           },
           {
             foreignKeyName: "completed_work_requests_requester_id_fkey"
@@ -402,13 +326,6 @@ export type Database = {
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "completed_work_requests_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks_with_overdue"
             referencedColumns: ["id"]
           },
         ]
@@ -454,20 +371,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "event_attendance_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "event_attendance_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
           },
           {
             foreignKeyName: "event_attendance_member_id_fkey"
@@ -569,20 +472,6 @@ export type Database = {
             foreignKeyName: "events_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "events_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "events_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
             referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
@@ -655,20 +544,6 @@ export type Database = {
             foreignKeyName: "group_applications_decided_by_fkey"
             columns: ["decided_by"]
             isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "group_applications_decided_by_fkey"
-            columns: ["decided_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "group_applications_decided_by_fkey"
-            columns: ["decided_by"]
-            isOneToOne: false
             referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
@@ -699,20 +574,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "groups"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "group_applications_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "group_applications_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
           },
           {
             foreignKeyName: "group_applications_member_id_fkey"
@@ -773,20 +634,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "groups"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "group_members_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "group_members_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
           },
           {
             foreignKeyName: "group_members_member_id_fkey"
@@ -899,20 +746,6 @@ export type Database = {
             foreignKeyName: "groups_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "groups_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "groups_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
             referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
@@ -993,20 +826,6 @@ export type Database = {
             foreignKeyName: "notification_email_preferences_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: true
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "notification_email_preferences_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: true
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "notification_email_preferences_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: true
             referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
@@ -1056,20 +875,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "notification_push_preferences_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "notification_push_preferences_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
           {
             foreignKeyName: "notification_push_preferences_member_id_fkey"
             columns: ["member_id"]
@@ -1151,20 +956,6 @@ export type Database = {
             foreignKeyName: "notifications_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "notifications_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "notifications_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
             referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
@@ -1203,13 +994,6 @@ export type Database = {
             referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "notifications_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks_with_overdue"
-            referencedColumns: ["id"]
-          },
         ]
       }
       org_settings: {
@@ -1235,20 +1019,6 @@ export type Database = {
           value?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "org_settings_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "org_settings_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
           {
             foreignKeyName: "org_settings_updated_by_fkey"
             columns: ["updated_by"]
@@ -1318,20 +1088,6 @@ export type Database = {
             foreignKeyName: "points_ledger_awarded_by_fkey"
             columns: ["awarded_by"]
             isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "points_ledger_awarded_by_fkey"
-            columns: ["awarded_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "points_ledger_awarded_by_fkey"
-            columns: ["awarded_by"]
-            isOneToOne: false
             referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
@@ -1362,20 +1118,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "task_evaluations"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "points_ledger_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "points_ledger_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
           },
           {
             foreignKeyName: "points_ledger_member_id_fkey"
@@ -1419,13 +1161,6 @@ export type Database = {
             referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "points_ledger_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks_with_overdue"
-            referencedColumns: ["id"]
-          },
         ]
       }
       privacy_notice_acknowledgements: {
@@ -1445,20 +1180,6 @@ export type Database = {
           notice_version?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "privacy_notice_acknowledgements_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "privacy_notice_acknowledgements_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
           {
             foreignKeyName: "privacy_notice_acknowledgements_member_id_fkey"
             columns: ["member_id"]
@@ -1497,12 +1218,10 @@ export type Database = {
           full_name: string
           id: string
           joined_at: string | null
-          joined_year: number | null
           nickname: string | null
           phone: string | null
           role: Database["public"]["Enums"]["member_role"]
           status: Database["public"]["Enums"]["member_status"]
-          tier: string | null
         }
         Insert: {
           avatar_color?: string | null
@@ -1511,12 +1230,10 @@ export type Database = {
           full_name: string
           id: string
           joined_at?: string | null
-          joined_year?: number | null
           nickname?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["member_role"]
           status?: Database["public"]["Enums"]["member_status"]
-          tier?: string | null
         }
         Update: {
           avatar_color?: string | null
@@ -1525,12 +1242,10 @@ export type Database = {
           full_name?: string
           id?: string
           joined_at?: string | null
-          joined_year?: number | null
           nickname?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["member_role"]
           status?: Database["public"]["Enums"]["member_status"]
-          tier?: string | null
         }
         Relationships: []
       }
@@ -1576,20 +1291,6 @@ export type Database = {
             foreignKeyName: "promotion_candidates_decided_by_fkey"
             columns: ["decided_by"]
             isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "promotion_candidates_decided_by_fkey"
-            columns: ["decided_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "promotion_candidates_decided_by_fkey"
-            columns: ["decided_by"]
-            isOneToOne: false
             referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
@@ -1613,20 +1314,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles_directory"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "promotion_candidates_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "promotion_candidates_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
           },
           {
             foreignKeyName: "promotion_candidates_member_id_fkey"
@@ -1723,7 +1410,8 @@ export type Database = {
           field: string
           from_value: number | null
           id: number
-          kind: string
+          kind: string | null
+          promotion_rule_id: number | null
           role_evaluation_id: number | null
           source: string
           to_value: number
@@ -1734,7 +1422,8 @@ export type Database = {
           field?: string
           from_value?: number | null
           id?: never
-          kind: string
+          kind?: string | null
+          promotion_rule_id?: number | null
           role_evaluation_id?: number | null
           source: string
           to_value: number
@@ -1745,26 +1434,13 @@ export type Database = {
           field?: string
           from_value?: number | null
           id?: never
-          kind?: string
+          kind?: string | null
+          promotion_rule_id?: number | null
           role_evaluation_id?: number | null
           source?: string
           to_value?: number
         }
         Relationships: [
-          {
-            foreignKeyName: "promotion_threshold_changes_changed_by_fkey"
-            columns: ["changed_by"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "promotion_threshold_changes_changed_by_fkey"
-            columns: ["changed_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
           {
             foreignKeyName: "promotion_threshold_changes_changed_by_fkey"
             columns: ["changed_by"]
@@ -1801,6 +1477,13 @@ export type Database = {
             referencedColumns: ["kind"]
           },
           {
+            foreignKeyName: "promotion_threshold_changes_promotion_rule_id_fkey"
+            columns: ["promotion_rule_id"]
+            isOneToOne: false
+            referencedRelation: "promotion_rules"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "promotion_threshold_changes_role_evaluation_id_fkey"
             columns: ["role_evaluation_id"]
             isOneToOne: false
@@ -1832,20 +1515,6 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "promotion_thresholds_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "promotion_thresholds_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
           {
             foreignKeyName: "promotion_thresholds_updated_by_fkey"
             columns: ["updated_by"]
@@ -1954,20 +1623,6 @@ export type Database = {
             foreignKeyName: "push_tokens_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "push_tokens_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "push_tokens_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
             referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
@@ -2057,20 +1712,6 @@ export type Database = {
             foreignKeyName: "role_evaluations_run_by_fkey"
             columns: ["run_by"]
             isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "role_evaluations_run_by_fkey"
-            columns: ["run_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "role_evaluations_run_by_fkey"
-            columns: ["run_by"]
-            isOneToOne: false
             referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
@@ -2139,20 +1780,6 @@ export type Database = {
             foreignKeyName: "role_history_changed_by_fkey"
             columns: ["changed_by"]
             isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "role_history_changed_by_fkey"
-            columns: ["changed_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "role_history_changed_by_fkey"
-            columns: ["changed_by"]
-            isOneToOne: false
             referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
@@ -2176,20 +1803,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles_directory"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "role_history_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "role_history_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
           },
           {
             foreignKeyName: "role_history_member_id_fkey"
@@ -2284,20 +1897,6 @@ export type Database = {
             foreignKeyName: "task_activity_actor_id_fkey"
             columns: ["actor_id"]
             isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "task_activity_actor_id_fkey"
-            columns: ["actor_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "task_activity_actor_id_fkey"
-            columns: ["actor_id"]
-            isOneToOne: false
             referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
@@ -2343,13 +1942,6 @@ export type Database = {
             referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "task_activity_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks_with_overdue"
-            referencedColumns: ["id"]
-          },
         ]
       }
       task_assignments: {
@@ -2388,20 +1980,6 @@ export type Database = {
             foreignKeyName: "task_assignments_assigned_by_fkey"
             columns: ["assigned_by"]
             isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "task_assignments_assigned_by_fkey"
-            columns: ["assigned_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "task_assignments_assigned_by_fkey"
-            columns: ["assigned_by"]
-            isOneToOne: false
             referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
@@ -2425,20 +2003,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles_directory"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "task_assignments_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "task_assignments_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
           },
           {
             foreignKeyName: "task_assignments_member_id_fkey"
@@ -2480,13 +2044,6 @@ export type Database = {
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "task_assignments_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks_with_overdue"
             referencedColumns: ["id"]
           },
         ]
@@ -2537,20 +2094,6 @@ export type Database = {
             foreignKeyName: "task_candidates_decided_by_fkey"
             columns: ["decided_by"]
             isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "task_candidates_decided_by_fkey"
-            columns: ["decided_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "task_candidates_decided_by_fkey"
-            columns: ["decided_by"]
-            isOneToOne: false
             referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
@@ -2574,20 +2117,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles_directory"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "task_candidates_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "task_candidates_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
           },
           {
             foreignKeyName: "task_candidates_member_id_fkey"
@@ -2629,13 +2158,6 @@ export type Database = {
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "task_candidates_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks_with_overdue"
             referencedColumns: ["id"]
           },
         ]
@@ -2704,20 +2226,6 @@ export type Database = {
             foreignKeyName: "task_evaluations_evaluated_by_fkey"
             columns: ["evaluated_by"]
             isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "task_evaluations_evaluated_by_fkey"
-            columns: ["evaluated_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "task_evaluations_evaluated_by_fkey"
-            columns: ["evaluated_by"]
-            isOneToOne: false
             referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
@@ -2741,20 +2249,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles_directory"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "task_evaluations_reversed_by_fkey"
-            columns: ["reversed_by"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "task_evaluations_reversed_by_fkey"
-            columns: ["reversed_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
           },
           {
             foreignKeyName: "task_evaluations_reversed_by_fkey"
@@ -2796,13 +2290,6 @@ export type Database = {
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "task_evaluations_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks_with_overdue"
             referencedColumns: ["id"]
           },
         ]
@@ -2913,20 +2400,6 @@ export type Database = {
             foreignKeyName: "tasks_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "tasks_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "tasks_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
             referencedRelation: "my_points"
             referencedColumns: ["member_id"]
           },
@@ -2966,13 +2439,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "tasks_duplicated_from_task_id_fkey"
-            columns: ["duplicated_from_task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks_with_overdue"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "tasks_group_id_fkey"
             columns: ["group_id"]
             isOneToOne: false
@@ -2993,43 +2459,10 @@ export type Database = {
             referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "tasks_parent_task_id_fkey"
-            columns: ["parent_task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks_with_overdue"
-            referencedColumns: ["id"]
-          },
         ]
       }
     }
     Views: {
-      dept_cup: {
-        Row: {
-          group_id: number | null
-          members: number | null
-          name: string | null
-          points: number | null
-        }
-        Relationships: []
-      }
-      leaderboard: {
-        Row: {
-          full_name: string | null
-          member_id: string | null
-          points: number | null
-          rank: number | null
-          role: Database["public"]["Enums"]["member_role"] | null
-        }
-        Relationships: []
-      }
-      member_points: {
-        Row: {
-          member_id: string | null
-          points: number | null
-        }
-        Relationships: []
-      }
       my_points: {
         Row: {
           member_id: string | null
@@ -3062,11 +2495,9 @@ export type Database = {
           full_name: string | null
           id: string | null
           joined_at: string | null
-          joined_year: number | null
           nickname: string | null
           role: Database["public"]["Enums"]["member_role"] | null
           status: Database["public"]["Enums"]["member_status"] | null
-          tier: string | null
         }
         Insert: {
           avatar_color?: string | null
@@ -3074,11 +2505,9 @@ export type Database = {
           full_name?: string | null
           id?: string | null
           joined_at?: string | null
-          joined_year?: number | null
           nickname?: string | null
           role?: Database["public"]["Enums"]["member_role"] | null
           status?: Database["public"]["Enums"]["member_status"] | null
-          tier?: string | null
         }
         Update: {
           avatar_color?: string | null
@@ -3086,11 +2515,9 @@ export type Database = {
           full_name?: string | null
           id?: string | null
           joined_at?: string | null
-          joined_year?: number | null
           nickname?: string | null
           role?: Database["public"]["Enums"]["member_role"] | null
           status?: Database["public"]["Enums"]["member_status"] | null
-          tier?: string | null
         }
         Relationships: []
       }
@@ -3111,198 +2538,6 @@ export type Database = {
           task_id?: number | null
         }
         Relationships: []
-      }
-      tasks_with_overdue: {
-        Row: {
-          assignment_mode: string | null
-          audience: string | null
-          campaign_id: number | null
-          cancel_reason: string | null
-          cancelled_at: string | null
-          completed_at: string | null
-          created_at: string | null
-          created_by: string | null
-          deadline: string | null
-          description: string | null
-          difficulty: number | null
-          duplicated_from_task_id: number | null
-          group_id: number | null
-          id: number | null
-          is_overdue: boolean | null
-          kind: string | null
-          parent_task_id: number | null
-          queue_closed_at: string | null
-          queue_opened_at: string | null
-          rating: number | null
-          returned_to_progress_at: string | null
-          review_round: number | null
-          started_at: string | null
-          status: Database["public"]["Enums"]["task_status"] | null
-          submitted_at: string | null
-          title: string | null
-          type: string | null
-          unfulfilled_at: string | null
-        }
-        Insert: {
-          assignment_mode?: string | null
-          audience?: string | null
-          campaign_id?: number | null
-          cancel_reason?: string | null
-          cancelled_at?: string | null
-          completed_at?: string | null
-          created_at?: string | null
-          created_by?: string | null
-          deadline?: string | null
-          description?: string | null
-          difficulty?: number | null
-          duplicated_from_task_id?: number | null
-          group_id?: number | null
-          id?: number | null
-          is_overdue?: never
-          kind?: string | null
-          parent_task_id?: number | null
-          queue_closed_at?: string | null
-          queue_opened_at?: string | null
-          rating?: number | null
-          returned_to_progress_at?: string | null
-          review_round?: number | null
-          started_at?: string | null
-          status?: Database["public"]["Enums"]["task_status"] | null
-          submitted_at?: string | null
-          title?: string | null
-          type?: string | null
-          unfulfilled_at?: string | null
-        }
-        Update: {
-          assignment_mode?: string | null
-          audience?: string | null
-          campaign_id?: number | null
-          cancel_reason?: string | null
-          cancelled_at?: string | null
-          completed_at?: string | null
-          created_at?: string | null
-          created_by?: string | null
-          deadline?: string | null
-          description?: string | null
-          difficulty?: number | null
-          duplicated_from_task_id?: number | null
-          group_id?: number | null
-          id?: number | null
-          is_overdue?: never
-          kind?: string | null
-          parent_task_id?: number | null
-          queue_closed_at?: string | null
-          queue_opened_at?: string | null
-          rating?: number | null
-          returned_to_progress_at?: string | null
-          review_round?: number | null
-          started_at?: string | null
-          status?: Database["public"]["Enums"]["task_status"] | null
-          submitted_at?: string | null
-          title?: string | null
-          type?: string | null
-          unfulfilled_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tasks_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "campaigns"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "leaderboard"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "tasks_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "member_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "tasks_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "my_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "tasks_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles_contact"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles_directory"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_duplicated_from_task_id_fkey"
-            columns: ["duplicated_from_task_id"]
-            isOneToOne: false
-            referencedRelation: "task_queue_summary"
-            referencedColumns: ["task_id"]
-          },
-          {
-            foreignKeyName: "tasks_duplicated_from_task_id_fkey"
-            columns: ["duplicated_from_task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_duplicated_from_task_id_fkey"
-            columns: ["duplicated_from_task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks_with_overdue"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_group_id_fkey"
-            columns: ["group_id"]
-            isOneToOne: false
-            referencedRelation: "groups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_parent_task_id_fkey"
-            columns: ["parent_task_id"]
-            isOneToOne: false
-            referencedRelation: "task_queue_summary"
-            referencedColumns: ["task_id"]
-          },
-          {
-            foreignKeyName: "tasks_parent_task_id_fkey"
-            columns: ["parent_task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_parent_task_id_fkey"
-            columns: ["parent_task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks_with_overdue"
-            referencedColumns: ["id"]
-          },
-        ]
       }
     }
     Functions: {
@@ -3690,50 +2925,6 @@ export type Database = {
           name: string
           path: number[]
         }[]
-      }
-      convert_task_mode: {
-        Args: {
-          p_assignment_mode: string
-          p_audience: string
-          p_task_id: number
-        }
-        Returns: {
-          assignment_mode: string | null
-          audience: string | null
-          campaign_id: number | null
-          cancel_reason: string | null
-          cancelled_at: string | null
-          completed_at: string | null
-          created_at: string
-          created_by: string | null
-          deadline: string | null
-          description: string | null
-          difficulty: number | null
-          duplicated_from_task_id: number | null
-          group_id: number
-          id: number
-          kind: string
-          link_label: string | null
-          link_url: string | null
-          parent_task_id: number | null
-          queue_closed_at: string | null
-          queue_opened_at: string | null
-          rating: number | null
-          returned_to_progress_at: string | null
-          review_round: number
-          started_at: string | null
-          status: Database["public"]["Enums"]["task_status"]
-          submitted_at: string | null
-          title: string
-          type: string | null
-          unfulfilled_at: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "tasks"
-          isOneToOne: true
-          isSetofReturn: false
-        }
       }
       create_campaign: {
         Args: { p_group_id: number; p_name: string }
@@ -4613,7 +3804,8 @@ export type Database = {
           field: string
           from_value: number | null
           id: number
-          kind: string
+          kind: string | null
+          promotion_rule_id: number | null
           role_evaluation_id: number | null
           source: string
           to_value: number
@@ -4675,12 +3867,10 @@ export type Database = {
           full_name: string
           id: string
           joined_at: string | null
-          joined_year: number | null
           nickname: string | null
           phone: string | null
           role: Database["public"]["Enums"]["member_role"]
           status: Database["public"]["Enums"]["member_status"]
-          tier: string | null
         }
         SetofOptions: {
           from: "*"
@@ -4703,12 +3893,10 @@ export type Database = {
           full_name: string
           id: string
           joined_at: string | null
-          joined_year: number | null
           nickname: string | null
           phone: string | null
           role: Database["public"]["Enums"]["member_role"]
           status: Database["public"]["Enums"]["member_status"]
-          tier: string | null
         }
         SetofOptions: {
           from: "*"
@@ -5042,6 +4230,30 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_promotion_rule: {
+        Args: {
+          p_enabled: boolean
+          p_min_tenure_months: number
+          p_rule_id: number
+        }
+        Returns: {
+          created_at: string
+          enabled: boolean
+          from_role: Database["public"]["Enums"]["member_role"]
+          id: number
+          kind: string
+          min_tenure_months: number
+          percent: number | null
+          to_role: Database["public"]["Enums"]["member_role"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "promotion_rules"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_task: {
         Args: {
           p_accept_consequences?: boolean
@@ -5053,52 +4265,6 @@ export type Database = {
           p_group_id: number
           p_link_label: string
           p_link_url: string
-          p_task_id: number
-          p_title: string
-        }
-        Returns: {
-          assignment_mode: string | null
-          audience: string | null
-          campaign_id: number | null
-          cancel_reason: string | null
-          cancelled_at: string | null
-          completed_at: string | null
-          created_at: string
-          created_by: string | null
-          deadline: string | null
-          description: string | null
-          difficulty: number | null
-          duplicated_from_task_id: number | null
-          group_id: number
-          id: number
-          kind: string
-          link_label: string | null
-          link_url: string | null
-          parent_task_id: number | null
-          queue_closed_at: string | null
-          queue_opened_at: string | null
-          rating: number | null
-          returned_to_progress_at: string | null
-          review_round: number
-          started_at: string | null
-          status: Database["public"]["Enums"]["task_status"]
-          submitted_at: string | null
-          title: string
-          type: string | null
-          unfulfilled_at: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "tasks"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      update_task_content: {
-        Args: {
-          p_campaign_id: number
-          p_deadline: string
-          p_description: string
           p_task_id: number
           p_title: string
         }

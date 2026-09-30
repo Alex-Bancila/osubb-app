@@ -135,9 +135,9 @@ select is(
   'the (now-inactive) Campaign reference is preserved on origin edits, not cleared');
 
 select is(
-  (select campaign_id from public.tasks_with_overdue where title = 'Dept campaign task 314'),
+  (select campaign_id from public.tasks where title = 'Dept campaign task 314'),
   (select id from public.campaigns where name = 'Campaign Edu 314'),
-  'campaign_id is visible through tasks_with_overdue');
+  'campaign_id round-trips on the fixture Task (#936: tasks_with_overdue, read through here before, is gone)');
 
 insert into public.campaigns(group_id,name,created_by) select id,'Project Campaign 522','31400000-0000-0000-0000-000000000001'::uuid from public.groups where name='Origin Project 314';
 select lives_ok($$insert into public.tasks(title,group_id,campaign_id) select 'Project own campaign 522',group_id,id from public.campaigns where name='Project Campaign 522'$$,'Project Task accepts its own Group Campaign');

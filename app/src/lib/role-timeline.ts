@@ -13,7 +13,8 @@
  *    its day in Europe/Bucharest, like `joined_at`, so durations and dates do
  *    not shift with the device's timezone.
  *  - A null `joined_at` degrades to the current Role only: no dates, no
- *    durations — the caller shows "Membru din <joined_year>" instead.
+ *    durations. Since #933 every Member has a `joined_at`, so this is only a
+ *    guard.
  *
  * Role values are plain strings: `role_history.from_role`/`to_role` are the
  * `member_role` enum today and become text when #593 retires level four, and

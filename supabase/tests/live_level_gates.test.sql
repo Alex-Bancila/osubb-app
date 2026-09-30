@@ -1,6 +1,7 @@
 -- live_level_gates.test.sql — security pass M4 (2026-09-27): row gates read the
--- live Profile, never the token's member_level; a BC cannot edit the Moderator's
--- or another BC's Profile.
+-- live Profile, never the token's member_level. Since #944 (ruling R31) a live
+-- BC edits the Moderator's and another BC's Profile too; the full matrix for
+-- leadership targets lives in bc_edits_leadership_profiles.test.sql.
 --
 -- Every stale persona carries a token that still says what the Profile used to
 -- be. Putting auth_level() back into any gate turns its "stale" assertion red.
@@ -11,7 +12,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(33);
+select plan(26);
 
 truncate public.profiles cascade;
 
@@ -84,12 +85,12 @@ select is((select rows from gate_updates where label = 'bc_recrut_full_name'), 1
   'a BC changes a privileged column on a Profile below level 6');
 select is((select rows from gate_updates where label = 'bc_self_full_name'), 1,
   'a BC edits their own Profile, privileged columns included');
-select is((select rows from gate_updates where label = 'bc_moderator_nickname'), 0,
-  'a BC cannot edit the Moderator''s Profile');
-select is((select rows from gate_updates where label = 'bc_moderator_email'), 0,
-  'a BC cannot rewrite the Moderator''s email');
-select is((select rows from gate_updates where label = 'bc_other_bc_email'), 0,
-  'a BC cannot rewrite another BC''s email');
+select is((select rows from gate_updates where label = 'bc_moderator_nickname'), 1,
+  'a live BC edits the Moderator''s Profile (R31, #944)');
+select is((select rows from gate_updates where label = 'bc_moderator_email'), 1,
+  'a live BC rewrites the Moderator''s email (R31, #944)');
+select is((select rows from gate_updates where label = 'bc_other_bc_email'), 1,
+  'a live BC rewrites another BC''s email (R31, #944)');
 select is((select rows from gate_updates where label = 'moderator_bc_email'), 1,
   'the Moderator edits a BC''s Profile');
 select is((select rows from gate_updates where label = 'stale_bc_recrut_nickname'), 0,
@@ -101,7 +102,7 @@ select is((select rows from gate_updates where label = 'deactivated_self_nicknam
 select is((select rows from gate_updates where label = 'deactivated_recrut_nickname'), 0,
   'stale token: a deactivated BC cannot edit colleagues'' Profiles');
 select is((select email from public.profiles where id = 'e4700000-0000-0000-0000-000000000009'),
-  'gate.moderator@test.local', 'the Moderator''s email is unchanged after the BC''s attempt');
+  'captured@test.local', 'the live BC''s write to the Moderator''s email is stored');
 
 -- ==================== guard_profile_privileged_columns ====================
 
@@ -114,23 +115,16 @@ reset role;
 
 select pg_temp.test_login('e4700000-0000-0000-0000-000000000006', '{"member_role":"bc","member_level":6}');
 select lives_ok(
-  $$ update public.profiles set tier = 'aur' where id = 'e4700000-0000-0000-0000-000000000006' $$,
-  'the guard admits a live BC''s privileged-column change');
+  $$ update public.profiles set joined_at = '2021-01-01' where id = 'e4700000-0000-0000-0000-000000000006' $$,
+  'the guard admits a live BC''s privileged-column change (#936: tier and joined_year dropped, joined_at is a guarded column)');
 reset role;
 
--- ==================== member_points and leaderboard ====================
-
-select pg_temp.test_login('e4700000-0000-0000-0000-000000000006', '{"member_role":"bc","member_level":6}');
-select ok((select count(*) from public.member_points) > 0, 'a live BC reads member_points');
-select ok((select count(*) from public.leaderboard) > 0, 'a live BC reads the leaderboard');
-reset role;
-
-select pg_temp.test_login('e4700000-0000-0000-0000-000000000035', '{"member_role":"bce","member_level":5}');
-select is((select count(*) from public.member_points), 0::bigint,
-  'stale token: a BCE demoted to vot reads no member_points');
-select is((select count(*) from public.leaderboard), 0::bigint,
-  'stale token: a BCE demoted to vot reads no leaderboard');
-reset role;
+-- #936: member_points and leaderboard are dropped. Neither department_cup nor
+-- leadership_leaderboard is a drop-in replacement for this section's own
+-- read-gate assertions -- both new aggregates sum only 'task'/'task_reversal'
+-- ledger rows, never a 'sanction' like the one this fixture writes, so the
+-- same live-vs-stale-level behaviour this section pinned is already covered,
+-- for the raw ledger, by the points_ledger assertions below.
 
 -- ==================== profiles_contact ====================
 
@@ -182,10 +176,6 @@ select is((select count(*) from public.profiles_contact), 0::bigint,
   'a live BC Profile without organisation claims reads no contact details');
 select is((select count(*) from public.points_ledger), 0::bigint,
   'a live BC Profile without organisation claims reads no ledger rows');
-select is((select count(*) from public.member_points), 0::bigint,
-  'a live BC Profile without organisation claims reads no member_points');
-select is((select count(*) from public.leaderboard), 0::bigint,
-  'a live BC Profile without organisation claims reads no leaderboard');
 with u as (update public.profiles set nickname = 'Fara Revendicari' where id = 'e4700000-0000-0000-0000-000000000000' returning 1)
 select is((select count(*) from u)::int, 0,
   'a live BC Profile without organisation claims edits no Profile');
@@ -195,11 +185,10 @@ select throws_ok(
   '42501', null,
   'a live BC Profile without organisation claims records no sanction');
 reset role;
--- member_points already answers nothing without claims, so the leaderboard's
--- own guards are pinned in the catalog.
-select ok(
-  position('auth_is_member() AND (( SELECT private.caller_level()' in pg_get_viewdef('public.leaderboard'::regclass, true)) > 0,
-  'leaderboard keeps its own claims guard beside the live level');
+-- #936: member_points and leaderboard (and the viewdef pin on its own claims
+-- guard) are dropped; points_ledger above already answers nothing without
+-- claims, and profiles_contact and points_ledger elsewhere in this file pin
+-- the same live-claims boundary on the surviving surfaces.
 
 select * from finish();
 rollback;

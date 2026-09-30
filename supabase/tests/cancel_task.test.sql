@@ -4,10 +4,9 @@
 -- What this suite pins that no earlier suite does:
 --   * public.tasks.cancel_reason and tasks_cancel_reason_ck, the biconditional
 --     that makes a reasonless cancellation unwritable by ANY path -- the
---     command or the table owner (#345 removed the third, a direct write);
---   * public.tasks_with_overdue carrying the new column (a `select task.*`
---     view expands its star at CREATE time, so a column added later is
---     invisible until the view is recreated);
+--     command or the table owner (#345 removed the third, a direct write;
+--     #936 removed the fourth, the tasks_with_overdue view that used to
+--     carry the column);
 --   * the Umbrella CASCADE, and the fact that its Subtask locks are taken in
 --     ONE statement BEFORE anything is written -- section 10 discriminates
 --     exactly that, by catching an earlier Subtask in pgrowlocks mode
@@ -39,7 +38,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(103);
+select plan(98);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -403,22 +402,10 @@ select ok(not has_function_privilege('service_role',
   'public.cancel_task(bigint, text)'::regprocedure, 'execute'),
   'service_role holds no execute on the wrapper either (conventions Sec4)');
 
--- ==================== 2. The column, the constraint, the view ====================
+-- ==================== 2. The column, the constraint ====================
 
 select has_column('public', 'tasks', 'cancel_reason',
   'public.tasks records why a Task was cancelled');
-select has_column('public', 'tasks_with_overdue', 'cancel_reason',
-  'and the app read surface exposes it -- a `select task.*` view expands its star at CREATE time, so the view had to be recreated');
-select ok(coalesce((
-    select class.reloptions::text like '%security_invoker=on%'
-      from pg_class as class
-      join pg_namespace as namespace on namespace.oid = class.relnamespace
-     where namespace.nspname = 'public' and class.relname = 'tasks_with_overdue'
-  ), false), 'the recreated view is still security_invoker=on -- it must never run as its owner and bypass RLS');
-select ok(has_table_privilege('authenticated', 'public.tasks_with_overdue', 'select'),
-  'the recreated view keeps its select grant to authenticated');
-select ok(not has_table_privilege('anon', 'public.tasks_with_overdue', 'select'),
-  'and still grants anon nothing');
 select ok(exists (
     select 1 from pg_constraint as constraint_row
      where constraint_row.conrelid = 'public.tasks'::regclass
@@ -453,10 +440,6 @@ select lives_ok($$ insert into public.tasks
 select is((select count(*) from public.tasks
             where status = 'cancelled' and cancel_reason is null), 0::bigint,
   'the constraint holds for every row in the database, fixtures included');
-select is((select view_row.cancel_reason from public.tasks_with_overdue as view_row
-            where view_row.id = (select cancelled_task_id from f339)),
-  'Motiv vechi #339', 'and the value reads back through tasks_with_overdue, not only through the table');
-
 -- ==================== 3. The happy path ====================
 -- A public Task in progress with an Executor and two Candidates, cancelled by
 -- the local BCE. One call ends an Assignment, closes a queue, decides two

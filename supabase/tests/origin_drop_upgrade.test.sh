@@ -45,6 +45,9 @@ drop function public.create_completed_work_request(text, bigint);
 drop function private.create_completed_work_request_impl(text, bigint);
 
 -- Stand-ins for what the migration drops without ever running.
+-- #936 dropped both views on main; the migration drops and recreates them.
+create view public.tasks_with_overdue as select 1 as stand_in;
+create view public.dept_cup as select 1 as stand_in;
 create function private.create_task_impl(text, text, timestamptz, text, text, bigint, text, text, uuid, bigint, bigint, text, bigint)
 returns public.tasks language sql as 'select null::public.tasks';
 create function public.create_task(text, text, timestamptz, text, text, bigint, text, text, uuid, bigint, bigint, text, bigint)

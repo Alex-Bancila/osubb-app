@@ -7,6 +7,7 @@
 - **Amended:** 2026-09-21 — the edit window: every Task field is editable until review, Group changes with accepted consequences, Public → Direct closes the queue; Campaigns report points and contributors
 - **Amended:** 2026-09-23 — the Candidate Queue never promotes by arrival: interest only queues, the Task Manager selects, and give-up or an edit that removes the Executor returns the Task to To do with its queue intact
 - **Amended:** 2026-09-25 — visibility follows the Task Audience: a Member sees their own Groups' Tasks and, elsewhere, only organization-wide public Tasks; supersedes the 2026-09-23 Minimum Level visibility amendment
+- **Amended:** 2026-09-29 — #936: `update_task_content` and `convert_task_mode` are dropped; `update_task` (with `preview_task_update`) is the one Task edit command in the server-command boundary
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -103,8 +104,8 @@ Browsers do not directly change Task state. Public commands derive the actor fro
 
 ```text
 create_task
-update_task_content
-convert_task_mode
+update_task          (full-state edit; replaced update_task_content and convert_task_mode, both dropped by #936)
+preview_task_update
 assign_task_executor
 express_task_interest
 withdraw_task_interest

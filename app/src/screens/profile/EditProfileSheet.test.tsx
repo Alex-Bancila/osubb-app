@@ -39,7 +39,6 @@ const sampleProfile: MyProfile = {
   role: 'voluntar',
   status: 'activ',
   avatar_color: '#284C93',
-  joined_year: 2025,
   joined_at: '2025-01-01',
   email: 'ana@osubb.ro',
   phone: '0711223344',

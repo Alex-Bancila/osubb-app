@@ -212,9 +212,9 @@ insert into auth.users (
   jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email')),
   jsonb_build_object(), '', '', '', '', '', '', '', ''
 );
-insert into profiles (id, full_name, email, role, joined_year, avatar_color)
+insert into profiles (id, full_name, email, role, joined_at, avatar_color)
 values ('e2750000-0000-0000-0000-000000000001', 'Seed Preservation',
-        'seed-preservation@test.local', 'vot', 2026, '#000000');
+        'seed-preservation@test.local', 'vot', '2026-01-01', '#000000');
 insert into groups (name, category, created_by)
 values ('Cross-owned seed guard', 'project', 'e2750000-0000-0000-0000-000000000001');
 insert into group_members(group_id,member_id,group_role)

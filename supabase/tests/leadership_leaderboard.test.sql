@@ -14,7 +14,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(83);
+select plan(80);
 create function pg_temp.g523_group(p_dept text default null, p_team text default null, p_project bigint default null)
 returns bigint language sql stable as $$
   select coalesce((select id from public.groups where id = pg_temp.dept_group(p_dept) or id = pg_temp.team_group(p_team) or id = pg_temp.project_group(p_project)),-1)
@@ -55,18 +55,12 @@ select ok(not has_function_privilege('anon', 'private.leadership_leaderboard_imp
 select ok(not has_function_privilege('service_role', 'private.leadership_leaderboard_impl(bigint, bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'the server role cannot bypass the BCE+ gate through the private body');
 
--- #258 is additive. `app/src/queries/points.ts` still reads the legacy
--- all-ledger view for the Dashboard card (and `public.dept_cup` beside it);
--- plan Task J1 moves those cards onto this function and `public.department_cup`,
--- and #376 retires the views afterwards. Dropping any of them here would break
--- the Dashboard, so all three points surfaces the frontend reads are pinned --
--- not `leaderboard` alone.
-select has_view('public', 'leaderboard',
-  'the legacy all-ledger Leaderboard view is untouched -- the Dashboard card still reads it until J1 and #376');
-select has_view('public', 'dept_cup',
-  'the Department Cup view is untouched -- `app/src/queries/points.ts` reads it for the Dashboard card until J1 and #376');
-select has_view('public', 'member_points',
-  'the personal-total view is untouched -- it backs `public.my_points`, which is where a sanction shows and this board never does');
+-- #936: the legacy all-ledger views (leaderboard, dept_cup, member_points)
+-- that J1/#376 were going to retire are gone now -- `app/src/queries/points.ts`
+-- reads this function and `public.department_cup` directly. The three
+-- has_view pins that kept the Dashboard's old surface honest are retired
+-- with them; nothing here replaces "the view exists" for an object that no
+-- longer does.
 
 -- ==================== 2. Fixtures ====================
 
@@ -344,11 +338,11 @@ select is((select points from public.leadership_leaderboard(pg_temp.g523_group('
   'the Department filter sums the Department Task (12) and the Department-Team Task (15) and drops the Project Task (12)');
 
 -- The two members on 3 points **share** rank 2, and the next row is rank 4 --
--- the standard `rank()` gap. That matches the legacy `public.leaderboard`
--- (`rank() over (order by points desc)`), which is the board BC and BCE read
--- today. `full_name` orders the *rows*, never the window: put it back inside
--- the window and `rank` degenerates into a row number (2, 3, 4), which is what
--- this assertion catches.
+-- the standard `rank()` gap, matching the legacy `public.leaderboard`
+-- (`rank() over (order by points desc)`, retired #936; this function is the
+-- only board BC and BCE read today). `full_name` orders the *rows*, never the
+-- window: put it back inside the window and `rank` degenerates into a row
+-- number (2, 3, 4), which is what this assertion catches.
 select results_eq(
   $$ select full_name, points, rank from public.leadership_leaderboard(pg_temp.g523_group('258-dept')) $$,
   $$ values ('Mihai Executor 258'::text, 27, 1),
