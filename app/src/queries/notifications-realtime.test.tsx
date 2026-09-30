@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetSupabaseMock, supabaseMock } from '../test/supabase-mock';
 import { keys } from './keys';
+import { onMembershipChange } from '../lib/membership-signal';
 
 vi.mock('../lib/supabase', async () => {
   const { supabaseClientMock } = await vi.importActual<
@@ -143,5 +144,37 @@ describe('notification Realtime signal', () => {
     view.unmount();
     await import('./notifications-realtime-channel');
     expect(supabaseMock.channel).not.toHaveBeenCalled();
+  });
+});
+
+describe('a system Notification signals a membership change (#959)', () => {
+  beforeEach(() => resetSupabaseMock());
+
+  it('signals on a system insert only — never on other kinds, updates or deletes', async () => {
+    const queryClient = new QueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    renderHook(() => useNotificationRealtime(memberId), { wrapper });
+    await waitFor(() => expect(supabaseMock.on).toHaveBeenCalledOnce());
+    const callback = supabaseMock.on.mock.calls[0]?.[2] as (
+      payload: unknown,
+    ) => void;
+    const listener = vi.fn();
+    const off = onMembershipChange(listener);
+
+    act(() => callback({ eventType: 'INSERT', new: { kind: 'task' }, old: {} }));
+    // Marking "Rol actualizat" as read later is an UPDATE of a system row.
+    act(() =>
+      callback({ eventType: 'UPDATE', new: { kind: 'system' }, old: {} }),
+    );
+    act(() => callback({ eventType: 'DELETE', new: {}, old: { id: 1 } }));
+    expect(listener).not.toHaveBeenCalled();
+
+    act(() =>
+      callback({ eventType: 'INSERT', new: { kind: 'system' }, old: {} }),
+    );
+    expect(listener).toHaveBeenCalledOnce();
+    off();
   });
 });

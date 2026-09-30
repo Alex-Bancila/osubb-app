@@ -63,6 +63,7 @@ vi.mock('./push-device', async (importOriginal) => ({
 }));
 
 import { AuthProvider, useAuth } from './auth';
+import { signalMembershipChange } from './membership-signal';
 
 // Builds a stored session. Passing `issuedAtMs` also stamps `expires_at` /
 // `expires_in` the way the real client does (a fixed one-hour lifetime), so
@@ -570,6 +571,102 @@ describe('refresh a stale session on window focus (#598)', () => {
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
 
     fireEvent(window, new Event('focus'));
+
+    expect(auth.refreshSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('refresh claims when the database signals a membership change (#959)', () => {
+  beforeEach(() => {
+    // Only Date is faked (see #598 above): the debounce and waitFor() keep
+    // running on real timers.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-30T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function renderProvider(session: StoredSession | null) {
+    const client = new QueryClient();
+    render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <SessionProbe />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(auth.listener()).not.toBeNull());
+    if (session) {
+      await act(async () => {
+        notifyListener()('SIGNED_IN', session);
+      });
+      await waitFor(() =>
+        expect(screen.getByTestId('session-user').textContent).toBe('a'),
+      );
+    }
+    // A cached view whose answer depends on the claims (any query does).
+    client.setQueryData(['profile', 'me'], { role: 'bc' });
+    return client;
+  }
+
+  it('refreshes a fresh session once for a burst of signals, then refetches every cached query', async () => {
+    const client = await renderProvider(
+      sessionFor('a', { issuedAtMs: Date.now() }),
+    );
+
+    // One command can write two Notifications in one transaction.
+    act(() => {
+      signalMembershipChange();
+      signalMembershipChange();
+    });
+
+    await waitFor(() => expect(auth.refreshSession).toHaveBeenCalledTimes(1), {
+      timeout: 3000,
+    });
+    await waitFor(() =>
+      expect(client.getQueryState(['profile', 'me'])?.isInvalidated).toBe(true),
+    );
+    expect(auth.refreshSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('still refetches the cached queries when the refresh fails', async () => {
+    auth.refreshSession.mockRejectedValueOnce(new Error('network down'));
+    const client = await renderProvider(
+      sessionFor('a', { issuedAtMs: Date.now() }),
+    );
+
+    act(() => signalMembershipChange());
+
+    await waitFor(() => expect(auth.refreshSession).toHaveBeenCalledTimes(1), {
+      timeout: 3000,
+    });
+    await waitFor(() =>
+      expect(client.getQueryState(['profile', 'me'])?.isInvalidated).toBe(true),
+    );
+    expect(screen.getByTestId('session-user').textContent).toBe('a');
+  });
+
+  it('counts a signalled refresh toward the focus cooldown of #598', async () => {
+    await renderProvider(sessionFor('a', { issuedAtMs: Date.now() - 20 * 60 * 1000 }));
+
+    act(() => signalMembershipChange());
+    await waitFor(() => expect(auth.refreshSession).toHaveBeenCalledTimes(1), {
+      timeout: 3000,
+    });
+
+    // The token still looks stale (the mock never delivers a new session),
+    // but the signalled refresh was seconds ago.
+    fireEvent(window, new Event('focus'));
+    expect(auth.refreshSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('does nothing without a session', async () => {
+    await renderProvider(null);
+
+    act(() => signalMembershipChange());
+    await new Promise((resolve) => setTimeout(resolve, 900));
 
     expect(auth.refreshSession).not.toHaveBeenCalled();
   });
