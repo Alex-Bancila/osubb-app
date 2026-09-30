@@ -15,15 +15,17 @@
 --     several Groups are placed together, and one ineligible Group refuses
 --     the whole call.
 --
--- Mutation guards (each names the assertions that turn red):
+-- Mutation guards (run 2026-09-30 against the live database, the original
+-- body restored after; each names the assertions that turned red):
 --   * the automatic_membership branch removed -> "an Automatic-Membership
 --     Group is refused ..." and the parity matrix;
 --   * the archived and Minimum-Level branches swapped -> "a Group refusing
---     twice answers the core's first question" and the parity matrix;
---   * `order by 1` removed from the loop -> "the first refusing Group in
---     ascending id order is named";
---   * the rank's level read as 0 (recrut) whatever p_role -> "a rank at the
---     Minimum Level is accepted" and the parity matrix.
+--     twice answers the core's first question ..." and the parity matrix;
+--   * the loop ordered descending -> "the first refusing Group in ascending
+--     id order is named ..." and the parity matrix;
+--   * the rank's level read as Recrut's whatever p_role -> "several Groups
+--     that all admit the rank are not refused", "a rank at the Minimum Level
+--     is accepted" and the parity matrix.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
@@ -73,9 +75,9 @@ insert into public.groups (name, category, min_level, automatic_membership, crea
 values ('Automat #949', 'department', 0, true, pg_temp.i949(1)),
        -- Refuses on every Group question at once: archived, above every rank
        -- but the Moderator, and Automatic.
-       ('Triplu #949',  'department', 7, true, pg_temp.i949(1)),
+       ('Triplu #949',  'department', 9, true, pg_temp.i949(1)),
        -- Refuses on the Minimum Level and on Automatic Membership.
-       ('Dublu #949',   'department', 7, true, pg_temp.i949(1));
+       ('Dublu #949',   'department', 9, true, pg_temp.i949(1));
 update public.groups set status = 'archived'
  where name in ('Arhivat #949', 'Triplu #949');
 

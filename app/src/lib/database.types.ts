@@ -3562,6 +3562,16 @@ export type Database = {
         Args: { p_kind: string }
         Returns: number
       }
+      provision_group_refusal: {
+        Args: {
+          p_group_ids: number[]
+          p_role: Database["public"]["Enums"]["member_role"]
+        }
+        Returns: {
+          group_id: number
+          reason: string
+        }[]
+      }
       provision_profile: {
         Args: {
           p_appointed_by?: string
