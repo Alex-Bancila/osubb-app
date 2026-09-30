@@ -25,7 +25,9 @@ import { Empty, ErrorState, Loading } from '../../components/states';
 import { Button } from '../../components/ui/button';
 import { MemberAvatar } from '../../components/ui/combobox';
 import { FieldError } from '../../components/ui/field';
+import { useAuth } from '../../lib/auth';
 import { useCapabilities, type Capabilities } from '../../lib/capabilities';
+import { memberEditRights } from '../../lib/member-edit-rights';
 import { formatDayMonthYear, formatPoints } from '../../lib/format';
 import { isUuid } from '../../lib/ids';
 import { bucharestDayKey } from '../../lib/calendar-time';
@@ -64,7 +66,7 @@ const JOINED_SAVE_FAILED =
 
 /**
  * The Nickname and the full name, for BC and the Moderator only (ruling R5).
- * The page mounts it behind the server's `manageRoles` capability; the
+ * The page mounts it behind `memberEditRights(...).profile` (#944); the
  * database refuses anyone else whatever the browser sends.
  */
 function IdentityEditor({ member }: { member: AdminMember }) {
@@ -228,7 +230,9 @@ function Fact({
  * "Data intrării" for BC and the Moderator (#932): the date tenure counts
  * from, with Editează → a date → Salvează / Renunță in place. The write is
  * `profiles_update_self` plus the #160 column grant; the privileged-column
- * guard refuses anyone below level 6 whatever the browser sends.
+ * guard refuses anyone below level 6 whatever the browser sends. Mounted
+ * behind `memberEditRights(...).profile`, so a BC gets it on a BC's or the
+ * Moderator's page too (#944).
  */
 function JoinDateFact({ member }: { member: AdminMember }) {
   const hintId = useId();
@@ -422,6 +426,7 @@ export default function MemberScreen() {
   const memberId = isUuid(raw) ? raw : undefined;
   const member = useAdminMember(memberId);
   const capabilities = useCapabilities();
+  const viewerId = useAuth().session?.user.id;
   const groups = useAdminGroups();
   const mine = useMyGroupRoles();
   const location = useLocation();
@@ -454,9 +459,11 @@ export default function MemberScreen() {
 
   // BC and the Moderator see every membership; a Group Manager or
   // Responsible, only those in the Groups they lead and below.
-  const canEdit = capabilities.data?.manageRoles === true;
+  const leads = capabilities.data?.manageRoles === true;
+  // One predicate for every edit control below, mirroring the server (#944).
+  const rights = memberEditRights({ id: viewerId, leads }, data.memberId);
   const visibleGroups = data.groups.filter((row) => {
-    if (canEdit) return true;
+    if (leads) return true;
     const group = groups.data.find((candidate) => candidate.id === row.id);
     return (
       group !== undefined &&
@@ -504,7 +511,7 @@ export default function MemberScreen() {
           {/* BC and the Moderator set the date tenure counts from (#932);
               for anyone else an imported Member who never signed in has no
               date yet (F-28). */}
-          {canEdit ? (
+          {rights.profile ? (
             <JoinDateFact member={data} />
           ) : (
             joined && <Fact label="Membru din">{joined}</Fact>
@@ -517,7 +524,7 @@ export default function MemberScreen() {
           {data.contact?.phone && (
             <Fact label="Telefon">{data.contact.phone}</Fact>
           )}
-          {canEdit && (
+          {leads && (
             <Fact label="Politica de confidențialitate">
               {privacy.isPending
                 ? 'Se încarcă…'
@@ -527,8 +534,8 @@ export default function MemberScreen() {
             </Fact>
           )}
         </dl>
-        {canEdit && <IdentityEditor member={data} />}
-        {canEdit && <ReinvitePanel memberId={data.memberId} />}
+        {rights.profile && <IdentityEditor member={data} />}
+        {rights.profile && <ReinvitePanel memberId={data.memberId} />}
         {/* No eyebrow: it would only repeat the title (ruling 2, F-24). */}
         <Panel title="Grupuri" flush={visibleGroups.length > 0}>
           {!visibleGroups.length ? (
@@ -555,9 +562,9 @@ export default function MemberScreen() {
             </ul>
           )}
         </Panel>
-        {canEdit && <RolePanel selectedMemberId={data.memberId} />}
+        {rights.rankAndStatus && <RolePanel selectedMemberId={data.memberId} />}
         {/* role_history_read answers another Member's rows to level 6 only. */}
-        {canEdit && data.role && (
+        {leads && data.role && (
           <Panel eyebrow="Parcurs" icon={GraduationCap} title="Istoric roluri">
             <MemberRoleTimeline
               memberId={data.memberId}
