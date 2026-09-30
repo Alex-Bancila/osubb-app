@@ -10,6 +10,7 @@ import {
 import type { Session } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
 import { keys } from '../queries/keys';
+import { onMembershipChange } from './membership-signal';
 import { forgetPushOn, unsubscribeDevice, withTimeout } from './push-device';
 import { supabase } from './supabase';
 
@@ -63,6 +64,13 @@ const STALE_SESSION_THRESHOLD_MS = 15 * 60 * 1000;
 /** Never attempt a refresh more often than this, even if focus/visibility
  * events fire in a burst. */
 const REFRESH_COOLDOWN_MS = 60 * 1000;
+
+/**
+ * How long a membership signal (#959) waits before refreshing, so that one
+ * command writing two Notifications in one transaction ("Numire încheiată"
+ * then "Numire în") costs one refresh, not two.
+ */
+const MEMBERSHIP_SIGNAL_DEBOUNCE_MS = 500;
 
 /**
  * Unix ms the current access token was issued, derived from the pair the
@@ -145,6 +153,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionRef.current = session;
   }, [session]);
 
+  // When this tab last asked for a refresh, by either path below: a signalled
+  // refresh is as good as a focus one for the cooldown.
+  const lastRefreshAt = useRef(0);
+
   useEffect(() => {
     let active = true;
 
@@ -214,8 +226,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // current session exactly as it was — `onAuthStateChange` above only ever
   // hears about a refresh that actually succeeded.
   useEffect(() => {
-    let lastRefreshAt = 0;
-
     function refreshIfStale() {
       if (document.visibilityState !== 'visible') return;
 
@@ -227,9 +237,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const now = Date.now();
       if (now - issuedAt < STALE_SESSION_THRESHOLD_MS) return;
-      if (now - lastRefreshAt < REFRESH_COOLDOWN_MS) return;
+      if (now - lastRefreshAt.current < REFRESH_COOLDOWN_MS) return;
 
-      lastRefreshAt = now;
+      lastRefreshAt.current = now;
       void supabase.auth.refreshSession().catch(() => undefined);
     }
 
@@ -240,6 +250,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', refreshIfStale);
     };
   }, []);
+
+  // Instant follow-up on a membership change (#959). The Realtime channel
+  // raises the signal when the database writes this Member a `system`
+  // Notification: a role change, a Group appointment or removal, an accepted
+  // application. The refresh re-stamps the Organization Claims, then every
+  // cached view refetches under the new token — with the old one the shell
+  // kept showing the old role, Administrare stayed put and every
+  // Minimum-Level answer was the old one until the focus refresh above or
+  // the hourly expiry. A failed refresh leaves the session exactly as it was
+  // (the listener never hears of it), and the refetch still runs: the
+  // database rows are right even while the token lags.
+  useEffect(() => {
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const off = onMembershipChange(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (!active || !sessionRef.current) return;
+        lastRefreshAt.current = Date.now();
+        void supabase.auth
+          .refreshSession()
+          .catch(() => undefined)
+          .then(() => {
+            if (active) void queryClient.invalidateQueries();
+          });
+      }, MEMBERSHIP_SIGNAL_DEBOUNCE_MS);
+    });
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      off();
+    };
+  }, [queryClient]);
 
   // Decoded once per session object, not once per render or per query.
   const claims = useMemo(
