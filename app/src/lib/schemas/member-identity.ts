@@ -43,7 +43,7 @@ export const invitationFieldForReason: Readonly<Record<string, string>> = {
 };
 
 /**
- * "Invită membru" (#931): the address and full name `invite-member` stores —
+ * "Invită membru" (#931, #949): the address and full name `invite-member` stores —
  * trimmed, the address lowercased — measured as `profiles` measures them.
  */
 export const memberInviteSchema = z.object({
@@ -53,8 +53,8 @@ export const memberInviteSchema = z.object({
     max: 120,
     tooLong: 'full_name_too_long',
   }),
-  // The chosen Group's id, so a Group refusal clears once another is chosen.
-  group: z.number().int().nullable(),
+  // The chosen Groups' ids, so a Group refusal clears once the choice changes.
+  groups: z.array(z.number().int()),
 });
 
 /** Where each reason about a new invitation is shown. */
@@ -63,8 +63,11 @@ export const inviteFieldForReason: Readonly<Record<string, string>> = {
   invite_email_taken: 'email',
   full_name_required: 'fullName',
   full_name_too_long: 'fullName',
-  invite_group_unavailable: 'group',
-  invite_group_refused: 'group',
+  invite_group_unavailable: 'groups',
+  invite_group_archived: 'groups',
+  invite_group_below_rank: 'groups',
+  invite_group_automatic: 'groups',
+  invite_group_refused: 'groups',
 };
 
 /**

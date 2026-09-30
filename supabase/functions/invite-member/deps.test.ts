@@ -95,3 +95,40 @@ Deno.test("with no project URL or anon key the function refuses to start, naming
     );
   }
 });
+
+Deno.test("groupRefusal asks provision_group_refusal with the rank and every Group id (#949)", async () => {
+  const env = { url: URL, anonKey: ANON, secretKey: SECRET };
+  const rpcCalls: { fn: string; args: unknown }[] = [];
+  const answers: { data: unknown; error: unknown }[] = [
+    {
+      data: [{ group_id: 7, reason: "group_archived" }],
+      error: null,
+    },
+    { data: [], error: null },
+    { data: null, error: { code: "22P02", message: "bad enum" } },
+  ];
+  const create: ClientFactory = () =>
+    ({
+      rpc: (fn: string, args: unknown) => {
+        rpcCalls.push({ fn, args });
+        return Promise.resolve(answers.shift());
+      },
+    }) as unknown as SupabaseClient;
+  const deps = realDeps(
+    new Request("http://localhost/invite-member", { method: "POST" }),
+    env,
+    create,
+  );
+
+  assertEquals(await deps.groupRefusal("voluntar", [4, 7]), {
+    refusal: { groupId: 7, reason: "group_archived" },
+  });
+  assertEquals(await deps.groupRefusal("recrut", []), { refusal: null });
+  assertEquals(await deps.groupRefusal("rege", []), {
+    error: { code: "22P02", message: "bad enum" },
+  });
+  assertEquals(rpcCalls[0], {
+    fn: "provision_group_refusal",
+    args: { p_role: "voluntar", p_group_ids: [4, 7] },
+  });
+});

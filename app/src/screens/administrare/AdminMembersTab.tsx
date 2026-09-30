@@ -16,7 +16,7 @@ import {
   type AppointableMember,
 } from '../../queries/groups-admin';
 import { normalizeSearch, statusLabel } from '../volunteers/directory-filters';
-import { CsvImportPanel } from './CsvImportPanel';
+import { CsvImportDialog } from './CsvImportDialog';
 import { InviteMemberDialog, type InvitedMember } from './InviteMemberDialog';
 
 /** The Member's page in Administrare (#103). */
@@ -149,11 +149,20 @@ function MembersPanel({ provision }: { provision: boolean }) {
       title="Membri"
       control={
         provision && (
-          <InviteMemberDialog
-            onInvited={(member) =>
-              setInvited((current) => [...current, member])
-            }
-          />
+          // The two ways a Member comes in, as one pair (#949): two equal
+          // columns, so they match in size at every width.
+          <div
+            role="group"
+            aria-label="Adaugă membri"
+            className="grid grid-cols-2 gap-2"
+          >
+            <InviteMemberDialog
+              onInvited={(member) =>
+                setInvited((current) => [...current, member])
+              }
+            />
+            <CsvImportDialog />
+          </div>
         )
       }
       stack={latest ? 3 : undefined}
@@ -191,8 +200,8 @@ function MembersPanel({ provision }: { provision: boolean }) {
 
 /**
  * Administrare → Membri (#825): every Member, each opening their page (#103),
- * and — for whoever may provision accounts — "Invită membru" (#931) and the
- * CSV import. Mounted behind
+ * and — for whoever may provision accounts — "Invită membru" (#931) and
+ * "Import CSV" side by side in the panel's header (#949). Mounted behind
  * `manageRoles` or `provisionMembers`; the server decides every read again.
  */
 export default function AdminMembersTab() {
@@ -202,7 +211,6 @@ export default function AdminMembersTab() {
   return (
     <PageGrid columns={1}>
       <MembersPanel provision={provision} />
-      {provision && <CsvImportPanel />}
     </PageGrid>
   );
 }

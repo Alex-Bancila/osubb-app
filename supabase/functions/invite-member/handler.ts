@@ -5,7 +5,14 @@
 //
 // POST { email, full_name, role?, group_ids? }
 //   201 { user_id }        invited and provisioned
-//   400                    bad input
+//   400                    bad input; a Group that will not take the new
+//                          Member (group_archived,
+//                          group_member_below_min_level,
+//                          automatic_group_has_no_roster_members) or an
+//                          unknown one (invalid_reference) -- answered before
+//                          any mail leaves (#949), so each of these codes
+//                          means nothing was sent; invalid_role. After the
+//                          mail, a refusal is provision_failed (rolled back)
 //   401 / 403              not signed in / not BC or Moderator (level < 6);
 //                          since ruling R31 (#917) that caller may give any
 //                          rank, bc and moderator included
@@ -18,7 +25,9 @@
 // the roster path with the caller as the Appointment's actor. `dept_ids` and
 // `team_ids` are gone and are refused loudly rather than ignored: a silently
 // dropped field would create a member placed nowhere, which is worse than an
-// error a BC can read.
+// error a BC can read. Several Groups are placed all-or-nothing: #949 screens
+// every one before the invitation is sent, and provision_profile places them
+// in one transaction.
 //
 // The ORDER of the steps below is the security-relevant part, and each step
 // is there because of a bug this function actually shipped with — see the
@@ -30,7 +39,10 @@ import {
   json,
   refusal,
 } from "../_shared/cors.ts";
-import { inviteMember } from "../_shared/member-invite.ts";
+import {
+  GROUP_REFUSAL_MESSAGES,
+  inviteMember,
+} from "../_shared/member-invite.ts";
 import type { InviteDeps } from "./deps.ts";
 
 const INVITE_LEVEL = 6; // BC and above — capability manageRoles (spec §4.1)
@@ -211,6 +223,16 @@ export async function handleInvite(
         );
       case "invalid_reference":
         return refusal("invalid_reference", result.message, 400, origin);
+      case "invalid_role":
+        return refusal("invalid_role", "Rol inexistent.", 400, origin);
+      case "group_refused":
+        // The core's reason is the code: error vocabulary, not database prose.
+        return refusal(
+          result.reason,
+          GROUP_REFUSAL_MESSAGES[result.reason],
+          400,
+          origin,
+        );
       case "invite_failed":
         console.error("invite failed", result.cause);
         return refusal(

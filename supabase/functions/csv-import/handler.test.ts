@@ -504,6 +504,32 @@ Deno.test("records a compensated provisioning failure without exposing database 
   );
 });
 
+Deno.test("records a Group that will not take a Recrut as a row failure with its reason (#949)", async () => {
+  const { deps } = fakeDeps({
+    outcomes: {
+      "nivel@example.com": {
+        kind: "group_refused",
+        reason: "group_member_below_min_level",
+        groupId: 1,
+      },
+    },
+  });
+  const response = await handleCsvImport(
+    request({ csv: "name,email,dept,team\nAna,nivel@example.com,edu," }),
+    deps,
+  );
+  const payload = await response.json();
+
+  assertEquals(payload.summary, { created: 0, skipped: 0, errors: 1 });
+  assertEquals(payload.errors, [{
+    row: 2,
+    email: "nivel@example.com",
+    field: "row",
+    code: "group_member_below_min_level",
+    message: "Un grup ales cere un rol mai mare decât cel ales.",
+  }]);
+});
+
 Deno.test("records a Group removed after parsing as a row failure", async () => {
   const { deps } = fakeDeps({
     outcomes: {

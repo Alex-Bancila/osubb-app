@@ -6,12 +6,19 @@
 
 import { assertEquals } from "@std/assert";
 import { handleInvite } from "./handler.ts";
-import type { DbError, InviteDeps, ProvisionArgs } from "./deps.ts";
+import type {
+  DbError,
+  GroupRefusal,
+  InviteDeps,
+  ProvisionArgs,
+} from "./deps.ts";
 
 interface FakeOptions {
   callerId?: string | null;
   level?: number;
   missingGroups?: number[];
+  groupRefusal?: GroupRefusal;
+  groupRefusalError?: DbError;
   profileExists?: boolean;
   inviteError?: DbError & { status?: number };
   provisionError?: DbError;
@@ -21,6 +28,7 @@ interface FakeOptions {
 function fakeDeps(options: FakeOptions = {}) {
   const calls: string[] = [];
   const provisioned: ProvisionArgs[] = [];
+  const screened: { role: string; groupIds: number[] }[] = [];
 
   const deps: InviteDeps = {
     callerId: () => {
@@ -36,6 +44,15 @@ function fakeDeps(options: FakeOptions = {}) {
     missingGroupIds: (ids) => {
       if (ids.length > 0) calls.push("missingGroupIds");
       return Promise.resolve(options.missingGroups ?? []);
+    },
+    groupRefusal: (role, groupIds) => {
+      calls.push("groupRefusal");
+      screened.push({ role, groupIds });
+      return Promise.resolve(
+        options.groupRefusalError
+          ? { error: options.groupRefusalError }
+          : { refusal: options.groupRefusal ?? null },
+      );
     },
     profileExists: () => {
       calls.push("profileExists");
@@ -60,7 +77,7 @@ function fakeDeps(options: FakeOptions = {}) {
     },
   };
 
-  return { deps, calls, provisioned };
+  return { deps, calls, provisioned, screened };
 }
 
 function request(
@@ -270,9 +287,11 @@ Deno.test("role defaults to recrut", async () => {
   assertEquals(provisioned[0].role, "recrut");
 });
 
-Deno.test("a Group the roster path refuses rolls the invitation back", async () => {
+Deno.test("a Group refused after the screen rolls the invitation back as provision_failed, never as a pre-mail reason", async () => {
   // What provisioning raises since #602: the Appointment core's own reason,
-  // normalised to PT400 so every placement refusal is one class here.
+  // normalised to PT400. The screen passed (a Group archived in between), so
+  // the mail has left; the account must not linger and burn the address.
+  // A group_* code tells the inviter nothing was sent, which is false here.
   const { deps, calls } = fakeDeps({
     provisionError: { code: "PT400", message: "group_archived" },
   });
@@ -280,13 +299,137 @@ Deno.test("a Group the roster path refuses rolls the invitation back", async () 
   const res = await handleInvite(request(validBody), deps);
 
   assertEquals(res.status, 400);
-  // Nothing to log into, so the account must not linger and burn the address.
+  assertEquals(calls.includes("inviteByEmail"), true);
   assertEquals(calls.includes("deleteUser"), true);
-  // The database's own words stay in the function log (security pass L4).
   const payload = await res.json();
-  assertEquals(Object.keys(payload).sort(), ["code", "error"]);
   assertEquals(payload.code, "provision_failed");
   assertEquals(JSON.stringify(payload).includes("group_archived"), false);
+});
+
+Deno.test("any other provisioning failure rolls back and keeps the database's words in the log", async () => {
+  for (
+    const provisionError of [
+      { code: "PT400", message: "group_member_below_min_level" },
+      { code: "23503", message: "violates foreign key constraint" },
+      { code: "42501", message: "member_manage_forbidden" },
+    ]
+  ) {
+    const { deps, calls } = fakeDeps({ provisionError });
+
+    const res = await handleInvite(request(validBody), deps);
+    const payload = await res.json();
+
+    assertEquals(res.status, 400);
+    assertEquals(calls.includes("deleteUser"), true);
+    // Security pass L4: only the error vocabulary leaves the function.
+    assertEquals(Object.keys(payload).sort(), ["code", "error"]);
+    assertEquals(payload.code, "provision_failed");
+    assertEquals(
+      JSON.stringify(payload).includes(provisionError.message),
+      false,
+    );
+  }
+});
+
+// ==================== several Groups, screened before the mail (#949) ====================
+
+Deno.test("an ineligible Group among several refuses the invitation before any mail leaves", async () => {
+  const cases: Array<[string, string]> = [
+    ["group_archived", "Un grup ales este arhivat."],
+    [
+      "group_member_below_min_level",
+      "Un grup ales cere un rol mai mare decât cel ales.",
+    ],
+    [
+      "automatic_group_has_no_roster_members",
+      "Un grup ales își primește membrii automat, după rol.",
+    ],
+  ];
+  for (const [reason, message] of cases) {
+    const { deps, calls, screened } = fakeDeps({
+      groupRefusal: { groupId: 7, reason },
+    });
+
+    const res = await handleInvite(
+      request({ ...validBody, role: "voluntar", group_ids: [4, 7, 9] }),
+      deps,
+    );
+    const payload = await res.json();
+
+    assertEquals(res.status, 400);
+    assertEquals(payload, { code: reason, error: message });
+    // Every chosen Group, with the chosen rank, was asked.
+    assertEquals(screened, [{ role: "voluntar", groupIds: [4, 7, 9] }]);
+    // All or nothing, and nothing in anyone's inbox.
+    assertEquals(calls.includes("inviteByEmail"), false);
+    assertEquals(calls.includes("provision"), false);
+    assertEquals(calls.includes("deleteUser"), false);
+  }
+});
+
+Deno.test("the screen runs after the missing-id check and before the address lookup", async () => {
+  const { deps, calls } = fakeDeps();
+  await handleInvite(request({ ...validBody, group_ids: [4, 7] }), deps);
+  assertEquals(calls.slice(calls.indexOf("missingGroupIds")), [
+    "missingGroupIds",
+    "groupRefusal",
+    "profileExists",
+    "inviteByEmail",
+    "provision",
+  ]);
+});
+
+Deno.test("a Group the screen does not recognise reads as an unknown Group", async () => {
+  const { deps, calls } = fakeDeps({
+    groupRefusal: { groupId: 12, reason: "group_manage_forbidden" },
+  });
+  const res = await handleInvite(
+    request({ ...validBody, group_ids: [12] }),
+    deps,
+  );
+  const payload = await res.json();
+  assertEquals(res.status, 400);
+  assertEquals(payload, {
+    code: "invalid_reference",
+    error: "Grup inexistent: 12.",
+  });
+  assertEquals(calls.includes("inviteByEmail"), false);
+});
+
+Deno.test("a rank that does not exist is refused before any mail leaves", async () => {
+  const { deps, calls } = fakeDeps({
+    groupRefusalError: {
+      code: "22P02",
+      message: 'invalid input value for enum member_role: "rege"',
+    },
+  });
+  const res = await handleInvite(request({ ...validBody, role: "rege" }), deps);
+  const payload = await res.json();
+  assertEquals(res.status, 400);
+  assertEquals(payload, { code: "invalid_role", error: "Rol inexistent." });
+  assertEquals(calls.includes("inviteByEmail"), false);
+});
+
+Deno.test("a failed screen sends no mail", async () => {
+  const { deps, calls } = fakeDeps({
+    groupRefusalError: { code: "08006", message: "connection failure" },
+  });
+  const res = await handleInvite(
+    request({ ...validBody, group_ids: [4] }),
+    deps,
+  );
+  assertEquals(res.status, 500);
+  assertEquals((await res.json()).code, "unexpected_error");
+  assertEquals(calls.includes("inviteByEmail"), false);
+});
+
+Deno.test("name and address alone invite a Recrut with no Group, screened all the same", async () => {
+  const { deps, provisioned, screened } = fakeDeps();
+  const res = await handleInvite(request(validBody), deps);
+  assertEquals(res.status, 201);
+  assertEquals(screened, [{ role: "recrut", groupIds: [] }]);
+  assertEquals(provisioned[0].role, "recrut");
+  assertEquals(provisioned[0].groupIds, []);
 });
 
 // ==================== CORS allow-list (#378) ====================
