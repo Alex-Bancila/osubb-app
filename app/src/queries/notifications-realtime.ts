@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { signalMembershipChange } from '../lib/membership-signal';
 import { keys } from './keys';
 
 /** Realtime only signals a refetch. Row contents always come through RLS. */
@@ -15,8 +16,16 @@ export function useNotificationRealtime(memberId?: string) {
     void import('./notifications-realtime-channel')
       .then(({ subscribe }) => {
         if (!active) return;
-        unsubscribe = subscribe(memberId, () => {
+        unsubscribe = subscribe(memberId, (change) => {
           if (!active) return;
+          // A system Notification is the database telling this Member that
+          // their role, level or Group standing changed (#959): the session
+          // must be refreshed so the Organization Claims follow. The hint
+          // only chooses to refresh; a wrong one costs a refresh, a missed
+          // one waits for the focus (#598) or expiry backstop.
+          if (change?.event === 'INSERT' && change.kind === 'system') {
+            signalMembershipChange();
+          }
           void queryClient.invalidateQueries({
             queryKey: keys.notifications.list(memberId),
           });
