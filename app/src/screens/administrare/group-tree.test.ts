@@ -158,8 +158,44 @@ it('lists exactly the led Groups, inherited ones marked, parents kept as context
   );
   expect(rows.map((row) => [row.group.name, row.depth, row.lead])).toEqual([
     ['Educațional', 0, null],
-    ['Amfiteatru', 1, { groupRole: 'manager', inherited: false }],
-    ['Foto', 2, { groupRole: 'manager', inherited: true }],
+    [
+      'Amfiteatru',
+      1,
+      { groupRole: 'manager', inherited: false, positionTitle: null },
+    ],
+    ['Foto', 2, { groupRole: 'manager', inherited: true, positionTitle: null }],
+  ]);
+});
+
+it("carries the viewer's own Responsible title, never an inherited one (#962)", () => {
+  const rows = ledTree(
+    tree,
+    [
+      mine(3, 'Amfiteatru', [1, 3], 'responsible'),
+      mine(5, 'Foto', [1, 3, 5], 'responsible', { explicit: false }),
+    ],
+    [
+      {
+        group_id: 3,
+        group_role: 'responsible',
+        position_title: 'Responsabil IT',
+      },
+    ],
+  );
+  expect(rows.map((row) => [row.group.name, row.lead])).toEqual([
+    ['Educațional', null],
+    [
+      'Amfiteatru',
+      {
+        groupRole: 'responsible',
+        inherited: false,
+        positionTitle: 'Responsabil IT',
+      },
+    ],
+    [
+      'Foto',
+      { groupRole: 'responsible', inherited: true, positionTitle: null },
+    ],
   ]);
 });
 

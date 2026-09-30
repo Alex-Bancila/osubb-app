@@ -334,14 +334,15 @@ function treeColumns(
 function ledColumns(rows: readonly LedRow[]): DataTableColumn<LedRow>[] {
   const next = new Map(rows.map((row, index) => [row, rows[index + 1]]));
   const led = rows.filter((row) => row.lead !== null);
-  // The position as this Group names it (#962): a Responsible of a Department
-  // that calls its Responsibles "Coordonator" reads "Coordonator".
+  // The viewer's own title first, then the position as this Group names it
+  // (#962): a Responsible under "Responsabil IT" reads that; one held from a
+  // Group above, or untitled, reads what the Group calls its Responsibles.
   const lead = (row: LedRow) =>
     row.lead
       ? groupRoleLabel(
           row.lead.groupRole,
           row.group.manager_title,
-          null,
+          row.lead.positionTitle,
           row.group.responsible_title,
         )
       : '';

@@ -162,6 +162,12 @@ export function buildTree(groups: readonly AdminGroup[]): TreeRow[] {
 export type Lead = {
   groupRole: 'manager' | 'responsible';
   inherited: boolean;
+  /**
+   * The viewer's own title on this Group's roster (#962): null for a
+   * Manager, and for a position held from a Group above, whose title
+   * belongs to that Group's row.
+   */
+  positionTitle: string | null;
 };
 
 /** One row of **Conduse de mine**: a led Group, or a greyed context parent. */
@@ -223,16 +229,29 @@ function fromLedSource(source: LedSource): AdminGroup {
 export function ledTree(
   groups: readonly AdminGroup[],
   mine: readonly LedSource[],
-  rosterRows: readonly { group_id: number; group_role: string }[] | undefined,
+  rosterRows:
+    | readonly {
+        group_id: number;
+        group_role: string;
+        position_title?: string | null;
+      }[]
+    | undefined,
 ): LedRow[] {
   const leads = new Map<number, Lead>();
   const byId = new Map(groups.map((group) => [group.id, group]));
   for (const row of mine) {
     if (row.group_role !== 'manager' && row.group_role !== 'responsible')
       continue;
+    const inherited = inheritsGroupRole(row, rosterRows);
+    const own = inherited
+      ? undefined
+      : rosterRows?.find(
+          (r) => r.group_id === row.id && r.group_role === row.group_role,
+        );
     leads.set(row.id, {
       groupRole: row.group_role,
-      inherited: inheritsGroupRole(row, rosterRows),
+      inherited,
+      positionTitle: own?.position_title ?? null,
     });
     if (!byId.has(row.id)) byId.set(row.id, fromLedSource(row));
   }
