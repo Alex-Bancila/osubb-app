@@ -10,6 +10,7 @@ import { initials } from '../../lib/format';
 import { useSignOutAction } from '../../lib/use-sign-out-action';
 import { cn } from '../../lib/utils';
 import { useUnreadAnnouncementsCount } from '../../queries/announcements';
+import { useLiveChanges } from '../../queries/live-changes';
 import { useUnreadNotificationCount } from '../../queries/notifications';
 import { useNotificationRealtime } from '../../queries/notifications-realtime';
 import { useMyProfile } from '../../queries/profile';
@@ -193,6 +194,8 @@ function SidebarContent({
 export default function AppShell() {
   const { claims, session, signOut } = useAuth();
   useNotificationRealtime(session?.user.id);
+  // #961: every other change arrives on the org:changes broadcast.
+  useLiveChanges(session?.user.id);
   // #769: keep this device's push subscription working across VAPID key
   // rotations and push-service renewals, silently, from every app start.
   usePushSelfRepair();

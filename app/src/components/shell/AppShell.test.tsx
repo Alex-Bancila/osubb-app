@@ -37,6 +37,9 @@ vi.mock('../../lib/capabilities', async (original) => ({
 vi.mock('../../queries/request-decisions', () => ({
   usePendingDecisions: queries.usePendingDecisions,
 }));
+vi.mock('../../queries/live-changes', () => ({
+  useLiveChanges: vi.fn(),
+}));
 vi.mock('../../queries/notifications-realtime', () => ({
   useNotificationRealtime: vi.fn(),
 }));
