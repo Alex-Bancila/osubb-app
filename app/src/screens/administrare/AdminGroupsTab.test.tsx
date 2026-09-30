@@ -413,9 +413,9 @@ it('names no direct Manager by default, and never offers the Moderator (#951)', 
   show();
   await user.click(screen.getByRole('button', { name: 'Creează Grup' }));
   const dialog = await screen.findByRole('dialog', { name: 'Grup nou' });
-  // The category titles the position: BCE for a Department.
+  // The category titles the position: Vicepreședinte for a Department (#957).
   const picker = within(dialog).getByRole('combobox', {
-    name: 'Manager direct (BCE)',
+    name: 'Manager direct (Vicepreședinte)',
   });
   expect(picker).toHaveTextContent('Fără manager direct');
   expect(dialog).toHaveTextContent(
@@ -499,7 +499,7 @@ it('keeps a direct Manager dropped by the Minimum Level dropped when it is lower
   const dialog = await screen.findByRole('dialog', { name: 'Grup nou' });
   await user.type(within(dialog).getByLabelText('Numele grupului'), 'Audit');
   const picker = within(dialog).getByRole('combobox', {
-    name: 'Manager direct (BCE)',
+    name: 'Manager direct (Vicepreședinte)',
   });
   await user.click(picker);
   await user.click(await screen.findByRole('option', { name: /Radu Recrut/ }));
@@ -523,7 +523,7 @@ it('drops a direct Manager the raised Minimum Level rules out (#951)', async () 
   const dialog = await screen.findByRole('dialog', { name: 'Grup nou' });
   await user.type(within(dialog).getByLabelText('Numele grupului'), 'Audit');
   const picker = within(dialog).getByRole('combobox', {
-    name: 'Manager direct (BCE)',
+    name: 'Manager direct (Vicepreședinte)',
   });
   await user.click(picker);
   await user.click(await screen.findByRole('option', { name: /Radu Recrut/ }));
