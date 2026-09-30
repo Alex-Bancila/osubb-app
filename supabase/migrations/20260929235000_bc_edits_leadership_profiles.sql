@@ -4,7 +4,7 @@
 -- Why: R31 (#905, #917) gave every BC member the Moderator's authority over the
 -- BC and Moderator ranks, their Status, and provisioning or re-inviting an
 -- account at either rank. The Profile fields on those same accounts (full
--- name, Nickname, join date, email, tier) stayed the Moderator's alone: the
+-- name, Nickname, join date, email) stayed the Moderator's alone: the
 -- security pass M4 (20260927180000_live_level_gates.sql) kept a BC to Profiles
 -- below level 6 because profiles.email is what invite-member, reinvite-member
 -- and the bounce mapping read, and a BC rewriting a leadership address
@@ -19,7 +19,8 @@
 -- What does not change:
 --   * The self limb: a live active Member edits their own Profile; which
 --     columns is still guard_profile_privileged_columns' call (full_name,
---     email, tier, joined_year, joined_at are BC's), unchanged.
+--     email, joined_at are BC's; body as 20260929234000_retire_dead_surface.sql
+--     left it), unchanged.
 --   * Rank and Status: `update (role, status)` stays revoked from
 --     authenticated (#610, 20260926092000_profile_command_writes.sql), so this
 --     path never re-ranks or deactivates anyone; set_member_role and
