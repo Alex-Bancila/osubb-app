@@ -91,7 +91,7 @@ The run gives each Member one Appointment, and the Biroul de Conducere Group doe
 2. Administrare → Setări → **Grupul Biroului de Conducere**: choose it.
 3. Administrare → Grupuri → Biroul de Conducere → **Roluri**: appoint each board member as Responsabil under their title (Președinte, Vicepreședinte Executiv, Coordonator IT).
 
-From then on every Member sees that title wherever the app names the holder's Role — the menu badge, the Member Card (with the rank beside it), Voluntari, Administrare → Membri, the Group rosters and the pickers; until then BC and BCE members appear under their rank. Since #957 the Responsabil picker offers BCE members only, so a BC member's own title cannot be appointed from step 3 until that rule makes room for the board Group.
+From then on every Member sees that title wherever the app names the holder's Role — the menu badge, the Member Card (with the rank beside it), Voluntari, Administrare → Membri, the Group rosters and the pickers; until then BC and BCE members appear under their rank. On this Group alone the Responsabil picker offers BC members as well as BCE (#963); everywhere else a BC member is never a Responsabil (#957).
 
 ## Why the history goes through Completed Work Requests
 

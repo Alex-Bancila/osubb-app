@@ -30,8 +30,9 @@ import type {
 } from '../../queries/groups-admin';
 import { useAuth } from '../../lib/auth';
 import { fetchGroupCoordination } from '../../queries/group-applications';
+import { useOrgSettings } from '../../queries/org-settings';
 import { MemberPicker } from './MemberPicker';
-import { groupRoleLabel, positionCandidates } from './group-tree';
+import { groupRoleLabel, isBoardGroup, positionCandidates } from './group-tree';
 
 /**
  * The Members holding a position in a Group above this one: theirs flows
@@ -390,7 +391,15 @@ export function GroupRolesTab({
     ...inherited.ids,
     ...[...managers, ...responsibles].map((entry) => entry.memberId),
   ]);
-  // Two lists, not one (#957): BC may be a Coordonator, never a Responsabil.
+  // #963: on the board Group a Responsible title is a Board Title, a BC
+  // member's included. Unknown until the settings answer: #957 holds then.
+  const settings = useOrgSettings();
+  const boardGroup = isBoardGroup(
+    group.id,
+    settings.data?.get('board_group_id'),
+  );
+  // Two lists, not one (#957): BC may be a Coordonator, never a Responsabil
+  // — except on the board Group.
   const managerCandidates = positionCandidates(
     members,
     group,
@@ -402,6 +411,7 @@ export function GroupRolesTab({
     group,
     holders,
     'responsible',
+    { boardGroup },
   );
   // No appointment while the positions above are unknown (see above).
   const appointBusy = busy || !inherited.ready;

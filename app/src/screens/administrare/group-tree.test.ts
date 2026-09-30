@@ -10,6 +10,7 @@ import {
   directManagerCandidates,
   createdGroupManager,
   managerTitleFor,
+  isBoardGroup,
   positionCandidates,
   groupStatusLabel,
   groupTabs,
@@ -397,6 +398,54 @@ it('offers BC as Coordonator but never as Responsabil, and the Moderator as neit
       positionCandidates(members, { min_level: 6 }, new Set(), 'manager'),
     ),
   ).toEqual(['bc']);
+});
+
+it('offers BC as Responsabil of the board Group alone, where the title is the Board Title (#963)', () => {
+  const members = [
+    appointable('bce', 'bce', 5),
+    appointable('bc', 'bc', 6),
+    appointable('moderator', 'moderator', 9),
+  ];
+  const board = { min_level: 5 };
+  const offered = (list: readonly { memberId: string }[]) =>
+    list.map((member) => member.memberId);
+
+  expect(
+    offered(
+      positionCandidates(members, board, new Set(), 'responsible', {
+        boardGroup: true,
+      }),
+    ),
+  ).toEqual(['bce', 'bc']);
+  // Any other Group keeps #957: BC is never its Responsabil.
+  expect(
+    offered(positionCandidates(members, board, new Set(), 'responsible')),
+  ).toEqual(['bce']);
+  // The Coordonator picker is the same on the board, and the Moderator
+  // stays out of both.
+  expect(
+    offered(
+      positionCandidates(members, board, new Set(), 'manager', {
+        boardGroup: true,
+      }),
+    ),
+  ).toEqual(['bce', 'bc']);
+  // A holder is still no one to appoint.
+  expect(
+    offered(
+      positionCandidates(members, board, new Set(['bc']), 'responsible', {
+        boardGroup: true,
+      }),
+    ),
+  ).toEqual(['bce']);
+});
+
+it('knows the board Group by the board_group_id setting alone (#963)', () => {
+  expect(isBoardGroup(7, '7')).toBe(true);
+  expect(isBoardGroup(7, '8')).toBe(false);
+  expect(isBoardGroup(7, null)).toBe(false);
+  expect(isBoardGroup(7, undefined)).toBe(false);
+  expect(isBoardGroup(7, '')).toBe(false);
 });
 
 it('names the direct Manager in the receipt only when one was chosen (#951)', () => {
