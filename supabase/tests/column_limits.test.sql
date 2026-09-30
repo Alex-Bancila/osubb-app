@@ -129,7 +129,7 @@ select throws_ok(
 
 -- ==================== 5. groups.manager_title / short ====================
 select throws_ok(
-  format($$ select private.update_group_impl(%s, 'Educațional', %L, false, null, false, 0, null, null) $$,
+  format($$ select private.update_group_impl(%s, 'Educațional', %L, null, false, null, false, 0, null, null) $$,
          (select group_id from limits_fixture), repeat('m', 81)),
   'PT400', 'manager_title_too_long',
   'update_group refuses a manager title over 80 characters at step 1');
@@ -208,7 +208,8 @@ select is(
     where contype = 'c' and not convalidated
       and conname in ('profiles_avatar_color_ck', 'profiles_full_name_length_ck', 'profiles_email_length_ck',
                       'events_location_length_ck', 'group_members_position_title_length_ck',
-                      'groups_manager_title_length_ck', 'groups_short_length_ck',
+                      'groups_manager_title_length_ck', 'groups_responsible_title_length_ck',
+                      'groups_short_length_ck',
                       'points_ledger_note_length_ck', 'rating_guide_label_length_ck',
                       'rating_guide_note_length_ck', 'difficulty_guide_note_length_ck',
                       'notifications_title_length_ck', 'notifications_body_length_ck')),
@@ -218,11 +219,12 @@ select is(
     where contype = 'c'
       and conname in ('profiles_avatar_color_ck', 'profiles_full_name_length_ck', 'profiles_email_length_ck',
                       'events_location_length_ck', 'group_members_position_title_length_ck',
-                      'groups_manager_title_length_ck', 'groups_short_length_ck',
+                      'groups_manager_title_length_ck', 'groups_responsible_title_length_ck',
+                      'groups_short_length_ck',
                       'points_ledger_note_length_ck', 'rating_guide_label_length_ck',
                       'rating_guide_note_length_ck', 'difficulty_guide_note_length_ck',
                       'notifications_title_length_ck', 'notifications_body_length_ck')),
-  13::bigint, 'all thirteen constraints exist');
+  14::bigint, 'all fourteen constraints exist (#962 added groups_responsible_title_length_ck)');
 select is(
   (select count(*) from public.profiles where avatar_color is not null and avatar_color !~ '^#[0-9A-Fa-f]{6}$'),
   0::bigint, 'no stored avatar colour is outside #RRGGBB');

@@ -1034,7 +1034,7 @@ select id as coordinator from public.profiles where email = 'responsabil@demo.os
 select id as below_minimum from public.profiles where email = 'voluntar@demo.osubb' \gset
 select id as eligible from public.profiles where email = 'vot@demo.osubb' \gset
 select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000007');
-select public.update_group(id,name,manager_title,accepts_applications,3,shared_work_visibility,3,
+select public.update_group(id,name,manager_title,responsible_title,accepts_applications,3,shared_work_visibility,3,
   application_form_label,application_form_url,p_confirm_removals => true)
 from public.groups where id=:gated_group;
 reset role;
@@ -1159,7 +1159,7 @@ select public.set_group_role(:native_root,'d0000000-0000-0000-0000-000000000005'
 reset role;
 select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000005');
 select (public.create_group('SMOKE native child','team',:native_root,1)).id as native_child \gset
-select public.update_group(:native_child,'SMOKE native child','Coordonator',true,1,true,1,null,null);
+select public.update_group(:native_child,'SMOKE native child','Coordonator',null,true,1,true,1,null,null);
 reset role;
 select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000002');
 select (public.apply_to_group(:native_child,'SMOKE application')).id as native_application \gset

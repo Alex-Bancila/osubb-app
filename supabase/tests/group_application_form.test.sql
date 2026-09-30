@@ -72,7 +72,7 @@ create function pg_temp.g697_as(n integer) returns void language sql as $$
 -- The child's full operational state, with only the link varying.
 create function pg_temp.g697_set(p_label text, p_url text) returns text
 language sql as $$
-  select format($f$select public.update_group(%s, 'Copil #697', null, false, null, false, 0, %L, %L)$f$,
+  select format($f$select public.update_group(%s, 'Copil #697', null, null, false, null, false, 0, %L, %L)$f$,
                 pg_temp.g697_group('Copil #697'), p_label, p_url)
 $$;
 create function pg_temp.g697_link(p_name text) returns text[]
@@ -218,7 +218,7 @@ select throws_ok(pg_temp.g697_set(null, null),
 
 -- No coupling: an Automatic-Membership Group may store a link like any other.
 select lives_ok(
-  format($$select public.update_group(%s, 'Automat #697', null, false, null, false, 0, 'Formular', 'https://forms.example.org/d')$$,
+  format($$select public.update_group(%s, 'Automat #697', null, null, false, null, false, 0, 'Formular', 'https://forms.example.org/d')$$,
          pg_temp.g697_group('Automat #697')),
   'an Automatic-Membership Group may store a link -- the setting is not tied to any Group kind');
 

@@ -324,7 +324,7 @@ select throws_ok(
   'apply_to_group: to an outsider a Private Group is missing, as in groups_read');
 select pg_temp.test_login_leadership(pg_temp.u756(11));
 select throws_ok(
-  format($$select public.update_group(%s, 'Private #756', null, true, 3, false, 0, null, null, false)$$,
+  format($$select public.update_group(%s, 'Private #756', null, null, true, 3, false, 0, null, null, false)$$,
          pg_temp.g756('Private #756')),
   'PT400', 'group_private',
   'update_group: Applications cannot be turned on for a Private Group');
