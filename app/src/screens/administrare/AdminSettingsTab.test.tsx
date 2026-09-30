@@ -175,8 +175,8 @@ it('groups the settings by purpose, each with its effect, value and one Editeaz�
     ],
     [
       'Grupul Biroului de Conducere',
-      'Titlul fiecărui responsabil din acest grup privat apare pe Profilul lui, la Funcția în OSUBB.',
-      'Profilul membrilor BC și BCE arată rolul, nu un titlu.',
+      'Titlul fiecărui responsabil BC sau BCE din acest grup privat apare în locul rolului, peste tot în aplicație.',
+      'Membrii BC și BCE apar cu rolul, nu cu un titlu.',
     ],
   ] as const;
   for (const [label, effect, unset] of expected) {
@@ -408,7 +408,7 @@ it('points the board setting at an active Private Group and clears it (#824)', a
   expect(await within(valueOf(item)).findByText('Nesetat')).toBeVisible();
   expect(
     within(item).getByText(
-      'Profilul membrilor BC și BCE arată rolul, nu un titlu.',
+      'Membrii BC și BCE apar cu rolul, nu cu un titlu.',
     ),
   ).toBeVisible();
 });

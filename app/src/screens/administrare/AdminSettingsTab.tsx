@@ -104,11 +104,12 @@ const ADUNAREA_GENERALA: GroupSetting = {
 const BOARD: GroupSetting = {
   key: 'board_group_id',
   label: 'Grupul Biroului de Conducere',
-  // #824: only Profil reads it, for BC/BCE's "Funcția în OSUBB", and falls
-  // back to the Role label; it confers nothing.
+  // #824, #963: the Board Titles live here. The app names a BC/BCE member's
+  // Role by theirs everywhere (Funcția în OSUBB included) and falls back to
+  // the Role label; it confers nothing.
   effect:
-    'Titlul fiecărui responsabil din acest grup privat apare pe Profilul lui, la Funcția în OSUBB.',
-  unset: 'Profilul membrilor BC și BCE arată rolul, nu un titlu.',
+    'Titlul fiecărui responsabil BC sau BCE din acest grup privat apare în locul rolului, peste tot în aplicație.',
+  unset: 'Membrii BC și BCE apar cu rolul, nu cu un titlu.',
   fits: (group) => group.is_private,
 };
 
