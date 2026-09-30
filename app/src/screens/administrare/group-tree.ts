@@ -428,3 +428,49 @@ export function positionCandidates(
       !holders.has(member.memberId),
   );
 }
+
+/**
+ * The direct Manager's title a new Group's category pre-fills (#951), the
+ * titles the Groups of that category carry: BCE for a Department, Coordonator
+ * Principal for a Project, Coordonator for a Team.
+ */
+const MANAGER_TITLES: Record<string, string> = {
+  department: 'BCE',
+  project: 'Coordonator Principal',
+  team: 'Coordonator',
+};
+
+export function managerTitleFor(category: string): string {
+  return MANAGER_TITLES[category] ?? 'Coordonator';
+}
+
+/**
+ * Who a new Group's direct Manager may be (#951): a live active Member at or
+ * above the new Group's Minimum Level — what `create_group` accepts — and
+ * never the Moderator. BC is offered like anyone eligible, the creator too.
+ */
+export function directManagerCandidates(
+  members: readonly AppointableMember[],
+  minLevel: number,
+): AppointableMember[] {
+  return members.filter(
+    (member) =>
+      member.status === 'activ' &&
+      member.level >= minLevel &&
+      member.roleId !== 'moderator',
+  );
+}
+
+/**
+ * Who a created Group's receipt names (#951): the direct Manager appointed
+ * with it and the title they hold, or `null` when none was chosen.
+ */
+export function createdGroupManager(
+  command: { category: string; managerId: string | null },
+  members: readonly AppointableMember[],
+): { member: AppointableMember; title: string } | null {
+  const member = command.managerId
+    ? members.find((candidate) => candidate.memberId === command.managerId)
+    : undefined;
+  return member ? { member, title: managerTitleFor(command.category) } : null;
+}

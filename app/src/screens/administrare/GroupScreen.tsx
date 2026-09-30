@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import {
   BackLink,
@@ -35,12 +35,14 @@ import {
 import { CampaignsPanel } from '../campaigns/CampaignsPanel';
 import { GroupApplicationsTab } from './GroupApplicationsTab';
 import { GroupChildrenTab } from './GroupChildrenTab';
+import { GroupCreatedReceipt } from './GroupCreateDialog';
 import { GroupRolesTab } from './GroupRolesTab';
 import { GroupRosterTab } from './GroupRosterTab';
 import { GroupSettingsTab } from './GroupSettingsTab';
 import {
   categoryLabel,
   currentGroupTab,
+  createdGroupManager,
   groupPathNames,
   groupStatusLabel,
   groupTabs,
@@ -171,7 +173,7 @@ export default function GroupScreen() {
   const actorLevel = useAuth().claims?.member_level ?? 0;
   const [searchParams] = useSearchParams();
   const applicationsQuery = useGroupApplications(id);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<ReactNode>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastReason, setLastReason] = useState<string | undefined>(undefined);
   const submitting = useRef(false);
@@ -237,7 +239,15 @@ export default function GroupScreen() {
     try {
       await command.mutateAsync(next);
       setLastReason(undefined);
-      setMessage(SUCCESS[next.kind]);
+      setMessage(
+        next.kind === 'create' ? (
+          <GroupCreatedReceipt
+            manager={createdGroupManager(next, membersQuery.data ?? [])}
+          />
+        ) : (
+          SUCCESS[next.kind]
+        ),
+      );
       return true;
     } catch (failure) {
       const known = failure instanceof CommandError;
