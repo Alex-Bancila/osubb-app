@@ -407,9 +407,7 @@ it('points the board setting at an active Private Group and clears it (#824)', a
   );
   expect(await within(valueOf(item)).findByText('Nesetat')).toBeVisible();
   expect(
-    within(item).getByText(
-      'Membrii BC și BCE apar cu rolul, nu cu un titlu.',
-    ),
+    within(item).getByText('Membrii BC și BCE apar cu rolul, nu cu un titlu.'),
   ).toBeVisible();
 });
 
