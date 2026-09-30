@@ -7,7 +7,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(9);
+select plan(12);
 
 -- Tables that carry no signal on purpose: the member-filtered notifications
 -- channel (#604), and self-only settings or machinery nobody watches live.
@@ -94,12 +94,38 @@ select cmp_ok(
   '>=', 1::bigint,
   'a Member may read the org:changes signals (the join succeeds)');
 
+-- Nobody but the trigger writes signals: realtime.messages has no insert
+-- policy, so a client's realtime.send() is swallowed by its own exception
+-- block and a direct insert is refused. A future insert policy fails here.
+create temp table member_count as
+  select count(*) as n from realtime.messages where topic = 'org:changes';
+select realtime.send('{"table":"tasks","op":"FORGED"}'::jsonb, 'change', 'org:changes', true);
+select is(
+  (select count(*) from realtime.messages where topic = 'org:changes')
+    - (select n from member_count),
+  0::bigint,
+  'a Member calling realtime.send() writes no signal');
+select throws_ok(
+  $$ insert into realtime.messages (topic, extension, payload, event, private)
+     values ('org:changes', 'broadcast', '{}'::jsonb, 'change', true) $$,
+  '42501',
+  null,
+  'a Member cannot insert a signal directly');
+
 select pg_temp.test_login('a0961000-0000-0000-0000-000000000002', '{}'::jsonb);
 select set_config('realtime.topic', 'org:changes', true);
 select is(
   (select count(*) from realtime.messages where topic = 'org:changes'),
   0::bigint,
   'a signed-in account without Organization Claims reads nothing');
+
+select pg_temp.test_clear_jwt();
+select set_config('role', 'anon', true);
+select set_config('realtime.topic', 'org:changes', true);
+select is(
+  (select count(*) from realtime.messages where topic = 'org:changes'),
+  0::bigint,
+  'anon reads nothing');
 
 select * from finish();
 rollback;

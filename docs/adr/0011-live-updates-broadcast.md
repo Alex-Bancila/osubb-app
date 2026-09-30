@@ -14,7 +14,7 @@ Every screen reads through TanStack Query with a 30-second `staleTime` and a ref
 Two ways to make every change live exist on Supabase Realtime:
 
 1. **`postgres_changes` on each table.** No server code, but Realtime evaluates the table's `select` policy once per changed row per connected Member. `private.can_read_task` is a multi-join over profiles, roles, tasks, groups, task_assignments, task_candidates and group_members; one `evaluate_task` writes several rows across five tables, so the policy would run dozens of times per connected Member for one command. DELETE events are not filtered by RLS at all, and `old` records carry only primary keys. The cost grows with changes × members × policy cost.
-2. **Broadcast from the database.** A statement-level trigger sends one message — the table name and the operation, never a row — on one private topic. Realtime authorizes the join once, against a `select` policy on `realtime.messages`, and then fans each message out to the connected clients. The cost grows with changes × members only, and every screen still refetches its rows through RLS.
+2. **Broadcast from the database.** A statement-level trigger sends one message — the table name and the operation, never a row — on one private topic. Realtime authorizes the join once, against a `select` policy on `realtime.messages`, and then fans each message out to the connected clients. The cost grows with changes × (connected members + 1) only — Realtime bills the message the database sends plus one delivery per subscribed client — and every screen still refetches its rows through RLS.
 
 ADR-0007 already rules that Realtime is only a signal to invalidate caches and never a second authorization path. Option 2 keeps that literally.
 
@@ -28,7 +28,7 @@ ADR-0007 already rules that Realtime is only a signal to invalidate caches and n
 
 ## Consequences
 
-- **Cost model.** Realtime bills messages, one per signal per connected client: Free 2M/month, Pro 5M/month. Statement-level triggers keep a fan-out or a seed run at one signal per statement. Concurrent connections are unchanged (channels multiplex over the one socket the notifications channel already opens).
+- **Cost model.** Realtime bills messages: one for the signal the database sends plus one per connected client it is delivered to, so a signal costs connected members + 1; Free 2M/month, Pro 5M/month. Statement-level triggers keep a fan-out or a seed run at one signal per statement. Concurrent connections are unchanged (channels multiplex over the one socket the notifications channel already opens).
 - **Failure mode.** With Realtime down, the database logs `WarnSendingBroadcastMessage` warnings and nothing else changes; the app falls back to `staleTime` and the focus refetch. A missing `realtime.messages` partition (created daily by the Realtime service) behaves the same way.
 - **What is not live.** Reading an Announcement signals only its readers list; the push machinery and per-Member preferences signal nothing.
 - **Conventions.** A new domain table gets the trigger in the migration that creates it, or its name on the exclusion list, and a line in `FAMILIES_BY_TABLE` (`docs/backend/conventions.md`). `private.broadcast_change` is pinned as a `trigger`-category function in `tracker_grants.test.sql`.
