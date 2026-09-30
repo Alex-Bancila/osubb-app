@@ -7,6 +7,7 @@
 - **Amended:** 2026-09-21 — profile grilling: the Promotion hooks read as ADR-0004's amendment of the same date (two doors behind one tenure gate, the Promotion Threshold, Retention Signals, AG Eligibility by the Voluntar Activ Role alone; superseded 2026-09-27)
 - **Amended:** 2026-09-27 — ruling R28: the Promotion hooks read as ADR-0004's amendment of the same date (Role Evaluations over a chosen date range, two BC-editable Promotion Thresholds, Promotion Candidates promoted by BC by hand)
 - **Amended:** 2026-09-30 — #957: a Department's Group Manager is its Vicepreședinte, a BC member; the BCE members are its Group Responsibles; a BC member may be Group Manager of any Group and never Group Responsible
+- **Amended:** 2026-09-30 — #962: the Group Responsible position has a per-Group display name (`groups.responsible_title`), as the Group Manager's has; each Responsible keeps a title of their own
 - **Deciders:** Alex Băncilă (grilling sessions of 2026-09-18, 2026-09-20, and 2026-09-21)
 - **Supersedes:** the work-origin, Campaign, and authorization sections of ADR-0007; the scope model and management rules of ADR-0008; the Voluntar → Membru Activ rule of ADR-0004 (each amended by reference, none retired)
 - **Superseded by:** —
@@ -37,17 +38,17 @@ A **Group** is one entity. BC or Moderator creates a top-level Group with a cust
 
 A Group carries **settings, not a kind**:
 
-| Setting                        | Meaning                                                                                                                                                   |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Parent Group                   | Optional, to any depth: a Child Group may have Child Groups of its own; cycles are impossible. Chosen at creation and never changed (amended 2026-09-20). |
-| Competes in the Department Cup | Top-level only. On for the five departments; off for Diverse, Secretariat, every Project, every Independent Team, and the AG.                             |
-| Counts toward the parent's Cup | Child only, default on. A Group's Task Points reach the Cup of its nearest competing ancestor only when this setting is on at every link of the path.     |
-| Minimum Level                  | Join and visibility gate (below).                                                                                                                         |
-| Accepts Applications           | On or off, with an Application Level at or above the Minimum Level.                                                                                       |
-| Shared Work Visibility         | Every member sees every Task of the Group. Pre-filled on for the Team category, off otherwise.                                                            |
-| Automatic Membership           | Every active Member at or above the Minimum Level belongs; the roster follows the Role and is never edited by hand.                                       |
-| Position display names         | What this Group calls its Group Manager ("BCE", "Coordonator Principal") and each Group Responsible ("Responsabil Logistică").                            |
-| Lifecycle                      | Active or archived; archiving keeps history.                                                                                                              |
+| Setting                        | Meaning                                                                                                                                                        |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Parent Group                   | Optional, to any depth: a Child Group may have Child Groups of its own; cycles are impossible. Chosen at creation and never changed (amended 2026-09-20).      |
+| Competes in the Department Cup | Top-level only. On for the five departments; off for Diverse, Secretariat, every Project, every Independent Team, and the AG.                                  |
+| Counts toward the parent's Cup | Child only, default on. A Group's Task Points reach the Cup of its nearest competing ancestor only when this setting is on at every link of the path.          |
+| Minimum Level                  | Join and visibility gate (below).                                                                                                                              |
+| Accepts Applications           | On or off, with an Application Level at or above the Minimum Level.                                                                                            |
+| Shared Work Visibility         | Every member sees every Task of the Group. Pre-filled on for the Team category, off otherwise.                                                                 |
+| Automatic Membership           | Every active Member at or above the Minimum Level belongs; the roster follows the Role and is never edited by hand.                                            |
+| Position display names         | What this Group calls its Group Manager ("BCE", "Coordonator Principal"), its Group Responsibles ("Coordonator", #962) and each one ("Responsabil Logistică"). |
+| Lifecycle                      | Active or archived; archiving keeps history.                                                                                                                   |
 
 **Department**, **Project**, and **Team** are presentation categories chosen at creation. They pre-fill settings and label the interface. No authority, visibility, membership, notification, or Cup rule may branch on the category, and a conventions test enforces it.
 
@@ -73,6 +74,8 @@ Every Group has the same three positions: **Group Manager**, **Group Responsible
 BCE remains a rank and is also the display name of a Department's Group Manager; the two are linked by Appointment, never by the schema. Coordonator Principal is the display name of a Project's Group Manager, appointed by BC or Moderator; Responsabil de Proiect is a Group Responsible of a Project.
 
 > **Amended 2026-09-30 (#957, Alex).** A Department is run by its **Vicepreședinte**, a BC member, who holds the Department's Group Manager position under that display name; the Department's **BCE members are its Group Responsibles**, each under their own title. BCE stays a rank; it is no longer the display name of a Department's Manager. In general a BC member may be appointed Group Manager of any Group and never Group Responsible; the Moderator holds no Group position. The server never restricted this — `private.appoint_group_member` judges liveness and Minimum Level only — so the rule lives in the Administrare pickers and here. The Manager title pre-filled for a new Department is "Vicepreședinte"; existing Departments are renamed in their settings by BC.
+
+> **Amended 2026-09-30 (#962, Alex).** The Group Responsible position has a display name per Group, as the Group Manager's has: `groups.responsible_title`, an operational setting ("Cum se numesc responsabilii") written by `update_group` under the same rules as the Manager title — optional, at most 80 characters, never blank. A Department's BCE members are its "Coordonator". Each Group Responsible still carries a title of their own, required at appointment: the appointment form pre-fills it with the Group's, and a label names a Responsible by their own title, then by the Group's, then "Responsabil". Each Roluri panel and its appointment copy use its position's name, so a Department offers "Numește un vicepreședinte" beside "Numește un coordonator"; a Group without the settings reads as before.
 
 ### Ranks
 
