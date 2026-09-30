@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog';
+import { reasonCopy } from '../../lib/command-reasons';
 import { supabase } from '../../lib/supabase';
 import { keys } from '../../queries/keys';
 
@@ -22,6 +23,11 @@ type ImportReport = {
   skipped: SkippedRow[];
   errors: ErrorRow[];
 };
+
+/** Why a row was skipped, from the shared reason table; an unknown code reads generically. */
+function skipReason(code: string) {
+  return reasonCopy(`csv_row_${code}`) ?? reasonCopy('csv_row_skipped') ?? code;
+}
 
 function isReport(value: unknown): value is ImportReport {
   if (typeof value !== 'object' || value === null) return false;
@@ -225,11 +231,7 @@ export function CsvImportDialog() {
               >
                 {report.skipped.map((row) => (
                   <li key={row.row}>
-                    Rândul {row.row}: {row.email} (
-                    {row.code === 'already_exists'
-                      ? 'există deja'
-                      : 'duplicat în fișier'}
-                    )
+                    Rândul {row.row}: {row.email} ({skipReason(row.code)})
                   </li>
                 ))}
               </ul>

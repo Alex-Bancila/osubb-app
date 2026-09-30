@@ -88,7 +88,7 @@ export type InviteMemberResult =
   | { kind: "already_exists"; email: string }
   | { kind: "invalid_reference"; message: string }
   | { kind: "invalid_role" }
-  | { kind: "group_refused"; reason: string; groupId: number | null }
+  | { kind: "group_refused"; reason: string; groupId: number }
   | { kind: "invite_failed"; cause?: DbError & { status?: number } }
   | { kind: "provision_failed"; details: string; cause: DbError };
 
@@ -170,19 +170,11 @@ export async function inviteMember(
     return { kind: "already_exists", email };
   }
 
-  await deps.deleteUser(invited.userId);
   // A Group that changed between the screen above and the locked Appointment
-  // (archived a moment ago, say) still reads as its reason.
-  if (
-    provisionError.code === "PT400" &&
-    isGroupRefusal(provisionError.message)
-  ) {
-    return {
-      kind: "group_refused",
-      reason: provisionError.message,
-      groupId: null,
-    };
-  }
+  // (archived a moment ago, say) lands here too. It stays provision_failed,
+  // not its Group reason: the mail has left, and a group_* code promises the
+  // inviter that nothing was sent.
+  await deps.deleteUser(invited.userId);
   return {
     kind: "provision_failed",
     details: provisionError.message,

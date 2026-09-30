@@ -101,7 +101,11 @@ it('shows created, skipped, and per-row error messages from a mixed report', asy
     data: {
       summary: { created: 1, skipped: 1, errors: 1 },
       created: [{ row: 2, email: 'ana@example.com', user_id: 'u1' }],
-      skipped: [{ row: 3, email: 'vechi@example.com', code: 'already_exists' }],
+      skipped: [
+        { row: 3, email: 'vechi@example.com', code: 'already_exists' },
+        { row: 5, email: 'dublu@example.com', code: 'duplicate_in_file' },
+        { row: 6, email: 'nou@example.com', code: 'some_future_code' },
+      ],
       errors: [
         {
           row: 4,
@@ -120,6 +124,11 @@ it('shows created, skipped, and per-row error messages from a mixed report', asy
   expect(
     await screen.findByText('Rândul 3: vechi@example.com (există deja)'),
   ).toBeVisible();
+  expect(
+    screen.getByText('Rândul 5: dublu@example.com (duplicat în fișier)'),
+  ).toBeVisible();
+  // A skip code the dialog does not know yet never reads as a duplicate.
+  expect(screen.getByText('Rândul 6: nou@example.com (ignorat)')).toBeVisible();
   expect(
     screen.getByText(
       'Rândul 4 (gresit@example.com): Departament inexistent: Necunoscut.',

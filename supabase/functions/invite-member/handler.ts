@@ -10,7 +10,9 @@
 //                          group_member_below_min_level,
 //                          automatic_group_has_no_roster_members) or an
 //                          unknown one (invalid_reference) -- answered before
-//                          any mail leaves (#949); invalid_role
+//                          any mail leaves (#949), so each of these codes
+//                          means nothing was sent; invalid_role. After the
+//                          mail, a refusal is provision_failed (rolled back)
 //   401 / 403              not signed in / not BC or Moderator (level < 6);
 //                          since ruling R31 (#917) that caller may give any
 //                          rank, bc and moderator included

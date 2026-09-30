@@ -490,6 +490,10 @@ const REASON_COPY = new Map<string, string>([
     'invite_role_unavailable',
     'Rolul ales nu mai există. Reîncarcă pagina și alege din nou.',
   ],
+  /* browser: why the CSV import skipped a row (#72, #949). */
+  ['csv_row_already_exists', 'există deja'],
+  ['csv_row_duplicate_in_file', 'duplicat în fișier'],
+  ['csv_row_skipped', 'ignorat'],
   [
     'invite_group_refused',
     'Membrul nu poate fi adăugat în grupurile alese: unul e arhivat, își primește membrii automat sau cere un rol mai mare. Nu s-a adăugat niciun membru; verifică grupurile și trimite din nou.',

@@ -287,10 +287,11 @@ Deno.test("role defaults to recrut", async () => {
   assertEquals(provisioned[0].role, "recrut");
 });
 
-Deno.test("a Group refused after the screen still rolls the invitation back, with its reason", async () => {
+Deno.test("a Group refused after the screen rolls the invitation back as provision_failed, never as a pre-mail reason", async () => {
   // What provisioning raises since #602: the Appointment core's own reason,
   // normalised to PT400. The screen passed (a Group archived in between), so
   // the mail has left; the account must not linger and burn the address.
+  // A group_* code tells the inviter nothing was sent, which is false here.
   const { deps, calls } = fakeDeps({
     provisionError: { code: "PT400", message: "group_archived" },
   });
@@ -298,18 +299,17 @@ Deno.test("a Group refused after the screen still rolls the invitation back, wit
   const res = await handleInvite(request(validBody), deps);
 
   assertEquals(res.status, 400);
+  assertEquals(calls.includes("inviteByEmail"), true);
   assertEquals(calls.includes("deleteUser"), true);
   const payload = await res.json();
-  assertEquals(payload, {
-    code: "group_archived",
-    error: "Un grup ales este arhivat.",
-  });
+  assertEquals(payload.code, "provision_failed");
+  assertEquals(JSON.stringify(payload).includes("group_archived"), false);
 });
 
 Deno.test("any other provisioning failure rolls back and keeps the database's words in the log", async () => {
   for (
     const provisionError of [
-      { code: "PT400", message: "toString" },
+      { code: "PT400", message: "group_member_below_min_level" },
       { code: "23503", message: "violates foreign key constraint" },
       { code: "42501", message: "member_manage_forbidden" },
     ]
