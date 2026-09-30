@@ -103,8 +103,8 @@ export function memberTaskPresentation(
     campaign_id: row.campaign_id,
     duplicated_from_task_id: row.duplicated_from_task_id,
     queue_closed_at: row.queue_closed_at,
-    link_label: null,
-    link_url: null,
+    link_label: row.link_label,
+    link_url: row.link_url,
     group: name
       ? {
           name,

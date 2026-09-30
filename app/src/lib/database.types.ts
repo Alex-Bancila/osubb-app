@@ -3372,6 +3372,8 @@ export type Database = {
           group_id: number
           group_name: string
           is_overdue: boolean
+          link_label: string
+          link_url: string
           member_id: string
           parent_task_id: number
           parent_task_title: string

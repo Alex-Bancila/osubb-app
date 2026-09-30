@@ -268,6 +268,27 @@ it('draws each Assignment with the Task card, read-only, keeping the evaluation 
     ).violations,
   ).toEqual([]);
 });
+it("shows the Task's Attached Link like every other Task view, and none where there is none (#947)", () => {
+  state.history.mockReturnValue({
+    data: [
+      {
+        ...workshop,
+        link_label: 'Dosar atelier',
+        link_url: 'https://drive.example/atelier',
+      },
+      { ...budget, link_label: null, link_url: null },
+    ],
+  });
+  view();
+  const [first, second] = cards() as [HTMLElement, HTMLElement];
+  const link = within(first).getByRole('link', {
+    name: 'Dosar atelier (se deschide într-o filă nouă)',
+  });
+  expect(link).toHaveAttribute('href', 'https://drive.example/atelier');
+  expect(link).toHaveAttribute('target', '_blank');
+  expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  expect(within(second).queryByRole('link')).toBeNull();
+});
 it('narrows by Group subtree and Campaign on the page, and sends the deadline range', async () => {
   const user = userEvent.setup();
   view(uid, '?de_la=2026-09-01&pana_la=2026-09-30');
