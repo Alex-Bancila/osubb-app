@@ -11,18 +11,12 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(60);
+select plan(52);
 
 -- ==================== 1. Surface, shape and grants ====================
 
-select has_view('public', 'dept_cup', 'the unfiltered Department Cup remains a public read endpoint');
-select is(
-  (select reloptions::text from pg_class where oid = 'public.dept_cup'::regclass),
-  '{security_invoker=on}', 'the Department Cup view is security-invoker');
-select ok(has_table_privilege('authenticated', 'public.dept_cup', 'SELECT'),
-  'authenticated may select the Department Cup view');
-select ok(not has_table_privilege('anon', 'public.dept_cup', 'SELECT'),
-  'anon cannot select the Department Cup view');
+-- #936: the dept_cup view (existence, reloptions, table grants) is dropped;
+-- public.department_cup is the sole surviving read surface, checked below.
 select has_function('public', 'department_cup', array['bigint', 'timestamp with time zone', 'timestamp with time zone'],
   'the Campaign-filtered Department Cup read exists');
 select ok(has_function_privilege('authenticated', 'public.department_cup(bigint, timestamptz, timestamptz)', 'EXECUTE'),
@@ -31,15 +25,6 @@ select ok(not has_function_privilege('anon', 'public.department_cup(bigint, time
   'anon cannot execute the Campaign-filtered Department Cup read');
 select ok(not has_function_privilege('service_role', 'private.department_cup_rows(bigint, timestamptz, timestamptz)', 'EXECUTE'),
   'the server role cannot bypass the BCE+ gate through the private body');
--- Pins the view-level revoke too, not only the function grant above: dept_cup
--- is security_invoker over a body service_role has no `usage` on `private` to
--- reach anyway (conventions.test.sql), so a retained grant here could never
--- return rows -- it would fail 42501 on the private schema. Nothing needs it
--- (grepped app/, supabase/functions/, scripts/, .github/workflows/), so the
--- revoke stands and this assertion keeps a future migration from quietly
--- restoring it.
-select ok(not has_table_privilege('service_role', 'public.dept_cup', 'SELECT'),
-  'service_role holds no select on the Department Cup view -- it could never satisfy it without private schema usage');
 
 -- #523: the wrapper/body split itself. Only the private body may read the whole
 -- ledger past RLS, and only because it gates itself; the public entry point
@@ -130,9 +115,11 @@ select fixture.title, 'Fixture', now() - interval '2 days',
 
 -- Snapshot the Cup before any of the fixture points land, as leadership: the
 -- demo seed already puts real Task points on real Departments.
+-- #936: dept_cup is dropped; department_cup(null, null, null) is the same
+-- unbounded, uncampaigned read.
 select pg_temp.test_login_leadership('25900000-0000-0000-0000-000000000001');
 create temporary table cup259_before as
-  select group_id, points from public.dept_cup;
+  select group_id, points from public.department_cup(null::bigint, null::timestamptz, null::timestamptz);
 reset role;
 
 select pg_temp.test_credit_task(task.id, '25900000-0000-0000-0000-000000000002',
@@ -166,22 +153,22 @@ insert into public.points_ledger (member_id, delta, reason, note, awarded_by) va
 
 select pg_temp.test_login_leadership('25900000-0000-0000-0000-000000000001');
 
-select is((select count(*) from public.dept_cup), 5::bigint,
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 5::bigint,
   'BCE sees all five competing Departments, including the ones on zero');
 
-select is((select points from public.dept_cup where group_id = pg_temp.dept_group('edu')),
+select is((select points from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) where group_id = pg_temp.dept_group('edu')),
           (select points + 27 from cup259_before where group_id = pg_temp.dept_group('edu')),
           'a Department Task (12) and a Department-Team Task on a child Team (15) both credit the parent Department, and the reversed award nets to zero');
 
-select is((select sum(points)::int from public.dept_cup),
+select is((select sum(points)::int from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)),
           (select sum(points)::int + 27 from cup259_before),
           'the Project Task (15) and the Independent-Team Task (6) credit no Department at all -- the whole Cup moved by exactly the two qualifying awards');
 
-select is((select count(*) from public.dept_cup where group_id in (pg_temp.dept_group('diverse'), pg_temp.dept_group('secretariat'), pg_temp.dept_group('org'))), 0::bigint,
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) where group_id in (pg_temp.dept_group('diverse'), pg_temp.dept_group('secretariat'), pg_temp.dept_group('org'))), 0::bigint,
   'coordination structures and the org row never appear as Cup rows');
 
-select is((select array_agg(group_id) from public.dept_cup),
-          (select array_agg(group_id order by points desc, name) from public.dept_cup),
+select is((select array_agg(group_id) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)),
+          (select array_agg(group_id order by points desc, name) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)),
           'rows use points descending with the stable Department-name tiebreak');
 
 -- ==================== 5. The Campaign filter ====================
@@ -196,10 +183,9 @@ select is((select count(*) from public.department_cup(2590001)), 5::bigint,
   'a filtered Cup still lists every competing Department, on zero where it earned nothing');
 select is((select sum(points)::int from public.department_cup(-1)), 0,
   'an unknown Campaign id yields a Cup of zeroes, not the unfiltered totals');
-select set_eq(
-  $$ select group_id, points, members from public.department_cup(null) $$,
-  $$ select group_id, points, members from public.dept_cup $$,
-  'department_cup(null) is the view: one body, two entry points');
+-- #936: dept_cup dropped, so department_cup(null) can no longer be pinned
+-- against it as "one body, two entry points" -- department_cup is now the
+-- only entry point, and that is exercised throughout this file.
 
 -- #523: settings and deep paths, all changed only in this rolled-back fixture.
 reset role;
@@ -208,7 +194,7 @@ select is((select points from public.department_cup(2590002) where group_id = pg
   'a child link that does not count blocks its Task points');
 update public.groups set counts_toward_parent_cup=true where id = pg_temp.team_group('259-dept-team');
 update public.groups set competes_in_cup=false where name = 'Tineret';
-select is((select count(*) from public.dept_cup where group_id = pg_temp.dept_group('youth')),0::bigint,
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) where group_id = pg_temp.dept_group('youth')),0::bigint,
   'disabling competition removes a Group row');
 update public.groups set competes_in_cup=true where name = 'Tineret';
 
@@ -241,14 +227,14 @@ select is((select points from public.department_cup(2590001) where group_id = pg
 update public.groups set counts_toward_parent_cup=true where name = 'Educațional';
 
 update public.groups set competes_in_cup=true where id = pg_temp.project_group(2590003);
-select is((select points from public.dept_cup where group_id=(select id from public.groups where id = pg_temp.project_group(2590003))),15,
+select is((select points from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) where group_id=(select id from public.groups where id = pg_temp.project_group(2590003))),15,
   'a Project presentation label never prevents a Group from competing');
 update public.groups set competes_in_cup=false where id = pg_temp.project_group(2590003);
-select ok(exists(select 1 from public.dept_cup cup join public.groups grp on grp.id=cup.group_id where grp.name = 'Educațional'),
+select ok(exists(select 1 from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) cup join public.groups grp on grp.id=cup.group_id where grp.name = 'Educațional'),
   'unfiltered Cup includes the actual Group identifier');
 select ok(exists(select 1 from public.department_cup(2590001) cup join public.groups grp on grp.id=cup.group_id where grp.name = 'Educațional'),
   'Campaign-filtered Cup includes the actual Group identifier');
-select is((select members from public.dept_cup where group_id = pg_temp.dept_group('edu')),
+select is((select members from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) where group_id = pg_temp.dept_group('edu')),
   (select count(*) from public.group_members gm join public.profiles p on p.id=gm.member_id and p.status='activ' where gm.group_id=(select id from public.groups where name = 'Educațional')),
   'Cup roster counts active explicit members of the competitor itself');
 
@@ -318,7 +304,7 @@ select is((select points from public.department_cup(null, '2001-03-10 10:00:00+0
   'in [T1, T2) edu holds the kept award only -- the award reversed at T2 nets to zero inside the range of its Evaluation');
 select is((select points from public.department_cup(null, '2001-04-10 10:00:00+00', null)
             where group_id = pg_temp.dept_group('edu')),
-          (select points - 6 from public.dept_cup where group_id = pg_temp.dept_group('edu')),
+          (select points - 6 from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) where group_id = pg_temp.dept_group('edu')),
   'in [T2, open) edu holds everything but the 2001 awards -- the reversal leaves no phantom -3 behind');
 select is((select points from public.department_cup(null, '2001-03-10 10:00:00+00', '2001-03-10 10:00:01+00')
             where group_id = pg_temp.dept_group('edu')), 6,
@@ -328,9 +314,9 @@ select is((select points from public.department_cup(null, '2001-03-10 10:00:00.0
   'and not in [T1 + 1us, T2) -- the from bound really filters');
 select is((select sum(points)::int from public.department_cup(null, null, '2001-03-10 10:00:00+00')), 0,
   'nothing in the whole Cup falls in [open, T1) -- the to bound is exclusive and really filters');
-select is((select points from public.dept_cup where group_id = pg_temp.dept_group('edu')),
-          (select points from public.department_cup(null, null, null) where group_id = pg_temp.dept_group('edu')),
-  'the dept_cup view is the unbounded read, the 2001 awards included');
+-- #936: dept_cup is dropped, so it can no longer be pinned against
+-- department_cup(null, null, null) as "the unbounded read" -- that is now
+-- exercised directly throughout this file instead of via the view.
 select is((select points from public.department_cup(2590001, '2001-03-10 10:00:00+00', '2001-04-10 10:00:00+00')
             where group_id = pg_temp.dept_group('edu')), 0,
   'the Campaign and the range combine: Campania A has no award in 2001');
@@ -348,7 +334,7 @@ select pg_temp.test_login_leadership('25900000-0000-0000-0000-000000000001');
 -- ==================== 6. The BCE+ gate returns no rows, never an error ====================
 
 select pg_temp.test_login_leadership('25900000-0000-0000-0000-000000000002');
-select is((select count(*) from public.dept_cup), 0::bigint,
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 0::bigint,
   'an ordinary Member (level 2) sees no protected rows');
 select is((select count(*) from public.department_cup(2590001)), 0::bigint,
   'an ordinary Member gets no rows from the filtered read either -- and no error');
@@ -358,7 +344,7 @@ select is((select count(*) from public.department_cup(2590001)), 0::bigint,
 -- and is the plausible-drift case named in review finding 1: loosening `>= 5`
 -- to `>= 3` would leave every other persona in this suite green.
 select pg_temp.test_login_leadership('25900000-0000-0000-0000-000000000004');
-select is((select count(*) from public.dept_cup), 0::bigint,
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 0::bigint,
   'a vot (level 3, the highest live rank below the gate) sees no protected rows');
 select is((select count(*) from public.department_cup(2590001)), 0::bigint,
   'a vot gets no rows from the filtered read either -- the gate is >= 5');
@@ -366,30 +352,30 @@ select is((select count(*) from public.department_cup(2590001)), 0::bigint,
 -- Pins the allow side above BCE alone: a gate accidentally narrowed to `= 5`
 -- must fail here.
 select pg_temp.test_login_leadership('25900000-0000-0000-0000-000000000005');
-select is((select count(*) from public.dept_cup), 5::bigint,
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 5::bigint,
   'a BC (level 6) also sees the Department Cup -- the gate is >= 5, not = 5');
 select is((select points from public.department_cup(2590001) where group_id = pg_temp.dept_group('edu')), 12,
   'a BC sees the same Campaign-filtered totals a BCE would');
 
 select pg_temp.test_login('25900000-0000-0000-0000-000000000002',
   '{"member_role":"bce","member_level":5,"dept_ids":[],"team_ids":[]}'::jsonb);
-select is((select count(*) from public.dept_cup), 0::bigint,
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 0::bigint,
   'a stale BCE claim loses to the live role: demotion takes effect before the token expires');
 
 select pg_temp.test_login_leadership('25900000-0000-0000-0000-000000000003');
-select is((select count(*) from public.dept_cup), 0::bigint,
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 0::bigint,
   'an inactive BCE sees no protected rows despite live leadership claims');
 
 select pg_temp.test_login('25900000-0000-0000-0000-000000000001', '{}'::jsonb);
-select is((select count(*) from public.dept_cup), 0::bigint,
+select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 0::bigint,
   'a claimless session sees no standings, even as a real active BCE uid');
 select is((select count(*) from public.department_cup(2590001)), 0::bigint,
   'a claimless session gets no rows from the filtered read either');
 
+-- #936: dept_cup dropped, so anon's grant refusal is checked only through
+-- department_cup below (the view's own throws_ok is gone with it).
 select pg_temp.test_clear_jwt();
 set local role anon;
-select throws_ok('select * from public.dept_cup', '42501', null,
-  'anon holds no grant on the Department Cup view');
 select throws_ok('select * from public.department_cup(1)', '42501', null,
   'anon holds no grant on the Campaign-filtered Department Cup read');
 reset role;

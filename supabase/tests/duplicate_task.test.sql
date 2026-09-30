@@ -7,10 +7,8 @@
 -- the clone is always top-level).
 --
 -- What this suite pins that no earlier suite does:
---   * public.tasks.duplicated_from_task_id and the fact that
---     tasks_with_overdue carries it (the `select task.*` view-expansion trap
---     #339/#340 already documented -- verified fresh against this branch's
---     own pg_get_viewdef, not copied);
+--   * public.tasks.duplicated_from_task_id (the view that used to carry it,
+--     tasks_with_overdue, was dropped by #936);
 --   * the Campaign carry-over rule: copied only when still active, silently
 --     dropped otherwise -- never a PT400, because the caller did not ask
 --     about the Campaign at all;
@@ -40,7 +38,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(81);
+select plan(77);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -281,22 +279,10 @@ select ok(not has_function_privilege('service_role',
   'public.duplicate_task(bigint, timestamptz)'::regprocedure, 'execute'),
   'service_role holds no execute on the wrapper either (conventions Sec4)');
 
--- ==================== 2. The column and the view ====================
+-- ==================== 2. The column ====================
 
 select has_column('public', 'tasks', 'duplicated_from_task_id',
   'public.tasks records which Task a row was cloned from');
-select has_column('public', 'tasks_with_overdue', 'duplicated_from_task_id',
-  'and the app read surface exposes it -- a `select task.*` view expands its star at CREATE time, so the view had to be recreated');
-select ok(coalesce((
-    select class.reloptions::text like '%security_invoker=on%'
-      from pg_class as class
-      join pg_namespace as namespace on namespace.oid = class.relnamespace
-     where namespace.nspname = 'public' and class.relname = 'tasks_with_overdue'
-  ), false), 'the recreated view is still security_invoker=on -- it must never run as its owner and bypass RLS');
-select ok(has_table_privilege('authenticated', 'public.tasks_with_overdue', 'select'),
-  'the recreated view keeps its select grant to authenticated');
-select ok(not has_table_privilege('anon', 'public.tasks_with_overdue', 'select'),
-  'and still grants anon nothing');
 
 -- ==================== 3. The happy path ====================
 select pg_temp.test_login('34100000-0000-0000-0000-000000000002', jsonb_build_object(

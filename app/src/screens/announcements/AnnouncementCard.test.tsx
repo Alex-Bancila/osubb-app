@@ -22,10 +22,8 @@ function presentation(
     group: { id: 1, name: 'OSUBB', short: 'OSUBB', isOrganization: true },
     audience: 'org',
     audienceLabel: null,
-    author: 'BC',
     authorMember: null,
     priority: 'critical',
-    category: 'organizatoric',
     pinned: true,
     formLabel: null,
     formUrl: null,
@@ -40,7 +38,7 @@ function presentation(
 }
 
 describe('AnnouncementCard', () => {
-  it('renders title, body, author, and formatted date', () => {
+  it('renders title, body and formatted date', () => {
     render(<AnnouncementCard announcement={presentation()} onOpen={vi.fn()} />);
 
     expect(screen.getByText('Ședință extraordinară BC')).toBeInTheDocument();
@@ -169,7 +167,12 @@ describe('AnnouncementCard', () => {
   it('keeps one meta line before the title, the date under it and one footer row (N1)', () => {
     render(
       <AnnouncementCard
-        announcement={presentation({ category: 'organizatoric' })}
+        announcement={presentation({
+          authorMember: {
+            memberId: 'd0000000-0000-0000-0000-000000000007',
+            fullName: 'Cristina Șerban',
+          },
+        })}
         onOpen={vi.fn()}
       />,
     );
@@ -189,10 +192,8 @@ describe('AnnouncementCard', () => {
     expect(
       content.querySelectorAll('[data-slot=announcement-meta]'),
     ).toHaveLength(1);
-    // The category stays in the details sheet.
-    expect(screen.queryByText('organizatoric')).not.toBeInTheDocument();
     const footer = card.querySelector('[data-slot=card-footer]') as HTMLElement;
-    expect(footer).toHaveTextContent('BC');
+    expect(footer).toHaveTextContent('Cristina Șerban');
     expect(footer).toContainElement(
       screen.getByRole('button', { name: /Citește/ }),
     );

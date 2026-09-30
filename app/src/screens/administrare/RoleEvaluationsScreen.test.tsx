@@ -30,14 +30,23 @@ type Threshold = {
 };
 type Change = {
   id: number;
-  kind: string;
+  kind: string | null;
   field?: string;
+  promotion_rule_id?: number | null;
   from_value: number | null;
   to_value: number;
   source: string;
   changed_by: string | null;
   role_evaluation_id: number | null;
   changed_at: string;
+};
+type Rule = {
+  id: number;
+  kind: string;
+  from_role: string;
+  to_role: string;
+  min_tenure_months: number;
+  enabled: boolean;
 };
 type Candidate = {
   id: number;
@@ -61,6 +70,7 @@ const db = vi.hoisted(() => ({
   runs: [] as Run[],
   thresholds: [] as Threshold[],
   changes: [] as Change[],
+  rules: [] as Rule[],
   candidates: [] as Candidate[],
   rankings: new Map<string, Ranked[]>(),
   percents: new Map<string, number | null>(),
@@ -75,9 +85,16 @@ function tableRows(table: string): unknown {
     case 'promotion_thresholds':
       return db.thresholds;
     case 'promotion_threshold_changes':
-      return [...db.changes].sort((a, b) =>
-        b.changed_at.localeCompare(a.changed_at),
-      );
+      // As the table answers: a row without a field is a threshold change.
+      return [...db.changes]
+        .sort((a, b) => b.changed_at.localeCompare(a.changed_at) || b.id - a.id)
+        .map((row) => ({
+          field: 'threshold',
+          promotion_rule_id: null,
+          ...row,
+        }));
+    case 'promotion_rules':
+      return db.rules;
     case 'promotion_candidates':
       return db.candidates
         .filter((row) => row.decision === null)
@@ -189,6 +206,40 @@ vi.mock('../../lib/supabase', () => {
         db.percents.set(String(args.p_kind), Number(args.p_percent));
         return { data: change, error: null };
       }
+      case 'update_promotion_rule': {
+        const rule = db.rules.find((r) => r.id === args.p_rule_id);
+        if (!rule) return { data: null, error: null };
+        const at = '2026-09-28T12:00:00Z';
+        if (rule.min_tenure_months !== args.p_min_tenure_months)
+          db.changes.push({
+            id: db.changes.length + 300,
+            kind: null,
+            field: 'tenure',
+            promotion_rule_id: rule.id,
+            from_value: rule.min_tenure_months,
+            to_value: Number(args.p_min_tenure_months),
+            source: 'manual',
+            changed_by: 'bc',
+            role_evaluation_id: null,
+            changed_at: at,
+          });
+        if (rule.enabled !== args.p_enabled)
+          db.changes.push({
+            id: db.changes.length + 300,
+            kind: null,
+            field: 'enabled',
+            promotion_rule_id: rule.id,
+            from_value: rule.enabled ? 1 : 0,
+            to_value: args.p_enabled ? 1 : 0,
+            source: 'manual',
+            changed_by: 'bc',
+            role_evaluation_id: null,
+            changed_at: at,
+          });
+        rule.min_tenure_months = Number(args.p_min_tenure_months);
+        rule.enabled = Boolean(args.p_enabled);
+        return { data: rule, error: null };
+      }
       case 'reject_promotion_candidate': {
         const row = db.candidates.find((c) => c.id === args.p_candidate_id);
         if (row) row.decision = 'rejected';
@@ -282,6 +333,24 @@ beforeEach(() => {
     },
   ];
   db.changes = [];
+  db.rules = [
+    {
+      id: 2,
+      kind: 'top_percent',
+      from_role: 'voluntar',
+      to_role: 'activ',
+      min_tenure_months: 6,
+      enabled: true,
+    },
+    {
+      id: 1,
+      kind: 'time',
+      from_role: 'recrut',
+      to_role: 'voluntar',
+      min_tenure_months: 6,
+      enabled: true,
+    },
+  ];
   db.candidates = [];
   db.rankings = new Map();
   db.percents = new Map([
@@ -498,7 +567,7 @@ it('edits a threshold and lists every change with its author or run', async () =
   show();
   const thresholds = await panel('Praguri');
   const log = await within(thresholds).findByRole('list', {
-    name: 'Istoricul pragurilor',
+    name: 'Istoricul modificărilor',
   });
   expect(
     within(log)
@@ -546,7 +615,9 @@ it('edits a threshold and lists every change with its author or run', async () =
   await waitFor(() =>
     expect(
       within(
-        within(thresholds).getByRole('list', { name: 'Istoricul pragurilor' }),
+        within(thresholds).getByRole('list', {
+          name: 'Istoricul modificărilor',
+        }),
       ).getAllByRole('listitem')[0],
     ).toHaveTextContent('28.09.2026 · Voluntar Activ42 → 35·BCBianca Coman'),
   );
@@ -631,7 +702,7 @@ it('edits each kind’s share (#866): 1–100 in the browser, logged, and the ne
     ),
   );
   const log = within(thresholds).getByRole('list', {
-    name: 'Istoricul pragurilor',
+    name: 'Istoricul modificărilor',
   });
   expect(within(log).getAllByRole('listitem')[0]).toHaveTextContent(
     '28.09.2026 · Voluntar Activ · procent20 % → 35 %·BCBianca Coman',
@@ -677,6 +748,173 @@ it('places a server refusal of a share under its field', async () => {
       'Doar BC și Moderatorul pot schimba procentele.',
     ),
   ).toBeVisible();
+});
+
+/** The Reguli de promovare section of Praguri (#935). */
+async function rulesSection() {
+  const thresholds = await panel('Praguri');
+  return (
+    await within(thresholds).findByRole('heading', {
+      name: 'Reguli de promovare',
+    })
+  ).closest('section') as HTMLElement;
+}
+
+const ruleRow = (rules: HTMLElement, label: string) =>
+  within(rules)
+    .getByRole('heading', { name: label })
+    .closest('li') as HTMLElement;
+
+it('shows each Promotion Rule, the ladder in order, with its tenure, state and effect (#935)', async () => {
+  db.rules = db.rules.map((rule) =>
+    rule.kind === 'top_percent'
+      ? { ...rule, min_tenure_months: 24, enabled: false }
+      : rule,
+  );
+  show();
+  const rules = await rulesSection();
+  await within(rules).findByRole('heading', { name: 'Recrut → Voluntar' });
+  expect(
+    within(rules)
+      .getAllByRole('heading', { level: 4 })
+      .map((heading) => heading.textContent),
+  ).toEqual(['Recrut → Voluntar', 'Voluntar → Voluntar Activ']);
+  const time = ruleRow(rules, 'Recrut → Voluntar');
+  expect(time).toHaveTextContent('6 luni');
+  expect(time).toHaveTextContent('Pornită');
+  expect(time).toHaveTextContent(
+    'Zilnic, fiecare Recrut care a împlinit vechimea devine automat Voluntar.',
+  );
+  const top = ruleRow(rules, 'Voluntar → Voluntar Activ');
+  expect(top).toHaveTextContent('24 de luni');
+  expect(top).toHaveTextContent(
+    'Oprită: evaluările Voluntar Activ nu mai propun candidați.',
+  );
+});
+
+it('edits a Promotion Rule’s tenure and on/off with the #923 row pattern, logged with its author (#935)', async () => {
+  const user = userEvent.setup();
+  show();
+  const rules = await rulesSection();
+  await within(rules).findByRole('heading', { name: 'Recrut → Voluntar' });
+  await user.click(
+    within(rules).getByRole('button', {
+      name: 'Editează regula Recrut → Voluntar',
+    }),
+  );
+  const input = within(rules).getByLabelText('Vechime cerută');
+  expect(input).toHaveValue(6);
+  expect(input).toHaveFocus();
+  // Nothing changed yet: nothing to save.
+  const save = within(rules).getByRole('button', { name: 'Salvează' });
+  expect(save).toBeDisabled();
+
+  await user.clear(input);
+  await user.type(input, '121');
+  await user.click(save);
+  expect(input).toHaveAccessibleDescription(
+    /Vechimea este un număr întreg de luni, de la 0 la 120\./,
+  );
+  expect(db.rpc).not.toHaveBeenCalledWith(
+    'update_promotion_rule',
+    expect.anything(),
+  );
+
+  await user.clear(input);
+  await user.type(input, '2');
+  const toggle = within(rules).getByRole('switch', {
+    name: 'Regula este pornită',
+  });
+  expect(toggle).toBeChecked();
+  await user.click(toggle);
+  expect(toggle).not.toBeChecked();
+  await user.click(save);
+  expect(db.rpc).toHaveBeenCalledWith('update_promotion_rule', {
+    p_rule_id: 1,
+    p_min_tenure_months: 2,
+    p_enabled: false,
+  });
+
+  expect(
+    await within(rules).findByText('Regula a fost salvată.'),
+  ).toBeVisible();
+  await waitFor(() =>
+    expect(
+      within(rules).getByRole('button', {
+        name: 'Editează regula Recrut → Voluntar',
+      }),
+    ).toHaveFocus(),
+  );
+  const time = ruleRow(rules, 'Recrut → Voluntar');
+  await waitFor(() => expect(time).toHaveTextContent('2 luni'));
+  expect(time).toHaveTextContent('Oprită');
+  expect(time).toHaveTextContent('schimbată deBCBianca Coman');
+
+  const thresholds = await panel('Praguri');
+  const log = await within(thresholds).findByRole('list', {
+    name: 'Istoricul modificărilor',
+  });
+  await waitFor(() =>
+    expect(
+      within(log)
+        .getAllByRole('listitem')
+        .map((row) => row.textContent),
+    ).toEqual([
+      '28.09.2026 · Recrut → Voluntar · starepornită → oprită·BCBianca Coman',
+      '28.09.2026 · Recrut → Voluntar · vechime6 luni → 2 luni·BCBianca Coman',
+    ]),
+  );
+  // A rule change is not a threshold change: the threshold keeps no author.
+  expect(thresholds).not.toHaveTextContent('introdus de');
+});
+
+it('Renunță closes the rule editor without saving', async () => {
+  const user = userEvent.setup();
+  show();
+  const rules = await rulesSection();
+  await user.click(
+    await within(rules).findByRole('button', {
+      name: 'Editează regula Voluntar → Voluntar Activ',
+    }),
+  );
+  const input = within(rules).getByLabelText('Vechime cerută');
+  await user.clear(input);
+  await user.type(input, '3');
+  await user.click(within(rules).getByRole('button', { name: 'Renunță' }));
+  expect(within(rules).queryByLabelText('Vechime cerută')).toBeNull();
+  expect(ruleRow(rules, 'Voluntar → Voluntar Activ')).toHaveTextContent(
+    '6 luni',
+  );
+  expect(db.rpc).not.toHaveBeenCalledWith(
+    'update_promotion_rule',
+    expect.anything(),
+  );
+});
+
+it('shows a server refusal of a rule edit in the editor', async () => {
+  db.refuse.set('update_promotion_rule', {
+    code: '42501',
+    message: 'promotion_rule_manage_forbidden',
+  });
+  const user = userEvent.setup();
+  show();
+  const rules = await rulesSection();
+  await user.click(
+    await within(rules).findByRole('button', {
+      name: 'Editează regula Voluntar → Voluntar Activ',
+    }),
+  );
+  await user.click(
+    within(rules).getByRole('switch', { name: 'Regula este pornită' }),
+  );
+  await user.click(within(rules).getByRole('button', { name: 'Salvează' }));
+  expect(
+    await within(rules).findByText(
+      'Doar BC și Moderatorul pot schimba regulile de promovare.',
+    ),
+  ).toBeVisible();
+  // The editor stays open for another try.
+  expect(within(rules).getByLabelText('Vechime cerută')).toBeVisible();
 });
 
 it('lists the open Promotion Candidates: Promovează opens Roluri preset, Respinge needs a reason', async () => {
@@ -909,7 +1147,7 @@ it('shows only Run and Praguri before the first run (B58)', async () => {
   ).toEqual(['Rulează o evaluare de rol', 'Praguri']);
   // Once the (empty) log has loaded, it leaves no block behind.
   await waitFor(() =>
-    expect(screen.queryByText('Istoricul pragurilor')).toBeNull(),
+    expect(screen.queryByText('Istoricul modificărilor')).toBeNull(),
   );
   expect(screen.queryByText('Nicio schimbare încă.')).toBeNull();
   expect(db.rpc).not.toHaveBeenCalledWith(

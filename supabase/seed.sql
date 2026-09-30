@@ -336,17 +336,17 @@ select '00000000-0000-0000-0000-000000000000', m.id, 'authenticated', 'authentic
 
 -- Names are ordinary Romanian names on purpose: a demo full of "Test User 1"
 -- reads as a prototype, and BC are looking at this on September 15.
--- #160: joined_at is January 1 of joined_year for every demo profile, so a
--- rebuilt database and a backfilled live one agree.
-insert into profiles (id, full_name, email, role, joined_year, joined_at, avatar_color) values
-  ('d0000000-0000-0000-0000-000000000001', 'Andrei Mureșan',   'recrut@demo.osubb',      'recrut',      2026, '2026-01-01', '#ED2025'),
-  ('d0000000-0000-0000-0000-000000000002', 'Ioana Popescu',    'voluntar@demo.osubb',    'voluntar',    2025, '2025-01-01', '#284C93'),
-  ('d0000000-0000-0000-0000-000000000003', 'Vlad Constantin',  'activ@demo.osubb',       'activ',       2025, '2025-01-01', '#7500A0'),
-  ('d0000000-0000-0000-0000-000000000004', 'Maria Dobre',      'vot@demo.osubb',         'vot',         2024, '2024-01-01', '#007F33'),
-  ('d0000000-0000-0000-0000-000000000005', 'Raluca Ionescu',   'responsabil@demo.osubb', 'vot', 2024, '2024-01-01', '#F2A700'),
-  ('d0000000-0000-0000-0000-000000000006', 'Alex Băncilă',     'bce@demo.osubb',         'bce',         2023, '2023-01-01', '#ED2025'),
-  ('d0000000-0000-0000-0000-000000000007', 'Cristina Șerban',  'bc@demo.osubb',          'bc',          2023, '2023-01-01', '#FF3B3B'),
-  ('d0000000-0000-0000-0000-000000000008', 'Moderator OSUBB',  'moderator@demo.osubb',   'moderator',   2023, '2023-01-01', '#241F1E');
+-- #160: every demo profile joined on January 1 of its year (#936 dropped the
+-- joined_year column that joined_at was first backfilled from).
+insert into profiles (id, full_name, email, role, joined_at, avatar_color) values
+  ('d0000000-0000-0000-0000-000000000001', 'Andrei Mureșan',   'recrut@demo.osubb',      'recrut',      '2026-01-01', '#ED2025'),
+  ('d0000000-0000-0000-0000-000000000002', 'Ioana Popescu',    'voluntar@demo.osubb',    'voluntar',    '2025-01-01', '#284C93'),
+  ('d0000000-0000-0000-0000-000000000003', 'Vlad Constantin',  'activ@demo.osubb',       'activ',       '2025-01-01', '#7500A0'),
+  ('d0000000-0000-0000-0000-000000000004', 'Maria Dobre',      'vot@demo.osubb',         'vot',         '2024-01-01', '#007F33'),
+  ('d0000000-0000-0000-0000-000000000005', 'Raluca Ionescu',   'responsabil@demo.osubb', 'vot', '2024-01-01', '#F2A700'),
+  ('d0000000-0000-0000-0000-000000000006', 'Alex Băncilă',     'bce@demo.osubb',         'bce',         '2023-01-01', '#ED2025'),
+  ('d0000000-0000-0000-0000-000000000007', 'Cristina Șerban',  'bc@demo.osubb',          'bc',          '2023-01-01', '#FF3B3B'),
+  ('d0000000-0000-0000-0000-000000000008', 'Moderator OSUBB',  'moderator@demo.osubb',   'moderator',   '2023-01-01', '#241F1E');
 
 -- Group commands own the demo directory and rosters. Claims are set only for
 -- this transaction; the command implementations still verify the live BC role.
@@ -1716,27 +1716,27 @@ select e.id, a.member_id, a.status
 -- The documented seed entrypoints run as postgres in one transaction, so an
 -- error rolls the trigger state back with the inserts.
 alter table announcements disable trigger announcements_fan_out;
-insert into announcements (title, body, author, priority, category, pinned, form_label, form_url, published_at, created_by, group_id, audience, deadline) values
+insert into announcements (title, body, priority, pinned, form_label, form_url, published_at, created_by, group_id, audience, deadline) values
   ('Ședință extraordinară BC — vineri',
    'Vineri, ora 18:00, Aula Magna. Prezența tuturor coordonatorilor este obligatorie.',
-   'BC', 'critical', 'organizatoric', true, null, null,
+   'critical', true, null, null,
    now() - interval '1 day',  'd0000000-0000-0000-0000-000000000007', (select id from groups where is_organization), 'org', null),
   ('Feedback eveniment de deschidere',
    'Spune-ne cum ți s-a părut. Durează două minute și chiar ne ajută.',
-   'Imagine & PR', 'important', 'feedback', false,
+   'important', false,
    'Completează formularul', 'https://forms.gle/exemplu-osubb',
    now() - interval '3 days', 'd0000000-0000-0000-0000-000000000006', (select id from groups where is_organization), 'org', now() + interval '30 hours'),
   ('Materiale de la cursul de Excel',
    'Slide-urile și exercițiile sunt în drive-ul departamentului.',
-   'Educational', 'normal', 'resurse', false, null, null,
+   'normal', false, null, null,
    now() - interval '5 days', 'd0000000-0000-0000-0000-000000000005', (select id from groups where name='Educațional'), 'local', now() - interval '2 days'),
   ('Recrutarea de toamnă începe luni',
    'Standul din campus are nevoie de voluntari pentru două ture pe zi.',
-   'Resurse Umane', 'important', 'recrutare', true, null, null,
+   'important', true, null, null,
    now() - interval '2 days', 'd0000000-0000-0000-0000-000000000005', (select id from groups where is_organization), 'org', now() + interval '6 days'),
   ('Noul ghid de punctaj',
    'Dificultatea și nota se înmulțesc — detaliile sunt în aplicație, la Ghid.',
-   'BC', 'normal', 'organizatoric', false, null, null,
+   'normal', false, null, null,
    now() - interval '8 days', 'd0000000-0000-0000-0000-000000000007', (select id from groups where is_organization), 'org', null);
 alter table announcements enable trigger announcements_fan_out;
 

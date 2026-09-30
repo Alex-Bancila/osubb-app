@@ -70,10 +70,8 @@ function presentation(
     group: { id: 1, name: 'OSUBB', short: 'OSUBB' },
     audience: 'org',
     audienceLabel: null,
-    author: 'BC',
     authorMember: null,
     priority: 'critical',
-    category: 'organizatoric',
     pinned: true,
     formLabel: null,
     formUrl: null,
@@ -110,7 +108,13 @@ describe('AnnouncementDetailsSheet', () => {
   });
 
   it('displays full announcement title, body, author, and date', () => {
-    const item = presentation();
+    // #936: the author is created_by as a Member Card; no free-text byline.
+    const item = presentation({
+      authorMember: {
+        memberId: 'd0000000-0000-0000-0000-000000000007',
+        fullName: 'Cristina Șerban',
+      },
+    });
 
     renderSheet(
       <AnnouncementDetailsSheet announcement={item} onClose={vi.fn()} />,
@@ -129,7 +133,7 @@ describe('AnnouncementDetailsSheet', () => {
     expect(
       screen.getByText(/Vineri la ora 18:00 în Aula Magna/),
     ).toBeInTheDocument();
-    expect(screen.getByText('BC')).toBeInTheDocument();
+    expect(screen.getByText('Cristina Șerban')).toBeInTheDocument();
     expect(screen.getByText(/18 septembrie 2026/)).toBeInTheDocument();
   });
 

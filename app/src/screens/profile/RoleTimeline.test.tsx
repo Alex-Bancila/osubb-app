@@ -56,7 +56,6 @@ const profile: MyProfile = {
   role: 'voluntar',
   status: 'activ',
   avatar_color: '#ED2025',
-  joined_year: 2025,
   joined_at: '2025-10-01',
   email: 'maria@osubb.ro',
   phone: '0722334455',
@@ -180,7 +179,7 @@ describe('RoleTimeline', () => {
     expect(items()[1]).toHaveTextContent('Decis de conducere');
   });
 
-  it('a null joined_at shows the current Role and the join year, without durations', () => {
+  it('a null joined_at shows the current Role only, without dates or durations', () => {
     historyMock.data = [
       {
         from_role: 'recrut',
@@ -195,8 +194,8 @@ describe('RoleTimeline', () => {
 
     const [only] = items();
     expect(items()).toHaveLength(1);
-    // The Role and the join year, nothing else: no dates, no duration, no actor.
-    expect(only).toHaveTextContent(/^VoluntarMembru din 2025$/);
+    // The Role, nothing else: no dates, no duration, no actor (#936 dropped joined_year).
+    expect(only).toHaveTextContent(/^Voluntar$/);
   });
 
   it('shows a Role key the reference does not know as-is', () => {

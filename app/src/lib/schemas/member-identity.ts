@@ -43,6 +43,31 @@ export const invitationFieldForReason: Readonly<Record<string, string>> = {
 };
 
 /**
+ * "Invită membru" (#931): the address and full name `invite-member` stores —
+ * trimmed, the address lowercased — measured as `profiles` measures them.
+ */
+export const memberInviteSchema = z.object({
+  email: emailSchema,
+  fullName: requiredText({
+    required: 'full_name_required',
+    max: 120,
+    tooLong: 'full_name_too_long',
+  }),
+  // The chosen Group's id, so a Group refusal clears once another is chosen.
+  group: z.number().int().nullable(),
+});
+
+/** Where each reason about a new invitation is shown. */
+export const inviteFieldForReason: Readonly<Record<string, string>> = {
+  email_invalid: 'email',
+  invite_email_taken: 'email',
+  full_name_required: 'fullName',
+  full_name_too_long: 'fullName',
+  invite_group_unavailable: 'group',
+  invite_group_refused: 'group',
+};
+
+/**
  * A Member's join date (#932): a real calendar day (`YYYY-MM-DD`, as the
  * date input sends it), never after today in Bucharest — tenure for the
  * promotion rules counts from it. `today` is injectable for tests.

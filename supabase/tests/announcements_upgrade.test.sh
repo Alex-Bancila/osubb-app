@@ -34,6 +34,8 @@ alter policy announcement_reads_manage_self on public.announcement_reads
 drop function private.can_read_announcement(bigint,text,integer,uuid);
 -- #590 removed the final legacy column; restore it only for this historical replay.
 alter table public.announcements add column dept_id text;
+-- #936 dropped the free-text author byline; the pre-#581 rows below still carry one.
+alter table public.announcements add column author text;
 update public.announcements a set dept_id=g.legacy_dept_id from public.groups g where g.id=a.group_id;
 alter table public.announcements drop column audience, drop column group_id;
 create policy announcements_read on public.announcements for select to authenticated using (public.auth_is_member());

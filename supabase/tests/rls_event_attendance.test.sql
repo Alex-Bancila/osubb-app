@@ -6,13 +6,16 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(27);
+select plan(26);
 
 
 -- ==================== Structure and grants ====================
+-- #936: event_attendance_create_self and event_attendance_update_self, plus
+-- every column-level insert/update grant, are dropped -- set_event_rsvp is now
+-- the only write path. event_attendance_read is untouched.
 select policies_are('public', 'event_attendance',
-  array['event_attendance_create_self', 'event_attendance_read', 'event_attendance_update_self'],
-  'attendance exposes only read, self-insert, and self-update policies');
+  array['event_attendance_read'],
+  'attendance exposes only its read policy -- direct writes retired (#936)');
 
 select ok(not has_table_privilege('authenticated', 'event_attendance', 'insert'),
   'authenticated has no table-wide INSERT grant');
@@ -20,21 +23,6 @@ select ok(not has_table_privilege('authenticated', 'event_attendance', 'update')
   'authenticated has no table-wide UPDATE grant');
 select ok(not has_table_privilege('authenticated', 'event_attendance', 'delete'),
   'authenticated cannot DELETE attendance rows');
-
-select ok(has_column_privilege('authenticated', 'event_attendance', 'event_id', 'insert'),
-  'authenticated may supply the event when creating an RSVP');
-select ok(has_column_privilege('authenticated', 'event_attendance', 'member_id', 'insert'),
-  'authenticated may supply the member id that RLS verifies');
-select ok(has_column_privilege('authenticated', 'event_attendance', 'status', 'insert'),
-  'authenticated may supply an RSVP status');
-select ok(not has_column_privilege('authenticated', 'event_attendance', 'checked_in', 'insert'),
-  'clients cannot mark themselves checked in while inserting');
-select ok(has_column_privilege('authenticated', 'event_attendance', 'status', 'update'),
-  'authenticated may update only the RSVP status column');
-select ok(not has_column_privilege('authenticated', 'event_attendance', 'checked_in', 'update'),
-  'clients cannot change checked_in');
-select ok(not has_column_privilege('authenticated', 'event_attendance', 'member_id', 'update'),
-  'clients cannot transfer an RSVP to another member');
 
 -- ==================== Fixtures ====================
 truncate events, event_attendance cascade;
@@ -62,8 +50,8 @@ insert into pg_temp.fixture_member_departments (member_id, dept_id) values
 -- 'RSVP imagine' carries min_level 3 (#519 retires min_level 4) specifically
 -- to stay the one Event hidden from a level-1 Voluntar below (the fixture
 -- this file needs for "a member cannot RSVP to an event hidden by event
--- RLS"); since #593 it is level >= 5 (Corina with a level-5 token) that reads
--- every attendance row, and a stale level-4 token reads only its own.
+-- RLS"). Colleague attendance is read by an Event's managers since #934
+-- (event_rsvp_managers.test.sql); no rank reads it here, whatever the token says.
 insert into events (title, type, group_id, min_level, starts_at) values
   ('RSVP organizație', 'sedinta', pg_temp.dept_group('org'), 0, now() + interval '1 day'),
   ('RSVP educațional', 'sedinta', pg_temp.dept_group('edu'), 0, now() + interval '2 days'),
@@ -101,11 +89,27 @@ select is((select count(*) from event_attendance), 1::bigint,
 select is((select status from event_attendance), 'going',
   'the member reads their own RSVP status');
 
-select lives_ok(
+-- #936: a direct insert is refused outright -- set_event_rsvp is the only
+-- write path left, and it reaches the same outcomes.
+select throws_ok(
   format($$ insert into event_attendance (event_id, member_id, status)
             values (%s, 'a1000000-0000-0000-0000-000000000063', 'going') $$,
          (select edu_event_id from attendance_fx)),
-  'a member can RSVP to an event they can see');
+  '42501', null, 'a direct insert by an authenticated Member is refused (#936)');
+
+select lives_ok(
+  format($$ select public.set_event_rsvp(%s, 'going') $$,
+         (select edu_event_id from attendance_fx)),
+  'the same RSVP succeeds through set_event_rsvp');
+select is(
+  (select member_id from event_attendance
+    where event_id = (select edu_event_id from attendance_fx)),
+  'a1000000-0000-0000-0000-000000000063'::uuid,
+  'set_event_rsvp writes only the caller''s own row -- it takes no member id to redirect it (#936)');
+select is(
+  (select checked_in from event_attendance
+    where event_id = (select edu_event_id from attendance_fx)),
+  false, 'set_event_rsvp leaves checked_in untouched on a new RSVP (#936)');
 
 select throws_ok(
   format($$ insert into event_attendance (event_id, member_id, status)
@@ -114,25 +118,32 @@ select throws_ok(
   '42501', null, 'a member cannot create an RSVP for a colleague');
 
 select throws_ok(
-  format($$ insert into event_attendance (event_id, member_id, status)
-            values (%s, 'a1000000-0000-0000-0000-000000000063', 'going') $$,
+  format($$ select public.set_event_rsvp(%s, 'going') $$,
          (select pr_event_id from attendance_fx)),
-  '42501', null, 'a member cannot RSVP to an event hidden by event RLS');
+  'PT404', 'event_not_visible', 'set_event_rsvp refuses an event hidden by event RLS -- visible event only (#936)');
 
-update event_attendance set status = 'declined'
- where member_id = 'a1000000-0000-0000-0000-000000000063'
-   and event_id = (select org_event_id from attendance_fx);
+select throws_ok(
+  format($$ update event_attendance set status = 'declined'
+            where member_id = 'a1000000-0000-0000-0000-000000000063'
+              and event_id = %s $$,
+         (select org_event_id from attendance_fx)),
+  '42501', null, 'a direct update by an authenticated Member is refused (#936)');
+
+select lives_ok(
+  format($$ select public.set_event_rsvp(%s, 'declined') $$,
+         (select org_event_id from attendance_fx)),
+  'the same status change succeeds through set_event_rsvp');
 select is(
   (select status from event_attendance
     where event_id = (select org_event_id from attendance_fx)),
-  'declined', 'a member can change their own RSVP status');
+  'declined', 'a member changes their own RSVP status through set_event_rsvp');
 
 select throws_ok(
   format($$ update event_attendance set checked_in = true
             where event_id = %s
               and member_id = 'a1000000-0000-0000-0000-000000000063' $$,
          (select org_event_id from attendance_fx)),
-  '42501', null, 'a member cannot mark themselves checked in');
+  '42501', null, 'a member cannot mark themselves checked in with a direct update (#936)');
 
 select throws_ok(
   format($$ delete from event_attendance
@@ -148,17 +159,23 @@ select pg_temp.test_login('c3000000-0000-0000-0000-000000000063', '{"member_role
 select is((select count(*) from event_attendance),0::bigint,'level 4 cannot read colleague attendance');
 reset role;
 -- M4: the level is read from the live Profile, so a level-5 token over a vot
--- Profile reads nothing; once the Profile really is BCE the same token reads all.
+-- Profile reads nothing. Since #934 a real BCE Profile reads nothing either:
+-- colleague answers belong to the Event's managers (event_rsvp_managers.test.sql).
 select pg_temp.test_login('c3000000-0000-0000-0000-000000000063', '{"member_role":"bce","member_level":5}');
 select is((select count(*) from event_attendance),0::bigint,'a stale level-5 token over a vot Profile reads no colleague attendance');
 reset role;
 update profiles set role = 'bce' where id = 'c3000000-0000-0000-0000-000000000063';
 select pg_temp.test_login('c3000000-0000-0000-0000-000000000063', '{"member_role":"bce","member_level":5}');
-select is((select count(*) from event_attendance),4::bigint,'level 5 reads attendance across visible events');
+select is((select count(*) from event_attendance),0::bigint,'#934: a live BCE who manages none of these Events reads no colleague attendance -- the level >= 5 limb is gone');
 
-update event_attendance set status = 'going'
- where member_id = 'b2000000-0000-0000-0000-000000000063'
-   and event_id = (select org_event_id from attendance_fx);
+-- #936: a manager's read access never extended to a colleague's row, and now
+-- no direct write reaches event_attendance at all -- same refusal either way.
+select throws_ok(
+  format($$ update event_attendance set status = 'going'
+            where member_id = 'b2000000-0000-0000-0000-000000000063'
+              and event_id = %s $$,
+         (select org_event_id from attendance_fx)),
+  '42501', null, 'a manager''s read access does not extend to a direct write on a colleague''s RSVP (#936)');
 
 reset role;
 select is(

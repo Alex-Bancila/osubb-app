@@ -84,13 +84,16 @@ export function usePromotionThresholds() {
 
 /**
  * One change in the Praguri log: a Promotion Threshold (`field` threshold —
- * a hand edit or a run's hand-over) or a kind's top share (`field` percent,
- * always a hand edit; #866, ruling R30).
+ * a hand edit or a run's hand-over), a kind's top share (`field` percent,
+ * always a hand edit; #866, ruling R30), or a Promotion Rule's tenure in
+ * months (`field` tenure) or on/off state (`field` enabled, 0 off and 1 on) —
+ * always a hand edit, naming the rule instead of a kind (#935).
  */
 export type ThresholdChange = {
   id: number;
-  kind: string;
+  kind: string | null;
   field: string;
+  promotion_rule_id: number | null;
   from_value: number | null;
   to_value: number;
   source: string;
@@ -104,7 +107,7 @@ export async function fetchThresholdChanges(): Promise<ThresholdChange[]> {
   const { data, error } = await supabase
     .from('promotion_threshold_changes')
     .select(
-      'id, kind, field, from_value, to_value, source, changed_by, role_evaluation_id, changed_at',
+      'id, kind, field, promotion_rule_id, from_value, to_value, source, changed_by, role_evaluation_id, changed_at',
     )
     .order('changed_at', { ascending: false })
     .order('id', { ascending: false });
@@ -274,6 +277,53 @@ export function percentText(
   return percent === null || percent === undefined ? '—' : String(percent);
 }
 
+/**
+ * A Promotion Rule (#49; editable since #935): the tenure in whole months
+ * counted from the join date, and whether the rule is on. `time` is Recrut →
+ * Voluntar (the daily job), `top_percent` Voluntar → Voluntar Activ (the
+ * Voluntar Activ Role Evaluation's candidates).
+ */
+export type PromotionRule = {
+  id: number;
+  kind: string;
+  fromRole: MemberRole;
+  toRole: MemberRole;
+  tenureMonths: number;
+  enabled: boolean;
+};
+
+/** Both rules, Recrut → Voluntar first. Every live active Member reads them. */
+export async function fetchPromotionRules(): Promise<PromotionRule[]> {
+  const { data, error } = await supabase
+    .from('promotion_rules')
+    .select('id, kind, from_role, to_role, min_tenure_months, enabled')
+    .order('id', { ascending: true });
+  if (error) throw error;
+  return (data ?? [])
+    .map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      fromRole: row.from_role,
+      toRole: row.to_role,
+      tenureMonths: row.min_tenure_months,
+      enabled: row.enabled,
+    }))
+    .sort((a, b) => ruleOrder(a.kind) - ruleOrder(b.kind) || a.id - b.id);
+}
+
+/** The ladder's order: the time rule (the first step) before top_percent. */
+function ruleOrder(kind: string): number {
+  return kind === 'time' ? 0 : 1;
+}
+
+export function usePromotionRules() {
+  const memberId = useAuth().session?.user.id;
+  return useQuery({
+    queryKey: keys.evaluation.rules(memberId),
+    queryFn: memberId ? fetchPromotionRules : skipToken,
+  });
+}
+
 /** What the tab asks the server to do. */
 export type RoleEvaluationCommand =
   | {
@@ -285,6 +335,7 @@ export type RoleEvaluationCommand =
     }
   | { kind: 'threshold'; evaluationKind: RoleEvaluationKind; threshold: number }
   | { kind: 'percent'; evaluationKind: RoleEvaluationKind; percent: number }
+  | { kind: 'rule'; ruleId: number; tenureMonths: number; enabled: boolean }
   | { kind: 'reject'; candidateId: number; reason: string };
 
 /** What a run reports back. */
@@ -298,6 +349,7 @@ const FAILED: Record<RoleEvaluationCommand['kind'], string> = {
   run: 'Nu am putut rula evaluarea. Reîncearcă.',
   threshold: 'Nu am putut salva pragul. Reîncearcă.',
   percent: 'Nu am putut salva procentul. Reîncearcă.',
+  rule: 'Nu am putut salva regula. Reîncearcă.',
   reject: 'Nu am putut respinge candidatul. Reîncearcă.',
 };
 
@@ -330,10 +382,16 @@ export async function runRoleEvaluationCommand(
             p_kind: command.evaluationKind,
             p_percent: command.percent,
           })
-        : await supabase.rpc('reject_promotion_candidate', {
-            p_candidate_id: command.candidateId,
-            p_reason: command.reason,
-          });
+        : command.kind === 'rule'
+          ? await supabase.rpc('update_promotion_rule', {
+              p_rule_id: command.ruleId,
+              p_min_tenure_months: command.tenureMonths,
+              p_enabled: command.enabled,
+            })
+          : await supabase.rpc('reject_promotion_candidate', {
+              p_candidate_id: command.candidateId,
+              p_reason: command.reason,
+            });
   if (error) throw new CommandError(error, FAILED[command.kind]);
   return null;
 }

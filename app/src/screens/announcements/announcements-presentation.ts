@@ -44,11 +44,9 @@ export type AnnouncementPresentation = {
    * Origin chip already says whose it is (B34).
    */
   audienceLabel: string | null;
-  author: string | null;
-  /** The author as a Member Card button; null on a legacy row without `created_by`. */
+  /** The author (`created_by`) as a Member Card button; null on a legacy row without one. */
   authorMember: MemberIdentity | null;
   priority: AnnouncementPriority;
-  category: string | null;
   pinned: boolean;
   formLabel: string | null;
   formUrl: string | null;
@@ -197,16 +195,14 @@ export function toAnnouncementPresentation(
     group,
     audience: row.audience,
     audienceLabel: localAudienceLabel(row.audience, origin),
-    author: row.author,
     authorMember: row.created_by
       ? (members?.get(row.created_by) ?? {
           memberId: row.created_by,
-          // The stored byline stands in until the directory answers.
-          fullName: row.author?.trim() || 'Membru OSUBB',
+          // Until the directory answers.
+          fullName: 'Membru OSUBB',
         })
       : null,
     priority: row.priority,
-    category: row.category,
     pinned: row.pinned,
     formLabel: row.form_label,
     formUrl: row.form_url,

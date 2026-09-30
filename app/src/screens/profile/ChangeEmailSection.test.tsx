@@ -37,7 +37,6 @@ const profile: MyProfile = {
   role: 'voluntar',
   status: 'activ',
   avatar_color: '#ED2025',
-  joined_year: 2025,
   joined_at: '2025-10-01',
   email: 'maria@osubb.ro',
   phone: '0722334455',

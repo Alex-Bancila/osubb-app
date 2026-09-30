@@ -175,7 +175,7 @@ describe('RSVP mutation', () => {
     },
   );
 
-  it('invalidates the returned member and event, and their Vin set, after success', async () => {
+  it('invalidates the returned member and event, their Vin set, and the Event’s Cine participă, after success', async () => {
     const queryClient = new QueryClient();
     const invalidate = vi
       .spyOn(queryClient, 'invalidateQueries')
@@ -189,12 +189,15 @@ describe('RSVP mutation', () => {
       checkedIn: false,
     });
 
-    expect(invalidate).toHaveBeenCalledTimes(2);
+    expect(invalidate).toHaveBeenCalledTimes(3);
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: ['events', 'rsvp', { eventId: 42, memberId }],
     });
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: ['events', 'going', { memberId }],
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ['events', 'attendance', { eventId: 42, memberId }],
     });
   });
 

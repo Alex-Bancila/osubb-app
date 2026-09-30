@@ -13,7 +13,7 @@ preflight() { sed -n '1,/^end $$;/p' "$migration"; }
 if {
   cat <<'SQL'
 begin;
-drop view public.leaderboard;
+drop view if exists public.leaderboard;  -- #936 dropped it on main
 drop view public.profiles_directory;
 -- M4 (20260927180000): profiles_update_self reads profiles.role, so it would pin
 -- the column type; the transaction never commits, so dropping it here is local.
