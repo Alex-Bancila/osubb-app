@@ -7,6 +7,7 @@
 - **Amended:** 2026-09-21 — profile grilling: the Promotion hooks read as ADR-0004's amendment of the same date (two doors behind one tenure gate, the Promotion Threshold, Retention Signals, AG Eligibility by the Voluntar Activ Role alone; superseded 2026-09-27)
 - **Amended:** 2026-09-27 — ruling R28: the Promotion hooks read as ADR-0004's amendment of the same date (Role Evaluations over a chosen date range, two BC-editable Promotion Thresholds, Promotion Candidates promoted by BC by hand)
 - **Amended:** 2026-09-30 — #957: a Department's Group Manager is its Vicepreședinte, a BC member; the BCE members are its Group Responsibles; a BC member may be Group Manager of any Group and never Group Responsible
+- **Amended:** 2026-09-30 — #963: the Biroul de Conducere Group is the home of Board Titles, and `profiles_directory` exposes them to every Member
 - **Deciders:** Alex Băncilă (grilling sessions of 2026-09-18, 2026-09-20, and 2026-09-21)
 - **Supersedes:** the work-origin, Campaign, and authorization sections of ADR-0007; the scope model and management rules of ADR-0008; the Voluntar → Membru Activ rule of ADR-0004 (each amended by reference, none retired)
 - **Superseded by:** —
@@ -73,6 +74,8 @@ Every Group has the same three positions: **Group Manager**, **Group Responsible
 BCE remains a rank and is also the display name of a Department's Group Manager; the two are linked by Appointment, never by the schema. Coordonator Principal is the display name of a Project's Group Manager, appointed by BC or Moderator; Responsabil de Proiect is a Group Responsible of a Project.
 
 > **Amended 2026-09-30 (#957, Alex).** A Department is run by its **Vicepreședinte**, a BC member, who holds the Department's Group Manager position under that display name; the Department's **BCE members are its Group Responsibles**, each under their own title. BCE stays a rank; it is no longer the display name of a Department's Manager. In general a BC member may be appointed Group Manager of any Group and never Group Responsible; the Moderator holds no Group position. The server never restricted this — `private.appoint_group_member` judges liveness and Minimum Level only — so the rule lives in the Administrare pickers and here. The Manager title pre-filled for a new Department is "Vicepreședinte"; existing Departments are renamed in their settings by BC.
+
+> **Amended 2026-09-30 (#963, Alex).** The Private Group Biroul de Conducere, named by `org_settings.board_group_id` (decision D1, #824), is the home of **Board Titles**: a BC or BCE member's Group Responsible display name there is the name of their function, and the app shows it wherever it names their Role, the rank beside it where both fit. `profiles_directory.board_title` and `member_card().board_title` expose it to every Member through one security-definer helper, `private.board_title`, while the Group's roster stays Private; no authority reads it.
 
 ### Ranks
 
