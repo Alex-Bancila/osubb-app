@@ -1,9 +1,8 @@
 import { Panel } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { formatPoints } from '../../lib/format';
+import { useMyRoleLabel } from '../../queries/my-role-label';
 import { useMyPoints } from '../../queries/points';
-import { useMyProfile } from '../../queries/profile';
-import { useRoles } from '../../queries/reference';
 
 /**
  * The Member's Personal Score (CONTEXT.md) above Taskurile mele, ruling R10:
@@ -15,13 +14,10 @@ import { useRoles } from '../../queries/reference';
  */
 export function PersonalScoreHeader() {
   const points = useMyPoints();
-  const profile = useMyProfile();
-  const roles = useRoles();
-
   /* The label comes from `roles` ("Membru cu Drept de Vot"), with the enum
-     value as the fallback while it loads — never a blank chip. */
-  const role = profile.data?.role;
-  const roleLabel = (role && roles.data?.get(role)?.name) ?? role ?? '';
+     value as the fallback while it loads — never a blank chip (#963: the
+     Board Title for a member who holds one). */
+  const roleLabel = useMyRoleLabel();
 
   return (
     <Panel title="Punctajul meu" className="h-auto">

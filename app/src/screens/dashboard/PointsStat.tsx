@@ -2,9 +2,8 @@ import { Link } from 'react-router';
 import { cn } from 'cn';
 import { focusRingClass } from '../../components/layout';
 import { formatPoints, pointWord } from '../../lib/format';
+import { useMyRoleLabel } from '../../queries/my-role-label';
 import { useMyPoints } from '../../queries/points';
-import { useMyProfile } from '../../queries/profile';
-import { useRoles } from '../../queries/reference';
 
 /**
  * The Member's points and Role on Acasă's greeting line (#859, Alex
@@ -19,15 +18,12 @@ import { useRoles } from '../../queries/reference';
  */
 export default function PointsStat() {
   const points = useMyPoints();
-  const profile = useMyProfile();
-  const roles = useRoles();
+  /* The Role label comes from the `roles` table ("Membru cu Drept de Vot"),
+     with the enum value as the fallback while it loads (#963: the Board
+     Title for a member who holds one). */
+  const roleLabel = useMyRoleLabel();
 
   if (points.data === undefined) return null;
-
-  /* The Role label comes from the `roles` table ("Membru cu Drept de Vot"),
-     with the enum value as the fallback while it loads. */
-  const role = profile.data?.role;
-  const roleLabel = (role && roles.data?.get(role)?.name) ?? role ?? '';
 
   return (
     <Link
