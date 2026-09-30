@@ -34,8 +34,8 @@ select ok(not has_function_privilege('service_role', 'public.leadership_member_t
 -- gap too). Four columns are exposed under another name because they would
 -- collide with an Assignment-level column (`id`, `created_at`, `created_by`,
 -- `kind` -> task_id / task_created_at / task_created_by / task_kind); `type`
--- is the retired legacy column nothing reads; `link_label` / `link_url`
--- (#684, the Attached Link) are simply not carried. (#579 dropped the Origin
+-- is the retired legacy column nothing reads. `link_label` / `link_url`
+-- (#684, the Attached Link) were missing until #947 and are carried now. (#579 dropped the Origin
 -- triple with the legacy columns it rendered: group_id / group_name are the
 -- whole Origin.) Pinning the *difference* rather than the overlap is what
 -- makes this fail the day a migration adds a column to public.tasks and the
@@ -60,8 +60,8 @@ select set_eq(
              select column_name from source_columns
               where column_name <> all (%L::text[]) $$, pg_temp.drilldown_columns()),
   $$ values ('id'::text), ('created_at'), ('created_by'), ('kind'),
-            ('link_label'), ('link_url'), ('type') $$,
-  'the drill-down exposes every public.tasks column (plus the computed is_overdue) under its own name except the four renamed for the Assignment row, the Attached Link pair link_label/link_url it never carried, and the retired legacy `type`');
+            ('type') $$,
+  'the drill-down exposes every public.tasks column (plus the computed is_overdue) under its own name -- the Attached Link pair link_label/link_url included (#947) -- except the four renamed for the Assignment row and the retired legacy `type`');
 
 insert into auth.users (id, email) values
   ('26000000-0000-0000-0000-000000000001', 'bce260@example.test'),
