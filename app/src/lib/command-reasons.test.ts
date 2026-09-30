@@ -306,11 +306,26 @@ it.each([
   'period_not_found',
   'invalid_period_name',
   'promotion_threshold_already_stamped',
-  'promotion_rule_manage_forbidden',
   'promotion_rule_not_top_percent',
   'invalid_initial_threshold',
 ])('no longer carries the retired open/close reason %s (R28)', (reason) => {
   expect(reasonCopy(reason)).toBeUndefined();
+});
+
+/* #935: update_promotion_rule brings promotion_rule_manage_forbidden back,
+   with its own words. */
+it.each([
+  [
+    'invalid_tenure_months',
+    'Vechimea este un număr întreg de luni, de la 0 la 120.',
+  ],
+  ['invalid_promotion_rule_enabled', 'Alege dacă regula este pornită.'],
+  [
+    'promotion_rule_manage_forbidden',
+    'Doar BC și Moderatorul pot schimba regulile de promovare.',
+  ],
+])('has Romanian copy for the Promotion Rule reason %s', (reason, copy) => {
+  expect(reasonCopy(reason)).toBe(copy);
 });
 
 /* #698: the application form link's own words (the settings form renames

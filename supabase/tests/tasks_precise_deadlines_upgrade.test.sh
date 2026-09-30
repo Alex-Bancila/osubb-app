@@ -13,7 +13,7 @@ create function public.auth_in_dept(text) returns boolean language sql as 'selec
 create function public.auth_in_team(text) returns boolean language sql as 'select false';
 
 -- Reconstruct the pre-#283 column and load dates on both sides of DST.
-drop view public.tasks_with_overdue;
+drop view if exists public.tasks_with_overdue;  -- #936 dropped it on main
 truncate public.tasks cascade;
 alter table public.tasks
   alter column deadline type date

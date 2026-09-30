@@ -350,7 +350,7 @@ select throws_ok(format('select public.update_task(%s, %s, %L, %L, %L::timestamp
     'T626 x:input', 'd', '2027-03-01 09:00:00+00', 'org'),
   'PT400', 'invalid_assignment_mode', 'a null Assignment Mode on an ordinary Task is refused (full state, never a patch)');
 select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input', p_campaign => (select pr_campaign from f626))),
-  'PT400', 'invalid_campaign', 'another Department''s Campaign is refused as in update_task_content');
+  'PT400', 'invalid_campaign', 'another Department''s Campaign is refused as invalid_campaign');
 reset role;
 select is((select count(*) from public.task_activity as activity
             where activity.task_id in (pg_temp.t('x:review'), pg_temp.t('x:done'), pg_temp.t('x:cancelled'),
@@ -579,7 +579,7 @@ select is(private.task_field_labels(array['deadline', 'review_round', 'title']),
   '#891: a name without a label is left out, never printed raw');
 select is(private.task_field_labels(array['review_round']), 'detalii',
   '#891: a list with no labelled name reads "detalii", never an empty "Modificat: ."');
--- Every name either edit body can put in `changed`, read from their source,
+-- Every name the edit body can put in `changed`, read from their source,
 -- so a field added later without a label fails here rather than reaching a
 -- Member as a column name.
 select is((select array_agg(distinct field.name order by field.name)
@@ -587,10 +587,10 @@ select is((select array_agg(distinct field.name order by field.name)
             cross join lateral regexp_matches(proc.prosrc, 'array_append\(v_changed, ''([a-z_]+)''\)', 'g') as m
             cross join lateral (select m[1] as name) as field
             where proc.pronamespace = 'private'::regnamespace
-              and proc.proname in ('plan_task_update', 'update_task_content_impl')
+              and proc.proname = 'plan_task_update'
               and private.task_field_labels(array[field.name]) = 'detalii'),
   null::text[],
-  '#891: every field name plan_task_update or update_task_content_impl can emit has a Romanian label');
+  '#891: every field name plan_task_update can emit has a Romanian label');
 select ok((select count(distinct m[1]) from pg_proc as proc
             cross join lateral regexp_matches(proc.prosrc, 'array_append\(v_changed, ''([a-z_]+)''\)', 'g') as m
             where proc.pronamespace = 'private'::regnamespace and proc.proname = 'plan_task_update') = 9,

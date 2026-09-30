@@ -182,9 +182,7 @@ export default function ProfileScreen() {
 
   const memberSinceLabel = profile.joined_at
     ? `Membru din ${formatLongDate(new Date(profile.joined_at))}`
-    : profile.joined_year
-      ? `Membru din ${profile.joined_year}`
-      : 'Membru OSUBB';
+    : 'Membru OSUBB';
 
   const openEdit = () => {
     setSaved(false);

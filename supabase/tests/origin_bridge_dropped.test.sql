@@ -10,7 +10,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(24);
+select plan(20);
 
 -- ==================== The legacy surface is gone ====================
 select hasnt_column('public', 'tasks', 'dept_id', 'tasks.dept_id is gone');
@@ -54,17 +54,8 @@ select ok(
   'tasks_validate_campaign fires on an UPDATE of group_id');
 
 -- ==================== Readers keep their shape and grants ====================
-select ok((select 'security_invoker=on' = any (reloptions) from pg_class where oid = 'public.tasks_with_overdue'::regclass),
-  'tasks_with_overdue is recreated security_invoker');
-select ok(has_table_privilege('authenticated', 'public.tasks_with_overdue', 'select')
-      and has_table_privilege('service_role', 'public.tasks_with_overdue', 'select')
-      and not has_table_privilege('anon', 'public.tasks_with_overdue', 'select'),
-  'tasks_with_overdue keeps its grants: authenticated and service_role read, anon does not');
-select hasnt_column('public', 'tasks_with_overdue', 'dept_id', 'tasks_with_overdue no longer carries the legacy triple');
-select ok((select 'security_invoker=on' = any (reloptions) from pg_class where oid = 'public.dept_cup'::regclass)
-      and has_table_privilege('authenticated', 'public.dept_cup', 'select')
-      and not has_table_privilege('anon', 'public.dept_cup', 'select'),
-  'dept_cup is recreated security_invoker with its grants');
+-- tasks_with_overdue and dept_cup were the legacy readers here; both are gone
+-- (#936), leaving public.tasks and public.department_cup as the only surface.
 select ok(has_function_privilege('authenticated', 'public.department_cup(bigint, timestamptz, timestamptz)', 'execute')
       and not has_function_privilege('anon', 'public.department_cup(bigint, timestamptz, timestamptz)', 'execute')
       and has_function_privilege('authenticated', 'public.leadership_member_tasks(uuid, timestamptz, timestamptz)', 'execute')

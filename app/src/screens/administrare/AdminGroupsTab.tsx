@@ -31,13 +31,14 @@ import {
   type GroupCommand,
 } from '../../queries/groups-admin';
 import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
-import { GroupCreateDialog } from './GroupCreateDialog';
+import { GroupCreateDialog, GroupCreatedReceipt } from './GroupCreateDialog';
 import { useAdministrareActionSlot } from './administrare-tabs';
 import {
   buildTree,
   categoryLabel,
   expandableIds,
   groupRoleLabel,
+  createdGroupManager,
   groupStatusLabel,
   leadsAny,
   ledTree,
@@ -540,7 +541,7 @@ export default function AdminGroupsTab() {
   const command = useGroupCommand();
   const actorLevel = useAuth().claims?.member_level ?? 0;
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<ReactNode>(null);
   const submitting = useRef(false);
 
   const groups = useMemo(() => groupsQuery.data ?? [], [groupsQuery.data]);
@@ -580,7 +581,15 @@ export default function AdminGroupsTab() {
     setMessage(null);
     try {
       await command.mutateAsync(next);
-      setMessage('Grupul a fost creat.');
+      setMessage(
+        next.kind === 'create' ? (
+          <GroupCreatedReceipt
+            manager={createdGroupManager(next, membersQuery.data ?? [])}
+          />
+        ) : (
+          'Grupul a fost creat.'
+        ),
+      );
       return true;
     } catch (failure) {
       if (onFailure) onFailure(failure);

@@ -49,7 +49,7 @@ The job refuses to do anything unless all three are true:
 | `STAGING_DB_URL` contains that same ref         | the URL secret points somewhere else — production, another project, an old one |
 | `SEED_PASSWORD` is set, 16 chars to 72 bytes    | the demo-password secret is missing, too short or too long                     |
 
-Then it preflights (are the migrations applied? can this role write `auth.users`?) before writing anything, applies the seed **in a single transaction**, and prints the leaderboard it produced.
+Then it preflights (are the migrations applied? can this role write `auth.users`?) before writing anything, applies the seed **in a single transaction**, and prints the point totals it produced (a ledger sum per active Member; #936 dropped the `leaderboard` view).
 
 Production is not reachable from here. It is a different project with different secrets and its own manually-approved deploy workflow (#77, #78) — and the only thing that could aim this job at it is putting a production URL in `STAGING_DB_URL` _and_ a production ref in `SUPABASE_PROJECT_REF`. Don't.
 
@@ -69,7 +69,7 @@ Reference data — roles, departments, the rating and difficulty guides, `role_c
 
 ## After it runs
 
-The job log ends with the leaderboard and a row count per table. It should match what you get locally after `npx supabase db reset`:
+The job log ends with the point totals and a row count per table. It should match what you get locally after `npx supabase db reset`:
 
 | what                    | count                       |
 | ----------------------- | --------------------------- |

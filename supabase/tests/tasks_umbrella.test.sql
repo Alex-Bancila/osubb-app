@@ -234,16 +234,16 @@ select throws_ok(
   '23514', 'new row for relation "tasks" violates check constraint "tasks_evaluation_inputs_ck"',
   'an ordinary Task completed without Difficulty/Rating still violates tasks_evaluation_inputs_ck (the original rule survives)');
 
--- ==================== tasks_with_overdue exposure ====================
+-- ==================== Subtask shape (#936: tasks_with_overdue is gone) ====================
 select is(
-  (select kind from public.tasks_with_overdue where title = 'Subtask 315'),
+  (select kind from public.tasks where title = 'Subtask 315'),
   'task',
-  'kind is visible through tasks_with_overdue');
+  'a Subtask keeps kind = task, not umbrella');
 
 select is(
-  (select parent_task_id from public.tasks_with_overdue where title = 'Subtask 315'),
+  (select parent_task_id from public.tasks where title = 'Subtask 315'),
   (select id from public.tasks where title = 'Umbrella 315'),
-  'parent_task_id is visible through tasks_with_overdue');
+  'parent_task_id round-trips on the Subtask');
 
 select throws_ok($$update public.tasks set group_id=(select id from public.groups where name = 'Imagine & PR') where title='Subtask 315'$$,'23514','subtask_origin_immutable','Group-only Subtask Origin edits are rejected');
 select * from finish();

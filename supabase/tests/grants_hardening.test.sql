@@ -5,7 +5,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap;
-select plan(19);
+select plan(16);
 
 -- search_path pinned on every JWT helper (auth_role was fixed in #237).
 select is(
@@ -39,10 +39,11 @@ select is(has_function_privilege('authenticated', 'public.my_groups()', 'execute
 
 -- views: select only.
 select is(has_table_privilege('authenticated', 'public.profiles_directory', 'insert'), false, 'profiles_directory: no insert');
-select is(has_table_privilege('authenticated', 'public.leaderboard', 'update'), false, 'leaderboard: no update');
-select is(has_table_privilege('authenticated', 'public.dept_cup', 'delete'), false, 'dept_cup: no delete');
-select is(has_table_privilege('authenticated', 'public.member_points', 'insert'), false, 'member_points: no insert');
-select is(has_table_privilege('authenticated', 'public.leaderboard', 'select'), true, 'leaderboard: select kept');
+-- #936: leaderboard, dept_cup and member_points are dropped views; their
+-- successors (leadership_leaderboard, department_cup, a points_ledger sum)
+-- are functions, so "no insert/update/delete" has no equivalent to port --
+-- deleted rather than turned into a meaningless function-grant check.
+select is(has_function_privilege('authenticated', 'public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz)', 'execute'), true, 'leadership_leaderboard: execute kept (#936, was leaderboard: select kept)');
 
 -- dead helper removed.
 select hasnt_function('public', 'in_my_dept', array['uuid'], 'in_my_dept dropped');

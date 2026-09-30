@@ -54,7 +54,7 @@ alter table public.points_ledger
 -- points_ledger_task_member_uidx is deliberately NOT recreated here: see the
 -- note beside the TRUNCATE below.
 
-drop view public.tasks_with_overdue;
+drop view if exists public.tasks_with_overdue;  -- #936 dropped it on main
 alter table public.tasks
   add column points int generated always as
     (difficulty * coalesce(public.rating_mult(rating), 0)) stored;

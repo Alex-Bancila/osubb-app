@@ -24,9 +24,13 @@ import type {
   AppointableMember,
   RunGroupCommand,
 } from '../../queries/groups-admin';
+import { MemberName } from '../../components/member/MemberName';
 import { MemberPicker } from './MemberPicker';
 import {
+  createdGroupManager,
+  directManagerCandidates,
   GROUP_CATEGORIES,
+  managerTitleFor,
   minLevelChoices,
   PRIVATE_GROUP_HINT,
 } from './group-tree';
@@ -47,6 +51,11 @@ const control =
  * and a Child Group of a Private Group is private whatever is chosen, so the
  * box is shown ticked and locked. A Group Manager under a public parent is
  * not offered it: the server would refuse the private Child.
+ *
+ * **Manager direct** (#951): creating a Group never makes its creator the
+ * Group Manager. The creator may name one, under the title the category
+ * pre-fills, or leave it empty — the Group is then run from above (CONTEXT.md
+ * Group Manager). The Moderator is never offered.
  */
 export function GroupCreateDialog({
   trigger,
@@ -106,6 +115,26 @@ export function GroupCreateDialog({
     effectiveParent?.min_level ?? 0,
     actorLevel,
   );
+  // The direct Manager (#951) is chosen, never assumed: nobody by default,
+  // and only among those `create_group` accepts at the new Group's Minimum
+  // Level. A choice the Minimum Level rules out is dropped for good: a later
+  // lowering does not bring it back unasked.
+  const minLevelOf = (level: string, above: AdminGroup | null) =>
+    level === '' ? (above?.min_level ?? 0) : Number(level);
+  const managerChoices = directManagerCandidates(
+    members,
+    minLevelOf(minLevel, effectiveParent),
+  );
+  const chosenManager =
+    managerChoices.find((member) => member.memberId === manager?.memberId) ??
+    null;
+  function dropIneligibleManager(nextMinLevel: number) {
+    if (
+      manager &&
+      directManagerCandidates([manager], nextMinLevel).length === 0
+    )
+      setManager(null);
+  }
 
   function reset() {
     setName('');
@@ -130,7 +159,7 @@ export function GroupCreateDialog({
         category: values.category,
         parentId: effectiveParent?.id ?? null,
         minLevel: values.minLevel,
-        managerId: manager?.memberId ?? null,
+        managerId: chosenManager?.memberId ?? null,
         color: values.color,
         short: values.short,
         isPrivate: privateChoice,
@@ -217,7 +246,10 @@ export function GroupCreateDialog({
                 groups={groups}
                 groupsById={groupsById}
                 value={chosenParent}
-                onValueChange={setChosenParent}
+                onValueChange={(next) => {
+                  setChosenParent(next);
+                  dropIneligibleManager(minLevelOf(minLevel, next));
+                }}
                 placeholder="Fără grup părinte"
               />
             </div>
@@ -229,7 +261,12 @@ export function GroupCreateDialog({
               <NativeSelect
                 value={minLevel}
                 disabled={disabled}
-                onChange={(event) => setMinLevel(event.target.value)}
+                onChange={(event) => {
+                  setMinLevel(event.target.value);
+                  dropIneligibleManager(
+                    minLevelOf(event.target.value, effectiveParent),
+                  );
+                }}
                 {...form.field('minLevel')}
               >
                 <NativeSelectOption value="">
@@ -252,16 +289,25 @@ export function GroupCreateDialog({
 
           <div className="grid gap-1.5">
             <span id="create-group-manager" className="text-sm font-medium">
-              Coordonator
+              Manager direct ({managerTitleFor(category)})
             </span>
             <MemberPicker
               ariaLabelledBy="create-group-manager"
-              members={members}
-              value={manager}
+              ariaDescribedBy="create-group-manager-hint"
+              members={managerChoices}
+              value={chosenManager}
               onValueChange={setManager}
-              placeholder="Fără coordonator deocamdată"
+              noneLabel="Fără manager direct"
               disabled={disabled}
             />
+            <p
+              id="create-group-manager-hint"
+              className="text-sm text-muted-foreground"
+            >
+              {effectiveParent
+                ? 'Opțional. Fără el, grupul este condus de managerii grupurilor de deasupra.'
+                : 'Opțional. Fără el, grupul este condus de BC și Moderator.'}
+            </p>
           </div>
 
           {(choosePrivate || inheritsPrivate) && (
@@ -332,5 +378,30 @@ export function GroupCreateDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * The receipt after a Group is created (#951): the direct Manager appointed
+ * with it, named through MemberName like every Member, under their title.
+ */
+export function GroupCreatedReceipt({
+  manager,
+}: {
+  manager: ReturnType<typeof createdGroupManager>;
+}) {
+  if (!manager) return <>Grupul a fost creat.</>;
+  return (
+    <>
+      Grupul a fost creat, cu{' '}
+      <MemberName
+        size="sm"
+        memberId={manager.member.memberId}
+        fullName={manager.member.name}
+        nickname={manager.member.nickname}
+        avatarColor={manager.member.avatarColor}
+      />{' '}
+      ca {manager.title}.
+    </>
   );
 }

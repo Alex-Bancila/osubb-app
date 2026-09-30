@@ -1,15 +1,7 @@
 import { useState } from 'react';
-import {
-  ExternalLink,
-  Pencil,
-  Pin,
-  PinOff,
-  Trash2,
-  UserRound,
-} from 'lucide-react';
+import { ExternalLink, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
 import { EmptyState } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
-import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import {
   Dialog,
@@ -120,11 +112,6 @@ function AnnouncementDetails({
           announcement={announcement}
           className="flex-wrap"
           // No read state here: opening the sheet is what marks it read.
-          trailing={
-            announcement.category && (
-              <Badge variant="outline">{announcement.category}</Badge>
-            )
-          }
         />
         <SheetTitle className="mt-1.5">{announcement.title}</SheetTitle>
         {/* As on the card: the date under the title, then the author. */}
@@ -138,17 +125,12 @@ function AnnouncementDetails({
           className="self-start"
         />
         <div className="flex min-w-0 items-center text-xs pointer-coarse:-my-1.5">
-          {announcement.authorMember ? (
+          {announcement.authorMember && (
             <MemberName
               {...announcement.authorMember}
               size="sm"
               className="text-xs"
             />
-          ) : (
-            <span className="inline-flex items-center gap-1 font-medium text-foreground pointer-coarse:min-h-11">
-              <UserRound className="size-3.5" aria-hidden="true" />
-              {announcement.author ?? 'OSUBB'}
-            </span>
           )}
         </div>
       </SheetHeader>

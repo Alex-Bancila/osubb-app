@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import {
+  formatMonthCount,
   formatDate,
   formatDayMonthYear,
   formatLongDate,
@@ -46,4 +47,21 @@ it('counts Tasks with the Romanian plural', () => {
     '120 de taskuri',
     '1.000 de taskuri',
   ]);
+});
+
+it('counts months with the Romanian plural (#935)', () => {
+  expect([0, 1, 2, 6, 19, 20, 24, 100, 101, 120].map(formatMonthCount)).toEqual(
+    [
+      '0 luni',
+      '1 lună',
+      '2 luni',
+      '6 luni',
+      '19 luni',
+      '20 de luni',
+      '24 de luni',
+      '100 de luni',
+      '101 luni',
+      '120 de luni',
+    ],
+  );
 });

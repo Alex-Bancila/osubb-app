@@ -4,7 +4,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(41);
+select plan(40);
 
 select has_column('public', 'tasks', 'started_at', 'Tasks record when work starts');
 select has_column('public', 'tasks', 'submitted_at', 'Tasks record the current submission');
@@ -26,14 +26,6 @@ select is(
         'tasks_cancelled_at_state_ck', 'tasks_review_return_ck',
         'tasks_lifecycle_timestamp_order_ck', 'tasks_queue_timestamp_state_ck')),
   8::bigint, 'all lifecycle and queue cross-column checks exist');
-select ok(
-  (select count(*) = 9 from information_schema.columns
-    where table_schema = 'public' and table_name = 'tasks_with_overdue'
-      and column_name in (
-        'started_at', 'submitted_at', 'completed_at', 'unfulfilled_at',
-        'cancelled_at', 'queue_opened_at', 'queue_closed_at',
-        'review_round', 'returned_to_progress_at')),
-  'the overdue query surface exposes all lifecycle markers');
 
 -- #312: a completed row must carry a rating alongside its difficulty
 -- (tasks_evaluation_inputs_ck); reopening it away from completed must clear

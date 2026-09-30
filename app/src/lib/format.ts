@@ -57,6 +57,14 @@ export function formatMemberCount(count: number): string {
   return `${new Intl.NumberFormat('ro-RO').format(count)} ${de ? 'de ' : ''}membri`;
 }
 
+/** A count of months, same plural rule: "1 lună", "6 luni", "24 de luni". */
+export function formatMonthCount(count: number): string {
+  if (count === 1) return '1 lună';
+  const lastTwo = count % 100;
+  const de = count >= 20 && (lastTwo === 0 || lastTwo >= 20);
+  return `${new Intl.NumberFormat('ro-RO').format(count)} ${de ? 'de ' : ''}luni`;
+}
+
 /** Parse a PostgreSQL `date` as a local calendar date, never as a UTC instant. */
 export function parseLocalDate(value: string | null): Date | null {
   const match = value?.match(/^(\d{4})-(\d{2})-(\d{2})$/);

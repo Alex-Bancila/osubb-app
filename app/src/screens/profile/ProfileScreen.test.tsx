@@ -82,7 +82,6 @@ const profileMocks = vi.hoisted(() => {
     role: 'voluntar' as Database['public']['Enums']['member_role'],
     status: 'activ' as const,
     avatar_color: '#ED2025' as string | null,
-    joined_year: 2024,
     joined_at: '2024-10-01',
     email: 'maria@osubb.ro',
     phone: '0722334455' as string | null,

@@ -7,7 +7,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(40);
+select plan(43);
 
 select has_function('public', 'leadership_member_tasks', array['uuid', 'timestamp with time zone', 'timestamp with time zone'], 'leadership drill-down is a public RPC');
 select function_returns('public', 'leadership_member_tasks', array['uuid', 'timestamp with time zone', 'timestamp with time zone'], 'setof record', 'drill-down returns records');
@@ -27,14 +27,20 @@ select ok(not has_function_privilege('service_role', 'public.leadership_member_t
 
 -- ==================== The drill-down carries the whole Task ====================
 -- J1's row click must render without a second query, so the drill-down has to
--- carry every `tasks_with_overdue` column. Eight are exposed under another
--- name: four would collide with an Assignment-level column (`id`,
--- `created_at`, `created_by`, `kind` -> task_id / task_created_at /
--- task_created_by / task_kind), and `type` is the retired legacy column
--- nothing reads. (#579 dropped the Origin triple with the legacy columns it
--- rendered: group_id / group_name are the whole Origin.) Pinning the *difference* rather than the overlap is
--- what makes this fail the day a migration adds a column to public.tasks --
--- silence would otherwise be mistaken for coverage.
+-- carry every public.tasks column, plus its own computed is_overdue (#936:
+-- tasks_with_overdue -- which used to stand in for "the read surface" here --
+-- is gone; it never carried link_label/link_url either, frozen at CREATE time
+-- before #684 added them, so comparing against the live table surfaces that
+-- gap too). Four columns are exposed under another name because they would
+-- collide with an Assignment-level column (`id`, `created_at`, `created_by`,
+-- `kind` -> task_id / task_created_at / task_created_by / task_kind); `type`
+-- is the retired legacy column nothing reads. `link_label` / `link_url`
+-- (#684, the Attached Link) were missing until #947 and are carried now. (#579 dropped the Origin
+-- triple with the legacy columns it rendered: group_id / group_name are the
+-- whole Origin.) Pinning the *difference* rather than the overlap is what
+-- makes this fail the day a migration adds a column to public.tasks and the
+-- drill-down does not follow -- silence would otherwise be mistaken for
+-- coverage.
 create function pg_temp.drilldown_columns() returns text[]
 language sql as $$
   select coalesce(array_agg(a.name), '{}')
@@ -45,12 +51,17 @@ language sql as $$
 $$;
 
 select set_eq(
-  format($$ select column_name::text from information_schema.columns
-             where table_schema = 'public' and table_name = 'tasks_with_overdue'
-               and column_name <> all (%L::text[]) $$, pg_temp.drilldown_columns()),
+  format($$ with source_columns as (
+               select column_name::text from information_schema.columns
+                where table_schema = 'public' and table_name = 'tasks'
+               union
+               select 'is_overdue'
+             )
+             select column_name from source_columns
+              where column_name <> all (%L::text[]) $$, pg_temp.drilldown_columns()),
   $$ values ('id'::text), ('created_at'), ('created_by'), ('kind'),
             ('type') $$,
-  'the drill-down exposes every tasks_with_overdue column under its own name except the four renamed for the Assignment row and the retired legacy `type`');
+  'the drill-down exposes every public.tasks column (plus the computed is_overdue) under its own name -- the Attached Link pair link_label/link_url included (#947) -- except the four renamed for the Assignment row and the retired legacy `type`');
 
 insert into auth.users (id, email) values
   ('26000000-0000-0000-0000-000000000001', 'bce260@example.test'),
@@ -81,10 +92,12 @@ values
    '26000000-0000-0000-0000-000000000001');
 insert into public.tasks
   (title, description, deadline, group_id, campaign_id, status, difficulty, rating,
-   created_by, created_at, started_at, submitted_at, unfulfilled_at, parent_task_id)
+   created_by, created_at, started_at, submitted_at, unfulfilled_at, parent_task_id,
+   link_label, link_url)
 select 'Historical Subtask 260', 'Full details 260', now() - interval '2 days', pg_temp.dept_group('edu'), campaign.id,
        'unfulfilled', 2, 1, '26000000-0000-0000-0000-000000000001', now() - interval '5 days',
-       now() - interval '4 days', now() - interval '3 days', now() - interval '1 day', parent.id
+       now() - interval '4 days', now() - interval '3 days', now() - interval '1 day', parent.id,
+       'Dosar 260', 'https://example.test/dosar-260'
   from public.campaigns as campaign
   cross join public.tasks as parent
  where campaign.name = 'Campaign 260' and parent.title = 'Umbrella 260';
@@ -118,6 +131,18 @@ select is((select completed_late from public.leadership_member_tasks('26000000-0
   'an unfulfilled outcome is not mislabeled as completed late');
 select is((select evaluation_history -> 0 ->> 'note' from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')), 'Evaluation note 260',
   'Evaluation and reversal history is present');
+
+-- #947: the Task's Attached Link (#679/#684) travels with the row, so
+-- Trackerul membrului draws the Link atașat like every other Task view. The
+-- column pin keeps a failure readable; the value pair is what fails if the
+-- body stops selecting either column (or swaps them).
+select ok(array['link_label', 'link_url'] <@ pg_temp.drilldown_columns(),
+  'the drill-down returns link_label and link_url (#947)');
+select is(
+  (select array[link_label, link_url]
+     from public.leadership_member_tasks('26000000-0000-0000-0000-000000000002')),
+  array['Dosar 260', 'https://example.test/dosar-260'],
+  'the Task''s Attached Link -- label and URL -- is in the row (#947)');
 
 -- The Assignment state for that Task, in the same row: who held it, when it
 -- started, how it ended and why.
@@ -238,6 +263,10 @@ select is((select count(*)::int from pg_proc
 select pg_temp.test_login_leadership('26000000-0000-0000-0000-000000000001');
 select is((select count(*) from public.leadership_member_tasks('26000000-0000-0000-0000-000000000007')), 2::bigint,
   'with no range both Assignments are there, the undated Task included');
+select ok(
+  (select bool_and(link_label is null and link_url is null)
+     from public.leadership_member_tasks('26000000-0000-0000-0000-000000000007')),
+  'a Task with no Attached Link returns neither half of it (#947)');
 select results_eq(
   $$ select title from public.leadership_member_tasks('26000000-0000-0000-0000-000000000007',
        '2001-03-10 10:00:00+00', '2001-03-10 10:00:01+00') $$,
