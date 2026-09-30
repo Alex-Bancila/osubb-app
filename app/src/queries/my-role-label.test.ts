@@ -99,6 +99,18 @@ describe('useMyRoleLabel (#963)', () => {
     expect(label()).toBe('bce');
   });
 
+  it('follows the live Role, never a stale token level: a demoted Member keeps no title', () => {
+    // Demoted to Voluntar while the token still says BC and the board row
+    // lingers; the Roles map is not loaded yet. The server helper answers
+    // only for a bc/bce Profile, and so must this.
+    state.claims = { member_role: 'bc', member_level: 6, group_ids: [] };
+    state.profile = { role: 'voluntar' };
+    state.roles = undefined;
+    state.membershipRows = onBoard;
+    expect(label()).toBe('voluntar');
+    expect(state.settingsEnabled.every((enabled) => !enabled)).toBe(true);
+  });
+
   it('says nothing until a Role is known', () => {
     expect(label()).toBe('');
   });
