@@ -158,7 +158,8 @@ select is(pg_temp.g962_titles('Departament #962'), array[null, null]::text[],
 -- ==================== 4 · the full-state replace ====================
 
 select pg_temp.g962_as(2);
-select lives_ok(pg_temp.g962_set(null, E'  Coordonator \t'),
+-- Padded with spaces: btrim, exactly as the Manager title is trimmed.
+select lives_ok(pg_temp.g962_set(null, '  Coordonator  '),
   'the Group''s Manager names the Responsible position through update_group');
 select is(pg_temp.g962_titles('Departament #962'), array[null, 'Coordonator'],
   'stored trimmed, and the Manager title is untouched');
