@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { onMembershipChange, signalMembershipChange } from './membership-signal';
+import {
+  onMembershipChange,
+  signalMembershipChange,
+} from './membership-signal';
 
 describe('membership signal (#959)', () => {
   it('reaches every listener until it unsubscribes', () => {

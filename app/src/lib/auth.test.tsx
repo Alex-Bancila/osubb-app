@@ -649,7 +649,9 @@ describe('refresh claims when the database signals a membership change (#959)', 
   });
 
   it('counts a signalled refresh toward the focus cooldown of #598', async () => {
-    await renderProvider(sessionFor('a', { issuedAtMs: Date.now() - 20 * 60 * 1000 }));
+    await renderProvider(
+      sessionFor('a', { issuedAtMs: Date.now() - 20 * 60 * 1000 }),
+    );
 
     act(() => signalMembershipChange());
     await waitFor(() => expect(auth.refreshSession).toHaveBeenCalledTimes(1), {

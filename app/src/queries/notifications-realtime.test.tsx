@@ -163,7 +163,9 @@ describe('a system Notification signals a membership change (#959)', () => {
     const listener = vi.fn();
     const off = onMembershipChange(listener);
 
-    act(() => callback({ eventType: 'INSERT', new: { kind: 'task' }, old: {} }));
+    act(() =>
+      callback({ eventType: 'INSERT', new: { kind: 'task' }, old: {} }),
+    );
     // Marking "Rol actualizat" as read later is an UPDATE of a system row.
     act(() =>
       callback({ eventType: 'UPDATE', new: { kind: 'system' }, old: {} }),
