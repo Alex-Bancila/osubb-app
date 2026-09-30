@@ -69,6 +69,7 @@ function group(
     status: 'active',
     is_organization: false,
     manager_title: null,
+    responsible_title: null,
     automatic_membership: false,
     accepts_applications: false,
     application_level: null,
@@ -855,6 +856,33 @@ it('opens Conduse de mine from the link itself (#921)', () => {
   expect(
     screen.getByRole('link', { name: 'Logistică, subgrup al Educațional' }),
   ).toBeVisible();
+});
+
+it('names "Funcția ta" after the Group\'s name for the position (#962)', () => {
+  api.groups.mockReturnValue({
+    data: tree.map((row) =>
+      row.id === 2
+        ? {
+            ...row,
+            manager_title: 'Vicepreședinte',
+            responsible_title: 'Coordonator',
+          }
+        : row,
+    ),
+    isPending: false,
+    isError: false,
+  });
+  api.myGroups.mockReturnValue({
+    data: LED_BY_BC,
+    isPending: false,
+    isError: false,
+  });
+  show('/administrare/grupuri?vedere=conduse');
+  const led = screen
+    .getByRole('link', { name: 'Logistică, subgrup al Educațional' })
+    .closest('tr') as HTMLElement;
+  expect(within(led).getByText('Coordonator')).toBeVisible();
+  expect(within(led).queryByText('Responsabil')).toBeNull();
 });
 
 it('hides the switch from BC who leads no Group, and ignores the key (#921)', () => {

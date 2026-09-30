@@ -90,7 +90,13 @@ export type ApplicationGroup = {
 
 type ApplicationGroupRow = Pick<
   AdminGroup,
-  'id' | 'name' | 'color' | 'path' | 'parent_id' | 'manager_title'
+  | 'id'
+  | 'name'
+  | 'color'
+  | 'path'
+  | 'parent_id'
+  | 'manager_title'
+  | 'responsible_title'
 >;
 
 /** Tree order, as `my_groups()` sorts: by path, then id. */
@@ -173,6 +179,8 @@ export function applicationGroups({
       roleLabel: groupRoleLabel(
         mine.group_role,
         byId.get(mine.id)?.manager_title,
+        null,
+        byId.get(mine.id)?.responsible_title,
       ),
       inherited: inheritsGroupRole(mine, rosterRows),
     });

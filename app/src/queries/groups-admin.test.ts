@@ -70,6 +70,7 @@ it('sends every Administrare write through its own command, nulls included', asy
     groupId: 3,
     name: 'Amfiteatru',
     managerTitle: 'Coordonator Principal',
+    responsibleTitle: '  Responsabil de Proiect ',
     acceptsApplications: true,
     applicationLevel: 1,
     sharedWorkVisibility: false,
@@ -82,6 +83,8 @@ it('sends every Administrare write through its own command, nulls included', asy
     p_group_id: 3,
     p_name: 'Amfiteatru',
     p_manager_title: 'Coordonator Principal',
+    // #962: the Responsible position's name, trimmed.
+    p_responsible_title: 'Responsabil de Proiect',
     p_accepts_applications: true,
     p_application_level: 1,
     p_shared_work_visibility: false,
@@ -90,6 +93,30 @@ it('sends every Administrare write through its own command, nulls included', asy
     p_application_form_url: 'https://forms.example.org/amfiteatru',
     p_confirm_removals: true,
   });
+
+  // A full-state replace: a blank or cleared name is sent as null, never
+  // dropped from the body.
+  await runGroupCommand({
+    kind: 'settings',
+    groupId: 3,
+    name: 'Amfiteatru',
+    managerTitle: null,
+    responsibleTitle: '   ',
+    acceptsApplications: false,
+    applicationLevel: null,
+    sharedWorkVisibility: false,
+    minLevel: 3,
+    applicationFormLabel: null,
+    applicationFormUrl: null,
+    confirmRemovals: false,
+  });
+  expect(api.rpc).toHaveBeenLastCalledWith(
+    'update_group',
+    expect.objectContaining({
+      p_manager_title: null,
+      p_responsible_title: null,
+    }),
+  );
 
   await runGroupCommand({
     kind: 'structure',
@@ -159,6 +186,7 @@ it('raises a translated refusal that still carries the server reason', async () 
     groupId: 3,
     name: 'Amfiteatru',
     managerTitle: null,
+    responsibleTitle: null,
     acceptsApplications: false,
     applicationLevel: null,
     sharedWorkVisibility: false,

@@ -191,7 +191,12 @@ function OwnGroupRow({
   const role =
     !inherited &&
     (row.group_role === 'manager' || row.group_role === 'responsible')
-      ? groupRoleLabel(row.group_role, group.manager_title, positionTitle)
+      ? groupRoleLabel(
+          row.group_role,
+          group.manager_title,
+          positionTitle,
+          group.responsible_title,
+        )
       : null;
   return (
     <ListRow

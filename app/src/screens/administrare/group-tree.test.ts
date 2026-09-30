@@ -11,6 +11,7 @@ import {
   createdGroupManager,
   managerTitleFor,
   positionCandidates,
+  positionNoun,
   groupStatusLabel,
   groupTabs,
   leadsAny,
@@ -43,6 +44,7 @@ function group(
     status: 'active',
     is_organization: false,
     manager_title: null,
+    responsible_title: null,
     automatic_membership: false,
     accepts_applications: false,
     application_level: null,
@@ -243,6 +245,39 @@ it('labels categories, statuses and Group Roles the way the Group names them', (
     'Responsabil Logistică',
   );
   expect(groupRoleLabel('member', 'BCE', null)).toBe('Membru');
+});
+
+it("names a Responsible by their own title, then the Group's name for the position, then Responsabil (#962)", () => {
+  expect(
+    groupRoleLabel('responsible', null, 'Responsabil Logistică', 'Coordonator'),
+  ).toBe('Responsabil Logistică');
+  expect(groupRoleLabel('responsible', null, null, 'Coordonator')).toBe(
+    'Coordonator',
+  );
+  expect(groupRoleLabel('responsible', null, '  ', ' Coordonator ')).toBe(
+    'Coordonator',
+  );
+  expect(groupRoleLabel('responsible', 'Vicepreședinte', null, null)).toBe(
+    'Responsabil',
+  );
+  expect(groupRoleLabel('responsible', null, null, '   ')).toBe('Responsabil');
+  // The Manager is never named after the Responsible position.
+  expect(groupRoleLabel('manager', null, null, 'Coordonator')).toBe(
+    'Coordonator',
+  );
+  expect(groupRoleLabel('manager', 'Vicepreședinte', null, 'Coordonator')).toBe(
+    'Vicepreședinte',
+  );
+  expect(groupRoleLabel('member', null, null, 'Coordonator')).toBe('Membru');
+});
+
+it('writes a position name inside a sentence, keeping acronyms (#962)', () => {
+  expect(positionNoun('Coordonator')).toBe('coordonator');
+  expect(positionNoun('Responsabil de Proiect')).toBe('responsabil de proiect');
+  expect(positionNoun('Coordonator IT')).toBe('coordonator IT');
+  expect(positionNoun('BCE')).toBe('BCE');
+  expect(positionNoun('Mentor-coordonator')).toBe('mentor-coordonator');
+  expect(positionNoun('  Șef de echipă ')).toBe('șef de echipă');
 });
 
 it('builds the breadcrumb from the Groups the caller can actually read', () => {

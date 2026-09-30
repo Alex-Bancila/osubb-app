@@ -42,16 +42,35 @@ export function groupStatusLabel(status: string): string {
       : status;
 }
 
-/** A Group Role as this Group names it (ADR-0009 §Group Roles). */
+/**
+ * A Group Role as this Group names it (ADR-0009 §Group Roles): a Manager by
+ * the Group's Manager title, a Responsible by their own title, then by the
+ * Group's name for the position (#962).
+ */
 export function groupRoleLabel(
   groupRole: string,
   managerTitle?: string | null,
   positionTitle?: string | null,
+  responsibleTitle?: string | null,
 ): string {
   if (groupRole === 'manager') return managerTitle?.trim() || 'Coordonator';
   if (groupRole === 'responsible')
-    return positionTitle?.trim() || 'Responsabil';
+    return positionTitle?.trim() || responsibleTitle?.trim() || 'Responsabil';
   return 'Membru';
+}
+
+/**
+ * A position's name inside a sentence ("Numește un coordonator", #962): each
+ * capitalised word in lower case, an acronym (BCE, IT) as written.
+ */
+export function positionNoun(title: string): string {
+  return title
+    .trim()
+    .split(/(\s+)/)
+    .map((word) =>
+      /^\p{Lu}[\p{Ll}-]*$/u.test(word) ? word.toLocaleLowerCase('ro') : word,
+    )
+    .join('');
 }
 
 /**
@@ -181,6 +200,7 @@ function fromLedSource(source: LedSource): AdminGroup {
     is_organization: source.is_organization,
     is_private: false,
     manager_title: null,
+    responsible_title: null,
     automatic_membership: false,
     accepts_applications: false,
     application_level: null,

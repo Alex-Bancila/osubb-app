@@ -308,6 +308,9 @@ export function GroupSettingsTab({
   const root = group.parent_id === null;
   const [name, setName] = useState(group.name);
   const [managerTitle, setManagerTitle] = useState(group.manager_title ?? '');
+  const [responsibleTitle, setResponsibleTitle] = useState(
+    group.responsible_title ?? '',
+  );
   const [accepts, setAccepts] = useState(group.accepts_applications);
   const [applicationLevel, setApplicationLevel] = useState(
     group.application_level === null ? '' : String(group.application_level),
@@ -379,6 +382,7 @@ export function GroupSettingsTab({
     {
       name,
       managerTitle,
+      responsibleTitle,
       acceptsApplications: accepts,
       // '' is "Ca nivelul minim al grupului": send the Minimum Level chosen
       // in this same save (#731), not null -- update_group refuses a null
@@ -497,6 +501,24 @@ export function GroupSettingsTab({
             />
           </Field>
           <FieldError {...settingsForm.errorProps('managerTitle')} />
+        </div>
+
+        {/* #962: what this Group calls its Responsibles -- "Coordonator"
+            for a Department's BCE members. It names the Roluri panel and
+            pre-fills each appointment's own title. */}
+        <div className="grid gap-1.5">
+          <Field label="Cum se numesc responsabilii">
+            <input
+              className={control}
+              value={responsibleTitle}
+              maxLength={80}
+              placeholder="Coordonator, Responsabil de Proiect…"
+              disabled={busy}
+              onChange={(event) => setResponsibleTitle(event.target.value)}
+              {...settingsForm.field('responsibleTitle')}
+            />
+          </Field>
+          <FieldError {...settingsForm.errorProps('responsibleTitle')} />
         </div>
 
         {!root && (

@@ -97,6 +97,7 @@ function group(
     status: 'active',
     is_organization: false,
     manager_title: null,
+    responsible_title: null,
     automatic_membership: false,
     accepts_applications: false,
     application_level: null,
@@ -407,6 +408,7 @@ it('names who leaves before it raises the Minimum Level, and only then confirms'
     groupId: 2,
     name: 'Logistică',
     managerTitle: null,
+    responsibleTitle: null,
     acceptsApplications: false,
     applicationLevel: null,
     sharedWorkVisibility: false,
@@ -460,6 +462,7 @@ it('sends the Minimum Level for "Ca nivelul minim al grupului", following a Mini
     groupId: 2,
     name: 'Logistică',
     managerTitle: null,
+    responsibleTitle: null,
     acceptsApplications: true,
     applicationLevel: 0,
     sharedWorkVisibility: false,
@@ -486,6 +489,7 @@ it('keeps an explicit Application Level as chosen', async () => {
     groupId: 2,
     name: 'Logistică',
     managerTitle: null,
+    responsibleTitle: null,
     acceptsApplications: true,
     applicationLevel: 5,
     sharedWorkVisibility: false,
@@ -646,6 +650,89 @@ it('appoints a Manager one level up and a Responsible under a display name', asy
     groupRole: 'responsible',
     positionTitle: 'Responsabil Logistică',
   });
+});
+
+it("names each position after the Group's settings and pre-fills a Responsible's title with the Group's (#962)", async () => {
+  api.groups.mockReturnValue({
+    data: tree.map((row) =>
+      row.id === 2
+        ? {
+            ...row,
+            manager_title: 'Vicepreședinte',
+            responsible_title: 'Coordonator',
+          }
+        : row,
+    ),
+    isPending: false,
+    isError: false,
+  });
+  api.roster.mockReturnValue({
+    data: [
+      ...roster,
+      // A Responsible whose row carries no title of their own.
+      {
+        memberId: 'r',
+        name: 'Radu Mihai',
+        avatarColor: null,
+        groupRole: 'responsible',
+        positionTitle: null,
+        source: 'roster',
+        roleId: null,
+        status: 'activ',
+        roleLabel: 'BCE',
+        level: 5,
+      },
+    ],
+    isPending: false,
+  });
+  const user = userEvent.setup();
+  show();
+  await user.click(tab('Roluri'));
+  expect(screen.getByRole('region', { name: 'Vicepreședinte' })).toBeVisible();
+  const panel = screen.getByRole('region', { name: 'Coordonator' });
+  expect(screen.queryByRole('region', { name: 'Responsabili' })).toBeNull();
+  expect(
+    within(within(panel).getByRole('list')).getByText('Coordonator'),
+  ).toBeVisible();
+  // Each position in its own words: never two identical buttons.
+  expect(
+    screen.getByRole('button', { name: 'Numește un vicepreședinte' }),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole('button', { name: 'Numește un responsabil' }),
+  ).toBeNull();
+
+  await user.click(
+    screen.getByRole('button', { name: 'Numește un coordonator' }),
+  );
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Coordonator în Logistică',
+  });
+  expect(dialog).toHaveAccessibleDescription(
+    'Un coordonator se ocupă de o parte din munca grupului, sub numele funcției pe care i-l dai.',
+  );
+  expect(within(dialog).getByLabelText('Numele funcției')).toHaveValue(
+    'Coordonator',
+  );
+  await user.click(within(dialog).getByRole('combobox', { name: 'Membru' }));
+  await user.click(await screen.findByRole('option', { name: /Carmen Radu/ }));
+  await user.click(within(dialog).getByRole('button', { name: 'Numește' }));
+  expect(api.mutate).toHaveBeenLastCalledWith({
+    kind: 'setRole',
+    groupId: 2,
+    memberId: 'c',
+    groupRole: 'responsible',
+    positionTitle: 'Coordonator',
+  });
+
+  await user.click(
+    screen.getByRole('button', { name: 'Numește un vicepreședinte' }),
+  );
+  expect(
+    await screen.findByRole('dialog', {
+      name: 'Vicepreședinte pentru Logistică',
+    }),
+  ).toBeVisible();
 });
 
 it('offers the position pickers only Members who could take the position (F-27)', async () => {

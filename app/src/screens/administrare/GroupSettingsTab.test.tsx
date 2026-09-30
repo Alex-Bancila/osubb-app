@@ -54,6 +54,7 @@ function group(extra: Partial<AdminGroup> = {}): AdminGroup {
     is_organization: false,
     is_private: false,
     manager_title: null,
+    responsible_title: null,
     automatic_membership: false,
     accepts_applications: true,
     application_level: 1,
@@ -126,6 +127,7 @@ it('saves the pair together, trimmed, as p_application_form_label / _url', async
       groupId: 2,
       name: 'Logistică',
       managerTitle: null,
+      responsibleTitle: null,
       acceptsApplications: true,
       applicationLevel: 1,
       sharedWorkVisibility: false,
@@ -135,6 +137,69 @@ it('saves the pair together, trimmed, as p_application_form_label / _url', async
       confirmRemovals: false,
     },
     expect.any(Function),
+  );
+});
+
+/*
+ * #962: the Group Responsible position's name, next to the Manager's —
+ * "Coordonator" for a Department's BCE members.
+ */
+const responsibleField = () =>
+  screen.getByLabelText('Cum se numesc responsabilii');
+
+it("names the Responsible position right after the Manager's, filled from the stored setting (#962)", () => {
+  show({ manager_title: 'Vicepreședinte', responsible_title: 'Coordonator' });
+  const manager = screen.getByLabelText('Cum se numește coordonatorul');
+  expect(manager).toHaveValue('Vicepreședinte');
+  expect(responsibleField()).toHaveValue('Coordonator');
+  expect(responsibleField()).toHaveAttribute('maxLength', '80');
+  expect(responsibleField()).toHaveAttribute(
+    'placeholder',
+    'Coordonator, Responsabil de Proiect…',
+  );
+  expect(
+    manager.compareDocumentPosition(responsibleField()) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+});
+
+it('saves the Responsible position name trimmed, as responsibleTitle, and clears it when emptied (#962)', async () => {
+  const user = userEvent.setup();
+  show();
+  await user.type(responsibleField(), '  Coordonator ');
+  await save();
+  expect(run).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      kind: 'settings',
+      managerTitle: null,
+      responsibleTitle: 'Coordonator',
+    }),
+    expect.any(Function),
+  );
+
+  await user.clear(responsibleField());
+  await save();
+  expect(run).toHaveBeenLastCalledWith(
+    expect.objectContaining({ kind: 'settings', responsibleTitle: null }),
+    expect.any(Function),
+  );
+});
+
+it("shows update_group's responsible_title_too_long under the Responsible field (#962)", async () => {
+  run.mockImplementation(async (_command, onFailure) => {
+    onFailure?.(
+      new CommandError(
+        { code: 'PT400', message: 'responsible_title_too_long' },
+        'x',
+      ),
+    );
+    return false;
+  });
+  show();
+  await save();
+  expect(run).toHaveBeenCalledTimes(1);
+  expect(responsibleField()).toHaveAccessibleDescription(
+    'Numele funcției are cel mult 80 de caractere.',
   );
 });
 

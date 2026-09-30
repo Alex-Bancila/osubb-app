@@ -44,13 +44,15 @@ export type Group = Pick<
   | 'is_organization'
 > & {
   manager_title?: string | null;
+  /** What the Group calls its Group Responsible position (#962). */
+  responsible_title?: string | null;
   automatic_membership?: boolean;
   /** A Private Group (#757, ruling R25): the reader sees it, so marks it. */
   is_private?: boolean;
 };
 
 const GROUP_FIELDS =
-  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, is_private, manager_title, automatic_membership';
+  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, is_private, manager_title, responsible_title, automatic_membership';
 
 /**
  * Every Group this member may read. RLS is the only filter — the browser asks
@@ -96,19 +98,21 @@ export type MemberGroup = {
 /**
  * Resolves the Group Role label for display:
  * - Group Manager under the Group's `manager_title` (or fallback "Manager")
- * - Group Responsible under `position_title` (or fallback "Responsabil")
+ * - Group Responsible under their own `position_title`, then the Group's
+ *   `responsible_title` (#962), then "Responsabil"
  * - Otherwise "Membru"
  */
 export function resolveGroupRoleLabel(
   groupRole: 'manager' | 'responsible' | 'member' | string,
   managerTitle?: string | null,
   positionTitle?: string | null,
+  responsibleTitle?: string | null,
 ): string {
   if (groupRole === 'manager') {
     return managerTitle?.trim() || 'Manager';
   }
   if (groupRole === 'responsible') {
-    return positionTitle?.trim() || 'Responsabil';
+    return positionTitle?.trim() || responsibleTitle?.trim() || 'Responsabil';
   }
   return 'Membru';
 }
@@ -157,6 +161,7 @@ export function buildMemberGroups(
       row.group_role,
       group.manager_title,
       row.position_title,
+      group.responsible_title,
     );
 
     result.push({

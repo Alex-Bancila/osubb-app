@@ -334,6 +334,17 @@ function treeColumns(
 function ledColumns(rows: readonly LedRow[]): DataTableColumn<LedRow>[] {
   const next = new Map(rows.map((row, index) => [row, rows[index + 1]]));
   const led = rows.filter((row) => row.lead !== null);
+  // The position as this Group names it (#962): a Responsible of a Department
+  // that calls its Responsibles "Coordonator" reads "Coordonator".
+  const lead = (row: LedRow) =>
+    row.lead
+      ? groupRoleLabel(
+          row.lead.groupRole,
+          row.group.manager_title,
+          null,
+          row.group.responsible_title,
+        )
+      : '';
   return [
     {
       id: 'name',
@@ -351,19 +362,19 @@ function ledColumns(rows: readonly LedRow[]): DataTableColumn<LedRow>[] {
     },
     {
       id: 'group_role',
-      accessorFn: (row) => (row.lead ? groupRoleLabel(row.lead.groupRole) : ''),
+      accessorFn: lead,
       header: 'Funcția ta',
       enableSorting: false,
       cell: ({ row }) => {
-        const lead = row.original.lead;
-        if (!lead) return null;
+        const position = row.original.lead;
+        if (!position) return null;
         return (
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <Badge variant="outline">{groupRoleLabel(lead.groupRole)}</Badge>
+            <Badge variant="outline">{lead(row.original)}</Badge>
             {/* Keyed on the position, not on the roster row: a Coordonator
                 from above who is also a plain member here still inherits it
                 (F-17). */}
-            {lead.inherited && (
+            {position.inherited && (
               <span className="text-xs text-muted-foreground">moștenit</span>
             )}
           </span>
