@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  authFailureMessage,
   emailChangeReason,
   toAuthCodeErrorMessage,
   toAuthErrorMessage,
@@ -112,6 +113,13 @@ describe('toEmailChangeErrorMessage (#632)', () => {
 });
 
 /* Audit D-14: a six-digit code is not a link. */
+describe('authFailureMessage (#968)', () => {
+  it('gives the shared copy for a kind the caller already knows', () => {
+    expect(authFailureMessage('rate-limit')).toBe(MESSAGE.rateLimit);
+    expect(authFailureMessage('unknown')).toBe(MESSAGE.unknown);
+  });
+});
+
 describe('toAuthCodeErrorMessage', () => {
   const CODE = 'Codul este greșit sau a expirat. Verifică-l sau cere unul nou.';
   it.each([

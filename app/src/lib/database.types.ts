@@ -3692,6 +3692,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      request_invitation_allowed: {
+        Args: { p_email: string; p_ip_hash: string }
+        Returns: string
+      }
       return_task_to_progress: {
         Args: { p_note: string; p_task_id: number }
         Returns: {
