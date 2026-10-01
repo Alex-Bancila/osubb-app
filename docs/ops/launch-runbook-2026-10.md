@@ -367,9 +367,10 @@ month ($20). Raise **Rate Limits → Emails sent per hour** to `250` on import d
   invitation itself (Edge Function `request-invitation`: at most once a minute and five times a
   day per address, twenty an hour per IP, nothing for an unknown, confirmed or inactive address).
   BC's re-send from Administrare (#773) stays as the fallback. Every board member is in this state
-  on launch day: "Trimite linkul" with their address is all they need. Optional for launch week:
-  raise **Authentication → Sign In / Providers → Email → Email OTP Expiration** (up to 86400 s) and
-  put it back to 3600 after — every link and code lives that long meanwhile.
+  on launch day: "Trimite linkul" with their address is all they need. Keep **Authentication → Sign
+  In / Providers → Email → Email OTP Expiration** at 3600 s or less, the bound of Supabase's production
+  checklist: a longer-lived link is a longer-lived token for anyone who gets hold of it, and the
+  re-send makes a longer life unnecessary.
 - **Brave blocks push until told otherwise.** On a laptop running Brave the switch turns on, the site
   permission is granted, and the subscription still fails with the app's generic "Nu am putut schimba
   notificările…" message: Brave ships with **Use Google services for push messaging** off
