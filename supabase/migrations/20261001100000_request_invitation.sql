@@ -83,6 +83,13 @@ begin
   --    at commit or rollback, like private.require_daily_cap's.
   perform pg_advisory_xact_lock(hashtextextended('osubb.invitation_request:' || v_hash, 0));
   v_now := clock_timestamp();
+  -- The address lock above serialises one address; two addresses from one
+  -- IP could otherwise count and insert at once near the cap. Taken after
+  -- the address lock, always in this order, so there is no cycle.
+  if p_ip_hash is not null then
+    perform pg_advisory_xact_lock(
+      hashtextextended('osubb.invitation_request_ip:' || p_ip_hash, 0));
+  end if;
 
   -- 3. Forget what is past every window, then record this call -- whatever
   --    the verdict, so an address or an IP that keeps asking stays limited.
