@@ -24,7 +24,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(76);
+select plan(78);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
@@ -194,6 +194,15 @@ select is((select string_agg(gm.member_id::text||'='||gm.group_role||'='||gm.pos
     and g.created_by='d0000000-0000-0000-0000-000000000007'),
   'd0000000-0000-0000-0000-000000000006=responsible=Coordonator IT,d0000000-0000-0000-0000-000000000007=responsible=Președinte',
   'the board roster is the demo BCE and BC, each a Responsible carrying their board title');
+-- #963: the same titles reach every Member through profiles_directory.
+select is((select board_title from profiles_directory
+            where id='d0000000-0000-0000-0000-000000000007'),
+  'Președinte',
+  'profiles_directory names the demo BC by their Board Title (#963)');
+select is((select board_title from profiles_directory
+            where id='d0000000-0000-0000-0000-000000000006'),
+  'Coordonator IT',
+  'and the demo BCE by theirs (#963)');
 select ok(not exists (select 1 from group_members gm join groups g on g.id=gm.group_id
   where g.name='Festivalul Studențesc 2026'
     and g.created_by='d0000000-0000-0000-0000-000000000007'

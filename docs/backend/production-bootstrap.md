@@ -83,6 +83,16 @@ executor_email,title,group_path,deadline,difficulty,rating,evaluated_at,points_n
 5. **History.** For each Task row: as the Executor, `public.create_completed_work_request(title, group)`; then, as the Moderator, `public.approve_completed_work_request(request, difficulty, rating, note)`. The Moderator's own rows are approved by the first `bc` row, because nobody approves their own Request.
 6. **Sign-out and summary.** Every session the run opened is signed out again (`scope=local`, so a session you opened yourself on your phone survives), and the run prints the Members created, the Group Roles set, the Tasks imported and each Member's Task Points. Exit code `0` means everything above happened.
 
+## After the run: the Board Titles
+
+The run gives each Member one Appointment, and the Biroul de Conducere Group does not exist yet in production, so the **Board Titles** (#963) come afterwards, from the app, as BC:
+
+1. Administrare → Grupuri: create the Group **Biroul de Conducere**, Private, Minimum Level 5.
+2. Administrare → Setări → **Grupul Biroului de Conducere**: choose it.
+3. Administrare → Grupuri → Biroul de Conducere → **Roluri**: appoint each board member as Responsabil under their title (Președinte, Vicepreședinte Executiv, Coordonator IT).
+
+From then on every Member sees that title wherever the app names the holder's Role — the menu badge, the Member Card (with the rank beside it), Voluntari, Administrare → Membri, the Group rosters and the pickers; until then BC and BCE members appear under their rank. On this Group alone the Responsabil picker offers BC members as well as BCE (#963); everywhere else a BC member is never a Responsabil (#957).
+
 ## Why the history goes through Completed Work Requests
 
 The issue asks for the Task commands and `private.evaluate_task` semantics, and forbids a direct Points Ledger insert. The service key cannot do that alone: every Task command is granted to `authenticated` only and takes its actor from the session (`auth.uid()`), and `start_task` and `submit_task_for_review` accept only the Task's own Executor. `private.*` is closed to `service_role` entirely.

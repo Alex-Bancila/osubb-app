@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { skipToken, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
+import { memberRoleLabel } from '../components/member/member-identity';
 import type { Json } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
@@ -8,8 +9,9 @@ import { resolveGroupRoleLabel, useGroups, useRoles } from './reference';
 
 /**
  * The Member Card (CONTEXT.md; ruling R6 of the 2026-09-23 grill): what any
- * active Member may see of a colleague — Nickname, full name, Role, join date
- * and Groups — plus contact details for the viewers already allowed them.
+ * active Member may see of a colleague — Nickname, full name, Role (named by
+ * their Board Title when they hold one, #963), join date and Groups — plus
+ * contact details for the viewers already allowed them.
  *
  * Two reads, neither of which the browser decides:
  * - `public.member_card()` (#675) returns the projection for any Member, so an
@@ -38,7 +40,13 @@ export type MemberCardData = {
   memberId: string;
   nickname: string | null;
   fullName: string;
+  /**
+   * How the card names the Member's Role: their Board Title when a BC or BCE
+   * member holds one (#963), the Role name otherwise.
+   */
   roleLabel: string | null;
+  /** The Role name alone ("BC"), shown beside a Board Title. */
+  rankLabel: string | null;
   /** `YYYY-MM-DD`, or null when the join date was never recorded. */
   joinedAt: string | null;
   avatarColor: string | null;
@@ -59,6 +67,8 @@ type CardRow = {
   nickname: string | null;
   full_name: string | null;
   role: string | null;
+  /** The Board Title (#963), null for anyone who holds none. */
+  board_title: string | null;
   joined_at: string | null;
   avatar_color: string | null;
   primary_group_id: number | null;
@@ -143,11 +153,15 @@ export function toMemberCardData(
   if (!card) return null;
   const list = memberships(card.memberships);
   const names = new Map(list.map((item) => [item.group_id, item.name]));
+  const rankLabel = card.role
+    ? (roles?.get(card.role)?.name ?? card.role)
+    : null;
   return {
     memberId: card.member_id,
     nickname: card.nickname?.trim() || null,
     fullName: card.full_name?.trim() || 'Membru OSUBB',
-    roleLabel: card.role ? (roles?.get(card.role)?.name ?? card.role) : null,
+    roleLabel: rankLabel && memberRoleLabel(rankLabel, card.board_title),
+    rankLabel,
     joinedAt: card.joined_at,
     avatarColor: card.avatar_color,
     primaryGroup:

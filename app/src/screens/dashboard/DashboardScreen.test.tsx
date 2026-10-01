@@ -60,6 +60,12 @@ vi.mock('../../queries/profile', () => ({
 vi.mock('../../queries/reference', () => ({
   useRoles: () => ({ data: new Map() }),
   useGroups: () => ({ data: new Map(), isPending: false }),
+  // The points line's Role label (#963): no board row, no Board Title.
+  useMyGroups: () => ({ membershipRows: [] }),
+  boardTitleFrom: () => null,
+}));
+vi.mock('../../queries/org-settings', () => ({
+  useOrgSettings: () => ({ data: undefined }),
 }));
 vi.mock('../../queries/points', () => ({ useMyPoints: hooks.useMyPoints }));
 vi.mock('../../queries/task-review', async (importActual) => ({

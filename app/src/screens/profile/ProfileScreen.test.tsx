@@ -1154,6 +1154,10 @@ describe('ProfileScreen', () => {
         within(panel).queryByText('Funcția nu este setată încă.'),
       ).not.toBeInTheDocument();
       expect(orgSettingsMock.enabled).toContain(true);
+      // #963: the Identitate chip names the Role by the Board Title too.
+      const identity = screen.getByRole('region', { name: 'Identitate' });
+      expect(within(identity).getByText('Coordonator IT')).toBeInTheDocument();
+      expect(within(identity).queryByText('BCE')).not.toBeInTheDocument();
     });
 
     it('Funcția în OSUBB falls back to the Role when no title is set', () => {
@@ -1178,6 +1182,9 @@ describe('ProfileScreen', () => {
       expect(
         within(panel).queryByText(/Coordonator|Casier/),
       ).not.toBeInTheDocument();
+      // No title: the Identitate chip keeps the Role (#963).
+      const identity = screen.getByRole('region', { name: 'Identitate' });
+      expect(within(identity).getByText('BC')).toBeInTheDocument();
     });
 
     // F-7 (#893, Alex 2026-09-29): the Moderator is not a board position.

@@ -2494,6 +2494,7 @@ export type Database = {
       profiles_directory: {
         Row: {
           avatar_color: string | null
+          board_title: string | null
           created_at: string | null
           full_name: string | null
           id: string | null
@@ -2504,6 +2505,7 @@ export type Database = {
         }
         Insert: {
           avatar_color?: string | null
+          board_title?: never
           created_at?: string | null
           full_name?: string | null
           id?: string | null
@@ -2514,6 +2516,7 @@ export type Database = {
         }
         Update: {
           avatar_color?: string | null
+          board_title?: never
           created_at?: string | null
           full_name?: string | null
           id?: string | null
@@ -3457,6 +3460,7 @@ export type Database = {
         Args: { p_member_id: string }
         Returns: {
           avatar_color: string
+          board_title: string
           full_name: string
           joined_at: string
           member_id: string

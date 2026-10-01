@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -111,6 +111,7 @@ function member(patch: object = {}) {
     nickname: 'Nana',
     fullName: 'Ana Pop',
     roleLabel: 'Voluntar',
+    rankLabel: 'Voluntar',
     role: 'voluntar',
     joinedAt: '2025-01-01',
     avatarColor: null,
@@ -339,6 +340,27 @@ it('leaves out "Membru din" for an imported Member with no date yet (F-28)', () 
   expect(screen.queryByText('Data intrării')).toBeNull();
   expect(screen.queryByText('—')).toBeNull();
   expect(screen.getByText('Rol organizațional')).toBeVisible();
+});
+
+it('names a board member by their Board Title, the Role muted beside it (#963)', () => {
+  state.member.mockReturnValue({
+    ...ready,
+    data: member({ role: 'bc', roleLabel: 'Președinte', rankLabel: 'BC' }),
+  });
+  show();
+  const fact = screen
+    .getByText('Rol organizațional')
+    .closest('div') as HTMLElement;
+  expect(within(fact).getByText('Președinte')).toHaveClass('font-semibold');
+  expect(within(fact).getByText('· BC')).toHaveClass('text-muted-foreground');
+});
+
+it('says the Role alone when there is no Board Title (#963)', () => {
+  show();
+  const fact = screen
+    .getByText('Rol organizațional')
+    .closest('div') as HTMLElement;
+  expect(fact.querySelector('dd')).toHaveTextContent(/^Voluntar$/);
 });
 
 it('clears the Nickname to none and refuses a blank full name before sending', async () => {

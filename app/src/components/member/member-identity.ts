@@ -13,3 +13,16 @@ export function memberDisplayName(
 ): string {
   return nickname?.trim() || fullName;
 }
+
+/**
+ * How the app names a Member's Role (#963): their **Board Title**
+ * (CONTEXT.md) — "Președinte", "Coordonator IT" — when a BC or BCE member
+ * holds one, the Role name ("BC", "Voluntar") otherwise, and a dash when
+ * neither is known. A label only: filters and sorts keep reading the Role.
+ */
+export function memberRoleLabel(
+  roleName: string | null | undefined,
+  boardTitle: string | null | undefined,
+): string {
+  return boardTitle?.trim() || roleName?.trim() || '—';
+}

@@ -120,7 +120,8 @@ export function DirectoryFilterBar({
     for (const member of members)
       if (member.roleId)
         byId.set(member.roleId, {
-          label: member.role,
+          // The Role's own name, never a member's Board Title (#963).
+          label: member.rankLabel,
           level: member.roleLevel,
         });
     return [...byId]

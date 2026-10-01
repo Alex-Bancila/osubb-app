@@ -8,10 +8,14 @@ The shared language for the OSUBB app. Use these terms consistently in product d
 Organizația Studenților din Universitatea Babeș-Bolyai, the student NGO whose internal work this application supports.
 
 **BC**:
-Biroul de Conducere, the organization’s highest operational leadership group. Every active BC member, like the Moderator, grants and removes the BC and Moderator Roles, changes the Membership Status of a Member holding either, and invites new Members at either rank. The organization always keeps at least one active BC member: whoever removes the last one names who replaces them in the same change. Every active BC member is a member of every Group by that Role (a Membru de drept), yet receives no Task, Event or Announcement Notification through Group membership, Group Audience or Group management; only what asks them to decide or concerns them personally reaches them. A BC member may hold the Group Manager position of any Group — each Department's Vicepreședinte is one — and never the Group Responsible position.
+Biroul de Conducere, the organization’s highest operational leadership group. Every active BC member, like the Moderator, grants and removes the BC and Moderator Roles, changes the Membership Status of a Member holding either, and invites new Members at either rank. The organization always keeps at least one active BC member: whoever removes the last one names who replaces them in the same change. Every active BC member is a member of every Group by that Role (a Membru de drept), yet receives no Task, Event or Announcement Notification through Group membership, Group Audience or Group management; only what asks them to decide or concerns them personally reaches them. A BC member may hold the Group Manager position of any Group — each Department's Vicepreședinte is one — and never the Group Responsible position, except in Biroul de Conducere, where the Responsible title is the Board Title. A BC member who holds a Board Title is named by it wherever the app names their Role.
 
 **BCE**:
-Biroul de Conducere Extins, the extended leadership group immediately below BC. A Department's Group Responsibles are its BCE members, each under their own display name.
+Biroul de Conducere Extins, the extended leadership group immediately below BC. A Department's Group Responsibles are its BCE members, each under their own display name. A BCE member who holds a Board Title is named by it wherever the app names their Role.
+
+**Board Title** (Funcția în OSUBB):
+The display name of a BC or BCE member's function — Președinte, Vicepreședinte Executiv, Coordonator IT — held as their Group Responsible title in the Biroul de Conducere Group (decision D1, #824) and shown wherever the app names their Role.
+_Avoid_: function, position
 
 **Vicepreședinte**:
 The display name of a Department's Group Manager: the BC member who runs that Department.

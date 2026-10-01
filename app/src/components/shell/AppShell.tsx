@@ -13,9 +13,9 @@ import { useUnreadAnnouncementsCount } from '../../queries/announcements';
 import { useLiveChanges } from '../../queries/live-changes';
 import { useUnreadNotificationCount } from '../../queries/notifications';
 import { useNotificationRealtime } from '../../queries/notifications-realtime';
+import { useMyRoleLabel } from '../../queries/my-role-label';
 import { useMyProfile } from '../../queries/profile';
 import { usePushSelfRepair } from '../../queries/push-subscription';
-import { useRoles } from '../../queries/reference';
 import { usePendingDecisions } from '../../queries/request-decisions';
 import { unreadAnnouncementsLabel } from '../../screens/announcements/announcements-presentation';
 import { unreadBadgeLabel } from '../../screens/notifications/notifications-presentation';
@@ -161,7 +161,8 @@ function SidebarContent({
             <span className="block truncate text-sm font-semibold">
               {memberName ?? memberEmail}
             </span>
-            {/* The Role's name, never its level: a system number (#844, B44). */}
+            {/* The Role's name — or the Board Title (#963) — never its
+                level: a system number (#844, B44). */}
             <Badge className="mt-1 max-w-full" title={roleLabel}>
               <span className="truncate">{roleLabel}</span>
             </Badge>
@@ -204,7 +205,6 @@ export default function AppShell() {
   const firstMobileLinkRef = useRef<HTMLAnchorElement>(null);
   const signOutAction = useSignOutAction(signOut);
   const profile = useMyProfile();
-  const roles = useRoles();
   const unreadNotifications = useUnreadNotificationCount();
   const unreadCount = unreadNotifications.data ?? 0;
   const unreadAnnouncements = useUnreadAnnouncementsCount();
@@ -220,10 +220,8 @@ export default function AppShell() {
     hasRequestsToDecide:
       requestsToDecide.isError || (requestsToDecide.data?.length ?? 0) > 0,
   };
-  const roleLabel =
-    (claims && roles.data?.get(claims.member_role)?.name) ??
-    claims?.member_role ??
-    '';
+  // The Board Title when the Member holds one (#963), else the Role's name.
+  const roleLabel = useMyRoleLabel();
 
   const visible = NAV_ITEMS.filter(
     (item) =>

@@ -69,6 +69,12 @@ vi.mock('../../queries/reference', () => ({
       ['vot', { id: 'vot', name: 'Membru cu Drept de Vot', level: 2 }],
     ]),
   }),
+  // The score's Role label (#963): no board row, no Board Title.
+  useMyGroups: () => ({ membershipRows: [] }),
+  boardTitleFrom: () => null,
+}));
+vi.mock('../../queries/org-settings', () => ({
+  useOrgSettings: () => ({ data: undefined }),
 }));
 vi.mock('../../queries/task-opportunities', async (importOriginal) => ({
   ...(await importOriginal<

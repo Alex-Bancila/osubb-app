@@ -504,6 +504,10 @@ export default function MemberScreen() {
         <dl className={`${panelBoxClass} grid gap-x-6 gap-y-4 sm:grid-cols-2`}>
           <Fact label="Rol organizațional">
             <span className="font-semibold">{data.roleLabel ?? '—'}</span>
+            {/* A Board Title names the Role (#963); the rank follows it. */}
+            {data.rankLabel && data.rankLabel !== data.roleLabel && (
+              <span className="text-muted-foreground"> · {data.rankLabel}</span>
+            )}
           </Fact>
           <Fact label="Status">
             {data.status ? statusLabel(data.status) : '—'}

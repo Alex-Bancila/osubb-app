@@ -7,6 +7,8 @@ const auth = vi.hoisted(() => ({ useAuth: vi.fn(), signOut: vi.fn() }));
 const queries = vi.hoisted(() => ({
   useMyProfile: vi.fn(),
   useRoles: vi.fn(),
+  useMyGroups: vi.fn(),
+  useOrgSettings: vi.fn(),
   useUnreadNotificationCount: vi.fn(),
   useUnreadAnnouncementsCount: vi.fn(),
   useCapabilities: vi.fn(),
@@ -20,7 +22,16 @@ vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../queries/profile', () => ({
   useMyProfile: queries.useMyProfile,
 }));
-vi.mock('../../queries/reference', () => ({ useRoles: queries.useRoles }));
+vi.mock('../../queries/reference', async (original) => ({
+  // The real D1 rule reads the Board Title off the caller's roster rows.
+  boardTitleFrom: (await original<typeof import('../../queries/reference')>())
+    .boardTitleFrom,
+  useRoles: queries.useRoles,
+  useMyGroups: queries.useMyGroups,
+}));
+vi.mock('../../queries/org-settings', () => ({
+  useOrgSettings: queries.useOrgSettings,
+}));
 vi.mock('../../queries/announcements', () => ({
   useUnreadAnnouncementsCount: queries.useUnreadAnnouncementsCount,
 }));
@@ -97,7 +108,14 @@ describe('AppShell', () => {
       data: { full_name: 'Mara Pop', avatar_color: '#284C93' },
     });
     queries.useRoles.mockReturnValue({
-      data: new Map([['voluntar', { name: 'Voluntar' }]]),
+      data: new Map([
+        ['voluntar', { name: 'Voluntar', level: 1 }],
+        ['bc', { name: 'BC', level: 6 }],
+      ]),
+    });
+    queries.useMyGroups.mockReturnValue({ membershipRows: [] });
+    queries.useOrgSettings.mockReturnValue({
+      data: new Map([['board_group_id', '99']]),
     });
     queries.useUnreadNotificationCount.mockReturnValue({ data: 0 });
     queries.useUnreadAnnouncementsCount.mockReturnValue({ data: 0 });
@@ -595,6 +613,36 @@ describe('AppShell', () => {
     renderShell();
     expect(screen.getByTitle('Voluntar')).toHaveTextContent(/^Voluntar$/);
     expect(screen.queryByText(/nivel/)).toBeNull();
+  });
+
+  it('names a board member by their Board Title in the sidebar footer (#963)', () => {
+    auth.useAuth.mockReturnValue({
+      claims: { member_role: 'bc', member_level: 6, group_ids: [] },
+      session: { user: { email: 'cristina@osubb.ro' } },
+      signOut: auth.signOut,
+    });
+    queries.useMyGroups.mockReturnValue({
+      membershipRows: [
+        {
+          group_id: 99,
+          group_role: 'responsible',
+          position_title: 'Președinte',
+        },
+      ],
+    });
+    renderShell();
+    expect(screen.getByTitle('Președinte')).toHaveTextContent(/^Președinte$/);
+    expect(screen.queryByTitle('BC')).toBeNull();
+  });
+
+  it('keeps the Role name for a board member without a title (#963)', () => {
+    auth.useAuth.mockReturnValue({
+      claims: { member_role: 'bc', member_level: 6, group_ids: [] },
+      session: { user: { email: 'cristina@osubb.ro' } },
+      signOut: auth.signOut,
+    });
+    renderShell();
+    expect(screen.getByTitle('BC')).toHaveTextContent(/^BC$/);
   });
 
   it('marks Clasament, not Taskuri, on a member history (#844, D17)', () => {

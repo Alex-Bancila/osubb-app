@@ -46,8 +46,8 @@ select hasnt_column('public', 'announcements', 'author',
   'announcements.author is gone -- the author is created_by');
 select hasnt_column('public', 'announcements', 'category', 'announcements.category is gone');
 select columns_are('public', 'profiles_directory',
-  array['id', 'full_name', 'role', 'status', 'avatar_color', 'created_at', 'joined_at', 'nickname'],
-  'profiles_directory keeps every other column');
+  array['id', 'full_name', 'role', 'status', 'avatar_color', 'created_at', 'joined_at', 'nickname', 'board_title'],
+  'profiles_directory keeps every other column (#963 appends board_title)');
 select ok(coalesce((select 'security_invoker=on' = any (reloptions)
                       from pg_class where oid = 'public.profiles_directory'::regclass), false)
           and has_table_privilege('authenticated', 'public.profiles_directory', 'select')

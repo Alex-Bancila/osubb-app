@@ -36,6 +36,7 @@ import { useAuth } from '../../lib/auth';
 import { safeHexColor } from '../../lib/color';
 import { formatLongDate, initials } from '../../lib/format';
 import { useTheme } from '../../lib/theme';
+import { useMyRoleLabel } from '../../queries/my-role-label';
 import { useOrgSettings } from '../../queries/org-settings';
 import { useMyPoints } from '../../queries/points';
 import { useMyProfile } from '../../queries/profile';
@@ -113,6 +114,8 @@ export default function ProfileScreen() {
   const pointsQuery = useMyPoints({ enabled: isPointsEligible });
   // D1: the board title's Group is named by an organization setting.
   const settingsQuery = useOrgSettings({ enabled: onBoard && !isModerator });
+  // #963: the Identitate chip names the Role by the Board Title when set.
+  const myRoleLabel = useMyRoleLabel();
   const promotion = usePromotionProgressState();
   const timelineShown = useRoleTimelineShown(profileQuery.data);
 
@@ -263,7 +266,7 @@ export default function ProfileScreen() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="role-badge">
                       <span className="role-dot" aria-hidden="true" />
-                      {roleLabel}
+                      {myRoleLabel}
                     </span>
                     {/* Here, not on the Groups panel, so BC/BCE keep it. */}
                     {hasAdunareaGenerala && (
@@ -498,8 +501,8 @@ function BoardTitle({
       <p className="text-[length:var(--fs-xl)] leading-tight font-extrabold wrap-anywhere text-foreground">
         {title ?? roleLabel}
       </p>
-      {/* The title is the information; the Role is on the Identitate chip
-          and in the eyebrow already (B46). */}
+      {/* The title is the information; the Role is in the eyebrow
+          already (B46). */}
       {!title && (
         <p className="mt-1 text-sm text-muted-foreground">
           Funcția nu este setată încă.
