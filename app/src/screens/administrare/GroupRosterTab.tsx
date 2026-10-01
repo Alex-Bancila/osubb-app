@@ -239,7 +239,12 @@ function rosterColumns({
     {
       id: 'group_role',
       accessorFn: (row) =>
-        groupRoleLabel(row.groupRole, group.manager_title, row.positionTitle),
+        groupRoleLabel(
+          row.groupRole,
+          group.manager_title,
+          row.positionTitle,
+          group.responsible_title,
+        ),
       header: 'Funcție în grup',
       cell: ({ row }) =>
         // Automatic Membership (#929): in the Group by Role, never by hand.
@@ -255,6 +260,7 @@ function rosterColumns({
               row.original.groupRole,
               group.manager_title,
               row.original.positionTitle,
+              group.responsible_title,
             )}
           </Badge>
         ),

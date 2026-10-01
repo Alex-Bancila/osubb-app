@@ -11,6 +11,7 @@ import {
   createdGroupManager,
   managerTitleFor,
   positionCandidates,
+  positionNoun,
   groupStatusLabel,
   groupTabs,
   leadsAny,
@@ -43,6 +44,7 @@ function group(
     status: 'active',
     is_organization: false,
     manager_title: null,
+    responsible_title: null,
     automatic_membership: false,
     accepts_applications: false,
     application_level: null,
@@ -156,8 +158,44 @@ it('lists exactly the led Groups, inherited ones marked, parents kept as context
   );
   expect(rows.map((row) => [row.group.name, row.depth, row.lead])).toEqual([
     ['Educațional', 0, null],
-    ['Amfiteatru', 1, { groupRole: 'manager', inherited: false }],
-    ['Foto', 2, { groupRole: 'manager', inherited: true }],
+    [
+      'Amfiteatru',
+      1,
+      { groupRole: 'manager', inherited: false, positionTitle: null },
+    ],
+    ['Foto', 2, { groupRole: 'manager', inherited: true, positionTitle: null }],
+  ]);
+});
+
+it("carries the viewer's own Responsible title, never an inherited one (#962)", () => {
+  const rows = ledTree(
+    tree,
+    [
+      mine(3, 'Amfiteatru', [1, 3], 'responsible'),
+      mine(5, 'Foto', [1, 3, 5], 'responsible', { explicit: false }),
+    ],
+    [
+      {
+        group_id: 3,
+        group_role: 'responsible',
+        position_title: 'Responsabil IT',
+      },
+    ],
+  );
+  expect(rows.map((row) => [row.group.name, row.lead])).toEqual([
+    ['Educațional', null],
+    [
+      'Amfiteatru',
+      {
+        groupRole: 'responsible',
+        inherited: false,
+        positionTitle: 'Responsabil IT',
+      },
+    ],
+    [
+      'Foto',
+      { groupRole: 'responsible', inherited: true, positionTitle: null },
+    ],
   ]);
 });
 
@@ -243,6 +281,39 @@ it('labels categories, statuses and Group Roles the way the Group names them', (
     'Responsabil Logistică',
   );
   expect(groupRoleLabel('member', 'BCE', null)).toBe('Membru');
+});
+
+it("names a Responsible by their own title, then the Group's name for the position, then Responsabil (#962)", () => {
+  expect(
+    groupRoleLabel('responsible', null, 'Responsabil Logistică', 'Coordonator'),
+  ).toBe('Responsabil Logistică');
+  expect(groupRoleLabel('responsible', null, null, 'Coordonator')).toBe(
+    'Coordonator',
+  );
+  expect(groupRoleLabel('responsible', null, '  ', ' Coordonator ')).toBe(
+    'Coordonator',
+  );
+  expect(groupRoleLabel('responsible', 'Vicepreședinte', null, null)).toBe(
+    'Responsabil',
+  );
+  expect(groupRoleLabel('responsible', null, null, '   ')).toBe('Responsabil');
+  // The Manager is never named after the Responsible position.
+  expect(groupRoleLabel('manager', null, null, 'Coordonator')).toBe(
+    'Coordonator',
+  );
+  expect(groupRoleLabel('manager', 'Vicepreședinte', null, 'Coordonator')).toBe(
+    'Vicepreședinte',
+  );
+  expect(groupRoleLabel('member', null, null, 'Coordonator')).toBe('Membru');
+});
+
+it('writes a position name inside a sentence, keeping acronyms (#962)', () => {
+  expect(positionNoun('Coordonator')).toBe('coordonator');
+  expect(positionNoun('Responsabil de Proiect')).toBe('responsabil de proiect');
+  expect(positionNoun('Coordonator IT')).toBe('coordonator IT');
+  expect(positionNoun('BCE')).toBe('BCE');
+  expect(positionNoun('Mentor-coordonator')).toBe('mentor-coordonator');
+  expect(positionNoun('  Șef de echipă ')).toBe('șef de echipă');
 });
 
 it('builds the breadcrumb from the Groups the caller can actually read', () => {

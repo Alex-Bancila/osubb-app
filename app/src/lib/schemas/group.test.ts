@@ -23,6 +23,7 @@ const create = {
 const settings = {
   name: 'Logistică',
   managerTitle: '',
+  responsibleTitle: '',
   acceptsApplications: false,
   applicationLevel: null as number | null,
   sharedWorkVisibility: false,
@@ -78,6 +79,19 @@ describe('Group name', () => {
     ).toEqual(['managerTitle: manager_title_too_long']);
   });
 
+  it("limits the Responsible position's name to 80 characters, as groups_responsible_title_length_ck does (#962)", () => {
+    expect(
+      check(groupSettingsSchema, settings, {
+        responsibleTitle: ' ' + 'ș'.repeat(80) + ' ',
+      }),
+    ).toEqual([]);
+    expect(
+      check(groupSettingsSchema, settings, {
+        responsibleTitle: 'r'.repeat(81),
+      }),
+    ).toEqual(['responsibleTitle: responsible_title_too_long']);
+  });
+
   it('trims the name and turns blank optional texts into null', () => {
     expect(
       groupCreateSchema.parse({ ...create, name: '  Logistică  ', short: ' ' }),
@@ -85,6 +99,15 @@ describe('Group name', () => {
     expect(
       groupSettingsSchema.parse({ ...settings, managerTitle: '  ' }),
     ).toMatchObject({ managerTitle: null });
+    expect(
+      groupSettingsSchema.parse({
+        ...settings,
+        responsibleTitle: '  Coordonator ',
+      }),
+    ).toMatchObject({ responsibleTitle: 'Coordonator' });
+    expect(
+      groupSettingsSchema.parse({ ...settings, responsibleTitle: ' \t' }),
+    ).toMatchObject({ responsibleTitle: null });
   });
 });
 
@@ -133,6 +156,7 @@ it('maps every reason a Group command raises to a Group field', () => {
       'color',
       'short',
       'managerTitle',
+      'responsibleTitle',
       'minLevel',
       'applicationLevel',
       'applicationForm.label',
@@ -147,6 +171,7 @@ it('maps every reason a Group command raises to a Group field', () => {
       'invalid_group_color',
       'short_too_long',
       'manager_title_too_long',
+      'responsible_title_too_long',
       'invalid_group_min_level',
       'invalid_position_title',
       'invalid_application_level',

@@ -61,6 +61,7 @@ function group(
     automatic_membership: false,
     shared_work_visibility: true,
     manager_title: 'Coordonator',
+    responsible_title: null,
     competes_in_cup: false,
     counts_toward_parent_cup: false,
     is_private: false,
@@ -574,6 +575,48 @@ it('lists the positions of Coordonare as rows with the title as the value', () =
     within(row).getByText('Coordonator').closest('[data-slot]'),
   ).toHaveAttribute('data-slot', 'list-row-value');
 });
+it("names an untitled Responsible in Coordonare, and the viewer's own position, after the Group's setting (#962)", () => {
+  api.groups.mockReturnValue(
+    ready([
+      group(2, 'Echipa Evenimente', { responsible_title: 'Coordonator' }),
+    ]),
+  );
+  api.mine.mockReturnValue(
+    ready([
+      { id: 2, group_role: 'responsible', explicit: true, automatic: false },
+    ]),
+  );
+  api.roster.mockReturnValue(
+    ready([
+      {
+        memberId: 'me',
+        fullName: 'Ana',
+        groupRole: 'responsible',
+        positionTitle: null,
+      },
+      {
+        memberId: 'r',
+        fullName: 'Radu',
+        groupRole: 'responsible',
+        positionTitle: 'Responsabil Foto',
+      },
+    ]),
+  );
+  detail();
+  const panel = screen.getByRole('region', { name: 'Coordonare' });
+  const [untitled, titled] = within(panel).getAllByRole('listitem');
+  expect(
+    within(untitled as HTMLElement).getByText('Coordonator'),
+  ).toBeVisible();
+  // A Responsible's own title still comes first.
+  expect(
+    within(titled as HTMLElement).getByText('Responsabil Foto'),
+  ).toBeVisible();
+  expect(
+    screen.getByText('Coordonator', { selector: 'strong' }),
+  ).toBeInTheDocument();
+});
+
 it('the back link falls back to Grupuri, and prefers state.from (A33)', () => {
   const view = detail();
   expect(

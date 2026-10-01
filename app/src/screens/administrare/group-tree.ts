@@ -42,16 +42,35 @@ export function groupStatusLabel(status: string): string {
       : status;
 }
 
-/** A Group Role as this Group names it (ADR-0009 §Group Roles). */
+/**
+ * A Group Role as this Group names it (ADR-0009 §Group Roles): a Manager by
+ * the Group's Manager title, a Responsible by their own title, then by the
+ * Group's name for the position (#962).
+ */
 export function groupRoleLabel(
   groupRole: string,
   managerTitle?: string | null,
   positionTitle?: string | null,
+  responsibleTitle?: string | null,
 ): string {
   if (groupRole === 'manager') return managerTitle?.trim() || 'Coordonator';
   if (groupRole === 'responsible')
-    return positionTitle?.trim() || 'Responsabil';
+    return positionTitle?.trim() || responsibleTitle?.trim() || 'Responsabil';
   return 'Membru';
+}
+
+/**
+ * A position's name inside a sentence ("Numește un coordonator", #962): each
+ * capitalised word in lower case, an acronym (BCE, IT) as written.
+ */
+export function positionNoun(title: string): string {
+  return title
+    .trim()
+    .split(/(\s+)/)
+    .map((word) =>
+      /^\p{Lu}[\p{Ll}-]*$/u.test(word) ? word.toLocaleLowerCase('ro') : word,
+    )
+    .join('');
 }
 
 /**
@@ -143,6 +162,12 @@ export function buildTree(groups: readonly AdminGroup[]): TreeRow[] {
 export type Lead = {
   groupRole: 'manager' | 'responsible';
   inherited: boolean;
+  /**
+   * The viewer's own title on this Group's roster (#962): null for a
+   * Manager, and for a position held from a Group above, whose title
+   * belongs to that Group's row.
+   */
+  positionTitle: string | null;
 };
 
 /** One row of **Conduse de mine**: a led Group, or a greyed context parent. */
@@ -181,6 +206,7 @@ function fromLedSource(source: LedSource): AdminGroup {
     is_organization: source.is_organization,
     is_private: false,
     manager_title: null,
+    responsible_title: null,
     automatic_membership: false,
     accepts_applications: false,
     application_level: null,
@@ -203,16 +229,29 @@ function fromLedSource(source: LedSource): AdminGroup {
 export function ledTree(
   groups: readonly AdminGroup[],
   mine: readonly LedSource[],
-  rosterRows: readonly { group_id: number; group_role: string }[] | undefined,
+  rosterRows:
+    | readonly {
+        group_id: number;
+        group_role: string;
+        position_title?: string | null;
+      }[]
+    | undefined,
 ): LedRow[] {
   const leads = new Map<number, Lead>();
   const byId = new Map(groups.map((group) => [group.id, group]));
   for (const row of mine) {
     if (row.group_role !== 'manager' && row.group_role !== 'responsible')
       continue;
+    const inherited = inheritsGroupRole(row, rosterRows);
+    const own = inherited
+      ? undefined
+      : rosterRows?.find(
+          (r) => r.group_id === row.id && r.group_role === row.group_role,
+        );
     leads.set(row.id, {
       groupRole: row.group_role,
-      inherited: inheritsGroupRole(row, rosterRows),
+      inherited,
+      positionTitle: own?.position_title ?? null,
     });
     if (!byId.has(row.id)) byId.set(row.id, fromLedSource(row));
   }
