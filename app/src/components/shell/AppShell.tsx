@@ -438,7 +438,7 @@ export default function AppShell() {
                 )}
               >
                 <span
-                  className="grid size-[52px] place-items-center rounded-full bg-(--brand-red) text-white shadow-[var(--sh-red)] ring-4 ring-card"
+                  className="grid size-[52px] place-items-center rounded-full bg-(--brand-red) text-white shadow-(--sh-red) ring-4 ring-card"
                   aria-hidden="true"
                 >
                   <Icon className="size-6" />
