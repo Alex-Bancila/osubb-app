@@ -4,7 +4,7 @@ import { Link, Outlet, useLocation } from 'react-router';
 import logoDark from '../../assets/brand/osubb-logo-on-dark.png';
 import logoLight from '../../assets/brand/osubb-logo-on-light.png';
 import { useAuth } from '../../lib/auth';
-import { submitsWorkRequests, useCapabilities } from '../../lib/capabilities';
+import { useCapabilities } from '../../lib/capabilities';
 import { safeHexColor } from '../../lib/color';
 import { initials } from '../../lib/format';
 import { useSignOutAction } from '../../lib/use-sign-out-action';
@@ -16,7 +16,6 @@ import { useNotificationRealtime } from '../../queries/notifications-realtime';
 import { useMyRoleLabel } from '../../queries/my-role-label';
 import { useMyProfile } from '../../queries/profile';
 import { usePushSelfRepair } from '../../queries/push-subscription';
-import { usePendingDecisions } from '../../queries/request-decisions';
 import { unreadAnnouncementsLabel } from '../../screens/announcements/announcements-presentation';
 import { unreadBadgeLabel } from '../../screens/notifications/notifications-presentation';
 import { Badge } from '../ui/badge';
@@ -37,7 +36,6 @@ import {
   TAB_ORDER,
   isNavItemActive,
   type NavItem,
-  type NavViewer,
 } from './navItems';
 
 /**
@@ -193,7 +191,7 @@ function SidebarContent({
 }
 
 export default function AppShell() {
-  const { claims, session, signOut } = useAuth();
+  const { session, signOut } = useAuth();
   useNotificationRealtime(session?.user.id);
   // #961: every other change arrives on the org:changes broadcast.
   useLiveChanges(session?.user.id);
@@ -212,23 +210,11 @@ export default function AppShell() {
   // The one cached my_capabilities() row the route guards and the Tracker
   // share: live rank and Group Roles, which the token cannot carry.
   const capabilities = useCapabilities();
-  // The same query the Cereri page reads, so opening it costs no request.
-  const requestsToDecide = usePendingDecisions();
-  const viewer: NavViewer = {
-    submitsWorkRequests: submitsWorkRequests(claims),
-    // A failed read keeps the item, so the page's retry stays reachable.
-    hasRequestsToDecide:
-      requestsToDecide.isError || (requestsToDecide.data?.length ?? 0) > 0,
-  };
   // The Board Title when the Member holds one (#963), else the Role's name.
   const roleLabel = useMyRoleLabel();
 
   const visible = NAV_ITEMS.filter(
-    (item) =>
-      (!item.capability || capabilities.data?.[item.capability] === true) &&
-      (!item.showWhen ||
-        item.showWhen(viewer) ||
-        isNavItemActive(item, location.pathname)),
+    (item) => !item.capability || capabilities.data?.[item.capability] === true,
   );
   const tabs = TAB_ORDER.map((path) =>
     visible.find((item) => item.path === path),

@@ -12,12 +12,11 @@ const queries = vi.hoisted(() => ({
   useUnreadNotificationCount: vi.fn(),
   useUnreadAnnouncementsCount: vi.fn(),
   useCapabilities: vi.fn(),
-  usePendingDecisions: vi.fn(),
 }));
 
 vi.mock('../../lib/auth', () => ({ useAuth: auth.useAuth }));
-// The real `submitsWorkRequests` rule is read from capabilities.ts, whose
-// module also builds the shared client.
+// The real `boardTitleFrom` rule is read from reference.ts, whose module also
+// builds the shared client.
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../queries/profile', () => ({
   useMyProfile: queries.useMyProfile,
@@ -39,14 +38,8 @@ vi.mock('../../queries/notifications', () => ({
   useUnreadNotificationCount: queries.useUnreadNotificationCount,
 }));
 
-vi.mock('../../lib/capabilities', async (original) => ({
-  submitsWorkRequests: (
-    await original<typeof import('../../lib/capabilities')>()
-  ).submitsWorkRequests,
+vi.mock('../../lib/capabilities', () => ({
   useCapabilities: queries.useCapabilities,
-}));
-vi.mock('../../queries/request-decisions', () => ({
-  usePendingDecisions: queries.usePendingDecisions,
 }));
 vi.mock('../../queries/live-changes', () => ({
   useLiveChanges: vi.fn(),
@@ -120,7 +113,6 @@ describe('AppShell', () => {
     queries.useUnreadNotificationCount.mockReturnValue({ data: 0 });
     queries.useUnreadAnnouncementsCount.mockReturnValue({ data: 0 });
     queries.useCapabilities.mockReturnValue({ data: capabilities() });
-    queries.usePendingDecisions.mockReturnValue({ data: [] });
   });
 
   it('keeps ordinary navigation gated and marks the current route in both menus', () => {
@@ -129,13 +121,10 @@ describe('AppShell', () => {
     const primary = screen.getByRole('navigation', {
       name: 'Navigare principală',
     });
-    expect(within(primary).getAllByRole('link')).toHaveLength(8);
+    expect(within(primary).getAllByRole('link')).toHaveLength(7);
     expect(
       within(primary).getByRole('link', { name: 'Grupuri' }),
     ).toHaveAttribute('href', '/grupuri');
-    expect(
-      within(primary).getByRole('link', { name: 'Cereri' }),
-    ).toHaveAttribute('href', '/cereri');
     expect(
       within(primary).getByRole('link', { name: 'Notificări' }),
     ).toHaveAttribute('href', '/notificari');
@@ -401,7 +390,6 @@ describe('AppShell', () => {
       'Clasament',
       'Voluntari',
       'Grupuri',
-      'Cereri',
       'Campanii',
       'Calendar',
       'Anunțuri',
@@ -502,60 +490,21 @@ describe('AppShell', () => {
     ).toBeVisible();
   });
 
-  describe('Cereri at level 5, where nobody files a Request (#855, B30)', () => {
-    beforeEach(() => {
-      auth.useAuth.mockReturnValue({
-        claims: { ...ordinaryClaims, member_role: 'bce', member_level: 5 },
-        session: { user: { email: 'mara@osubb.ro' } },
-        signOut: auth.signOut,
-      });
-    });
-    const cereri = () =>
-      within(
-        screen.getByRole('navigation', { name: 'Navigare principală' }),
-      ).queryByRole('link', { name: 'Cereri' });
+  it('has no Cereri item: the Requests are a view of Taskuri, current there too (#973)', () => {
+    renderShell('/tracker?vedere=cereri');
 
-    it('hides the item with nothing to decide, and while the queue loads', () => {
-      const view = renderShell();
-      expect(cereri()).toBeNull();
-      queries.usePendingDecisions.mockReturnValue({ isPending: true });
-      view.rerender(
-        <MemoryRouter initialEntries={['/calendar']}>
-          <Routes>
-            <Route element={<AppShell />}>
-              <Route path="*" element={<h1>Conținut</h1>} />
-            </Route>
-          </Routes>
-        </MemoryRouter>,
-      );
-      expect(cereri()).toBeNull();
+    const primary = screen.getByRole('navigation', {
+      name: 'Navigare principală',
     });
-
-    it('keeps the item when the queue cannot be read, so its retry is reachable', () => {
-      queries.usePendingDecisions.mockReturnValue({ isError: true });
-      renderShell();
-      expect(cereri()).toHaveAttribute('href', '/cereri');
-    });
-
-    it('shows the item with one Request to decide', () => {
-      queries.usePendingDecisions.mockReturnValue({ data: [{ id: 7 }] });
-      renderShell();
-      expect(cereri()).toHaveAttribute('href', '/cereri');
-    });
-
-    it('keeps the item while the viewer is on the page', () => {
-      renderShell('/cereri');
-      expect(cereri()).toHaveAttribute('aria-current', 'page');
-    });
-  });
-
-  it('shows Cereri below level 5 with nothing to decide', () => {
-    renderShell();
+    expect(within(primary).queryByRole('link', { name: 'Cereri' })).toBeNull();
+    expect(
+      within(primary).getByRole('link', { name: 'Taskuri' }),
+    ).toHaveAttribute('aria-current', 'page');
     expect(
       within(
-        screen.getByRole('navigation', { name: 'Navigare principală' }),
-      ).getByRole('link', { name: 'Cereri' }),
-    ).toHaveAttribute('href', '/cereri');
+        screen.getByRole('navigation', { name: 'Navigare rapidă' }),
+      ).getByRole('link', { name: 'Taskuri' }),
+    ).toHaveAttribute('aria-current', 'page');
   });
 
   it('opens a keyboard-safe mobile menu and returns focus when Escape closes it', async () => {
