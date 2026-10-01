@@ -418,6 +418,8 @@ describe('AppShell', () => {
       labels(screen.getByRole('navigation', { name: 'Navigare principală' })),
     ).toEqual(order);
 
+    // The phone drawer: the same order, minus the two pages the top bar
+    // owns there (#972).
     await user.click(screen.getByRole('button', { name: 'Deschide meniul' }));
     expect(
       labels(
@@ -426,7 +428,9 @@ describe('AppShell', () => {
           { name: 'Meniu principal' },
         ),
       ),
-    ).toEqual(order);
+    ).toEqual(
+      order.filter((label) => label !== 'Notificări' && label !== 'Profil'),
+    );
   });
 
   it.each([
@@ -720,5 +724,137 @@ describe('AppShell', () => {
     );
     expect(screen.getByRole('button', { name: 'Deconectare' })).toBeEnabled();
     expect(screen.queryByText(/private provider error/i)).toBeNull();
+  });
+});
+
+describe('phone navigation (#972)', () => {
+  beforeEach(() => {
+    auth.signOut.mockResolvedValue(undefined);
+    auth.useAuth.mockReturnValue({
+      claims: ordinaryClaims,
+      session: { user: { email: 'mara@osubb.ro' } },
+      signOut: auth.signOut,
+    });
+    queries.useMyProfile.mockReturnValue({
+      data: { full_name: 'Mara Pop', avatar_color: '#284C93' },
+    });
+    queries.useRoles.mockReturnValue({
+      data: new Map([
+        ['voluntar', { name: 'Voluntar', level: 1 }],
+        ['bc', { name: 'BC', level: 6 }],
+      ]),
+    });
+    queries.useMyGroups.mockReturnValue({ membershipRows: [] });
+    queries.useOrgSettings.mockReturnValue({
+      data: new Map([['board_group_id', '99']]),
+    });
+    queries.useUnreadNotificationCount.mockReturnValue({ data: 0 });
+    queries.useUnreadAnnouncementsCount.mockReturnValue({ data: 0 });
+    queries.useCapabilities.mockReturnValue({ data: capabilities() });
+    queries.usePendingDecisions.mockReturnValue({ data: [] });
+  });
+
+  const captions = (nav: HTMLElement) =>
+    within(nav)
+      .getAllByRole('link')
+      .map((link) => link.textContent?.replace(/\d+$/, '').trim());
+
+  it('orders the bar Taskuri, Calendar, Acasă in the centre, Anunțuri, Grupuri', () => {
+    renderShell('/');
+    const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
+    expect(captions(quick)).toEqual([
+      'Taskuri',
+      'Calendar',
+      'Acasă',
+      'Anunțuri',
+      'Grupuri',
+    ]);
+    expect(within(quick).getByRole('link', { name: 'Acasă' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(
+      within(quick).getByRole('link', { name: 'Grupuri' }),
+    ).toHaveAttribute('href', '/grupuri');
+    expect(within(quick).queryByRole('link', { name: 'Profil' })).toBeNull();
+  });
+
+  it('reaches Profil only from the avatar in the top bar on a phone', () => {
+    renderShell('/profil');
+    const header = within(screen.getByRole('banner'));
+    const avatar = header.getByRole('link', { name: 'Profil' });
+    expect(avatar).toHaveAttribute('href', '/profil');
+    expect(avatar).toHaveAttribute('aria-current', 'page');
+    expect(avatar).toHaveTextContent('MP');
+    expect(avatar.className).toContain('lg:hidden');
+    // The laptop sidebar keeps Profil and Notificări as entries.
+    const primary = screen.getByRole('navigation', {
+      name: 'Navigare principală',
+    });
+    expect(
+      within(primary).getByRole('link', { name: 'Profil' }),
+    ).toHaveAttribute('aria-current', 'page');
+    expect(
+      within(primary).getByRole('link', { name: 'Notificări' }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the hamburger only when a page would be missing from the bar and the top bar', async () => {
+    // Every page of this viewer is on the bar or in the top bar: no drawer.
+    auth.useAuth.mockReturnValue({
+      claims: { member_role: 'bc', member_level: 6, group_ids: [] },
+      session: { user: { email: 'mara@osubb.ro' } },
+      signOut: auth.signOut,
+    });
+    const { unmount } = renderShell('/');
+    expect(
+      screen.queryByRole('button', { name: 'Deschide meniul' }),
+    ).toBeNull();
+    unmount();
+
+    // Administrare lives nowhere else: the drawer returns, without the two
+    // pages the top bar owns.
+    const user = userEvent.setup();
+    queries.useCapabilities.mockReturnValue({
+      data: capabilities({ administer: true, seeLeadership: true }),
+    });
+    renderShell('/');
+    await user.click(screen.getByRole('button', { name: 'Deschide meniul' }));
+    const drawer = within(
+      screen.getByRole('dialog', { name: 'Meniu' }),
+    ).getByRole('navigation', { name: 'Meniu principal' });
+    const labels = captions(drawer);
+    expect(labels).toContain('Administrare');
+    expect(labels).toContain('Clasament');
+    expect(labels).not.toContain('Notificări');
+    expect(labels).not.toContain('Profil');
+  });
+
+  it('badges Taskuri with the Requests waiting for a decision, on the bar and the sidebar', () => {
+    queries.usePendingDecisions.mockReturnValue({
+      data: [{ id: 1 }, { id: 2 }],
+    });
+    renderShell('/calendar');
+    const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
+    expect(
+      within(quick).getByRole('link', { name: /^Taskuri, 2 cereri de decis$/ }),
+    ).toHaveTextContent('2');
+    const primary = screen.getByRole('navigation', {
+      name: 'Navigare principală',
+    });
+    expect(
+      within(primary).getByRole('link', {
+        name: /^Taskuri\s*2 cereri de decis$/,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps every bar control at least 44 px tall and marks the centre Acasă as the raised home', () => {
+    renderShell('/calendar');
+    const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
+    const home = within(quick).getByRole('link', { name: 'Acasă' });
+    expect(home).toHaveAttribute('data-slot', 'home-tab');
+    for (const link of within(quick).getAllByRole('link'))
+      expect(link.className).toMatch(/min-h-14/);
   });
 });
