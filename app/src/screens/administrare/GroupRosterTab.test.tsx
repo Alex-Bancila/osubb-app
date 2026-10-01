@@ -171,6 +171,36 @@ it('names board members by their Board Title in Rol OSUBB and among the membri d
   ).toEqual(['CȘCristina ȘerbanPreședinte']);
 });
 
+it("names a Coordonator by their own function name, and an untitled one by the Group's (#967)", () => {
+  const department: AdminGroup = {
+    ...adunarea,
+    id: 8,
+    name: 'Educațional',
+    category: 'department',
+    min_level: 0,
+    automatic_membership: false,
+    manager_title: 'Vicepreședinte',
+  };
+  renderRoster(department, [
+    entry('v', 'Vlad Marin', 'roster', {
+      groupRole: 'manager',
+      positionTitle: 'Vicepreședinte Educațional',
+    }),
+    entry('w', 'Wanda Pop', 'roster', { groupRole: 'manager' }),
+  ]);
+  const table = screen.getByRole('table');
+  expect(
+    within(within(table).getByRole('row', { name: /Vlad Marin/ })).getByText(
+      'Vicepreședinte Educațional',
+    ),
+  ).toBeInTheDocument();
+  expect(
+    within(within(table).getByRole('row', { name: /Wanda Pop/ })).getByText(
+      'Vicepreședinte',
+    ),
+  ).toBeInTheDocument();
+});
+
 it('offers a roster member of a plain Group a removal, and never a membru de drept', () => {
   const team = {
     ...adunarea,

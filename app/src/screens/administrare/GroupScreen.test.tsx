@@ -743,6 +743,115 @@ it("names each position after the Group's settings and pre-fills a Responsible's
   ).toBeVisible();
 });
 
+it("lets each Coordonator carry a function name of their own, pre-filled with the Group's (#967)", async () => {
+  api.groups.mockReturnValue({
+    data: tree.map((row) =>
+      row.id === 2 ? { ...row, manager_title: 'Vicepreședinte' } : row,
+    ),
+    isPending: false,
+    isError: false,
+  });
+  api.roster.mockReturnValue({
+    data: [
+      // Bogdan Ion, an untitled Manager, then one under a name of their own.
+      ...roster,
+      {
+        memberId: 'd',
+        name: 'Dana Pop',
+        avatarColor: null,
+        groupRole: 'manager',
+        positionTitle: 'Vicepreședinte Educațional',
+        source: 'roster',
+        roleId: null,
+        status: 'activ',
+        roleLabel: 'BC',
+        level: 6,
+      },
+    ],
+    isPending: false,
+  });
+  const user = userEvent.setup();
+  show();
+  await user.click(tab('Roluri'));
+  const panel = screen.getByRole('region', { name: 'Vicepreședinte' });
+  const [untitled, titled] = within(
+    within(panel).getByRole('list'),
+  ).getAllByRole('listitem');
+  expect(
+    within(untitled as HTMLElement).getByText('Vicepreședinte'),
+  ).toBeVisible();
+  expect(
+    within(titled as HTMLElement).getByText('Vicepreședinte Educațional'),
+  ).toBeVisible();
+
+  // Withdrawing names the position the holder actually has.
+  await user.click(
+    screen.getByRole('button', { name: 'Retrage funcția lui Dana Pop' }),
+  );
+  const confirm = await screen.findByRole('dialog', {
+    name: 'Retragi funcția lui Dana Pop?',
+  });
+  expect(confirm).toHaveAccessibleDescription(
+    'Dana Pop nu va mai fi Vicepreședinte Educațional în Logistică, dar rămâne membru al grupului.',
+  );
+  await user.click(within(confirm).getByRole('button', { name: 'Renunță' }));
+
+  await user.click(
+    screen.getByRole('button', { name: 'Numește un vicepreședinte' }),
+  );
+  let dialog = await screen.findByRole('dialog', {
+    name: 'Vicepreședinte pentru Logistică',
+  });
+  let title = within(dialog).getByLabelText('Numele funcției (opțional)');
+  expect(title).toHaveValue('Vicepreședinte');
+  expect(title).not.toBeRequired();
+  await user.click(within(dialog).getByRole('combobox', { name: 'Membru' }));
+  await user.click(await screen.findByRole('option', { name: /Carmen Radu/ }));
+  await user.clear(title);
+  await user.type(title, '  Vicepreședinte Relații Externe ');
+  await user.click(within(dialog).getByRole('button', { name: 'Numește' }));
+  expect(api.mutate).toHaveBeenLastCalledWith({
+    kind: 'setRole',
+    groupId: 2,
+    memberId: 'c',
+    groupRole: 'manager',
+    positionTitle: 'Vicepreședinte Relații Externe',
+  });
+
+  // Emptied, the field sends no name: the Group's then names the position.
+  await user.click(
+    screen.getByRole('button', { name: 'Numește un vicepreședinte' }),
+  );
+  dialog = await screen.findByRole('dialog', {
+    name: 'Vicepreședinte pentru Logistică',
+  });
+  title = within(dialog).getByLabelText('Numele funcției (opțional)');
+  expect(title).toHaveValue('Vicepreședinte');
+  await user.click(within(dialog).getByRole('combobox', { name: 'Membru' }));
+  await user.click(await screen.findByRole('option', { name: /Carmen Radu/ }));
+  await user.clear(title);
+  await user.click(within(dialog).getByRole('button', { name: 'Numește' }));
+  expect(api.mutate).toHaveBeenLastCalledWith({
+    kind: 'setRole',
+    groupId: 2,
+    memberId: 'c',
+    groupRole: 'manager',
+    positionTitle: null,
+  });
+
+  // The Responsabil's name stays required, under its own label.
+  await user.click(
+    screen.getByRole('button', { name: 'Numește un responsabil' }),
+  );
+  dialog = await screen.findByRole('dialog', {
+    name: 'Responsabil în Logistică',
+  });
+  expect(within(dialog).getByLabelText('Numele funcției')).toHaveValue('');
+  expect(
+    within(dialog).queryByLabelText('Numele funcției (opțional)'),
+  ).toBeNull();
+});
+
 it('offers the position pickers only Members who could take the position (F-27)', async () => {
   const person = (
     memberId: string,

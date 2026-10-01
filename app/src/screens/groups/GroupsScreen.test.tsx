@@ -519,6 +519,44 @@ it('shows no position for one inherited from above, even on the roster (F-17)', 
     'EducaționalEchipă · Coordonator',
   ]);
 });
+it("names the member's own Coordonator position by their function name, else the Group's (#967)", () => {
+  api.groups.mockReturnValue(
+    ready([
+      group(8, 'Educațional', {
+        accepts_applications: false,
+        manager_title: 'Vicepreședinte',
+      }),
+      group(9, 'Cultural', {
+        accepts_applications: false,
+        manager_title: 'Vicepreședinte',
+      }),
+    ]),
+  );
+  api.mine.mockReturnValue(
+    ready([
+      myGroup(8, 'Educațional', { group_role: 'manager' }),
+      myGroup(9, 'Cultural', { group_role: 'manager' }),
+    ]),
+  );
+  api.rosterRows.mockReturnValue({
+    ...ready([]),
+    membershipRows: [
+      {
+        group_id: 8,
+        group_role: 'manager',
+        position_title: 'Vicepreședinte Educațional',
+      },
+      { group_id: 9, group_role: 'manager', position_title: null },
+    ],
+  });
+  list();
+  const own = screen.getByRole('region', { name: 'Grupurile tale' });
+  const rows = within(own).getAllByRole('listitem');
+  expect(rows.map((row) => row.textContent)).toEqual([
+    'CulturalEchipă · Vicepreședinte',
+    'EducaționalEchipă · Vicepreședinte Educațional',
+  ]);
+});
 it('marks an archived Group as Arhivat on its page (F-18)', () => {
   // The fixture Group is named "Arhivat": its name, then the badge.
   detail(4);
@@ -617,6 +655,66 @@ it("names an untitled Responsible in Coordonare, and the viewer's own position, 
   ).toBeInTheDocument();
 });
 
+it("names each Coordonator in Coordonare, and the viewer's own position, by their function name, else the Group's (#967)", () => {
+  api.groups.mockReturnValue(
+    ready([group(2, 'Echipa Evenimente', { manager_title: 'Vicepreședinte' })]),
+  );
+  api.mine.mockReturnValue(
+    ready([{ id: 2, group_role: 'manager', explicit: true, automatic: false }]),
+  );
+  api.roster.mockReturnValue(
+    ready([
+      {
+        memberId: 'me',
+        fullName: 'Ana',
+        groupRole: 'manager',
+        positionTitle: 'Vicepreședinte Educațional',
+      },
+      {
+        memberId: 'v',
+        fullName: 'Vlad',
+        groupRole: 'manager',
+        positionTitle: null,
+      },
+    ]),
+  );
+  detail();
+  const panel = screen.getByRole('region', { name: 'Coordonare' });
+  const [titled, untitled] = within(panel).getAllByRole('listitem');
+  expect(
+    within(titled as HTMLElement).getByText('Vicepreședinte Educațional'),
+  ).toBeVisible();
+  expect(
+    within(untitled as HTMLElement).getByText('Vicepreședinte'),
+  ).toBeVisible();
+  expect(
+    screen.getByText('Vicepreședinte Educațional', { selector: 'strong' }),
+  ).toBeInTheDocument();
+});
+it("names the viewer's own untitled Coordonator position by the Group's name for it (#967)", () => {
+  api.groups.mockReturnValue(
+    ready([
+      group(2, 'Echipa Evenimente', { manager_title: ' Vicepreședinte ' }),
+    ]),
+  );
+  api.mine.mockReturnValue(
+    ready([{ id: 2, group_role: 'manager', explicit: true, automatic: false }]),
+  );
+  api.roster.mockReturnValue(
+    ready([
+      {
+        memberId: 'me',
+        fullName: 'Ana',
+        groupRole: 'manager',
+        positionTitle: null,
+      },
+    ]),
+  );
+  detail();
+  expect(
+    screen.getByText('Vicepreședinte', { selector: 'strong' }),
+  ).toBeInTheDocument();
+});
 it('the back link falls back to Grupuri, and prefers state.from (A33)', () => {
   const view = detail();
   expect(

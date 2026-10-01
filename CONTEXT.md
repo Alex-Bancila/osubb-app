@@ -73,7 +73,7 @@ The position a Member holds in one Group: Group Manager, Group Responsible, or o
 _Avoid_: Project role, team role, local role
 
 **Group Manager**:
-A Member appointed to run a Group: its roster, Group Responsibles, Child Groups, work, and Events. BC or Moderator appoints the Group Managers of a top-level Group; the parent's Group Managers appoint a Child Group's, and the position carries down to every Group below. The Group's settings give the position its display name, such as BCE or Coordonator Principal. A Group with no Group Manager is run by the Group Managers of its nearest ancestor that has one, or by BC and Moderator.
+A Member appointed to run a Group: its roster, Group Responsibles, Child Groups, work, and Events. BC or Moderator appoints the Group Managers of a top-level Group; the parent's Group Managers appoint a Child Group's, and the position carries down to every Group below. The Group's settings give the position its display name, such as Vicepreședinte for a Department or Coordonator Principal for a Project; each holder may also carry a function name of their own, such as Coordonator Marketing, pre-filled from it at appointment, and shown before it (#967). A Group with no Group Manager is run by the Group Managers of its nearest ancestor that has one, or by BC and Moderator.
 _Avoid_: Lead, leader, coordinator, owner; Manager alone where it could be read as Task Manager
 
 **Group Responsible**:

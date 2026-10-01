@@ -255,8 +255,14 @@ export function validateInput({ memberRows, taskRows, groups, today }) {
     if (groupRole === 'responsible' && raw.position_title === '') {
       at('position_title', 'a Group Responsible needs a display name');
     }
-    if (groupRole !== 'responsible' && raw.position_title !== '') {
-      at('position_title', 'only a Group Responsible carries a display name');
+    // #967: a Group Manager may carry one of their own; a plain member never.
+    if (groupRole === 'member' && raw.position_title !== '') {
+      at('position_title', 'an ordinary member carries no display name');
+    }
+    // The database keeps at most 80 characters (position_title_too_long):
+    // refuse it here, so --execute cannot fail after a clean dry run.
+    if (groupRole !== 'member' && charLength(raw.position_title) > 80) {
+      at('position_title', 'a display name has at most 80 characters');
     }
 
     let group = null;

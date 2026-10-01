@@ -190,6 +190,40 @@ it("labels a Responsible's Group with the Group's name for the position (#962)",
   ]);
 });
 
+it("labels a led Group by the viewer's own function name, else the Group's name for the position (#967)", () => {
+  // Group 1's manager_title is "Director" (see row()).
+  const dept = row(1, 'Educațional', [1]);
+  const team = row(2, 'Logistică', [2]);
+  const child = { ...row(3, 'Echipa IT', [1, 3]), manager_title: 'Șef' };
+  const list = applicationGroups({
+    applications: [],
+    myGroups: [
+      led(dept, 'manager'),
+      led(team, 'responsible'),
+      // Held from Educațional, above: no own row here, so no own title.
+      led(child, 'manager', false),
+    ],
+    groups: [dept, team, child],
+    rosterRows: [
+      {
+        group_id: 1,
+        group_role: 'manager',
+        position_title: 'Director Educațional',
+      },
+      {
+        group_id: 2,
+        group_role: 'responsible',
+        position_title: 'Responsabil Logistică',
+      },
+    ],
+  });
+  expect(list.map((entry) => [entry.name, entry.roleLabel])).toEqual([
+    ['Educațional', 'Director Educațional'],
+    ['Echipa IT', 'Șef'],
+    ['Logistică', 'Responsabil Logistică'],
+  ]);
+});
+
 it.each([
   [0, '0 cereri'],
   [1, '1 cerere'],

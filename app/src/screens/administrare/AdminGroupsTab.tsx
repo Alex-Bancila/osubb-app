@@ -335,8 +335,9 @@ function ledColumns(rows: readonly LedRow[]): DataTableColumn<LedRow>[] {
   const next = new Map(rows.map((row, index) => [row, rows[index + 1]]));
   const led = rows.filter((row) => row.lead !== null);
   // The viewer's own title first, then the position as this Group names it
-  // (#962): a Responsible under "Responsabil IT" reads that; one held from a
-  // Group above, or untitled, reads what the Group calls its Responsibles.
+  // (#962, #967): a Responsible under "Responsabil IT" or a Coordonator under
+  // "Vicepreședinte Educațional" reads that; one held from a Group above, or
+  // untitled, reads what the Group calls the position.
   const lead = (row: LedRow) =>
     row.lead
       ? groupRoleLabel(

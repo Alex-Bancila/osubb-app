@@ -438,6 +438,26 @@ test('every input rule is reported at once, with its row and column', () => {
   assert.match(errors[4].message, /Automatic Membership/);
 });
 
+test('a manager row may carry a display name of its own, a member row never (#967)', () => {
+  const { members, errors } = validate(
+    [
+      HEADER,
+      MODERATOR,
+      'm@example.com,M,,bc,EDU,manager,Vicepreședinte Educațional,,',
+      'n@example.com,N,,bc,EDU,manager,,,',
+      'p@example.com,P,,bce,EDU,member,Membru de onoare,,',
+      'q@example.com,Q,,bce,EDU,,Fără funcție,,',
+    ].join('\n'),
+  );
+  assert.equal(members[1].positionTitle, 'Vicepreședinte Educațional');
+  assert.equal(members[2].positionTitle, null);
+  assert.deepEqual(
+    errors.map((e) => `${e.row}:${e.column}`),
+    ['5:position_title', '6:position_title'],
+  );
+  assert.match(errors[0].message, /an ordinary member carries no display name/);
+});
+
 test('a historical Task must fit its Executor, its Group and the Evaluation scale', () => {
   const members = [
     HEADER,
@@ -484,6 +504,25 @@ test('the Group matching copy is the csv-import rule', () => {
   }
 });
 
+test('a display name over 80 characters fails the dry run, as it would the real run (#967)', () => {
+  const long = 'C'.repeat(81);
+  const exact = 'C'.repeat(80);
+  const { members, errors } = validate(
+    [
+      HEADER,
+      MODERATOR,
+      `m@example.com,M,,bc,EDU,manager,${long},,`,
+      `r@example.com,R,,bce,EDU,responsible,${long},,`,
+      `n@example.com,N,,bc,EDU,manager,${exact},,`,
+    ].join('\n'),
+  );
+  assert.equal(members[3].positionTitle, exact);
+  assert.deepEqual(
+    errors.map((e) => `${e.row}:${e.column}`),
+    ['3:position_title', '4:position_title'],
+  );
+  assert.match(errors[0].message, /at most 80 characters/);
+});
 test('CSV parsing follows RFC 4180 and keeps spreadsheet row numbers', () => {
   const records = parseCsv('﻿a,b\r\n"x, y","say ""hi"""\r\n\r\n"multi\nline",z\n');
   assert.deepEqual(records, [
