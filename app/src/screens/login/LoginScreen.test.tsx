@@ -32,11 +32,10 @@ vi.mock('../../components/shell/PrivacyGate', () => ({
 vi.mock('../dashboard/DashboardScreen', () => ({
   default: () => <h1>Dashboard</h1>,
 }));
-vi.mock('../tracker/TrackerScreen', () => ({ default: () => null }));
-vi.mock('../calendar/CalendarScreen', () => ({ default: () => null }));
-vi.mock('../requests/CompletedWorkRequestScreen', () => ({
-  default: () => <h1>Cereri</h1>,
+vi.mock('../tracker/TrackerScreen', () => ({
+  default: () => <h1>Taskuri</h1>,
 }));
+vi.mock('../calendar/CalendarScreen', () => ({ default: () => null }));
 vi.mock('../no-profile/NoProfileScreen', () => ({
   default: () => <h1>Fără profil</h1>,
 }));
@@ -397,7 +396,14 @@ describe('LoginScreen code sign-in, end to end', () => {
     typeTheCode('123456');
     fireEvent.click(screen.getByRole('button', { name: 'Conectează-mă' }));
 
-    await screen.findByRole('heading', { name: 'Cereri' });
-    expect(window.location.pathname).toBe('/cereri');
-  });
+    // `/cereri` is restored, then forwarded to Taskuri's Cereri view (#973).
+    await screen.findByRole(
+      'heading',
+      { name: 'Taskuri' },
+      { timeout: 10_000 },
+    );
+    expect(window.location.pathname + window.location.search).toBe(
+      '/tracker?vedere=cereri',
+    );
+  }, 15_000);
 });

@@ -12,6 +12,7 @@ vi.mock('./RequestDecisionQueue', () => ({
 }));
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const hooks = vi.hoisted(() => ({
@@ -24,7 +25,7 @@ const hooks = vi.hoisted(() => ({
 vi.mock('../../queries/completed-work-requests', () => hooks);
 vi.mock('../../lib/auth', () => ({ useAuth: hooks.useAuth }));
 // capabilities.ts (submitsWorkRequests) pulls in the shared client transitively;
-// it is never called by this screen, so an inert stub is enough to satisfy it.
+// it is never called by this view, so an inert stub is enough to satisfy it.
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 // Readable Groups name each option's parent: Echipa Media sits under
 // Educațional; OSUBB Fest is top-level.
@@ -42,14 +43,23 @@ vi.mock('../tracker/TaskDetailsSheet', () => ({
     taskId === null ? null : <p>Detalii task #{taskId}</p>,
 }));
 
-import CompletedWorkRequestScreen from './CompletedWorkRequestScreen';
+import { RequestsView } from './RequestsView';
 
 const optionTexts = () =>
   within(screen.getByRole('listbox'))
     .getAllByRole('option')
     .map((option) => option.textContent);
 
-describe('CompletedWorkRequestScreen', () => {
+/** The view as Taskuri shows it at `?vedere=cereri` (#973). */
+function show() {
+  return render(
+    <MemoryRouter initialEntries={['/tracker?vedere=cereri']}>
+      <RequestsView />
+    </MemoryRouter>,
+  );
+}
+
+describe('RequestsView', () => {
   const mutateAsync = vi.fn();
 
   beforeEach(() => {
@@ -110,7 +120,7 @@ describe('CompletedWorkRequestScreen', () => {
         },
       ],
     });
-    render(<CompletedWorkRequestScreen />);
+    show();
     // Each row names the Group it was filed for (#855, B32), a Child Group
     // with its parent; a Group no longer readable leaves no empty line.
     const rows = screen.getAllByRole('listitem');
@@ -144,7 +154,7 @@ describe('CompletedWorkRequestScreen', () => {
 
   it('offers a searchable Grup picker of exactly the supplied Groups, each with its parent', async () => {
     const user = userEvent.setup();
-    render(<CompletedWorkRequestScreen />);
+    show();
 
     const box = screen.getByRole('combobox', { name: 'Grup' });
     expect(box).toHaveAccessibleDescription(
@@ -166,7 +176,7 @@ describe('CompletedWorkRequestScreen', () => {
 
   it('submits the selected Group and trimmed description, then confirms success', async () => {
     const user = userEvent.setup();
-    render(<CompletedWorkRequestScreen />);
+    show();
 
     const send = screen.getByRole('button', { name: 'Trimite cererea' });
     expect(send).toBeDisabled();
@@ -202,10 +212,18 @@ describe('CompletedWorkRequestScreen', () => {
       isError: true,
       error: { code: 'PT400', message: 'description_required' },
     });
-    render(<CompletedWorkRequestScreen />);
+    show();
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Descrierea este obligatorie.',
     );
+  });
+
+  it('has no page header of its own: Taskuri’s frames it (#973)', () => {
+    show();
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+    expect(
+      screen.getByRole('heading', { name: 'Activitatea ta' }),
+    ).toBeVisible();
   });
 
   it.each([1, 4])(
@@ -214,7 +232,7 @@ describe('CompletedWorkRequestScreen', () => {
       hooks.useAuth.mockReturnValue({
         claims: { member_role: 'voluntar', member_level: level },
       });
-      render(<CompletedWorkRequestScreen />);
+      show();
 
       expect(
         screen.getByRole('combobox', { name: 'Grup' }),
@@ -225,7 +243,6 @@ describe('CompletedWorkRequestScreen', () => {
       expect(
         screen.getByRole('heading', { name: 'Cererile mele' }),
       ).toBeInTheDocument();
-      expect(screen.getByText(/Descrie contribuția/)).toBeInTheDocument();
       // The decision queue is unrelated to the level gate and still renders,
       // hidden while there is nothing to decide.
       expect(
@@ -240,7 +257,7 @@ describe('CompletedWorkRequestScreen', () => {
       hooks.useAuth.mockReturnValue({
         claims: { member_role: 'bc', member_level: level },
       });
-      render(<CompletedWorkRequestScreen />);
+      show();
 
       expect(
         screen.queryByRole('combobox', { name: 'Grup' }),
@@ -251,16 +268,7 @@ describe('CompletedWorkRequestScreen', () => {
       expect(
         screen.queryByRole('heading', { name: 'Cererile mele' }),
       ).not.toBeInTheDocument();
-      // No sentence invites a Request nobody at this level can submit, and the
-      // title names the page, not the form it does not have.
-      expect(screen.queryByText(/Descrie contribuția/)).not.toBeInTheDocument();
-      expect(
-        screen.getByRole('heading', { level: 1, name: 'Cereri' }),
-      ).toBeInTheDocument();
-      expect(
-        screen.queryByText(/activitate realizată$/),
-      ).not.toBeInTheDocument();
-      // The decision queue is the page: it says so when it is empty (B30).
+      // The decision queue is the view: it says so when it is empty (B30).
       expect(
         screen.getByRole('region', { name: 'Coadă decizii stub' }),
       ).toHaveAttribute('data-show-empty', 'true');

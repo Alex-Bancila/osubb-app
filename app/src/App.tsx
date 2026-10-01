@@ -28,7 +28,6 @@ import NoProfileScreen from './screens/no-profile/NoProfileScreen';
 import CampaignsScreen from './screens/campaigns/CampaignsScreen';
 import VolunteersScreen from './screens/volunteers/VolunteersScreen';
 import DashboardScreen from './screens/dashboard/DashboardScreen';
-import CompletedWorkRequestScreen from './screens/requests/CompletedWorkRequestScreen';
 import AnnouncementsScreen from './screens/announcements/AnnouncementsScreen';
 import NotificationsScreen from './screens/notifications/NotificationsScreen';
 import ProfileScreen from './screens/profile/ProfileScreen';
@@ -378,7 +377,12 @@ export default function App() {
               </DeferredRoute>
             }
           />
-          <Route path="/cereri" element={<CompletedWorkRequestScreen />} />
+          {/* Cereri is a view of Taskuri (#973). Notifications and saved
+                sign-in destinations still name `/cereri`: forward them. */}
+          <Route
+            path="/cereri"
+            element={<Navigate to="/tracker?vedere=cereri" replace />}
+          />
           <Route path="/anunturi" element={<AnnouncementsScreen />} />
           <Route path="/notificari" element={<NotificationsScreen />} />
           <Route
