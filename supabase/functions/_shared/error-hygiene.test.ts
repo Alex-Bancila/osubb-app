@@ -14,6 +14,8 @@ import { handleInvite } from "../invite-member/handler.ts";
 import type { InviteDeps } from "../invite-member/deps.ts";
 import { handleReinvite } from "../reinvite-member/handler.ts";
 import type { ReinviteDeps } from "../reinvite-member/deps.ts";
+import { handleRequestInvitation } from "../request-invitation/handler.ts";
+import type { RequestInvitationDeps } from "../request-invitation/deps.ts";
 import { handleResendWebhook } from "../resend-webhook/handler.ts";
 import type { ResendWebhookDeps } from "../resend-webhook/deps.ts";
 import { decodeSigningSecret, sign } from "../resend-webhook/signature.ts";
@@ -425,6 +427,87 @@ Deno.test("reinvite-member: no error body carries database or setting text", asy
   for (const [name, req, deps] of cases) {
     await sweep(`reinvite-member ${name}`, () => handleReinvite(req, deps));
   }
+});
+
+// ==================== request-invitation ====================
+
+function requestInvitationDeps(
+  overrides: Partial<RequestInvitationDeps> = {},
+): RequestInvitationDeps {
+  return {
+    verdict: () => Promise.resolve("send"),
+    inviteByEmail: () => Promise.resolve(),
+    ...overrides,
+  };
+}
+
+const REQUEST_INVITATION = "http://localhost/request-invitation";
+
+/** The login page's own request: no session, the app's origin. */
+function loginPagePost(
+  body: unknown,
+  origin: string | null = "http://localhost:5173",
+): Request {
+  return new Request(REQUEST_INVITATION, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(origin ? { Origin: origin } : {}),
+    },
+    body: typeof body === "string" ? body : JSON.stringify(body),
+  });
+}
+
+const ADDRESS = { email: "ana@example.com" };
+
+Deno.test("request-invitation: no error body carries database or setting text", async () => {
+  const cases: Array<[string, Request, RequestInvitationDeps]> = [
+    ["GET", new Request(REQUEST_INVITATION), requestInvitationDeps()],
+    [
+      "no origin",
+      loginPagePost(ADDRESS, null),
+      requestInvitationDeps(),
+    ],
+    [
+      "foreign origin",
+      loginPagePost(ADDRESS, "https://evil.example"),
+      requestInvitationDeps(),
+    ],
+    ["bad JSON", loginPagePost("{"), requestInvitationDeps()],
+    ["array body", loginPagePost([]), requestInvitationDeps()],
+    ["no email", loginPagePost({}), requestInvitationDeps()],
+    ["typed email", loginPagePost({ email: 1 }), requestInvitationDeps()],
+    ["bad email", loginPagePost({ email: "x" }), requestInvitationDeps()],
+    [
+      "IP limited",
+      loginPagePost(ADDRESS),
+      requestInvitationDeps({ verdict: () => Promise.resolve("ip_limited") }),
+    ],
+    [
+      "database fails",
+      loginPagePost(ADDRESS),
+      requestInvitationDeps({ verdict: reject }),
+    ],
+  ];
+  for (const [name, req, deps] of cases) {
+    await sweep(
+      `request-invitation ${name}`,
+      () => handleRequestInvitation(req, deps),
+    );
+  }
+});
+
+Deno.test("request-invitation: a failed send answers the success body, never Auth's words", async () => {
+  const { result } = await capturingErrors(() =>
+    handleRequestInvitation(
+      loginPagePost(ADDRESS),
+      requestInvitationDeps({ inviteByEmail: reject }),
+    )
+  );
+  assertEquals(result.status, 202);
+  const text = await result.text();
+  assertClean("request-invitation failed send", text);
+  assertEquals(JSON.parse(text), { ok: true });
 });
 
 // ==================== send-push ====================
