@@ -225,7 +225,11 @@ describe('buildMemberGroups and resolveGroupRoleLabel', () => {
 
   it("names a Manager by their own title, then the Group's name for the position, then Manager (#967)", () => {
     expect(
-      resolveGroupRoleLabel('manager', 'Vicepreședinte', 'Coordonator Marketing'),
+      resolveGroupRoleLabel(
+        'manager',
+        'Vicepreședinte',
+        'Coordonator Marketing',
+      ),
     ).toBe('Coordonator Marketing');
     expect(
       resolveGroupRoleLabel('manager', 'Vicepreședinte', ' Coordonator IT '),
@@ -235,7 +239,11 @@ describe('buildMemberGroups and resolveGroupRoleLabel', () => {
     );
     expect(resolveGroupRoleLabel('manager', ' ', null)).toBe('Manager');
     expect(
-      resolveGroupRoleLabel('member', 'Vicepreședinte', 'Coordonator Marketing'),
+      resolveGroupRoleLabel(
+        'member',
+        'Vicepreședinte',
+        'Coordonator Marketing',
+      ),
     ).toBe('Membru');
   });
 
@@ -256,9 +264,7 @@ describe('buildMemberGroups and resolveGroupRoleLabel', () => {
         [team.id, team],
       ]),
     );
-    expect(
-      new Map(rows.map((row) => [row.id, row.role_label])),
-    ).toStrictEqual(
+    expect(new Map(rows.map((row) => [row.id, row.role_label]))).toStrictEqual(
       new Map([
         [dept.id, 'Vicepreședinte Educațional'],
         [team.id, 'Manager'],

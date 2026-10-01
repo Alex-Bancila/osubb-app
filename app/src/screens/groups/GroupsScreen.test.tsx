@@ -657,9 +657,7 @@ it("names an untitled Responsible in Coordonare, and the viewer's own position, 
 
 it("names each Coordonator in Coordonare, and the viewer's own position, by their function name, else the Group's (#967)", () => {
   api.groups.mockReturnValue(
-    ready([
-      group(2, 'Echipa Evenimente', { manager_title: 'Vicepreședinte' }),
-    ]),
+    ready([group(2, 'Echipa Evenimente', { manager_title: 'Vicepreședinte' })]),
   );
   api.mine.mockReturnValue(
     ready([{ id: 2, group_role: 'manager', explicit: true, automatic: false }]),
