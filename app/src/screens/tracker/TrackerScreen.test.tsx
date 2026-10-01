@@ -1392,17 +1392,19 @@ describe('My tasks screen', () => {
       expect(segment('Taskuri')).toHaveAttribute('aria-pressed', 'true');
     });
 
-    it('shows a BC member with nothing to decide no toggle, and ignores ?vedere=cereri', () => {
+    it('offers a BC member with nothing to decide the toggle too, and honours ?vedere=cereri (#979)', () => {
       query();
       hooks.level = 6;
       renderAt('/tracker?vedere=cereri');
 
-      expect(toggle()).toBeNull();
-      expect(requestsView()).toBeNull();
+      expect(segment('Cereri')).toHaveAttribute('aria-pressed', 'true');
+      expect(requestsView()).toBeVisible();
       expect(
-        screen.getByText('Lucrul tău și oportunitățile din OSUBB.'),
+        screen.getByText(
+          'Cererile de activitate realizată pe care le poți aproba sau respinge.',
+        ),
       ).toBeVisible();
-      expect(taskLists()).toBeVisible();
+      expect(taskLists()).toBeNull();
     });
 
     it('counts the Requests a BC member has to decide on the Cereri segment', async () => {
@@ -1469,7 +1471,7 @@ describe('My tasks screen', () => {
       expect(segment('Cereri')).toHaveAttribute('aria-pressed', 'true');
     });
 
-    it('waits for the queue before sending a link to Cereri back to Taskuri', () => {
+    it('shows Cereri at once while the queue loads, and keeps it when the queue comes back empty (#979)', () => {
       query();
       hooks.level = 6;
       hooks.usePendingDecisions.mockReturnValue({
@@ -1478,7 +1480,7 @@ describe('My tasks screen', () => {
       });
       const view = renderAt('/tracker?vedere=cereri');
       expect(requestsView()).toBeVisible();
-      expect(toggle()).toBeNull();
+      expect(segment('Cereri')).toHaveAttribute('aria-pressed', 'true');
 
       hooks.usePendingDecisions.mockReturnValue({
         data: [],
@@ -1486,8 +1488,8 @@ describe('My tasks screen', () => {
         isError: false,
       });
       view.rerender(tree('/tracker?vedere=cereri'));
-      expect(requestsView()).toBeNull();
-      expect(taskLists()).toBeVisible();
+      expect(requestsView()).toBeVisible();
+      expect(taskLists()).toBeNull();
     });
   });
 });
