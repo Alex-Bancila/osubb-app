@@ -19,6 +19,7 @@ import { usePushSelfRepair } from '../../queries/push-subscription';
 import { usePendingDecisions } from '../../queries/request-decisions';
 import { unreadAnnouncementsLabel } from '../../screens/announcements/announcements-presentation';
 import { unreadBadgeLabel } from '../../screens/notifications/notifications-presentation';
+import { decisionsBadgeLabel } from '../../screens/requests/requests-presentation';
 import { Badge } from '../ui/badge';
 import { Button, buttonVariants } from '../ui/button';
 import {
@@ -34,7 +35,9 @@ import {
   ANNOUNCEMENTS_PATH,
   NAV_ITEMS,
   NOTIFICATIONS_PATH,
+  PROFILE_PATH,
   TAB_ORDER,
+  TRACKER_PATH,
   isNavItemActive,
   type NavItem,
   type NavViewer,
@@ -57,8 +60,18 @@ function deniedMessage(state: unknown): string | null {
 /** The unread counts the shell badges, by the path whose entry carries them. */
 type NavBadges = Partial<Record<string, { count: number; label: string }>>;
 
-function navBadges(notifications: number, announcements: number): NavBadges {
+function navBadges(
+  notifications: number,
+  announcements: number,
+  decisions: number,
+): NavBadges {
   const badges: NavBadges = {};
+  // The Requests waiting for the viewer's decision live under Taskuri (#972).
+  if (decisions > 0)
+    badges[TRACKER_PATH] = {
+      count: decisions,
+      label: decisionsBadgeLabel(decisions),
+    };
   if (notifications > 0)
     badges[NOTIFICATIONS_PATH] = {
       count: notifications,
@@ -208,7 +221,6 @@ export default function AppShell() {
   const unreadNotifications = useUnreadNotificationCount();
   const unreadCount = unreadNotifications.data ?? 0;
   const unreadAnnouncements = useUnreadAnnouncementsCount();
-  const badges = navBadges(unreadCount, unreadAnnouncements.data ?? 0);
   // The one cached my_capabilities() row the route guards and the Tracker
   // share: live rank and Group Roles, which the token cannot carry.
   const capabilities = useCapabilities();
@@ -220,6 +232,11 @@ export default function AppShell() {
     hasRequestsToDecide:
       requestsToDecide.isError || (requestsToDecide.data?.length ?? 0) > 0,
   };
+  const badges = navBadges(
+    unreadCount,
+    unreadAnnouncements.data ?? 0,
+    requestsToDecide.data?.length ?? 0,
+  );
   // The Board Title when the Member holds one (#963), else the Role's name.
   const roleLabel = useMyRoleLabel();
 
@@ -233,12 +250,20 @@ export default function AppShell() {
   const tabs = TAB_ORDER.map((path) =>
     visible.find((item) => item.path === path),
   ).filter((item) => item !== undefined);
+  // On a phone Notificări and Profil are the top bar's (#972): the drawer
+  // holds the rest, and opens only when some page would otherwise be
+  // unreachable — a volunteer needs nothing but the bar and the top bar.
+  const drawerItems = visible.filter(
+    (item) => item.path !== NOTIFICATIONS_PATH && item.path !== PROFILE_PATH,
+  );
+  const drawerNeeded = drawerItems.some((item) => !tabs.includes(item));
   const current = visible.find((item) =>
     isNavItemActive(item, location.pathname),
   );
   const denied = deniedMessage(location.state);
   const isNotificationsActive =
     location.pathname.startsWith(NOTIFICATIONS_PATH);
+  const isProfileActive = location.pathname.startsWith(PROFILE_PATH);
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return;
@@ -287,6 +312,7 @@ export default function AppShell() {
             </SheetClose>
             <SidebarContent
               {...sidebarProps}
+              items={drawerItems}
               label="Meniu principal"
               firstLinkRef={firstMobileLinkRef}
               onNavigate={() => setMenuOpen(false)}
@@ -295,14 +321,16 @@ export default function AppShell() {
         </SheetPortal>
 
         <header className="flex items-center gap-3 border-b border-border bg-card px-4 pt-[env(safe-area-inset-top)] [grid-area:topbar] sm:px-6">
-          <SheetTrigger
-            render={<Button variant="ghost" size="icon" />}
-            className="lg:hidden"
-            aria-label="Deschide meniul"
-            aria-controls="mobile-navigation"
-          >
-            <Menu aria-hidden="true" />
-          </SheetTrigger>
+          {drawerNeeded && (
+            <SheetTrigger
+              render={<Button variant="ghost" size="icon" />}
+              className="lg:hidden"
+              aria-label="Deschide meniul"
+              aria-controls="mobile-navigation"
+            >
+              <Menu aria-hidden="true" />
+            </SheetTrigger>
+          )}
           <span className="shrink-0 lg:hidden" aria-hidden="true">
             <img
               className="h-8 w-auto object-contain dark:hidden"
@@ -345,6 +373,27 @@ export default function AppShell() {
               </Badge>
             )}
           </Link>
+          {/* Profil's only door on a phone (#972): the Member's own initials
+              on their colour, the one personal mark in the top bar. */}
+          <Link
+            to={PROFILE_PATH}
+            className={cn(
+              'grid size-11 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50 lg:hidden',
+              isProfileActive && 'bg-accent',
+            )}
+            aria-current={isProfileActive ? 'page' : undefined}
+            aria-label="Profil"
+          >
+            <span
+              className="grid size-8 place-items-center rounded-full text-xs font-bold text-white"
+              style={{
+                backgroundColor: safeHexColor(profile.data?.avatar_color),
+              }}
+              aria-hidden="true"
+            >
+              {initials(profile.data?.full_name ?? session?.user.email)}
+            </span>
+          </Link>
         </header>
       </Sheet>
 
@@ -373,6 +422,30 @@ export default function AppShell() {
           const Icon = item.icon;
           const badge = badges[item.path];
           const isActive = isNavItemActive(item, location.pathname);
+          if (item.path === '/')
+            // The raised home (#972): the one disc in brand red, lifted over
+            // the bar's edge in the centre, the four flat tabs around it. The
+            // disc keeps its colour; the caption and aria-current say active.
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                data-slot="home-tab"
+                aria-current={isActive ? 'page' : undefined}
+                className={cn(
+                  '-mt-5 flex min-h-14 flex-1 flex-col items-center justify-start gap-1 rounded-lg px-1 text-[10.5px] font-semibold text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+                  isActive && 'text-red-700',
+                )}
+              >
+                <span
+                  className="grid size-[52px] place-items-center rounded-full bg-(--brand-red) text-white shadow-(--sh-red) ring-4 ring-card"
+                  aria-hidden="true"
+                >
+                  <Icon className="size-6" />
+                </span>
+                {item.label}
+              </Link>
+            );
           return (
             <Link
               key={item.path}

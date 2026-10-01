@@ -63,6 +63,7 @@ vi.mock('../../queries/org-settings', () => ({
 const authMock = vi.hoisted(() => ({
   claims: null as MemberClaims | null,
   session: { user: { id: 'p1' } },
+  signOut: vi.fn(async () => undefined),
 }));
 
 vi.mock('../../lib/auth', () => ({
@@ -70,7 +71,7 @@ vi.mock('../../lib/auth', () => ({
     claims: authMock.claims,
     session: authMock.session,
     loading: false,
-    signOut: vi.fn(),
+    signOut: authMock.signOut,
   }),
 }));
 
@@ -1259,5 +1260,28 @@ describe('ProfileScreen', () => {
         within(sheet).getByRole('button', { name: 'Schimbă adresa' }),
       ).toBeInTheDocument();
     });
+  });
+});
+
+describe('sign-out from Profil (#972)', () => {
+  it('offers Deconectare in the header and signs out', async () => {
+    const user = userEvent.setup();
+    authMock.signOut.mockResolvedValueOnce(undefined);
+    render(<ProfileScreen />, { wrapper: wrapper() });
+
+    await user.click(screen.getByRole('button', { name: 'Deconectare' }));
+
+    expect(authMock.signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a failed sign-out on the page and unlocks a retry', async () => {
+    const user = userEvent.setup();
+    authMock.signOut.mockRejectedValueOnce(new Error('offline'));
+    render(<ProfileScreen />, { wrapper: wrapper() });
+
+    await user.click(screen.getByRole('button', { name: 'Deconectare' }));
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Deconectare' })).toBeEnabled();
   });
 });
