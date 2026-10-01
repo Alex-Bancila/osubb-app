@@ -90,7 +90,9 @@ export default function MemberGroupScreen() {
       ? (group.manager_title ?? 'Coordonator')
       : role.group_role === 'responsible'
         ? (roster.data?.find((row) => row.memberId === auth.session?.user.id)
-            ?.positionTitle ?? 'Responsabil')
+            ?.positionTitle ??
+          group.responsible_title ??
+          'Responsabil')
         : 'Membru'
     : null;
   // Coordonare only when someone holds a position (relevance B29); while it
@@ -192,7 +194,9 @@ export default function MemberGroupScreen() {
                       <span className="block max-w-28 text-sm whitespace-normal text-muted-foreground sm:max-w-40 xl:max-w-56">
                         {row.groupRole === 'manager'
                           ? (group.manager_title ?? 'Coordonator')
-                          : (row.positionTitle ?? 'Responsabil')}
+                          : (row.positionTitle ??
+                            group.responsible_title ??
+                            'Responsabil')}
                       </span>
                     }
                   >

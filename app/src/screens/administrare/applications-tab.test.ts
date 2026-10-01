@@ -83,6 +83,7 @@ const row = (
   path,
   parent_id: path.length > 1 ? (path[path.length - 2] ?? null) : null,
   manager_title: id === 1 ? 'Director' : null,
+  responsible_title: null as string | null,
   status,
 });
 const led = (
@@ -165,6 +166,28 @@ it('adds every Group with a readable pending Application, led or not (BC and Mod
     [9, 1, null],
   ]);
   expect(list[1]?.name).toBe('Necunoscut');
+});
+
+it("labels a Responsible's Group with the Group's name for the position (#962)", () => {
+  const dept = {
+    ...row(1, 'Educațional', [1]),
+    responsible_title: 'Coordonator',
+  };
+  const team = row(2, 'Logistică', [2]);
+  const list = applicationGroups({
+    applications: [],
+    myGroups: [led(dept, 'responsible'), led(team, 'responsible')],
+    groups: [dept, team],
+    rosterRows: [
+      { group_id: 1, group_role: 'responsible' },
+      { group_id: 2, group_role: 'responsible' },
+    ],
+  });
+  expect(list.map((entry) => [entry.name, entry.roleLabel])).toEqual([
+    ['Educațional', 'Coordonator'],
+    // Without the setting: as before.
+    ['Logistică', 'Responsabil'],
+  ]);
 });
 
 it.each([

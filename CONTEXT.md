@@ -77,7 +77,7 @@ A Member appointed to run a Group: its roster, Group Responsibles, Child Groups,
 _Avoid_: Lead, leader, coordinator, owner; Manager alone where it could be read as Task Manager
 
 **Group Responsible**:
-A Member appointed by a Group Manager to manage the ordinary members, their work, and the Events of a Group and every Group below it, under a custom display name. A Group Responsible never manages or evaluates the Tasks of a Group Manager or of another Group Responsible.
+A Member appointed by a Group Manager to manage the ordinary members, their work, and the Events of a Group and every Group below it, under a custom display name. The Group's settings give the position its display name, such as Coordonator for a Department's BCE members; each holder still carries a title of their own, pre-filled from it at appointment, and shown before it. A Group Responsible never manages or evaluates the Tasks of a Group Manager or of another Group Responsible.
 _Avoid_: Deputy, sub-manager, co-lead
 
 **Appointment**:
@@ -398,7 +398,7 @@ A pending request to join a Group, resolved through `apply_to_group`, `withdraw_
 An audit row for each organizational Role or Membership Status change, with the actor and optional reason. Historical rank names are retained even when a rank is retired; new Role commands accept only the seven live ranks.
 
 **Group settings → `groups` columns**:
-Minimum Level → `groups.min_level` · Application Level → `groups.application_level` · Shared Work Visibility → `groups.shared_work_visibility` · Automatic Membership → `groups.automatic_membership` · the Group Manager's display name → `groups.manager_title` · the two Department Cup settings → `groups.competes_in_cup` and `groups.counts_toward_parent_cup`. The Group structure and settings commands own these writes; the browser never updates the table directly.
+Minimum Level → `groups.min_level` · Application Level → `groups.application_level` · Shared Work Visibility → `groups.shared_work_visibility` · Automatic Membership → `groups.automatic_membership` · the Group Manager's display name → `groups.manager_title` · the Group Responsible position's display name → `groups.responsible_title` · the two Department Cup settings → `groups.competes_in_cup` and `groups.counts_toward_parent_cup`. The Group structure and settings commands own these writes; the browser never updates the table directly.
 
 **`group_ids` claim**:
 The organization claim listing the Groups a Member explicitly belongs to, via `group_members` rows only, memberships of archived Groups included — Automatic Membership is derived from Role and Minimum Level and is never in the token. It is the only roster claim: the `dept_ids`/`team_ids` claims were removed in #591.

@@ -686,6 +686,7 @@ export type Database = {
           name: string
           parent_id: number | null
           path: number[]
+          responsible_title: string | null
           shared_work_visibility: boolean
           short: string | null
           status: string
@@ -711,6 +712,7 @@ export type Database = {
           name: string
           parent_id?: number | null
           path: number[]
+          responsible_title?: string | null
           shared_work_visibility?: boolean
           short?: string | null
           status?: string
@@ -736,6 +738,7 @@ export type Database = {
           name?: string
           parent_id?: number | null
           path?: number[]
+          responsible_title?: string | null
           shared_work_visibility?: boolean
           short?: string | null
           status?: string
@@ -2655,6 +2658,7 @@ export type Database = {
           name: string
           parent_id: number | null
           path: number[]
+          responsible_title: string | null
           shared_work_visibility: boolean
           short: string | null
           status: string
@@ -3090,6 +3094,7 @@ export type Database = {
           name: string
           parent_id: number | null
           path: number[]
+          responsible_title: string | null
           shared_work_visibility: boolean
           short: string | null
           status: string
@@ -4164,6 +4169,7 @@ export type Database = {
           p_manager_title: string
           p_min_level: number
           p_name: string
+          p_responsible_title: string
           p_shared_work_visibility: boolean
         }
         Returns: {
@@ -4186,6 +4192,7 @@ export type Database = {
           name: string
           parent_id: number | null
           path: number[]
+          responsible_title: string | null
           shared_work_visibility: boolean
           short: string | null
           status: string
@@ -4232,6 +4239,7 @@ export type Database = {
           name: string
           parent_id: number | null
           path: number[]
+          responsible_title: string | null
           shared_work_visibility: boolean
           short: string | null
           status: string

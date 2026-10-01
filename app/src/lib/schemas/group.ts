@@ -30,13 +30,19 @@ const optional = z
 /**
  * Security pass 2026-09-27: the Group labels' column limits, the same as the
  * inputs' maxLength -- Prescurtare at most 16 characters (groups_short_length_ck),
- * a Manager title at most 80 (groups_manager_title_length_ck). The Responsible
- * title input caps itself at the same 80 (group_members_position_title_length_ck).
+ * a Manager title at most 80 (groups_manager_title_length_ck), and (#962) the
+ * Group's name for its Responsible position at most 80
+ * (groups_responsible_title_length_ck). A Responsible's own title input caps
+ * itself at the same 80 (group_members_position_title_length_ck).
  */
 const short = optionalText({ max: 16, tooLong: 'short_too_long' });
 const managerTitle = optionalText({
   max: 80,
   tooLong: 'manager_title_too_long',
+});
+const responsibleTitle = optionalText({
+  max: 80,
+  tooLong: 'responsible_title_too_long',
 });
 
 const color = optional.superRefine((value, ctx) => {
@@ -115,6 +121,7 @@ export const groupSettingsSchema = z
   .object({
     name: groupName,
     managerTitle,
+    responsibleTitle,
     acceptsApplications: z.boolean(),
     applicationLevel: level('invalid_application_level').nullable(),
     sharedWorkVisibility: z.boolean(),
@@ -149,8 +156,12 @@ export const fieldForReason: Readonly<Record<string, string>> = {
   invalid_group_category: 'category',
   invalid_group_color: 'color',
   short_too_long: 'short',
+  // update_group raises invalid_position_title for a blank Manager or
+  // Responsible name alike; the form never sends a blank one (it trims to
+  // null), so the first of the two fields takes it.
   invalid_position_title: 'managerTitle',
   manager_title_too_long: 'managerTitle',
+  responsible_title_too_long: 'responsibleTitle',
   invalid_group_min_level: 'minLevel',
   group_min_level_below_parent: 'minLevel',
   group_min_level_above_actor: 'minLevel',

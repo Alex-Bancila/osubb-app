@@ -180,6 +180,11 @@ const REASON_COPY = new Map<string, string>([
   ['location_too_long', 'Locul are cel mult 200 de caractere.'],
   ['short_too_long', 'Prescurtarea are cel mult 16 caractere.'],
   ['manager_title_too_long', 'Numele funcției are cel mult 80 de caractere.'],
+  // #962: the Group Responsible position's name, the same limit.
+  [
+    'responsible_title_too_long',
+    'Numele funcției are cel mult 80 de caractere.',
+  ],
   ['position_title_too_long', 'Numele funcției are cel mult 80 de caractere.'],
   ['full_name_too_long', 'Numele complet are cel mult 120 de caractere.'],
   [

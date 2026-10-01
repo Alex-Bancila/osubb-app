@@ -25,6 +25,7 @@ const adunarea: AdminGroup = {
   status: 'active',
   is_organization: false,
   manager_title: null,
+  responsible_title: null,
   automatic_membership: true,
   accepts_applications: false,
   application_level: null,

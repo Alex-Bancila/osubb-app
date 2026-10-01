@@ -141,7 +141,12 @@ export function toMemberCardData(
   roles?: Map<string, { name: string }>,
   groups?: Map<
     number,
-    { name: string; manager_title?: string | null; is_private?: boolean }
+    {
+      name: string;
+      manager_title?: string | null;
+      responsible_title?: string | null;
+      is_private?: boolean;
+    }
   >,
 ): MemberCardData | null {
   // No row: the Member does not exist, or the viewer is not an active Member.
@@ -185,6 +190,7 @@ export function toMemberCardData(
           item.group_role,
           groups?.get(item.group_id)?.manager_title || 'Coordonator',
           item.position_title,
+          groups?.get(item.group_id)?.responsible_title,
         ),
         groupRole: item.group_role,
         isPrivate: groups?.get(item.group_id)?.is_private === true,

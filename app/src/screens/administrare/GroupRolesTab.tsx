@@ -32,7 +32,12 @@ import { useAuth } from '../../lib/auth';
 import { fetchGroupCoordination } from '../../queries/group-applications';
 import { useOrgSettings } from '../../queries/org-settings';
 import { MemberPicker } from './MemberPicker';
-import { groupRoleLabel, isBoardGroup, positionCandidates } from './group-tree';
+import {
+  groupRoleLabel,
+  isBoardGroup,
+  positionCandidates,
+  positionNoun,
+} from './group-tree';
 
 /**
  * The Members holding a position in a Group above this one: theirs flows
@@ -80,6 +85,7 @@ function AppointDialog({
   description,
   groupRole,
   withTitle,
+  defaultTitle = '',
   members,
   busy,
   error,
@@ -90,6 +96,8 @@ function AppointDialog({
   description: string;
   groupRole: GroupRole;
   withTitle: boolean;
+  /** What "Numele funcției" opens with: the Group's name for the position (#962). */
+  defaultTitle?: string;
   members: AppointableMember[];
   busy: boolean;
   error: string | null;
@@ -111,7 +119,7 @@ function AppointDialog({
   const titleErrorId = useId();
   function reset() {
     setMember(null);
-    setPositionTitle('');
+    setPositionTitle(defaultTitle);
     setAttempted(false);
     setMissing({});
   }
@@ -246,6 +254,7 @@ function WithdrawDialog({
     entry.groupRole,
     group.manager_title,
     entry.positionTitle,
+    group.responsible_title,
   );
   return (
     <Dialog
@@ -352,6 +361,7 @@ function PositionList({
               entry.groupRole,
               group.manager_title,
               entry.positionTitle,
+              group.responsible_title,
             )}
           </p>
         </ListRow>
@@ -426,6 +436,11 @@ export function GroupRolesTab({
       groupRole: 'member',
       positionTitle: null,
     });
+  // Each position under the name the Group's settings give it (#962), so a
+  // Department's "Vicepreședinte" and its "Coordonator" responsibles never
+  // share one button label; without a setting, the words stay as they were.
+  const managerName = group.manager_title?.trim() || null;
+  const responsibleName = group.responsible_title?.trim() || null;
 
   // Two panels side by side from 768 px, each with its own appointment and
   // its rows flush in the box — no bordered row inside a bordered box
@@ -433,15 +448,19 @@ export function GroupRolesTab({
   return (
     <PageGrid columns={2} alignHeaders>
       <Panel
-        title={group.manager_title?.trim() || 'Coordonatori'}
+        title={managerName ?? 'Coordonatori'}
         description={authority.appointManager ? lookupFailed : undefined}
         flush={managers.length > 0}
         control={
           authority.appointManager && (
             <AppointDialog
-              trigger="Numește un coordonator"
-              title={`Coordonator pentru ${group.name}`}
-              description="Coordonatorul conduce grupul și toate subgrupurile lui."
+              trigger={`Numește un ${positionNoun(managerName ?? 'Coordonator')}`}
+              title={`${managerName ?? 'Coordonator'} pentru ${group.name}`}
+              description={
+                managerName
+                  ? `Un ${positionNoun(managerName)} conduce grupul și toate subgrupurile lui.`
+                  : 'Coordonatorul conduce grupul și toate subgrupurile lui.'
+              }
               groupRole="manager"
               withTitle={false}
               members={managerCandidates}
@@ -472,17 +491,22 @@ export function GroupRolesTab({
       </Panel>
 
       <Panel
-        title="Responsabili"
+        title={responsibleName ?? 'Responsabili'}
         description={authority.manageGroup ? lookupFailed : undefined}
         flush={responsibles.length > 0}
         control={
           authority.manageGroup && (
             <AppointDialog
-              trigger="Numește un responsabil"
-              title={`Responsabil în ${group.name}`}
-              description="Responsabilul se ocupă de o parte din munca grupului, sub numele funcției pe care i-l dai."
+              trigger={`Numește un ${positionNoun(responsibleName ?? 'Responsabil')}`}
+              title={`${responsibleName ?? 'Responsabil'} în ${group.name}`}
+              description={
+                responsibleName
+                  ? `Un ${positionNoun(responsibleName)} se ocupă de o parte din munca grupului, sub numele funcției pe care i-l dai.`
+                  : 'Responsabilul se ocupă de o parte din munca grupului, sub numele funcției pe care i-l dai.'
+              }
               groupRole="responsible"
               withTitle
+              defaultTitle={responsibleName ?? ''}
               members={responsibleCandidates}
               busy={appointBusy}
               error={error}
@@ -500,7 +524,7 @@ export function GroupRolesTab({
         }
       >
         <PositionList
-          label="Responsabilii grupului"
+          label={responsibleName ?? 'Responsabilii grupului'}
           entries={responsibles}
           group={group}
           canChange={authority.manageGroup}

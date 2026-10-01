@@ -199,6 +199,49 @@ describe('buildMemberGroups and resolveGroupRoleLabel', () => {
     );
   });
 
+  it("names a Responsible by their own title, then the Group's name for the position, then Responsabil (#962)", () => {
+    expect(
+      resolveGroupRoleLabel(
+        'responsible',
+        null,
+        'Coordonator IT',
+        'Coordonator',
+      ),
+    ).toBe('Coordonator IT');
+    expect(
+      resolveGroupRoleLabel('responsible', null, null, 'Coordonator'),
+    ).toBe('Coordonator');
+    expect(
+      resolveGroupRoleLabel('responsible', null, ' ', ' Coordonator '),
+    ).toBe('Coordonator');
+    expect(resolveGroupRoleLabel('responsible', 'Director', null, null)).toBe(
+      'Responsabil',
+    );
+    // The Manager keeps the Manager's name.
+    expect(resolveGroupRoleLabel('manager', null, null, 'Coordonator')).toBe(
+      'Manager',
+    );
+  });
+
+  it("labels an untitled Responsible row with the Group's name for the position (#962)", () => {
+    const dept: Group = {
+      ...eduDeptGroup,
+      manager_title: 'Vicepreședinte',
+      responsible_title: 'Coordonator',
+    };
+    const result = buildMemberGroups(
+      [
+        {
+          group_id: dept.id,
+          group_role: 'responsible' as const,
+          position_title: null,
+        },
+      ],
+      new Map([[dept.id, dept]]),
+    );
+    expect(result.map((g) => g.role_label)).toEqual(['Coordonator']);
+  });
+
   it('builds member groups from explicit group_members rows joined to groups', () => {
     const rows = [
       {

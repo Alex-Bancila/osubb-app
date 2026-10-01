@@ -37,6 +37,7 @@ export type AdminGroup = Pick<
   | 'is_organization'
   | 'is_private'
   | 'manager_title'
+  | 'responsible_title'
   | 'automatic_membership'
   | 'accepts_applications'
   | 'application_level'
@@ -54,7 +55,7 @@ export type AdminGroup = Pick<
 };
 
 const GROUP_FIELDS =
-  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, is_private, manager_title, automatic_membership, accepts_applications, application_level, competes_in_cup, counts_toward_parent_cup, shared_work_visibility, application_form_label, application_form_url';
+  'id, name, short, color, category, path, parent_id, min_level, status, is_organization, is_private, manager_title, responsible_title, automatic_membership, accepts_applications, application_level, competes_in_cup, counts_toward_parent_cup, shared_work_visibility, application_form_label, application_form_url';
 
 /* Supabase caps a response at 1,000 rows; rosters pass that before the Group
    tree does, so every projection here is read in stable pages. */
@@ -312,6 +313,8 @@ export type GroupCommand =
       groupId: number;
       name: string;
       managerTitle: string | null;
+      /** What the Group calls its Group Responsible position (#962). */
+      responsibleTitle: string | null;
       acceptsApplications: boolean;
       applicationLevel: number | null;
       sharedWorkVisibility: boolean;
@@ -377,7 +380,7 @@ export async function runGroupCommand(command: GroupCommand) {
  * `as never` on the argument objects, deliberately: the generated Args types
  * mark every parameter non-null, because Supabase's generator has no way to
  * say "this one accepts null". These commands do — a null `p_manager_title`
- * clears the display name, a null `p_application_level` is only valid while
+ * or `p_responsible_title` clears that display name, a null `p_application_level` is only valid while
  * Applications are off (#731: the "same as Minimum Level" option sends the
  * Minimum Level itself, never null), a null `p_parent_id` means a top-level
  * Group — and sending
@@ -403,6 +406,7 @@ function callCommand(command: GroupCommand) {
         p_group_id: command.groupId,
         p_name: command.name.trim(),
         p_manager_title: trimmed(command.managerTitle),
+        p_responsible_title: trimmed(command.responsibleTitle),
         p_accepts_applications: command.acceptsApplications,
         p_application_level: command.applicationLevel,
         p_shared_work_visibility: command.sharedWorkVisibility,

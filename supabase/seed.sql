@@ -478,7 +478,7 @@ select public.archive_group(pg_temp.seed_group_id('Gala Voluntarilor 2025'));
 -- takes them from level 1 with a form link; the Voluntar Activ persona has
 -- already applied (a pending row for its Responsibles), and the Voluntar
 -- persona can still apply from Grupuri.
-select public.update_group(grp.id, grp.name, grp.manager_title, true, 1,
+select public.update_group(grp.id, grp.name, grp.manager_title, grp.responsible_title, true, 1,
          grp.shared_work_visibility, grp.min_level,
          'Formular de înscriere', 'https://forms.gle/exemplu-logistica')
   from public.groups as grp

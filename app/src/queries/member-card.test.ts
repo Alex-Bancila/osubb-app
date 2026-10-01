@@ -193,3 +193,33 @@ it('names a BC or BCE member by their Board Title and keeps the rank beside it (
     }),
   ).toMatchObject({ roleLabel: 'Coordonator IT', rankLabel: 'bce' });
 });
+
+it("names an untitled Responsible by the Group's name for the position (#962)", () => {
+  const membership = (group_id: number) => ({
+    group_id,
+    name: `G${group_id}`,
+    parent_id: null,
+    color: null,
+    group_role: 'responsible',
+    position_title: null,
+    joined_at: '2024-06-01T10:00:00Z',
+  });
+  const data = toMemberCardData(
+    {
+      card: { ...row, memberships: [membership(1), membership(2)] },
+      contact: null,
+    },
+    undefined,
+    new Map([
+      [
+        1,
+        { name: 'G1', manager_title: null, responsible_title: 'Coordonator' },
+      ],
+      [2, { name: 'G2', manager_title: null, responsible_title: null }],
+    ]),
+  );
+  expect(data?.groups.map((group) => group.roleLabel)).toEqual([
+    'Coordonator',
+    'Responsabil',
+  ]);
+});
