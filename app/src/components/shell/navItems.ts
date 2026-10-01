@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   ListTodo,
   Megaphone,
+  Network,
   ShieldCheck,
   Tag,
   UserRound,
@@ -43,6 +44,16 @@ export const NOTIFICATIONS_PATH = '/notificari';
 /** The Anunțuri page, named once for the same reason: it carries the unread-announcements badge. */
 export const ANNOUNCEMENTS_PATH = '/anunturi';
 
+/** Taskuri, named once: on a phone its entry carries the Requests-to-decide badge (#972). */
+export const TRACKER_PATH = '/tracker';
+
+/**
+ * Profil, named once: on a phone it is reached only from the avatar in the
+ * top bar (#972), as Notificări only from the bell, so the shell leaves both
+ * out of the bar and the drawer.
+ */
+export const PROFILE_PATH = '/profil';
+
 /**
  * One list drives the sidebar, the mobile tab bar and the page title, so those
  * three can never disagree about what exists or what it is called.
@@ -75,7 +86,8 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Users,
     capability: 'seeDirectory',
   },
-  { path: '/grupuri', label: 'Grupuri', icon: Users },
+  // Its own icon, not Voluntari's: on the bar the two must read apart (#972).
+  { path: '/grupuri', label: 'Grupuri', icon: Network, onTabBar: true },
   {
     path: '/administrare/campanii',
     label: 'Campanii',
@@ -99,7 +111,7 @@ export const NAV_ITEMS: NavItem[] = [
     onTabBar: true,
   },
   { path: NOTIFICATIONS_PATH, label: 'Notificări', icon: Bell },
-  { path: '/profil', label: 'Profil', icon: UserRound, onTabBar: true },
+  { path: PROFILE_PATH, label: 'Profil', icon: UserRound },
   {
     path: '/administrare',
     label: 'Administrare',
@@ -137,12 +149,14 @@ export function isNavItemActive(item: NavItem, pathname: string): boolean {
   return pathname === item.path || pathname.startsWith(`${item.path}/`);
 }
 
-/* The mobile bar carries five, in a different order from the sidebar:
-   the two things people open the app for come first. */
+/* The phone bar carries five, in a different order from the sidebar (#972):
+   Acasă in the centre as the raised home, the two things a volunteer opens
+   the app for on its left, what they read on its right. Notificări and Profil
+   live in the top bar instead. */
 export const TAB_ORDER = [
-  '/',
+  TRACKER_PATH,
   '/calendar',
-  '/tracker',
+  '/',
   ANNOUNCEMENTS_PATH,
-  '/profil',
+  '/grupuri',
 ];
