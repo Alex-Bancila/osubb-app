@@ -514,8 +514,7 @@ test('a display name over 80 characters fails the dry run, as it would the real 
       `m@example.com,M,,bc,EDU,manager,${long},,`,
       `r@example.com,R,,bce,EDU,responsible,${long},,`,
       `n@example.com,N,,bc,EDU,manager,${exact},,`,
-    ].join('
-'),
+    ].join('\n'),
   );
   assert.equal(members[3].positionTitle, exact);
   assert.deepEqual(
@@ -524,7 +523,6 @@ test('a display name over 80 characters fails the dry run, as it would the real 
   );
   assert.match(errors[0].message, /at most 80 characters/);
 });
-
 test('CSV parsing follows RFC 4180 and keeps spreadsheet row numbers', () => {
   const records = parseCsv('﻿a,b\r\n"x, y","say ""hi"""\r\n\r\n"multi\nline",z\n');
   assert.deepEqual(records, [
