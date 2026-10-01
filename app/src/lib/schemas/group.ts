@@ -32,8 +32,9 @@ const optional = z
  * inputs' maxLength -- Prescurtare at most 16 characters (groups_short_length_ck),
  * a Manager title at most 80 (groups_manager_title_length_ck), and (#962) the
  * Group's name for its Responsible position at most 80
- * (groups_responsible_title_length_ck). A Responsible's own title input caps
- * itself at the same 80 (group_members_position_title_length_ck).
+ * (groups_responsible_title_length_ck). A Responsible's or (#967) a
+ * Manager's own title input caps itself at the same 80
+ * (group_members_position_title_length_ck).
  */
 const short = optionalText({ max: 16, tooLong: 'short_too_long' });
 const managerTitle = optionalText({
@@ -54,22 +55,34 @@ const level = (reason: string) =>
   z.number().refine((value) => LEVELS.includes(value), reason);
 
 /**
- * Appointing into a position (Audit D-16): a member is always chosen, and a
- * Group Responsible always carries a title of at most 80 characters.
+ * What a position asks of its holder's own title (#967), the rule
+ * set_group_role judges: a Group Responsible always carries one, a Group
+ * Manager may, and ordinary membership never does.
  */
-export function appointmentSchema(withTitle: boolean) {
+export type PositionTitleRule = 'required' | 'optional' | 'none';
+
+/**
+ * Appointing into a position (Audit D-16): a member is always chosen, and a
+ * title, where the position takes one, is trimmed and at most 80 characters
+ * (group_members_position_title_length_ck). An optional one left blank is no
+ * title, so the Group's name for the position labels the holder.
+ */
+export function appointmentSchema(rule: PositionTitleRule) {
   return z.object({
     memberId: z
       .string()
       .nullable()
       .refine((value) => value !== null, 'member_required'),
-    positionTitle: withTitle
-      ? requiredText({
-          required: 'position_title_required',
-          max: 80,
-          tooLong: 'position_title_too_long',
-        })
-      : z.string().transform(() => null),
+    positionTitle:
+      rule === 'required'
+        ? requiredText({
+            required: 'position_title_required',
+            max: 80,
+            tooLong: 'position_title_too_long',
+          })
+        : rule === 'optional'
+          ? optionalText({ max: 80, tooLong: 'position_title_too_long' })
+          : z.string().transform(() => null),
   });
 }
 

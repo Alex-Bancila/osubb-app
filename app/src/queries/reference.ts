@@ -97,7 +97,8 @@ export type MemberGroup = {
 
 /**
  * Resolves the Group Role label for display:
- * - Group Manager under the Group's `manager_title` (or fallback "Manager")
+ * - Group Manager under their own `position_title` (#967), then the Group's
+ *   `manager_title`, then "Manager"
  * - Group Responsible under their own `position_title`, then the Group's
  *   `responsible_title` (#962), then "Responsabil"
  * - Otherwise "Membru"
@@ -109,7 +110,7 @@ export function resolveGroupRoleLabel(
   responsibleTitle?: string | null,
 ): string {
   if (groupRole === 'manager') {
-    return managerTitle?.trim() || 'Manager';
+    return positionTitle?.trim() || managerTitle?.trim() || 'Manager';
   }
   if (groupRole === 'responsible') {
     return positionTitle?.trim() || responsibleTitle?.trim() || 'Responsabil';

@@ -137,7 +137,11 @@ export function applicationGroups({
     'id' | 'name' | 'path' | 'status' | 'group_role' | 'explicit' | 'automatic'
   > & { color: string | null })[];
   groups: readonly ApplicationGroupRow[];
-  rosterRows?: readonly { group_id: number; group_role: string }[];
+  rosterRows?: readonly {
+    group_id: number;
+    group_role: string;
+    position_title?: string | null;
+  }[];
 }): ApplicationGroup[] {
   const byId = new Map(groups.map((group) => [group.id, group]));
   const pending = new Map<number, number>();
@@ -174,15 +178,24 @@ export function applicationGroups({
     if (mine.group_role !== 'manager' && mine.group_role !== 'responsible')
       continue;
     if (mine.status !== 'active' && !pending.has(mine.id)) continue;
+    const inherited = inheritsGroupRole(mine, rosterRows);
+    // The viewer's own title for the position they hold here (#962, #967),
+    // as ledTree reads it; one held from above has none on this Group.
+    const own = inherited
+      ? undefined
+      : rosterRows?.find(
+          (row) =>
+            row.group_id === mine.id && row.group_role === mine.group_role,
+        );
     listed.set(mine.id, {
       ...entry(mine.id, mine.name, mine.color, mine.path),
       roleLabel: groupRoleLabel(
         mine.group_role,
         byId.get(mine.id)?.manager_title,
-        null,
+        own?.position_title,
         byId.get(mine.id)?.responsible_title,
       ),
-      inherited: inheritsGroupRole(mine, rosterRows),
+      inherited,
     });
   }
   for (const [id, name] of names) {

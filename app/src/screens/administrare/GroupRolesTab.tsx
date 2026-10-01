@@ -10,7 +10,10 @@ import {
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
 import { reasonCopy } from '../../lib/command-reasons';
-import { appointmentSchema } from '../../lib/schemas/group';
+import {
+  appointmentSchema,
+  type PositionTitleRule,
+} from '../../lib/schemas/group';
 import { MemberAvatar } from '../../components/ui/combobox';
 import {
   Dialog,
@@ -77,15 +80,17 @@ const control =
 /**
  * Appointing someone into a position, in a pop-up. A Group Responsible is
  * always shown under a display name of their own (ADR-0009 §Group Roles), so
- * the name is part of the appointment, not an afterthought.
+ * the name is part of the appointment, not an afterthought; a Group Manager
+ * may carry one under the Group's name for the position (#967).
  */
 function AppointDialog({
   trigger,
   title,
   description,
   groupRole,
-  withTitle,
+  titleRule,
   defaultTitle = '',
+  titlePlaceholder,
   members,
   busy,
   error,
@@ -95,9 +100,11 @@ function AppointDialog({
   title: string;
   description: string;
   groupRole: GroupRole;
-  withTitle: boolean;
+  /** Whether "Numele funcției" is asked for, offered, or absent (#967). */
+  titleRule: PositionTitleRule;
   /** What "Numele funcției" opens with: the Group's name for the position (#962). */
   defaultTitle?: string;
+  titlePlaceholder?: string;
   members: AppointableMember[];
   busy: boolean;
   error: string | null;
@@ -165,15 +172,19 @@ function AppointDialog({
           />
           <FieldError>{missing.member}</FieldError>
         </div>
-        {withTitle && (
+        {titleRule !== 'none' && (
           <div className="grid gap-1.5">
             <label className="grid gap-1.5">
-              <span className="text-sm font-medium">Numele funcției</span>
+              <span className="text-sm font-medium">
+                {titleRule === 'optional'
+                  ? 'Numele funcției (opțional)'
+                  : 'Numele funcției'}
+              </span>
               <input
                 className={control}
                 value={positionTitle}
                 maxLength={80}
-                placeholder="Responsabil Logistică"
+                placeholder={titlePlaceholder}
                 disabled={busy}
                 aria-invalid={missing.title ? true : undefined}
                 aria-describedby={missing.title ? titleErrorId : undefined}
@@ -204,7 +215,7 @@ function AppointDialog({
             type="button"
             disabled={busy}
             onClick={async () => {
-              const parsed = appointmentSchema(withTitle).safeParse({
+              const parsed = appointmentSchema(titleRule).safeParse({
                 memberId: member?.memberId ?? null,
                 positionTitle,
               });
@@ -462,17 +473,21 @@ export function GroupRolesTab({
                   : 'Coordonatorul conduce grupul și toate subgrupurile lui.'
               }
               groupRole="manager"
-              withTitle={false}
+              // #967: a name of their own under the Group's, which it opens
+              // with, as a Responsabil's does (#962); emptied, it is none.
+              titleRule="optional"
+              defaultTitle={managerName ?? ''}
+              titlePlaceholder="Coordonator Marketing"
               members={managerCandidates}
               busy={appointBusy}
               error={error}
-              onAppoint={(memberId) =>
+              onAppoint={(memberId, positionTitle) =>
                 onRun({
                   kind: 'setRole',
                   groupId: group.id,
                   memberId,
                   groupRole: 'manager',
-                  positionTitle: null,
+                  positionTitle,
                 })
               }
             />
@@ -505,8 +520,9 @@ export function GroupRolesTab({
                   : 'Responsabilul se ocupă de o parte din munca grupului, sub numele funcției pe care i-l dai.'
               }
               groupRole="responsible"
-              withTitle
+              titleRule="required"
               defaultTitle={responsibleName ?? ''}
+              titlePlaceholder="Responsabil Logistică"
               members={responsibleCandidates}
               busy={appointBusy}
               error={error}

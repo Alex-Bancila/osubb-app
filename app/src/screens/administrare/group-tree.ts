@@ -43,9 +43,9 @@ export function groupStatusLabel(status: string): string {
 }
 
 /**
- * A Group Role as this Group names it (ADR-0009 §Group Roles): a Manager by
- * the Group's Manager title, a Responsible by their own title, then by the
- * Group's name for the position (#962).
+ * A Group Role as this Group names it (ADR-0009 §Group Roles): a holder by
+ * their own title, then by the Group's name for the position — the Manager
+ * title (#967), or the Responsible one (#962).
  */
 export function groupRoleLabel(
   groupRole: string,
@@ -53,7 +53,8 @@ export function groupRoleLabel(
   positionTitle?: string | null,
   responsibleTitle?: string | null,
 ): string {
-  if (groupRole === 'manager') return managerTitle?.trim() || 'Coordonator';
+  if (groupRole === 'manager')
+    return positionTitle?.trim() || managerTitle?.trim() || 'Coordonator';
   if (groupRole === 'responsible')
     return positionTitle?.trim() || responsibleTitle?.trim() || 'Responsabil';
   return 'Membru';

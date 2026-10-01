@@ -30,7 +30,11 @@ import {
   useGroupCoordination,
   useGroupUpcomingEvents,
 } from '../../queries/group-applications';
-import { categoryLabel, groupStatusLabel } from '../administrare/group-tree';
+import {
+  categoryLabel,
+  groupRoleLabel,
+  groupStatusLabel,
+} from '../administrare/group-tree';
 import { ApplicationAction } from './ApplicationAction';
 import { ApplicationFormLink } from './ApplicationFormLink';
 import { acceptsApplication, applicationForm } from './application-eligibility';
@@ -85,15 +89,20 @@ export default function MemberGroupScreen() {
     mine.data,
     capabilities.data?.createTopLevelGroups === true,
   );
+  // The viewer's own title on their own row for that position (#962, #967);
+  // a position held from a Group above has no row here, so the Group's name
+  // for it applies.
   const roleTitle = role
-    ? role.group_role === 'manager'
-      ? (group.manager_title ?? 'Coordonator')
-      : role.group_role === 'responsible'
-        ? (roster.data?.find((row) => row.memberId === auth.session?.user.id)
-            ?.positionTitle ??
-          group.responsible_title ??
-          'Responsabil')
-        : 'Membru'
+    ? groupRoleLabel(
+        role.group_role,
+        group.manager_title,
+        roster.data?.find(
+          (row) =>
+            row.memberId === auth.session?.user.id &&
+            row.groupRole === role.group_role,
+        )?.positionTitle,
+        group.responsible_title,
+      )
     : null;
   // Coordonare only when someone holds a position (relevance B29); while it
   // loads or fails the panel keeps its place.
@@ -192,11 +201,12 @@ export default function MemberGroupScreen() {
                       // A long title wraps rather than cutting the name
                       // short, at every width the panel is narrow (F-4).
                       <span className="block max-w-28 text-sm whitespace-normal text-muted-foreground sm:max-w-40 xl:max-w-56">
-                        {row.groupRole === 'manager'
-                          ? (group.manager_title ?? 'Coordonator')
-                          : (row.positionTitle ??
-                            group.responsible_title ??
-                            'Responsabil')}
+                        {groupRoleLabel(
+                          row.groupRole,
+                          group.manager_title,
+                          row.positionTitle,
+                          group.responsible_title,
+                        )}
                       </span>
                     }
                   >
