@@ -404,8 +404,15 @@ export default function AppShell() {
         </>
       </main>
 
+      {/* The bar is drawn by its two pseudo-elements (#977): the surface
+          with its top border, masked by a round cut-out centred on the
+          raised Acasă (its centre sits 12 px below the bar's edge: lifted
+          20 px from a 6 px padding, radius 26), and a one-pixel arc that
+          carries the border around the cut. `relative z-10` keeps the bar
+          above the positioned content area, which otherwise painted over
+          the disc's upper half. */}
       <nav
-        className="flex justify-around border-t border-border bg-card px-1 pt-1.5 pb-[calc(.375rem+env(safe-area-inset-bottom))] [grid-area:tabbar] lg:hidden"
+        className="relative isolate z-10 flex justify-around px-1 pt-1.5 pb-[calc(.375rem+env(safe-area-inset-bottom))] [grid-area:tabbar] before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:border-t before:border-border before:bg-card before:[mask-image:radial-gradient(circle_at_50%_12px,transparent_32px,#000_33px)] after:pointer-events-none after:absolute after:inset-0 after:-z-10 after:bg-[radial-gradient(circle_at_50%_12px,transparent_32px,var(--border)_32.5px,var(--border)_33.5px,transparent_34px)] lg:hidden"
         aria-label="Navigare rapidă"
       >
         {tabs.map((item) => {
@@ -414,8 +421,9 @@ export default function AppShell() {
           const isActive = isNavItemActive(item, location.pathname);
           if (item.path === '/')
             // The raised home (#972): the one disc in brand red, lifted over
-            // the bar's edge in the centre, the four flat tabs around it. The
-            // disc keeps its colour; the caption and aria-current say active.
+            // the bar's edge in the centre, floating in the bar's cut-out
+            // (#977), the four flat tabs around it. The disc keeps its
+            // colour; the caption and aria-current say active.
             return (
               <Link
                 key={item.path}
@@ -428,7 +436,7 @@ export default function AppShell() {
                 )}
               >
                 <span
-                  className="grid size-[52px] place-items-center rounded-full bg-(--brand-red) text-white shadow-(--sh-red) ring-4 ring-card"
+                  className="grid size-[52px] place-items-center rounded-full bg-(--brand-red) text-white shadow-(--sh-red)"
                   aria-hidden="true"
                 >
                   <Icon className="size-6" />
