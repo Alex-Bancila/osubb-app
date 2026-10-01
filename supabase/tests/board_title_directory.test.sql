@@ -141,7 +141,7 @@ select is(private.board_title('96300000-0000-0000-0000-000000000001'), 'Președi
 select is(pg_temp.directory_title963(3), null,
   'a BCE who is a Responsible elsewhere carries no Board Title -- only the Group board_group_id names counts');
 select is(pg_temp.directory_title963(6), null,
-  'a Group Manager row on the board carries no Board Title -- only a Group Responsible has a display name');
+  'a Group Manager row on the board carries no Board Title, even under a title of its own (#967) -- the Board Title is a Group Responsible''s display name');
 select is(pg_temp.directory_title963(5), null,
   'the Moderator carries no Board Title even on the board (F-7, #893: the Moderator is not a board position)');
 select is(pg_temp.directory_title963(4), null,

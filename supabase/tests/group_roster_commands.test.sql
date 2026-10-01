@@ -114,10 +114,10 @@ select throws_ok(
   'PT400', 'position_title_required',
   'set_group_role: a Group Responsible is always shown under a custom display name');
 select throws_ok(
-  format($$select public.set_group_role(%s, %L, 'manager', 'Șef suprem')$$,
+  format($$select public.set_group_role(%s, %L, 'member', 'Șef suprem')$$,
          pg_temp.g583_group('Rădăcină #583'), pg_temp.g583_uid(8)),
   'PT400', 'invalid_position_title',
-  'set_group_role: a Group Manager''s display name is a Group setting, not a roster value');
+  'set_group_role: ordinary membership carries no display name (#967: a Group Manager''s own is optional, group_manager_title.test.sql)');
 select throws_ok(
   format($$select public.set_group_role(%s, %L, 'responsible', '   ')$$,
          pg_temp.g583_group('Rădăcină #583'), pg_temp.g583_uid(8)),
