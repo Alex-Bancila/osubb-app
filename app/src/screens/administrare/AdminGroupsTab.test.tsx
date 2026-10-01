@@ -917,6 +917,46 @@ it('names "Funcția ta" by the viewer’s own title when the position is theirs 
   expect(within(led).queryByText('Coordonator')).toBeNull();
 });
 
+it.each([
+  ['Vicepreședinte Logistică', 'Vicepreședinte Logistică'],
+  [null, 'Vicepreședinte'],
+])(
+  'names "Funcția ta" as a Coordonator by their own title (%s), else the Group\'s (#967)',
+  (own, shown) => {
+    api.groups.mockReturnValue({
+      data: tree.map((row) =>
+        row.id === 2
+          ? {
+              ...row,
+              manager_title: 'Vicepreședinte',
+              responsible_title: 'Coordonator',
+            }
+          : row,
+      ),
+      isPending: false,
+      isError: false,
+    });
+    api.myGroups.mockReturnValue({
+      data: [myGroup(2, 'Logistică', 'manager', { path: [1, 2] })],
+      isPending: false,
+      isError: false,
+    });
+    api.rosterRows.mockReturnValue({
+      membershipRows: [
+        { group_id: 2, group_role: 'manager', position_title: own },
+      ],
+      isPending: false,
+      isError: false,
+    });
+    show('/administrare/grupuri?vedere=conduse');
+    const led = screen
+      .getByRole('link', { name: 'Logistică, subgrup al Educațional' })
+      .closest('tr') as HTMLElement;
+    expect(within(led).getByText(shown)).toBeVisible();
+    expect(within(led).queryByText('Coordonator')).toBeNull();
+  },
+);
+
 it('hides the switch from BC who leads no Group, and ignores the key (#921)', () => {
   api.myGroups.mockReturnValue({
     data: [myGroup(9, 'OSUBB', 'member', { automatic: true })],

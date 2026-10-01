@@ -223,6 +223,49 @@ describe('buildMemberGroups and resolveGroupRoleLabel', () => {
     );
   });
 
+  it("names a Manager by their own title, then the Group's name for the position, then Manager (#967)", () => {
+    expect(
+      resolveGroupRoleLabel('manager', 'Vicepreședinte', 'Coordonator Marketing'),
+    ).toBe('Coordonator Marketing');
+    expect(
+      resolveGroupRoleLabel('manager', 'Vicepreședinte', ' Coordonator IT '),
+    ).toBe('Coordonator IT');
+    expect(resolveGroupRoleLabel('manager', 'Vicepreședinte', ' ')).toBe(
+      'Vicepreședinte',
+    );
+    expect(resolveGroupRoleLabel('manager', ' ', null)).toBe('Manager');
+    expect(
+      resolveGroupRoleLabel('member', 'Vicepreședinte', 'Coordonator Marketing'),
+    ).toBe('Membru');
+  });
+
+  it("labels a Manager's row by their own title, and an untitled one by the Group's (#967)", () => {
+    const dept: Group = { ...eduDeptGroup, manager_title: 'Vicepreședinte' };
+    const team: Group = { ...itTeamGroup, manager_title: null };
+    const rows = buildMemberGroups(
+      [
+        {
+          group_id: dept.id,
+          group_role: 'manager',
+          position_title: 'Vicepreședinte Educațional',
+        },
+        { group_id: team.id, group_role: 'manager', position_title: null },
+      ],
+      new Map<number, Group>([
+        [dept.id, dept],
+        [team.id, team],
+      ]),
+    );
+    expect(
+      new Map(rows.map((row) => [row.id, row.role_label])),
+    ).toStrictEqual(
+      new Map([
+        [dept.id, 'Vicepreședinte Educațional'],
+        [team.id, 'Manager'],
+      ]),
+    );
+  });
+
   it("labels an untitled Responsible row with the Group's name for the position (#962)", () => {
     const dept: Group = {
       ...eduDeptGroup,

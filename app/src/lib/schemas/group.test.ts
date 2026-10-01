@@ -7,6 +7,7 @@ import {
 import { CommandError } from '../command-reasons';
 import {
   applicationFormFailure,
+  appointmentSchema,
   fieldForReason,
   groupCreateSchema,
   groupSettingsSchema,
@@ -144,6 +145,65 @@ describe('Group settings', () => {
         applicationLevel: 3,
       }),
     ).toEqual([]);
+  });
+});
+
+describe('Appointment: the title rule per position (#967)', () => {
+  const appoint = (
+    rule: Parameters<typeof appointmentSchema>[0],
+    positionTitle: string,
+  ) => appointmentSchema(rule).safeParse({ memberId: 'm', positionTitle });
+
+  it('always asks for a member', () => {
+    for (const rule of ['required', 'optional', 'none'] as const)
+      expect(
+        issues(
+          appointmentSchema(rule).safeParse({
+            memberId: null,
+            positionTitle: 'Coordonator',
+          }),
+        ),
+      ).toEqual(['memberId: member_required']);
+  });
+
+  it("requires a Responsabil's title, trimmed, of at most 80 characters", () => {
+    expect(issues(appoint('required', '  '))).toEqual([
+      'positionTitle: position_title_required',
+    ]);
+    expect(issues(appoint('required', 'r'.repeat(81)))).toEqual([
+      'positionTitle: position_title_too_long',
+    ]);
+    expect(appoint('required', ` ${'ș'.repeat(80)} `)).toMatchObject({
+      success: true,
+      data: { positionTitle: 'ș'.repeat(80) },
+    });
+  });
+
+  it("takes a Coordonator's title as optional: blank is none, trimmed, at most 80", () => {
+    expect(appoint('optional', '   ')).toMatchObject({
+      success: true,
+      data: { positionTitle: null },
+    });
+    expect(appoint('optional', '')).toMatchObject({
+      success: true,
+      data: { positionTitle: null },
+    });
+    expect(appoint('optional', '  Coordonator Marketing ')).toMatchObject({
+      success: true,
+      data: { positionTitle: 'Coordonator Marketing' },
+    });
+    expect(appoint('optional', 'ș'.repeat(80)).success).toBe(true);
+    expect(issues(appoint('optional', 'm'.repeat(81)))).toEqual([
+      'positionTitle: position_title_too_long',
+    ]);
+  });
+
+  it('sends no title for any other position, whatever was typed', () => {
+    expect(appoint('none', 'Membru de onoare')).toMatchObject({
+      success: true,
+      data: { positionTitle: null },
+    });
+    expect(appoint('none', 'm'.repeat(81)).success).toBe(true);
   });
 });
 

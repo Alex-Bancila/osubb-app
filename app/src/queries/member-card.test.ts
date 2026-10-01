@@ -223,3 +223,39 @@ it("names an untitled Responsible by the Group's name for the position (#962)", 
     'Responsabil',
   ]);
 });
+
+it("names a Coordonator by their own function name, then the Group's, then Coordonator (#967)", () => {
+  const membership = (group_id: number, position_title: string | null) => ({
+    group_id,
+    name: `G${group_id}`,
+    parent_id: null,
+    color: null,
+    group_role: 'manager',
+    position_title,
+    joined_at: '2024-06-01T10:00:00Z',
+  });
+  const data = toMemberCardData(
+    {
+      card: {
+        ...row,
+        memberships: [
+          membership(1, 'Vicepreședinte Educațional'),
+          membership(2, null),
+          membership(3, null),
+        ],
+      },
+      contact: null,
+    },
+    undefined,
+    new Map([
+      [1, { name: 'G1', manager_title: 'Vicepreședinte' }],
+      [2, { name: 'G2', manager_title: 'Vicepreședinte' }],
+      [3, { name: 'G3', manager_title: null }],
+    ]),
+  );
+  expect(data?.groups.map((group) => group.roleLabel)).toEqual([
+    'Vicepreședinte Educațional',
+    'Vicepreședinte',
+    'Coordonator',
+  ]);
+});

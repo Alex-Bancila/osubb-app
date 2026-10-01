@@ -308,6 +308,30 @@ it("names a Responsible by their own title, then the Group's name for the positi
   expect(groupRoleLabel('member', null, null, 'Coordonator')).toBe('Membru');
 });
 
+it("names a Manager by their own title, then the Group's name for the position, then Coordonator (#967)", () => {
+  expect(
+    groupRoleLabel('manager', 'Vicepreședinte', 'Coordonator Marketing'),
+  ).toBe('Coordonator Marketing');
+  expect(
+    groupRoleLabel('manager', 'Vicepreședinte', '  Coordonator Marketing '),
+  ).toBe('Coordonator Marketing');
+  expect(groupRoleLabel('manager', 'Vicepreședinte', null)).toBe(
+    'Vicepreședinte',
+  );
+  expect(groupRoleLabel('manager', ' Vicepreședinte ', '   ')).toBe(
+    'Vicepreședinte',
+  );
+  expect(groupRoleLabel('manager', null, null)).toBe('Coordonator');
+  expect(groupRoleLabel('manager', '  ', undefined)).toBe('Coordonator');
+  // Never after the Responsible position, and a plain row names none.
+  expect(groupRoleLabel('manager', null, null, 'Responsabil IT')).toBe(
+    'Coordonator',
+  );
+  expect(
+    groupRoleLabel('member', 'Vicepreședinte', 'Coordonator Marketing'),
+  ).toBe('Membru');
+});
+
 it('writes a position name inside a sentence, keeping acronyms (#962)', () => {
   expect(positionNoun('Coordonator')).toBe('coordonator');
   expect(positionNoun('Responsabil de Proiect')).toBe('responsabil de proiect');
