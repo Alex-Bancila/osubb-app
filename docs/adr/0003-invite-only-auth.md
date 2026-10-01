@@ -6,6 +6,7 @@
 - **Amended:** 2026-09-19 — magic links are the only member sign-in method in v1 (#204)
 - **Amended:** 2026-09-20 — the emailed six-digit code beside the link; sessions refresh on focus; the demotion window; the revoke function; the Moderator seat and the first accounts
 - **Amended:** 2026-09-29 — ruling R31 (ADR-0004): every BC member, like the Moderator, changes the Role of a Member holding BC or Moderator; the last holder is replaced in the same change. Extended the same day (#917): BC also changes their Status and invites or re-invites at either rank
+- **Amended:** 2026-10-01 — an invited Member re-sends their own invitation from the login page (#968); invite-only is unchanged: nothing is created, only an existing, never-used invitation is re-sent, under a per-address cooldown, a daily cap and a per-IP cap
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -59,3 +60,9 @@ Retention is unaffected: ADR-0006 keeps an alumnus's history in the database. Wh
 ## Amendment (2026-09-29) — BC shares the leadership seats (ruling R31)
 
 Supersedes the 2026-09-20 amendment's "only a Moderator may change a Member holding BC or Moderator". Every active BC member, like the Moderator, changes the Role of a BC member or Moderator (#905) and, extended the same day (#917), their Membership Status. BC members also create or re-invite an account at either rank. Nobody changes their own Role or Status. The seats still cannot be emptied: a change that takes the last active Moderator or BC member out of the rank, or out of Activ, names the replacement in the same change. The replacement may be the person making it. The rest of the 2026-09-20 amendment stands: the seat is transferred by granting it to the successor, and the first accounts are bootstrapped once. The rule and its safeguards are ADR-0004's 2026-09-29 amendment.
+
+## Amendment (2026-10-01) — the invitee re-sends their own invitation (#968)
+
+An invitation's link and code live about an hour, as every one-time password does. Before this amendment an invitee who missed that hour was stuck until BC re-sent it from Administrare (#773): with sign-up disabled, Auth answers a magic-link request for an account that exists but was never confirmed with `signup_disabled` and sends nothing. Decision (Alex, 2026-10-01): every invited Member can get in by themselves, whenever they get to it. On that answer the login page asks the `request-invitation` Edge Function to re-send the invitation, and the Member gets a new "Ai fost invitat" email whose link and six-digit code sign them in.
+
+Invite-only is preserved, and both gates stand. The function creates nothing: it re-sends an invitation BC already made, and only to an account that was invited, never confirmed, never signed in, and whose profile is `activ` — an unknown address, a confirmed Member, or a deactivated one gets nothing, and the answer is the same for every address, so the page reveals no account. One request per address per minute, five per address per day and twenty per IP per hour are counted in the database, from a log that holds hashes only and forgets them after a day; the project-wide email cap still applies. A confirmed Member's sign-in is unchanged. BC's re-send from Administrare stays the path for a wrong address.
