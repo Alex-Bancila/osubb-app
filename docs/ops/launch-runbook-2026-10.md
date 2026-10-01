@@ -327,3 +327,63 @@ anything on Thursday except fixes found by the acceptance run.
 Resend free = 100 emails a day; each import file ≤ 100 rows; each invitation is one email and each
 later sign-in another. Either three days of ≤ 80 invitations, or **Resend → Billing → Pro** for one
 month ($20). Raise **Rate Limits → Emails sent per hour** to `250` on import days and put it back after.
+
+## §15 Traps met on the first run (30 Sep 2026) — read before repeating any step
+
+- **Staging had no claims for a month.** The JWT claims hook (§5.2) was never enabled on staging, so every
+  member session was claimless and every policy denied it, while `db push` and the seed (database
+  password, not a session) kept working. Symptom: a token whose `app_metadata` has only `provider`, and
+  reads that come back empty. Decode a token before trusting a hosted project; the one-liner is in the
+  session notes of 2026-09-30 and below.
+- **A migration guard can block staging for days.** The level-4 retirement refuses to apply while a
+  `responsabil` holder exists (#592). Every merge after it failed at "Push migrations to staging" and the
+  function and web deploys skipped, silently, for three days. When a `main` run is red, read the
+  `push-staging` log first. The re-rank is a command call with a BC session, never a Studio edit.
+- **PowerShell traps.** Variable names are case-insensitive: a loop variable `$h` overwrites a
+  headers hashtable `$H`. `curl` is an alias for `Invoke-WebRequest`, and bash line continuations (`\`)
+  do not exist; use `Invoke-RestMethod`. If `npx` fails with "running scripts is disabled", call
+  `npx.cmd`, or once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`. An empty JSON array from
+  `Invoke-RestMethod` wrapped in `@()` counts as one item on Windows PowerShell 5.1.
+- **Secrets versus variables.** A GitHub Environment page has two boxes. A token pasted into
+  **Environment variables** is plain text and the workflows never read it (they read `secrets.*`). It
+  belongs in **Environment secrets**, the upper box. If a token ever lands in a variable, in a chat, or
+  in a pasted error message, roll it in Cloudflare and re-add it; rolling is one click.
+- **Prefer an Account API Token** (Manage Account → Account API Tokens) over a User token: a user token
+  dies when that user leaves the account. The first staging token was created as a user token; replace
+  it with an account-owned one when the production token is created (§11.2).
+- **Decode a Supabase token** (PowerShell):
+
+  ```powershell
+  $p = $TOKEN.Split('.')[1]; $p = $p.PadRight($p.Length + (4 - $p.Length % 4) % 4, '='); [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($p.Replace('-','+').Replace('_','/')))
+  ```
+
+- **Email OTP Length is 8 on a fresh hosted project.** The app, the templates and every line of copy
+  say six digits, and the login screen refuses anything else. On **every** hosted project set
+  **Authentication → Sign In / Providers → Email → Email OTP Length** to `6` (§5 and §7), then request a
+  link and count the digits in the email. Found on staging on 2026-09-30, on the first real sign-in.
+- **An expired or lost invitation is the Member's own to fix (#968).** The auth server treats an
+  unconfirmed account as a new sign-up, and with sign-ups disabled it answers `signup_disabled` to
+  a plain magic-link request. Since #968 the login screen turns that answer into a re-send of the
+  invitation itself (Edge Function `request-invitation`: at most once a minute and five times a
+  day per address, twenty an hour per IP, nothing for an unknown, confirmed or inactive address).
+  BC's re-send from Administrare (#773) stays as the fallback. Every board member is in this state
+  on launch day: "Trimite linkul" with their address is all they need. Keep **Authentication → Sign
+  In / Providers → Email → Email OTP Expiration** at 3600 s or less, the bound of Supabase's production
+  checklist: a longer-lived link is a longer-lived token for anyone who gets hold of it, and the
+  re-send makes a longer life unnecessary.
+- **Brave blocks push until told otherwise.** On a laptop running Brave the switch turns on, the site
+  permission is granted, and the subscription still fails with the app's generic "Nu am putut schimba
+  notificările…" message: Brave ships with **Use Google services for push messaging** off
+  (`brave://settings/privacy`). Turn it on and relaunch. Chrome and Edge need nothing. One line for the
+  quickstart.
+- **The seed refuses a staging Group it does not own.** Two Teams mirrored from the legacy `teams` table
+  on 2026-09-18 had no creator, so the seed's cleanup skipped them and `create_group` answered
+  `group_name_taken`; the whole run rolled back (it is one transaction), so nothing was half-applied.
+  One-time fix, done 2026-09-30: `update public.groups set created_by = '<demo BC id>' where id in
+(…) and created_by is null;`, then run the seed again. After the seed the demo password is the
+  `SEED_PASSWORD` secret, and `parola123` stops working on staging.
+- **Departments are run by their Vicepreședinte (#957, 2026-09-30).** After PR #958 merges, BC opens
+  each of the seven Departments in Administrare → Setări and sets the Manager title to
+  `Vicepreședinte` (it was `BCE`); then appoints the Vicepreședinte as Coordonator from Roluri, where
+  BC members are now offered, and the BCE members as Responsabili under their own titles. Staging this
+  week, production on launch day after the bootstrap.
