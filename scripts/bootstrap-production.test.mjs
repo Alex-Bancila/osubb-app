@@ -504,6 +504,27 @@ test('the Group matching copy is the csv-import rule', () => {
   }
 });
 
+test('a display name over 80 characters fails the dry run, as it would the real run (#967)', () => {
+  const long = 'C'.repeat(81);
+  const exact = 'C'.repeat(80);
+  const { members, errors } = validate(
+    [
+      HEADER,
+      MODERATOR,
+      `m@example.com,M,,bc,EDU,manager,${long},,`,
+      `r@example.com,R,,bce,EDU,responsible,${long},,`,
+      `n@example.com,N,,bc,EDU,manager,${exact},,`,
+    ].join('
+'),
+  );
+  assert.equal(members[3].positionTitle, exact);
+  assert.deepEqual(
+    errors.map((e) => `${e.row}:${e.column}`),
+    ['3:position_title', '4:position_title'],
+  );
+  assert.match(errors[0].message, /at most 80 characters/);
+});
+
 test('CSV parsing follows RFC 4180 and keeps spreadsheet row numbers', () => {
   const records = parseCsv('﻿a,b\r\n"x, y","say ""hi"""\r\n\r\n"multi\nline",z\n');
   assert.deepEqual(records, [
