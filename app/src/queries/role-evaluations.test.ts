@@ -144,7 +144,7 @@ describe('the Role Evaluation reads (#827 over #826)', () => {
     ]);
   });
 
-  it('reads only undecided candidates, joined to the run that listed them', async () => {
+  it('reads only undecided candidates: a run row named after its run, a live row (#983) after the day it was listed', async () => {
     db.results.set('promotion_candidates', {
       data: [
         {
@@ -152,8 +152,20 @@ describe('the Role Evaluation reads (#827 over #826)', () => {
           member_id: 'ana',
           task_points: 48,
           tenure_since: '2026-03-15',
+          threshold_used: 30,
+          created_at: '2026-07-01T09:00:00Z',
           role_evaluation_id: 1,
-          role_evaluation: { name: 'Semestrul I', threshold_used: 30 },
+          role_evaluation: { name: 'Semestrul I' },
+        },
+        {
+          id: 9,
+          member_id: 'dan',
+          task_points: 31,
+          tenure_since: '2026-01-10',
+          threshold_used: 30,
+          created_at: '2026-10-02T08:30:00Z',
+          role_evaluation_id: null,
+          role_evaluation: null,
         },
       ],
       error: null,
@@ -167,6 +179,17 @@ describe('the Role Evaluation reads (#827 over #826)', () => {
         roleEvaluationId: 1,
         evaluationName: 'Semestrul I',
         thresholdUsed: 30,
+        listedAt: '2026-07-01T09:00:00Z',
+      },
+      {
+        id: 9,
+        memberId: 'dan',
+        taskPoints: 31,
+        tenureSince: '2026-01-10',
+        roleEvaluationId: null,
+        evaluationName: null,
+        thresholdUsed: 30,
+        listedAt: '2026-10-02T08:30:00Z',
       },
     ]);
     expect(db.calls).toContainEqual([
@@ -178,8 +201,9 @@ describe('the Role Evaluation reads (#827 over #826)', () => {
     const select = db.calls.find(
       (call) => call[0] === 'promotion_candidates' && call[1] === 'select',
     );
+    expect(String(select?.[2])).toContain('threshold_used, created_at');
     expect(String(select?.[2])).toContain(
-      'role_evaluations!promotion_candidates_role_evaluation_id_fkey(name, threshold_used)',
+      'role_evaluations!promotion_candidates_role_evaluation_id_fkey(name)',
     );
   });
 

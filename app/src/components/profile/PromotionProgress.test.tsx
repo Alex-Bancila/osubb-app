@@ -238,7 +238,7 @@ describe('PromotionProgress (#634)', () => {
       ).toBeInTheDocument();
     });
 
-    it('exactly at the threshold: past it, BC decides at the next evaluation', () => {
+    it('exactly at the threshold: past it, a Promotion Candidate at once; BC decides', () => {
       setup('voluntar', progress({ points: 30 }));
 
       expect(screen.getByRole('progressbar')).toHaveAttribute(
@@ -247,7 +247,7 @@ describe('PromotionProgress (#634)', () => {
       );
       expect(
         screen.getByText(
-          'Ai depășit pragul — BC va fi anunțat la următoarea evaluare',
+          'Ai depășit pragul — ești candidat la promovare; BC decide',
         ),
       ).toBeInTheDocument();
       expect(screen.queryByText(/mai ai/i)).not.toBeInTheDocument();
@@ -262,7 +262,7 @@ describe('PromotionProgress (#634)', () => {
       );
       expect(
         screen.getByText(
-          'Ai depășit pragul — BC va fi anunțat la următoarea evaluare',
+          'Ai depășit pragul — ești candidat la promovare; BC decide',
         ),
       ).toBeInTheDocument();
     });
@@ -275,7 +275,7 @@ describe('PromotionProgress (#634)', () => {
       expect(full).toHaveAttribute('aria-valuenow', '1');
       expect(
         screen.getByText(
-          'Ai depășit pragul — BC va fi anunțat la următoarea evaluare',
+          'Ai depășit pragul — ești candidat la promovare; BC decide',
         ),
       ).toBeInTheDocument();
       cleanup();

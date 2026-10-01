@@ -132,9 +132,10 @@ $$;
 -- their values and only forget the demo author.
 --
 -- The Candidate and Retention Signal Notifications carry no foreign key:
--- their dedupe key `<kind>:<run>:<member>` names the run and the Member.
+-- their dedupe key `<kind>:<run>:<member>` names the run and the Member; a
+-- Candidate listed between runs (#983) carries `live` in place of the run.
 delete from notifications notification
- where notification.dedupe_key ~ '^(promotion_candidate|retention_signal):[0-9]+:[0-9a-f-]{36}$'
+ where notification.dedupe_key ~ '^(promotion_candidate|retention_signal):([0-9]+|live):[0-9a-f-]{36}$'
    and (split_part(notification.dedupe_key, ':', 2) in (
           select evaluation.id::text
             from role_evaluations evaluation
@@ -150,7 +151,7 @@ delete from notifications notification
                 from promotion_candidates candidate
                 join profiles decider on decider.id = candidate.decided_by
                where decider.email like '%@demo.osubb'
-                 and candidate.role_evaluation_id::text = split_part(notification.dedupe_key, ':', 2)
+                 and coalesce(candidate.role_evaluation_id::text, 'live') = split_part(notification.dedupe_key, ':', 2)
                  and candidate.member_id::text = split_part(notification.dedupe_key, ':', 3))));
 
 delete from promotion_candidates candidate

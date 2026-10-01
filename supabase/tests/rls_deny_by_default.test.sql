@@ -176,8 +176,8 @@ insert into role_evaluations (name, kind, period_from, period_to, run_by, thresh
           'ffffffff-0000-0000-0000-000000000006', 30, 0);
 insert into promotion_threshold_changes (kind, from_value, to_value, source, changed_by)
   values ('voluntar_activ', 30, 31, 'manual', 'ffffffff-0000-0000-0000-000000000006');
-insert into promotion_candidates (role_evaluation_id, member_id, task_points, tenure_since)
-  select run.id, member.id, 40, '2026-01-01'
+insert into promotion_candidates (role_evaluation_id, member_id, task_points, tenure_since, threshold_used)
+  select run.id, member.id, 40, '2026-01-01', 30
     from role_evaluations as run,
          (values ('ffffffff-0000-0000-0000-000000000006'::uuid),
                  ('eeeeeeee-0000-0000-0000-000000000156'::uuid)) as member (id)

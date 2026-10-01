@@ -3,6 +3,7 @@ vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 import {
   computedThresholdText,
   defaultRangeStart,
+  promoteHref,
   runConsequences,
   runResultText,
 } from './role-evaluation-text';
@@ -84,5 +85,43 @@ describe('Role Evaluation words', () => {
     });
     expect(text).toContain('cel puțin 1 punct devin');
     expect(text).not.toContain('1 puncte');
+  });
+});
+
+describe('where Promovează leads (#827, #983)', () => {
+  const candidate = {
+    id: 7,
+    memberId: 'ana',
+    taskPoints: 48,
+    tenureSince: '2026-03-15',
+    roleEvaluationId: 1,
+    evaluationName: 'Semestrul I',
+    thresholdUsed: 30,
+    listedAt: '2026-07-01T09:00:00Z',
+  };
+
+  it('prefills the Role panel with the run that listed a run candidate', () => {
+    const url = new URL(promoteHref(candidate), 'https://app.osubb.ro');
+    expect(url.pathname).toBe('/administrare/roluri');
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      membru: 'ana',
+      rol: 'activ',
+      motiv: 'Evaluarea de rol „Semestrul I”',
+    });
+  });
+
+  it('names the day a live candidate qualified instead', () => {
+    const url = new URL(
+      promoteHref({
+        ...candidate,
+        roleEvaluationId: null,
+        evaluationName: null,
+        listedAt: '2026-10-02T08:30:00Z',
+      }),
+      'https://app.osubb.ro',
+    );
+    expect(url.searchParams.get('motiv')).toBe(
+      'Candidat la promovare din 02.10.2026',
+    );
   });
 });

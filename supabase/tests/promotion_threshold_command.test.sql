@@ -84,16 +84,6 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('82600000-0000-0000-0000-000000000004', 'Voluntar 826',   'm04-826@test.local', 'voluntar',  'activ'),
   ('82600000-0000-0000-0000-000000000005', 'BC inactiv 826', 'm05-826@test.local', 'bc',        'inactiv');
 
--- The suite owns both kinds' rows for its own duration: pinned to a known
--- starting value so every later assertion is exact regardless of what a
--- concurrent suite or a previous run left behind.
-update public.promotion_thresholds set threshold = 30, updated_by = null where kind = 'voluntar_activ';
-update public.promotion_thresholds set threshold = null, updated_by = null where kind = 'adunarea_generala';
-delete from public.promotion_threshold_changes where kind in ('voluntar_activ', 'adunarea_generala');
-
-create temp table thresholds_before826 as
-  select kind, threshold, updated_by from public.promotion_thresholds where kind in ('voluntar_activ', 'adunarea_generala');
-
 -- ==================== 2. The advisory lock, held against a retry ====================
 -- Run before this transaction ever takes (47, 1) itself: every
 -- set_promotion_threshold call below would hold that lock for the rest of
@@ -156,6 +146,20 @@ select extensions.dblink_disconnect('pt_setup');
 
 reset role;
 select pg_temp.test_clear_jwt();
+
+-- The suite owns both kinds' rows for its own duration: pinned to a known
+-- starting value so every later assertion is exact regardless of what a
+-- concurrent suite or a previous run left behind. Pinned only now: a write
+-- to promotion_thresholds fires #983's refresh, whose try-lock on (47, 1)
+-- would have held the lock for this transaction and starved the probe above;
+-- and as the owner again, after the probe's session.
+update public.promotion_thresholds set threshold = 30, updated_by = null where kind = 'voluntar_activ';
+update public.promotion_thresholds set threshold = null, updated_by = null where kind = 'adunarea_generala';
+delete from public.promotion_threshold_changes where kind in ('voluntar_activ', 'adunarea_generala');
+
+create temp table thresholds_before826 as
+  select kind, threshold, updated_by from public.promotion_thresholds where kind in ('voluntar_activ', 'adunarea_generala');
+
 
 select is(
   (select row(threshold, updated_by)::text from public.promotion_thresholds where kind = 'voluntar_activ'),

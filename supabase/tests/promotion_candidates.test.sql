@@ -50,8 +50,8 @@ insert into public.profiles (id, full_name, email, role, status, joined_at) valu
 insert into public.role_evaluations (kind, name, period_from, period_to, run_by, threshold_used, ranked_count)
 values ('voluntar_activ', 'Evaluare 8261', '2026-01-01', '2026-06-30', '82610000-0000-0000-0000-000000000001', 20, 5);
 
-insert into public.promotion_candidates (role_evaluation_id, member_id, task_points, tenure_since)
-select run.id, member.id, 30, '2000-07-01'
+insert into public.promotion_candidates (role_evaluation_id, member_id, task_points, tenure_since, threshold_used)
+select run.id, member.id, 30, '2000-07-01', 20
   from public.role_evaluations as run,
        unnest(array['82610000-0000-0000-0000-000000000011', '82610000-0000-0000-0000-000000000012',
                     '82610000-0000-0000-0000-000000000013', '82610000-0000-0000-0000-000000000014',
@@ -74,15 +74,15 @@ select is(
   (select relrowsecurity from pg_class where oid = 'public.promotion_candidates'::regclass),
   true, 'RLS is enabled on promotion_candidates');
 select throws_ok(
-  $$ insert into public.promotion_candidates (role_evaluation_id, member_id, task_points, tenure_since)
-     select run, '82610000-0000-0000-0000-000000000011', 1, '2000-07-01' from fx8261 $$,
+  $$ insert into public.promotion_candidates (role_evaluation_id, member_id, task_points, tenure_since, threshold_used)
+     select run, '82610000-0000-0000-0000-000000000011', 1, '2000-07-01', 20 from fx8261 $$,
   '23505', 'duplicate key value violates unique constraint "promotion_candidates_role_evaluation_id_member_id_key"',
   'a Member is listed once per Role Evaluation');
 insert into public.role_evaluations (kind, name, period_from, period_to, run_by, threshold_used, ranked_count)
 values ('voluntar_activ', 'Evaluare 8261 bis', '2026-01-01', '2026-06-30', '82610000-0000-0000-0000-000000000001', 20, 5);
 select throws_ok(
-  $$ insert into public.promotion_candidates (role_evaluation_id, member_id, task_points, tenure_since)
-     select id, '82610000-0000-0000-0000-000000000011', 1, '2000-07-01'
+  $$ insert into public.promotion_candidates (role_evaluation_id, member_id, task_points, tenure_since, threshold_used)
+     select id, '82610000-0000-0000-0000-000000000011', 1, '2000-07-01', 20
        from public.role_evaluations where name = 'Evaluare 8261 bis' $$,
   '23505', 'duplicate key value violates unique constraint "promotion_candidates_open_member_uidx"',
   'a Member has at most one undecided candidate row across runs');

@@ -1261,9 +1261,10 @@ export type Database = {
           id: number
           member_id: string
           reason: string | null
-          role_evaluation_id: number
+          role_evaluation_id: number | null
           task_points: number
           tenure_since: string
+          threshold_used: number
         }
         Insert: {
           created_at?: string
@@ -1273,9 +1274,10 @@ export type Database = {
           id?: never
           member_id: string
           reason?: string | null
-          role_evaluation_id: number
+          role_evaluation_id?: number | null
           task_points: number
           tenure_since: string
+          threshold_used: number
         }
         Update: {
           created_at?: string
@@ -1285,9 +1287,10 @@ export type Database = {
           id?: never
           member_id?: string
           reason?: string | null
-          role_evaluation_id?: number
+          role_evaluation_id?: number | null
           task_points?: number
           tenure_since?: string
+          threshold_used?: number
         }
         Relationships: [
           {
@@ -3625,9 +3628,10 @@ export type Database = {
           id: number
           member_id: string
           reason: string | null
-          role_evaluation_id: number
+          role_evaluation_id: number | null
           task_points: number
           tenure_since: string
+          threshold_used: number
         }
         SetofOptions: {
           from: "*"
