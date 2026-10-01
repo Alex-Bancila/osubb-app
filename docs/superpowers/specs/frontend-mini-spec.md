@@ -79,7 +79,7 @@ Rules: a component used by one screen lives in that screen's folder. It moves to
 | `/bc`            | BC Panel                                    | level ≥ 6            | #104–#107 |
 | `/profil`        | Profile                                     | everyone             | #108      |
 
-> **Amended 2026-10-01 (#973):** Cereri (Completed-work Requests) is not a page of its own any more. #855 gave it a route, `/cereri`, and a sidebar item shown to whoever files a Request or has one to decide (audit rule B30); it is now a view of `/tracker`, `?vedere=cereri`, reached with the Taskuri · Cereri toggle at the top of Taskuri, which the same people see. The sidebar item is gone, and `/cereri` forwards to `/tracker?vedere=cereri` so Notification links and saved sign-in destinations still land there.
+> **Amended 2026-10-01 (#973):** Cereri (Completed-work Requests) is not a page of its own any more. #855 gave it a route, `/cereri`, and a sidebar item shown to whoever files a Request or has one to decide (audit rule B30); it is now a view of `/tracker`, `?vedere=cereri`, reached with the Taskuri · Cereri toggle at the top of Taskuri, which every Member sees (amended 2026-10-02, #979: an empty queue is a state of the view, not an empty page). The sidebar item is gone, and `/cereri` forwards to `/tracker?vedere=cereri` so Notification links and saved sign-in destinations still land there.
 
 Paths are Romanian because members read them; code identifiers stay English (`CONTEXT.md` rule).
 

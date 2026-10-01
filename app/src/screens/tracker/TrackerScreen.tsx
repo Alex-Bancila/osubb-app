@@ -185,17 +185,12 @@ export default function TrackerScreen() {
   // Leadership does not work by points (R27): no Personal Score above
   // Taskurile mele, the same test as Acasă (B15).
   const leader = useCapability('seeLeadership').data === true;
-  // Cereri is for whoever files a Request or has one to decide (#855, B30);
-  // a failed read counts as one, so the view's retry stays reachable.
+  // Cereri is every Member's (#979): a volunteer files there, leadership
+  // and the Group Managers decide there, and an empty queue is shown as
+  // such. The read stays for the count on the segment.
   const filesRequests = submitsWorkRequests(claims);
   const decisions = usePendingDecisions();
   const toDecide = decisions.data?.length ?? 0;
-  const offersRequests = filesRequests || decisions.isError || toDecide > 0;
-  // Once offered, Cereri stays for the visit: the decision that empties the
-  // queue must not pull the view, and its receipt, away mid-visit.
-  const [requestsOffered, setRequestsOffered] = useState(false);
-  if (offersRequests && !requestsOffered) setRequestsOffered(true);
-  const hasRequests = offersRequests || requestsOffered;
   const [detailId, setDetailId] = useState<number | null>(null);
   // The Task this page just created or added, and what its details say (#915).
   const [created, setCreated] = useState<{
@@ -213,14 +208,9 @@ export default function TrackerScreen() {
   // The deep links (#685, #822, #846): `/tracker?task=<id>` lands on the
   // Task, `/tracker?lista=<tab>` opens that tab. `task` wins over `lista`.
   const [params, setParams] = useSearchParams();
-  // `?vedere=cereri` (#973) shows Cereri to a viewer it is for; anyone else
-  // gets the Tracker. A link waits for the queue before it is ignored, so a
-  // Member who only decides does not see the Tracker flash first.
+  // `?vedere=cereri` (#973) shows Cereri; anything else the Tracker.
   const view: TrackerView =
-    params.get(VIEW_KEY) === REQUESTS_VIEW &&
-    (hasRequests || decisions.isPending)
-      ? 'cereri'
-      : 'taskuri';
+    params.get(VIEW_KEY) === REQUESTS_VIEW ? 'cereri' : 'taskuri';
   // A history entry per choice, so Back returns to the Tracker; every other
   // parameter is kept.
   function chooseView(next: TrackerView) {
@@ -383,38 +373,36 @@ export default function TrackerScreen() {
         }
         actions={
           <>
-            {hasRequests && (
-              <SegmentedToggle
-                label="Secțiune"
-                options={[
-                  { value: 'taskuri', label: 'Taskuri', icon: ListTodo },
-                  {
-                    value: 'cereri',
-                    label: (
-                      <>
-                        Cereri
-                        {toDecide > 0 && (
-                          // Solid, so the count stays legible on the inked
-                          // segment as well as on the track.
-                          <Badge
-                            variant="destructive"
-                            className="min-w-5 bg-destructive text-(--surface) dark:bg-destructive"
-                          >
-                            <span aria-hidden="true">{toDecide}</span>
-                            <span className="sr-only">
-                              , {decisionsLabel(toDecide)}
-                            </span>
-                          </Badge>
-                        )}
-                      </>
-                    ),
-                    icon: ClipboardPlus,
-                  },
-                ]}
-                value={view}
-                onChange={chooseView}
-              />
-            )}
+            <SegmentedToggle
+              label="Secțiune"
+              options={[
+                { value: 'taskuri', label: 'Taskuri', icon: ListTodo },
+                {
+                  value: 'cereri',
+                  label: (
+                    <>
+                      Cereri
+                      {toDecide > 0 && (
+                        // Solid, so the count stays legible on the inked
+                        // segment as well as on the track.
+                        <Badge
+                          variant="destructive"
+                          className="min-w-5 bg-destructive text-(--surface) dark:bg-destructive"
+                        >
+                          <span aria-hidden="true">{toDecide}</span>
+                          <span className="sr-only">
+                            , {decisionsLabel(toDecide)}
+                          </span>
+                        </Badge>
+                      )}
+                    </>
+                  ),
+                  icon: ClipboardPlus,
+                },
+              ]}
+              value={view}
+              onChange={chooseView}
+            />
             {view === 'taskuri' && (
               <>
                 <NewTaskControl
