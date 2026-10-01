@@ -255,8 +255,9 @@ export function validateInput({ memberRows, taskRows, groups, today }) {
     if (groupRole === 'responsible' && raw.position_title === '') {
       at('position_title', 'a Group Responsible needs a display name');
     }
-    if (groupRole !== 'responsible' && raw.position_title !== '') {
-      at('position_title', 'only a Group Responsible carries a display name');
+    // #967: a Group Manager may carry one of their own; a plain member never.
+    if (groupRole === 'member' && raw.position_title !== '') {
+      at('position_title', 'an ordinary member carries no display name');
     }
 
     let group = null;
