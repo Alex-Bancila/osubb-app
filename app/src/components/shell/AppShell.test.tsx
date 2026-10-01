@@ -817,3 +817,38 @@ describe('phone navigation (#972)', () => {
       expect(link.className).toMatch(/min-h-14/);
   });
 });
+
+describe('the top bar carries no page name (#981)', () => {
+  beforeEach(() => {
+    auth.signOut.mockResolvedValue(undefined);
+    auth.useAuth.mockReturnValue({
+      claims: ordinaryClaims,
+      session: { user: { email: 'mara@osubb.ro' } },
+      signOut: auth.signOut,
+    });
+    queries.useMyProfile.mockReturnValue({
+      data: { full_name: 'Mara Pop', avatar_color: '#284C93' },
+    });
+    queries.useRoles.mockReturnValue({
+      data: new Map([['voluntar', { name: 'Voluntar', level: 1 }]]),
+    });
+    queries.useMyGroups.mockReturnValue({ membershipRows: [] });
+    queries.useOrgSettings.mockReturnValue({ data: new Map() });
+    queries.useUnreadNotificationCount.mockReturnValue({ data: 0 });
+    queries.useUnreadAnnouncementsCount.mockReturnValue({ data: 0 });
+    queries.useCapabilities.mockReturnValue({ data: capabilities() });
+    queries.usePendingDecisions.mockReturnValue({ data: [] });
+  });
+
+  it('shows no page name in the bar, and hides the bar from laptop width', () => {
+    const { container } = renderShell('/calendar');
+    const header = screen.getByRole('banner');
+    // The page's own header names the page; the bar does not repeat it.
+    expect(header.textContent).not.toMatch(/Calendar/);
+    expect(header.className).toContain('lg:hidden');
+    // On a laptop the grid is sidebar | main, with no row for a top bar.
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.className).toContain("lg:[grid-template-areas:'sidebar_main']");
+    expect(root.className).not.toContain('sidebar_topbar');
+  });
+});
