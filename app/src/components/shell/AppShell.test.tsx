@@ -16,11 +16,14 @@ const queries = vi.hoisted(() => ({
 }));
 
 vi.mock('../../lib/auth', () => ({ useAuth: auth.useAuth }));
-// The real `submitsWorkRequests` rule is read from capabilities.ts, whose
-// module also builds the shared client.
+// The real `boardTitleFrom` rule is read from reference.ts, whose module also
+// builds the shared client.
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../queries/profile', () => ({
   useMyProfile: queries.useMyProfile,
+}));
+vi.mock('../../queries/request-decisions', () => ({
+  usePendingDecisions: queries.usePendingDecisions,
 }));
 vi.mock('../../queries/reference', async (original) => ({
   // The real D1 rule reads the Board Title off the caller's roster rows.
@@ -39,14 +42,8 @@ vi.mock('../../queries/notifications', () => ({
   useUnreadNotificationCount: queries.useUnreadNotificationCount,
 }));
 
-vi.mock('../../lib/capabilities', async (original) => ({
-  submitsWorkRequests: (
-    await original<typeof import('../../lib/capabilities')>()
-  ).submitsWorkRequests,
+vi.mock('../../lib/capabilities', () => ({
   useCapabilities: queries.useCapabilities,
-}));
-vi.mock('../../queries/request-decisions', () => ({
-  usePendingDecisions: queries.usePendingDecisions,
 }));
 vi.mock('../../queries/live-changes', () => ({
   useLiveChanges: vi.fn(),
@@ -129,13 +126,10 @@ describe('AppShell', () => {
     const primary = screen.getByRole('navigation', {
       name: 'Navigare principală',
     });
-    expect(within(primary).getAllByRole('link')).toHaveLength(8);
+    expect(within(primary).getAllByRole('link')).toHaveLength(7);
     expect(
       within(primary).getByRole('link', { name: 'Grupuri' }),
     ).toHaveAttribute('href', '/grupuri');
-    expect(
-      within(primary).getByRole('link', { name: 'Cereri' }),
-    ).toHaveAttribute('href', '/cereri');
     expect(
       within(primary).getByRole('link', { name: 'Notificări' }),
     ).toHaveAttribute('href', '/notificari');
@@ -401,7 +395,6 @@ describe('AppShell', () => {
       'Clasament',
       'Voluntari',
       'Grupuri',
-      'Cereri',
       'Campanii',
       'Calendar',
       'Anunțuri',
@@ -506,63 +499,29 @@ describe('AppShell', () => {
     ).toBeVisible();
   });
 
-  describe('Cereri at level 5, where nobody files a Request (#855, B30)', () => {
-    beforeEach(() => {
-      auth.useAuth.mockReturnValue({
-        claims: { ...ordinaryClaims, member_role: 'bce', member_level: 5 },
-        session: { user: { email: 'mara@osubb.ro' } },
-        signOut: auth.signOut,
-      });
-    });
-    const cereri = () =>
-      within(
-        screen.getByRole('navigation', { name: 'Navigare principală' }),
-      ).queryByRole('link', { name: 'Cereri' });
+  it('has no Cereri item: the Requests are a view of Taskuri, current there too (#973)', () => {
+    renderShell('/tracker?vedere=cereri');
 
-    it('hides the item with nothing to decide, and while the queue loads', () => {
-      const view = renderShell();
-      expect(cereri()).toBeNull();
-      queries.usePendingDecisions.mockReturnValue({ isPending: true });
-      view.rerender(
-        <MemoryRouter initialEntries={['/calendar']}>
-          <Routes>
-            <Route element={<AppShell />}>
-              <Route path="*" element={<h1>Conținut</h1>} />
-            </Route>
-          </Routes>
-        </MemoryRouter>,
-      );
-      expect(cereri()).toBeNull();
+    const primary = screen.getByRole('navigation', {
+      name: 'Navigare principală',
     });
-
-    it('keeps the item when the queue cannot be read, so its retry is reachable', () => {
-      queries.usePendingDecisions.mockReturnValue({ isError: true });
-      renderShell();
-      expect(cereri()).toHaveAttribute('href', '/cereri');
-    });
-
-    it('shows the item with one Request to decide', () => {
-      queries.usePendingDecisions.mockReturnValue({ data: [{ id: 7 }] });
-      renderShell();
-      expect(cereri()).toHaveAttribute('href', '/cereri');
-    });
-
-    it('keeps the item while the viewer is on the page', () => {
-      renderShell('/cereri');
-      expect(cereri()).toHaveAttribute('aria-current', 'page');
-    });
-  });
-
-  it('shows Cereri below level 5 with nothing to decide', () => {
-    renderShell();
+    expect(within(primary).queryByRole('link', { name: 'Cereri' })).toBeNull();
+    expect(
+      within(primary).getByRole('link', { name: 'Taskuri' }),
+    ).toHaveAttribute('aria-current', 'page');
     expect(
       within(
-        screen.getByRole('navigation', { name: 'Navigare principală' }),
-      ).getByRole('link', { name: 'Cereri' }),
-    ).toHaveAttribute('href', '/cereri');
+        screen.getByRole('navigation', { name: 'Navigare rapidă' }),
+      ).getByRole('link', { name: 'Taskuri' }),
+    ).toHaveAttribute('aria-current', 'page');
   });
 
   it('opens a keyboard-safe mobile menu and returns focus when Escape closes it', async () => {
+    // The drawer exists only for a Member with a page off the bars (#972):
+    // Clasament puts one there.
+    queries.useCapabilities.mockReturnValue({
+      data: capabilities({ seeLeadership: true }),
+    });
     const user = userEvent.setup();
     renderShell();
 
@@ -587,6 +546,11 @@ describe('AppShell', () => {
   });
 
   it('releases the modal drawer when the viewport crosses to desktop', async () => {
+    // The drawer exists only for a Member with a page off the bars (#972):
+    // Clasament puts one there.
+    queries.useCapabilities.mockReturnValue({
+      data: capabilities({ seeLeadership: true }),
+    });
     const user = userEvent.setup();
     let notifyBreakpoint: ((event: { matches: boolean }) => void) | undefined;
     vi.stubGlobal(
@@ -800,12 +764,7 @@ describe('phone navigation (#972)', () => {
   });
 
   it('shows the hamburger only when a page would be missing from the bar and the top bar', async () => {
-    // Every page of this viewer is on the bar or in the top bar: no drawer.
-    auth.useAuth.mockReturnValue({
-      claims: { member_role: 'bc', member_level: 6, group_ids: [] },
-      session: { user: { email: 'mara@osubb.ro' } },
-      signOut: auth.signOut,
-    });
+    // Every page of a volunteer is on the bar or in the top bar: no drawer.
     const { unmount } = renderShell('/');
     expect(
       screen.queryByRole('button', { name: 'Deschide meniul' }),

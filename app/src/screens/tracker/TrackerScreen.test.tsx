@@ -1,6 +1,6 @@
 import { act, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { Link, MemoryRouter } from 'react-router';
+import { Link, MemoryRouter, useLocation, useNavigate } from 'react-router';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,9 +18,18 @@ const hooks = vi.hoisted(() => ({
   useAllTasks: vi.fn(),
   useMyPoints: vi.fn(),
   useTaskQueue: vi.fn(),
+  usePendingDecisions: vi.fn(),
   join: vi.fn(),
   level: 1,
   seeLeadership: false,
+}));
+vi.mock('../../queries/request-decisions', () => ({
+  usePendingDecisions: hooks.usePendingDecisions,
+}));
+// The Requests have their own suite (RequestsView.test.tsx); here the view is
+// only told apart from the Tracker's.
+vi.mock('../requests/RequestsView', () => ({
+  RequestsView: () => <h2>Cereri view</h2>,
 }));
 vi.mock('../../lib/capabilities', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/capabilities')>()),
@@ -220,6 +229,7 @@ describe('My tasks screen', () => {
       isError: false,
       refetch: vi.fn(),
     });
+    hooks.usePendingDecisions.mockReturnValue({ data: [], isError: false });
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -1268,5 +1278,216 @@ describe('My tasks screen', () => {
         expect(hooks.useAllTasks).toHaveBeenLastCalledWith(false);
       },
     );
+  });
+
+  describe('the Cereri view (#973)', () => {
+    const decision = (id: number) => ({
+      id,
+      description: `Activitatea ${id}`,
+      requester_id: `member-${id}`,
+      requester_name: `Membru ${id}`,
+      group_id: 10,
+      group_name: 'Educațional',
+      created_at: '2026-09-30T10:00:00Z',
+    });
+    const toggle = () => screen.queryByRole('group', { name: 'Secțiune' });
+    const segment = (name: string) =>
+      within(screen.getByRole('group', { name: 'Secțiune' })).getByRole(
+        'button',
+        { name },
+      );
+    const requestsView = () =>
+      screen.queryByRole('heading', { name: 'Cereri view' });
+    const taskLists = () =>
+      screen.queryByRole('tablist', { name: 'Liste de taskuri' });
+
+    /** The router's address and its Back button, beside the page. */
+    function Probe() {
+      const location = useLocation();
+      const navigate = useNavigate();
+      return (
+        <>
+          <output aria-label="Adresa">
+            {location.pathname + location.search}
+          </output>
+          <button type="button" onClick={() => void navigate(-1)}>
+            Înapoi
+          </button>
+        </>
+      );
+    }
+    function renderWithProbe(url: string) {
+      return render(
+        <MemoryRouter initialEntries={[url]}>
+          <TrackerScreen />
+          <Probe />
+        </MemoryRouter>,
+      );
+    }
+    const address = () =>
+      screen.getByRole('status', { name: 'Adresa' }).textContent;
+
+    it('offers a Member who files Requests the Taskuri · Cereri toggle, first among the actions', () => {
+      query();
+      renderAt('/tracker');
+
+      expect(toggle()).toBeVisible();
+      expect(toggle()?.parentElement?.firstElementChild).toBe(toggle());
+      expect(segment('Taskuri')).toHaveAttribute('aria-pressed', 'true');
+      expect(segment('Cereri')).toHaveAttribute('aria-pressed', 'false');
+      expect(screen.getByRole('button', { name: 'Task nou' })).toBeVisible();
+      expect(requestsView()).toBeNull();
+      expect(taskLists()).toBeVisible();
+    });
+
+    it('shows the Requests under the Taskuri title at ?vedere=cereri, without the Task actions', () => {
+      query();
+      renderAt('/tracker?vedere=cereri');
+
+      expect(
+        screen.getByRole('heading', { level: 1, name: 'Taskuri' }),
+      ).toBeVisible();
+      expect(requestsView()).toBeVisible();
+      expect(segment('Cereri')).toHaveAttribute('aria-pressed', 'true');
+      expect(
+        screen.getByText(
+          'Descrie contribuția, iar coordonatorii grupului o vor evalua.',
+        ),
+      ).toBeVisible();
+      expect(
+        screen.queryByText('Lucrul tău și oportunitățile din OSUBB.'),
+      ).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Task nou' })).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: 'Adaugă task finalizat' }),
+      ).toBeNull();
+      expect(taskLists()).toBeNull();
+    });
+
+    it('sets and clears ?vedere, keeping the other parameters', async () => {
+      const user = userEvent.setup();
+      query();
+      renderWithProbe('/tracker?lista=disponibile');
+
+      await user.click(segment('Cereri'));
+      expect(address()).toBe('/tracker?lista=disponibile&vedere=cereri');
+      expect(requestsView()).toBeVisible();
+
+      await user.click(segment('Taskuri'));
+      expect(address()).toBe('/tracker?lista=disponibile');
+      expect(requestsView()).toBeNull();
+      expect(taskLists()).toBeVisible();
+    });
+
+    it('returns to the Tracker on Back', async () => {
+      const user = userEvent.setup();
+      query();
+      renderWithProbe('/tracker');
+
+      await user.click(segment('Cereri'));
+      expect(address()).toBe('/tracker?vedere=cereri');
+      await user.click(screen.getByRole('button', { name: 'Înapoi' }));
+      expect(address()).toBe('/tracker');
+      expect(requestsView()).toBeNull();
+      expect(segment('Taskuri')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('shows a BC member with nothing to decide no toggle, and ignores ?vedere=cereri', () => {
+      query();
+      hooks.level = 6;
+      renderAt('/tracker?vedere=cereri');
+
+      expect(toggle()).toBeNull();
+      expect(requestsView()).toBeNull();
+      expect(
+        screen.getByText('Lucrul tău și oportunitățile din OSUBB.'),
+      ).toBeVisible();
+      expect(taskLists()).toBeVisible();
+    });
+
+    it('counts the Requests a BC member has to decide on the Cereri segment', async () => {
+      const user = userEvent.setup();
+      query();
+      hooks.level = 6;
+      hooks.usePendingDecisions.mockReturnValue({
+        data: [decision(1), decision(2)],
+        isError: false,
+      });
+      renderAt('/tracker');
+
+      const cereri = segment('Cereri, 2 cereri de decis');
+      expect(within(cereri).getByText('2')).toHaveAttribute(
+        'aria-hidden',
+        'true',
+      );
+      await user.click(cereri);
+      expect(requestsView()).toBeVisible();
+      expect(
+        screen.getByText(
+          'Cererile de activitate realizată pe care le poți aproba sau respinge.',
+        ),
+      ).toBeVisible();
+      expect(screen.queryByText(/Descrie contribuția/)).toBeNull();
+    });
+
+    it.each([
+      [1, 'Cereri, 1 cerere de decis'],
+      [20, 'Cereri, 20 de cereri de decis'],
+    ])('names %i Requests to decide in Romanian', (count, name) => {
+      query();
+      hooks.usePendingDecisions.mockReturnValue({
+        data: Array.from({ length: count }, (_, index) => decision(index + 1)),
+        isError: false,
+      });
+      renderAt('/tracker');
+      expect(segment(name)).toBeVisible();
+    });
+
+    it('keeps the toggle when the queue cannot be read, so its retry is reachable', () => {
+      query();
+      hooks.level = 6;
+      hooks.usePendingDecisions.mockReturnValue({ isError: true });
+      renderAt('/tracker?vedere=cereri');
+
+      expect(segment('Cereri')).toHaveAttribute('aria-pressed', 'true');
+      expect(requestsView()).toBeVisible();
+    });
+
+    it('stays on the Cereri view when the last decision empties the queue', () => {
+      query();
+      hooks.level = 6;
+      hooks.usePendingDecisions.mockReturnValue({
+        data: [decision(1)],
+        isError: false,
+      });
+      const view = renderAt('/tracker?vedere=cereri');
+      expect(requestsView()).toBeVisible();
+
+      hooks.usePendingDecisions.mockReturnValue({ data: [], isError: false });
+      view.rerender(tree('/tracker?vedere=cereri'));
+      expect(requestsView()).toBeVisible();
+      expect(segment('Cereri')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('waits for the queue before sending a link to Cereri back to Taskuri', () => {
+      query();
+      hooks.level = 6;
+      hooks.usePendingDecisions.mockReturnValue({
+        isPending: true,
+        isError: false,
+      });
+      const view = renderAt('/tracker?vedere=cereri');
+      expect(requestsView()).toBeVisible();
+      expect(toggle()).toBeNull();
+
+      hooks.usePendingDecisions.mockReturnValue({
+        data: [],
+        isPending: false,
+        isError: false,
+      });
+      view.rerender(tree('/tracker?vedere=cereri'));
+      expect(requestsView()).toBeNull();
+      expect(taskLists()).toBeVisible();
+    });
   });
 });

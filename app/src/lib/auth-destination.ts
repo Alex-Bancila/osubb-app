@@ -17,6 +17,7 @@ const memberRoutes = [
   '/calendar',
   '/grupuri',
   '/grupuri/:groupId',
+  // Links to the Cereri page before #973; App.tsx forwards them to Taskuri.
   '/cereri',
   '/anunturi',
   // #775: the Email Digest's "Deschide notificările" button survives the login.

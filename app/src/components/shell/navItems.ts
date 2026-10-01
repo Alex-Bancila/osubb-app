@@ -6,7 +6,6 @@ import {
   ListTodo,
   Megaphone,
   Network,
-  ClipboardPlus,
   ShieldCheck,
   Tag,
   UserRound,
@@ -33,24 +32,6 @@ export type NavItem = {
   activeOn?: readonly string[];
   /** Mobile shows five of these; the rest live in the drawer. */
   onTabBar?: boolean;
-  /**
-   * A further condition on who the item is for, read from what the shell
-   * knows about the viewer (`NavViewer`). The shell keeps the item while the
-   * viewer is on its page, so a decision that empties it does not pull the
-   * item away mid-visit.
-   */
-  showWhen?: (viewer: NavViewer) => boolean;
-};
-
-/** What the shell knows about the viewer beyond the capability row. */
-export type NavViewer = {
-  /** Files Completed-work Requests for their own work (`submitsWorkRequests`). */
-  submitsWorkRequests: boolean;
-  /**
-   * `pending_request_decisions()` returned at least one Request, or could not
-   * be read (the page then offers the retry).
-   */
-  hasRequestsToDecide: boolean;
 };
 
 /**
@@ -87,7 +68,8 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Taskuri',
     icon: ListTodo,
     onTabBar: true,
-    // A member's history below it is Clasament's page (#844, D17).
+    // A member's history below it is Clasament's page (#844, D17). Its Cereri
+    // view (`?vedere=cereri`, #973) is this page too: only the path is matched.
     activeOn: ['/tracker'],
   },
   {
@@ -106,15 +88,6 @@ export const NAV_ITEMS: NavItem[] = [
   },
   // Its own icon, not Voluntari's: on the bar the two must read apart (#972).
   { path: '/grupuri', label: 'Grupuri', icon: Network, onTabBar: true },
-  {
-    path: '/cereri',
-    label: 'Cereri',
-    icon: ClipboardPlus,
-    // For whoever files a Request or has one to decide: to a BC member with
-    // nothing to decide the page would be a header and nothing else (#855, B30).
-    showWhen: (viewer) =>
-      viewer.submitsWorkRequests || viewer.hasRequestsToDecide,
-  },
   {
     path: '/administrare/campanii',
     label: 'Campanii',

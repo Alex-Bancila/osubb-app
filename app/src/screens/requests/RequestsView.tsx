@@ -10,9 +10,7 @@ import { submitsWorkRequests } from '../../lib/capabilities';
 import {
   EmptyState,
   ListRow,
-  Page,
   PageGrid,
-  PageHeader,
   Panel,
   rowListClass,
 } from '../../components/layout';
@@ -72,7 +70,13 @@ function safeSubmitError(error: unknown) {
   );
 }
 
-export default function CompletedWorkRequestScreen() {
+/**
+ * **Cereri**, Taskuri's other view (`/tracker?vedere=cereri`, #973): the
+ * Requests the viewer may decide, and — for a Member who files them — the
+ * form for a new one and their own. Taskuri's header frames it, so it sits
+ * directly in that `Page`, one block per child.
+ */
+export function RequestsView() {
   const { claims } = useAuth();
   // BC and BCE do not work by points, so they have no use for filing a
   // Request for their own work (ruling R14, corrected 2026-09-22) — but they
@@ -103,18 +107,10 @@ export default function CompletedWorkRequestScreen() {
   }
 
   return (
-    <Page width="reading">
-      <PageHeader
-        title="Cereri"
-        description={
-          canSubmitRequests
-            ? 'Descrie contribuția, iar coordonatorii grupului o vor evalua.'
-            : 'Cererile de activitate realizată pe care le poți aproba sau respinge.'
-        }
-      />
+    <>
       {/* Outside the grid: for a Member who files Requests the queue renders
           nothing until there is one to decide (it is not a panel that may go
-          missing). For one who only decides it is the page, empty or not. */}
+          missing). For one who only decides it is the view, empty or not. */}
       <RequestDecisionQueue showEmpty={!canSubmitRequests} />
       <PageGrid columns={1}>
         {canSubmitRequests && (
@@ -295,6 +291,6 @@ export default function CompletedWorkRequestScreen() {
         )}
       </PageGrid>
       <TaskDetailsSheet taskId={taskId} onClose={() => setTaskId(null)} />
-    </Page>
+    </>
   );
 }

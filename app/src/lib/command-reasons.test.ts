@@ -153,7 +153,7 @@ it('keeps the reasons the per-feature tables used to translate (#674)', () => {
     'invalid_event_interval',
     'calendar_manage_forbidden',
     'event_min_level_above_actor',
-    // request-decisions.ts, CompletedWorkRequestScreen.tsx, RolePanel.tsx
+    // request-decisions.ts, RequestsView.tsx, RolePanel.tsx
     'request_not_pending',
     'evaluation_note_required',
     'request_origin_forbidden',

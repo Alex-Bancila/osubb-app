@@ -132,9 +132,6 @@ vi.mock('./screens/tracker/TrackerScreen', async () => {
   };
 });
 vi.mock('./screens/calendar/CalendarScreen', () => ({ default: () => null }));
-vi.mock('./screens/requests/CompletedWorkRequestScreen', () => ({
-  default: () => <h1>Cereri screen</h1>,
-}));
 vi.mock('./screens/announcements/AnnouncementsScreen', () => ({
   default: () => <h1>Anunțuri screen</h1>,
 }));
@@ -408,18 +405,18 @@ describe('route guards', () => {
 
   it('preserves a deep link and restores it after the session arrives', async () => {
     auth.useAuth.mockReturnValue(signedOut);
-    window.history.pushState({}, '', '/cereri?source=test#requests');
+    window.history.pushState({}, '', '/anunturi?source=test#requests');
     const view = render(<App />);
     await screen.findByRole('heading', { name: 'Login screen' });
     expect(new URLSearchParams(window.location.search).get('next')).toBe(
-      '/cereri?source=test#requests',
+      '/anunturi?source=test#requests',
     );
     auth.useAuth.mockReturnValue(member);
     view.rerender(<App />);
-    await screen.findByRole('heading', { name: 'Cereri screen' });
+    await screen.findByRole('heading', { name: 'Anunțuri screen' });
     expect(
       window.location.pathname + window.location.search + window.location.hash,
-    ).toBe('/cereri?source=test#requests');
+    ).toBe('/anunturi?source=test#requests');
   });
 
   it('sends a Member who just signed out to a bare /login, forgetting the page (#844, D25)', async () => {
@@ -830,4 +827,34 @@ it('forwards an old /tracker/<id> Task link to /tracker?task=<id> (#844, D1)', a
   expect(window.location.pathname + window.location.search).toBe(
     '/tracker?task=12',
   );
+}, 15_000);
+
+// After the "Task nou" block too, for the same reason.
+it('lands a /cereri link restored after the session arrives on Taskuri’s Cereri view (#973)', async () => {
+  auth.useAuth.mockReturnValue(signedOut);
+  grant();
+  window.history.pushState({}, '', '/cereri?source=test#requests');
+  const client = new QueryClient();
+  const tree = () => (
+    <QueryClientProvider client={client}>
+      <App />
+    </QueryClientProvider>
+  );
+  const view = render(tree());
+  await screen.findByRole('heading', { name: 'Login screen' });
+  expect(new URLSearchParams(window.location.search).get('next')).toBe(
+    '/cereri?source=test#requests',
+  );
+  auth.useAuth.mockReturnValue(member);
+  view.rerender(tree());
+  await screen.findByRole(
+    'heading',
+    { name: 'Tracker screen' },
+    { timeout: 10_000 },
+  );
+  // The forward names its own address: the old link's query and hash do not
+  // come along.
+  expect(
+    window.location.pathname + window.location.search + window.location.hash,
+  ).toBe('/tracker?vedere=cereri');
 }, 15_000);

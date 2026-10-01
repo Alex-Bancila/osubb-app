@@ -257,6 +257,7 @@ A BCE/BC/Moderator comparison of Task Points earned in the top-level Groups set 
 
 **Completed-work Request**:
 A Member’s request to recognize work already completed for one Origin. Approval creates the completed Task, Assignment, Evaluation, and Task Points together; the decider may first change the Task's title, details, Group, Attached Link and Campaign. A Group's managers can also add such a completed Task for one of its members directly, without a Request.
+In the app the Requests are **Cereri**: a view of Taskuri, not a page of its own, reached with the Taskuri · Cereri toggle by a Member who files Requests or has some to decide. Administrare → Cereri is a different thing: Group Applications.
 _Avoid_: Award request, new-task request, `task_requests`
 
 **Sanction**:

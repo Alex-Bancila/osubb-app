@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { Tabs } from '@base-ui/react/tabs';
 import type { UseQueryResult } from '@tanstack/react-query';
+import { ClipboardPlus, ListTodo } from 'lucide-react';
 import { useMyTasks } from '../../queries/tasks';
 import { useTaskOpportunities } from '../../queries/task-opportunities';
 import {
@@ -10,19 +11,23 @@ import {
   useManagedTasks,
   useAllTasks,
 } from '../../queries/task-tabs';
+import { usePendingDecisions } from '../../queries/request-decisions';
+import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import {
   EmptyState,
   Page,
   PageHeader,
+  SegmentedToggle,
   tabClass,
   tabListClass,
   useActiveTabInView,
 } from '../../components/layout';
 import { useAuth } from '../../lib/auth';
-import { useCapability } from '../../lib/capabilities';
+import { submitsWorkRequests, useCapability } from '../../lib/capabilities';
 import { ErrorState, Loading } from '../../components/states';
 import { parsePositiveInt } from '../../lib/ids';
+import { RequestsView } from '../requests/RequestsView';
 import { AvailableOpportunities } from './AvailableOpportunities';
 import { TaskDetailsSheet } from './TaskDetailsSheet';
 import { ManagerTaskList } from './ManagerTaskList';
@@ -150,18 +155,47 @@ const nonEmpty = (rows: readonly { id: number }[]) => rows.length > 0;
 
 const HIGHLIGHT_MS = 4000;
 
+/**
+ * Taskuri's two views (#973): the Task Tracker, and **Cereri** — the
+ * Completed-work Requests — at `?vedere=cereri`.
+ */
+type TrackerView = 'taskuri' | 'cereri';
+
+const VIEW_KEY = 'vedere';
+const REQUESTS_VIEW = 'cereri';
+
+/** "1 cerere de decis", "3 cereri de decis", "20 de cereri de decis". */
+function decisionsLabel(count: number): string {
+  if (count === 1) return '1 cerere de decis';
+  const lastTwo = count % 100;
+  const de = count >= 20 && (lastTwo === 0 || lastTwo >= 20);
+  return `${new Intl.NumberFormat('ro-RO').format(count)} ${de ? 'de ' : ''}cereri de decis`;
+}
+
 export default function TrackerScreen() {
   const mine = useMyTasks();
   const available = useTaskOpportunities();
   const management = useTaskManagement();
   const managed = useManagedTasks(management.data === true);
   const leadership = useTaskLeadership();
-  const level = useAuth().claims?.member_level ?? 0;
+  const { claims } = useAuth();
+  const level = claims?.member_level ?? 0;
   const showAll = leadership.data === true && level < MANAGES_ALL_LEVEL;
   const all = useAllTasks(showAll);
   // Leadership does not work by points (R27): no Personal Score above
   // Taskurile mele, the same test as Acasă (B15).
   const leader = useCapability('seeLeadership').data === true;
+  // Cereri is for whoever files a Request or has one to decide (#855, B30);
+  // a failed read counts as one, so the view's retry stays reachable.
+  const filesRequests = submitsWorkRequests(claims);
+  const decisions = usePendingDecisions();
+  const toDecide = decisions.data?.length ?? 0;
+  const offersRequests = filesRequests || decisions.isError || toDecide > 0;
+  // Once offered, Cereri stays for the visit: the decision that empties the
+  // queue must not pull the view, and its receipt, away mid-visit.
+  const [requestsOffered, setRequestsOffered] = useState(false);
+  if (offersRequests && !requestsOffered) setRequestsOffered(true);
+  const hasRequests = offersRequests || requestsOffered;
   const [detailId, setDetailId] = useState<number | null>(null);
   // The Task this page just created or added, and what its details say (#915).
   const [created, setCreated] = useState<{
@@ -178,7 +212,25 @@ export default function TrackerScreen() {
   const [tab, setTab] = useState<TrackerTab | null>(null);
   // The deep links (#685, #822, #846): `/tracker?task=<id>` lands on the
   // Task, `/tracker?lista=<tab>` opens that tab. `task` wins over `lista`.
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
+  // `?vedere=cereri` (#973) shows Cereri to a viewer it is for; anyone else
+  // gets the Tracker. A link waits for the queue before it is ignored, so a
+  // Member who only decides does not see the Tracker flash first.
+  const view: TrackerView =
+    params.get(VIEW_KEY) === REQUESTS_VIEW &&
+    (hasRequests || decisions.isPending)
+      ? 'cereri'
+      : 'taskuri';
+  // A history entry per choice, so Back returns to the Tracker; every other
+  // parameter is kept.
+  function chooseView(next: TrackerView) {
+    setParams((current) => {
+      const nextParams = new URLSearchParams(current);
+      if (next === 'cereri') nextParams.set(VIEW_KEY, REQUESTS_VIEW);
+      else nextParams.delete(VIEW_KEY);
+      return nextParams;
+    });
+  }
   const linkedId = linkedTaskId(params.get('task'));
   const listParam = LIST_PARAM.get(params.get('lista') ?? '') ?? null;
   const link = `${linkedId ?? ''}|${listParam ?? ''}`;
@@ -316,143 +368,192 @@ export default function TrackerScreen() {
       ? 'mine'
       : current;
   const tabStrip = useRef<HTMLDivElement>(null);
-  useActiveTabInView(tabStrip, selected);
+  // The strip mounts afresh on the way back from Cereri: centre it again then.
+  useActiveTabInView(tabStrip, view === 'taskuri' ? selected : null);
   return (
     <Page>
       <PageHeader
         title="Taskuri"
-        description="Lucrul tău și oportunitățile din OSUBB."
+        description={
+          view === 'taskuri'
+            ? 'Lucrul tău și oportunitățile din OSUBB.'
+            : filesRequests
+              ? 'Descrie contribuția, iar coordonatorii grupului o vor evalua.'
+              : 'Cererile de activitate realizată pe care le poți aproba sau respinge.'
+        }
         actions={
           <>
-            <NewTaskControl
-              onCreated={(id) => {
-                setCreated({ id, notice: 'Taskul a fost creat.' });
-                setDetailId(id);
-              }}
-            />
-            <AddCompletedTaskControl
-              onAdded={({ id }) => {
-                setCreated({
-                  id,
-                  notice:
-                    'Taskul finalizat a fost adăugat. Punctele au fost acordate.',
-                });
-                setDetailId(id);
-              }}
-            />
+            {hasRequests && (
+              <SegmentedToggle
+                label="Secțiune"
+                options={[
+                  { value: 'taskuri', label: 'Taskuri', icon: ListTodo },
+                  {
+                    value: 'cereri',
+                    label: (
+                      <>
+                        Cereri
+                        {toDecide > 0 && (
+                          // Solid, so the count stays legible on the inked
+                          // segment as well as on the track.
+                          <Badge
+                            variant="destructive"
+                            className="min-w-5 bg-destructive text-(--surface) dark:bg-destructive"
+                          >
+                            <span aria-hidden="true">{toDecide}</span>
+                            <span className="sr-only">
+                              , {decisionsLabel(toDecide)}
+                            </span>
+                          </Badge>
+                        )}
+                      </>
+                    ),
+                    icon: ClipboardPlus,
+                  },
+                ]}
+                value={view}
+                onChange={chooseView}
+              />
+            )}
+            {view === 'taskuri' && (
+              <>
+                <NewTaskControl
+                  onCreated={(id) => {
+                    setCreated({ id, notice: 'Taskul a fost creat.' });
+                    setDetailId(id);
+                  }}
+                />
+                <AddCompletedTaskControl
+                  onAdded={({ id }) => {
+                    setCreated({
+                      id,
+                      notice:
+                        'Taskul finalizat a fost adăugat. Punctele au fost acordate.',
+                    });
+                    setDetailId(id);
+                  }}
+                />
+              </>
+            )}
           </>
         }
       />
-      {management.isError && (
-        <div role="alert" className="text-sm">
-          <p>Nu am putut verifica accesul la taskurile de gestionat.</p>
-          <Button
-            variant="outline"
-            className="min-h-11 min-w-11"
-            onClick={() => management.refetch()}
+      {view === 'cereri' ? (
+        <RequestsView />
+      ) : (
+        <>
+          {management.isError && (
+            <div role="alert" className="text-sm">
+              <p>Nu am putut verifica accesul la taskurile de gestionat.</p>
+              <Button
+                variant="outline"
+                className="min-h-11 min-w-11"
+                onClick={() => management.refetch()}
+              >
+                Reîncarcă accesul
+              </Button>
+            </div>
+          )}
+          {leadership.isPending && (
+            <p role="status" className="text-sm text-muted-foreground">
+              Se verifică accesul la toate taskurile…
+            </p>
+          )}
+          {leadership.isError && (
+            <div role="alert" className="space-y-3 text-sm">
+              <p>Nu am putut verifica accesul la toate taskurile.</p>
+              <Button
+                variant="outline"
+                className="min-h-11 min-w-11"
+                onClick={() => leadership.refetch()}
+              >
+                Reîncarcă accesul complet
+              </Button>
+            </div>
+          )}
+          <Tabs.Root
+            // The tab strip has no margin of its own: this stack spaces it (#841).
+            className="flex flex-col gap-6"
+            value={selected}
+            onValueChange={(value) => {
+              if (isTrackerTab(value)) setTab(value);
+              setGaveUp(null);
+            }}
           >
-            Reîncarcă accesul
-          </Button>
-        </div>
-      )}
-      {leadership.isPending && (
-        <p role="status" className="text-sm text-muted-foreground">
-          Se verifică accesul la toate taskurile…
-        </p>
-      )}
-      {leadership.isError && (
-        <div role="alert" className="space-y-3 text-sm">
-          <p>Nu am putut verifica accesul la toate taskurile.</p>
-          <Button
-            variant="outline"
-            className="min-h-11 min-w-11"
-            onClick={() => leadership.refetch()}
-          >
-            Reîncarcă accesul complet
-          </Button>
-        </div>
-      )}
-      <Tabs.Root
-        // The tab strip has no margin of its own: this stack spaces it (#841).
-        className="flex flex-col gap-6"
-        value={selected}
-        onValueChange={(value) => {
-          if (isTrackerTab(value)) setTab(value);
-          setGaveUp(null);
-        }}
-      >
-        <Tabs.List
-          ref={tabStrip}
-          aria-label="Liste de taskuri"
-          className={tabListClass}
-        >
-          <Tabs.Tab value="mine" className={tabClass}>
-            Taskurile mele
-          </Tabs.Tab>
-          <Tabs.Tab value="available" className={tabClass}>
-            Disponibile
-          </Tabs.Tab>
-          {management.data && (
-            <Tabs.Tab value="managed" className={tabClass}>
-              De gestionat
-            </Tabs.Tab>
-          )}
-          {showAll && (
-            <Tabs.Tab value="all" className={tabClass}>
-              Toate
-            </Tabs.Tab>
-          )}
-        </Tabs.List>
-        <Tabs.Panel value="mine" className="space-y-6">
-          {!leader && <PersonalScoreHeader />}
-          {gaveUp !== null && (
-            <TaskActionSuccess key={gaveUp.id}>
-              {gaveUp.receipt}
-            </TaskActionSuccess>
-          )}
-          <TaskQueryPanel
-            query={mine}
-            onGaveUp={(id, receipt) => setGaveUp({ id, receipt })}
-            empty="Nu ai niciun task atribuit încă."
-            now={now}
-            onOpenTask={setDetailId}
-            highlightedId={highlightedId}
-          />
-        </Tabs.Panel>
-        <Tabs.Panel value="available">
-          <TaskQueryStates query={available}>
-            {(opportunities) => (
-              <AvailableOpportunities
-                opportunities={opportunities}
+            <Tabs.List
+              ref={tabStrip}
+              aria-label="Liste de taskuri"
+              className={tabListClass}
+            >
+              <Tabs.Tab value="mine" className={tabClass}>
+                Taskurile mele
+              </Tabs.Tab>
+              <Tabs.Tab value="available" className={tabClass}>
+                Disponibile
+              </Tabs.Tab>
+              {management.data && (
+                <Tabs.Tab value="managed" className={tabClass}>
+                  De gestionat
+                </Tabs.Tab>
+              )}
+              {showAll && (
+                <Tabs.Tab value="all" className={tabClass}>
+                  Toate
+                </Tabs.Tab>
+              )}
+            </Tabs.List>
+            <Tabs.Panel value="mine" className="space-y-6">
+              {!leader && <PersonalScoreHeader />}
+              {gaveUp !== null && (
+                <TaskActionSuccess key={gaveUp.id}>
+                  {gaveUp.receipt}
+                </TaskActionSuccess>
+              )}
+              <TaskQueryPanel
+                query={mine}
+                onGaveUp={(id, receipt) => setGaveUp({ id, receipt })}
+                empty="Nu ai niciun task atribuit încă."
                 now={now}
                 onOpenTask={setDetailId}
+                highlightedId={highlightedId}
               />
+            </Tabs.Panel>
+            <Tabs.Panel value="available">
+              <TaskQueryStates query={available}>
+                {(opportunities) => (
+                  <AvailableOpportunities
+                    opportunities={opportunities}
+                    now={now}
+                    onOpenTask={setDetailId}
+                  />
+                )}
+              </TaskQueryStates>
+            </Tabs.Panel>
+            {management.data && (
+              <Tabs.Panel value="managed">
+                <TaskQueryPanel
+                  query={managed}
+                  empty="Nu ai taskuri de gestionat acum."
+                  manager
+                  now={now}
+                  onOpenTask={setDetailId}
+                />
+              </Tabs.Panel>
             )}
-          </TaskQueryStates>
-        </Tabs.Panel>
-        {management.data && (
-          <Tabs.Panel value="managed">
-            <TaskQueryPanel
-              query={managed}
-              empty="Nu ai taskuri de gestionat acum."
-              manager
-              now={now}
-              onOpenTask={setDetailId}
-            />
-          </Tabs.Panel>
-        )}
-        {showAll && (
-          <Tabs.Panel value="all">
-            <TaskQueryPanel
-              query={all}
-              empty="Nu există taskuri vizibile."
-              manager
-              now={now}
-              onOpenTask={setDetailId}
-            />
-          </Tabs.Panel>
-        )}
-      </Tabs.Root>
+            {showAll && (
+              <Tabs.Panel value="all">
+                <TaskQueryPanel
+                  query={all}
+                  empty="Nu există taskuri vizibile."
+                  manager
+                  now={now}
+                  onOpenTask={setDetailId}
+                />
+              </Tabs.Panel>
+            )}
+          </Tabs.Root>
+        </>
+      )}
       <TaskDetailsSheet
         key={detailId}
         taskId={detailId}

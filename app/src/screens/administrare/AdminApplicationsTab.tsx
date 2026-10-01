@@ -38,7 +38,8 @@ const NO_COLOR = 'var(--ink-400)';
  * Moderator also every Group with a pending Application. Choosing one
  * (`?grup=<id>`) shows only its Applications; "Toate" shows every section.
  * Each Application is decided in place with the same command as the Group
- * page's Cereri tab. Completed-work Requests keep their own page (`/cereri`).
+ * page's Cereri tab. Completed-work Requests are Taskuri's Cereri view
+ * (`/tracker?vedere=cereri`, #973).
  */
 export default function AdminApplicationsTab() {
   const applications = useManagedGroupApplications();
