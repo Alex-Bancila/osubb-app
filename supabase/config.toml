@@ -164,6 +164,20 @@ verify_jwt = true
 import_map = "./functions/deno.json"
 entrypoint = "./functions/reinvite-member/index.ts"
 
+# #968 — an invited Member re-sends their own invitation from the login page.
+# verify_jwt = false: the caller has not signed in, so there is no session,
+# and the publishable key the app sends is not a JWT. The gates are the
+# browser origin (ALLOWED_ORIGINS, _shared/cors.ts: no Origin or a foreign
+# one is 403) and the database throttle public.request_invitation_allowed
+# (one request per address per minute, five per address per day, twenty per
+# IP per hour). The function only re-sends an existing, unconfirmed
+# invitation; it never creates an account. docs/backend/inviting.md.
+[functions.request-invitation]
+enabled = true
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/request-invitation/index.ts"
+
 # #703 (ADR-0010) — Web Push outbox sender, called every minute by the
 # pg_cron job osubb-send-push through pg_net. verify_jwt = false (#769, ruling
 # L8): the caller is authenticated by the project's secret key (sb_secret_...)

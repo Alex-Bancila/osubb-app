@@ -348,6 +348,10 @@ The rule that only a person provisioned by OSUBB leadership becomes a Member of 
 The passwordless email link used by a provisioned Member to sign in. The same email carries a six-digit Sign-in Code that completes the same sign-in where the link cannot reach the app, such as the installed app on iPhone or a second device.
 _Avoid_: OTP in user-facing copy; password
 
+**Invitation**:
+The account BC creates for a Member by email, before their first sign-in; its email carries a Magic Link and a Sign-in Code. Until it is first used, its email can be re-sent — by BC from Administrare, or by the Member from the login page.
+_Avoid_: sign-up, registration
+
 **Provisioning**:
 Creating the organization membership information associated with an invited person, including their initial Department by Appointment.
 

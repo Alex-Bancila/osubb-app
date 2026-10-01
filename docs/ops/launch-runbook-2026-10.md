@@ -303,6 +303,11 @@ anything on Thursday except fixes found by the acceptance run.
 3. Send the invitations (#36): from Administrare, one by one or via the CSV import, ≤ 80 today. Watch
    **Resend → Emails** for bounces; a bounced address is fixed with N5 (or, until N5 merges, tell the
    member to enter their correct address at the login screen only if the profile email was right).
+   An invitation whose hour has passed needs nothing from you: the Member types the address on the login
+   page and presses **Trimite linkul**, and a fresh invitation arrives (#968). Optional for launch week:
+   raise **Authentication → Sign In / Providers → Email → Email OTP Expiration** (up to 86400 s, 24 h) so
+   fewer invitations lapse at all. _Why only that week:_ every sign-in link and code then lives as long,
+   which widens the window for guessing a code; put it back to 3600 afterwards.
 4. Stay on call. The push health check (N2) writes you an in-app Notification if the outbox stalls;
    Resend shows deliveries; Cloudflare → `osubb-app` → Deployments shows the live version and the
    **Rollback** button next to the previous one.

@@ -439,7 +439,7 @@ const REASON_COPY = new Map<string, string>([
   ],
   [
     'already_confirmed',
-    'Adresa membrului este deja confirmată. Poate cere un link de autentificare din ecranul de login.',
+    'Adresa membrului este deja confirmată, deci nu are invitație de retrimis. Se conectează singur: își scrie adresa în ecranul de conectare și apasă „Trimite linkul”.',
   ],
   [
     'member_inactive',

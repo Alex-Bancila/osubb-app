@@ -11,7 +11,10 @@ const auth = vi.hoisted(() => ({
   onAuthStateChange: vi.fn(),
   signOut: vi.fn(),
 }));
-vi.mock('../../lib/supabase', () => ({ supabase: { auth } }));
+// #968: the login page re-sends an unconfirmed invitation through the
+// request-invitation Edge Function.
+const functions = vi.hoisted(() => ({ invoke: vi.fn() }));
+vi.mock('../../lib/supabase', () => ({ supabase: { auth, functions } }));
 
 /* Only for the end-to-end restore test below, which renders the real router so
    the front-door guard — not a stand-in — decides where a fresh session lands.
@@ -237,6 +240,115 @@ describe('LoginScreen', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Nu te-am putut conecta la internet. Verifică conexiunea și încearcă din nou.',
     );
+  });
+});
+
+/** Auth's answer to a magic-link request it refuses, as supabase-js hands it over. */
+function authRefusal(code: string, message: string) {
+  return { data: {}, error: { code, message, status: 422 } };
+}
+
+/** A non-2xx answer from the Edge Function: its Response inside the error. */
+function functionRefusal(status: number, body = '{}') {
+  return {
+    data: null,
+    error: Object.assign(new Error('Edge Function returned a non-2xx'), {
+      context: new Response(body, { status }),
+    }),
+  };
+}
+
+describe('LoginScreen re-sends an unconfirmed invitation (#968)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    auth.signInWithOtp.mockReset();
+    functions.invoke.mockReset();
+    functions.invoke.mockResolvedValue({ data: { ok: true }, error: null });
+  });
+
+  it('asks the function to re-send on signup_disabled, then shows the sent screen with the code step', async () => {
+    auth.signInWithOtp.mockResolvedValue(
+      authRefusal('signup_disabled', 'Signups not allowed for this instance'),
+    );
+    render(<LoginScreen />);
+
+    askForTheEmail();
+
+    await screen.findByRole('heading', { name: 'Verifică-ți emailul' });
+    expect(functions.invoke).toHaveBeenCalledTimes(1);
+    expect(functions.invoke).toHaveBeenCalledWith('request-invitation', {
+      body: { email: 'membru@exemplu.ro' },
+    });
+    // The invitation's six-digit code is the same Sign-in Code.
+    expect(screen.getByLabelText('Cod de 6 cifre')).toBeVisible();
+    // Remembered before the call, so /auth/confirm signs in without asking.
+    expect(requestedSignInFor('membru@exemplu.ro')).toBe(true);
+  });
+
+  it('shows the sent screen on otp_disabled without asking the function — an unknown address learns nothing', async () => {
+    auth.signInWithOtp.mockResolvedValue(
+      authRefusal('otp_disabled', 'Signups not allowed for otp'),
+    );
+    render(<LoginScreen />);
+
+    askForTheEmail();
+
+    await screen.findByRole('heading', { name: 'Verifică-ți emailul' });
+    expect(functions.invoke).not.toHaveBeenCalled();
+  });
+
+  it('shows the rate-limit copy when the function answers 429, never the sent screen', async () => {
+    auth.signInWithOtp.mockResolvedValue(
+      authRefusal('signup_disabled', 'Signups not allowed for this instance'),
+    );
+    functions.invoke.mockResolvedValue(
+      functionRefusal(429, '{"code":"rate_limited","error":"x"}'),
+    );
+    render(<LoginScreen />);
+
+    askForTheEmail();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Prea multe cereri într-un timp scurt. Încearcă din nou peste un minut.',
+    );
+    expect(
+      screen.queryByRole('heading', { name: 'Verifică-ți emailul' }),
+    ).toBeNull();
+    expect(screen.getByLabelText('Email')).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+  });
+
+  it('shows the unknown-error copy when the function fails — never a false "sent"', async () => {
+    auth.signInWithOtp.mockResolvedValue(
+      authRefusal('signup_disabled', 'Signups not allowed for this instance'),
+    );
+    functions.invoke.mockResolvedValue(functionRefusal(500));
+    render(<LoginScreen />);
+
+    askForTheEmail();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Nu am putut finaliza conectarea. Încearcă din nou; dacă problema persistă, anunță BC.',
+    );
+    expect(
+      screen.queryByRole('heading', { name: 'Verifică-ți emailul' }),
+    ).toBeNull();
+  });
+
+  it('leaves a confirmed Member on the ordinary magic link: no function call', async () => {
+    auth.signInWithOtp.mockResolvedValue({ data: {}, error: null });
+    render(<LoginScreen />);
+
+    askForTheEmail();
+
+    await screen.findByRole('heading', { name: 'Verifică-ți emailul' });
+    expect(auth.signInWithOtp).toHaveBeenCalledWith({
+      email: 'membru@exemplu.ro',
+      options: expect.objectContaining({ shouldCreateUser: false }),
+    });
+    expect(functions.invoke).not.toHaveBeenCalled();
   });
 });
 

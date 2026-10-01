@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import {
+  authFailureMessage,
   toAuthCodeErrorMessage,
   toAuthErrorMessage,
 } from '../../lib/auth-error-message';
 import { authCallbackUrl } from '../../lib/auth-destination';
 import { normalizeEmail } from '../../lib/normalize';
+import { requestInvitation } from '../../lib/request-invitation';
 import { rememberSignInRequest } from '../../lib/sign-in-request';
 import { supabase } from '../../lib/supabase';
 import { Button } from '../../components/ui/button';
@@ -98,9 +100,30 @@ export default function LoginScreen({
        faults — rate limiting, the mail provider being down — are shown honestly,
        because those are not about who exists. */
     const failureCode = authError.code ?? '';
+
+    /* `signup_disabled` is Auth's answer for an account that exists but was
+       never confirmed: an invitation that expired or never arrived. Its
+       Member gets a fresh one here, without BC (#968). The function answers
+       alike for every address, and the sent screen below is already worded
+       for both cases — the invitation's six-digit code is the same Sign-in
+       Code the second step verifies. */
+    if (failureCode === 'signup_disabled') {
+      const outcome = await requestInvitation(address);
+      if (outcome === 'sent') {
+        setStatus('sent');
+        return;
+      }
+      setError(
+        authFailureMessage(
+          outcome === 'rate_limited' ? 'rate-limit' : 'unknown',
+        ),
+      );
+      setStatus('error');
+      return;
+    }
+
     const anonymous =
       failureCode === 'otp_disabled' ||
-      failureCode === 'signup_disabled' ||
       failureCode === 'user_not_found' ||
       /signups not allowed|not found/i.test(authError.message);
 

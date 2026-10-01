@@ -120,6 +120,14 @@ export function toAuthErrorMessage(error: unknown): string {
   return MESSAGES[kindFrom(detailsFrom(error))];
 }
 
+/**
+ * The same fixed copy for a failure whose kind is already known rather than
+ * read off an Auth error — the invitation re-send's 429 or failure (#968).
+ */
+export function authFailureMessage(kind: 'rate-limit' | 'unknown'): string {
+  return MESSAGES[kind];
+}
+
 /** A six-digit code GoTrue refused as expired or invalid: it is a code, not a link. */
 const CODE_REFUSED =
   'Codul este greșit sau a expirat. Verifică-l sau cere unul nou.';
