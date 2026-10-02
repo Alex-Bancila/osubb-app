@@ -24,7 +24,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(78);
+select plan(79);
 
 -- ==================== One login per role (AC) ====================
 select is((select count(*) from profiles where email like '%@demo.osubb'), 8::bigint,
@@ -667,10 +667,11 @@ select ok(
 select is(
   (select count(*) from points_ledger ledger
      left join task_evaluations evaluation on evaluation.id = ledger.evaluation_id
+     left join task_difficulty_levels level on level.level = evaluation.difficulty
     where ledger.reason = 'task'
       and (evaluation.id is null
            or ledger.delta <> evaluation.points
-           or evaluation.points <> evaluation.difficulty * rating_mult(evaluation.rating))),
+           or evaluation.points is distinct from level.base_points * rating_mult(evaluation.rating))),
   0::bigint,
   'every task ledger row names its Evaluation and carries that Evaluation''s scoring-guide points');
 
@@ -772,6 +773,18 @@ select ok(
 select ok(
   exists (select 1 from points_ledger where reason = 'task' and delta < 0),
   'at least one task was graded 1, so a member''s point total shows a real penalty');
+
+-- #985: the demo shows the Difficulty kinds above the stars, evaluated.
+select is(
+  (select string_agg(level.kind || ':' || evaluation.difficulty || ':' || evaluation.points, ','
+                     order by evaluation.difficulty)
+     from task_evaluations evaluation
+     join task_difficulty_levels level on level.level = evaluation.difficulty
+     join tasks task on task.id = evaluation.task_id
+     join profiles creator on creator.id = task.created_by
+    where creator.email like '%@demo.osubb' and level.kind <> 'star'),
+  'medal:7:14,text:10:40',
+  'one Argint Task (7 x 2 = 14) and one Coordonator Task (20 x 2 = 40) are evaluated in the demo');
 
 -- ==================== The demo has to look alive ====================
 -- These are about the *demo*, not the engine: a leaderboard where everyone

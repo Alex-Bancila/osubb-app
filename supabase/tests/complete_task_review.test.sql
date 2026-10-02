@@ -555,11 +555,11 @@ select is((select task.status::text from public.tasks as task
   'a negative award still COMPLETES the Task -- outcome and points are independent (ADR-0007)');
 
 -- ==================== 3b. A ONE-point award reads as Romanian, not as a template ====================
--- public.rating_mult maps Rating 1..5 to -1, 0, 1, 2, 3, so with Difficulty
--- 1..5 the award is bounded to -5..15. Magnitude 1 is reachable both ways
--- (Difficulty 1 x Rating 3 = +1, Difficulty 1 x Rating 1 = -1) and is the only
--- case Romanian writes in the singular. The `de puncte` form (20 upward) is
--- unreachable at this range and is deliberately not implemented.
+-- public.rating_mult maps Rating 1..5 to -1, 0, 1, 2, 3. Magnitude 1 is
+-- reachable both ways (Difficulty 1 x Rating 3 = +1, Difficulty 1 x Rating 1
+-- = -1) and is the only case Romanian writes in the singular. The `de puncte`
+-- form (20 upward), reachable since #985 lifted the award to -20..60, is
+-- pinned in task_difficulty_levels.test.sql.
 
 select pg_temp.test_login('33600000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
@@ -599,9 +599,9 @@ select throws_ok(format($$ select public.complete_task_review(%s, null, 4, 'Nota
 select throws_ok(format($$ select public.complete_task_review(%s, 0, 4, 'Nota') $$,
   (select inputs_task_id from f336)),
   'PT400', 'invalid_difficulty', 'Difficulty 0 is below the guide''s range');
-select throws_ok(format($$ select public.complete_task_review(%s, 6, 4, 'Nota') $$,
+select throws_ok(format($$ select public.complete_task_review(%s, 11, 4, 'Nota') $$,
   (select inputs_task_id from f336)),
-  'PT400', 'invalid_difficulty', 'Difficulty 6 is above the guide''s range');
+  'PT400', 'invalid_difficulty', 'Difficulty 11 is above the guide''s ten levels (#985)');
 select throws_ok(format($$ select public.complete_task_review(%s, 3, null, 'Nota') $$,
   (select inputs_task_id from f336)),
   'PT400', 'invalid_rating', 'a null Rating is rejected');
@@ -630,10 +630,10 @@ select throws_ok(format($$ select public.complete_task_review(%s, 3, 4, '  ') $$
 -- beside the note, so that all three callers of private.evaluate_task answer a
 -- malformed Difficulty or Rating identically. Both are asserted: with only one
 -- of them pinned the other could be pushed back below the gate unnoticed.
-select throws_ok(format($$ select public.complete_task_review(%s, 9, 4, 'Nota valida') $$,
+select throws_ok(format($$ select public.complete_task_review(%s, 11, 4, 'Nota valida') $$,
   (select gate_task_id from f336)),
   'PT400', 'invalid_difficulty',
-  'and so does the Difficulty range check -- a claimless caller with Difficulty 9 gets PT400, not 42501 (finding 5: this is what approve_completed_work_request already did)');
+  'and so does the Difficulty range check -- a claimless caller with Difficulty 11 gets PT400, not 42501 (finding 5: this is what approve_completed_work_request already did)');
 select throws_ok(format($$ select public.complete_task_review(%s, 3, 9, 'Nota valida') $$,
   (select gate_task_id from f336)),
   'PT400', 'invalid_rating',

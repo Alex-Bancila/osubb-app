@@ -512,9 +512,9 @@ select throws_ok(format($$ select public.mark_task_unfulfilled(%s, null, 3, 'Not
 select throws_ok(format($$ select public.mark_task_unfulfilled(%s, 0, 3, 'Nota') $$,
   (select inputs_task_id from f337)),
   'PT400', 'invalid_difficulty', 'Difficulty 0 is below the guide''s range');
-select throws_ok(format($$ select public.mark_task_unfulfilled(%s, 6, 3, 'Nota') $$,
+select throws_ok(format($$ select public.mark_task_unfulfilled(%s, 11, 3, 'Nota') $$,
   (select inputs_task_id from f337)),
-  'PT400', 'invalid_difficulty', 'Difficulty 6 is above the guide''s range');
+  'PT400', 'invalid_difficulty', 'Difficulty 11 is above the guide''s ten levels (#985)');
 select throws_ok(format($$ select public.mark_task_unfulfilled(%s, 3, null, 'Nota') $$,
   (select inputs_task_id from f337)),
   'PT400', 'invalid_rating', 'a null Rating is rejected');
@@ -543,10 +543,10 @@ select throws_ok(format($$ select public.mark_task_unfulfilled(%s, 3, 3, '  ') $
 -- beside the note, so that all three callers of private.evaluate_task answer a
 -- malformed Difficulty or Rating identically. Both are asserted: with only one
 -- of them pinned the other could be pushed back below the gate unnoticed.
-select throws_ok(format($$ select public.mark_task_unfulfilled(%s, 9, 3, 'Nota valida') $$,
+select throws_ok(format($$ select public.mark_task_unfulfilled(%s, 11, 3, 'Nota valida') $$,
   (select gate_task_id from f337)),
   'PT400', 'invalid_difficulty',
-  'and so does the Difficulty range check -- a claimless caller with Difficulty 9 gets PT400, not 42501 (finding 5: this is what approve_completed_work_request already did)');
+  'and so does the Difficulty range check -- a claimless caller with Difficulty 11 gets PT400, not 42501 (finding 5: this is what approve_completed_work_request already did)');
 select throws_ok(format($$ select public.mark_task_unfulfilled(%s, 3, 9, 'Nota valida') $$,
   (select gate_task_id from f337)),
   'PT400', 'invalid_rating',
