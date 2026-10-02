@@ -45,7 +45,7 @@ The login page's "Trimite linkul" does not reach these accounts either: it only 
 
 ## 4. Review
 
-The **De invitat** grid lists every never-invited Member with the import's notes. Correct names, addresses, phones, ranks and Departments there before anyone is emailed.
+The **De invitat** grid lists every never-invited Member with the import's notes. Correct names, addresses, phones, ranks and Departments there before anyone is emailed. An address corrected here is the one the invitation goes to: the sender moves the account's sign-in address to it before mailing (`docs/backend/inviting.md`, "The invitation goes to the Profile's address"). _Why:_ the imported account still holds the sheet's address until then, and a mail to it would go to the wrong mailbox.
 
 ## 5. Before sending — dashboard settings (production project)
 
@@ -56,7 +56,7 @@ The **De invitat** grid lists every never-invited Member with the import's notes
 
 ## 6. Send in batches
 
-Select Members in De invitat and press **Trimite invitațiile**. The app calls `send-invitations` with at most 50 ids per call. Each sent invitation stamps `profiles.invited_at` and the Member leaves the grid. When Auth answers the rate limit the batch **stops cleanly** and says where (`stopped.member_id`); the rest are `not_attempted`. Wait for the hour to pass and continue. Watch **Resend → Emails** for bounces; correct a bounced address in the grid and send again.
+Select Members in De invitat and press **Trimite invitațiile**. The app calls `send-invitations` with at most 50 ids per call. Each sent invitation stamps `profiles.invited_at` and the Member leaves the grid. When Auth answers the rate limit the batch **stops cleanly** and says where (`stopped.member_id`); the rest are `not_attempted`. Wait for the hour to pass and continue. Watch **Resend → Emails** for bounces; correct a bounced address in the grid and send again — the sender follows the corrected address. A row that answers **email_taken** names an address another Member already has: two sheet rows share a mailbox, so settle which person owns it before sending either. **email_sync_failed** means Auth refused to move the address and nothing was sent; send that row again later and check the function's logs if it repeats.
 
 ## Related
 

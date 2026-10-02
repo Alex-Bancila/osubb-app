@@ -1,8 +1,10 @@
 // The port send-invitations talks to the outside world through (#991), and
 // its real wiring: reinvite-member's reads of a Member's Auth account and
-// Profile, an invitation send that keeps Auth's error code (the rate-limit
-// stop reads it), and the invited_at stamp. No createUser, no deleteUser:
-// this function only ever sends.
+// Profile, its address lookup and Auth move (the sender mails the Profile's
+// address, so Auth follows a correction made in the De invitat grid), an
+// invitation send that keeps Auth's error code (the rate-limit stop reads
+// it), and the invited_at stamp. No createUser, no deleteUser: this function
+// only ever moves an address and sends.
 
 import { createClient } from "@supabase/supabase-js";
 import type { AdminEnv, ClientFactory } from "../invite-member/deps.ts";
@@ -26,6 +28,10 @@ export interface SendInvitationsDeps {
   memberLevel(userId: string): Promise<number>;
   authAccount(memberId: string): Promise<AuthAccount | null>;
   profile(memberId: string): Promise<MemberProfile | null>;
+  /** True when a profile OTHER than this Member's already uses the address. */
+  emailTaken(email: string, memberId: string): Promise<boolean>;
+  /** Moves the Auth user to a new address (no confirmation: admin API). */
+  setAuthEmail(memberId: string, email: string): Promise<{ error?: SendError }>;
   /** Sends the invitation to an existing, unconfirmed account. */
   inviteByEmail(email: string): Promise<{ userId?: string; error?: SendError }>;
   /** public.record_invitation_sent: the stamp, as Postgres recorded it. */
@@ -49,6 +55,8 @@ export function realDeps(
     memberLevel: (userId) => reads.memberLevel(userId),
     authAccount: (memberId) => reads.authAccount(memberId),
     profile: (memberId) => reads.profile(memberId),
+    emailTaken: (email, memberId) => reads.emailTaken(email, memberId),
+    setAuthEmail: (memberId, email) => reads.setAuthEmail(memberId, email),
 
     async inviteByEmail(email) {
       const { data, error } = await admin.auth.admin.inviteUserByEmail(email);

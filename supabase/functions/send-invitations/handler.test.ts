@@ -19,25 +19,44 @@ interface FakeOptions {
   stampError?: Error;
   /** Milliseconds added to the clock per send. */
   sendCost?: number;
+  /** Addresses another profile already holds. */
+  taken?: string[];
+  /** Auth's answer when asked to move a user to this address. */
+  authEmailErrors?: Record<string, SendError>;
 }
 
 function fakeDeps(options: FakeOptions = {}) {
   const calls: string[] = [];
   let clock = 0;
   let sends = 0;
+  // Auth's view of each Member's address, moved by setAuthEmail: the fake
+  // invitation answers the user who holds the address, as Auth does.
+  const authEmails = new Map<string, string>();
   const deps: SendInvitationsDeps = {
     callerId: () => Promise.resolve("caller-1"),
     memberLevel: () => Promise.resolve(options.level ?? 6),
     authAccount: (memberId) => {
       const account = options.accounts?.[memberId];
-      return Promise.resolve(
-        account === null ? null : {
-          email: `${memberId.slice(-2)}@osubb.local`,
-          lastSignInAt: null,
-          emailConfirmed: false,
-          ...account,
-        },
-      );
+      if (account === null) return Promise.resolve(null);
+      const email = account?.email ?? `${memberId.slice(-2)}@osubb.local`;
+      authEmails.set(memberId, email);
+      return Promise.resolve({
+        email,
+        lastSignInAt: null,
+        emailConfirmed: false,
+        ...account,
+      });
+    },
+    emailTaken: (email) => {
+      calls.push(`emailTaken:${email}`);
+      return Promise.resolve((options.taken ?? []).includes(email));
+    },
+    setAuthEmail: (memberId, email) => {
+      calls.push(`setAuthEmail:${email}`);
+      const error = options.authEmailErrors?.[email];
+      if (error) return Promise.resolve({ error });
+      authEmails.set(memberId, email);
+      return Promise.resolve({});
     },
     profile: (memberId) => {
       const profile = options.profiles?.[memberId];
@@ -57,8 +76,8 @@ function fakeDeps(options: FakeOptions = {}) {
       clock += options.sendCost ?? 0;
       const error = options.sendErrors?.[sends];
       if (error) return Promise.resolve({ error });
-      const memberId = id(Number(email.slice(0, 2)));
-      return Promise.resolve({ userId: memberId });
+      const owner = [...authEmails].find(([, held]) => held === email)?.[0];
+      return Promise.resolve({ userId: owner ?? "nobody" });
     },
     recordInvitationSent: (memberId) => {
       calls.push(`stamp:${memberId}`);
@@ -255,4 +274,89 @@ Deno.test("a failed stamp still reports the invitation as sent", async () => {
     status: "sent",
     invited_at: null,
   });
+});
+
+Deno.test("a Profile address that differs from Auth's moves Auth there first, then mails it", async () => {
+  const { deps, calls } = fakeDeps({
+    profiles: { [id(10)]: { email: "corect@osubb.local" } },
+  });
+  const payload = await (await handleSendInvitations(
+    request({ member_ids: [id(10)] }),
+    deps,
+  )).json();
+  assertEquals(calls, [
+    "emailTaken:corect@osubb.local",
+    "setAuthEmail:corect@osubb.local",
+    "invite:corect@osubb.local",
+    `stamp:${id(10)}`,
+  ]);
+  assertEquals(payload.results[0], {
+    member_id: id(10),
+    status: "sent",
+    invited_at: "2026-10-02T10:00:00+00:00",
+  });
+});
+
+Deno.test("a case-only difference between the two addresses moves nothing", async () => {
+  const { deps, calls } = fakeDeps({
+    profiles: { [id(10)]: { email: " 10@OSUBB.local " } },
+  });
+  const payload = await (await handleSendInvitations(
+    request({ member_ids: [id(10)] }),
+    deps,
+  )).json();
+  assertEquals(calls, ["invite:10@osubb.local", `stamp:${id(10)}`]);
+  assertEquals(payload.results[0].status, "sent");
+});
+
+Deno.test("a Profile address another Member holds fails that row with email_taken; the batch goes on", async () => {
+  const { deps, calls } = fakeDeps({
+    profiles: { [id(10)]: { email: "11@osubb.local" } },
+    taken: ["11@osubb.local"],
+  });
+  const payload = await (await handleSendInvitations(
+    request({ member_ids: [id(10), id(11)] }),
+    deps,
+  )).json();
+  assertEquals(calls, [
+    "emailTaken:11@osubb.local",
+    "invite:11@osubb.local",
+    `stamp:${id(11)}`,
+  ]);
+  assertEquals(payload.results[0].status, "failed");
+  assertEquals(payload.results[0].code, "email_taken");
+  assertEquals(payload.results[1].status, "sent");
+  assertEquals(payload.summary, {
+    sent: 1,
+    skipped: 0,
+    failed: 1,
+    not_attempted: 0,
+  });
+});
+
+Deno.test("Auth refusing the move sends nothing: its duplicate answer is email_taken, anything else email_sync_failed", async () => {
+  const { deps, calls } = fakeDeps({
+    profiles: {
+      [id(10)]: { email: "dublat@osubb.local" },
+      [id(11)]: { email: "refuzat@osubb.local" },
+    },
+    authEmailErrors: {
+      "dublat@osubb.local": {
+        message: "A user with this email address has already been registered",
+        status: 422,
+      },
+      "refuzat@osubb.local": { message: "auth down", status: 500 },
+    },
+  });
+  const payload = await (await handleSendInvitations(
+    request({ member_ids: [id(10), id(11)] }),
+    deps,
+  )).json();
+  assertEquals(calls.filter((c) => c.startsWith("invite:")), []);
+  assertEquals(
+    payload.results.map((r: { status: string; code?: string }) =>
+      `${r.status}:${r.code}`
+    ),
+    ["failed:email_taken", "failed:email_sync_failed"],
+  );
 });

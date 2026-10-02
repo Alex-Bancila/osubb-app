@@ -12,7 +12,10 @@
 //     sent           Auth accepted the invitation; invited_at stamped
 //     skipped        nothing to send: already_active (signed in),
 //                    already_confirmed, member_inactive, member_not_found
-//     failed         invite_failed (Auth refused this one; the batch goes on)
+//     failed         the batch goes on: invite_failed (Auth refused the send),
+//                    email_taken (the Profile's corrected address belongs to
+//                    another account), email_sync_failed (Auth refused to
+//                    move to it; nothing was sent)
 //     rate_limited   Auth answered over_email_send_rate_limit: the batch
 //                    STOPS here, this Member got nothing
 //     not_attempted  after a stop; send them in a later batch
@@ -25,6 +28,14 @@
 // the order given. Like reinvite-member it never creates or deletes an
 // account: Auth re-sends an invitation to an existing unconfirmed user,
 // keeping its id.
+//
+// The invitation goes to the PROFILE's address. The De invitat grid writes
+// profiles.email when BC corrects an address (#992), and Auth's copy would
+// otherwise still hold the imported one; so a Member whose two addresses
+// differ has Auth moved to the Profile's first, as reinvite-member does
+// (address lookup, then auth.admin.updateUserById). No profile write and no
+// rollback: the Profile already holds the new address, so the row either
+// stays as it was or both sides hold the new one before the mail leaves.
 
 import {
   corsHeaders,
@@ -245,7 +256,38 @@ async function sendOne(
       return skipped("member_inactive", "Membrul nu este activ.");
     }
 
-    const invited = await deps.inviteByEmail(account.email);
+    // The Profile's address is the one BC corrected in the grid; Auth
+    // follows it before the mail leaves, or this row fails and nothing is
+    // sent. A case-only difference names the same mailbox: nothing moves.
+    let email = account.email;
+    const corrected = profile.email.trim().toLowerCase();
+    if (corrected !== account.email.toLowerCase()) {
+      const taken: Result = {
+        member_id: memberId,
+        status: "failed",
+        code: "email_taken",
+        message: `${corrected} este folosită deja de alt cont.`,
+      };
+      if (await deps.emailTaken(corrected, memberId)) return taken;
+      const moved = await deps.setAuthEmail(memberId, corrected);
+      if (moved.error) {
+        if (isDuplicate(moved.error)) return taken;
+        console.error("send-invitations auth email move failed", {
+          status: moved.error.status,
+          code: moved.error.code,
+        });
+        return {
+          member_id: memberId,
+          status: "failed",
+          code: "email_sync_failed",
+          message:
+            "Nu am putut muta adresa de autentificare. Nimic nu a fost trimis.",
+        };
+      }
+      email = corrected;
+    }
+
+    const invited = await deps.inviteByEmail(email);
     if (invited.error || !invited.userId) {
       if (invited.error && isRateLimit(invited.error)) {
         return {

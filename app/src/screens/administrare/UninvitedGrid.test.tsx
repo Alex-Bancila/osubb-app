@@ -241,7 +241,7 @@ describe('the grid', () => {
 });
 
 describe('inline edits', () => {
-  it('saves a name and a phone through the profile write, normalised', async () => {
+  it('saves a name, an address and a phone through the profile write, normalised', async () => {
     const user = userEvent.setup();
     listed([person(1)]);
     show();
@@ -266,6 +266,27 @@ describe('inline edits', () => {
 
     await user.click(
       screen.getByRole('button', {
+        name: 'Editează emailul pentru Exemplu 01',
+      }),
+    );
+    const email = screen.getByRole('textbox', {
+      name: 'Emailul pentru Exemplu 01',
+    });
+    await user.clear(email);
+    await user.type(email, 'ANA@Example.TEST{Enter}');
+    expect(api.contact).toHaveBeenLastCalledWith({
+      memberId: 'm1',
+      field: 'email',
+      value: 'ana@example.test',
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('textbox', { name: /Emailul pentru/ }),
+      ).toBeNull(),
+    );
+
+    await user.click(
+      screen.getByRole('button', {
         name: 'Editează telefonul pentru Exemplu 01',
       }),
     );
@@ -281,13 +302,30 @@ describe('inline edits', () => {
     });
   });
 
-  it('keeps the address read-only: the sender mails the Auth address', () => {
+  it('refuses an invalid address in place and saves nothing; Escape puts it back', async () => {
+    const user = userEvent.setup();
     listed([person(1)]);
     show();
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Editează emailul pentru Exemplu 01',
+      }),
+    );
+    const email = screen.getByRole('textbox', {
+      name: 'Emailul pentru Exemplu 01',
+    });
+    await user.clear(email);
+    await user.type(email, 'nu-e-adresa{Enter}');
+    expect(screen.getByRole('alert')).toBeVisible();
+    expect(email).toHaveAttribute('aria-invalid', 'true');
+    expect(api.contact).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}');
+    expect(api.contact).not.toHaveBeenCalled();
     expect(
-      screen.queryByRole('button', { name: /Editează emailul/ }),
-    ).toBeNull();
-    expect(within(grid()).getByText('v1@example.test')).toBeVisible();
+      screen.getByRole('button', {
+        name: 'Editează emailul pentru Exemplu 01',
+      }),
+    ).toHaveTextContent('v1@example.test');
   });
 
   it('refuses an invalid phone in place and saves nothing; Escape puts it back', async () => {
