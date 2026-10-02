@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-30
+- **Amended:** 2026-10-02 — `difficulty_guide` dropped (#989); its successor `task_difficulty_levels` (#985) broadcasts the same way
 - **Deciders:** Alex Băncilă (request of 2026-09-30, launch week: "every change should appear instantly in the app")
 - **Supersedes:** the "polling first, Realtime only where it visibly helps" stance of the architecture spec §6 and the frontend mini-spec; the Wave-3 limit "Realtime limited to own Notification rows, invalidation only" (D8)
 - **Superseded by:** —
