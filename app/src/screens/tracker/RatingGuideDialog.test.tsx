@@ -218,7 +218,7 @@ it('searches the Proiecte list, by Domeniu, ignoring diacritics', async () => {
   const search = within(dialog).getByRole('searchbox', {
     name: 'Caută în taskurile din Proiecte',
   });
-  expect(within(dialog).getByText('87 taskuri')).toBeVisible();
+  expect(within(dialog).getByText('87 de taskuri')).toBeVisible();
   expect(
     within(dialog).getByRole('region', { name: 'LOGISTICĂ' }),
   ).toBeVisible();

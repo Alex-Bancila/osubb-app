@@ -4,6 +4,7 @@ import { SubHeading } from '../../../components/layout';
 import { DifficultyMark } from '../../../components/tasks/DifficultyMark';
 import { Button } from '../../../components/ui/button';
 import { difficultyName } from '../../../lib/difficulty-levels';
+import { formatTaskCount } from '../../../lib/format';
 import { ratingGuide } from './general';
 import { ExperienceRules } from './GuideScale';
 import { SetButton } from './SetButton';
@@ -101,8 +102,8 @@ export function GuideTaskList({
             {query.trim()
               ? found === 1
                 ? '1 task găsit'
-                : `${found} taskuri găsite`
-              : `${total} taskuri`}
+                : `${formatTaskCount(found)} găsite`
+              : formatTaskCount(total)}
           </p>
         </div>
       )}
