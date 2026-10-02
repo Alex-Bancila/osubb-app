@@ -1,5 +1,6 @@
 import { assertEquals } from "@std/assert";
 import type { AuthAccount, MemberProfile } from "../reinvite-member/deps.ts";
+import type { AuthError } from "../reinvite-member/deps.ts";
 import type { SendError, SendInvitationsDeps } from "./deps.ts";
 import {
   BATCH_LIMIT,
@@ -19,6 +20,10 @@ interface FakeOptions {
   stampError?: Error;
   /** Milliseconds added to the clock per send. */
   sendCost?: number;
+  /** Addresses another profile already holds. */
+  takenEmails?: string[];
+  /** What Auth answers when the address is moved. */
+  setAuthError?: AuthError;
 }
 
 function fakeDeps(options: FakeOptions = {}) {
@@ -47,8 +52,19 @@ function fakeDeps(options: FakeOptions = {}) {
           fullName: "Voluntar",
           status: "activ",
           role: "voluntar",
+          invitedAt: null,
           ...profile,
         },
+      );
+    },
+    emailTaken: (email) => {
+      calls.push(`taken?:${email}`);
+      return Promise.resolve(options.takenEmails?.includes(email) ?? false);
+    },
+    setAuthEmail: (memberId, email) => {
+      calls.push(`setAuthEmail:${memberId}:${email}`);
+      return Promise.resolve(
+        options.setAuthError ? { error: options.setAuthError } : {},
       );
     },
     inviteByEmail: (email) => {
@@ -255,4 +271,117 @@ Deno.test("a failed stamp still reports the invitation as sent", async () => {
     status: "sent",
     invited_at: null,
   });
+});
+
+// ==================== the corrected address (#997) ====================
+
+Deno.test("a profile address corrected in the grid moves Auth first, and the invitation goes there", async () => {
+  const { deps, calls } = fakeDeps({
+    profiles: { [id(10)]: { email: " 10@Corectat.local " } },
+  });
+  const payload = await (await handleSendInvitations(
+    request({ member_ids: [id(10), id(11)] }),
+    deps,
+  )).json();
+  assertEquals(calls, [
+    "taken?:10@corectat.local",
+    `setAuthEmail:${id(10)}:10@corectat.local`,
+    "invite:10@corectat.local",
+    `stamp:${id(10)}`,
+    // A Member whose two addresses agree is sent as before: Auth untouched.
+    "invite:11@osubb.local",
+    `stamp:${id(11)}`,
+  ]);
+  assertEquals(payload.summary.sent, 2);
+});
+
+Deno.test("an address differing from Auth only in case is not a correction", async () => {
+  const { deps, calls } = fakeDeps({
+    profiles: { [id(10)]: { email: "10@OSUBB.local" } },
+  });
+  await handleSendInvitations(request({ member_ids: [id(10)] }), deps);
+  assertEquals(calls, ["invite:10@osubb.local", `stamp:${id(10)}`]);
+});
+
+Deno.test("a corrected address another profile holds is refused before Auth is touched; the batch goes on", async () => {
+  const { deps, calls } = fakeDeps({
+    profiles: { [id(10)]: { email: "10@altcineva.local" } },
+    takenEmails: ["10@altcineva.local"],
+  });
+  const payload = await (await handleSendInvitations(
+    request({ member_ids: [id(10), id(11)] }),
+    deps,
+  )).json();
+  assertEquals(payload.results[0], {
+    member_id: id(10),
+    status: "failed",
+    code: "email_taken",
+    message: "10@altcineva.local este folosită deja de alt cont.",
+  });
+  assertEquals(calls, [
+    "taken?:10@altcineva.local",
+    "invite:11@osubb.local",
+    `stamp:${id(11)}`,
+  ]);
+});
+
+Deno.test("a corrected address another Auth user holds is email_taken, and nothing is sent", async () => {
+  const { deps, calls } = fakeDeps({
+    profiles: { [id(10)]: { email: "10@altcineva.local" } },
+    setAuthError: {
+      message: "A user with this email address has already been registered",
+      status: 422,
+      code: "email_exists",
+    },
+  });
+  const payload = await (await handleSendInvitations(
+    request({ member_ids: [id(10)] }),
+    deps,
+  )).json();
+  assertEquals(payload.results[0].code, "email_taken");
+  assertEquals(payload.summary.failed, 1);
+  assertEquals(calls.some((c) => c.startsWith("invite:")), false);
+});
+
+Deno.test("Auth refusing the corrected address for another reason sends nothing", async () => {
+  const { deps, calls } = fakeDeps({
+    profiles: { [id(10)]: { email: "10@corectat.local" } },
+    setAuthError: { message: "boom", status: 500 },
+  });
+  const payload = await (await handleSendInvitations(
+    request({ member_ids: [id(10)] }),
+    deps,
+  )).json();
+  assertEquals(payload.results[0].code, "email_sync_failed");
+  assertEquals(calls.some((c) => c.startsWith("invite:")), false);
+});
+
+Deno.test("an already-invited Member whose addresses differ is refused: no Auth move, no send", async () => {
+  const { deps, calls } = fakeDeps({
+    profiles: {
+      [id(10)]: {
+        email: "10@corectat.local",
+        invitedAt: "2026-10-01T10:00:00+00:00",
+      },
+    },
+  });
+  const payload = await (await handleSendInvitations(
+    request({ member_ids: [id(10)] }),
+    deps,
+  )).json();
+  assertEquals(payload.results[0].code, "email_mismatch");
+  assertEquals(calls, []);
+});
+
+Deno.test("a signed-in Member's differing address is never moved", async () => {
+  const { deps, calls } = fakeDeps({
+    accounts: { [id(10)]: { lastSignInAt: "2026-10-01T00:00:00Z" } },
+    profiles: { [id(10)]: { email: "10@corectat.local" } },
+  });
+  const payload = await (await handleSendInvitations(
+    request({ member_ids: [id(10)] }),
+    deps,
+  )).json();
+  assertEquals(payload.results[0].code, "already_active");
+  assertEquals(calls, []);
 });

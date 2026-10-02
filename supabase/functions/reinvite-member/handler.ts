@@ -6,8 +6,13 @@
 // POST { member_id, action: "status" }
 //   200 { member_id, email, last_sign_in_at, email_confirmed }
 //                          what the Administrare page needs to show the
-//                          control: never signed in, address unconfirmed
+//                          control: never signed in, address unconfirmed.
+//                          `email` is the PROFILE address -- where BC keeps
+//                          corrections (#997) and where a re-send goes
 // POST { member_id, email? }                     (action "reinvite", default)
+//                          without `email`, the profile address: a
+//                          correction BC made in the "De invitat" grid moves
+//                          Auth with it before the send (#997)
 //   200 { member_id, email, email_changed }      invitation sent again
 //   400                    bad input
 //   401 / 403              not signed in / not BC or Moderator (level < 6);
@@ -48,9 +53,11 @@ interface ReinviteRequest {
   action?: unknown;
 }
 
-/** Auth's answer when an address already belongs to a confirmed account. */
-function isDuplicate(error: { message: string; status?: number }): boolean {
-  return error.status === 422 ||
+/** Auth's answer when an address already belongs to another account. */
+function isDuplicate(
+  error: { message: string; status?: number; code?: string },
+): boolean {
+  return error.status === 422 || error.code === "email_exists" ||
     /already been registered|already exists/i.test(error.message);
 }
 
@@ -173,7 +180,7 @@ export async function handleReinvite(
       return json(
         {
           member_id: memberId,
-          email: account.email,
+          email: profile.email,
           last_sign_in_at: account.lastSignInAt,
           email_confirmed: account.emailConfirmed,
         },
@@ -219,7 +226,10 @@ export async function handleReinvite(
       );
     }
 
-    const email = (body.email ?? account.email).trim().toLowerCase();
+    // Without a new address, the profile's: BC corrects a never-invited
+    // Member's address in the "De invitat" grid (#997), a profile write, and
+    // this send must not put the old Auth address back over it.
+    const email = (body.email ?? profile.email).trim().toLowerCase();
     if (!email || !email.includes("@")) {
       return refusal("email_invalid", "Email invalid.", 400, origin);
     }
@@ -353,12 +363,15 @@ export async function handleReinvite(
     // caller, as #773 allows. The email has left by now: a failed audit is
     // logged, not reported as a failed re-send.
     const changed = authChanges || profileChanges;
+    // The address the invitation would have gone to: the profile's when BC
+    // typed a new one here, Auth's when only Auth followed the profile.
+    const previous = profileChanges ? profile.email : account.email;
     try {
       await deps.notifyCaller(callerId, {
         title: "Invitație retrimisă",
         body:
           `Invitația pentru ${profile.fullName} a fost retrimisă la ${email}.` +
-          (changed ? ` Adresa anterioară: ${profile.email}.` : ""),
+          (changed ? ` Adresa anterioară: ${previous}.` : ""),
         link: `/administrare/membri/${memberId}`,
       });
     } catch (error) {

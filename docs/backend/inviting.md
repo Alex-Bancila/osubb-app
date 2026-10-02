@@ -255,7 +255,9 @@ Locally, open Mailpit at http://127.0.0.1:54324 and confirm one **"Ai fost invit
 }
 ```
 
-`status` is `sent`, `skipped` (`already_active`, `already_confirmed`, `member_inactive`, `member_not_found`), `failed` (`invite_failed`; the batch goes on), `rate_limited` (Auth's `over_email_send_rate_limit` or a 429: the batch **stops** there) or `not_attempted` (after a stop). `stopped` is null, or names the reason (`rate_limited`, or `time_budget` when the batch nears the function's time limit) and the first Member who got nothing. Every sent invitation — from here, `invite-member`, the recruits CSV and `reinvite-member` — stamps `profiles.invited_at` through `public.record_invitation_sent`; the column was backfilled from `auth.users.invited_at`.
+`status` is `sent`, `skipped` (`already_active`, `already_confirmed`, `member_inactive`, `member_not_found`), `failed` (`invite_failed`, `email_taken`, `email_sync_failed`, `email_mismatch`; the batch goes on), `rate_limited` (Auth's `over_email_send_rate_limit` or a 429: the batch **stops** there) or `not_attempted` (after a stop). `stopped` is null, or names the reason (`rate_limited`, or `time_budget` when the batch nears the function's time limit) and the first Member who got nothing. Every sent invitation — from here, `invite-member`, the recruits CSV and `reinvite-member` — stamps `profiles.invited_at` through `public.record_invitation_sent`; the column was backfilled from `auth.users.invited_at`.
+
+**The address (#997).** An invitation goes to `profiles.email`, the address BC corrects in the grid's Email cell (a profile write, BC and the Moderator only; an address another profile holds is refused there as `email_taken`). When that address differs from the Auth user's (case aside), `send-invitations` first moves the Auth user to it through the admin API — no confirmation email, the account is unconfirmed and unused — then sends. It does so only for a Member never invited (`invited_at` null), never signed in and unconfirmed. An address another profile or Auth user already holds is refused as `failed` / `email_taken` and nothing is sent or changed; Auth refusing the move otherwise is `email_sync_failed`. An already-invited Member whose two addresses differ is refused as `email_mismatch`: their address is corrected with **Retrimite invitația** on the member page, below. The Email cell is editable only while a row waits; once its invitation is sent the row is read-only and the Member leaves the grid on the next load.
 
 ## What the member sees
 
@@ -326,7 +328,7 @@ curl -X POST "$SUPABASE_URL/functions/v1/reinvite-member" \
   -d '{ "member_id": "caa02729-…", "email": "ioana.popescu@gmail.com" }'
 ```
 
-Omit `email` to re-send to the address on file. `{ "member_id": "…", "action": "status" }` answers `last_sign_in_at` and `email_confirmed` without changing anything — the page uses it to decide whether to show the panel.
+Omit `email` to re-send to the profile address — when BC corrected it in the "De invitat" grid, Auth is moved to it first (#997), as for a new `email`. `{ "member_id": "…", "action": "status" }` answers `email` (the profile address, where a re-send goes), `last_sign_in_at` and `email_confirmed` without changing anything — the page uses it to decide whether to show the panel.
 
 | Response                      | What it means                                                                                                | What to do                                                                                                                    |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |

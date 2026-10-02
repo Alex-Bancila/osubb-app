@@ -670,7 +670,7 @@ function SenderBar({
 /**
  * "De invitat" (#992): the Members the volunteer import created that nobody
  * has invited and who never signed in (#991's read), as a working grid —
- * name, email, phone, rank and Departments edit in place through the commands
+ * name, email (#997), phone, rank and Departments edit in place through the commands
  * the member page uses; positions and the import's problems are read-only,
  * with the member page one click away for the rest. "Trimite invitațiile"
  * sends to the ticked rows, or to everyone listed, in batches. A Member sent
@@ -962,12 +962,16 @@ export function UninvitedGrid() {
                         }
                       />
                     </Cell>
-                    {/* Read-only for now: `send-invitations` mails the Auth
-                        address, and a profile write would leave the two
-                        apart. A wrong address is corrected on the member
-                        page (`reinvite-member` moves both, then sends). */}
-                    <Cell done text={member.email}>
-                      {null}
+                    {/* #997: the profile address is where the invitation
+                        goes — `send-invitations` moves the unused Auth
+                        account to it before sending. Read-only once sent. */}
+                    <Cell done={done} text={member.email}>
+                      <TextCell
+                        field="email"
+                        member={member}
+                        value={member.email}
+                        onSave={(value) => saveContact(member, 'email', value)}
+                      />
                     </Cell>
                     <Cell done={done} text={member.phone ?? '—'}>
                       <TextCell

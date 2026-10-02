@@ -35,6 +35,12 @@ export interface MemberProfile {
    * until ruling R31 (#917); the handler no longer branches on it.
    */
   role: string;
+  /**
+   * `profiles.invited_at` (#991): null until an invitation was first sent.
+   * `send-invitations` moves the Auth address to a corrected profile address
+   * only while it is null (#997).
+   */
+  invitedAt: string | null;
 }
 
 export type AuthError = DbError & { status?: number };
@@ -119,7 +125,7 @@ export function realDeps(
 
     async profile(memberId) {
       const { data, error } = await admin.from("profiles")
-        .select("email, full_name, status, role")
+        .select("email, full_name, status, role, invited_at")
         .eq("id", memberId)
         .maybeSingle();
       if (error) throw error;
@@ -129,6 +135,7 @@ export function realDeps(
           fullName: data.full_name,
           status: data.status,
           role: data.role,
+          invitedAt: data.invited_at ?? null,
         }
         : null;
     },
@@ -150,7 +157,13 @@ export function realDeps(
         email,
       });
       return error
-        ? { error: { message: error.message, status: error.status } }
+        ? {
+          error: {
+            message: error.message,
+            status: error.status,
+            code: error.code,
+          },
+        }
         : {};
     },
 

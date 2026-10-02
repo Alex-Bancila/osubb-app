@@ -347,6 +347,7 @@ function reinviteDeps(overrides: Partial<ReinviteDeps> = {}): ReinviteDeps {
         fullName: "Ana Pop",
         status: "activ",
         role: "membru",
+        invitedAt: null,
       }),
     emailTaken: () => Promise.resolve(false),
     setAuthEmail: () => Promise.resolve({}),

@@ -67,6 +67,7 @@ function fakeDeps(options: FakeOptions = {}) {
           fullName: "Ioana Popescu",
           status: "activ",
           role: "voluntar",
+          invitedAt: null,
           ...options.profile,
         },
       );
@@ -541,4 +542,73 @@ Deno.test("the status read stays open to BC for a leadership target: it changes 
   );
   assertEquals(res.status, 200);
   assertEquals(mutations(calls), []);
+});
+
+// ==================== the profile address (#997) ====================
+
+Deno.test("#997: without an address, a correction made on the profile moves Auth and the invitation goes there", async () => {
+  const { deps, calls, notices } = fakeDeps({
+    profile: { email: "corect@osubb.local" },
+  });
+
+  const res = await handleReinvite(request({ member_id: MEMBER }), deps);
+  const payload = await res.json();
+
+  assertEquals(res.status, 200);
+  assertEquals(payload, {
+    member_id: MEMBER,
+    email: "corect@osubb.local",
+    email_changed: true,
+  });
+  // Auth follows the profile; the profile is never put back to the old one.
+  assertEquals(mutations(calls), [
+    "setAuthEmail:corect@osubb.local",
+    "inviteByEmail:corect@osubb.local",
+    "notifyCaller:caller-1",
+  ]);
+  assertEquals(
+    notices[0].body,
+    "Invitația pentru Ioana Popescu a fost retrimisă la corect@osubb.local. Adresa anterioară: gresit@osubb.local.",
+  );
+});
+
+Deno.test("#997: a profile correction another account holds is refused before Auth is touched", async () => {
+  const { deps, calls } = fakeDeps({
+    profile: { email: "altcineva@osubb.local" },
+    emailTaken: true,
+  });
+
+  const res = await handleReinvite(request({ member_id: MEMBER }), deps);
+
+  assertEquals(res.status, 409);
+  assertEquals((await res.json()).code, "email_taken");
+  assertEquals(mutations(calls), []);
+});
+
+Deno.test("#997: Auth refusing the profile correction as taken sends nothing", async () => {
+  const { deps, calls } = fakeDeps({
+    profile: { email: "altcineva@osubb.local" },
+    authEmailError: {
+      message: "A user with this email address has already been registered",
+      status: 422,
+      code: "email_exists",
+    },
+  });
+
+  const res = await handleReinvite(request({ member_id: MEMBER }), deps);
+
+  assertEquals(res.status, 409);
+  assertEquals((await res.json()).code, "email_taken");
+  assertEquals(mutations(calls), ["setAuthEmail:altcineva@osubb.local"]);
+});
+
+Deno.test("#997: status answers the profile address, where a re-send goes", async () => {
+  const { deps } = fakeDeps({ profile: { email: "corect@osubb.local" } });
+
+  const res = await handleReinvite(
+    request({ member_id: MEMBER, action: "status" }),
+    deps,
+  );
+
+  assertEquals((await res.json()).email, "corect@osubb.local");
 });

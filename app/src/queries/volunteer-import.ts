@@ -421,8 +421,10 @@ const CONTACT_COLUMN = {
 /**
  * One contact cell of a never-invited Member: the `profiles` column a live BC
  * or Moderator may write on any row (#944; `email` is BC's alone). The sender
- * mails the Profile's address, so a corrected one is where the invitation
- * goes. `.single()` turns an RLS refusal (zero rows) into a failure.
+ * mails the Profile's address, moving the unused Auth account to it first
+ * (#997), so a corrected one is where the invitation goes. `.single()` turns
+ * an RLS refusal (zero rows) into a failure; an address another profile holds
+ * (the unique `profiles.email`) reads as `email_taken`.
  */
 export async function updateUninvitedContact(input: {
   memberId: string;
@@ -435,5 +437,11 @@ export async function updateUninvitedContact(input: {
     .eq('id', input.memberId)
     .select('id')
     .single();
-  if (error) throw new CommandError(error, 'Nu am putut salva schimbarea.');
+  if (error)
+    throw new CommandError(
+      input.field === 'email' && error.code === '23505'
+        ? { message: 'email_taken' }
+        : error,
+      'Nu am putut salva schimbarea.',
+    );
 }

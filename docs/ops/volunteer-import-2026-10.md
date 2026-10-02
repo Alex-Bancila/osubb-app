@@ -45,7 +45,7 @@ The login page's "Trimite linkul" does not reach these accounts either: it only 
 
 ## 4. Review
 
-The **De invitat** grid lists every never-invited Member with the import's notes. Correct names, addresses, phones, ranks and Departments there before anyone is emailed.
+The **De invitat** grid lists every never-invited Member with the import's notes. Correct names, addresses, phones, ranks and Departments there before anyone is emailed. _Why the address matters here:_ an address fixed in the grid is where the invitation goes — `send-invitations` moves the still-unused account to it before sending (#997). An address another account already uses is refused in the cell, or at the send as `email_taken`.
 
 ## 5. Before sending — dashboard settings (production project)
 
@@ -56,7 +56,7 @@ The **De invitat** grid lists every never-invited Member with the import's notes
 
 ## 6. Send in batches
 
-Select Members in De invitat and press **Trimite invitațiile**. The app calls `send-invitations` with at most 50 ids per call. Each sent invitation stamps `profiles.invited_at` and the Member leaves the grid. When Auth answers the rate limit the batch **stops cleanly** and says where (`stopped.member_id`); the rest are `not_attempted`. Wait for the hour to pass and continue. Watch **Resend → Emails** for bounces; correct a bounced address in the grid and send again.
+Select Members in De invitat and press **Trimite invitațiile**. The app calls `send-invitations` with at most 50 ids per call. Each sent invitation stamps `profiles.invited_at` and the Member leaves the grid. When Auth answers the rate limit the batch **stops cleanly** and says where (`stopped.member_id`); the rest are `not_attempted`. Wait for the hour to pass and continue. Watch **Resend → Emails** for bounces. A sent Member has left the grid, so correct a bounced address on the Member's page with **Retrimite invitația** (`docs/backend/inviting.md`).
 
 ## Related
 
