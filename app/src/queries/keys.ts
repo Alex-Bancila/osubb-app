@@ -103,6 +103,7 @@ export const keys = {
     groups: () => ['reference', 'groups'] as const,
     roles: () => ['reference', 'roles'] as const,
     evaluationScale: () => ['reference', 'evaluation-scale'] as const,
+    difficultyLevels: () => ['reference', 'difficulty-levels'] as const,
   },
   tasks: {
     all: ['tasks'] as const,

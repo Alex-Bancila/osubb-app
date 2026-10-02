@@ -2,14 +2,9 @@ import { useId, useRef, useState, type KeyboardEvent, type Ref } from 'react';
 import { Radio } from '@base-ui/react/radio';
 import { RadioGroup } from '@base-ui/react/radio-group';
 import { Star } from 'lucide-react';
-import {
-  DIFFICULTY_LEVELS,
-  difficultyLevel,
-} from '../../lib/difficulty-levels';
+import { difficultyLevel } from '../../lib/difficulty-levels';
 import { cn } from '../../lib/utils';
-
-const STARS = DIFFICULTY_LEVELS.filter((row) => row.kind === 'star');
-const ROLES = DIFFICULTY_LEVELS.filter((row) => row.kind !== 'star');
+import { useDifficultyLevels } from '../../queries/difficulty-levels';
 
 type DifficultyPickerProps = {
   /** The visible name of the control, e.g. "Dificultate (obligatoriu)". */
@@ -55,14 +50,17 @@ export function DifficultyPicker({
   const id = useId();
   const labelId = `${id}-label`;
   const hintId = `${id}-hint`;
+  const levels = useDifficultyLevels().data ?? [];
+  const stars = levels.filter((row) => row.kind === 'star');
+  const roles = levels.filter((row) => row.kind !== 'star');
   const [preview, setPreview] = useState<number | null>(null);
   const options = useRef<(HTMLElement | null)[]>([]);
   const shown = preview ?? value ?? 0;
-  const chosen = value === null ? null : difficultyLevel(value);
+  const chosen = value === null ? null : difficultyLevel(levels, value);
   const chosenHint = value === null ? null : hint(value);
   const name = (level: number) => {
     const text = hint(level);
-    const title = difficultyLevel(level)?.label ?? String(level);
+    const title = difficultyLevel(levels, level)?.label ?? String(level);
     return text ? `${title} — ${text}` : title;
   };
 
@@ -100,7 +98,7 @@ export function DifficultyPicker({
           className="-mx-1.5 flex w-fit max-w-full"
           onPointerLeave={() => setPreview(null)}
         >
-          {STARS.map(({ level }) => {
+          {stars.map(({ level }) => {
             const lit = shown <= 5 && level <= shown;
             return (
               <Radio.Root
@@ -131,7 +129,7 @@ export function DifficultyPicker({
           })}
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {ROLES.map((row) => (
+          {roles.map((row) => (
             <Radio.Root
               key={row.level}
               ref={(element) => {
@@ -155,14 +153,16 @@ export function DifficultyPicker({
         </div>
       </RadioGroup>
       <p id={hintId} className="min-h-5 text-sm text-muted-foreground">
-        {chosen === null ? (
+        {value === null ? (
           prompt
         ) : (
           <>
             <span className="font-semibold text-foreground tabular-nums">
-              {chosen.kind === 'star'
-                ? `${chosen.level} din 5`
-                : `${chosen.glyph ? `${chosen.glyph} ` : ''}${chosen.label}`}
+              {!chosen
+                ? value
+                : chosen.kind === 'star'
+                  ? `${chosen.level} din 5`
+                  : `${chosen.glyph ? `${chosen.glyph} ` : ''}${chosen.label}`}
             </span>
             {chosenHint && <> — {chosenHint}</>}
           </>

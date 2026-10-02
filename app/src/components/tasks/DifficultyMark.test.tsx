@@ -1,5 +1,11 @@
 import { render, screen } from '@testing-library/react';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
+import { difficultyLevelsFixture } from '../../test/difficulty-levels-fixture';
+
+const levels = vi.hoisted(() => ({ data: undefined as unknown }));
+vi.mock('../../queries/difficulty-levels', () => ({
+  useDifficultyLevels: () => levels,
+}));
 import { DifficultyMark } from './DifficultyMark';
 import { previewPoints } from '../../lib/difficulty-levels';
 
@@ -12,6 +18,7 @@ it.each([
   [9, 'Dificultate Responsabil', 'text', 'Responsabil'],
   [10, 'Dificultate Coordonator', 'text', 'Coordonator'],
 ])('draws level %i as one named image (%s)', (value, name, kind, text) => {
+  levels.data = difficultyLevelsFixture;
   render(<DifficultyMark value={value} label="Dificultate" />);
   const mark = screen.getByRole('img', { name });
   expect(mark).toHaveAttribute('data-difficulty-kind', kind);
@@ -42,4 +49,12 @@ it('previews base points × the multiplier, as the server computes them', () => 
   expect(previewPoints(scale, '', '3')).toBeNull();
   expect(previewPoints(scale, '4', '3')).toBeNull();
   expect(previewPoints(undefined, '3', '3')).toBeNull();
+});
+
+it('draws the bare number, never a guess, until the levels have loaded', () => {
+  levels.data = undefined;
+  render(<DifficultyMark value={7} />);
+  const mark = screen.getByRole('img', { name: 'Dificultate 7' });
+  expect(mark).toHaveTextContent('7');
+  expect(mark.querySelectorAll('svg')).toHaveLength(0);
 });

@@ -3,6 +3,7 @@ import { skipToken, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
+import { useDifficultyLevels } from './difficulty-levels';
 import { keys } from './keys';
 import { useMyGroupRoles } from './my-groups';
 
@@ -336,23 +337,34 @@ export function useRoles() {
  * anything shown from this is a preview (`previewPoints`).
  */
 export function useEvaluationScale() {
-  return useQuery({
+  const ratings = useQuery({
     queryKey: keys.reference.evaluationScale(),
     staleTime: Infinity,
     queryFn: async () => {
-      const [ratings, difficulties] = await Promise.all([
-        supabase
-          .from('rating_guide')
-          .select('rating, multiplier, label')
-          .order('rating'),
-        supabase
-          .from('task_difficulty_levels')
-          .select('level, kind, label, glyph, base_points')
-          .order('level'),
-      ]);
-      if (ratings.error) throw ratings.error;
-      if (difficulties.error) throw difficulties.error;
-      return { ratings: ratings.data, difficulties: difficulties.data };
+      const { data, error } = await supabase
+        .from('rating_guide')
+        .select('rating, multiplier, label')
+        .order('rating');
+      if (error) throw error;
+      return data;
     },
   });
+  // The same cached read every Difficulty display uses: one request.
+  const difficulties = useDifficultyLevels();
+  const data = useMemo(
+    () =>
+      ratings.data && difficulties.data
+        ? { ratings: ratings.data, difficulties: difficulties.data }
+        : undefined,
+    [ratings.data, difficulties.data],
+  );
+  return {
+    data,
+    isPending: ratings.isPending || difficulties.isPending,
+    isError: ratings.isError || difficulties.isError,
+    isFetching: ratings.isFetching || difficulties.isFetching,
+    refetch: async () => {
+      await Promise.all([ratings.refetch(), difficulties.refetch()]);
+    },
+  };
 }

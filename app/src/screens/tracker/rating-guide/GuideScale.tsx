@@ -1,6 +1,7 @@
 import { SubHeading } from '../../../components/layout';
 import { DifficultyMark } from '../../../components/tasks/DifficultyMark';
 import { difficultyName } from '../../../lib/difficulty-levels';
+import { useDifficultyLevels } from '../../../queries/difficulty-levels';
 import { formatPoints } from '../../../lib/format';
 import { ratingGuide } from './general';
 import { SetButton } from './SetButton';
@@ -33,6 +34,7 @@ export function GuideScale({
   selection: GuideSelection;
   onSet?: (patch: GuidePatch) => void;
 }) {
+  const levels = useDifficultyLevels().data;
   const multiplier = (value: number) =>
     scale?.ratings.find((rating) => rating.rating === value)?.multiplier;
   const basePoints = (level: number) =>
@@ -100,7 +102,7 @@ export function GuideScale({
                 </span>
                 {onSet && (
                   <SetButton
-                    name={`Setează Dificultate ${difficultyName(level)}`}
+                    name={`Setează Dificultate ${difficultyName(levels, level)}`}
                     patch={{ difficulty: level }}
                     applied={isApplied({ difficulty: level }, selection)}
                     onSet={onSet}

@@ -14,6 +14,7 @@ import {
 } from '../../components/ui/dialog';
 import { difficultyName } from '../../lib/difficulty-levels';
 import { cn } from '../../lib/utils';
+import { useDifficultyLevels } from '../../queries/difficulty-levels';
 import { useEvaluationScale, useGroups } from '../../queries/reference';
 import { guideForGroup, ratingGuide } from './rating-guide';
 import { GuideScale } from './rating-guide/GuideScale';
@@ -72,6 +73,7 @@ function GuideBody({
   onSet?: (patch: GuidePatch) => void;
 }) {
   const scale = useEvaluationScale();
+  const levels = useDifficultyLevels().data;
   const groups = useGroups();
   const { group, sheet, via } = guideForGroup(groupId, groups.data);
   const [view, setView] = useState<'tasks' | 'scale'>('tasks');
@@ -89,7 +91,7 @@ function GuideBody({
     setLastSet(id);
     const parts = [
       patch.difficulty !== undefined &&
-        `Dificultate ${difficultyName(patch.difficulty)}`,
+        `Dificultate ${difficultyName(levels, patch.difficulty)}`,
       patch.rating !== undefined && `Nota ${patch.rating}`,
     ].filter(Boolean);
     setAnnouncement(`Setat în formular: ${parts.join(', ')}.`);

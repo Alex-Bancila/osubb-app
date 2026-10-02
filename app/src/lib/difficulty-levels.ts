@@ -1,43 +1,48 @@
+import type { DifficultyKind } from './schemas/evaluation';
+
 /**
  * The ten Difficulty levels (#985, #986): five stars for ordinary work, three
  * medals and two named roles for a responsibility. `public.task_difficulty_levels`
- * is the reference table (house rule 6) and owns each level's base points,
- * which the app reads with `useEvaluationScale`; this module only says how a
- * level LOOKS — the same mirror the five stars always were (ruling R29a:
- * stars stay stars) — so every card can draw one without a request.
+ * is the reference table (house rule 6) and owns each level's kind, label,
+ * glyph and base points; the app reads it once (`useDifficultyLevels`) and
+ * these helpers only interpret the rows.
  */
-export const DIFFICULTY_LEVELS = [
-  { level: 1, kind: 'star', label: '1 stea', glyph: '⭐' },
-  { level: 2, kind: 'star', label: '2 stele', glyph: '⭐⭐' },
-  { level: 3, kind: 'star', label: '3 stele', glyph: '⭐⭐⭐' },
-  { level: 4, kind: 'star', label: '4 stele', glyph: '⭐⭐⭐⭐' },
-  { level: 5, kind: 'star', label: '5 stele', glyph: '⭐⭐⭐⭐⭐' },
-  { level: 6, kind: 'medal', label: 'Bronz', glyph: '🥉' },
-  { level: 7, kind: 'medal', label: 'Argint', glyph: '🥈' },
-  { level: 8, kind: 'medal', label: 'Aur', glyph: '🥇' },
-  { level: 9, kind: 'text', label: 'Responsabil', glyph: null },
-  { level: 10, kind: 'text', label: 'Coordonator', glyph: null },
-] as const;
+export type DifficultyLevelRow = {
+  level: number;
+  kind: DifficultyKind;
+  label: string;
+  glyph: string | null;
+  base_points: number;
+};
 
-export type DifficultyLevelInfo = (typeof DIFFICULTY_LEVELS)[number];
-export type DifficultyLevel = DifficultyLevelInfo['level'];
+/** A level number the guide's content may name (1–10, `tasks_difficulty_ck`). */
+export type DifficultyLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
-/** The level's presentation, or null outside 1–10. */
-export function difficultyLevel(value: number): DifficultyLevelInfo | null {
-  return DIFFICULTY_LEVELS.find((row) => row.level === value) ?? null;
+/** One level's row, or null while the table loads or outside it. */
+export function difficultyLevel(
+  levels: readonly DifficultyLevelRow[] | undefined,
+  value: number,
+): DifficultyLevelRow | null {
+  return levels?.find((row) => row.level === value) ?? null;
 }
 
 /**
  * The words a screen reader hears and a sentence can carry: "3 stele",
- * "Bronz", "Coordonator".
+ * "Bronz", "Coordonator" — "nivelul 3" until the table has loaded.
  */
-export function difficultyName(value: number): string {
-  return difficultyLevel(value)?.label ?? `nivelul ${value}`;
+export function difficultyName(
+  levels: readonly DifficultyLevelRow[] | undefined,
+  value: number,
+): string {
+  return difficultyLevel(levels, value)?.label ?? `nivelul ${value}`;
 }
 
-/** The name a Difficulty mark carries for assistive technology. */
-export function difficultyMarkName(value: number) {
-  const level = difficultyLevel(value);
+/** The name a Difficulty mark carries: "Dificultate 3 din 5", "Dificultate Bronz". */
+export function difficultyMarkName(
+  levels: readonly DifficultyLevelRow[] | undefined,
+  value: number,
+): string {
+  const level = difficultyLevel(levels, value);
   if (!level) return `Dificultate ${value}`;
   return level.kind === 'star'
     ? `Dificultate ${value} din 5`

@@ -4,6 +4,7 @@ import { SubHeading } from '../../../components/layout';
 import { DifficultyMark } from '../../../components/tasks/DifficultyMark';
 import { Button } from '../../../components/ui/button';
 import { difficultyName } from '../../../lib/difficulty-levels';
+import { useDifficultyLevels } from '../../../queries/difficulty-levels';
 import { formatTaskCount } from '../../../lib/format';
 import { ratingGuide } from './general';
 import { ExperienceRules } from './GuideScale';
@@ -162,6 +163,7 @@ function TaskRow({
   lastSet: string | null;
   onSet?: (patch: GuidePatch, id: string) => void;
 }) {
+  const levels = useDifficultyLevels().data;
   const options = taskOptions(task, experiences);
   const medalChoice =
     options.length > 1 && options.every((o) => !o.experiences);
@@ -189,7 +191,7 @@ function TaskRow({
             const who = option.experiences
               ? `${experienceNames(option.experiences)}, `
               : '';
-            const name = `Setează ${who}Dificultate ${difficultyName(option.level)}${task.rating ? `, Nota ${task.rating}` : ''} — ${task.task}`;
+            const name = `Setează ${who}Dificultate ${difficultyName(levels, option.level)}${task.rating ? `, Nota ${task.rating}` : ''} — ${task.task}`;
             const content = (
               <>
                 {option.experiences ? (
