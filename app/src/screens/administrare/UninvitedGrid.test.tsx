@@ -72,6 +72,7 @@ vi.mock('../../queries/reference', async (original) => {
     useRoles: () => ({ data: roles }),
   };
 });
+import { CommandError } from '../../lib/command-reasons';
 import { UninvitedGrid } from './UninvitedGrid';
 
 // Fake people only.
@@ -281,13 +282,103 @@ describe('inline edits', () => {
     });
   });
 
-  it('keeps the address read-only: the sender mails the Auth address', () => {
+  it('corrects a never-invited address through the profile write, normalised (#997)', async () => {
+    const user = userEvent.setup();
     listed([person(1)]);
     show();
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Editează emailul pentru Exemplu 01',
+      }),
+    );
+    const email = screen.getByRole('textbox', {
+      name: 'Emailul pentru Exemplu 01',
+    });
+    expect(email).toHaveAttribute('type', 'email');
+    await user.clear(email);
+    await user.type(email, '  Ana.Pop@Example.TEST {Enter}');
+    expect(api.contact).toHaveBeenCalledWith({
+      memberId: 'm1',
+      field: 'email',
+      value: 'ana.pop@example.test',
+    });
+  });
+
+  it('refuses an invalid address in place and saves nothing', async () => {
+    const user = userEvent.setup();
+    listed([person(1)]);
+    show();
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Editează emailul pentru Exemplu 01',
+      }),
+    );
+    const email = screen.getByRole('textbox', {
+      name: 'Emailul pentru Exemplu 01',
+    });
+    await user.clear(email);
+    await user.type(email, 'ana.example.test{Enter}');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Scrie o adresă de email validă.',
+    );
+    expect(email).toHaveAttribute('aria-invalid', 'true');
+    expect(api.contact).not.toHaveBeenCalled();
+  });
+
+  it("shows the server's reason for a taken address, the input still open", async () => {
+    const user = userEvent.setup();
+    api.contact.mockRejectedValue(
+      new CommandError({ message: 'email_taken' }, 'fallback'),
+    );
+    listed([person(1)]);
+    show();
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Editează emailul pentru Exemplu 01',
+      }),
+    );
+    const email = screen.getByRole('textbox', {
+      name: 'Emailul pentru Exemplu 01',
+    });
+    await user.clear(email);
+    await user.type(email, 'luat@example.test{Enter}');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Adresa este folosită deja de alt cont. Verifică adresa.',
+    );
     expect(
-      screen.queryByRole('button', { name: /Editează emailul/ }),
+      screen.getByRole('textbox', { name: 'Emailul pentru Exemplu 01' }),
+    ).toBeVisible();
+  });
+
+  it('makes the address read-only once the invitation is sent', async () => {
+    const user = userEvent.setup();
+    listed([person(1), person(2)]);
+    api.send.mockImplementation((ids: string[]) =>
+      Promise.resolve(sentAll(ids)),
+    );
+    show();
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Selectează Exemplu 01' }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Trimite invitațiile (1)' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Trimite' }));
+    await waitFor(() => expect(api.send).toHaveBeenCalledWith(['m1']));
+    const sent = within(grid())
+      .getByText('v1@example.test')
+      .closest('tr') as HTMLElement;
+    await waitFor(() => expect(sent).toHaveTextContent(/Invitație trimisă/));
+    expect(
+      screen.queryByRole('button', {
+        name: 'Editează emailul pentru Exemplu 01',
+      }),
     ).toBeNull();
-    expect(within(grid()).getByText('v1@example.test')).toBeVisible();
+    expect(
+      screen.getByRole('button', {
+        name: 'Editează emailul pentru Exemplu 02',
+      }),
+    ).toBeVisible();
   });
 
   it('refuses an invalid phone in place and saves nothing; Escape puts it back', async () => {

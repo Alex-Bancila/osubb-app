@@ -338,4 +338,42 @@ describe('the grid', () => {
       expect(single).toHaveBeenCalled();
     },
   );
+
+  function refusedWith(error: { code: string; message: string }) {
+    const single = vi.fn().mockResolvedValue({ error });
+    api.from.mockReturnValue({
+      update: () => ({ eq: () => ({ select: () => ({ single }) }) }),
+    });
+  }
+
+  it('reads an address another profile holds as email_taken (#997)', async () => {
+    refusedWith({
+      code: '23505',
+      message: 'duplicate key value violates unique constraint',
+    });
+    await expect(
+      updateUninvitedContact({
+        memberId: 'm1',
+        field: 'email',
+        value: 'luat@example.test',
+      }),
+    ).rejects.toMatchObject({
+      reason: 'email_taken',
+      message: 'Adresa este folosită deja de alt cont. Verifică adresa.',
+    });
+  });
+
+  it('keeps any other refusal generic', async () => {
+    refusedWith({ code: '42501', message: 'permission denied' });
+    await expect(
+      updateUninvitedContact({
+        memberId: 'm1',
+        field: 'email',
+        value: 'nou@example.test',
+      }),
+    ).rejects.toMatchObject({
+      reason: undefined,
+      message: 'Nu am putut salva schimbarea.',
+    });
+  });
 });

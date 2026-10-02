@@ -24,6 +24,8 @@ interface World {
   /** What `member_level` answers for the caller; BC (6) unless a test says so. */
   callerLevel?: number;
   profileUpdateError?: { code: string; message: string };
+  /** The target profile's invited_at; null unless a test says so. */
+  invitedAt?: string | null;
 }
 
 /**
@@ -90,6 +92,7 @@ function fakeClients(world: World) {
             full_name: "Ioana Popescu",
             status: "activ",
             role: world.role ?? "voluntar",
+            invited_at: world.invitedAt ?? null,
           },
           error: null,
         });
@@ -260,4 +263,22 @@ Deno.test("the real wiring lets the Moderator re-invite a pending BC", async () 
     `auth.admin.updateUserById("${MEMBER}",{"email":"corect@osubb.local"})`,
     `auth.admin.inviteUserByEmail("corect@osubb.local")`,
   ]);
+});
+
+Deno.test("#997: the profile read carries invited_at, the gate send-invitations' address move reads", async () => {
+  const { create, log } = fakeClients({
+    lastSignInAt: null,
+    invitedAt: "2026-10-01T10:00:00+00:00",
+  });
+  const req = request({ member_id: MEMBER, action: "status" });
+
+  const profile = await realDeps(req, ENV, create).profile(MEMBER);
+
+  assertEquals(profile?.invitedAt, "2026-10-01T10:00:00+00:00");
+  assertEquals(
+    log.includes(
+      `profiles.select(email, full_name, status, role, invited_at).eq(id,${MEMBER})`,
+    ),
+    true,
+  );
 });

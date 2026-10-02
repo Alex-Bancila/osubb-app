@@ -1,13 +1,16 @@
 // The port send-invitations talks to the outside world through (#991), and
 // its real wiring: reinvite-member's reads of a Member's Auth account and
 // Profile, an invitation send that keeps Auth's error code (the rate-limit
-// stop reads it), and the invited_at stamp. No createUser, no deleteUser:
-// this function only ever sends.
+// stop reads it), and the invited_at stamp. Since #997 also reinvite-member's
+// address check and Auth address move, so a never-invited Member whose address
+// BC corrected in the "De invitat" grid is mailed at the corrected one. No
+// createUser, no deleteUser: this function never creates or removes an account.
 
 import { createClient } from "@supabase/supabase-js";
 import type { AdminEnv, ClientFactory } from "../invite-member/deps.ts";
 import {
   type AuthAccount,
+  type AuthError,
   type MemberProfile,
   realDeps as reinviteDeps,
 } from "../reinvite-member/deps.ts";
@@ -26,6 +29,10 @@ export interface SendInvitationsDeps {
   memberLevel(userId: string): Promise<number>;
   authAccount(memberId: string): Promise<AuthAccount | null>;
   profile(memberId: string): Promise<MemberProfile | null>;
+  /** True when a profile OTHER than this Member's uses the address (any case). */
+  emailTaken(email: string, memberId: string): Promise<boolean>;
+  /** Moves the Auth user to a new address (admin API: no confirmation mail). */
+  setAuthEmail(memberId: string, email: string): Promise<{ error?: AuthError }>;
   /** Sends the invitation to an existing, unconfirmed account. */
   inviteByEmail(email: string): Promise<{ userId?: string; error?: SendError }>;
   /** public.record_invitation_sent: the stamp, as Postgres recorded it. */
@@ -49,6 +56,8 @@ export function realDeps(
     memberLevel: (userId) => reads.memberLevel(userId),
     authAccount: (memberId) => reads.authAccount(memberId),
     profile: (memberId) => reads.profile(memberId),
+    emailTaken: (email, memberId) => reads.emailTaken(email, memberId),
+    setAuthEmail: (memberId, email) => reads.setAuthEmail(memberId, email),
 
     async inviteByEmail(email) {
       const { data, error } = await admin.auth.admin.inviteUserByEmail(email);

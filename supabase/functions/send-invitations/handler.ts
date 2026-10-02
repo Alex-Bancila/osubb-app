@@ -12,7 +12,11 @@
 //     sent           Auth accepted the invitation; invited_at stamped
 //     skipped        nothing to send: already_active (signed in),
 //                    already_confirmed, member_inactive, member_not_found
-//     failed         invite_failed (Auth refused this one; the batch goes on)
+//     failed         invite_failed (Auth refused this one; the batch goes on);
+//                    email_taken (the profile's corrected address belongs to
+//                    another account), email_sync_failed (Auth refused the
+//                    corrected address), email_mismatch (the two addresses
+//                    differ on an already-invited Member)
 //     rate_limited   Auth answered over_email_send_rate_limit: the batch
 //                    STOPS here, this Member got nothing
 //     not_attempted  after a stop; send them in a later batch
@@ -25,6 +29,14 @@
 // the order given. Like reinvite-member it never creates or deletes an
 // account: Auth re-sends an invitation to an existing unconfirmed user,
 // keeping its id.
+//
+// The address (#997): the invitation goes to `profiles.email`, the column BC
+// corrects in the "De invitat" grid. When it differs from the Auth user's
+// address (case aside), the Auth address is moved to it first through the
+// admin API -- only for a Member never invited (`invited_at` null), never
+// signed in and unconfirmed, i.e. an account nobody has used or been sent
+// anything for. An already-invited Member with two addresses is refused: their
+// correction is reinvite-member's, from the member page.
 
 import {
   corsHeaders,
@@ -32,6 +44,7 @@ import {
   json,
   refusal,
 } from "../_shared/cors.ts";
+import type { AuthAccount, MemberProfile } from "../reinvite-member/deps.ts";
 import type { SendInvitationsDeps } from "./deps.ts";
 
 export const SEND_LEVEL = 6;
@@ -60,8 +73,10 @@ function isRateLimit(error: { code?: string; status?: number }): boolean {
   return error.code === "over_email_send_rate_limit" || error.status === 429;
 }
 
-function isDuplicate(error: { message: string; status?: number }): boolean {
-  return error.status === 422 ||
+function isDuplicate(
+  error: { message: string; status?: number; code?: string },
+): boolean {
+  return error.status === 422 || error.code === "email_exists" ||
     /already been registered|already exists/i.test(error.message);
 }
 
@@ -245,7 +260,10 @@ async function sendOne(
       return skipped("member_inactive", "Membrul nu este activ.");
     }
 
-    const invited = await deps.inviteByEmail(account.email);
+    const address = await invitationAddress(memberId, account, profile, deps);
+    if ("refusal" in address) return address.refusal;
+
+    const invited = await deps.inviteByEmail(address.email);
     if (invited.error || !invited.userId) {
       if (invited.error && isRateLimit(invited.error)) {
         return {
@@ -290,4 +308,50 @@ async function sendOne(
     });
     return failed;
   }
+}
+
+/**
+ * Where this Member's invitation goes (#997): the profile address, with the
+ * Auth user moved to it first when the two differ. Every refusal leaves both
+ * sides as they were.
+ */
+async function invitationAddress(
+  memberId: string,
+  account: AuthAccount,
+  profile: MemberProfile,
+  deps: SendInvitationsDeps,
+): Promise<{ email: string } | { refusal: Result }> {
+  const refusal = (code: string, message: string) => ({
+    refusal: { member_id: memberId, status: "failed" as const, code, message },
+  });
+  const email = profile.email.trim().toLowerCase();
+  if (email === account.email.trim().toLowerCase()) {
+    return { email: account.email };
+  }
+  // The callers have already refused a signed-in or confirmed account; the
+  // stamp is the third condition: once an invitation left, the old address
+  // holds a live link, and moving it is reinvite-member's explicit step.
+  if (profile.invitedAt !== null) {
+    return refusal(
+      "email_mismatch",
+      "Adresa din profil diferă de cea a contului. Retrimite invitația din pagina membrului.",
+    );
+  }
+  const taken = `${email} este folosită deja de alt cont.`;
+  if (await deps.emailTaken(email, memberId)) {
+    return refusal("email_taken", taken);
+  }
+  const moved = await deps.setAuthEmail(memberId, email);
+  if (moved.error) {
+    if (isDuplicate(moved.error)) return refusal("email_taken", taken);
+    console.error("send-invitations auth email update failed", {
+      status: moved.error.status,
+      code: moved.error.code,
+    });
+    return refusal(
+      "email_sync_failed",
+      "Nu am putut muta contul pe adresa corectată. Nu s-a trimis nimic.",
+    );
+  }
+  return { email };
 }
