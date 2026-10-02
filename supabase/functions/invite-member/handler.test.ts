@@ -22,6 +22,7 @@ interface FakeOptions {
   profileExists?: boolean;
   inviteError?: DbError & { status?: number };
   provisionError?: DbError;
+  stampError?: Error;
 }
 
 /** A fake port that records every call, so tests can assert what did NOT happen. */
@@ -74,6 +75,12 @@ function fakeDeps(options: FakeOptions = {}) {
     deleteUser: () => {
       calls.push("deleteUser");
       return Promise.resolve();
+    },
+    recordInvitationSent: (memberId) => {
+      calls.push(`recordInvitationSent:${memberId}`);
+      return options.stampError
+        ? Promise.reject(options.stampError)
+        : Promise.resolve();
     },
   };
 
@@ -281,6 +288,34 @@ Deno.test("a BC invites, and the email is normalised once", async () => {
   assertEquals(calls.includes("deleteUser"), false);
 });
 
+Deno.test("#991: a sent invitation is stamped after the Profile exists", async () => {
+  const { deps, calls } = fakeDeps();
+  const res = await handleInvite(request(validBody), deps);
+  assertEquals(res.status, 201);
+  assertEquals(calls.slice(-2), [
+    "provision",
+    "recordInvitationSent:new-user-1",
+  ]);
+});
+
+Deno.test("#991: a failed stamp is logged, never reported as a failed invitation", async () => {
+  const { deps, calls } = fakeDeps({ stampError: new Error("db down") });
+  const res = await handleInvite(request(validBody), deps);
+  assertEquals(res.status, 201);
+  assertEquals(calls.includes("deleteUser"), false);
+});
+
+Deno.test("#991: an invitation rolled back is never stamped", async () => {
+  const { deps, calls } = fakeDeps({
+    provisionError: { code: "PT400", message: "group_archived" },
+  });
+  await handleInvite(request(validBody), deps);
+  assertEquals(
+    calls.some((call) => call.startsWith("recordInvitationSent")),
+    false,
+  );
+});
+
 Deno.test("role defaults to recrut", async () => {
   const { deps, provisioned } = fakeDeps();
   await handleInvite(request(validBody), deps);
@@ -376,6 +411,7 @@ Deno.test("the screen runs after the missing-id check and before the address loo
     "profileExists",
     "inviteByEmail",
     "provision",
+    "recordInvitationSent:new-user-1",
   ]);
 });
 

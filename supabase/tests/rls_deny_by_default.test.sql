@@ -182,6 +182,11 @@ insert into promotion_candidates (role_evaluation_id, member_id, task_points, te
          (values ('ffffffff-0000-0000-0000-000000000006'::uuid),
                  ('eeeeeeee-0000-0000-0000-000000000156'::uuid)) as member (id)
    where run.name = 'rls-role-evaluation';
+-- #991: the volunteer import's record has no policy at all; the row owned by
+-- the claimless uid is the one a self limb would have exposed.
+insert into member_imports (member_id, sheet_email, sheet_row, imported_by) values
+  ('ffffffff-0000-0000-0000-000000000006', 'rls-import-991@test.local', 2, null),
+  ('eeeeeeee-0000-0000-0000-000000000156', 'rls-import-claimless-991@test.local', 3, null);
 
 -- ==================== The claimless sweep (AC) ====================
 -- `set role authenticated` with no JWT has no caller identity at all:

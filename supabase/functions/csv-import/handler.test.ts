@@ -13,6 +13,9 @@ const demoGroups: GroupReference[] = [
   { id: 3, name: "Echipa App", short: "T-APP", path: [1, 3] },
 ];
 
+const unreachable = () =>
+  Promise.reject(new Error("the recruits format called the volunteer port"));
+
 interface FakeOptions {
   callerId?: string | null;
   callerError?: Error;
@@ -56,6 +59,15 @@ function fakeDeps(options: FakeOptions = {}) {
           userId: `user-${invited.length}`,
         },
       );
+    },
+    // #991: the recruits format never reaches the volunteer port.
+    volunteers: {
+      importGroups: unreachable,
+      boardGroupId: unreachable,
+      lookupAddresses: unreachable,
+      createAccount: unreachable,
+      importMember: unreachable,
+      deleteUser: unreachable,
     },
   };
 

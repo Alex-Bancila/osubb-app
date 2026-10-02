@@ -159,6 +159,104 @@ Rows are numbered like a spreadsheet: the header is row 1 and the first member i
 
 Locally, open Mailpit at http://127.0.0.1:54324 and confirm one **"Ai fost invitat în aplicația OSUBB"** message for every `created` row, each showing both the link and the six-digit code. Hosted imports require the SMTP provider from issue #146; without working hosted email delivery, the function cannot send real invitations.
 
+## The volunteer-base import: create now, invite later (#991)
+
+`csv-import` recognises a second format by its header — the volunteer sheet (`Nume & Prenume`, `Funcția`, `Email`, `Număr de telefon`, `Departament PRINCIPAL`, `Departament secundar`…; extra columns are ignored). Unlike the recruits format it **sends no email**: accounts are created now and invited later, in batches. The mapping and the operator's steps are in [`docs/ops/volunteer-import-2026-10.md`](../ops/volunteer-import-2026-10.md); level 6 only, like every path here.
+
+**Dry-run** — `POST { csv, mode: "dry_run" }` (the default) writes nothing:
+
+```json
+{
+  "format": "volunteers",
+  "mode": "dry_run",
+  "summary": {
+    "rows": 602,
+    "create": 597,
+    "complete": 0,
+    "skip": 5,
+    "with_warnings": 12
+  },
+  "rows": [
+    {
+      "row": 2,
+      "full_name": "Pop Ana",
+      "email": "ana@example.com",
+      "phone": "+40712345678",
+      "rank": "voluntar",
+      "function": "Membru voluntar",
+      "action": "create",
+      "member_id": null,
+      "placements": [
+        {
+          "group_id": 2,
+          "group_name": "Tineret",
+          "group_role": "member",
+          "position_title": null
+        }
+      ],
+      "problems": [
+        {
+          "code": "invalid_phone",
+          "message": "Telefon invalid: contul se creează fără telefon.",
+          "blocking": false
+        }
+      ]
+    }
+  ]
+}
+```
+
+`rank` is `voluntar | vot | bce | bc`; `action` is `create`, `complete` (imported before: the missing Appointments are added) or `skip` (a blocking problem). `placements` are in roster order, the principal Department first. Blocking codes: `name_required`, `name_too_long`, `email_required`, `invalid_email`, `duplicate_in_file`, `unknown_department`, `already_member`, `auth_account_exists`. Notes (the row imports, the note is stored and shown in the grid): `invalid_phone`, `rank_defaulted`, `unknown_function`, `no_position` ("fără poziție"), `project_missing` ("proiect lipsă: <P>"), `board_group_missing`, `board_title_missing`, `title_too_long`.
+
+**Apply** — `POST { csv, mode: "apply", rows?: number[] }` applies the listed sheet rows, at most 100 per call (`413 too_many_rows` otherwise; without `rows` the whole file, which must then be at most 100 rows):
+
+```json
+{
+  "format": "volunteers",
+  "mode": "apply",
+  "summary": { "created": 98, "completed": 0, "skipped": 2, "failed": 0 },
+  "rows": [
+    {
+      "row": 2,
+      "email": "ana@example.com",
+      "outcome": "created",
+      "member_id": "…",
+      "placements": [{ "group_id": 2, "group_role": "member", "position_title": null, "status": "appointed" }],
+      "problems": []
+    },
+    { "row": 4, "email": "", "outcome": "skipped", "code": "email_required", "message": "Emailul lipsește.", "problems": [ … ] }
+  ]
+}
+```
+
+`outcome` is `created | completed | skipped | failed`; a placement's `status` is `appointed`, `present` (already held) or `conflict` (a different role or title is held: left untouched). A `failed` row's `code` is a database reason (`group_archived`, `phone_invalid`, …) or `import_failed` / `account_create_failed` / `unexpected_error`. Per row: Auth's admin `createUser` with the address unconfirmed (verified locally: no mail; a later `inviteUserByEmail` answers the same user id and sends one), then `public.import_member` in one transaction; if that fails, the account just created is deleted again — only while the lookup still reports it as unused, so an account a concurrent call imported is never removed. A re-run never creates a second account: `public.import_member_lookup` finds an imported Member by the address they were imported under (even after BC corrected it) and reuses an account an interrupted run left without a Profile.
+
+**The "De invitat" grid** — `supabase.rpc('uninvited_members')`, level 6 only (`42501 member_manage_forbidden`): one row per activ Member with `profiles.invited_at` null who never signed in — `member_id, full_name, email, phone, role, joined_at, created_at, imported_at, sheet_row, problems, primary_group_id, primary_group_name, memberships` (`[{ group_id, name, parent_id, group_role, position_title }]` in roster order), ordered by sheet row, then name.
+
+**Sending** — Edge Function `send-invitations`, `POST { member_ids: string[] }` (1–50 uuids):
+
+```json
+{
+  "summary": { "sent": 49, "skipped": 0, "failed": 0, "not_attempted": 1 },
+  "stopped": { "reason": "rate_limited", "member_id": "…" },
+  "results": [
+    {
+      "member_id": "…",
+      "status": "sent",
+      "invited_at": "2026-10-03T09:00:00+00:00"
+    },
+    {
+      "member_id": "…",
+      "status": "rate_limited",
+      "code": "over_email_send_rate_limit",
+      "message": "…"
+    }
+  ]
+}
+```
+
+`status` is `sent`, `skipped` (`already_active`, `already_confirmed`, `member_inactive`, `member_not_found`), `failed` (`invite_failed`; the batch goes on), `rate_limited` (Auth's `over_email_send_rate_limit` or a 429: the batch **stops** there) or `not_attempted` (after a stop). `stopped` is null, or names the reason (`rate_limited`, or `time_budget` when the batch nears the function's time limit) and the first Member who got nothing. Every sent invitation — from here, `invite-member`, the recruits CSV and `reinvite-member` — stamps `profiles.invited_at` through `public.record_invitation_sent`; the column was backfilled from `auth.users.invited_at`.
+
 ## What the member sees
 
 An email titled **"Ai fost invitat în aplicația OSUBB"** with a link and a six-digit code. Clicking the link signs them in — no password, nothing to remember. Future sign-ins use the same pair, sent to the same address; Google sign-in is not part of the accepted authentication design.

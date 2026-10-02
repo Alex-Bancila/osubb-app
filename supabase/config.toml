@@ -148,7 +148,9 @@ verify_jwt = true
 import_map = "./functions/deno.json"
 entrypoint = "./functions/invite-member/index.ts"
 
-# Epic 2.4 — BC imports up to 100 recruits from validated CSV text.
+# Epic 2.4 — BC imports up to 100 recruits from validated CSV text. #991: the
+# volunteer sheet (recognised by its header) is a dry-run, then an apply that
+# creates accounts without sending any email.
 [functions.csv-import]
 enabled = true
 verify_jwt = true
@@ -163,6 +165,15 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/deno.json"
 entrypoint = "./functions/reinvite-member/index.ts"
+
+# #991 — BC/Moderator send the invitations of never-invited Members (the
+# volunteer import) in batches of at most 50; the batch stops cleanly on
+# Auth's over_email_send_rate_limit. Same gate as reinvite-member.
+[functions.send-invitations]
+enabled = true
+verify_jwt = true
+import_map = "./functions/deno.json"
+entrypoint = "./functions/send-invitations/index.ts"
 
 # #968 — an invited Member re-sends their own invitation from the login page.
 # verify_jwt = false: the caller has not signed in, so there is no session,

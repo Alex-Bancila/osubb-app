@@ -767,6 +767,93 @@ export type Database = {
           },
         ]
       }
+      member_imports: {
+        Row: {
+          created_at: string
+          imported_by: string | null
+          member_id: string
+          problems: string[]
+          sheet_email: string
+          sheet_row: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          imported_by?: string | null
+          member_id: string
+          problems?: string[]
+          sheet_email: string
+          sheet_row: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          imported_by?: string | null
+          member_id?: string
+          problems?: string[]
+          sheet_email?: string
+          sheet_row?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_imports_imported_by_fkey"
+            columns: ["imported_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "member_imports_imported_by_fkey"
+            columns: ["imported_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_imports_imported_by_fkey"
+            columns: ["imported_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_imports_imported_by_fkey"
+            columns: ["imported_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_imports_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "member_imports_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_imports_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "profiles_contact"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_imports_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notif_suppression: {
         Row: {
           kind: Database["public"]["Enums"]["noti_kind"]
@@ -1205,6 +1292,7 @@ export type Database = {
           email: string
           full_name: string
           id: string
+          invited_at: string | null
           joined_at: string | null
           nickname: string | null
           phone: string | null
@@ -1217,6 +1305,7 @@ export type Database = {
           email: string
           full_name: string
           id: string
+          invited_at?: string | null
           joined_at?: string | null
           nickname?: string | null
           phone?: string | null
@@ -1229,6 +1318,7 @@ export type Database = {
           email?: string
           full_name?: string
           id?: string
+          invited_at?: string | null
           joined_at?: string | null
           nickname?: string | null
           phone?: string | null
@@ -3352,6 +3442,30 @@ export type Database = {
           source: string
         }[]
       }
+      import_member: {
+        Args: {
+          p_email: string
+          p_full_name: string
+          p_imported_by: string
+          p_joined_at: string
+          p_phone: string
+          p_placements: Json
+          p_problems: string[]
+          p_role: Database["public"]["Enums"]["member_role"]
+          p_sheet_row: number
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      import_member_lookup: {
+        Args: { p_emails: string[] }
+        Returns: {
+          email: string
+          imported: boolean
+          member_id: string
+          orphan_user_id: string
+        }[]
+      }
       leadership_leaderboard: {
         Args: {
           p_campaign_id?: number
@@ -3606,6 +3720,7 @@ export type Database = {
         Returns: string
       }
       rating_mult: { Args: { r: number }; Returns: number }
+      record_invitation_sent: { Args: { p_member_id: string }; Returns: string }
       reject_completed_work_request: {
         Args: { p_note: string; p_request_id: number }
         Returns: {
@@ -3902,6 +4017,7 @@ export type Database = {
           email: string
           full_name: string
           id: string
+          invited_at: string | null
           joined_at: string | null
           nickname: string | null
           phone: string | null
@@ -3928,6 +4044,7 @@ export type Database = {
           email: string
           full_name: string
           id: string
+          invited_at: string | null
           joined_at: string | null
           nickname: string | null
           phone: string | null
@@ -4116,6 +4233,24 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      uninvited_members: {
+        Args: never
+        Returns: {
+          created_at: string
+          email: string
+          full_name: string
+          imported_at: string
+          joined_at: string
+          member_id: string
+          memberships: Json
+          phone: string
+          primary_group_id: number
+          primary_group_name: string
+          problems: string[]
+          role: Database["public"]["Enums"]["member_role"]
+          sheet_row: number
+        }[]
       }
       update_campaign: {
         Args: { p_campaign_id: number; p_name: string }
