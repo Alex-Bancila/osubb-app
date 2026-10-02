@@ -16,7 +16,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(36);
+select plan(35);
 
 -- Fixtures: the demo seed's Voluntar (a Member editing their own profile),
 -- one Department Group, one Event and one roster row to update.
@@ -172,10 +172,7 @@ select throws_ok(
   $$ update public.rating_guide set note = repeat('n', 1001) where rating = 3 $$,
   '23514', 'new row for relation "rating_guide" violates check constraint "rating_guide_note_length_ck"',
   'rating_guide_note_length_ck refuses a note over 1000 characters');
-select throws_ok(
-  $$ update public.difficulty_guide set note = repeat('n', 1001) where stars = 3 $$,
-  '23514', 'new row for relation "difficulty_guide" violates check constraint "difficulty_guide_note_length_ck"',
-  'difficulty_guide_note_length_ck refuses a note over 1000 characters');
+-- difficulty_guide_note_length_ck went with its table (#989).
 
 -- ==================== 7. notifications ====================
 select throws_ok(
@@ -211,7 +208,7 @@ select is(
                       'groups_manager_title_length_ck', 'groups_responsible_title_length_ck',
                       'groups_short_length_ck',
                       'points_ledger_note_length_ck', 'rating_guide_label_length_ck',
-                      'rating_guide_note_length_ck', 'difficulty_guide_note_length_ck',
+                      'rating_guide_note_length_ck',
                       'notifications_title_length_ck', 'notifications_body_length_ck')),
   null, 'every new constraint is validated');
 select is(
@@ -222,9 +219,9 @@ select is(
                       'groups_manager_title_length_ck', 'groups_responsible_title_length_ck',
                       'groups_short_length_ck',
                       'points_ledger_note_length_ck', 'rating_guide_label_length_ck',
-                      'rating_guide_note_length_ck', 'difficulty_guide_note_length_ck',
+                      'rating_guide_note_length_ck',
                       'notifications_title_length_ck', 'notifications_body_length_ck')),
-  14::bigint, 'all fourteen constraints exist (#962 added groups_responsible_title_length_ck)');
+  13::bigint, 'all thirteen constraints exist (#962 added groups_responsible_title_length_ck; #989 dropped difficulty_guide with its own)');
 select is(
   (select count(*) from public.profiles where avatar_color is not null and avatar_color !~ '^#[0-9A-Fa-f]{6}$'),
   0::bigint, 'no stored avatar colour is outside #RRGGBB');

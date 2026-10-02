@@ -14,6 +14,8 @@
 --   4. All four evaluating commands accept 10 and refuse 11, and the award
 --      reaches the Executor's ledger, public.my_points and the Clasament.
 --   5. Awards of 20 and more read "de puncte" in both notifications.
+--   6. The retired public.difficulty_guide is gone (#989): this table is the
+--      only Difficulty reference.
 --
 -- Fixture prefix 98500000-0000-0000-0000-0000000000NN; native Groups written
 -- as the owner in this rolled-back transaction (conventions §10).
@@ -23,7 +25,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(35);
+select plan(36);
 
 -- ==================== Fixtures ====================
 create function pg_temp.u985(n integer) returns uuid language sql immutable as $$
@@ -129,6 +131,9 @@ select pg_temp.test_login(pg_temp.u985(4), '{"provider":"email"}'::jsonb);
 select is((select count(*) from public.task_difficulty_levels), 0::bigint,
   'a session without organization claims reads none');
 reset role;
+
+select hasnt_table('public', 'difficulty_guide',
+  'the retired difficulty_guide is dropped: task_difficulty_levels is the only Difficulty reference (#989)');
 
 -- ==================== 2. The stored range ====================
 select is((select pg_get_constraintdef(oid) from pg_constraint

@@ -160,26 +160,28 @@ drop function public.conventions_probe_category(bigint);
 
 -- Security pass I1: tables that only migrations or security-definer commands
 -- write carry no write grant to authenticated. RLS (no write policy) is the
--- second guard, never the only one. Reference data (roles, difficulty_guide,
--- rating_guide) changes only by migration; a profiles row is inserted only by
--- provision_profile (service role) and never deleted by a client. profiles
--- keeps its column-level UPDATE grants for profiles_update_self.
+-- second guard, never the only one. Reference data (roles,
+-- task_difficulty_levels, rating_guide) changes only by migration; a profiles
+-- row is inserted only by provision_profile (service role) and never deleted
+-- by a client. profiles keeps its column-level UPDATE grants for
+-- profiles_update_self. (task_difficulty_levels took difficulty_guide's place
+-- here when #989 dropped that table.)
 create function pg_temp.command_only_write_grants() returns text[]
 language sql as $$
   select coalesce(array_agg(t.tbl || ':' || t.priv order by t.tbl, t.priv), '{}')
     from (values ('roles', 'INSERT'), ('roles', 'UPDATE'), ('roles', 'DELETE'),
-                 ('difficulty_guide', 'INSERT'), ('difficulty_guide', 'UPDATE'),
-                 ('difficulty_guide', 'DELETE'),
+                 ('task_difficulty_levels', 'INSERT'), ('task_difficulty_levels', 'UPDATE'),
+                 ('task_difficulty_levels', 'DELETE'),
                  ('rating_guide', 'INSERT'), ('rating_guide', 'UPDATE'),
                  ('rating_guide', 'DELETE'),
                  ('profiles', 'INSERT'), ('profiles', 'DELETE')) as t(tbl, priv)
    where has_table_privilege('authenticated', ('public.' || t.tbl)::regclass, t.priv);
 $$;
 select is(pg_temp.command_only_write_grants(), '{}'::text[],
-  'authenticated has no INSERT/UPDATE/DELETE on roles, difficulty_guide or rating_guide, and no INSERT/DELETE on profiles');
+  'authenticated has no INSERT/UPDATE/DELETE on roles, task_difficulty_levels or rating_guide, and no INSERT/DELETE on profiles');
 select ok(
   has_table_privilege('authenticated', 'public.roles', 'select')
-  and has_table_privilege('authenticated', 'public.difficulty_guide', 'select')
+  and has_table_privilege('authenticated', 'public.task_difficulty_levels', 'select')
   and has_table_privilege('authenticated', 'public.rating_guide', 'select'),
   'authenticated still reads the three reference tables');
 -- Non-hollow: a re-grant is named.

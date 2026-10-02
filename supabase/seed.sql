@@ -6,7 +6,7 @@
 -- by the manual "Seed staging demo data" workflow, which runs exactly this file
 -- with psql. See docs/backend/seeding-staging.md.
 --
--- Reference lookups (roles, departments, rating_guide, difficulty_guide,
+-- Reference lookups (roles, departments, rating_guide, task_difficulty_levels,
 -- role levels, scoring guides, and notif_suppression) are seeded by MIGRATIONS so they exist
 -- in every environment, production included. Do not duplicate them here.
 --

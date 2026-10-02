@@ -330,21 +330,6 @@ export type Database = {
           },
         ]
       }
-      difficulty_guide: {
-        Row: {
-          note: string | null
-          stars: number
-        }
-        Insert: {
-          note?: string | null
-          stars: number
-        }
-        Update: {
-          note?: string | null
-          stars?: number
-        }
-        Relationships: []
-      }
       event_attendance: {
         Row: {
           checked_in: boolean | null

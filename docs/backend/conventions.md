@@ -4,7 +4,7 @@ A reference for writing Supabase migrations in this repo — not a tutorial. Eac
 
 ## 1. Migrations
 
-Create every migration with `npx supabase migration new <snake_case_name>`; migrations are forward-only and additive (no editing a merged file — add another one). The first line is `-- #<issue>: <one-line purpose>`; further comments explain _why_ a choice was made, not what the SQL already says. Reference data (roles, Departments, rating/difficulty guides, notification suppression) lives in migrations; demo data lives in `supabase/seed.sql` (house rule 6). `supabase/migrations/0001_core_schema.sql` is the one non-timestamped file in the directory and is never renamed.
+Create every migration with `npx supabase migration new <snake_case_name>`; migrations are forward-only and additive (no editing a merged file — add another one). The first line is `-- #<issue>: <one-line purpose>`; further comments explain _why_ a choice was made, not what the SQL already says. Reference data (roles, Departments, the rating guide and Task Difficulty levels, notification suppression) lives in migrations; demo data lives in `supabase/seed.sql` (house rule 6). `supabase/migrations/0001_core_schema.sql` is the one non-timestamped file in the directory and is never renamed.
 
 Example: `supabase/migrations/20260910173341_departments_diverse_secretariat.sql` (first line `-- #310: coordination structures Diverse (Department Teams it, interne) and Secretariat; retire the legacy 'it' department.`).
 
