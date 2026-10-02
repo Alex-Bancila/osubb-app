@@ -17,6 +17,10 @@ const api = vi.hoisted(() => ({
   changeMember: vi.fn(),
 }));
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+vi.mock(
+  '../../queries/member-card',
+  () => import('../../test/member-card-mock'),
+);
 vi.mock('../../queries/volunteer-import', async (original) => ({
   ...(await original<object>()),
   useUninvitedMembers: api.uninvited,
@@ -202,6 +206,31 @@ describe('the grid', () => {
     await user.click(screen.getByRole('button', { name: 'Cu probleme (1)' }));
     expect(within(grid()).queryByText('Exemplu 01')).toBeNull();
     expect(within(grid()).getByText('Exemplu 02')).toBeVisible();
+  });
+
+  it('falls back to every row once the last row with problems is sent', async () => {
+    const user = userEvent.setup();
+    listed([
+      person(1),
+      person(2, {
+        problems: [
+          { code: 'note', message: 'proiect lipsă: Gala', blocking: false },
+        ],
+      }),
+    ]);
+    api.send.mockImplementation((ids: string[]) =>
+      Promise.resolve(sentAll(ids)),
+    );
+    show();
+    await user.click(screen.getByRole('button', { name: 'Cu probleme (1)' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Trimite invitațiile (2)' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Trimite' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /Cu probleme/ })).toBeNull(),
+    );
+    expect(within(grid()).getByText('Exemplu 01')).toBeVisible();
   });
 
   it('says so when nobody is left to invite', () => {

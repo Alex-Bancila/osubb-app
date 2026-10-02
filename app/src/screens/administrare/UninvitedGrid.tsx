@@ -5,6 +5,7 @@ import type { ZodType } from 'zod';
 import { cn } from 'cn';
 import { focusRingClass, SegmentedToggle } from '../../components/layout';
 import { Empty, ErrorState, Loading } from '../../components/states';
+import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
 import {
@@ -165,6 +166,7 @@ function TextCell({
         className={cellButtonClass}
         aria-label={`Editează ${spec.label.toLowerCase()} pentru ${who}`}
         onClick={() => {
+          cancelled.current = false;
           setDraft(value);
           setError(null);
           setEditing(true);
@@ -742,11 +744,16 @@ export function UninvitedGrid() {
       (members.data ?? []).filter((member) => !sentRows.has(member.memberId)),
     [members.data, sentRows],
   );
+  const withProblems = waiting.filter(
+    (member) => member.problems.length > 0,
+  ).length;
+  // Once the last row with problems is sent the toggle goes away: show all.
+  const rowFilter: RowFilter = withProblems > 0 ? filter : 'all';
   const shown = useMemo(() => {
     const needle = normalizeSearch(query.trim());
     const rows = [...waiting, ...sentRows.values()].filter(
       (member) =>
-        (filter === 'all' || member.problems.length > 0) &&
+        (rowFilter === 'all' || member.problems.length > 0) &&
         (!needle ||
           normalizeSearch(`${member.name} ${member.email}`).includes(needle)),
     );
@@ -756,7 +763,7 @@ export function UninvitedGrid() {
           Number(sentRows.has(right.memberId)) ||
         left.name.localeCompare(right.name, 'ro'),
     );
-  }, [waiting, sentRows, query, filter]);
+  }, [waiting, sentRows, query, rowFilter]);
   const selectable = shown.filter((member) => !sentRows.has(member.memberId));
   const allSelected =
     selectable.length > 0 &&
@@ -764,10 +771,6 @@ export function UninvitedGrid() {
   const someSelected = selectable.some((member) =>
     selected.has(member.memberId),
   );
-  const withProblems = waiting.filter(
-    (member) => member.problems.length > 0,
-  ).length;
-
   async function saveContact(
     member: UninvitedMember,
     field: ContactField,
@@ -833,7 +836,7 @@ export function UninvitedGrid() {
         {withProblems > 0 && (
           <SegmentedToggle
             label="Rânduri afișate"
-            value={filter}
+            value={rowFilter}
             onChange={setFilter}
             options={[
               { value: 'all', label: `Toți (${waiting.length})` },
@@ -937,7 +940,18 @@ export function UninvitedGrid() {
                         />
                       )}
                     </td>
-                    <Cell className={stickyName} done={done} text={member.name}>
+                    <Cell
+                      className={stickyName}
+                      done={done}
+                      text={member.name}
+                      sent={
+                        <MemberName
+                          memberId={member.memberId}
+                          fullName={member.name}
+                          size="sm"
+                        />
+                      }
+                    >
                       <TextCell
                         field="fullName"
                         member={member}
@@ -1043,14 +1057,23 @@ export function UninvitedGrid() {
 function Cell({
   done,
   text,
+  sent,
   className,
   children,
 }: {
   done: boolean;
   text: string;
+  /** What a sent row shows instead of `text` (the name, as `MemberName`). */
+  sent?: ReactNode;
   className?: string;
   children: ReactNode;
 }) {
+  if (done && sent)
+    return (
+      <td className={cn(td, className)}>
+        <span className="block px-1.5 py-2">{sent}</span>
+      </td>
+    );
   return (
     <td className={cn(td, className)}>
       {done ? (

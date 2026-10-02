@@ -182,7 +182,7 @@ export function CsvImportDialog({
             <span className="font-medium text-foreground">
               Baza de voluntari
             </span>{' '}
-            (coloana „Nume & Prenume”): se verifică întâi, apoi conturile se
+            (coloana „Nume & Prenume”): se verifică întâi, apoi membrii se
             creează fără niciun email. Invitațiile pleacă din „De invitat”.
           </li>
           <li>
