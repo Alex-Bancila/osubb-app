@@ -72,9 +72,13 @@ Run from GitHub's side after the deploy; every check reports, and any failure fa
 | Check                                                                       | Proves                                                            |
 | --------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | `select 1` through the session pooler                                       | the database is up and the password in the Environment is current |
-| `GET /functions/v1/send-push` without a key answers `401`                   | the functions are deployed and still refuse anonymous calls       |
+| `POST /functions/v1/send-push` without a key answers `401`                  | the functions are deployed and still refuse anonymous calls       |
 | `/` sends a `Content-Security-Policy` (or its `-Report-Only` form) and HSTS | the `_headers` file of #770 shipped with this build               |
 | `/manifest.webmanifest` is `application/manifest+json`                      | the PWA can still be installed                                    |
+
+The push check POSTs: the function checks the method before the key, so a GET is `405` whatever the caller
+holds. The header and manifest checks retry up to six times, ten seconds apart, because a fresh deployment
+serves its `_headers` rules a few seconds late (#1001).
 
 The header and manifest checks run on `https://osubb-app.pages.dev` and, once the CNAME resolves, on
 `https://app.osubb.ro` as well; before the custom domain exists (the first Release) the run notes that it
