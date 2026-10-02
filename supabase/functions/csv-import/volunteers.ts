@@ -349,7 +349,7 @@ async function applyRow(
       importedBy: callerId,
     });
     if (imported.error || !imported.result) {
-      if (createdHere) await deleteQuietly(deps, createdHere);
+      if (createdHere) await deleteIfUnused(deps, row.email, createdHere);
       const { code, message } = failure(
         imported.error ?? { message: "import_failed" },
       );
@@ -368,13 +368,26 @@ async function applyRow(
       row: row.row,
       errorType: error instanceof Error ? error.name : typeof error,
     });
-    if (createdHere) await deleteQuietly(deps, createdHere);
+    if (createdHere) await deleteIfUnused(deps, row.email, createdHere);
     return failed("unexpected_error", "Importul acestui rând a eșuat.");
   }
 }
 
-async function deleteQuietly(deps: VolunteerImportDeps, userId: string) {
+/**
+ * Deletes an account this call created, but only while it is still an
+ * orphan: a concurrent call may have found it through the duplicate path and
+ * imported it, and that Member's account must survive this row's failure.
+ * When the address cannot be checked, nothing is deleted -- the next run
+ * reuses the orphan anyway.
+ */
+async function deleteIfUnused(
+  deps: VolunteerImportDeps,
+  email: string,
+  userId: string,
+) {
   try {
+    const known = (await deps.lookupAddresses([email])).get(email);
+    if (known?.orphanUserId !== userId) return;
     await deps.deleteUser(userId);
   } catch (error) {
     // The next run finds the account as an orphan and reuses it.

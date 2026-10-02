@@ -15,7 +15,7 @@ import type { DbError } from "../_shared/member-invite.ts";
 interface FakeOptions {
   level?: number;
   known?: Record<string, KnownAddress>;
-  /** After a duplicate create, what a second lookup answers. */
+  /** What every lookup after the first answers (a race, a cleanup check). */
   knownAfterDuplicate?: Record<string, KnownAddress>;
   createErrors?: Record<string, AuthError>;
   importErrors?: Record<string, DbError>;
@@ -270,6 +270,14 @@ Deno.test("a create that races another call reuses the account it finds", async 
 Deno.test("a refused row deletes the account it created (no mail ever left) and reports the reason", async () => {
   const { deps, calls } = fakeDeps({
     importErrors: { "ana@x.ro": { code: "PT409", message: "group_archived" } },
+    // The cleanup check: still an orphan, so it is ours to delete.
+    knownAfterDuplicate: {
+      "ana@x.ro": {
+        memberId: null,
+        imported: false,
+        orphanUserId: "user-ana@x.ro",
+      },
+    },
   });
   const payload = await (await handleCsvImport(
     request({ csv: CSV, mode: "apply", rows: [2] }),
@@ -288,6 +296,25 @@ Deno.test("a refused row deletes the account it created (no mail ever left) and 
     message: "Un grup ales este arhivat.",
     problems: [],
   });
+});
+
+Deno.test("an account another call imported meanwhile is never deleted by this row's failure", async () => {
+  const { deps, calls } = fakeDeps({
+    importErrors: { "ana@x.ro": { code: "23505", message: "duplicate key" } },
+    knownAfterDuplicate: {
+      "ana@x.ro": {
+        memberId: "user-ana@x.ro",
+        imported: true,
+        orphanUserId: null,
+      },
+    },
+  });
+  const payload = await (await handleCsvImport(
+    request({ csv: CSV, mode: "apply", rows: [2] }),
+    deps,
+  )).json();
+  assertEquals(calls, ["create:ana@x.ro", "import:ana@x.ro:user-ana@x.ro"]);
+  assertEquals(payload.rows[0].code, "already_exists");
 });
 
 Deno.test("a reused account is never deleted when its row fails", async () => {

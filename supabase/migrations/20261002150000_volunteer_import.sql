@@ -297,6 +297,9 @@ begin
         select profile.id
           from public.profiles as profile
          where lower(profile.email) = wanted.address
+         -- profiles.email is unique only as written: should two spellings
+         -- of one address ever exist, the exact one, then the oldest, wins.
+         order by (profile.email = wanted.address) desc, profile.created_at, profile.id
          limit 1
       ) as by_profile on true
   )
