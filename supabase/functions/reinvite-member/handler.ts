@@ -340,6 +340,14 @@ export async function handleReinvite(
       );
     }
 
+    // #991: the invitation has left; stamp it. Logged, never reported, when
+    // it fails -- the Member has the mail either way.
+    try {
+      await deps.recordInvitationSent(memberId);
+    } catch (error) {
+      console.error("invitation stamp failed", error);
+    }
+
     // The audit line. There is no profile-history table (role_history is
     // for Roles only), so the record is a `system` Notification to the
     // caller, as #773 allows. The email has left by now: a failed audit is

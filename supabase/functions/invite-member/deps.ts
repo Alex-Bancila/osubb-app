@@ -182,5 +182,12 @@ export function realDeps(
     async deleteUser(userId) {
       await admin.auth.admin.deleteUser(userId);
     },
+
+    async recordInvitationSent(memberId) {
+      const { error } = await admin.rpc("record_invitation_sent", {
+        p_member_id: memberId,
+      });
+      if (error) throw error;
+    },
   };
 }

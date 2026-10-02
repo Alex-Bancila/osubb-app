@@ -14,7 +14,10 @@ select plan(12);
 create function pg_temp.excluded_tables() returns text[] language sql as $$
   select array['notifications', 'push_tokens', 'push_deliveries',
                'notification_push_preferences', 'notification_email_preferences',
-               'notif_suppression'];
+               'notif_suppression',
+               -- #991: the volunteer import's record; the grid refetches
+               -- after each import call it makes.
+               'member_imports'];
 $$;
 
 create function pg_temp.broadcasting_tables() returns text[] language sql as $$

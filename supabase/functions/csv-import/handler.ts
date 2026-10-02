@@ -16,6 +16,11 @@ import {
   type RecruitCsvResult,
 } from "../_shared/csv.ts";
 import { buildGroupLookup, type GroupReference } from "../_shared/groups.ts";
+import { readVolunteerSheet } from "../_shared/volunteer-sheet.ts";
+import {
+  handleVolunteerImport,
+  type VolunteerImportDeps,
+} from "./volunteers.ts";
 
 export interface CsvImportDeps {
   callerId(): Promise<string | null>;
@@ -26,6 +31,8 @@ export interface CsvImportDeps {
     input: InviteMemberInput,
     references: RecruitCsvReferences,
   ): Promise<InviteMemberResult>;
+  /** #991: the volunteer-sheet format (dry-run / apply without email). */
+  volunteers: VolunteerImportDeps;
 }
 
 interface CsvImportRowError {
@@ -134,6 +141,18 @@ export async function handleCsvImport(
       "csv_too_large",
       "Fișierul CSV depășește limita de 256 KB.",
       413,
+      origin,
+    );
+  }
+  // #991: the volunteer sheet is recognised by its header and never sends
+  // an email; every other file is the recruits format below, unchanged.
+  const volunteerSheet = readVolunteerSheet(csv);
+  if (volunteerSheet !== null) {
+    return handleVolunteerImport(
+      body as Record<string, unknown>,
+      volunteerSheet,
+      callerId,
+      deps.volunteers,
       origin,
     );
   }
