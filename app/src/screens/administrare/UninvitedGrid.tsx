@@ -947,13 +947,12 @@ export function UninvitedGrid() {
                         }
                       />
                     </Cell>
-                    <Cell done={done} text={member.email}>
-                      <TextCell
-                        field="email"
-                        member={member}
-                        value={member.email}
-                        onSave={(value) => saveContact(member, 'email', value)}
-                      />
+                    {/* Read-only for now: `send-invitations` mails the Auth
+                        address, and a profile write would leave the two
+                        apart. A wrong address is corrected on the member
+                        page (`reinvite-member` moves both, then sends). */}
+                    <Cell done text={member.email}>
+                      {null}
                     </Cell>
                     <Cell done={done} text={member.phone ?? '—'}>
                       <TextCell

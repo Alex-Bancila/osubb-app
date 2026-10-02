@@ -394,8 +394,7 @@ export async function sendInvitationBatch(
 }
 
 export async function fetchUninvitedMembers(): Promise<UninvitedMember[]> {
-  // Not in the generated types until #991 lands with its regenerated file.
-  const { data, error } = await supabase.rpc('uninvited_members' as never);
+  const { data, error } = await supabase.rpc('uninvited_members');
   if (error) throw error;
   return readUninvited(data);
 }

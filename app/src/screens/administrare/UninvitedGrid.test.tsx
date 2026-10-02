@@ -212,7 +212,7 @@ describe('the grid', () => {
 });
 
 describe('inline edits', () => {
-  it('saves a name, an address and a phone through the profile write, normalised', async () => {
+  it('saves a name and a phone through the profile write, normalised', async () => {
     const user = userEvent.setup();
     listed([person(1)]);
     show();
@@ -237,22 +237,6 @@ describe('inline edits', () => {
 
     await user.click(
       screen.getByRole('button', {
-        name: 'Editează emailul pentru Exemplu 01',
-      }),
-    );
-    const email = screen.getByRole('textbox', {
-      name: 'Emailul pentru Exemplu 01',
-    });
-    await user.clear(email);
-    await user.type(email, 'ANA@Example.TEST{Enter}');
-    expect(api.contact).toHaveBeenLastCalledWith({
-      memberId: 'm1',
-      field: 'email',
-      value: 'ana@example.test',
-    });
-
-    await user.click(
-      screen.getByRole('button', {
         name: 'Editează telefonul pentru Exemplu 01',
       }),
     );
@@ -268,50 +252,57 @@ describe('inline edits', () => {
     });
   });
 
-  it('refuses an invalid address in place and saves nothing; Escape puts it back', async () => {
+  it('keeps the address read-only: the sender mails the Auth address', () => {
+    listed([person(1)]);
+    show();
+    expect(
+      screen.queryByRole('button', { name: /Editează emailul/ }),
+    ).toBeNull();
+    expect(within(grid()).getByText('v1@example.test')).toBeVisible();
+  });
+
+  it('refuses an invalid phone in place and saves nothing; Escape puts it back', async () => {
     const user = userEvent.setup();
     listed([person(1)]);
     show();
     await user.click(
       screen.getByRole('button', {
-        name: 'Editează emailul pentru Exemplu 01',
+        name: 'Editează telefonul pentru Exemplu 01',
       }),
     );
-    const email = screen.getByRole('textbox', {
-      name: 'Emailul pentru Exemplu 01',
+    const phone = screen.getByRole('textbox', {
+      name: 'Telefonul pentru Exemplu 01',
     });
-    await user.clear(email);
-    await user.type(email, 'nu-e-adresa{Enter}');
+    await user.clear(phone);
+    await user.type(phone, '12{Enter}');
     expect(screen.getByRole('alert')).toBeVisible();
-    expect(email).toHaveAttribute('aria-invalid', 'true');
+    expect(phone).toHaveAttribute('aria-invalid', 'true');
     expect(api.contact).not.toHaveBeenCalled();
     await user.keyboard('{Escape}');
     expect(api.contact).not.toHaveBeenCalled();
     expect(
       screen.getByRole('button', {
-        name: 'Editează emailul pentru Exemplu 01',
+        name: 'Editează telefonul pentru Exemplu 01',
       }),
-    ).toHaveTextContent('v1@example.test');
+    ).toHaveTextContent('+40712000000');
   });
 
   it('shows a refused save under the cell, the input still open', async () => {
     const user = userEvent.setup();
-    api.contact.mockRejectedValue(new Error('email_taken'));
+    api.contact.mockRejectedValue(new Error('full_name_too_long'));
     listed([person(1)]);
     show();
     await user.click(
-      screen.getByRole('button', {
-        name: 'Editează emailul pentru Exemplu 01',
-      }),
+      screen.getByRole('button', { name: 'Editează numele pentru Exemplu 01' }),
     );
-    const email = screen.getByRole('textbox', {
-      name: 'Emailul pentru Exemplu 01',
+    const name = screen.getByRole('textbox', {
+      name: 'Numele pentru Exemplu 01',
     });
-    await user.clear(email);
-    await user.type(email, 'alt@example.test{Enter}');
+    await user.clear(name);
+    await user.type(name, 'Alt Nume{Enter}');
     expect(await screen.findByRole('alert')).toBeVisible();
     expect(
-      screen.getByRole('textbox', { name: 'Emailul pentru Exemplu 01' }),
+      screen.getByRole('textbox', { name: 'Numele pentru Exemplu 01' }),
     ).toBeVisible();
   });
 
