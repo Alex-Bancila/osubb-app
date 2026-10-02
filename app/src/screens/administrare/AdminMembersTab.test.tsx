@@ -6,7 +6,11 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { AppointableMember } from '../../queries/groups-admin';
 
-const api = vi.hoisted(() => ({ capabilities: vi.fn(), members: vi.fn() }));
+const api = vi.hoisted(() => ({
+  capabilities: vi.fn(),
+  members: vi.fn(),
+  uninvited: vi.fn(),
+}));
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../lib/capabilities', () => ({
   useCapabilities: api.capabilities,
@@ -15,9 +19,16 @@ vi.mock('../../queries/groups-admin', async (original) => ({
   ...(await original<object>()),
   useAppointableMembers: api.members,
 }));
+vi.mock('../../queries/volunteer-import', async (original) => ({
+  ...(await original<object>()),
+  useUninvitedMembers: api.uninvited,
+}));
+vi.mock('./UninvitedGrid', () => ({
+  UninvitedGrid: () => <p>Grila „De invitat”</p>,
+}));
 vi.mock('./CsvImportDialog', () => ({
-  CsvImportDialog: () => (
-    <button type="button" className="w-full">
+  CsvImportDialog: ({ onShowUninvited }: { onShowUninvited?: () => void }) => (
+    <button type="button" className="w-full" onClick={onShowUninvited}>
       Import CSV
     </button>
   ),
@@ -67,12 +78,25 @@ function Where() {
   return <p data-testid="where">{pathname}</p>;
 }
 
-function show() {
+function Search() {
+  const { search } = useLocation();
+  return <p data-testid="search">{search}</p>;
+}
+
+function show(entry = '/administrare/membri') {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <MemoryRouter initialEntries={['/administrare/membri']}>
+      <MemoryRouter initialEntries={[entry]}>
         <Routes>
-          <Route path="/administrare/membri" element={<AdminMembersTab />} />
+          <Route
+            path="/administrare/membri"
+            element={
+              <>
+                <AdminMembersTab />
+                <Search />
+              </>
+            }
+          />
           <Route path="/administrare/membri/:id" element={<Where />} />
         </Routes>
       </MemoryRouter>
@@ -81,6 +105,7 @@ function show() {
 }
 
 beforeEach(() => {
+  api.uninvited.mockReturnValue({ data: [] });
   api.capabilities.mockReturnValue({
     data: { manageRoles: true, provisionMembers: true },
   });
@@ -304,4 +329,56 @@ it('confirms a sent invitation and marks the new Member in the list', async () =
     .getByRole('button', { name: 'Profilul membrului Ștefi' })
     .closest('tr') as HTMLElement;
   expect(within(other).queryByText('Invitație trimisă')).toBeNull();
+});
+
+it('switches to "De invitat" and back, the view kept in the URL (#992)', async () => {
+  const user = userEvent.setup();
+  api.uninvited.mockReturnValue({
+    data: [{ memberId: 'x' }, { memberId: 'y' }],
+  });
+  show();
+  const panel = screen.getByRole('region', { name: 'Membri' });
+  const views = within(panel).getByRole('group', { name: 'Vizualizare' });
+  expect(within(views).getByRole('button', { name: 'Toți' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await user.click(
+    within(views).getByRole('button', { name: 'De invitat (2)' }),
+  );
+  expect(screen.getByText('Grila „De invitat”')).toBeVisible();
+  expect(screen.getByTestId('search')).toHaveTextContent('?vedere=de-invitat');
+  // The Members list is not rendered under the grid.
+  expect(within(panel).queryByLabelText('Caută un membru')).toBeNull();
+
+  await user.click(within(views).getByRole('button', { name: 'Toți' }));
+  expect(screen.getByTestId('search')).toBeEmptyDOMElement();
+  expect(within(panel).getByLabelText('Caută un membru')).toBeVisible();
+  // Kept mounted but hidden, so a sending run keeps its progress.
+  expect(screen.getByText('Grila „De invitat”')).not.toBeVisible();
+});
+
+it('opens on "De invitat" from the URL, and the import leads there', async () => {
+  const user = userEvent.setup();
+  show('/administrare/membri?vedere=de-invitat');
+  expect(screen.getByText('Grila „De invitat”')).toBeVisible();
+  await user.click(
+    within(screen.getByRole('group', { name: 'Vizualizare' })).getByRole(
+      'button',
+      { name: 'Toți' },
+    ),
+  );
+  await user.click(screen.getByRole('button', { name: 'Import CSV' }));
+  expect(screen.getByText('Grila „De invitat”')).toBeVisible();
+});
+
+it('never offers "De invitat" to a viewer who may not provision, whatever the URL says', () => {
+  api.capabilities.mockReturnValue({
+    data: { manageRoles: true, provisionMembers: false },
+  });
+  show('/administrare/membri?vedere=de-invitat');
+  expect(screen.queryByRole('group', { name: 'Vizualizare' })).toBeNull();
+  expect(screen.queryByText('Grila „De invitat”')).toBeNull();
+  // The read is not even asked for.
+  expect(api.uninvited).toHaveBeenCalledWith(false);
 });

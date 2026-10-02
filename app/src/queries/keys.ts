@@ -94,6 +94,9 @@ export const keys = {
     /** Nickname, full name and avatar colour for a set of Members (sorted ids). */
     names: (viewerId: string | undefined, memberIds: readonly string[]) =>
       ['members', 'names', { viewerId, memberIds }] as const,
+    /** Members the import created and nobody invited yet (#992). */
+    uninvited: (viewerId: string | undefined) =>
+      ['members', 'uninvited', { viewerId }] as const,
   },
   /* Reference data — roles, Groups, the scoring guides. Same family for all of
      it: one `['reference']` invalidation after a deploy, or after Administrare
