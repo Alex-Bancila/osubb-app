@@ -68,6 +68,8 @@ export interface ReinviteDeps {
   inviteByEmail(email: string): Promise<{ userId?: string; error?: AuthError }>;
   /** A `system` Notification to the caller: the audit line of the re-send. */
   notifyCaller(callerId: string, notice: CallerNotice): Promise<void>;
+  /** #991: stamps profiles.invited_at once the invitation has been sent. */
+  recordInvitationSent(memberId: string): Promise<void>;
 }
 
 export function realDeps(
@@ -185,6 +187,13 @@ export function realDeps(
         title: notice.title,
         body: notice.body,
         link: notice.link,
+      });
+      if (error) throw error;
+    },
+
+    async recordInvitationSent(memberId) {
+      const { error } = await admin.rpc("record_invitation_sent", {
+        p_member_id: memberId,
       });
       if (error) throw error;
     },

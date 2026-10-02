@@ -28,6 +28,7 @@ interface FakeOptions {
   inviteError?: AuthError;
   invitedUserId?: string;
   notifyError?: Error;
+  stampError?: Error;
 }
 
 /** A fake port that records every call, so tests can assert order and absence. */
@@ -96,6 +97,12 @@ function fakeDeps(options: FakeOptions = {}) {
           : { userId: options.invitedUserId ?? MEMBER },
       );
     },
+    recordInvitationSent: (memberId) => {
+      calls.push(`recordInvitationSent:${memberId}`);
+      return options.stampError
+        ? Promise.reject(options.stampError)
+        : Promise.resolve();
+    },
     notifyCaller: (callerId, notice) => {
       calls.push(`notifyCaller:${callerId}`);
       notices.push(notice);
@@ -141,6 +148,29 @@ Deno.test("a Member who has signed in is refused before anything changes", async
   assertEquals(payload.code, "already_active");
   // Their address is theirs now: no correction, no stray sign-in link.
   assertEquals(mutations(calls), []);
+});
+
+Deno.test("#991: a re-sent invitation is stamped after the send, a refused one never", async () => {
+  const sent = fakeDeps();
+  const res = await handleReinvite(request({ member_id: MEMBER }), sent.deps);
+  assertEquals(res.status, 200);
+  const send = sent.calls.indexOf("inviteByEmail:gresit@osubb.local");
+  const stamp = sent.calls.indexOf(`recordInvitationSent:${MEMBER}`);
+  assertEquals(send >= 0 && stamp > send, true);
+
+  const failed = fakeDeps({ inviteError: { message: "smtp down" } });
+  await handleReinvite(request({ member_id: MEMBER }), failed.deps);
+  assertEquals(
+    failed.calls.some((call) => call.startsWith("recordInvitationSent")),
+    false,
+  );
+
+  const unstamped = fakeDeps({ stampError: new Error("db down") });
+  const ok = await handleReinvite(
+    request({ member_id: MEMBER }),
+    unstamped.deps,
+  );
+  assertEquals(ok.status, 200);
 });
 
 Deno.test("a corrected address is written to Auth, then the profile, then invited", async () => {

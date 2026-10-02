@@ -105,6 +105,7 @@ function inviteDeps(overrides: Partial<InviteDeps> = {}): InviteDeps {
     inviteByEmail: () => Promise.resolve({ userId: "new-user-1" }),
     provision: () => Promise.resolve({}),
     deleteUser: () => Promise.resolve(),
+    recordInvitationSent: () => Promise.resolve(),
     ...overrides,
   };
 }
@@ -238,6 +239,14 @@ function csvDeps(overrides: Partial<CsvImportDeps> = {}): CsvImportDeps {
     memberLevel: () => Promise.resolve(6),
     activeGroups: () => Promise.resolve([]),
     invite: reject,
+    volunteers: {
+      importGroups: reject,
+      boardGroupId: reject,
+      lookupAddresses: reject,
+      createAccount: reject,
+      importMember: reject,
+      deleteUser: reject,
+    },
     ...overrides,
   };
 }
@@ -344,6 +353,7 @@ function reinviteDeps(overrides: Partial<ReinviteDeps> = {}): ReinviteDeps {
     setProfileEmail: () => Promise.resolve({}),
     inviteByEmail: () => Promise.resolve({ userId: UUID }),
     notifyCaller: () => Promise.resolve(),
+    recordInvitationSent: () => Promise.resolve(),
     ...overrides,
   };
 }

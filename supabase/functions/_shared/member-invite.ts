@@ -72,6 +72,8 @@ export interface InviteDeps {
   ): Promise<{ userId?: string; error?: DbError & { status?: number } }>;
   provision(args: ProvisionArgs): Promise<{ error?: DbError }>;
   deleteUser(userId: string): Promise<void>;
+  /** #991: stamps profiles.invited_at once the invitation has been sent. */
+  recordInvitationSent(memberId: string): Promise<void>;
 }
 
 export interface InviteMemberInput {
@@ -163,6 +165,15 @@ export async function inviteMember(
   });
 
   if (!provisionError) {
+    // #991: the invitation left before the Profile existed, so it is stamped
+    // now. A failed stamp is logged, never reported: the mail has gone.
+    try {
+      await deps.recordInvitationSent(invited.userId);
+    } catch (error) {
+      console.error("invitation stamp failed", {
+        errorType: error instanceof Error ? error.name : typeof error,
+      });
+    }
     return { kind: "created", userId: invited.userId, email };
   }
 
