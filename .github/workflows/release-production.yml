@@ -212,8 +212,10 @@ jobs:
           answer="$( [ -n "$pooler" ] && timeout 30 psql "$pooler" -tAc 'select 1' 2>&1 || true)"
           if [ "$answer" = 1 ]; then pass "select 1 through the pooler"; else fail "select 1 through the pooler (${answer:-no pooler URL from supabase link})"; fi
 
-          status="$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' "${SUPABASE_URL%/}/functions/v1/send-push" || true)"
-          if [ "$status" = 401 ]; then pass "GET send-push without a key → 401"; else fail "GET send-push without a key → $status, expected 401"; fi
+          # POST: the function checks the method before the key, so a GET is
+          # 405 whatever the caller holds (#1001).
+          status="$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' -X POST "${SUPABASE_URL%/}/functions/v1/send-push" || true)"
+          if [ "$status" = 401 ]; then pass "POST send-push without a key → 401"; else fail "POST send-push without a key → $status, expected 401"; fi
 
           hosts="https://$PAGES_PROJECT.pages.dev"
           if getent hosts "$PRODUCTION_DOMAIN" >/dev/null; then
@@ -222,11 +224,24 @@ jobs:
             echo "::notice::$PRODUCTION_DOMAIN does not resolve yet; checked $hosts only (runbook §11 adds the CNAME after the first Release)."
           fi
           for host in $hosts; do
-            headers="$(curl -sSI --connect-timeout 10 --max-time 30 "$host/" 2>&1 | tr -d '\r' | tr '[:upper:]' '[:lower:]' || true)"
-            if printf '%s\n' "$headers" | grep -Eq '^content-security-policy(-report-only)?:'; then pass "$host/ sends a CSP"; else fail "$host/ sends no Content-Security-Policy"; fi
-            if printf '%s\n' "$headers" | grep -q '^strict-transport-security:'; then pass "$host/ sends HSTS"; else fail "$host/ sends no Strict-Transport-Security"; fi
-            type="$(curl -sS --connect-timeout 10 --max-time 30 -o /dev/null -w '%{content_type}' "$host/manifest.webmanifest" || true)"
-            if [ "${type%%;*}" = application/manifest+json ]; then pass "$host/manifest.webmanifest is application/manifest+json"; else fail "$host/manifest.webmanifest is '$type', expected application/manifest+json"; fi
+            # A fresh deployment serves its _headers rules a few seconds late
+            # (the first Release met text/plain for the manifest one second
+            # after wrangler returned, #1001): up to six tries, ten seconds
+            # apart, and the last try's answers are what is reported.
+            csp=0; hsts=0; mtype=0; type=""
+            for attempt in 1 2 3 4 5 6; do
+              headers="$(curl -sSI --connect-timeout 10 --max-time 30 "$host/" 2>&1 | tr -d '\r' | tr '[:upper:]' '[:lower:]' || true)"
+              type="$(curl -sS --connect-timeout 10 --max-time 30 -o /dev/null -w '%{content_type}' "$host/manifest.webmanifest" || true)"
+              csp=0; hsts=0; mtype=0
+              printf '%s\n' "$headers" | grep -Eq '^content-security-policy(-report-only)?:' && csp=1
+              printf '%s\n' "$headers" | grep -q '^strict-transport-security:' && hsts=1
+              [ "${type%%;*}" = application/manifest+json ] && mtype=1
+              [ "$csp$hsts$mtype" = 111 ] && break
+              [ "$attempt" = 6 ] || sleep 10
+            done
+            if [ "$csp" = 1 ]; then pass "$host/ sends a CSP"; else fail "$host/ sends no Content-Security-Policy"; fi
+            if [ "$hsts" = 1 ]; then pass "$host/ sends HSTS"; else fail "$host/ sends no Strict-Transport-Security"; fi
+            if [ "$mtype" = 1 ]; then pass "$host/manifest.webmanifest is application/manifest+json"; else fail "$host/manifest.webmanifest is '$type', expected application/manifest+json"; fi
           done
           exit "$failed"
 
