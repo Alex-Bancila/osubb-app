@@ -5,6 +5,7 @@ import { DialogFooter } from '../ui/dialog';
 import { FieldError } from '../ui/field';
 import { evaluationSchema, fieldForReason } from '../../lib/schemas/evaluation';
 import { useFormValidation } from '../../lib/use-form-validation';
+import { previewPoints } from '../../lib/difficulty-levels';
 import { useEvaluationScale } from '../../queries/reference';
 import { RatingGuideDialog } from '../../screens/tracker/RatingGuideDialog';
 import { EvaluationInputs } from './EvaluationInputs';
@@ -17,6 +18,7 @@ export function EvaluationFields({
   isPending,
   outcome = 'completed',
   inDialog = false,
+  groupId,
 }: {
   executorName: string | null;
   onCancel: () => void;
@@ -34,6 +36,8 @@ export function EvaluationFields({
    * title, and the buttons in the dialog footer (#842, X11; #855, R1).
    */
   inDialog?: boolean;
+  /** The Task's Group: the guide opens on its list (#986). */
+  groupId?: number | null;
 }) {
   const id = useId();
   const scale = useEvaluationScale();
@@ -46,11 +50,7 @@ export function EvaluationFields({
     fieldForReason,
   );
   const submitting = useRef(false);
-  const chosen = scale.data?.ratings.find(
-    (row) => row.rating === Number(rating),
-  );
-  const points =
-    difficulty && chosen ? Number(difficulty) * chosen.multiplier : null;
+  const points = previewPoints(scale.data, difficulty, rating);
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (submitting.current) return;
@@ -111,7 +111,18 @@ export function EvaluationFields({
           istoric. Evaluarea poate acorda zero puncte sau poate scădea puncte.
         </p>
       )}
-      <RatingGuideDialog />
+      <RatingGuideDialog
+        groupId={groupId}
+        selection={{
+          difficulty: difficulty === '' ? null : Number(difficulty),
+          rating: rating === '' ? null : Number(rating),
+        }}
+        onSet={(patch) => {
+          if (patch.difficulty !== undefined)
+            setDifficulty(String(patch.difficulty));
+          if (patch.rating !== undefined) setRating(String(patch.rating));
+        }}
+      />
       {scale.isPending && (
         <p role="status" className="text-sm">
           Se încarcă dificultățile și notele…
@@ -141,10 +152,6 @@ export function EvaluationFields({
         }}
         form={form}
         disabled={isPending || !scale.data}
-        difficultyHint={(value) =>
-          scale.data?.difficulties.find((row) => row.stars === value)?.note ??
-          null
-        }
         points={points}
       />
       <FieldError>{form.formError}</FieldError>

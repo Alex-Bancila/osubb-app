@@ -36,6 +36,7 @@ import {
   type CompletedTaskOptions,
   type CompletedTaskVolunteer,
 } from '../../queries/completed-tasks';
+import { previewPoints } from '../../lib/difficulty-levels';
 import { useEvaluationScale } from '../../queries/reference';
 import { RatingGuideDialog } from '../../screens/tracker/RatingGuideDialog';
 import { TaskGroupCascade } from '../../screens/tracker/TaskGroupCascade';
@@ -68,7 +69,8 @@ export type FixedVolunteer = {
  *
  * The Task first (Grup, Voluntar, Titlu, Detalii, Campanie, Link atașat — no
  * deadline, no Audience: a completed Task is no Opportunity), then the
- * Evaluation (Dificultate as stars, Nota as a number, R29a). Only Groups and
+ * Evaluation (Dificultate as stars or a responsibility, Nota as a number,
+ * R29a, #986), with the rating guide on the chosen Group's list. Only Groups and
  * volunteers the server would accept are offered; the command still decides.
  */
 export function CompletedTaskForm({
@@ -133,13 +135,7 @@ export function CompletedTaskForm({
     completedTaskFieldForReason(volunteer ? 'groupId' : 'executorId'),
   );
   const submitting = useRef(false);
-  const chosen = scale.data?.ratings.find(
-    (row) => row.rating === Number(values.rating),
-  );
-  const points =
-    values.difficulty && chosen
-      ? Number(values.difficulty) * chosen.multiplier
-      : null;
+  const points = previewPoints(scale.data, values.difficulty, values.rating);
 
   function update(patch: Partial<CompletedTaskInput>) {
     setValues((current) => ({ ...current, ...patch }));
@@ -326,7 +322,24 @@ export function CompletedTaskForm({
       <div className="grid gap-4 border-t border-border pt-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <SubHeading>Evaluarea</SubHeading>
-          <RatingGuideDialog />
+          <RatingGuideDialog
+            groupId={values.groupId}
+            selection={{
+              difficulty:
+                values.difficulty === '' ? null : Number(values.difficulty),
+              rating: values.rating === '' ? null : Number(values.rating),
+            }}
+            onSet={(patch) =>
+              update({
+                ...(patch.difficulty !== undefined
+                  ? { difficulty: String(patch.difficulty) }
+                  : {}),
+                ...(patch.rating !== undefined
+                  ? { rating: String(patch.rating) }
+                  : {}),
+              })
+            }
+          />
         </div>
         {scale.isPending && (
           <p role="status" className="m-0 text-sm">
@@ -353,10 +366,6 @@ export function CompletedTaskForm({
           onChange={update}
           form={form}
           disabled={isPending || !scale.data}
-          difficultyHint={(value) =>
-            scale.data?.difficulties.find((row) => row.stars === value)?.note ??
-            null
-          }
           points={points}
         />
       </div>

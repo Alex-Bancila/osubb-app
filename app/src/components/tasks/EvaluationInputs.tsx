@@ -1,8 +1,11 @@
 import { FieldError } from '../ui/field';
 import { formatPoints } from '../../lib/format';
 import type { useFormValidation } from '../../lib/use-form-validation';
-import { ratingHint } from '../../screens/tracker/rating-guide-content';
-import { DifficultyStarPicker } from './DifficultyStars';
+import {
+  difficultyHint,
+  ratingHint,
+} from '../../screens/tracker/rating-guide/general';
+import { DifficultyPicker } from './DifficultyPicker';
 import { RatingPicker } from './RatingPicker';
 
 export type EvaluationInputValues = {
@@ -18,7 +21,8 @@ type Bound = Pick<
 >;
 
 /**
- * An Evaluation's three inputs (ruling R29a) — Dificultate as five stars,
+ * An Evaluation's three inputs (ruling R29a, #986) — Dificultate as five
+ * stars or a responsibility (medal, Responsabil, Coordonator),
  * Nota as a number, the required Observații — with the points preview
  * between them. One definition for every form that evaluates: the Evaluation
  * dialog (`EvaluationFields`) and the completed-Task form (#915). The caller
@@ -30,7 +34,6 @@ export function EvaluationInputs({
   onChange,
   form,
   disabled,
-  difficultyHint,
   points,
 }: {
   /** A `useId()` of the caller, so the note's label finds its textarea. */
@@ -39,8 +42,7 @@ export function EvaluationInputs({
   onChange: (patch: Partial<EvaluationInputValues>) => void;
   form: Bound;
   disabled: boolean;
-  difficultyHint: (value: number) => string | null;
-  /** The preview: Difficulty x the Rating's multiplier, null until both are chosen. */
+  /** The preview: the level's base points x the Rating's multiplier, null until both are chosen. */
   points: number | null;
 }) {
   const { difficulty, rating, note } = values;
@@ -49,9 +51,9 @@ export function EvaluationInputs({
       <legend className="sr-only">
         Dificultate, notă și observații obligatorii
       </legend>
-      <DifficultyStarPicker
+      <DifficultyPicker
         label="Dificultate (obligatoriu)"
-        prompt="Alege între 1 și 5 stele: 1 e cel mai ușor, 5 cel mai greu."
+        prompt="Alege 1–5 stele pentru un task sau o responsabilitate: medalie, Responsabil, Coordonator."
         value={difficulty === '' ? null : Number(difficulty)}
         onChange={(value) => onChange({ difficulty: String(value) })}
         hint={difficultyHint}

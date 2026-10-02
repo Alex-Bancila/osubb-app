@@ -34,7 +34,7 @@ import { gaveUpReceipt, type OnGaveUp } from './give-up-receipt';
 import { useReceiptTurn } from './receipt-turn';
 import { SubmitForReviewDialog } from './SubmitForReviewDialog';
 import { SubmissionNote } from './SubmissionNote';
-import { DifficultyStars } from '../../components/tasks/DifficultyStars';
+import { DifficultyMark } from '../../components/tasks/DifficultyMark';
 
 type TaskCardProps = {
   task: TaskPresentation;
@@ -476,7 +476,7 @@ export function TaskCard({
               {task.difficulty === null ? (
                 'Dificultate —'
               ) : (
-                <DifficultyStars value={task.difficulty} label="Dificultate" />
+                <DifficultyMark value={task.difficulty} label="Dificultate" />
               )}{' '}
               · Nota {task.rating ?? '—'}
             </p>

@@ -6,6 +6,7 @@ import { CommandError } from '../../lib/command-reasons';
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 const state = vi.hoisted(() => ({
+  groups: new Map<number, unknown>() as Map<number, never>,
   manage: { data: true as boolean | undefined },
   create: vi.fn(),
   executors: vi.fn(),
@@ -14,7 +15,15 @@ const state = vi.hoisted(() => ({
     isError: false,
     data: {
       ratings: [{ rating: 5, multiplier: 3, label: 'Excelent' }],
-      difficulties: [{ stars: 4, note: 'Greu' }],
+      difficulties: [
+        {
+          level: 4,
+          kind: 'star',
+          label: '4 stele',
+          glyph: null,
+          base_points: 4,
+        },
+      ],
     },
   },
 }));
@@ -23,6 +32,7 @@ vi.mock('../../queries/task-tabs', () => ({
 }));
 vi.mock('../../queries/reference', () => ({
   useEvaluationScale: () => state.scale,
+  useGroups: () => ({ data: state.groups, isPending: false }),
 }));
 // Dept 7 and its Team 9; Ana belongs to the Team, Bogdan only to the Dept.
 const people = {
@@ -89,9 +99,7 @@ async function open(user: User) {
 }
 
 async function evaluate(user: User, dialog: HTMLElement) {
-  await user.click(
-    within(dialog).getByRole('radio', { name: '4 stele — Greu' }),
-  );
+  await user.click(within(dialog).getByRole('radio', { name: /^4 stele — / }));
   await user.click(
     within(dialog).getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
   );
@@ -268,4 +276,75 @@ it('puts a server refusal under the field it names, in Romanian', async () => {
   expect(within(dialog).getByLabelText('Titlu (obligatoriu)')).toHaveValue(
     'Stand',
   );
+});
+
+it('sets the Evaluation from the guide of the chosen Group (#986)', async () => {
+  const user = userEvent.setup();
+  state.groups = new Map([
+    [
+      7,
+      {
+        id: 7,
+        name: 'Educație',
+        short: 'EDU',
+        category: 'department',
+        path: [7],
+        is_organization: false,
+      },
+    ],
+    [
+      9,
+      {
+        id: 9,
+        name: 'Mentorat',
+        short: null,
+        category: 'team',
+        path: [7, 9],
+        is_organization: false,
+      },
+    ],
+  ]) as never;
+  const dialog = await open(user);
+  await pick(
+    user,
+    within(dialog).getByRole('combobox', {
+      name: 'Grup principal (obligatoriu)',
+    }),
+    /^Educație/,
+  );
+  await pick(
+    user,
+    within(dialog).getByRole('combobox', { name: 'Subgrup (opțional)' }),
+    /^Mentorat/,
+  );
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Ghid de evaluare' }),
+  );
+  const guide = await screen.findByRole('dialog', { name: 'Ghid de evaluare' });
+  // Mentorat sits under Educație (EDU): the EDU list.
+  await user.click(
+    within(guide).getByRole('button', {
+      name: 'Setează Începător, Dificultate 4 stele — Scriere postări',
+    }),
+  );
+  await user.click(
+    within(guide).getByRole('button', { name: 'Note și dificultăți' }),
+  );
+  await user.click(
+    within(guide).getByRole('button', { name: 'Setează Nota 5' }),
+  );
+  await user.click(within(guide).getByRole('button', { name: 'Gata' }));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Ghid de evaluare' }),
+    ).toBeNull(),
+  );
+  expect(
+    within(dialog).getByRole('radio', { name: /^4 stele — / }),
+  ).toBeChecked();
+  expect(
+    within(dialog).getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
+  ).toHaveAttribute('aria-valuenow', '5');
+  expect(within(dialog).getByText(/Previzualizare: 12 puncte/)).toBeVisible();
+  state.groups = new Map() as never;
 });

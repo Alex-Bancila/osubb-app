@@ -2,66 +2,23 @@ import { useId, useRef, useState, type KeyboardEvent, type Ref } from 'react';
 import { Radio } from '@base-ui/react/radio';
 import { RadioGroup } from '@base-ui/react/radio-group';
 import { Star } from 'lucide-react';
+import {
+  DIFFICULTY_LEVELS,
+  difficultyLevel,
+} from '../../lib/difficulty-levels';
 import { cn } from '../../lib/utils';
 
-const STARS = [1, 2, 3, 4, 5] as const;
+const STARS = DIFFICULTY_LEVELS.filter((row) => row.kind === 'star');
+const ROLES = DIFFICULTY_LEVELS.filter((row) => row.kind !== 'star');
 
-/** "1 stea", "3 stele": the name a screen reader hears for one star. */
-function starCount(count: number) {
-  return count === 1 ? '1 stea' : `${count} stele`;
-}
-
-/**
- * A Difficulty, read at a glance (ruling R29a): five small stars, the first
- * `value` filled. One image to assistive technology, named
- * "Dificultate 3 din 5"; `label` is an optional visible prefix that the
- * image's name already covers.
- */
-export function DifficultyStars({
-  value,
-  label,
-  className,
-}: {
-  value: number;
-  label?: string;
-  className?: string;
-}) {
-  return (
-    <span
-      role="img"
-      aria-label={`Dificultate ${value} din 5`}
-      className={cn(
-        'inline-flex items-center gap-1 align-[-0.125em]',
-        className,
-      )}
-    >
-      {label && <span aria-hidden="true">{label}</span>}
-      <span aria-hidden="true" className="inline-flex gap-px">
-        {STARS.map((step) => (
-          <Star
-            key={step}
-            strokeWidth={1.75}
-            className={cn(
-              'size-3.5',
-              step <= value
-                ? 'fill-brand-red text-brand-red'
-                : 'fill-transparent text-muted-foreground/60',
-            )}
-          />
-        ))}
-      </span>
-    </span>
-  );
-}
-
-type DifficultyStarPickerProps = {
+type DifficultyPickerProps = {
   /** The visible name of the control, e.g. "Dificultate (obligatoriu)". */
   label: string;
   value: number | null;
   onChange: (value: number) => void;
-  /** The short note for each star (`difficulty_guide.note`); null if unknown. */
+  /** The guide's interpretation of each level; null if unknown. */
   hint: (value: number) => string | null;
-  /** Shown under the stars until one is chosen. */
+  /** Shown under the control until a level is chosen. */
   prompt: string;
   disabled?: boolean;
   invalid?: boolean;
@@ -71,15 +28,20 @@ type DifficultyStarPickerProps = {
   groupRef?: Ref<HTMLDivElement>;
 };
 
+const focusRing =
+  'outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-[-2px] focus-visible:outline-ring data-disabled:cursor-not-allowed data-disabled:opacity-50';
+
 /**
- * The signature of the Evaluation dialog (ruling R29a): Difficulty as five
- * stars in the OSUBB red. Radio semantics from Base UI — arrow keys move the
- * choice, Tab leaves it — plus the number keys 1–5 as a shortcut. Each star
- * is a 44 px target named "3 stele — <note>", so a screen reader hears the
- * words the line under the stars shows. The pointer previews a star before
- * it is chosen; the fill eases in over 120 ms unless motion is reduced.
+ * Difficulty, all ten levels (ruling R29a, #986): five stars in the OSUBB red
+ * for ordinary work, then the responsibilities — 🥉 Bronz, 🥈 Argint, 🥇 Aur,
+ * Responsabil, Coordonator — as chips on a second row. One radio group from
+ * Base UI: arrow keys walk all ten in order, Tab leaves, and the number keys
+ * 1–5 choose a star. Every option is a 44 px target named with the guide's
+ * interpretation ("3 stele — Task care presupune …"), the words the line under
+ * the control shows. The pointer previews a star before it is chosen; the
+ * fill eases in over 120 ms unless motion is reduced.
  */
-export function DifficultyStarPicker({
+export function DifficultyPicker({
   label,
   value,
   onChange,
@@ -89,17 +51,19 @@ export function DifficultyStarPicker({
   invalid = false,
   errorId,
   groupRef,
-}: DifficultyStarPickerProps) {
+}: DifficultyPickerProps) {
   const id = useId();
   const labelId = `${id}-label`;
   const hintId = `${id}-hint`;
   const [preview, setPreview] = useState<number | null>(null);
-  const stars = useRef<(HTMLElement | null)[]>([]);
+  const options = useRef<(HTMLElement | null)[]>([]);
   const shown = preview ?? value ?? 0;
+  const chosen = value === null ? null : difficultyLevel(value);
   const chosenHint = value === null ? null : hint(value);
-  const name = (step: number) => {
-    const text = hint(step);
-    return text ? `${starCount(step)} — ${text}` : starCount(step);
+  const name = (level: number) => {
+    const text = hint(level);
+    const title = difficultyLevel(level)?.label ?? String(level);
+    return text ? `${title} — ${text}` : title;
   };
 
   function numberKey(event: KeyboardEvent<HTMLDivElement>) {
@@ -108,7 +72,7 @@ export function DifficultyStarPicker({
     const step = Number(event.key);
     setPreview(null);
     onChange(step);
-    stars.current[step - 1]?.focus();
+    options.current[step - 1]?.focus();
   }
 
   return (
@@ -130,43 +94,75 @@ export function DifficultyStarPicker({
         }}
         disabled={disabled}
         onKeyDown={numberKey}
-        onPointerLeave={() => setPreview(null)}
-        className="-mx-1.5 flex w-fit max-w-full"
+        className="grid w-fit max-w-full gap-1"
       >
-        {STARS.map((step) => {
-          const lit = step <= shown;
-          return (
-            <Radio.Root
-              key={step}
-              ref={(element) => {
-                stars.current[step - 1] = element;
-              }}
-              value={step}
-              aria-label={name(step)}
-              onPointerEnter={() => !disabled && setPreview(step)}
-              className="group/star grid size-11 shrink-0 cursor-pointer place-items-center rounded-md outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-[-2px] focus-visible:outline-ring data-disabled:cursor-not-allowed data-disabled:opacity-50"
-            >
-              <Star
-                aria-hidden="true"
-                strokeWidth={1.5}
+        <div
+          className="-mx-1.5 flex w-fit max-w-full"
+          onPointerLeave={() => setPreview(null)}
+        >
+          {STARS.map(({ level }) => {
+            const lit = shown <= 5 && level <= shown;
+            return (
+              <Radio.Root
+                key={level}
+                ref={(element) => {
+                  options.current[level - 1] = element;
+                }}
+                value={level}
+                aria-label={name(level)}
+                onPointerEnter={() => !disabled && setPreview(level)}
                 className={cn(
-                  'size-8 transition-[fill,color] duration-120 ease-out motion-reduce:transition-none',
-                  lit
-                    ? 'fill-brand-red text-brand-red'
-                    : 'fill-transparent text-muted-foreground/70',
+                  'grid size-11 shrink-0 cursor-pointer place-items-center rounded-md',
+                  focusRing,
                 )}
-              />
+              >
+                <Star
+                  aria-hidden="true"
+                  strokeWidth={1.5}
+                  className={cn(
+                    'size-8 transition-[fill,color] duration-120 ease-out motion-reduce:transition-none',
+                    lit
+                      ? 'fill-brand-red text-brand-red'
+                      : 'fill-transparent text-muted-foreground/70',
+                  )}
+                />
+              </Radio.Root>
+            );
+          })}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {ROLES.map((row) => (
+            <Radio.Root
+              key={row.level}
+              ref={(element) => {
+                options.current[row.level - 1] = element;
+              }}
+              value={row.level}
+              aria-label={name(row.level)}
+              className={cn(
+                'inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-background px-3 text-sm font-semibold text-muted-foreground hover:border-foreground/40 hover:text-foreground data-checked:border-brand-red data-checked:bg-accent data-checked:text-accent-foreground',
+                focusRing,
+              )}
+            >
+              {row.glyph && (
+                <span aria-hidden="true" className="text-base leading-none">
+                  {row.glyph}
+                </span>
+              )}
+              <span aria-hidden="true">{row.label}</span>
             </Radio.Root>
-          );
-        })}
+          ))}
+        </div>
       </RadioGroup>
       <p id={hintId} className="min-h-5 text-sm text-muted-foreground">
-        {value === null ? (
+        {chosen === null ? (
           prompt
         ) : (
           <>
             <span className="font-semibold text-foreground tabular-nums">
-              {value} din 5
+              {chosen.kind === 'star'
+                ? `${chosen.level} din 5`
+                : `${chosen.glyph ? `${chosen.glyph} ` : ''}${chosen.label}`}
             </span>
             {chosenHint && <> — {chosenHint}</>}
           </>

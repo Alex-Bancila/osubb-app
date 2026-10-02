@@ -34,7 +34,15 @@ const completed = vi.hoisted(() => ({
     isError: false,
     data: {
       ratings: [{ rating: 4, multiplier: 2, label: 'Foarte bun' }],
-      difficulties: [{ stars: 3, note: 'Mediu' }],
+      difficulties: [
+        {
+          level: 3,
+          kind: 'star',
+          label: '3 stele',
+          glyph: null,
+          base_points: 3,
+        },
+      ],
     },
   },
 }));
@@ -548,9 +556,7 @@ it('adds a completed Task for the tracked Member, preselected, and says so (#915
     within(dialog).getByLabelText('Titlu (obligatoriu)'),
     'Atelier de vară',
   );
-  await user.click(
-    within(dialog).getByRole('radio', { name: '3 stele — Mediu' }),
-  );
+  await user.click(within(dialog).getByRole('radio', { name: /^3 stele — / }));
   await user.click(
     within(dialog).getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
   );
