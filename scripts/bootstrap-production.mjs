@@ -231,10 +231,15 @@ export function validateInput({ memberRows, taskRows, groups, today }) {
   memberRows.forEach((raw, index) => {
     const at = (column, message) => fail('members', raw.row, column, message);
     if (raw.extraCells) at('row', 'more cells than the header has columns');
-    const email = raw.email.toLowerCase();
+    // Checked before lowercasing: Unicode lowercasing folds the Kelvin sign
+    // (U+212A) to an ASCII k, which would let a non-ASCII address through.
+    let email = raw.email;
     if (!EMAIL_SHAPE.test(email)) at('email', `"${raw.email}" is not an email address`);
     else if (!EMAIL.test(email)) at('email', `"${raw.email}" holds a character outside ASCII, which Auth refuses`);
-    else if (byEmail.has(email)) at('email', `${email} appears twice`);
+    else {
+      email = email.toLowerCase();
+      if (byEmail.has(email)) at('email', `${email} appears twice`);
+    }
 
     if (raw.full_name === '') at('full_name', 'is required');
 
