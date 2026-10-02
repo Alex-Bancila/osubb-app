@@ -39,6 +39,7 @@ const groups = new Map([
   // If the Organization were the root of everything, a Department would still
   // show its own list.
   row(70, 'Educațional (sub OSUBB)', 'EDU', 'department', [5, 70]),
+  row(71, 'Financiar (FR)', 'FR', 'department', [71]),
 ]);
 
 describe('guideForGroup', () => {
@@ -53,6 +54,7 @@ describe('guideForGroup', () => {
     [60, 'Proiecte', null],
     [61, 'Proiecte', 'Festivalul Studențesc 2026'],
     [70, 'EDU', null],
+    [71, 'FIN', null],
   ])('Group %i shows the %s list (via %s)', (id, key, via) => {
     const guide = guideForGroup(id, groups);
     expect(guide.group?.id).toBe(id);
@@ -145,6 +147,13 @@ it('keeps the guide content (structure snapshot)', () => {
 });
 
 it('gives every row a level the app knows, and every sheet column a Setează', () => {
+  for (const sheet of guideSheets) {
+    // A row is identified by its task name (the guide marks the last Setează).
+    const names = sheet.sections.flatMap((section) =>
+      section.tasks.map((task) => task.task),
+    );
+    expect(new Set(names).size).toBe(names.length);
+  }
   for (const sheet of guideSheets)
     for (const section of sheet.sections)
       for (const task of section.tasks) {

@@ -129,10 +129,11 @@ export function GuideTaskList({
           >
             {section.title && <SubHeading>{section.title}</SubHeading>}
             <ul className="m-0 list-none divide-y divide-border p-0">
-              {section.tasks.map((task, row) => (
+              {section.tasks.map((task) => (
                 <TaskRow
-                  key={`${row}-${task.task}`}
-                  id={`${section.title ?? index}/${row}`}
+                  key={task.task}
+                  // The task name, unique in a sheet, so a search keeps the mark.
+                  id={`${section.title ?? index}/${task.task}`}
                   task={task}
                   experiences={sheet.experiences}
                   selection={selection}

@@ -66,7 +66,9 @@ export function guideForGroup(
 
   const top = chain.find((row) => !row.is_organization);
   if (!top) return { group, sheet: interne, via: null };
-  const sheet = departmentSheets[(top.short ?? '').trim().toUpperCase()];
+  const short = (top.short ?? '').trim().toUpperCase();
+  // The sheet itself is named FR; the Group is FIN on main.
+  const sheet = departmentSheets[short === 'FR' ? 'FIN' : short];
   return sheet
     ? { group, sheet, via: viaOf(top) }
     : { group, sheet: null, via: null };
