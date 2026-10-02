@@ -14,9 +14,9 @@ import {
  * (ADR-0004 amended 2026-09-21; rulings R9, R13, R18, R28).
  *
  * Only the Recrut → Voluntar step is a date the tenure job keeps. Every other
- * step is BC's decision at a Role Evaluation: reaching the Promotion
- * Threshold makes a tenured Voluntar a Promotion Candidate at the next Voluntar
- * Activ Role Evaluation, and nothing here promises a Role.
+ * step is BC's decision: reaching the Promotion Threshold makes a tenured
+ * Voluntar a Promotion Candidate at once (#983) and at every Voluntar Activ
+ * Role Evaluation, and nothing here promises a Role.
  *
  * Six states, one per rung:
  * - Recrut: the date the `time` rule makes them Voluntar; once that date has
@@ -25,7 +25,8 @@ import {
  *   Nothing about the threshold (R18).
  * - Voluntar with tenure: a bar from 0 to the Voluntar Activ Promotion
  *   Threshold in force, points counted since the last Voluntar Activ Role
- *   Evaluation (the total before any); past it, BC is told at the next one.
+ *   Evaluation (the total before any); past it, they are a candidate and BC
+ *   has been told (#983).
  * - Voluntar Activ: their points beside the Voluntar Activ threshold; a
  *   Voluntar cu Drept de Vot: beside the Adunarea Generală threshold — the
  *   reference the Retention Signal uses. No bar.
@@ -210,8 +211,8 @@ function ThresholdBar({
   threshold: number;
   since: string | null;
 }) {
-  // Reaching the threshold makes a Promotion Candidate at the next Role
-  // Evaluation (#826); BC decides. "At" counts as past it.
+  // Reaching the threshold makes a Promotion Candidate at once (#983); BC
+  // decides. "At" counts as past it.
   const reached = points >= threshold;
   // A stamped threshold can be 0 or negative (net points after reversals and
   // low Ratings): no scale to fill, so the bar is simply full or empty.
@@ -248,7 +249,7 @@ function ThresholdBar({
       </div>
       <p className="m-0 text-sm font-medium text-foreground">
         {reached
-          ? 'Ai depășit pragul — BC va fi anunțat la următoarea evaluare'
+          ? 'Ai depășit pragul — ești candidat la promovare; BC decide'
           : `Mai ai ${formatPointCount(threshold - points)} până la pragul Voluntar Activ`}
       </p>
     </div>

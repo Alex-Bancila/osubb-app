@@ -123,15 +123,21 @@ export function useThresholdChanges() {
   });
 }
 
-/** An undecided Promotion Candidate with the run that listed them. */
+/**
+ * An undecided Promotion Candidate: listed by a run (`roleEvaluationId` and
+ * `evaluationName` set) or, since #983, between runs the moment they
+ * qualified (both null; `listedAt` says when). `thresholdUsed` is the line the
+ * row was measured against.
+ */
 export type PromotionCandidate = {
   id: number;
   memberId: string;
   taskPoints: number;
   tenureSince: string;
-  roleEvaluationId: number;
-  evaluationName: string;
+  roleEvaluationId: number | null;
+  evaluationName: string | null;
   thresholdUsed: number;
+  listedAt: string;
 };
 
 /** The open candidates (`decision is null`), highest points first. */
@@ -141,7 +147,7 @@ export async function fetchPromotionCandidates(): Promise<
   const { data, error } = await supabase
     .from('promotion_candidates')
     .select(
-      'id, member_id, task_points, tenure_since, role_evaluation_id, role_evaluation:role_evaluations!promotion_candidates_role_evaluation_id_fkey(name, threshold_used)',
+      'id, member_id, task_points, tenure_since, threshold_used, created_at, role_evaluation_id, role_evaluation:role_evaluations!promotion_candidates_role_evaluation_id_fkey(name)',
     )
     .is('decision', null)
     .order('task_points', { ascending: false })
@@ -153,8 +159,9 @@ export async function fetchPromotionCandidates(): Promise<
     taskPoints: row.task_points,
     tenureSince: row.tenure_since,
     roleEvaluationId: row.role_evaluation_id,
-    evaluationName: row.role_evaluation?.name ?? '',
-    thresholdUsed: row.role_evaluation?.threshold_used ?? 0,
+    evaluationName: row.role_evaluation?.name ?? null,
+    thresholdUsed: row.threshold_used,
+    listedAt: row.created_at,
   }));
 }
 

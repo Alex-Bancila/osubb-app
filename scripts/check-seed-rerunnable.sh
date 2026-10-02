@@ -345,8 +345,8 @@ values ('voluntar_activ', 'Evaluare reală #901', current_date - 30, current_dat
         'e2750000-0000-0000-0000-000000000001', 1, 0);
 insert into promotion_threshold_changes (kind, from_value, to_value, source, changed_by)
 values ('voluntar_activ', null, 7, 'manual', 'e2750000-0000-0000-0000-000000000001');
-insert into promotion_candidates (role_evaluation_id, member_id, task_points, tenure_since)
-select id, 'e2750000-0000-0000-0000-000000000001', 7, current_date
+insert into promotion_candidates (role_evaluation_id, member_id, task_points, tenure_since, threshold_used)
+select id, 'e2750000-0000-0000-0000-000000000001', 7, current_date, 1
   from role_evaluations where name = 'Evaluare reală #901';
 insert into notifications (member_id, kind, title, dedupe_key)
 select 'e2750000-0000-0000-0000-000000000001', 'system', 'Candidat la promovare #901',

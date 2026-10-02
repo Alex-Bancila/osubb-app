@@ -309,7 +309,7 @@ Turning one organization event into targeted Notifications for its intended reci
 ## Governance
 
 **Role Evaluation**:
-A run BC performs from Administrare over an Evaluation Period chosen at that moment, of one kind: Voluntar Activ or Adunarea Generală. It ranks the Task Points of the Task Evaluations falling in that range, records the Promotion Threshold it used and the one it computed, and produces Promotion Candidates and Retention Signals. Nothing ranks live between Role Evaluations.
+A run BC performs from Administrare over an Evaluation Period chosen at that moment, of one kind: Voluntar Activ or Adunarea Generală. It ranks the Task Points of the Task Evaluations falling in that range, records the Promotion Threshold it used and the one it computed, and produces Promotion Candidates and Retention Signals. Nothing ranks live between Role Evaluations, though a Voluntar who reaches the threshold in force between runs is listed as a Promotion Candidate at once (#983).
 _Avoid_: Evaluation alone (that is a Task's review), opening or closing a Period, live ranking
 
 **Evaluation Period**:
@@ -317,11 +317,11 @@ The date range, from one day to another, that BC chooses for one Role Evaluation
 _Avoid_: Season, scoring window, semester when the ranking window is meant, open Period
 
 **Promotion Rule**:
-A BC-set rule about moving a Member to a higher Role. Automatic only for Recrut to Voluntar (tenure). Voluntar to Voluntar Activ needs the required tenure counted from the join date plus Task Points at or above the Voluntar Activ Promotion Threshold at a Role Evaluation, which makes the Member a Promotion Candidate; BC then promotes by hand. Voluntar Activ to Voluntar cu Drept de Vot is human-confirmed; nothing is automatic downward. A Member below the required tenure is neither a Promotion Candidate nor notified. BC edits each rule's required tenure (whole months) and turns it on or off at any time, every change audited; a rule turned off promotes nobody (Recrut to Voluntar) and lists no Promotion Candidate (Voluntar to Voluntar Activ).
+A BC-set rule about moving a Member to a higher Role. Automatic only for Recrut to Voluntar (tenure). Voluntar to Voluntar Activ needs the required tenure counted from the join date plus Task Points at or above the Voluntar Activ Promotion Threshold, at a Role Evaluation or, counted since the last one, between runs, which makes the Member a Promotion Candidate; BC then promotes by hand. Voluntar Activ to Voluntar cu Drept de Vot is human-confirmed; nothing is automatic downward. A Member below the required tenure is neither a Promotion Candidate nor notified. BC edits each rule's required tenure (whole months) and turns it on or off at any time, every change audited; a rule turned off promotes nobody (Recrut to Voluntar) and lists no Promotion Candidate (Voluntar to Voluntar Activ).
 _Avoid_: Auto-promotion, level-up, threshold alone
 
 **Promotion Candidate**:
-A Voluntar with the required tenure whose Task Points reach the Voluntar Activ Promotion Threshold at a Role Evaluation. They join the candidates list and BC and Moderator receive one Notification per Member per Role Evaluation; they are never promoted automatically, only by BC in the Role panel. Distinct from a Candidate, who waits in a Task's Candidate Queue.
+A Voluntar with the required tenure whose Task Points reach the Voluntar Activ Promotion Threshold: at a Role Evaluation, or between runs the moment their Task Points since the last Voluntar Activ Role Evaluation reach the threshold in force (2026-10-02, #983). They join the candidates list at once and BC and Moderator receive one Notification per Member per listing; they are never promoted automatically, only by BC in the Role panel. A Member listed between runs leaves the list again when they stop qualifying (a reversal, a raised threshold, the rule turned off), and a rejection made between runs holds until the next Voluntar Activ Role Evaluation. Distinct from a Candidate, who waits in a Task's Candidate Queue.
 _Avoid_: Candidate alone, eligible, auto-promoted
 
 **Promotion Threshold**:

@@ -1,4 +1,5 @@
 import { formatPointCount, formatPoints } from '../../lib/format';
+import { bucharestDayKey } from '../../lib/calendar-time';
 import type { RoleEvaluationKind } from '../../lib/schemas/role-evaluation';
 import type { PromotionCandidate } from '../../queries/role-evaluations';
 import {
@@ -115,12 +116,24 @@ export function computedThresholdText(computed: number | null): string {
     : formatPoints(computed);
 }
 
-/** Where **Promovează** leads: Roluri on the Member, Voluntar Activ chosen. */
+/** An instant's day in Romania, as `01.02.2026`. */
+export function formatInstantDay(instant: string): string {
+  return formatDay(bucharestDayKey(instant));
+}
+
+/**
+ * Where **Promovează** leads: Roluri on the Member, Voluntar Activ chosen, the
+ * reason prefilled with the run that listed them or, for a candidate listed
+ * between runs (#983), the day they qualified.
+ */
 export function promoteHref(candidate: PromotionCandidate): string {
   const params = new URLSearchParams({
     [ROLE_PANEL_MEMBER_PARAM]: candidate.memberId,
     [ROLE_PANEL_ROLE_PARAM]: 'activ',
-    [ROLE_PANEL_REASON_PARAM]: `Evaluarea de rol „${candidate.evaluationName}”`,
+    [ROLE_PANEL_REASON_PARAM]:
+      candidate.evaluationName === null
+        ? `Candidat la promovare din ${formatInstantDay(candidate.listedAt)}`
+        : `Evaluarea de rol „${candidate.evaluationName}”`,
   });
   return `/administrare/roluri?${params.toString()}`;
 }

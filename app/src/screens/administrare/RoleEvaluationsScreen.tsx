@@ -87,6 +87,7 @@ import {
   computedThresholdText,
   defaultRangeStart,
   formatDay,
+  formatInstantDay,
   promoteHref,
   runConsequences,
   runResultText,
@@ -125,11 +126,6 @@ const HOLDER_LABEL: Record<string, string> = {
 };
 
 type Run = (command: RoleEvaluationCommand) => Promise<RunResult | null>;
-
-/** An instant's day in Romania, as `01.02.2026`. */
-function formatInstantDay(instant: string): string {
-  return formatDay(bucharestDayKey(instant));
-}
 
 function rangeText(run: Pick<RoleEvaluation, 'period_from' | 'period_to'>) {
   return `${formatDay(run.period_from)}–${formatDay(run.period_to)}`;
@@ -733,10 +729,10 @@ const TIME_RULE_TEXT: RuleText = {
 };
 
 const TOP_PERCENT_RULE_TEXT: RuleText = {
-  on: 'La o evaluare Voluntar Activ, un Voluntar cu această vechime și cel puțin pragul devine candidat la promovare.',
-  off: 'Oprită: evaluările Voluntar Activ nu mai propun candidați.',
+  on: 'Un Voluntar cu această vechime devine candidat la promovare de îndată ce ajunge la prag, și la fiecare evaluare Voluntar Activ.',
+  off: 'Oprită: nimeni nu mai devine candidat la promovare.',
   applies:
-    'Se aplică de la următoarea evaluare Voluntar Activ; evaluările rulate nu se recalculează.',
+    'Se aplică imediat listei de candidați și de la următoarea evaluare Voluntar Activ; evaluările rulate nu se recalculează.',
 };
 
 function ruleText(kind: string): RuleText {
@@ -1227,9 +1223,9 @@ function RejectDialog({
           <DialogHeader>
             <DialogTitle>Respingi candidatul?</DialogTitle>
             <DialogDescription>
-              Candidatul rămâne Voluntar. Respingerea ține doar pentru evaluarea
-              „{candidate.evaluationName}”: dacă la o evaluare viitoare are din
-              nou cel puțin pragul, reapare în listă.
+              {candidate.evaluationName === null
+                ? 'Candidatul rămâne Voluntar. Respingerea ține până la următoarea evaluare Voluntar Activ: dacă la ea, sau după ea, are din nou cel puțin pragul, reapare în listă.'
+                : `Candidatul rămâne Voluntar. Respingerea ține doar pentru evaluarea „${candidate.evaluationName}”: dacă după ea are din nou cel puțin pragul, reapare în listă.`}
             </DialogDescription>
           </DialogHeader>
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-sm">
@@ -1294,7 +1290,7 @@ function CandidatesPanel({
       eyebrow="Roluri"
       icon={UserCheck}
       title="Candidați la promovare"
-      description="Voluntari cu vechimea cerută și cel puțin pragul Voluntar Activ. Nimeni nu este promovat automat: BC decide în panoul de roluri."
+      description="Voluntari cu vechimea cerută și cel puțin pragul Voluntar Activ: de îndată ce ajung la prag, și la fiecare evaluare Voluntar Activ. Nimeni nu este promovat automat: BC decide în panoul de roluri."
     >
       {notice && (
         <p role="alert" className="m-0 mb-2 text-sm">
@@ -1348,7 +1344,9 @@ function CandidatesPanel({
                   {formatDay(candidate.tenureSince)}
                 </p>
                 <p className="m-0 text-sm text-muted-foreground">
-                  Evaluarea „{candidate.evaluationName}”
+                  {candidate.evaluationName === null
+                    ? `Eligibil din ${formatInstantDay(candidate.listedAt)}, între evaluări`
+                    : `Evaluarea „${candidate.evaluationName}”`}
                 </p>
               </ListRow>
             );

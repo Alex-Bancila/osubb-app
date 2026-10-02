@@ -53,7 +53,9 @@ type Candidate = {
   member_id: string;
   task_points: number;
   tenure_since: string;
-  role_evaluation_id: number;
+  role_evaluation_id: number | null;
+  threshold_used: number;
+  created_at: string;
   decision: string | null;
 };
 type Ranked = {
@@ -102,9 +104,7 @@ function tableRows(table: string): unknown {
           const run = db.runs.find((r) => r.id === row.role_evaluation_id);
           return {
             ...row,
-            role_evaluation: run
-              ? { name: run.name, threshold_used: run.threshold_used }
-              : null,
+            role_evaluation: run ? { name: run.name } : null,
           };
         });
     default:
@@ -788,7 +788,7 @@ it('shows each Promotion Rule, the ladder in order, with its tenure, state and e
   const top = ruleRow(rules, 'Voluntar → Voluntar Activ');
   expect(top).toHaveTextContent('24 de luni');
   expect(top).toHaveTextContent(
-    'Oprită: evaluările Voluntar Activ nu mai propun candidați.',
+    'Oprită: nimeni nu mai devine candidat la promovare.',
   );
 });
 
@@ -926,6 +926,8 @@ it('lists the open Promotion Candidates: Promovează opens Roluri preset, Respin
       task_points: 48,
       tenure_since: '2026-03-15',
       role_evaluation_id: 1,
+      threshold_used: 30,
+      created_at: '2026-07-01T09:00:00Z',
       decision: null,
     },
     {
@@ -934,6 +936,8 @@ it('lists the open Promotion Candidates: Promovează opens Roluri preset, Respin
       task_points: 31,
       tenure_since: '2026-01-10',
       role_evaluation_id: 1,
+      threshold_used: 30,
+      created_at: '2026-07-01T09:00:00Z',
       decision: null,
     },
   ];
@@ -1017,6 +1021,53 @@ it('lists the open Promotion Candidates: Promovează opens Roluri preset, Respin
   );
 });
 
+it('lists a candidate who qualified between runs by the day they did, and says how long a rejection holds (#983)', async () => {
+  db.runs = [RUN_VA];
+  db.candidates = [
+    {
+      id: 9,
+      member_id: 'ana',
+      task_points: 32,
+      tenure_since: '2026-03-15',
+      role_evaluation_id: null,
+      threshold_used: 30,
+      created_at: '2026-10-02T08:30:00Z',
+      decision: null,
+    },
+  ];
+  const user = userEvent.setup();
+  show();
+  const candidates = await panel('Candidați la promovare');
+  const list = await within(candidates).findByRole('list', {
+    name: 'Candidați la promovare',
+  });
+  const row = within(list).getAllByRole('listitem')[0] as HTMLElement;
+  expect(row).toHaveTextContent(
+    '32 de puncte · pragul 30 · vechime din 15.03.2026',
+  );
+  expect(row).toHaveTextContent('Eligibil din 02.10.2026, între evaluări');
+  expect(row).not.toHaveTextContent('Evaluarea „');
+  const href =
+    within(row)
+      .getByRole('link', { name: 'Promovează: Ana Pop' })
+      .getAttribute('href') ?? '';
+  const url = new URL(href, 'https://app.osubb.ro');
+  expect(Object.fromEntries(url.searchParams)).toEqual({
+    membru: 'ana',
+    rol: 'activ',
+    motiv: 'Candidat la promovare din 02.10.2026',
+  });
+
+  await user.click(
+    within(row).getByRole('button', { name: 'Respinge: Ana Pop' }),
+  );
+  const dialog = await screen.findByRole('dialog');
+  expect(dialog).toHaveTextContent(
+    'Respingerea ține până la următoarea evaluare Voluntar Activ: dacă la ea, sau după ea, are din nou cel puțin pragul, reapare în listă.',
+  );
+  expect(dialog).toHaveTextContent('32 de puncte · pragul 30');
+});
+
 it('reports a candidate decided meanwhile, and says so when no candidate waits', async () => {
   db.runs = [RUN_VA];
   db.candidates = [
@@ -1026,6 +1077,8 @@ it('reports a candidate decided meanwhile, and says so when no candidate waits',
       task_points: 48,
       tenure_since: '2026-03-15',
       role_evaluation_id: 1,
+      threshold_used: 30,
+      created_at: '2026-07-01T09:00:00Z',
       decision: null,
     },
   ];
