@@ -417,6 +417,7 @@ test('every input rule is reported at once, with its row and column', () => {
       'v@example.com,V,,bce,EDU,responsible,,,',
       'u@example.com,U,,bce,EDU,,,2030-01-01,x@example.com',
       'X@example.com,X again,,bce,EDU,,,,',
+      'ignătescu@example.com,T,,bce,EDU,,,,',
     ].join('\n'),
   );
   assert.deepEqual(
@@ -432,8 +433,10 @@ test('every input rule is reported at once, with its row and column', () => {
       '9:joined_at',
       '9:appointed_by_email',
       '10:email',
+      '11:email',
     ],
   );
+  assert.match(errors[10].message, /outside ASCII/, 'a Romanian letter in an address is refused by the dry run, as Auth refuses it');
   assert.match(errors[3].message, /names 2 Groups/, 'an ambiguous name is reported, never guessed');
   assert.match(errors[4].message, /Automatic Membership/);
 });

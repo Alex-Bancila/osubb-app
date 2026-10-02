@@ -200,7 +200,11 @@ export function resolveGroupPath(value, groups) {
 
 // --------------------------------------------------------------- validation
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// ASCII only: Supabase Auth refuses an address with a Romanian letter in it
+// ("invalid format"), and the first production run met one at row 93 and
+// rolled 91 accounts back. The dry run must refuse what the real run would.
+const EMAIL = /^[\x21-\x7e]+$/;
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function isRealDate(value) {
@@ -228,7 +232,8 @@ export function validateInput({ memberRows, taskRows, groups, today }) {
     const at = (column, message) => fail('members', raw.row, column, message);
     if (raw.extraCells) at('row', 'more cells than the header has columns');
     const email = raw.email.toLowerCase();
-    if (!EMAIL.test(email)) at('email', `"${raw.email}" is not an email address`);
+    if (!EMAIL_SHAPE.test(email)) at('email', `"${raw.email}" is not an email address`);
+    else if (!EMAIL.test(email)) at('email', `"${raw.email}" holds a character outside ASCII, which Auth refuses`);
     else if (byEmail.has(email)) at('email', `${email} appears twice`);
 
     if (raw.full_name === '') at('full_name', 'is required');
