@@ -1,11 +1,16 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { cn } from 'cn';
 import {
   DataTable,
   type DataTableColumn,
 } from '../../components/data-table/DataTable';
-import { focusRingClass, PageGrid, Panel } from '../../components/layout';
+import {
+  focusRingClass,
+  PageGrid,
+  Panel,
+  SegmentedToggle,
+} from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
 import { memberDisplayName } from '../../components/member/member-identity';
 import { ErrorState, Loading } from '../../components/states';
@@ -15,9 +20,17 @@ import {
   useAppointableMembers,
   type AppointableMember,
 } from '../../queries/groups-admin';
+import { useUninvitedMembers } from '../../queries/volunteer-import';
 import { normalizeSearch, statusLabel } from '../volunteers/directory-filters';
 import { CsvImportDialog } from './CsvImportDialog';
 import { InviteMemberDialog, type InvitedMember } from './InviteMemberDialog';
+import { UninvitedGrid } from './UninvitedGrid';
+
+type MembersView = 'all' | 'uninvited';
+
+/** "De invitat" lives in the URL (`?vedere=de-invitat`), so a reload keeps it. */
+const VIEW_PARAM = 'vedere';
+const UNINVITED = 'de-invitat';
 
 /** The Member's page in Administrare (#103). */
 function memberPagePath(memberId: string) {
@@ -133,6 +146,24 @@ const columnClassName = {
 function MembersPanel({ provision }: { provision: boolean }) {
   const members = useAppointableMembers();
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  // Only whoever may provision sees the import's list (#992).
+  const uninvited = useUninvitedMembers(provision);
+  const view: MembersView =
+    provision && params.get(VIEW_PARAM) === UNINVITED ? 'uninvited' : 'all';
+  const [visited, setVisited] = useState(false);
+  const gridMounted = visited || view === 'uninvited';
+  if (view === 'uninvited' && !visited) setVisited(true);
+  const setView = (next: MembersView) =>
+    setParams(
+      (current) => {
+        const copy = new URLSearchParams(current);
+        if (next === 'uninvited') copy.set(VIEW_PARAM, UNINVITED);
+        else copy.delete(VIEW_PARAM);
+        return copy;
+      },
+      { replace: true },
+    );
   const [invited, setInvited] = useState<InvitedMember[]>([]);
   const invitedIds = useMemo(
     () => new Set(invited.map((member) => member.userId)),
@@ -161,12 +192,30 @@ function MembersPanel({ provision }: { provision: boolean }) {
                 setInvited((current) => [...current, member])
               }
             />
-            <CsvImportDialog />
+            <CsvImportDialog onShowUninvited={() => setView('uninvited')} />
           </div>
         )
       }
-      stack={latest ? 3 : undefined}
+      stack={latest || provision ? 3 : undefined}
     >
+      {provision && (
+        <SegmentedToggle
+          label="Vizualizare"
+          className="self-start"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: 'all', label: 'Toți' },
+            {
+              value: 'uninvited',
+              label:
+                uninvited.data && uninvited.data.length > 0
+                  ? `De invitat (${uninvited.data.length})`
+                  : 'De invitat',
+            },
+          ]}
+        />
+      )}
       {latest && (
         <p role="status" className="text-sm">
           {/* No name here: a Member's name renders through MemberName, and
@@ -176,7 +225,14 @@ function MembersPanel({ provision }: { provision: boolean }) {
           email.
         </p>
       )}
-      {members.isPending ? (
+      {/* Mounted from the first visit on and only hidden after, so a sending
+          run keeps its progress while BC looks at "Toți". */}
+      {gridMounted && (
+        <div hidden={view !== 'uninvited'} className="min-w-0">
+          <UninvitedGrid />
+        </div>
+      )}
+      {view === 'uninvited' ? null : members.isPending ? (
         <Loading label="Se încarcă membrii…" />
       ) : members.isError ? (
         <ErrorState

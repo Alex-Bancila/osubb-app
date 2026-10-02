@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Upload } from 'lucide-react';
+import { cn } from 'cn';
 import { SubHeading } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import {
@@ -13,6 +14,8 @@ import {
 import { reasonCopy } from '../../lib/command-reasons';
 import { supabase } from '../../lib/supabase';
 import { keys } from '../../queries/keys';
+import { isVolunteerSheet } from '../../queries/volunteer-import';
+import { VolunteerImportFlow } from './VolunteerImportFlow';
 
 type ImportRow = { row: number; email: string };
 type SkippedRow = ImportRow & { code: string };
@@ -70,10 +73,19 @@ async function importErrorMessage(error: unknown): Promise<string> {
  * stays in the dialog until it is closed. Mounted only behind
  * `provisionMembers`, the function's own level-6 gate.
  */
-export function CsvImportDialog() {
+export function CsvImportDialog({
+  onShowUninvited,
+}: {
+  /** Leaves the dialog for the "De invitat" list after a volunteer import. */
+  onShowUninvited?: () => void;
+} = {}) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  /** The volunteer sheet's text (#992): its own flow, a dry run first. */
+  const [volunteerCsv, setVolunteerCsv] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const onBusy = useCallback((next: boolean) => setBusy(next), []);
   const [report, setReport] = useState<ImportReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -109,8 +121,23 @@ export function CsvImportDialog() {
     }
   }
 
+  async function choose(next: File | null) {
+    setFile(next);
+    setReport(null);
+    setError(null);
+    setVolunteerCsv(null);
+    if (!next) return;
+    if (next.size > 256 * 1024) {
+      setError('Fișierul CSV depășește limita de 256 KB.');
+      return;
+    }
+    const csv = await next.text();
+    if (isVolunteerSheet(csv)) setVolunteerCsv(csv);
+  }
+
   function reset() {
     setFile(null);
+    setVolunteerCsv(null);
     setReport(null);
     setError(null);
   }
@@ -119,7 +146,7 @@ export function CsvImportDialog() {
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (pending) return;
+        if (pending || busy) return;
         setOpen(next);
         if (next) reset();
       }}
@@ -136,16 +163,37 @@ export function CsvImportDialog() {
         <Upload aria-hidden="true" />
         Import CSV
       </Button>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-cols-[minmax(0,1fr)] overflow-y-auto">
+      <DialogContent
+        className={cn(
+          'max-h-[calc(100dvh-2rem)] grid-cols-[minmax(0,1fr)] overflow-y-auto',
+          // The volunteer preview is a table: as wide as the screen allows.
+          volunteerCsv !== null && 'sm:max-w-5xl',
+        )}
+      >
         <DialogHeader>
           <DialogTitle>Import CSV</DialogTitle>
           <DialogDescription>
-            Adaugă membri dintr-un fișier cu coloanele name,email,dept,team.
-            Fiecare primește o invitație și intră ca Recrut. Pentru dept și
-            team, folosește numele scurt sau numele afișat al Grupului; literele
-            mari și diacriticele nu contează.
+            Adaugă membri dintr-unul din cele două fișiere de mai jos.
           </DialogDescription>
         </DialogHeader>
+        {/* The format is read from the header row, so both share one picker. */}
+        <ul className="grid list-inside list-disc gap-1 text-sm text-muted-foreground">
+          <li>
+            <span className="font-medium text-foreground">
+              Baza de voluntari
+            </span>{' '}
+            (coloana „Nume & Prenume”): se verifică întâi, apoi membrii se
+            creează fără niciun email. Invitațiile pleacă din „De invitat”.
+          </li>
+          <li>
+            <span className="font-medium text-foreground">
+              name,email,dept,team
+            </span>
+            : fiecare primește o invitație și intră ca Recrut. Pentru dept și
+            team, folosește numele scurt sau numele afișat al Grupului; literele
+            mari și diacriticele nu contează.
+          </li>
+        </ul>
         <a
           className="inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4"
           href="/model-import-membri.csv"
@@ -162,13 +210,9 @@ export function CsvImportDialog() {
               type="file"
               aria-label="Fișier CSV"
               accept=".csv,text/csv"
-              disabled={pending}
+              disabled={pending || busy}
               className="peer sr-only"
-              onChange={(event) => {
-                setFile(event.target.files?.[0] ?? null);
-                setReport(null);
-                setError(null);
-              }}
+              onChange={(event) => void choose(event.target.files?.[0] ?? null)}
             />
             <label
               htmlFor="csv-import-file"
@@ -178,14 +222,27 @@ export function CsvImportDialog() {
             </label>
             {file && <span className="text-sm break-all">{file.name}</span>}
           </div>
-          <Button
-            type="button"
-            disabled={!file || pending}
-            onClick={() => void submit()}
-          >
-            {pending ? 'Se importă…' : 'Importă fișierul'}
-          </Button>
+          {volunteerCsv === null && (
+            <Button
+              type="button"
+              disabled={!file || pending}
+              onClick={() => void submit()}
+            >
+              {pending ? 'Se importă…' : 'Importă fișierul'}
+            </Button>
+          )}
         </div>
+
+        {volunteerCsv !== null && (
+          <VolunteerImportFlow
+            csv={volunteerCsv}
+            onBusy={onBusy}
+            onShowUninvited={() => {
+              setOpen(false);
+              onShowUninvited?.();
+            }}
+          />
+        )}
 
         {error && (
           <p role="alert" className="text-sm text-destructive">
