@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { AttachedLinkButton } from '../../components/attached-link/AttachedLinkButton';
-import { DifficultyStars } from '../../components/tasks/DifficultyStars';
+import { DifficultyMark } from '../../components/tasks/DifficultyMark';
 import { Button } from '../../components/ui/button';
 import {
   formatBucharestDay,
@@ -117,7 +117,8 @@ function submittedLink(details: Json) {
     : null;
 }
 // One before/after line: its text keys it, its content is what shows. A
-// Difficulty reads as stars (R29a); every other value is plain text.
+// Difficulty reads as its mark — stars, a medal or a role (R29a, #986); every
+// other value is plain text.
 type ChangeLine = { key: string; content: ReactNode };
 function changes(
   details: Json,
@@ -139,12 +140,12 @@ function changes(
       typeof value === 'number' &&
       Number.isInteger(value) &&
       value >= 1 &&
-      value <= 5
+      value <= 10
     )
       return [
         {
           key: `difficulty:${value}`,
-          content: <DifficultyStars value={value} label="Dificultate:" />,
+          content: <DifficultyMark value={value} label="Dificultate:" />,
         },
       ];
     const text =

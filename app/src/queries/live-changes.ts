@@ -107,7 +107,7 @@ const FAMILIES_BY_TABLE: ReadonlyMap<string, readonly Prefix[]> = new Map<
     ],
   ],
   ['rating_guide', [keys.reference.all]],
-  ['difficulty_guide', [keys.reference.all]],
+  ['task_difficulty_levels', [keys.reference.all]],
   [
     'org_settings',
     [

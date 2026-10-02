@@ -237,6 +237,7 @@ function TaskDetails({
           overdue={task.overdue}
           hasExecutor={task.executor?.isCurrent === true}
           executorName={query.data.executorName}
+          groupId={query.data.task.group_id}
         />
       </div>
       {task.kind === 'task' && <TaskReviewCapabilityNotice taskId={taskId} />}

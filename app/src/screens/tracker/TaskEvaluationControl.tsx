@@ -16,6 +16,7 @@ export function TaskEvaluationControl({
   executorName,
   overdue = false,
   hasExecutor = false,
+  groupId,
 }: {
   taskId: number;
   status: TaskStatus;
@@ -24,6 +25,8 @@ export function TaskEvaluationControl({
   overdue?: boolean;
   /** mark_task_unfulfilled refuses a Task nobody is working on. */
   hasExecutor?: boolean;
+  /** The Task's Group: the rating guide opens on its list (#986). */
+  groupId?: number | null;
 }) {
   const capability = useTaskEvaluationCapability(taskId);
   const [open, setOpen] = useState(false);
@@ -61,6 +64,7 @@ export function TaskEvaluationControl({
           taskId={taskId}
           outcome={outcome}
           executorName={executorName}
+          groupId={groupId}
           onCancel={() => setOpen(false)}
           onSuccess={() => {
             setOpen(false);
@@ -107,9 +111,11 @@ export function EvaluationForm({
   onCancel,
   onSuccess,
   outcome = 'completed',
+  groupId,
 }: {
   taskId: number;
   executorName: string | null;
+  groupId?: number | null;
   onCancel: () => void;
   onSuccess: () => void;
   outcome?: 'completed' | 'unfulfilled';
@@ -119,6 +125,7 @@ export function EvaluationForm({
     <EvaluationFields
       outcome={outcome}
       executorName={executorName}
+      groupId={groupId}
       onCancel={onCancel}
       onSuccess={onSuccess}
       isPending={mutation.isPending}

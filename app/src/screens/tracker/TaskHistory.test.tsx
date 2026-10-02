@@ -57,14 +57,14 @@ describe('Authorized Task timeline', () => {
     expect(screen.getByText('Titlu: Nou')).toBeVisible();
     expect(screen.queryByText(/internal-id/)).not.toBeInTheDocument();
   });
-  it('shows a Difficulty change as stars and a Nota change as a number (R29a)', () => {
+  it('shows a Difficulty change as its mark (stars, a role) and a Nota change as a number (R29a, #986)', () => {
     render(
       <TaskTimeline
         activity={[
           activity({
             details: {
               before: { difficulty: 2, rating: 3 },
-              after: { difficulty: 4, rating: 5 },
+              after: { difficulty: 10, rating: 5 },
             },
           }),
         ]}
@@ -74,11 +74,11 @@ describe('Authorized Task timeline', () => {
       screen.getByRole('img', { name: 'Dificultate 2 din 5' }),
     ).toBeVisible();
     expect(
-      screen.getByRole('img', { name: 'Dificultate 4 din 5' }),
+      screen.getByRole('img', { name: 'Dificultate Coordonator' }),
     ).toBeVisible();
     expect(screen.getByText('Nota: 3')).toBeVisible();
     expect(screen.getByText('Nota: 5')).toBeVisible();
-    expect(screen.queryByText('Dificultate: 4')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dificultate: 10')).not.toBeInTheDocument();
   });
   it('renders actual conversion from/to payloads and campaign changes', () => {
     render(

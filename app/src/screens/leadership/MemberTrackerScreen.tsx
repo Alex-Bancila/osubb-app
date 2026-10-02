@@ -32,7 +32,7 @@ import { TaskCard } from '../tracker/TaskCard';
 import { AddCompletedTaskForMember } from '../tracker/AddCompletedTaskControl';
 import { TaskActionSuccess } from '../../components/tasks/TaskActionSuccess';
 import { LeadershipAccess } from './LeadershipAccess';
-import { DifficultyStars } from '../../components/tasks/DifficultyStars';
+import { DifficultyMark } from '../../components/tasks/DifficultyMark';
 import {
   filterMemberTasks,
   historyEvaluations,
@@ -112,7 +112,7 @@ function AssignmentRecord({ task }: { task: MemberTask }) {
                   {entry.difficulty === null ? (
                     'Dificultate: —'
                   ) : (
-                    <DifficultyStars
+                    <DifficultyMark
                       value={entry.difficulty}
                       label="Dificultate:"
                     />

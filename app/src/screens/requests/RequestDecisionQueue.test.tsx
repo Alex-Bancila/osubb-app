@@ -4,6 +4,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import axe from 'axe-core';
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 const state = vi.hoisted(() => ({
+  groups: new Map<number, unknown>() as Map<number, never>,
   queue: vi.fn(),
   mutate: vi.fn(),
   scale: {
@@ -13,7 +14,15 @@ const state = vi.hoisted(() => ({
     refetch: vi.fn(),
     data: {
       ratings: [{ rating: 5, multiplier: 4, label: 'Excelent' }],
-      difficulties: [{ stars: 2, note: 'Ușor' }],
+      difficulties: [
+        {
+          level: 2,
+          kind: 'star',
+          label: '2 stele',
+          glyph: null,
+          base_points: 2,
+        },
+      ],
     },
   },
 }));
@@ -24,6 +33,7 @@ vi.mock('../../queries/request-decisions', async (original) => ({
 }));
 vi.mock('../../queries/reference', () => ({
   useEvaluationScale: () => state.scale,
+  useGroups: () => ({ data: state.groups, isPending: false }),
 }));
 // #915: where the approver may credit the requester -- the Request's Group
 // and a Child Group of it, each with its Campaigns.
@@ -90,7 +100,7 @@ it('shares evaluation fields and retains success after the queue refetches empty
     screen.getByRole('button', { name: 'Aprobă și acordă punctele' }),
   );
   expect(state.mutate).not.toHaveBeenCalled();
-  await user.click(screen.getByRole('radio', { name: '2 stele — Ușor' }));
+  await user.click(screen.getByRole('radio', { name: /^2 stele — / }));
   await user.click(
     screen.getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
   );
@@ -256,7 +266,7 @@ it('names the Requester by Nickname as a button that opens their Member Card', a
 });
 
 async function score(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('radio', { name: '2 stele — Ușor' }));
+  await user.click(screen.getByRole('radio', { name: /^2 stele — / }));
   await user.click(
     screen.getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
   );
@@ -371,4 +381,42 @@ it("always offers the Request's own Group, even when the read leaves it out (#91
   expect(
     screen.getByRole('combobox', { name: 'Grup principal (obligatoriu)' }),
   ).toHaveTextContent('Ateliere');
+});
+
+it('sets the approval Evaluation from the guide of the Request Group (#986)', async () => {
+  const user = userEvent.setup();
+  // The Request's Group is Human Resources (HR), with its own list.
+  state.groups = new Map([
+    [
+      3,
+      {
+        id: 3,
+        name: 'Ateliere',
+        short: 'HR',
+        category: 'department',
+        path: [3],
+        is_organization: false,
+      },
+    ],
+  ]) as never;
+  render(<RequestDecisionQueue />);
+  await user.click(screen.getByRole('button', { name: 'Evaluează cererea' }));
+  await user.click(screen.getByRole('button', { name: 'Ghid de evaluare' }));
+  const guide = await screen.findByRole('dialog', { name: 'Ghid de evaluare' });
+  expect(
+    within(guide).getByRole('region', { name: 'Taskuri în Resurse Umane' }),
+  ).toBeVisible();
+  await user.click(
+    within(guide).getByRole('button', {
+      name: 'Setează Dificultate 2 stele — Remindere',
+    }),
+  );
+  await user.click(within(guide).getByRole('button', { name: 'Gata' }));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Ghid de evaluare' }),
+    ).toBeNull(),
+  );
+  expect(screen.getByRole('radio', { name: /^2 stele — / })).toBeChecked();
+  state.groups = new Map() as never;
 });

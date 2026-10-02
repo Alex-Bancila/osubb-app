@@ -4,6 +4,7 @@ import * as axe from 'axe-core';
 import { beforeEach, expect, it, onTestFinished, vi } from 'vitest';
 import { CommandError } from '../../lib/command-reasons';
 const state = vi.hoisted(() => ({
+  groups: new Map<number, unknown>() as Map<number, never>,
   capability: true,
   mutation: { isPending: false, mutateAsync: vi.fn() },
   scale: {
@@ -16,7 +17,15 @@ const state = vi.hoisted(() => ({
         { rating: 1, multiplier: -2, label: 'Slab' },
         { rating: 5, multiplier: 4, label: 'Excelent' },
       ],
-      difficulties: [{ stars: 2, note: 'Ușor' }],
+      difficulties: [
+        {
+          level: 2,
+          kind: 'star',
+          label: '2 stele',
+          glyph: null,
+          base_points: 2,
+        },
+      ],
     },
   },
 }));
@@ -26,6 +35,7 @@ vi.mock('../../queries/task-review', () => ({
 }));
 vi.mock('../../queries/reference', () => ({
   useEvaluationScale: () => state.scale,
+  useGroups: () => ({ data: state.groups, isPending: false }),
 }));
 import { TaskEvaluationControl } from './TaskEvaluationControl';
 beforeEach(() => {
@@ -60,7 +70,7 @@ it('requires all fields, previews live guide values and submits one Executor eva
   await user.click(screen.getByRole('button', { name: 'Evaluează taskul' }));
   await user.click(screen.getByRole('button', { name: 'Confirmă evaluarea' }));
   expect(state.mutation.mutateAsync).not.toHaveBeenCalled();
-  await user.click(screen.getByRole('radio', { name: '2 stele — Ușor' }));
+  await user.click(screen.getByRole('radio', { name: /^2 stele — / }));
   await user.click(
     screen.getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
   );
@@ -85,7 +95,7 @@ it('retains entered values on conflict and is accessible', async () => {
   const user = userEvent.setup();
   const { container } = render(<TaskEvaluationControl {...props} />);
   await user.click(screen.getByRole('button', { name: 'Evaluează taskul' }));
-  await user.click(screen.getByRole('radio', { name: '2 stele — Ușor' }));
+  await user.click(screen.getByRole('radio', { name: /^2 stele — / }));
   await user.click(
     screen.getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
   );
@@ -105,7 +115,7 @@ it('prevents repeated submits while the first command is unresolved', async () =
   const user = userEvent.setup();
   render(<TaskEvaluationControl {...props} />);
   await user.click(screen.getByRole('button', { name: 'Evaluează taskul' }));
-  await user.click(screen.getByRole('radio', { name: '2 stele — Ușor' }));
+  await user.click(screen.getByRole('radio', { name: /^2 stele — / }));
   await user.click(
     screen.getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
   );
@@ -151,7 +161,7 @@ it('submits the unfulfilled outcome through the shared evaluation form', async (
   expect(
     screen.getByText(/păstrează încercarea în istoric/),
   ).toBeInTheDocument();
-  await user.click(screen.getByRole('radio', { name: '2 stele — Ușor' }));
+  await user.click(screen.getByRole('radio', { name: /^2 stele — / }));
   await user.click(
     screen.getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
   );
@@ -180,7 +190,7 @@ it('announces and focuses success after the refetch changes status before mutati
   const user = userEvent.setup();
   const view = render(<TaskEvaluationControl {...props} />);
   await user.click(screen.getByRole('button', { name: 'Evaluează taskul' }));
-  await user.click(screen.getByRole('radio', { name: '2 stele — Ușor' }));
+  await user.click(screen.getByRole('radio', { name: /^2 stele — / }));
   await user.click(
     screen.getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
   );
@@ -215,7 +225,7 @@ it('announces and focuses success for unfulfilled after the refetch changes stat
   await user.click(
     screen.getByRole('button', { name: 'Marchează nerealizat' }),
   );
-  await user.click(screen.getByRole('radio', { name: '2 stele — Ușor' }));
+  await user.click(screen.getByRole('radio', { name: /^2 stele — / }));
   await user.click(
     screen.getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
   );
@@ -243,7 +253,7 @@ it('preserves success when mutation resolves before the refetch changes status b
   const user = userEvent.setup();
   const view = render(<TaskEvaluationControl {...props} />);
   await user.click(screen.getByRole('button', { name: 'Evaluează taskul' }));
-  await user.click(screen.getByRole('radio', { name: '2 stele — Ușor' }));
+  await user.click(screen.getByRole('radio', { name: /^2 stele — / }));
   await user.click(
     screen.getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
   );
