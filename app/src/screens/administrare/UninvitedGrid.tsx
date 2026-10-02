@@ -753,7 +753,8 @@ export function UninvitedGrid() {
     const needle = normalizeSearch(query.trim());
     const rows = [...waiting, ...sentRows.values()].filter(
       (member) =>
-        (rowFilter === 'all' || member.problems.length > 0) &&
+        (rowFilter === 'all' ||
+          (!sentRows.has(member.memberId) && member.problems.length > 0)) &&
         (!needle ||
           normalizeSearch(`${member.name} ${member.email}`).includes(needle)),
     );
