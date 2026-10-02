@@ -18,6 +18,9 @@ drop view public.profiles_directory;
 -- M4 (20260927180000): profiles_update_self reads profiles.role, so it would pin
 -- the column type; the transaction never commits, so dropping it here is local.
 drop policy profiles_update_self on public.profiles;
+-- #983: the Promotion Candidate refresh compares profiles.role with today's
+-- enum, so the update below would fail against the old one; local too.
+drop trigger profiles_refresh_promotion_candidates on public.profiles;
 create type pg_temp.pre593_member_role as enum ('recrut','voluntar','activ','vot','responsabil','bce','bc','moderator');
 alter table public.profiles alter column role drop default;
 alter table public.profiles alter column role type pg_temp.pre593_member_role using role::text::pg_temp.pre593_member_role;

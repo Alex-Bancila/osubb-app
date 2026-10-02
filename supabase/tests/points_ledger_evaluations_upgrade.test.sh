@@ -42,6 +42,10 @@ begin;
 set local client_min_messages = warning;
 
 drop trigger task_evaluations_reject_legacy_source on public.task_evaluations;
+-- #983: the Promotion Candidate refresh reads points_ledger.evaluation_id,
+-- which the pre-#317 shape below does not have yet; the transaction never
+-- commits, so dropping the trigger here is local.
+drop trigger points_ledger_refresh_promotion_candidates on public.points_ledger;
 drop function private.reject_legacy_evaluation_source();
 
 drop index public.points_ledger_evaluation_reason_uidx;
