@@ -526,7 +526,7 @@ select set_config('request.jwt.claims','',true);
 --   duplicated from the unfulfilled  pr-duplicate
 --   campaign-labelled .............. one active Campaign per real Department
 --   completed-work requests ........ approved / pending / rejected
---   above the stars (#985) ......... hr-medal-completed (Argint), pr-coordonator-completed
+--   above the stars (#985) ......... edu-medal-completed (Argint), edu-coordonator-completed
 
 -- Deadlines are relative to `now()` and land on Bucharest 23:59 of the target
 -- day, the way a human picks one. Negative days are deadlines already past.
@@ -755,13 +755,14 @@ insert into demo_task_seed values
    pg_temp.demo_deadline(8), 'd0000000-0000-0000-0000-000000000008', now() - interval '10 days'),
 
   -- #985: the two Difficulty kinds above the stars, both evaluated -- a
-  -- medal (Argint) in HR and a Coordonator Task in PR, as the guide uses them.
-  ('hr-medal-completed', 'Responsabil campanie internă',
-   'Monitorizarea voluntarilor și gestionarea taskurilor campaniei interne.', 'hr', 'hr', null, null,
+  -- medal (Argint) and a Coordonator Task in Educațional, both for the Recrut
+  -- persona, whose points move no Role Evaluation cohort or threshold.
+  ('edu-medal-completed', 'Responsabil echipă TalkEdu',
+   'Brigada TalkEdu: ture, materiale și voluntarii din campus.', 'logistic', 'edu', null, null,
    'task', 'local', 'direct', null, null,
-   pg_temp.demo_deadline(-2), 'd0000000-0000-0000-0000-000000000008', now() - interval '16 days'),
-  ('pr-coordonator-completed', 'Coordonare campanie de recrutare',
-   'Plan media, vizualuri și echipa de postări pentru recrutarea de toamnă.', 'promo', 'pr', null, null,
+   pg_temp.demo_deadline(-2), 'd0000000-0000-0000-0000-000000000007', now() - interval '16 days'),
+  ('edu-coordonator-completed', 'Coordonare EDU Nights',
+   'Program, facilitatori și logistică pentru seria EDU Nights de toamnă.', 'proiect', 'edu', null, null,
    'task', 'local', 'direct', null, null,
    pg_temp.demo_deadline(-5), 'd0000000-0000-0000-0000-000000000007', now() - interval '26 days'),
 
@@ -981,7 +982,7 @@ update tasks
        completed_at = now() - interval '3 days',
        difficulty   = 7,
        rating       = 4
- where id = pg_temp.demo_task_id('hr-medal-completed');
+ where id = pg_temp.demo_task_id('edu-medal-completed');
 
 update tasks
    set status       = 'completed',
@@ -990,7 +991,7 @@ update tasks
        completed_at = now() - interval '6 days',
        difficulty   = 10,
        rating       = 4
- where id = pg_temp.demo_task_id('pr-coordonator-completed');
+ where id = pg_temp.demo_task_id('edu-coordonator-completed');
 
 update tasks set status = 'in_progress', started_at = now() - interval '5 days'
  where id = pg_temp.demo_task_id('project-overdue');
@@ -1070,9 +1071,9 @@ select fixture.key, fixture.task_key, fixture.member_id, fixture.assigned_at,
      now() - interval '10 days', 'd0000000-0000-0000-0000-000000000008', null, null, null),
     ('edu-request-task', 'edu-request-task', 'd0000000-0000-0000-0000-000000000001',
      now() - interval '3 days', 'd0000000-0000-0000-0000-000000000008', null, 'completed', null),
-    ('hr-medal-completed', 'hr-medal-completed', 'd0000000-0000-0000-0000-000000000005',
-     now() - interval '16 days', 'd0000000-0000-0000-0000-000000000008', null, 'completed', null),
-    ('pr-coordonator-completed', 'pr-coordonator-completed', 'd0000000-0000-0000-0000-000000000003',
+    ('edu-medal-completed', 'edu-medal-completed', 'd0000000-0000-0000-0000-000000000001',
+     now() - interval '16 days', 'd0000000-0000-0000-0000-000000000007', null, 'completed', null),
+    ('edu-coordonator-completed', 'edu-coordonator-completed', 'd0000000-0000-0000-0000-000000000001',
      now() - interval '26 days', 'd0000000-0000-0000-0000-000000000007', null, 'completed', null)
   ) as fixture (key, task_key, member_id, assigned_at, assigned_by, ended_at,
                 end_reason, end_note)
@@ -1200,11 +1201,11 @@ select pg_temp.demo_task_id(fixture.task_key),
      'completed', 2, 3, 'Muncă reală, confirmată de coordonatorul standului.',
      now() - interval '3 days', null, null, null),
     -- #985: Argint (7 base points) and Coordonator (20), both rated 4.
-    ('hr-medal-completed', 'hr-medal-completed', 'd0000000-0000-0000-0000-000000000008',
-     'completed', 7, 4, 'Campania internă a mers fără sincope; voluntarii au fost urmăriți constant.',
+    ('edu-medal-completed', 'edu-medal-completed', 'd0000000-0000-0000-0000-000000000007',
+     'completed', 7, 4, 'Brigada a ieșit la fiecare tură; voluntarii au fost urmăriți constant.',
      now() - interval '3 days', null, null, null),
-    ('pr-coordonator-completed', 'pr-coordonator-completed', 'd0000000-0000-0000-0000-000000000007',
-     'completed', 10, 4, 'Campania de recrutare a fost coordonată de la plan media la ultima postare.',
+    ('edu-coordonator-completed', 'edu-coordonator-completed', 'd0000000-0000-0000-0000-000000000007',
+     'completed', 10, 4, 'Seria EDU Nights a fost coordonată de la program la ultima seară.',
      now() - interval '6 days', null, null, null)
   ) as fixture (task_key, assignment_key, evaluated_by, outcome, difficulty,
                 rating, note, evaluated_at, reversed_at, reversed_by,
@@ -1689,43 +1690,43 @@ select pg_temp.demo_task_id(fixture.task_key), fixture.kind, fixture.actor_id,
      'todo', 'in_progress', null, '{}'::jsonb, interval '8 days'),
 
     -- ---- #985: a medal Task and a Coordonator Task, both evaluated
-    ('hr-medal-completed', 'created', 'd0000000-0000-0000-0000-000000000008', null,
+    ('edu-medal-completed', 'created', 'd0000000-0000-0000-0000-000000000007', null,
      null, 'todo', null,
      jsonb_build_object('kind', 'task', 'audience', 'local', 'assignment_mode', 'direct',
                         'campaign_id', null, 'parent_task_id', null,
-                        'executor_id', 'd0000000-0000-0000-0000-000000000005'),
+                        'executor_id', 'd0000000-0000-0000-0000-000000000001'),
      interval '16 days'),
-    ('hr-medal-completed', 'executor_assigned', 'd0000000-0000-0000-0000-000000000008', 'hr-medal-completed',
+    ('edu-medal-completed', 'executor_assigned', 'd0000000-0000-0000-0000-000000000007', 'edu-medal-completed',
      null, null, null,
-     jsonb_build_object('via', 'create', 'member_id', 'd0000000-0000-0000-0000-000000000005'),
+     jsonb_build_object('via', 'create', 'member_id', 'd0000000-0000-0000-0000-000000000001'),
      interval '16 days' - interval '2 seconds'),
-    ('hr-medal-completed', 'started', 'd0000000-0000-0000-0000-000000000005', 'hr-medal-completed',
+    ('edu-medal-completed', 'started', 'd0000000-0000-0000-0000-000000000001', 'edu-medal-completed',
      'todo', 'in_progress', null, '{}'::jsonb, interval '15 days'),
-    ('hr-medal-completed', 'submitted', 'd0000000-0000-0000-0000-000000000005', 'hr-medal-completed',
+    ('edu-medal-completed', 'submitted', 'd0000000-0000-0000-0000-000000000001', 'edu-medal-completed',
      'in_progress', 'in_review', null, '{}'::jsonb, interval '4 days'),
-    ('hr-medal-completed', 'evaluated', 'd0000000-0000-0000-0000-000000000008', 'hr-medal-completed',
-     'in_review', 'completed', 'Campania internă a mers fără sincope; voluntarii au fost urmăriți constant.',
-     jsonb_build_object('evaluation_id', pg_temp.demo_evaluation_id('hr-medal-completed'),
+    ('edu-medal-completed', 'evaluated', 'd0000000-0000-0000-0000-000000000007', 'edu-medal-completed',
+     'in_review', 'completed', 'Brigada a ieșit la fiecare tură; voluntarii au fost urmăriți constant.',
+     jsonb_build_object('evaluation_id', pg_temp.demo_evaluation_id('edu-medal-completed'),
                         'difficulty', 7, 'rating', 4, 'points', pg_temp.demo_points(7, 4)),
      interval '3 days'),
 
-    ('pr-coordonator-completed', 'created', 'd0000000-0000-0000-0000-000000000007', null,
+    ('edu-coordonator-completed', 'created', 'd0000000-0000-0000-0000-000000000007', null,
      null, 'todo', null,
      jsonb_build_object('kind', 'task', 'audience', 'local', 'assignment_mode', 'direct',
                         'campaign_id', null, 'parent_task_id', null,
-                        'executor_id', 'd0000000-0000-0000-0000-000000000003'),
+                        'executor_id', 'd0000000-0000-0000-0000-000000000001'),
      interval '26 days'),
-    ('pr-coordonator-completed', 'executor_assigned', 'd0000000-0000-0000-0000-000000000007', 'pr-coordonator-completed',
+    ('edu-coordonator-completed', 'executor_assigned', 'd0000000-0000-0000-0000-000000000007', 'edu-coordonator-completed',
      null, null, null,
-     jsonb_build_object('via', 'create', 'member_id', 'd0000000-0000-0000-0000-000000000003'),
+     jsonb_build_object('via', 'create', 'member_id', 'd0000000-0000-0000-0000-000000000001'),
      interval '26 days' - interval '2 seconds'),
-    ('pr-coordonator-completed', 'started', 'd0000000-0000-0000-0000-000000000003', 'pr-coordonator-completed',
+    ('edu-coordonator-completed', 'started', 'd0000000-0000-0000-0000-000000000001', 'edu-coordonator-completed',
      'todo', 'in_progress', null, '{}'::jsonb, interval '25 days'),
-    ('pr-coordonator-completed', 'submitted', 'd0000000-0000-0000-0000-000000000003', 'pr-coordonator-completed',
+    ('edu-coordonator-completed', 'submitted', 'd0000000-0000-0000-0000-000000000001', 'edu-coordonator-completed',
      'in_progress', 'in_review', null, '{}'::jsonb, interval '7 days'),
-    ('pr-coordonator-completed', 'evaluated', 'd0000000-0000-0000-0000-000000000007', 'pr-coordonator-completed',
-     'in_review', 'completed', 'Campania de recrutare a fost coordonată de la plan media la ultima postare.',
-     jsonb_build_object('evaluation_id', pg_temp.demo_evaluation_id('pr-coordonator-completed'),
+    ('edu-coordonator-completed', 'evaluated', 'd0000000-0000-0000-0000-000000000007', 'edu-coordonator-completed',
+     'in_review', 'completed', 'Seria EDU Nights a fost coordonată de la program la ultima seară.',
+     jsonb_build_object('evaluation_id', pg_temp.demo_evaluation_id('edu-coordonator-completed'),
                         'difficulty', 10, 'rating', 4, 'points', pg_temp.demo_points(10, 4)),
      interval '6 days'),
 

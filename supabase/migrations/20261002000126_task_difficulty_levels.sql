@@ -76,8 +76,10 @@ alter table public.task_difficulty_levels enable row level security;
 create policy task_difficulty_levels_read on public.task_difficulty_levels
   for select to authenticated using (public.auth_is_member());
 
-revoke all on table public.task_difficulty_levels from public, anon, authenticated;
-grant select on table public.task_difficulty_levels to authenticated;
+-- Reference data changes only by migration: no client role, service_role
+-- included, keeps a write grant from the default privileges.
+revoke all on table public.task_difficulty_levels from public, anon, authenticated, service_role;
+grant select on table public.task_difficulty_levels to authenticated, service_role;
 
 create trigger broadcast_change after insert or update or delete on public.task_difficulty_levels
   for each statement execute function private.broadcast_change();

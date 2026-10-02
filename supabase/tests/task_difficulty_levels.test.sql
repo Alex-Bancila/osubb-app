@@ -23,7 +23,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(34);
+select plan(35);
 
 -- ==================== Fixtures ====================
 create function pg_temp.u985(n integer) returns uuid language sql immutable as $$
@@ -114,6 +114,11 @@ select ok(has_table_privilege('authenticated', 'public.task_difficulty_levels', 
       and not has_table_privilege('authenticated', 'public.task_difficulty_levels', 'update')
       and not has_table_privilege('authenticated', 'public.task_difficulty_levels', 'delete'),
   'authenticated reads the levels and writes none: they change only by migration');
+select ok(has_table_privilege('service_role', 'public.task_difficulty_levels', 'select')
+      and not has_table_privilege('service_role', 'public.task_difficulty_levels', 'insert')
+      and not has_table_privilege('service_role', 'public.task_difficulty_levels', 'update')
+      and not has_table_privilege('service_role', 'public.task_difficulty_levels', 'delete'),
+  'service_role reads the levels and writes none either');
 
 select pg_temp.test_login_leadership(pg_temp.u985(3));
 select is((select count(*) from public.task_difficulty_levels), 10::bigint,
