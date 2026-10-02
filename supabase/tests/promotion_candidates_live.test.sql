@@ -1,4 +1,4 @@
--- promotion_candidates_live.test.sql -- #983 (ruling R34): the Promotion
+-- promotion_candidates_live.test.sql -- #983 (ruling R35): the Promotion
 -- Candidate list between Role Evaluations.
 --
 -- A tenured Voluntar whose net Task Points since the latest Voluntar Activ

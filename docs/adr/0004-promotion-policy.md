@@ -7,7 +7,7 @@
 - **Amended:** 2026-09-21 — profile grilling: Voluntar → Voluntar Activ has two doors behind one tenure gate (the top x% at a Period's close, or the Promotion Threshold during the following Period); a Retention Signal to BC replaces any downward automation for Voluntar Activ and Drept de Vot; AG Eligibility follows from the Voluntar Activ Role alone; BC seeds the first threshold (superseded 2026-09-27)
 - **Amended:** 2026-09-27 — ruling R28: no Period is opened or closed; BC runs Role Evaluations over a chosen date range, of two kinds with one BC-editable Promotion Threshold each; Voluntar → Voluntar Activ is BC-confirmed from a list of Promotion Candidates; only Recrut → Voluntar stays automatic
 - **Amended:** 2026-09-29 — ruling R31: every BC member, not only the Moderator, grants and removes the BC and Moderator Roles; whoever removes the last active Moderator or BC member names the replacement in the same change; extended the same day (#917) to the Status of a BC member or Moderator and to provisioning or re-inviting at either rank
-- **Amended:** 2026-10-02 — ruling R34 (#983): a Voluntar who holds the required tenure and reaches the Promotion Threshold in force between Role Evaluations becomes a Promotion Candidate at once, not only at the next run; BC still promotes by hand
+- **Amended:** 2026-10-02 — ruling R35 (#983): a Voluntar who holds the required tenure and reaches the Promotion Threshold in force between Role Evaluations becomes a Promotion Candidate at once, not only at the next run; BC still promotes by hand
 - **Deciders:** Alex Băncilă (IT Coordinator)
 - **Supersedes:** —
 - **Superseded by:** —
@@ -84,7 +84,7 @@ Supersedes the 2026-09-20 amendment's "only a Moderator may change the Role … 
 
 **The seats can never be emptied.** A change that takes BC or Moderator from its last active holder must name a replacement in the same save: any active Member, the person making the change included (the one self-change allowed). The replacement is given the rank first, then the change applies, in one transaction; each writes its own `role_history` row and Notification naming the real actor. A replacement who is the last holder of the other leadership rank is refused, unless the Member being changed takes that rank in the same save (the two swap seats). Two such changes made at the same moment are serialized, so neither can count on a holder the other is removing. The Moderator seat's transfer reads as before, and may now be made by BC as well.
 
-## Amendment (2026-10-02) — a Promotion Candidate the moment they qualify (ruling R34)
+## Amendment (2026-10-02) — a Promotion Candidate the moment they qualify (ruling R35)
 
 Amends the 2026-09-27 amendment's "Voluntar → Voluntar Activ is BC-confirmed". Alex (2026-10-02, issue #983): "when a volunteer is eligible for voluntar activ, add them directly to the list of eligible volunteers, not only when the evaluation period comes".
 

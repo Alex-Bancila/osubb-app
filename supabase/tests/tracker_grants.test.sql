@@ -825,7 +825,7 @@ insert into pinned_private_functions (proname, args, category) values
   -- body runs as the wrapper's owner and is granted to nobody -- the same
   -- shape as #776's notify_email_delivery_problem_impl.
   ('request_invitation_allowed_impl',    'p_email text, p_ip_hash text', 'none'),
-  -- #983 (R34): the Promotion Candidate list between Role Evaluations --
+  -- #983 (R35): the Promotion Candidate list between Role Evaluations --
   -- the refresh (called by the statement triggers, last by the run and
   -- daily by the tenure job) and the statement-trigger body that calls
   -- it. Both definer, both granted to nobody.

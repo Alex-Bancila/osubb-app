@@ -146,12 +146,12 @@ select throws_ok(
   $$ insert into public.task_evaluations
        (task_id, assignment_id, evaluated_by, outcome, difficulty, rating, points, note)
      select task.id, assignment.id, '31600000-0000-0000-0000-000000000001',
-            'completed', 6, 4, 6, 'a note'
+            'completed', 11, 4, 6, 'a note'
        from public.tasks task
        join public.task_assignments assignment on assignment.task_id = task.id
       where task.title = 'Evaluation fixture Task A 316' $$,
   '23514', null,
-  'difficulty above 5 is rejected');
+  'difficulty above 10 is rejected (#985)');
 select throws_ok(
   $$ insert into public.task_evaluations
        (task_id, assignment_id, evaluated_by, outcome, difficulty, rating, points, note)
