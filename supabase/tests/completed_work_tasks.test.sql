@@ -303,9 +303,9 @@ select throws_ok(format($q$
 $q$, pg_temp.u915(4), pg_temp.g915('Echipa A1 #915')),
   '42501', 'task_command_forbidden', 'a claimless session is refused');
 select throws_ok(format($q$
-  select public.create_completed_task(%L, %s, 'Refuz dificultate #915', null, null, null, null, 9, 3, 'n')
+  select public.create_completed_task(%L, %s, 'Refuz dificultate #915', null, null, null, null, 11, 3, 'n')
 $q$, pg_temp.u915(4), pg_temp.g915('Echipa A1 #915')),
-  'PT400', 'invalid_difficulty', 'a Difficulty outside 1..5 is malformed for everyone, answered before the gate');
+  'PT400', 'invalid_difficulty', 'a Difficulty outside 1..10 is malformed for everyone, answered before the gate');
 select throws_ok(format($q$
   select public.create_completed_task(%L, %s, 'Refuz nota #915', null, null, null, null, 3, 3, '   ')
 $q$, pg_temp.u915(4), pg_temp.g915('Echipa A1 #915')),
@@ -439,10 +439,10 @@ select ok((select pg_get_functiondef('private.create_completed_task_impl(uuid, b
             ~ 'private\.evaluate_task\(',
   'create_completed_task writes no points itself: private.evaluate_task does');
 select ok((select pg_get_functiondef('private.approve_completed_work_request_impl(bigint, integer, integer, text, text, text, bigint, text, text, bigint)'::regprocedure))
-            !~ 'points_ledger|task_evaluations'
+            !~ 'points_ledger|insert into public.task_evaluations|rating_mult'
       and (select pg_get_functiondef('private.approve_completed_work_request_impl(bigint, integer, integer, text, text, text, bigint, text, text, bigint)'::regprocedure))
             ~ 'private\.evaluate_task\(',
-  'nor does an approval');
+  'nor does an approval: it reads back the points evaluate_task wrote and never recomputes them (#985)');
 
 -- ==================== 9. The daily cap ====================
 -- Fill the Manager's task_create allowance to one below its limit with

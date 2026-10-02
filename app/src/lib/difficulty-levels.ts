@@ -21,10 +21,6 @@ export const DIFFICULTY_LEVELS = [
 
 export type DifficultyLevelInfo = (typeof DIFFICULTY_LEVELS)[number];
 export type DifficultyLevel = DifficultyLevelInfo['level'];
-export type DifficultyKind = DifficultyLevelInfo['kind'];
-
-export const MIN_DIFFICULTY = 1;
-export const MAX_DIFFICULTY = 10;
 
 /** The level's presentation, or null outside 1–10. */
 export function difficultyLevel(value: number): DifficultyLevelInfo | null {

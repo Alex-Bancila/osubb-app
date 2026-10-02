@@ -27,12 +27,16 @@ it.each([
   ['1', []],
   ['5', []],
   ['6', []],
+  [9, []],
   ['10', []],
   ['11', ['difficulty: invalid_difficulty']],
   ['2.5', ['difficulty: invalid_difficulty']],
-])('keeps a Difficulty of %j within 1–10 (#985)', (difficulty, expected) => {
-  expect(check({ difficulty })).toEqual(expected);
-});
+])(
+  'keeps a Difficulty of %j within the ten levels (#985)',
+  (difficulty, expected) => {
+    expect(check({ difficulty })).toEqual(expected);
+  },
+);
 
 it.each([
   ['', ['rating: invalid_rating']],

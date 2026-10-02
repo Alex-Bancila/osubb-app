@@ -713,6 +713,25 @@ select pg_temp.smoke_eq(
   pg_temp.smoke_points('d0000000-0000-0000-0000-000000000002'), :base_02 + 6 + 2 + 1,
   'step 18: approval credited 1 x 1 = 1 more point -- +9 in total across the run');
 
+-- ==================== step 18b (#985): a Coordonator Task ====================
+-- Difficulty 10 is Coordonator, 20 base points: rated 5 it earns 20 x 3 = 60.
+
+select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000007');
+select public.create_completed_task('d0000000-0000-0000-0000-000000000002', :edu_group,
+  'SMOKE coordonarea targului de voluntariat', null, null, null, null, 10, 5,
+  'Coordonare completa, de la plan la raport.');
+reset role;
+
+select pg_temp.smoke_eq(
+  (select evaluation.points from public.task_evaluations as evaluation
+     join public.tasks as task on task.id = evaluation.task_id
+    where task.title = 'SMOKE coordonarea targului de voluntariat'), 60,
+  'step 18b: a Coordonator Task rated 5 is worth its 20 base points x 3');
+
+select pg_temp.smoke_eq(
+  pg_temp.smoke_points('d0000000-0000-0000-0000-000000000002'), :base_02 + 6 + 2 + 1 + 60,
+  'step 18b: the Executor''s total rose by exactly 60');
+
 -- ==================== step 19: authenticated cannot write any Task table ====================
 -- Every one of these is syntactically valid; the ONLY reason it fails is the
 -- privilege #345 revoked. Run as a real, active member -- not anon -- so this

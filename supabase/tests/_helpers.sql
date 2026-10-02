@@ -290,7 +290,9 @@ begin
 
   v_outcome := case when v_task.status = 'unfulfilled'
                     then 'unfulfilled' else 'completed' end;
-  v_points  := v_task.difficulty * public.rating_mult(v_task.rating);
+  -- #985: the level's base points, as private.evaluate_task computes them.
+  v_points  := (select level.base_points from public.task_difficulty_levels as level
+                 where level.level = v_task.difficulty) * public.rating_mult(v_task.rating);
 
   select id into v_assignment_id
     from public.task_assignments
