@@ -65,7 +65,7 @@ The scope is deliberately narrow. A real person invited to staging for testing k
 
 "Identical" means the data is identical, not the row ids: `tasks.id` and friends come from identity sequences, which keep counting. Nothing in the app depends on a specific id.
 
-Reference data — roles, departments, the rating and difficulty guides, `role_capabilities`, `notif_suppression` — is **not** touched. It lives in migrations, because production needs it too (house rule 6).
+Reference data — roles, departments, the rating guide and Task Difficulty levels, `role_capabilities`, `notif_suppression` — is **not** touched. It lives in migrations, because production needs it too (house rule 6).
 
 ## After it runs
 
