@@ -8,6 +8,7 @@
 - **Amended:** 2026-09-23 — the Candidate Queue never promotes by arrival: interest only queues, the Task Manager selects, and give-up or an edit that removes the Executor returns the Task to To do with its queue intact
 - **Amended:** 2026-09-25 — visibility follows the Task Audience: a Member sees their own Groups' Tasks and, elsewhere, only organization-wide public Tasks; supersedes the 2026-09-23 Minimum Level visibility amendment
 - **Amended:** 2026-09-29 — #936: `update_task_content` and `convert_task_mode` are dropped; `update_task` (with `preview_task_update`) is the one Task edit command in the server-command boundary
+- **Amended:** 2026-10-02 — #985 (ruling R34): Difficulty has ten levels — five stars, the Bronz/Argint/Aur medals and Responsabil/Coordonator — each with base points (1–5, 6, 7, 8, 15, 20); Task Points are base points × the Rating multiplier
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -77,7 +78,7 @@ The normal transition is:
 todo → in_progress → in_review → completed
 ```
 
-An authorized Reviewer may return `in_review` work to `in_progress` with a note; this increments the review round and marks the Task Feedback pending. Final Evaluation — `complete_task_review`, or `mark_task_unfulfilled` for overdue unfinished work — requires Difficulty, Rating, and a note, and awards Difficulty × the Rating multiplier from the scoring guide only to the active Executor in the same transaction.
+An authorized Reviewer may return `in_review` work to `in_progress` with a note; this increments the review round and marks the Task Feedback pending. Final Evaluation — `complete_task_review`, or `mark_task_unfulfilled` for overdue unfinished work — requires Difficulty, Rating, and a note, and awards the Difficulty level's base points × the Rating multiplier from the scoring guide only to the active Executor in the same transaction. Difficulty is one of ten levels (`public.task_difficulty_levels`): stars 1–5 worth 1–5 base points, the Bronz, Argint and Aur medals (6–8) worth 6, 7 and 8, Responsabil (9) worth 15 and Coordonator (10) worth 20; a Coordonator Task rated 5 earns 60 and rated 1 loses 20. _(Amended 2026-10-02, #985; previously Difficulty was 1–5 and the award Difficulty × the multiplier.)_
 
 Reopening completed work requires a reason, returns it to `in_progress`, and reverses its Task-ledger effect atomically. Cancelling requires a reason and never deletes Assignments, Candidatures, Evaluations, or Task Activity.
 

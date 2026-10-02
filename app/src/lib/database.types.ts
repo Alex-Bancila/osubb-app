@@ -2165,6 +2165,30 @@ export type Database = {
           },
         ]
       }
+      task_difficulty_levels: {
+        Row: {
+          base_points: number
+          glyph: string | null
+          kind: string
+          label: string
+          level: number
+        }
+        Insert: {
+          base_points: number
+          glyph?: string | null
+          kind: string
+          label: string
+          level: number
+        }
+        Update: {
+          base_points?: number
+          glyph?: string | null
+          kind?: string
+          label?: string
+          level?: number
+        }
+        Relationships: []
+      }
       task_evaluations: {
         Row: {
           assignment_id: number
