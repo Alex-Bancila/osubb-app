@@ -1225,7 +1225,7 @@ function RejectDialog({
             <DialogDescription>
               {candidate.evaluationName === null
                 ? 'Candidatul rămâne Voluntar. Respingerea ține până la următoarea evaluare Voluntar Activ: dacă la ea, sau după ea, are din nou cel puțin pragul, reapare în listă.'
-                : `Candidatul rămâne Voluntar. Respingerea ține doar pentru evaluarea „${candidate.evaluationName}”: dacă la o evaluare viitoare are din nou cel puțin pragul, reapare în listă.`}
+                : `Candidatul rămâne Voluntar. Respingerea ține doar pentru evaluarea „${candidate.evaluationName}”: dacă după ea are din nou cel puțin pragul, reapare în listă.`}
             </DialogDescription>
           </DialogHeader>
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-sm">

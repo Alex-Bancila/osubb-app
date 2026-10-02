@@ -34,8 +34,14 @@
 --     Voluntar unlists them";
 --   * the rejected-row exclusion removed -> "a live rejection keeps the
 --     Member off the list while the window lasts";
---   * the try-lock replaced by pg_advisory_xact_lock -> the probe's
---     lock_timeout error instead of "an award while another session holds";
+--   * the shared try-lock replaced by pg_advisory_xact_lock -> the probe's
+--     lock_timeout error (pinned at 2 s) instead of "an award while another
+--     session holds";
+--   * the shared try-lock made exclusive -> "an award while another writer's
+--     refresh holds (47, 1) shared is listed at once";
+--   * `on conflict ... do nothing` removed -> no assertion here (the race it
+--     guards needs two sessions on uncommitted fixtures); the index it
+--     targets is pinned by promotion_candidates.test.sql;
 --   * the run's trailing refresh removed (run_role_evaluation_impl) -> "after
 --     the run, a Voluntar already at the threshold in the new window is
 --     listed at once";
@@ -134,22 +140,32 @@ update public.profiles set status = 'inactiv'
 update public.promotion_rules set min_tenure_months = 6, enabled = true;
 update public.promotion_thresholds set threshold = 15 where kind = 'voluntar_activ';
 
+-- Pinned so a refresh that waits fails here instead of hanging the suite.
+set local lock_timeout = '2s';
 select lives_ok(
   $$ select pg_temp.credit983('98300000-0000-0000-0000-000000000018', 15) $$,
   'an award while another session holds (47, 1) succeeds: the refresh does not wait for the lock');
+reset lock_timeout;
 select is(
   (select count(*) from public.promotion_candidates where member_id = '98300000-0000-0000-0000-000000000018'),
   0::bigint,
   'and lists nobody meanwhile: the holder (a run) re-lists everyone itself');
 
 select extensions.dblink_exec('lock983', 'rollback;');
-select extensions.dblink_disconnect('lock983');
 
+-- Another writer's refresh holds (47, 1) shared, as every concurrent award
+-- does until it commits: this session's refresh must not step aside for it.
+select extensions.dblink_exec('lock983',
+  'begin; do $lock$ begin perform pg_catalog.pg_advisory_xact_lock_shared(47, 1); end $lock$;');
+set local lock_timeout = '2s';
 select pg_temp.credit983('98300000-0000-0000-0000-000000000018', 1);
+reset lock_timeout;
 select results_eq(
   $$ select * from pg_temp.open983('98300000-0000-0000-0000-000000000018') $$,
   $$ values (null::bigint, 16, '2000-07-01'::date, 15) $$,
-  'the next write after the lock is released lists the Voluntar: the list catches up by itself');
+  'an award while another writer''s refresh holds (47, 1) shared is listed at once: the list catches up by itself');
+select extensions.dblink_exec('lock983', 'rollback;');
+select extensions.dblink_disconnect('lock983');
 
 create temp table fx983 as
   select (now() at time zone 'Europe/Bucharest')::date as today,

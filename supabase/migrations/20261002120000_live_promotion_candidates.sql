@@ -18,15 +18,20 @@
 --     period_to; all time before any run), supersedes the open live rows of
 --     Voluntars who no longer qualify, lists each newly eligible Member with
 --     one Notification per live BC/Moderator, and returns the number listed.
---     It takes pg_try_advisory_xact_lock(47, 1) and does nothing while a run
---     or a threshold edit holds that lock: the run re-lists everyone from its
---     range and then calls the refresh itself, and waiting here -- from
---     inside a transaction that may already hold a Profile `for update`
---     (set_member_role, set_member_status) -- could deadlock against the
---     run's `for key share` on the population's Profiles.
+--     It takes pg_try_advisory_xact_lock_shared(47, 1) and does nothing
+--     while a run or a threshold edit holds that lock exclusively: the run
+--     re-lists everyone from its range and then calls the refresh itself,
+--     and waiting here -- from inside a transaction that may already hold a
+--     Profile `for update` (set_member_role, set_member_status) -- could
+--     deadlock against the run's `for key share` on the population's
+--     Profiles. Shared, so concurrent writers refresh side by side (an
+--     exclusive try-lock would make the second of two simultaneous awards
+--     skip its refresh and miss its own crossing); the insert is idempotent
+--     against the one-open-row index, and only a row actually written is
+--     notified.
 --   * Statement-level triggers call it after writes to points_ledger,
---     promotion_thresholds, promotion_rules and profiles (role, status,
---     joined_at). run_role_evaluation_impl calls it last: the new window may
+--     promotion_thresholds, promotion_rules and profiles (any update; role,
+--     status and joined_at are what matter). run_role_evaluation_impl calls it last: the new window may
 --     already hold points when the range ended earlier. apply_promotions
 --     calls it daily, for a tenure reached by the calendar alone.
 --   * A live row of a Member who leaves Voluntar is closed by the
@@ -86,9 +91,10 @@ declare
   v_listed    integer := 0;
   v_row       record;
 begin
-  -- A run or a threshold edit holds (47, 1): it re-lists from its range and
-  -- calls this last. Never wait here (the header says why).
-  if not pg_catalog.pg_try_advisory_xact_lock(47, 1) then
+  -- A run or a threshold edit holds (47, 1) exclusively: it re-lists from
+  -- its range and calls this last. Shared, so concurrent writers refresh
+  -- side by side; never wait here (the header says why).
+  if not pg_catalog.pg_try_advisory_xact_lock_shared(47, 1) then
     return 0;
   end if;
 
@@ -178,8 +184,15 @@ begin
                           and refused.created_at >= coalesce(v_last_run, '-infinity'::timestamptz))
      order by eligible.member_id
   loop
+    -- Idempotent against promotion_candidates_open_member_uidx: a concurrent
+    -- refresh may have listed the Member first, and only a row actually
+    -- written is notified.
     insert into public.promotion_candidates (role_evaluation_id, member_id, task_points, tenure_since, threshold_used)
-    values (null, v_row.member_id, v_row.task_points, v_row.tenure_since, v_threshold);
+    values (null, v_row.member_id, v_row.task_points, v_row.tenure_since, v_threshold)
+    on conflict (member_id) where decision is null do nothing;
+    if not found then
+      continue;
+    end if;
     v_listed := v_listed + 1;
 
     perform private.notify(
@@ -202,7 +215,7 @@ end;
 $$;
 
 comment on function private.refresh_promotion_candidates() is
-  '#983 (ruling R34): the Promotion Candidate list between Role Evaluations. Reads the eligible set -- live active Voluntars with the top_percent rule''s tenure on today''s Europe/Bucharest date whose net Task Points since the day after the latest Voluntar Activ run''s period_to (all time before any run) reach the Voluntar Activ threshold in force; nobody while the rule is off or the threshold unset -- then supersedes the open live rows of Voluntars who no longer qualify (decided_by null; a Member who left Voluntar is the role_history trigger''s) and lists each eligible Member with no open row and no live rejection since the last run: a promotion_candidates row with role_evaluation_id null and one Notification per live BC/Moderator (dedupe key promotion_candidate:live:<member>, link /administrare/evaluari). Returns the number listed. Takes pg_try_advisory_xact_lock(47, 1) and returns 0 at once while a run or a threshold edit holds it. Called by the statement triggers on points_ledger, promotion_thresholds, promotion_rules and profiles, last by run_role_evaluation_impl, and daily by apply_promotions. Executable by nobody.';
+  '#983 (ruling R34): the Promotion Candidate list between Role Evaluations. Reads the eligible set -- live active Voluntars with the top_percent rule''s tenure on today''s Europe/Bucharest date whose net Task Points since the day after the latest Voluntar Activ run''s period_to (all time before any run) reach the Voluntar Activ threshold in force; nobody while the rule is off or the threshold unset -- then supersedes the open live rows of Voluntars who no longer qualify (decided_by null; a Member who left Voluntar is the role_history trigger''s) and lists each eligible Member with no open row and no live rejection since the last run: a promotion_candidates row with role_evaluation_id null and one Notification per live BC/Moderator (dedupe key promotion_candidate:live:<member>, link /administrare/evaluari). Returns the number listed. Takes pg_try_advisory_xact_lock_shared(47, 1) -- shared, so concurrent writers refresh side by side, and the insert is idempotent against the one-open-row index -- and returns 0 at once while a run or a threshold edit holds the lock exclusively. Called by the statement triggers on points_ledger, promotion_thresholds, promotion_rules and profiles, last by run_role_evaluation_impl, and daily by apply_promotions. Executable by nobody.';
 
 revoke execute on function private.refresh_promotion_candidates()
   from public, anon, authenticated, service_role;
@@ -223,7 +236,7 @@ end;
 $$;
 
 comment on function private.refresh_promotion_candidates_on_write() is
-  '#983: statement-trigger body -- calls private.refresh_promotion_candidates() after a write to points_ledger (an award or a reversal), promotion_thresholds (the line), promotion_rules (the tenure or the switch) or profiles (role, status, joined_at). Granted to nobody.';
+  '#983: statement-trigger body -- calls private.refresh_promotion_candidates() after a write to points_ledger (an award or a reversal), promotion_thresholds (the line), promotion_rules (the tenure or the switch) or profiles (any update -- role, status and joined_at are what matter). Granted to nobody.';
 
 revoke execute on function private.refresh_promotion_candidates_on_write()
   from public, anon, authenticated, service_role;
@@ -240,8 +253,11 @@ create trigger promotion_rules_refresh_promotion_candidates
 after update on public.promotion_rules
 for each statement execute function private.refresh_promotion_candidates_on_write();
 
+-- No column list: a list would make the trigger depend on the columns it
+-- names (the joined_at upgrade harness drops that column to rebuild history),
+-- and the refresh is cheap and idempotent on any other change.
 create trigger profiles_refresh_promotion_candidates
-after update of role, status, joined_at on public.profiles
+after update on public.profiles
 for each statement execute function private.refresh_promotion_candidates_on_write();
 
 -- ---------------------------------------------------------------------------
@@ -462,7 +478,8 @@ begin
 
   -- 9. #983: the new window opens at p_to + 1 and may already hold points
   --    (a range that ended earlier); whoever is at the threshold in it is
-  --    listed now. The run holds (47, 1), so the refresh's try-lock succeeds.
+  --    listed now. The run holds (47, 1), so the refresh's shared try-lock
+  --    (its own session's) succeeds.
   perform private.refresh_promotion_candidates();
 
   return query select v_run_id, v_candidates, v_signals;
@@ -505,4 +522,4 @@ end;
 $$;
 
 comment on function private.apply_promotions() is
-  '#52, trimmed by #826 (ruling R28), #983: the daily pg_cron job osubb-apply-promotions. Takes pg_advisory_xact_lock(52, 1), then applies every row of private.detect_promotions() -- the tenure rule, Recrut -> Voluntar -- through private.apply_promotion, then calls private.refresh_promotion_candidates() (a tenure reached by the calendar alone; a try-lock, so the job never waits on a run). Returns the number of promotions applied; a second run applies none. Never promotes to Voluntar Activ, never demotes or withdraws a Role. Executable by nobody.';
+  '#52, trimmed by #826 (ruling R28), #983: the daily pg_cron job osubb-apply-promotions. Takes pg_advisory_xact_lock(52, 1), then applies every row of private.detect_promotions() -- the tenure rule, Recrut -> Voluntar -- through private.apply_promotion, then calls private.refresh_promotion_candidates() (a tenure reached by the calendar alone; a shared try-lock, so the job never waits on a run). Returns the number of promotions applied; a second run applies none. Never promotes to Voluntar Activ, never demotes or withdraws a Role. Executable by nobody.';
