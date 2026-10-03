@@ -99,6 +99,15 @@ select vault.create_secret('https://<ref>.supabase.co', 'project_url');
 select vault.create_secret('<sb_secret_ key>', 'secret_key');
 ```
 
+Then read both back. Vault stores whatever was pasted, spaces included, and a space inside the URL makes every `osubb-send-push` run fail with "invalid URL" (seen on production on 3 Oct 2026):
+
+```sql
+select name, length(decrypted_secret) from vault.decrypted_secrets
+ where name in ('project_url', 'secret_key');
+-- project_url: 40 characters for a 20-character ref; secret_key: 41.
+-- A plain UPDATE on vault.secrets is refused; fix a value with vault.update_secret (below).
+```
+
 `secret_key` is the project's **secret key** (`sb_secret_…`, Project Settings → API Keys), not the legacy JWT `service_role` key, which Supabase retires by the end of 2026 (#769, ruling L8). The job sends it on the `apikey` header; `send-push` has `verify_jwt = false` (`supabase/config.toml`) and compares it in constant time with the keys the platform gives the function, so any of the project's secret keys works and nothing else does. To rotate it: create a new secret key in the dashboard, then `select vault.update_secret((select id from vault.secrets where name = 'secret_key'), '<new key>');`, then delete the old key in the dashboard.
 
 A project set up before #769 has a `service_role_key` row instead; nothing reads it any more, so after `secret_key` exists and a delivery has gone through, delete it: `delete from vault.secrets where name = 'service_role_key';`.
