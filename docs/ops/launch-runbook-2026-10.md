@@ -349,9 +349,9 @@ month ($20). Raise **Rate Limits → Emails sent per hour** to `250` on import d
   pg_net refused the URL every minute ("invalid URL" in `cron.job_run_details`), the outbox grew and the
   push-health notice fired hourly. After creating the two rows, read them back and check the lengths:
   `select name, length(decrypted_secret) from vault.decrypted_secrets where name in ('project_url',
-  'secret_key');` — the URL is 40 characters for a 20-character ref, the key 41. A row is never edited
+'secret_key');` — the URL is 40 characters for a 20-character ref, the key 41. A row is never edited
   with `update` (permission denied): use `select vault.update_secret((select id from vault.secrets where
-  name = 'project_url'), '<value>');`. And a key shown on a screenshot that leaves the machine is
+name = 'project_url'), '<value>');`. And a key shown on a screenshot that leaves the machine is
   rotated (API Keys → new secret key → update the Vault row → delete the old key).
 - **Secrets versus variables.** A GitHub Environment page has two boxes. A token pasted into
   **Environment variables** is plain text and the workflows never read it (they read `secrets.*`). It
