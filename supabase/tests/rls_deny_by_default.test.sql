@@ -356,15 +356,16 @@ select is(pg_temp.tables_visible_to_claimless(), '{}'::text[],
   'real claimless user: no public table is readable, including owned rows');
 
 -- These views are protected independently of their source tables:
--- profiles_contact runs with owner rights, profiles_directory inherits RLS
+-- public.member_contacts reads through a security-definer body (#1006: it
+-- replaced the owner-rights profiles_contact view), profiles_directory inherits RLS
 -- through security_invoker. #936: member_points and leaderboard (the other
 -- owner-rights and security_invoker views this section used to cover) are
 -- dropped; leadership_leaderboard and department_cup below hold the same
 -- claims check on the surviving read surface.
 select is((select count(*) from profiles_directory), 0::bigint,
   'real claimless user: profiles_directory is empty');
-select is((select count(*) from profiles_contact), 0::bigint,
-  'real claimless user: profiles_contact is empty');
+select is((select count(*) from public.member_contacts()), 0::bigint,
+  'real claimless user: member_contacts is empty');
 select is((select count(*) from public.leadership_leaderboard()), 0::bigint,
   'real claimless user: leadership_leaderboard is empty');
 select is((select count(*) from public.department_cup(null::bigint, null::timestamptz, null::timestamptz)), 0::bigint,

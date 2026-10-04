@@ -127,7 +127,7 @@ export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
       ),
       readAllRows((from, to) =>
         supabase
-          .from('profiles_contact')
+          .rpc('member_contacts', {})
           .select('id, email, phone')
           .order('id')
           .range(from, to),

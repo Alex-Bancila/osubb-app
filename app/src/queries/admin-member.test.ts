@@ -41,11 +41,14 @@ it('reads the Member Card, the status and only the ledger rows RLS returns', asy
       tasks: null,
     },
   ];
-  supabaseMock.rpc.mockReturnValue({
-    maybeSingle: vi.fn().mockResolvedValue({ data: card, error: null }),
-  });
+  // #1006: contact details are an rpc now (member_contacts), not a view.
+  const contacts = chain({ data: null, error: null });
+  supabaseMock.rpc.mockImplementation((name: string) =>
+    name === 'member_card'
+      ? { maybeSingle: vi.fn().mockResolvedValue({ data: card, error: null }) }
+      : contacts,
+  );
   const tables = {
-    profiles_contact: chain({ data: null, error: null }),
     profiles_directory: chain({ data: { status: 'activ' }, error: null }),
     points_ledger: chain({ data: ledger, error: null }),
   };
@@ -83,17 +86,22 @@ it('reads the Member Card, the status and only the ledger rows RLS returns', asy
   expect(supabaseMock.rpc).toHaveBeenCalledWith('member_card', {
     p_member_id: 'member',
   });
+  expect(supabaseMock.rpc).toHaveBeenCalledWith('member_contacts', {
+    p_ids: ['member'],
+  });
+  expect(supabaseMock.from).not.toHaveBeenCalledWith('profiles_contact');
   expect(tables.points_ledger.eq).toHaveBeenCalledWith('member_id', 'member');
   expect(tables.profiles_directory.eq).toHaveBeenCalledWith('id', 'member');
 });
 
 it('surfaces a refused status read instead of an empty page', async () => {
-  supabaseMock.rpc.mockReturnValue({
-    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-  });
+  supabaseMock.rpc.mockImplementation((name: string) =>
+    name === 'member_card'
+      ? { maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) }
+      : chain({ data: null, error: null }),
+  );
   const refused = { message: 'permission denied' };
   const tables = {
-    profiles_contact: chain({ data: null, error: null }),
     profiles_directory: chain({ data: null, error: refused }),
     points_ledger: chain({ data: [], error: null }),
   };

@@ -106,6 +106,8 @@ if [ "$ONLY" = all ] || [ "$ONLY" = db ]; then
 
   step "db: lint" npx supabase db lint --level warning --fail-on warning
 
+  step "db: security advisors" npx supabase db advisors --local --type security --level warn --fail-on warn
+
   step "db: pgTAP suites" npx supabase test db
 
   step "db: historical data migration harnesses" bash -c '

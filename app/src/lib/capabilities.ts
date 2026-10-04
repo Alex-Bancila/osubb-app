@@ -18,7 +18,7 @@ export type Capabilities = {
   managesAnyGroup: boolean;
   /** Exactly `public.can_manage_tasks()`: manages work in some Group. */
   manageTasks: boolean;
-  /** Rank BCE+ (the `profiles_contact` gate the volunteer directory needs). */
+  /** Rank BCE+ (the `member_contacts()` gate the volunteer directory needs). */
   seeDirectory: boolean;
   /** Rank BCE+ (leaderboard, Department Cup, member history). */
   seeLeadership: boolean;

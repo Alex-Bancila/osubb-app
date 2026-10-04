@@ -74,6 +74,15 @@ jobs:
       - name: Lint database
         run: supabase db lint --level warning --fail-on warning
 
+      # #1006: the Supabase Security Advisor's lints, the same ones the
+      # dashboard shows for production (security_definer_view,
+      # function_search_path_mutable, rls_disabled_in_public, ...). The
+      # baseline is clean at WARN, so any new security WARN or ERROR fails the
+      # build. The INFO and performance findings are pinned by
+      # supabase/tests/advisor_findings.test.sql instead.
+      - name: Security advisors
+        run: supabase db advisors --local --type security --level warn --fail-on warn
+
       # The private schema holds security-definer helpers and command
       # implementations that PostgREST must never expose. Hosted projects
       # don't read supabase/config.toml for exposed schemas — that's a

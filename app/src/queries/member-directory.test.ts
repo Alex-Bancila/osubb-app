@@ -8,7 +8,8 @@ const fixtures: Record<string, unknown[]> = {
     { id: 'a', full_name: 'Ana', role: 'voluntar', status: 'activ' },
     { id: 'b', full_name: 'Bogdan', role: 'bc', status: 'alumni' },
   ],
-  profiles_contact: [{ id: 'a', email: 'ana@example.test', phone: null }],
+  // #1006: an rpc now, answered from the fixture like group_roster.
+  member_contacts: [{ id: 'a', email: 'ana@example.test', phone: null }],
   // Ana's earliest membership overall is the child Logistică, but a child
   // never becomes the chip (R17): the earliest TOP-LEVEL one does. Arhivă
   // (archived) and OSUBB (the Organization Group) never count.
@@ -121,10 +122,12 @@ function query(data: unknown[] | null, error: unknown = null) {
   };
   return builder;
 }
-/** The group_roster read answers from the fixture; any other rpc is the ranking. */
+/** group_roster and member_contacts answer from the fixture; any other rpc is the ranking. */
 function rpcWith(ranking: () => ReturnType<typeof query>) {
   return (name: string) =>
-    name === 'group_roster' ? query(fixtures.group_roster ?? []) : ranking();
+    name === 'group_roster' || name === 'member_contacts'
+      ? query(fixtures[name] ?? [])
+      : ranking();
 }
 beforeEach(() => {
   mocks.from
@@ -176,6 +179,8 @@ describe('directory reads', () => {
     expect(mocks.from).not.toHaveBeenCalledWith('group_members');
     expect(mocks.rpc).toHaveBeenCalledWith('group_roster', {});
     expect(mocks.rpc).toHaveBeenCalledWith('leadership_leaderboard', {});
+    expect(mocks.rpc).toHaveBeenCalledWith('member_contacts', {});
+    expect(mocks.from).not.toHaveBeenCalledWith('profiles_contact');
   });
   it('names a BC or BCE member by their Board Title, keeping the Role for filters and sorting (#963)', async () => {
     const directory = query([
@@ -243,7 +248,11 @@ describe('directory reads', () => {
       { member_id: 'a', points: 42 },
     ]);
     mocks.rpc.mockImplementation((name: string) =>
-      name === 'group_roster' ? pages : ranking,
+      name === 'group_roster'
+        ? pages
+        : name === 'member_contacts'
+          ? query(fixtures.member_contacts ?? [])
+          : ranking,
     );
     const members = await fetchMemberDirectory();
     expect(members[0]).toMatchObject({ points: 42 });

@@ -160,7 +160,7 @@ it('omits the join line when the date was never recorded, and the chip without a
   expect(within(dialog).queryByText(/^\+\d/)).toBeNull();
 });
 
-it('shows contact only when profiles_contact returned a row', async () => {
+it('shows contact only when member_contacts returned a row', async () => {
   const dialog = await openCard();
   expect(within(dialog).queryByText('Contact')).toBeNull();
   expect(within(dialog).queryByRole('link', { name: /@/ })).toBeNull();

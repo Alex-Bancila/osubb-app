@@ -20,14 +20,10 @@ const row = {
   memberships: [],
 };
 
-function contactTable(result: unknown, calls: unknown[][]) {
+function contactRead(result: unknown, calls: unknown[][]) {
   const chain = {
     select: (...args: unknown[]) => {
       calls.push(['select', ...args]);
-      return chain;
-    },
-    eq: (...args: unknown[]) => {
-      calls.push(['eq', ...args]);
       return chain;
     },
     maybeSingle: () => Promise.resolve(result),
@@ -37,38 +33,44 @@ function contactTable(result: unknown, calls: unknown[][]) {
 
 it('reads member_card() and the contact row, and nothing else', async () => {
   const calls: unknown[][] = [];
-  api.rpc.mockReturnValue({
-    maybeSingle: () => Promise.resolve({ data: row, error: null }),
-  });
-  api.from.mockImplementation((name: string) => {
-    calls.push(['from', name]);
-    // Not the viewer's to read: the view simply answers no row.
-    return contactTable({ data: null, error: null }, calls);
+  api.rpc.mockImplementation((name: string, args: unknown) => {
+    calls.push(['rpc', name, args]);
+    return name === 'member_card'
+      ? { maybeSingle: () => Promise.resolve({ data: row, error: null }) }
+      : // Not the viewer's to read: the function simply answers no row.
+        contactRead({ data: null, error: null }, calls);
   });
 
   await expect(fetchMemberCardRows('member-1')).resolves.toEqual({
     card: row,
     contact: null,
   });
-  expect(api.rpc).toHaveBeenCalledWith('member_card', {
-    p_member_id: 'member-1',
-  });
+  // #1006: contact details come from member_contacts(), never from a table
+  // or the retired profiles_contact view.
+  expect(api.from).not.toHaveBeenCalled();
   expect(calls).toEqual([
-    ['from', 'profiles_contact'],
+    ['rpc', 'member_card', { p_member_id: 'member-1' }],
+    ['rpc', 'member_contacts', { p_ids: ['member-1'] }],
     ['select', 'email, phone'],
-    ['eq', 'id', 'member-1'],
   ]);
 });
 
 it('fails loudly when either read fails', async () => {
   const failure = { message: 'denied', code: '42501' };
-  api.rpc.mockReturnValue({
-    maybeSingle: () => Promise.resolve({ data: null, error: failure }),
-  });
-  api.from.mockImplementation(() =>
-    contactTable({ data: null, error: null }, []),
+  api.rpc.mockImplementation((name: string) =>
+    name === 'member_card'
+      ? { maybeSingle: () => Promise.resolve({ data: null, error: failure }) }
+      : contactRead({ data: null, error: null }, []),
   );
   await expect(fetchMemberCardRows('member-1')).rejects.toBe(failure);
+
+  const contactFailure = { message: 'too_many_ids', code: 'PT400' };
+  api.rpc.mockImplementation((name: string) =>
+    name === 'member_card'
+      ? { maybeSingle: () => Promise.resolve({ data: row, error: null }) }
+      : contactRead({ data: null, error: contactFailure }, []),
+  );
+  await expect(fetchMemberCardRows('member-1')).rejects.toBe(contactFailure);
 });
 
 it('turns the row into the card: role name, Group labels and roles, contact gate', () => {

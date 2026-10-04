@@ -35,14 +35,14 @@ export type UpdateMyProfileInput = {
 
 /**
  * My own profile row, combining basic info from `profiles` and contact info
- * from the owner-rights `profiles_contact` view.
+ * from `public.member_contacts()` (#1006).
  *
  * The token knows what I may do — role, level, departments — but not who I am:
  * claims carry no name, and `session.user.email` is an address, not a person.
  * So the greeting, the sidebar, contact information and avatar colour come from here.
  *
  * `email` and `phone` are revoked from `authenticated` on table `profiles` directly
- * and must be read through `profiles_contact`, which is granted to SELF or level >= 5.
+ * and must be read through `member_contacts()`, which answers SELF or level >= 5.
  */
 export function useMyProfile() {
   const { session } = useAuth();
@@ -64,9 +64,8 @@ export async function fetchMyProfile(memberId: string): Promise<MyProfile> {
       .eq('id', memberId)
       .single(),
     supabase
-      .from('profiles_contact')
+      .rpc('member_contacts', { p_ids: [memberId] })
       .select('email, phone')
-      .eq('id', memberId)
       .maybeSingle(),
   ]);
 
@@ -91,7 +90,7 @@ export async function fetchMyProfile(memberId: string): Promise<MyProfile> {
  *    Trigger `profiles_guard_nickname` trims the Nickname, turns blank into null
  *    and names the reason one is refused (`nickname_too_short` ... `nickname_taken`).
  * 3. Crucially, the update statement does NOT use `.select('phone')` because `phone` is revoked from
- *    `authenticated` on the table directly. We invalidate `keys.profile.all` to refetch via `profiles_contact`.
+ *    `authenticated` on the table directly. We invalidate `keys.profile.all` to refetch via `member_contacts()`.
  */
 export function useUpdateMyProfile() {
   const { session } = useAuth();

@@ -17,8 +17,9 @@ import { resolveGroupRoleLabel, useGroups, useRoles } from './reference';
  * - `public.member_card()` (#675) returns the projection for any Member, so an
  *   ordinary Member sees a colleague's Groups even outside their own rosters.
  *   It carries no contact column, no points and no rank.
- * - `profiles_contact` answers a row only for yourself or level ≥ 5; the
- *   presence of that row is the whole gate for the Contact section.
+ * - `public.member_contacts()` (#1006) answers a row only for yourself or
+ *   level ≥ 5; the presence of that row is the whole gate for the Contact
+ *   section.
  */
 export type MemberCardGroup = {
   id: number;
@@ -119,9 +120,8 @@ export async function fetchMemberCardRows(
   const [card, contact] = await Promise.all([
     supabase.rpc('member_card', { p_member_id: memberId }).maybeSingle(),
     supabase
-      .from('profiles_contact')
+      .rpc('member_contacts', { p_ids: [memberId] })
       .select('email, phone')
-      .eq('id', memberId)
       .maybeSingle(),
   ]);
   if (card.error) throw card.error;
