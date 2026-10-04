@@ -2,10 +2,10 @@
 # #1009: replay the old_base_joined_at migration against profiles dated on
 # launch day and prove the rule -- every non-Recrut profile whose joined_at is
 # 2026-10-02 moves to 2026-02-22, a Recrut dated 2026-10-02 keeps its date, a
-# profile with any other date is never touched, and a second run changes
-# nothing. The update runs as postgres, as a migration does, so it also proves
-# that no trigger on profiles refuses or rewrites the change. Everything runs
-# in one rolled-back transaction.
+# profile with any other date (the day after launch included) is never
+# touched, and a second run changes nothing. The update runs as postgres, as a
+# migration does, so it also proves that no trigger on profiles refuses or
+# rewrites the change. Everything runs in one rolled-back transaction.
 set -euo pipefail
 
 db_container="${SUPABASE_DB_CONTAINER:-supabase_db_osubb-app}"
@@ -20,13 +20,15 @@ insert into auth.users (id, email) values
   ('10090000-0000-0000-0000-000000000011', 'recrut-1009@test.local'),
   ('10090000-0000-0000-0000-000000000012', 'voluntar-1009@test.local'),
   ('10090000-0000-0000-0000-000000000013', 'dated-1009@test.local'),
-  ('10090000-0000-0000-0000-000000000014', 'bc-1009@test.local');
+  ('10090000-0000-0000-0000-000000000014', 'bc-1009@test.local'),
+  ('10090000-0000-0000-0000-000000000015', 'next-day-1009@test.local');
 
 insert into public.profiles (id, full_name, email, role, joined_at) values
   ('10090000-0000-0000-0000-000000000011', 'Recrut 1009',   'recrut-1009@test.local',   'recrut',   date '2026-10-02'),
   ('10090000-0000-0000-0000-000000000012', 'Voluntar 1009', 'voluntar-1009@test.local', 'voluntar', date '2026-10-02'),
   ('10090000-0000-0000-0000-000000000013', 'Dated 1009',    'dated-1009@test.local',    'voluntar', date '2025-05-10'),
-  ('10090000-0000-0000-0000-000000000014', 'Bc 1009',       'bc-1009@test.local',       'bc',       date '2026-10-02');
+  ('10090000-0000-0000-0000-000000000014', 'Bc 1009',       'bc-1009@test.local',       'bc',       date '2026-10-02'),
+  ('10090000-0000-0000-0000-000000000015', 'Next Day 1009', 'next-day-1009@test.local', 'voluntar', date '2026-10-03');
 
 -- Every other profile (the demo data) as it stood, to prove nothing else moves.
 create temporary table before_1009 on commit drop as
@@ -64,6 +66,12 @@ begin
        where id = '10090000-0000-0000-0000-000000000013')
        is distinct from date '2025-05-10' then
     raise exception 'a profile with another join date was touched';
+  end if;
+
+  if (select joined_at from public.profiles
+       where id = '10090000-0000-0000-0000-000000000015')
+       is distinct from date '2026-10-03' then
+    raise exception 'a Voluntar who joined after launch day was moved';
   end if;
 
   if exists (select 1
