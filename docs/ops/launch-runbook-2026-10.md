@@ -339,6 +339,11 @@ month ($20). Raise **Rate Limits → Emails sent per hour** to `250` on import d
   `responsabil` holder exists (#592). Every merge after it failed at "Push migrations to staging" and the
   function and web deploys skipped, silently, for three days. When a `main` run is red, read the
   `push-staging` log first. The re-rank is a command call with a BC session, never a Studio edit.
+- **A merge can start no CI run at all (4 Oct 2026, PR #1007).** GitHub dropped the `push` event of a
+  merge to `main`: no run existed for the merge commit 20 minutes later, so staging silently kept the old
+  build. After every merge, check that **Actions** lists a `CI` run for the merge commit before running
+  the Release. `ci.yml` has no manual trigger; the next push to `main` (a docs-only commit is enough)
+  starts a run for the newest commit, which carries the missed merge with it.
 - **PowerShell traps.** Variable names are case-insensitive: a loop variable `$h` overwrites a
   headers hashtable `$H`. `curl` is an alias for `Invoke-WebRequest`, and bash line continuations (`\`)
   do not exist; use `Invoke-RestMethod`. If `npx` fails with "running scripts is disabled", call
