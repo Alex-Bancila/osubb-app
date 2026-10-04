@@ -31,7 +31,7 @@ select is(public.rating_mult(1), -1, 'rating_mult keeps its body (1 -> -1)');
 -- security definer ones. pgTAP and the test helpers live outside these schemas.
 create function pg_temp.functions_without_search_path() returns text[]
 language sql as $$
-  select coalesce(array_agg(n.nspname || '.' || p.proname order by 1), '{}')
+  select coalesce(array_agg(n.nspname || '.' || p.proname order by n.nspname, p.proname), '{}')
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
    where n.nspname in ('public', 'private')
@@ -77,7 +77,7 @@ select is(pg_temp.unindexed_foreign_keys(), array['tasks_created_by_fkey'],
 
 create function pg_temp.tables_without_primary_key() returns text[]
 language sql as $$
-  select coalesce(array_agg(n.nspname || '.' || c.relname order by 1), '{}')
+  select coalesce(array_agg(n.nspname || '.' || c.relname order by n.nspname, c.relname), '{}')
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
    where c.relkind in ('r', 'p')
@@ -96,7 +96,7 @@ select lives_ok(
 
 create function pg_temp.rls_tables_without_policy() returns text[]
 language sql as $$
-  select coalesce(array_agg(n.nspname || '.' || c.relname order by 1), '{}')
+  select coalesce(array_agg(n.nspname || '.' || c.relname order by n.nspname, c.relname), '{}')
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
    where c.relkind in ('r', 'p')
@@ -107,7 +107,7 @@ $$;
 select is(pg_temp.rls_tables_without_policy(), '{}'::text[],
   'every table in public and private with RLS on has at least one policy');
 select is(
-  (select array_agg(format('%s.%s:%s:%s:%s:%s', schemaname, tablename, permissive, cmd, qual, with_check) order by 1)
+  (select array_agg(format('%s.%s:%s:%s:%s:%s', schemaname, tablename, permissive, cmd, qual, with_check) order by schemaname, tablename)
      from pg_policies
     where policyname like '%\_manage\_no\_client'),
   array[
@@ -122,7 +122,7 @@ select is(
 select is(
   (select array_agg(format('%s.%s:%s', schemaname, tablename,
                            array_to_string(array(select r from unnest(roles) r order by r), ','))
-                    order by 1)
+                    order by schemaname, tablename)
      from pg_policies
     where policyname like '%\_manage\_no\_client'),
   array[
