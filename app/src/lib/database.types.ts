@@ -2323,6 +2323,14 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles_contact: {
+        Row: {
+          email: string | null
+          id: string | null
+          phone: string | null
+        }
+        Relationships: []
+      }
       profiles_directory: {
         Row: {
           avatar_color: string | null

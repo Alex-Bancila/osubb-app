@@ -10,6 +10,8 @@
 --      self reads own; BCE and above read everyone; below 5 reads only their own;
 --      claimless reads nothing; deactivated reads nothing, their own included;
 --      a stale token is not trusted.
+--   3. The transition shim: profiles_contact is now a security_invoker view over
+--      the function, and answers each persona exactly what the function does.
 -- Runs in one transaction and rolls back.
 begin;
 \set osubb_test_suite true
@@ -17,7 +19,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(35);
+select plan(41);
 
 truncate public.profiles cascade;
 
@@ -68,6 +70,11 @@ language sql as $$
   select coalesce(array_agg(format('%s|%s|%s', id, email, phone) order by id), '{}')
     from pg_temp.legacy_profiles_contact;
 $$;
+create function pg_temp.contacts_shim() returns text[]
+language sql as $$
+  select coalesce(array_agg(format('%s|%s|%s', id, email, phone) order by id), '{}')
+    from public.profiles_contact;
+$$;
 create function pg_temp.contact_ids() returns uuid[]
 language sql as $$
   select coalesce(array_agg(id order by id), '{}') from public.member_contacts();
@@ -75,7 +82,11 @@ $$;
 
 -- ==================== Structure ====================
 
-select hasnt_view('public', 'profiles_contact', 'the owner-rights profiles_contact view is gone');
+select has_view('public', 'profiles_contact', 'the profiles_contact name survives as a transition shim for older app bundles');
+select ok((select reloptions from pg_class where oid = 'public.profiles_contact'::regclass) @> array['security_invoker=on'],
+  'the shim runs as the caller: the owner-rights view is gone');
+select is(has_table_privilege('anon', 'public.profiles_contact', 'select'), false,
+  'anon cannot read the shim');
 select has_function('public', 'member_contacts', array['uuid[]'], 'public.member_contacts(uuid[]) exists');
 select is((select prosecdef from pg_proc where oid = 'public.member_contacts(uuid[])'::regprocedure), false,
   'the public wrapper runs as the caller: no security-definer function in the exposed schema');
@@ -100,6 +111,7 @@ reset role;
 select pg_temp.test_login('c1006000-0000-0000-0000-000000000006', '{"member_role":"bc","member_level":6}');
 select is(cardinality(pg_temp.contact_ids()), 9, 'a BC reads every Profile''s contact details, alumni and inactive included');
 select is(pg_temp.contacts_now(), pg_temp.contacts_before(), 'BC: the same rows as the view');
+select is(pg_temp.contacts_shim(), pg_temp.contacts_now(), 'BC: the shim answers what the function answers');
 select is(
   (select array_agg(format('%s|%s', email, phone)) from public.member_contacts(array['c1006000-0000-0000-0000-000000000001'::uuid])),
   array['contacts.voluntar@test.local|+40700100001'],
@@ -123,6 +135,7 @@ select pg_temp.test_login('c1006000-0000-0000-0000-000000000001', '{"member_role
 select is(pg_temp.contact_ids(), array['c1006000-0000-0000-0000-000000000001'::uuid],
   'a Voluntar reads only their own contact details');
 select is(pg_temp.contacts_now(), pg_temp.contacts_before(), 'Voluntar: the same rows as the view');
+select is(pg_temp.contacts_shim(), pg_temp.contacts_now(), 'Voluntar: the shim answers what the function answers');
 select is(
   (select count(*) from public.member_contacts(array['c1006000-0000-0000-0000-000000000006'::uuid])), 0::bigint,
   'naming a colleague in p_ids does not widen a Voluntar''s read');
@@ -152,6 +165,7 @@ select pg_temp.test_login('c1006000-0000-0000-0000-000000000066', '{"member_role
 select is(cardinality(pg_temp.contact_ids()), 0,
   'stale token: a deactivated BC reads no contact details, their own included');
 select is(pg_temp.contacts_now(), pg_temp.contacts_before(), 'deactivated BC: the same (no) rows as the view');
+select is(pg_temp.contacts_shim(), '{}'::text[], 'deactivated BC: the shim answers nothing either');
 reset role;
 
 -- ==================== claimless: nothing ====================
@@ -160,6 +174,7 @@ select pg_temp.test_login('c1006000-0000-0000-0000-000000000006', jsonb_build_ob
 select is(cardinality(pg_temp.contact_ids()), 0,
   'a live BC Profile without organisation claims reads no contact details');
 select is(pg_temp.contacts_now(), pg_temp.contacts_before(), 'claimless BC: the same (no) rows as the view');
+select is(pg_temp.contacts_shim(), '{}'::text[], 'claimless BC: the shim answers nothing either');
 reset role;
 
 select pg_temp.test_clear_jwt();

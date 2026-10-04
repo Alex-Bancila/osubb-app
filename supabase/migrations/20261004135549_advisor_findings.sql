@@ -16,8 +16,16 @@
 --    from 20260927180000_live_level_gates.sql (its latest definition):
 --    the caller holds organisation claims, has a live `activ` Profile
 --    (caller_level() >= 0), and the row is their own or their live level is
---    at least 5. The view is then dropped, so the security_invoker sweep in
---    conventions.test.sql has no exception left.
+--    at least 5. The owner-rights view is then dropped, so the
+--    security_invoker sweep in conventions.test.sql has no exception left.
+--    A security_invoker view of the same name and columns takes its place
+--    for one transition period: the PWA updates only when a Member accepts
+--    the update prompt (registerType 'prompt'), so a bundle from before this
+--    Release keeps reading profiles_contact for a while, and the Member Card
+--    and Profil fail loudly when that read errors. The shim reads through
+--    public.member_contacts() as the caller, so it answers exactly the same
+--    rows and the advisor has nothing to report. Drop it once no bundle
+--    older than this Release is in use.
 -- 2. function_search_path_mutable (WARN): public.rating_mult pins
 --    search_path. ALTER keeps its signature, body, volatility and grants.
 -- 3. unindexed_foreign_keys (23): one covering btree index per foreign key,
@@ -91,6 +99,16 @@ grant execute on function private.member_contacts_impl(uuid[]) to authenticated;
 grant execute on function public.member_contacts(uuid[]) to authenticated;
 
 drop view public.profiles_contact;
+
+create view public.profiles_contact with (security_invoker = on) as
+  select contact.id, contact.email, contact.phone
+    from public.member_contacts() as contact;
+
+comment on view public.profiles_contact is
+  '#1006 transition shim, to be dropped once no app bundle older than #1006 is in use: the former owner-rights contact view, now security_invoker over public.member_contacts(), so it answers exactly that function''s rows to the same callers. New code calls public.member_contacts().';
+
+revoke all on public.profiles_contact from public, anon, authenticated, service_role;
+grant select on public.profiles_contact to authenticated;
 
 -- 2. ----------------------------------------------------------------------
 
