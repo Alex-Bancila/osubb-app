@@ -18,7 +18,7 @@ Imports OSUBB's existing volunteers (about 600 people) from the "Baza de date oa
 | `Departament PRINCIPAL`, `Departament secundar`… | memberships of the Department Groups with that name (`Imagine&PR` is "Imagine & PR"); the principal one is the chip  |
 | everything else                                  | ignored: birth date, university, faculty, specialisation, level, year                                                |
 
-Everyone joins on **22.02.2026**. `Funcția` maps as follows (the issue's binding table):
+Everyone joins on **22.02.2026**. _Correction (2026-10-04, #1009):_ the production import of 2 October stamped the provisioning day instead, so every profile read `joined_at = 2026-10-02`. Migration `20261004183127_old_base_joined_at.sql` moves every non-Recrut profile dated 2026-10-02 to 2026-02-22 by rule (no names or addresses in git); Recruți keep their real date. It reaches production with the next Release. `Funcția` maps as follows (the issue's binding table):
 
 - `Membru voluntar` → Voluntar; `Membru cu drept de vot` → Voluntar cu Drept de Vot; the highest rank a cell names wins.
 - `BC, <titlu>` → BC and Group Responsible of Biroul de Conducere with that title (Președinte, Secretar General, …); `Cenzor` → BC with the title "Cenzor".
