@@ -20,7 +20,7 @@ import { useGroups, useRoles } from './reference';
 /**
  * A Member's page in Administrare (#103). Nothing here decides who may see
  * what: the Member Card projection (#675, Private Groups filtered by #756),
- * `profiles_contact` and `points_ledger` each answer only what RLS lets the
+ * `member_contacts()` and `points_ledger` each answer only what RLS lets the
  * viewer read, and the page renders exactly those rows.
  */
 export type LedgerRow = {

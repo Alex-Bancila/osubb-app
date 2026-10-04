@@ -198,7 +198,7 @@ export function useReinviteMember() {
   return useMutation({
     mutationFn: reinviteMember,
     onSuccess: async () => {
-      // A corrected address shows on the page (profiles_contact) and in the
+      // A corrected address shows on the page (member_contacts) and in the
       // directory; the invitation status keys live under members too.
       await Promise.all(
         [keys.members.all, keys.notifications.all].map((queryKey) =>

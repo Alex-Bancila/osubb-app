@@ -401,7 +401,7 @@ Then, with a BC access token, run the `curl` above and:
 curl "$SUPABASE_URL/rest/v1/departments?select=id" -H "apikey: $ANON_KEY" -H "Authorization: Bearer $NEW_TOKEN"
 # → 7 departments (they are a member now)
 
-curl "$SUPABASE_URL/rest/v1/profiles_contact?select=email" -H "apikey: $ANON_KEY" -H "Authorization: Bearer $NEW_TOKEN"
+curl -X POST "$SUPABASE_URL/rest/v1/rpc/member_contacts?select=email" -H "apikey: $ANON_KEY" -H "Authorization: Bearer $NEW_TOKEN" -H "Content-Type: application/json" -d '{}'
 # → exactly one row: their own. Contact details of others are not theirs to read.
 
 curl "$SUPABASE_URL/rest/v1/departments?select=id" -H "apikey: $ANON_KEY"

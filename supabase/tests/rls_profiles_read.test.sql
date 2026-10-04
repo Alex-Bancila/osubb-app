@@ -11,7 +11,7 @@ select plan(21);
 
 -- ==================== Structure ====================
 select has_view('public', 'profiles_directory', 'the safe projection exists');
-select has_view('public', 'profiles_contact', 'the gated contact view exists');
+select has_function('public', 'member_contacts', array['uuid[]'], 'the gated contact read exists (#1006: replaces the profiles_contact view)');
 
 select hasnt_column('public', 'profiles_directory', 'email',
   'the directory carries no email');
@@ -64,11 +64,11 @@ select throws_ok(
   $$ select phone from profiles $$,
   '42501', null, 'voluntar cannot read phones from the table — not even their own');
 
--- SELF gets their contact details back through the gated view.
+-- SELF gets their contact details back through the gated read (#1006).
 select is(
-  (select email from profiles_contact where id = 'd1000000-0000-0000-0000-0000000000d1'),
-  'dora.prof@test.local', 'SELF reads own email through profiles_contact');
-select is((select count(*) from profiles_contact), 1::bigint,
+  (select email from public.member_contacts() where id = 'd1000000-0000-0000-0000-0000000000d1'),
+  'dora.prof@test.local', 'SELF reads own email through member_contacts');
+select is((select count(*) from public.member_contacts()), 1::bigint,
   'a voluntar sees exactly one contact row: their own');
 
 select ok((select count(*) from profiles_directory) >= 3,
@@ -84,10 +84,10 @@ select pg_temp.test_login('d3000000-0000-0000-0000-0000000000d3', jsonb_build_ob
     'team_ids', '[]'::jsonb
   ));
 
-select ok((select count(*) from profiles_contact) >= 3,
+select ok((select count(*) from public.member_contacts()) >= 3,
   'level >= 5 reads everyone''s contact details (volunteers directory)');
 select is(
-  (select phone from profiles_contact where id = 'd1000000-0000-0000-0000-0000000000d1'),
+  (select phone from public.member_contacts() where id = 'd1000000-0000-0000-0000-0000000000d1'),
   '+40700111222', 'level >= 5 reads a specific member''s phone');
 
 reset role;
@@ -106,7 +106,7 @@ select is((select count(*) from profiles), 0::bigint,
   'a claimless session sees no profile rows');
 select is((select count(*) from profiles_directory), 0::bigint,
   'a claimless session sees no directory');
-select is((select count(*) from profiles_contact), 0::bigint,
+select is((select count(*) from public.member_contacts()), 0::bigint,
   'a claimless session sees no contact details');
 
 reset role;

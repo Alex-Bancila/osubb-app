@@ -31,7 +31,7 @@ select is(
   pg_get_function_result('public.member_card(uuid)'::regprocedure),
   'TABLE(member_id uuid, nickname text, full_name text, role member_role, board_title text, joined_at date, avatar_color text, primary_group_id bigint, primary_group_name text, primary_group_color text, other_memberships integer, memberships jsonb)',
   'the projection returns exactly the Member Card columns (#963: board_title after role)');
--- R6: contact only for viewers who can already read profiles_contact, never
+-- R6: contact only for viewers who can already read member_contacts, never
 -- here; never points or rank. Asserted on both functions' declared columns.
 select is(
   (select count(*)

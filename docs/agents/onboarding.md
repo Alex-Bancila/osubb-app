@@ -39,7 +39,7 @@ supabase/
 │   │                                    # announcements+announcement_reads · notifications ·
 │   │                                    # notif_suppression (bc+bce)+push_tokens · provision_profile()
 │   │                                    # · reference/teams reads · profiles column grants +
-│   │                                    # profiles_directory/profiles_contact · calendar visibility
+│   │                                    # profiles_directory/member_contacts · calendar visibility
 │   ├── 20260823*                        # member_level() · auth_is_member() required on all 14
 │   │                                    # member-facing policies (the claimless audit)
 │   ├── 20260908083829…20260909151741_project_*.sql (7 files)   # Projects (#268–#274): schema ·
@@ -140,7 +140,7 @@ Always confirm against live state: `gh issue list --label max-1h --state open`. 
 - **A write denied by RLS is not always an error.** INSERT without a matching policy raises 42501; UPDATE/DELETE without one matches zero rows and returns _silently_. Assert the value is unchanged, not `throws_ok`.
 - **Policies should not depend on other tables' policies.** Use a `security definer` helper (`is_assigned`, `private.can_read_team`, `private.can_manage_project_work`) so narrowing one table later cannot silently change another table's visibility.
 - **Conventions are written down:** `docs/backend/conventions.md` — read it before your first migration.
-- **`profiles_contact` is deliberately owner-rights** (the one exception to house rule 3 since #936 dropped `member_points`) because it re-exposes columns revoked from `authenticated`. Its WHERE clause is the security boundary — don't "fix" it to `security_invoker`, that breaks it for everyone it serves.
+- **Contact details come from `public.member_contacts()`** (#1006), an invoker wrapper over the security-definer `private.member_contacts_impl`, because `email` and `phone` are revoked from `authenticated` on `profiles`. Its WHERE clause is the security boundary (your own row, or everyone's at live level ≥ 5). It replaced the owner-rights `profiles_contact` view, so house rule 3 now has no exception.
 - **Never open a stacked PR.** This cost two recoveries (#126, #137). A PR whose base is another feature branch is retargeted to `main` only when that base branch is **deleted** — merging the base is not enough, and neither is waiting. The stacked PR then merges _into the still-existing feature branch_: it reads "Merged", CI is green, the issue stays open, and `main` silently lacks the code. Nothing about the UI says anything is wrong. If work depends on unmerged work, **put both in one PR**, or wait for the base to land on `main` before opening the next one. It is never worth the recovery.
 - `rating_mult()` already exists (migration 3) — don't recreate it.
 - Enabling RLS on a table read by the auth hook without a `supabase_auth_admin` policy breaks logins — the four needed policies already exist (migration 4); keep the pattern for any new hook-read table.

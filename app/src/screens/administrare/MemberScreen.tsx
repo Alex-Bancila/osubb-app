@@ -417,7 +417,7 @@ function PointsPanel({ points }: { points: readonly LedgerRow[] }) {
  * One Member's page in Administrare (#103; ADR-0009 §Management surface).
  * Everything on it is what the server returned for this viewer: the Member
  * Card's Groups (Private Groups already filtered), contact details only when
- * `profiles_contact` answers, and only the ledger rows RLS lets them read.
+ * `member_contacts()` answers, and only the ledger rows RLS lets them read.
  * A sub-page of the Membri tab: back link, no tab bar (#825).
  */
 export default function MemberScreen() {

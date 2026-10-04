@@ -126,22 +126,22 @@ reset role;
 -- same live-vs-stale-level behaviour this section pinned is already covered,
 -- for the raw ledger, by the points_ledger assertions below.
 
--- ==================== profiles_contact ====================
+-- ==================== member_contacts (#1006: was the profiles_contact view) ====================
 
 select pg_temp.test_login('e4700000-0000-0000-0000-000000000006', '{"member_role":"bc","member_level":6}');
-select is((select count(*) from public.profiles_contact), 7::bigint,
+select is((select count(*) from public.member_contacts()), 7::bigint,
   'a live BC reads every Member''s contact details');
 reset role;
 
 select pg_temp.test_login('e4700000-0000-0000-0000-000000000035', '{"member_role":"bce","member_level":5}');
-select is((select count(*) from public.profiles_contact), 1::bigint,
+select is((select count(*) from public.member_contacts()), 1::bigint,
   'stale token: a BCE demoted to vot reads only their own contact details');
-select is((select array_agg(id) from public.profiles_contact), array['e4700000-0000-0000-0000-000000000035'::uuid],
+select is((select array_agg(id) from public.member_contacts()), array['e4700000-0000-0000-0000-000000000035'::uuid],
   'the one row a demoted BCE reads is their own');
 reset role;
 
 select pg_temp.test_login('e4700000-0000-0000-0000-000000000066', '{"member_role":"bc","member_level":6}');
-select is((select count(*) from public.profiles_contact), 0::bigint,
+select is((select count(*) from public.member_contacts()), 0::bigint,
   'stale token: a deactivated BC reads no contact details, their own included');
 reset role;
 
@@ -172,7 +172,7 @@ reset role;
 -- ==================== the claims guard still stands ====================
 
 select pg_temp.test_login('e4700000-0000-0000-0000-000000000006', jsonb_build_object('provider', 'email'));
-select is((select count(*) from public.profiles_contact), 0::bigint,
+select is((select count(*) from public.member_contacts()), 0::bigint,
   'a live BC Profile without organisation claims reads no contact details');
 select is((select count(*) from public.points_ledger), 0::bigint,
   'a live BC Profile without organisation claims reads no ledger rows');
@@ -187,7 +187,7 @@ select throws_ok(
 reset role;
 -- #936: member_points and leaderboard (and the viewdef pin on its own claims
 -- guard) are dropped; points_ledger above already answers nothing without
--- claims, and profiles_contact and points_ledger elsewhere in this file pin
+-- claims, and member_contacts and points_ledger elsewhere in this file pin
 -- the same live-claims boundary on the surviving surfaces.
 
 select * from finish();

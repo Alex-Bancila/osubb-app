@@ -19,6 +19,15 @@ import { keys } from './keys';
 
 const memberId = 'p1000000-0000-0000-0000-000000000001';
 
+/** `rpc('member_contacts', …).select(…).maybeSingle()` answering `result`. */
+function contactRead(result: unknown) {
+  return {
+    select: vi.fn().mockReturnValue({
+      maybeSingle: vi.fn().mockResolvedValue(result),
+    }),
+  };
+}
+
 function wrapper(queryClient: QueryClient) {
   return function QueryWrapper({ children }: { children: ReactNode }) {
     return (
@@ -34,7 +43,17 @@ describe('profile queries and mutations', () => {
   });
 
   describe('fetchMyProfile', () => {
-    it('fetches profile and contact details through profiles and profiles_contact', async () => {
+    it('fetches profile and contact details through profiles and member_contacts', async () => {
+      // #1006: contact details come from the member_contacts rpc.
+      supabaseMock.rpc.mockReturnValue(
+        contactRead({
+          data: {
+            email: 'alex@osubb.ro',
+            phone: '0712345678',
+          },
+          error: null,
+        }),
+      );
       supabaseMock.from.mockImplementation((table: string) => {
         if (table === 'profiles') {
           return {
@@ -49,21 +68,6 @@ describe('profile queries and mutations', () => {
                     status: 'activ',
                     avatar_color: '#ED2025',
                     joined_at: '2024-01-01',
-                  },
-                  error: null,
-                }),
-              }),
-            }),
-          };
-        }
-        if (table === 'profiles_contact') {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({
-                  data: {
-                    email: 'alex@osubb.ro',
-                    phone: '0712345678',
                   },
                   error: null,
                 }),
@@ -87,9 +91,20 @@ describe('profile queries and mutations', () => {
         email: 'alex@osubb.ro',
         phone: '0712345678',
       });
+      expect(supabaseMock.rpc).toHaveBeenCalledWith('member_contacts', {
+        p_ids: [memberId],
+      });
+      expect(supabaseMock.from).not.toHaveBeenCalledWith('profiles_contact');
     });
 
     it('handles null contact info safely', async () => {
+      // #1006: contact details come from the member_contacts rpc.
+      supabaseMock.rpc.mockReturnValue(
+        contactRead({
+          data: null,
+          error: null,
+        }),
+      );
       supabaseMock.from.mockImplementation((table: string) => {
         if (table === 'profiles') {
           return {
@@ -105,18 +120,6 @@ describe('profile queries and mutations', () => {
                     avatar_color: null,
                     joined_at: '2026-09-01',
                   },
-                  error: null,
-                }),
-              }),
-            }),
-          };
-        }
-        if (table === 'profiles_contact') {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({
-                  data: null,
                   error: null,
                 }),
               }),
@@ -146,6 +149,13 @@ describe('profile queries and mutations', () => {
     it('queries with keys.profile.me(id) when session exists', async () => {
       auth.useAuth.mockReturnValue({ session: { user: { id: memberId } } });
 
+      // #1006: contact details come from the member_contacts rpc.
+      supabaseMock.rpc.mockReturnValue(
+        contactRead({
+          data: { email: 'ana@osubb.ro', phone: null },
+          error: null,
+        }),
+      );
       supabaseMock.from.mockImplementation((table: string) => {
         if (table === 'profiles') {
           return {
@@ -160,18 +170,6 @@ describe('profile queries and mutations', () => {
                     avatar_color: '#284C93',
                     joined_at: '2025-01-01',
                   },
-                  error: null,
-                }),
-              }),
-            }),
-          };
-        }
-        if (table === 'profiles_contact') {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({
-                  data: { email: 'ana@osubb.ro', phone: null },
                   error: null,
                 }),
               }),

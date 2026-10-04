@@ -86,7 +86,7 @@ select lives_ok(
 
 -- #673 (R8): the phone is normalised to E.164 on the way in, or refused.
 -- Read back as the owner: authenticated reads contact fields through
--- profiles_contact, not the table.
+-- public.member_contacts (#1006), not the table.
 reset role;
 select is(
   (select phone from profiles where id = 'e1000000-0000-0000-0000-0000000000e1'),
@@ -216,12 +216,12 @@ select is(
 
 update profiles set email = 'eva.corectat@test.local'
  where id = 'e2000000-0000-0000-0000-0000000000e2';
--- Read it back through profiles_contact, not the table: `email` is revoked from
+-- Read it back through public.member_contacts (#1006), not the table: `email` is revoked from
 -- `authenticated` at the column level (3.2a), and BC is `authenticated` like
--- everyone else. BC may *write* the column and *read* it through the gated view
+-- everyone else. BC may *write* the column and *read* it through the gated read
 -- (level >= 5) — selecting it from the table would raise 42501 even for them.
 select is(
-  (select email from profiles_contact where id = 'e2000000-0000-0000-0000-0000000000e2'),
+  (select email from public.member_contacts() where id = 'e2000000-0000-0000-0000-0000000000e2'),
   'eva.corectat@test.local', 'BC fixes a typo in an invited address');
 
 -- Even BC writes through the app cannot touch these, by column privilege.
