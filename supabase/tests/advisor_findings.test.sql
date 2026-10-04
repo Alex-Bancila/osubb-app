@@ -118,11 +118,21 @@ select is(
     'public.push_deliveries:RESTRICTIVE:ALL:false:false'
   ],
   'the five service- and definer-only tables each carry one restrictive deny-all policy');
+-- Per policy, not the union: a policy that loses either role fails here.
 select is(
-  (select array_agg(distinct r order by r) from pg_policies, unnest(roles) r
+  (select array_agg(format('%s.%s:%s', schemaname, tablename,
+                           array_to_string(array(select r from unnest(roles) r order by r), ','))
+                    order by 1)
+     from pg_policies
     where policyname like '%\_manage\_no\_client'),
-  array['anon', 'authenticated']::name[],
-  'the deny policies name the two client roles');
+  array[
+    'private.email_digests:anon,authenticated',
+    'private.invitation_requests:anon,authenticated',
+    'private.resend_webhook_deliveries:anon,authenticated',
+    'public.member_imports:anon,authenticated',
+    'public.push_deliveries:anon,authenticated'
+  ],
+  'each deny policy names both client roles, anon and authenticated');
 -- Not hollow: an RLS table with no policy is reported by name.
 create table public.advisor_probe_no_policy (id bigint primary key);
 alter table public.advisor_probe_no_policy enable row level security;
