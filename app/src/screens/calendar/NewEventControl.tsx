@@ -17,7 +17,6 @@ import {
 import { EventForm } from './EventForm';
 import { setEventReceipt } from './event-receipts';
 import {
-  eventDialogContentClass,
   groupsAvailableAtLevel,
   type EventFormOptions,
 } from './event-form-model';
@@ -80,7 +79,7 @@ function NewEventDialog({
         <PlusIcon aria-hidden="true" />
         Eveniment nou
       </Button>
-      <DialogContent className={eventDialogContentClass}>
+      <DialogContent fullScreenOnPhone className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Eveniment nou</DialogTitle>
           <DialogDescription>

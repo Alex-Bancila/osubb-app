@@ -56,7 +56,8 @@ function NewTaskDialog({ onCreated }: { onCreated: (taskId: number) => void }) {
       </Button>
       <DialogContent
         finalFocus={() => !created.current}
-        className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-none max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none"
+        fullScreenOnPhone
+        className="sm:max-w-2xl"
       >
         <DialogHeader>
           <DialogTitle>Task nou</DialogTitle>

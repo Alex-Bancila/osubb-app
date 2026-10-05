@@ -14,6 +14,7 @@ import {
   loginEmailFrom,
 } from './lib/auth-destination';
 import { useCapabilities, type Capability } from './lib/capabilities';
+import { useKeyboardInset } from './lib/keyboard-inset';
 import {
   administrareTab,
   type AdministrareTabPath,
@@ -266,6 +267,9 @@ function FrontDoor({ children }: { children: ReactElement }) {
 }
 
 export default function App() {
+  // Every screen, the sign-in included, keeps its fields and actions above a
+  // phone keyboard (#1013).
+  useKeyboardInset();
   return (
     <BrowserRouter>
       <Routes>

@@ -10,7 +10,12 @@ describe('SessionScreen', () => {
       </SessionScreen>,
     );
     const frame = screen.getByRole('main');
-    expect(frame).toHaveClass('grid', 'place-items-center', 'h-dvh');
+    // The screen above a phone keyboard, not the whole screen (#1013).
+    expect(frame).toHaveClass(
+      'grid',
+      'place-items-center',
+      'h-[calc(100dvh-var(--keyboard-inset))]',
+    );
     // `place-content` would clip a card taller than the screen at its top.
     expect(frame).not.toHaveClass('place-content-center');
   });

@@ -161,7 +161,8 @@ export function EvaluationFields({
           {submitButton}
         </DialogFooter>
       ) : (
-        <div className="flex flex-wrap gap-2">
+        // Pinned above a phone keyboard, like a dialog footer (#1013).
+        <div data-keyboard-pin="" className="flex flex-wrap gap-2">
           {submitButton}
           {cancelButton('Înapoi')}
         </div>

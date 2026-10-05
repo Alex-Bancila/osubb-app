@@ -26,7 +26,6 @@ import { TaskReasonDialog } from '../tracker/TaskReasonDialog';
 import { EventForm } from './EventForm';
 import { setEventReceipt, useEventReceipt } from './event-receipts';
 import {
-  eventDialogContentClass,
   groupsAvailableAtLevel,
   type EventDraft,
   type EventFormOptions,
@@ -143,7 +142,8 @@ function EditEventDialog({
       </Button>
       {/* After a save the receipt takes focus; otherwise back to Editează. */}
       <DialogContent
-        className={eventDialogContentClass}
+        fullScreenOnPhone
+        className="sm:max-w-2xl"
         finalFocus={() => !saved.current}
       >
         <DialogHeader>

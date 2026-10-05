@@ -4,6 +4,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogTitle,
 } from '../../components/ui/dialog';
 import { FieldError } from '../../components/ui/field';
@@ -112,7 +113,7 @@ export function ApplicationAction({
               </div>
             )}
             {error && <p role="alert">{error}</p>}
-            <div className="flex flex-wrap justify-end gap-2">
+            <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
@@ -124,7 +125,7 @@ export function ApplicationAction({
               <Button type="submit" disabled={mutation.isPending}>
                 {mutation.isPending ? 'Se salvează…' : 'Confirmă'}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

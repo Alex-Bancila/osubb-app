@@ -101,7 +101,7 @@ export function SubmitForReviewDialog({
           focus; otherwise focus goes back to the trigger. */}
       <DialogContent
         finalFocus={() => !succeeded.current}
-        className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg"
+        className="sm:max-w-lg"
       >
         <form onSubmit={submit} noValidate className="grid gap-4">
           <DialogHeader>

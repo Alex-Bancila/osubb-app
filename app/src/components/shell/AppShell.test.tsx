@@ -339,6 +339,19 @@ describe('AppShell', () => {
     expect(screen.getByRole('main')).not.toHaveClass('overflow-hidden');
   });
 
+  it('ends at a phone keyboard and steps the bar aside while it is open (#1013)', () => {
+    const { container } = renderShell();
+
+    const root = container.firstElementChild as HTMLElement;
+    expect(root).toHaveClass('h-[calc(100dvh-var(--keyboard-inset))]');
+    expect(root).not.toHaveClass('h-dvh');
+    expect(
+      screen.getByRole('navigation', { name: 'Navigare rapidă' }),
+    ).toHaveClass('keyboard:hidden');
+    // The revealed field keeps a small gap above the keyboard.
+    expect(screen.getByRole('main')).toHaveClass('keyboard:scroll-pb-3');
+  });
+
   it('shows directory and Administrare destinations from the server capability row', () => {
     auth.useAuth.mockReturnValue({
       claims: { ...ordinaryClaims, member_role: 'bc', member_level: 6 },

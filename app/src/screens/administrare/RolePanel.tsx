@@ -700,7 +700,9 @@ export function RolePanel({
                     disabled={change.isPending}
                   />
                 </div>
-                <div className="min-w-0">
+                {/* The two saves come into view with the Motiv field above a
+                    phone keyboard (#1013). */}
+                <div data-keyboard-actions="" className="min-w-0">
                   <Button
                     type="button"
                     block
@@ -712,7 +714,7 @@ export function RolePanel({
                     Salvează rolul
                   </Button>
                 </div>
-                <div className="min-w-0">
+                <div data-keyboard-actions="" className="min-w-0">
                   {statusGuard ? (
                     // The last holder leaving `activ`: the replacement dialog
                     // names both changes and repeats the warning.

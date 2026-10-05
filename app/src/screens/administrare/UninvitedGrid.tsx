@@ -851,7 +851,7 @@ export function UninvitedGrid() {
         <Empty text="Nu e nimeni de invitat. Membrii importați apar aici până primesc invitația." />
       ) : (
         <div
-          className="max-h-[70dvh] scroll-pl-[12.5rem] overflow-auto sm:scroll-pl-[16rem] rounded-md border border-border"
+          className="max-h-[calc(var(--visible-height)*0.7)] scroll-pl-[12.5rem] overflow-auto sm:scroll-pl-[16rem] rounded-md border border-border"
           role="region"
           aria-label="Membri de invitat"
           tabIndex={0}

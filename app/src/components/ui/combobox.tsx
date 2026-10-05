@@ -5,6 +5,7 @@ import { cn } from 'cn';
 import { buttonVariants } from '@/components/ui/button';
 import { AVATAR_FALLBACK, safeHexColor } from '@/lib/color';
 import { initials } from '@/lib/format';
+import { useKeyboardState } from '@/lib/keyboard-inset';
 
 // A dropdown whose search box lives inside the pop-up: the trigger looks like
 // a field, the member types to narrow the list, arrows move the highlight and
@@ -48,12 +49,21 @@ function ComboboxContent({
   ...props
 }: ComboboxPrimitive.Popup.Props &
   Pick<ComboboxPrimitive.Positioner.Props, 'sideOffset' | 'align'>) {
+  // Typing in the search box raises a phone keyboard: the list flips and
+  // shrinks to stay above it, as it does at the screen's edge (#1013).
+  const keyboard = useKeyboardState();
   return (
     <ComboboxPrimitive.Portal>
       <ComboboxPrimitive.Positioner
         className="z-80 outline-none"
         sideOffset={sideOffset}
         align={align}
+        collisionPadding={{
+          top: 5,
+          right: 5,
+          bottom: 5 + keyboard.inset,
+          left: 5,
+        }}
       >
         <ComboboxPrimitive.Popup
           data-slot="combobox-content"

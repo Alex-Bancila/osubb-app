@@ -5,6 +5,8 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 @custom-variant dark (&:is([data-theme="dark"] *));
+/* While a phone's on-screen keyboard is open (#1013, lib/keyboard-inset.ts). */
+@custom-variant keyboard (&:where(:root[data-keyboard="open"] *));
 
 @theme inline {
   --font-sans: var(--font-family-base);
@@ -120,6 +122,33 @@
   --sidebar-accent-foreground: var(--red-700);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--focus-ring-color);
+
+  /* The phone keyboard (#1013): `useKeyboardInset` sets the inset while the
+     keyboard covers part of the layout viewport (iOS), and how far iOS panned
+     the visible area down it. The shell ends at the keyboard
+     (`100dvh - inset`); sheets and dialogs, fixed to the layout viewport, sit
+     in the visible area: from `--visible-top`, `--visible-height` tall. */
+  --keyboard-inset: 0px;
+  --keyboard-offset-top: 0px;
+  --visible-top: var(--keyboard-offset-top);
+  --visible-height: calc(
+    100dvh - var(--keyboard-inset) - var(--keyboard-offset-top)
+  );
+}
+
+/* A form's actions while the keyboard is open (#1013): the sheet and dialog
+   footers, and any action row marked `data-keyboard-pin`, stick to the bottom
+   of the visible area, just above the keyboard, on the surface they sit on.
+   `bottom: 0` is the scroller's padding edge; the border image paints that
+   surface (and a hairline 0.75rem above the buttons) across the scroller and
+   down over its padding, without moving the layout; the scroller clips it.
+   `PIN_BAND` in lib/keyboard-inset.ts matches the 0.75rem. */
+:root[data-keyboard='open'] [data-keyboard-pin] {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  border-image: linear-gradient(var(--border) 0 1px, var(--card) 0) fill 0 / 0 /
+    0.75rem 100vw 2rem;
 }
 
 @layer base {
