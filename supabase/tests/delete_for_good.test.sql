@@ -33,7 +33,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(77);
+select plan(78);
 
 -- ==================== Fixtures ====================
 
@@ -73,6 +73,10 @@ insert into public.groups (name, category, parent_id, min_level, created_by)
 values ('Copil #1017', 'team', pg_temp.g('Rădăcină #1017'), 0, pg_temp.u(1));
 insert into public.groups (name, category, parent_id, min_level, created_by)
 values ('Nepot #1017', 'team', pg_temp.g('Copil #1017'), 0, pg_temp.u(1));
+insert into public.groups (name, category, parent_id, min_level, created_by)
+values ('Copil cu arhivă #1017', 'team', pg_temp.g('Rădăcină #1017'), 0, pg_temp.u(1));
+insert into public.groups (name, category, parent_id, min_level, created_by)
+values ('Arhivat #1017', 'team', pg_temp.g('Copil cu arhivă #1017'), 0, pg_temp.u(1));
 insert into public.groups (name, category, parent_id, min_level, automatic_membership, created_by)
 values ('Copil automat #1017', 'team', pg_temp.g('Părinte protejat #1017'), 0, true, pg_temp.u(1));
 
@@ -116,6 +120,8 @@ insert into public.tasks
    now() - interval '9 days', now() - interval '8 days', now(), pg_temp.u(3)),
   ('Puncte responsabil #1017',  pg_temp.g('Rădăcină #1017'), 'local', 'direct', 'completed', 1, 4,
    now() - interval '9 days', now() - interval '8 days', now(), pg_temp.u(3)),
+  ('Arhivat punctat #1017',     pg_temp.g('Arhivat #1017'),  'local', 'direct', 'completed', 4, 4,
+   now() - interval '9 days', now() - interval '8 days', now(), pg_temp.u(3)),
   ('Nepot punctat #1017',       pg_temp.g('Nepot #1017'),    'local', 'direct', 'completed', 5, 4,
    now() - interval '9 days', now() - interval '8 days', now(), pg_temp.u(3));
 insert into public.tasks (title, group_id, kind, audience, assignment_mode, status, created_by)
@@ -133,8 +139,10 @@ insert into awards values
   ('Cu puncte #1017',          pg_temp.u(5),  pg_temp.test_credit_task(pg_temp.task('Cu puncte #1017'), pg_temp.u(5), pg_temp.u(3))),
   ('Puncte responsabil #1017', pg_temp.u(10), pg_temp.test_credit_task(pg_temp.task('Puncte responsabil #1017'), pg_temp.u(10), pg_temp.u(3))),
   ('Nepot punctat #1017',      pg_temp.u(6),  pg_temp.test_credit_task(pg_temp.task('Nepot punctat #1017'), pg_temp.u(6), pg_temp.u(3))),
+  ('Arhivat punctat #1017',    pg_temp.u(9),  pg_temp.test_credit_task(pg_temp.task('Arhivat punctat #1017'), pg_temp.u(9), pg_temp.u(3))),
   ('Subtask punctat #1017',    pg_temp.u(6),  pg_temp.test_credit_task(pg_temp.task('Subtask punctat #1017'), pg_temp.u(6), pg_temp.u(3)));
 grant select on awards to authenticated;
+update public.groups set status = 'archived' where name = 'Arhivat #1017';
 -- One Activity row the immutability guard must keep protecting (section 4).
 insert into public.task_activity (task_id, kind, actor_id, details)
 values (pg_temp.task('Puncte responsabil #1017'), 'created', pg_temp.u(3), '{}'::jsonb);
@@ -154,8 +162,15 @@ insert into public.campaigns (name, group_id, created_by) values
 insert into public.tasks (title, group_id, audience, assignment_mode, status, deadline, campaign_id, created_by)
 values ('Etichetat #1017', pg_temp.g('Rădăcină #1017'), 'local', 'direct', 'todo', now() + interval '9 days',
         (select id from public.campaigns where name = 'Campanie #1017'), pg_temp.u(3));
+-- The Event delete_event removes is created the way the app creates one with
+-- its Announcement (#909), so the Announcement it must leave in place is the
+-- real one: same title, same Group, no link back to the Event.
+select pg_temp.test_login(pg_temp.u(3), '{"member_role":"voluntar","member_level":1}'::jsonb);
+select public.create_event('Eveniment #1017', 'activitate', pg_temp.g('Rădăcină #1017'),
+  now() + interval '5 days', null, null, null, 'Se anunță odată cu evenimentul.', 0, null, true);
+reset role;
+select pg_temp.test_clear_jwt();
 insert into public.events (title, type, starts_at, group_id, campaign_id, created_by) values
-  ('Eveniment #1017',           'activitate', now() + interval '5 days', pg_temp.g('Rădăcină #1017'), null, pg_temp.u(3)),
   ('Eveniment etichetat #1017', 'activitate', now() + interval '6 days', pg_temp.g('Rădăcină #1017'),
    (select id from public.campaigns where name = 'Campanie #1017'), pg_temp.u(3)),
   ('Eveniment nepot #1017',     'activitate', now() + interval '7 days', pg_temp.g('Nepot #1017'), null, pg_temp.u(3));
@@ -168,7 +183,6 @@ values (pg_temp.event('Eveniment #1017'), pg_temp.u(5), 'going');
 select private.notify(array[pg_temp.u(5)], 'event'::public.noti_kind, 'Eveniment nou: Eveniment #1017', null,
   null, 'event:' || pg_temp.event('Eveniment #1017'), null, '/calendar?event=' || pg_temp.event('Eveniment #1017'));
 insert into public.announcements (title, body, group_id, created_by) values
-  ('Anunț cu evenimentul #1017', 'Publicat odată cu evenimentul.', pg_temp.g('Rădăcină #1017'), pg_temp.u(3)),
   ('Anunț nepot #1017',          'Doar pentru nepot.',             pg_temp.g('Nepot #1017'),    pg_temp.u(3));
 
 create temporary table ids as
@@ -187,7 +201,8 @@ select pg_temp.task('Fără puncte #1017')     as t_plain,
        pg_temp.event('Eveniment nepot #1017') as e_grandchild,
        (select id from public.campaigns where name = 'Campanie #1017') as c_plain,
        (select id from public.campaigns where name = 'Campanie nepot #1017') as c_grandchild,
-       (select id from public.announcements where title = 'Anunț cu evenimentul #1017') as a_plain,
+       (select id from public.announcements where title = 'Eveniment #1017'
+           and group_id = pg_temp.g('Rădăcină #1017')) as a_plain,
        (select id from public.announcements where title = 'Anunț nepot #1017') as a_grandchild,
        pg_temp.g('Gol #1017') as g_empty;
 grant select on ids to authenticated;
@@ -360,8 +375,8 @@ select is((select count(*)::int from public.events where id = (select e_plain fr
   0, 'the Event is gone with its RSVPs');
 select is((select count(*)::int from public.notifications where subject = 'event:' || (select e_plain from ids)),
   0, 'and with its Notifications');
-select is((select count(*)::int from public.announcements where id = (select a_plain from ids)), 1,
-  'an Announcement published with the Event stays');
+select is((select title from public.announcements where id = (select a_plain from ids)), 'Eveniment #1017',
+  'the Announcement create_event published with the Event (same title, same Group) stays');
 
 -- ==================== 6 · delete_campaign ====================
 
@@ -459,13 +474,17 @@ select is((select sum(delta)::int from public.points_ledger
 select is((select count(*)::int from public.notifications
             where member_id = pg_temp.u(6) and title = 'Grup șters: Copil #1017'),
   1, 'the Member whose points were taken back is told once');
+select pg_temp.as_member(3);
+select throws_ok(format($$select public.delete_group(%s, 'everything')$$, pg_temp.g('Copil cu arhivă #1017')),
+  '42501', 'task_evaluate_forbidden',
+  'delete_group(everything): a Group Manager below level 6 cannot take back points held in an archived Group below -- reopen_task''s rule, so that subtree is BC''s');
 select pg_temp.as_bc();
 select is((select points from public.department_cup() where group_id = pg_temp.g('Rădăcină #1017')),
   (select points from cup_before) - (select points from awards where title = 'Nepot punctat #1017'),
   'the Department Cup follows the reversal');
 
 select is(public.delete_group(pg_temp.g('Rădăcină #1017'), 'everything') ->> 'points_reversed',
-  (-(select points from awards where title = 'Puncte responsabil #1017'))::text,
+  (-(select sum(points) from awards where title in ('Puncte responsabil #1017', 'Arhivat punctat #1017')))::text,
   'delete_group(everything): BC deletes a top-level Group with all its content');
 reset role;
 select is((select count(*)::int from public.tasks where id in ((select t_resp from ids), (select t_copy from ids), (select t_labelled from ids)))

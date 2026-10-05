@@ -1513,6 +1513,7 @@ it('shows an archived Group read-only, whoever looks', async () => {
   // Below level 6: an archived Group offers nothing at all (BC and the
   // Moderator may still delete it for good, #1017 — tested below).
   api.level.value = 5;
+  capabilities(false);
   api.groups.mockReturnValue({
     data: [
       tree[0],

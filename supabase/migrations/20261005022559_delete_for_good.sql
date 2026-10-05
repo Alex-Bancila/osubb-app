@@ -739,7 +739,15 @@ begin
     raise sqlstate 'PT409' using message = 'group_not_empty', detail = v_summary::text;
   end if;
 
-  -- 7. Mutate. Content first, then the Groups.
+  -- 7a. Mode empty deletes the Group rows and nothing else: content that a
+  --     concurrent insert slipped in after the check above makes this DELETE
+  --     fail its NO ACTION foreign key (23503) instead of being removed unseen.
+  if p_mode = 'empty' then
+    delete from public.groups where path @> array[p_group_id];
+    return v_summary || jsonb_build_object('mode', p_mode, 'points_reversed', 0);
+  end if;
+
+  -- 7b. Mode everything. Content first, then the Groups.
   select coalesce(array_agg(locked.id order by locked.id), '{}'::bigint[])
     into v_task_ids
     from (
@@ -750,6 +758,24 @@ begin
        order by task.id
          for no key update of task
     ) as locked;
+
+  -- Taking an award back keeps reopen_task's authority here too: a Group
+  -- Manager below level 6 evaluates only the work of ACTIVE Groups on their
+  -- path, so a subtree holding points in an archived Group is BC's to delete.
+  if exists (
+    select 1
+      from (
+        select entry.task_id
+          from public.points_ledger as entry
+         where entry.task_id = any (v_task_ids)
+           and entry.reason in ('task', 'task_reversal')
+         group by entry.task_id, entry.member_id
+        having sum(entry.delta) <> 0
+      ) as staked
+     where not coalesce(private.can_evaluate_task(staked.task_id), false))
+  then
+    raise exception using errcode = '42501', message = 'task_evaluate_forbidden';
+  end if;
 
   for v_award in
     select effect.member_id, sum(effect.points)::integer as points
@@ -850,7 +876,7 @@ as $function$
 $function$;
 
 comment on function private.delete_group_impl(bigint, text) is
-  '#1017 (ruling R38): body of public.delete_group. PT400 invalid_delete_mode unless p_mode is everything or empty (before any gate). Locks the Group FOR NO KEY UPDATE (42501 group_manage_forbidden if unknown), then private.require_group_remover (archive_group''s authority), then every Group below it FOR NO KEY UPDATE in id order. PT409 group_protected when the subtree holds the Organization Group, an Automatic-Membership Group or the Group named by org_settings board_group_id / adunarea_generala_group_id. Mode empty: PT409 group_not_empty (the summary in DETAIL) when the subtree holds a Child Group, Task, Event, Announcement, Campaign, Application or Completed-work Request -- roster rows do not count and go with the Group. Mode everything: the subtree''s Tasks locked in id order and removed through private.delete_tasks_effect (every award reversed first), then its Completed-work Requests, Events (RSVPs cascade), Announcements (reads cascade), Campaigns, the Notifications about each of them, and the Groups (roster rows and Applications cascade); one system Notification per Member whose points were reversed. Returns private.group_delete_summary as it stood, plus mode and points_reversed (the net change).';
+  '#1017 (ruling R38): body of public.delete_group. PT400 invalid_delete_mode unless p_mode is everything or empty (before any gate). Locks the Group FOR NO KEY UPDATE (42501 group_manage_forbidden if unknown), then private.require_group_remover (archive_group''s authority), then every Group below it FOR NO KEY UPDATE in id order. PT409 group_protected when the subtree holds the Organization Group, an Automatic-Membership Group or the Group named by org_settings board_group_id / adunarea_generala_group_id. Mode empty: PT409 group_not_empty (the summary in DETAIL) when the subtree holds a Child Group, Task, Event, Announcement, Campaign, Application or Completed-work Request -- roster rows do not count and go with the Group, and nothing but the Group rows is deleted, so content added after the check fails the delete (23503). Mode everything: 42501 task_evaluate_forbidden unless the caller may evaluate every Task that still holds points (reopen_task''s rule; below level 6 that excludes archived Groups); the subtree''s Tasks locked in id order and removed through private.delete_tasks_effect (every award reversed first), then its Completed-work Requests, Events (RSVPs cascade), Announcements (reads cascade), Campaigns, the Notifications about each of them, and the Groups (roster rows and Applications cascade); one system Notification per Member whose points were reversed. Returns private.group_delete_summary as it stood, plus mode and points_reversed (the net change).';
 comment on function public.delete_group(bigint, text) is
   '#1017 (ruling R38, amending ADR-0009): whoever may archive a Group deletes it for good. p_mode = ''empty'' deletes a Group with no content (its roster goes with it) and is refused with PT409 group_not_empty otherwise; p_mode = ''everything'' deletes the whole subtree with all its content, reversing every Task Point first. The Organization Group, Automatic-Membership Groups and the board Group or Adunarea Generală set in Setări are never deleted (PT409 group_protected). Archiving stays public.archive_group. Body: private.delete_group_impl.';
 
