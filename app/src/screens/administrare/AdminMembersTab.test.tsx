@@ -240,6 +240,44 @@ it('finds a Member by name, blind to case and diacritics, and says when none mat
   expect(screen.getByText('Niciun membru găsit.')).toBeVisible();
 });
 
+/* #1018: Voluntari's quiet count, under the search, following it. */
+it('counts the Members in the list, following the search, with the Romanian plural', async () => {
+  const user = userEvent.setup();
+  show();
+  const panel = screen.getByRole('region', { name: 'Membri' });
+  const count = within(panel).getByText('2 membri');
+  expect(count).toHaveAttribute('role', 'status');
+  expect(count).toHaveClass('text-sm', 'text-muted-foreground');
+  // Between the search and the table, where Voluntari puts it.
+  expect(
+    screen.getByLabelText('Caută un membru').compareDocumentPosition(count) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(
+    count.compareDocumentPosition(screen.getByRole('table')) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  await user.type(screen.getByLabelText('Caută un membru'), 'stefan');
+  expect(count).toHaveTextContent('1 din 2 membri');
+});
+
+it('says "1 membru" for a list of one', () => {
+  api.members.mockReturnValue({
+    isPending: false,
+    isError: false,
+    data: [member('ana', 'Ana Pop')],
+  });
+  show();
+  expect(screen.getByText('1 membru')).toHaveAttribute('role', 'status');
+});
+
+it('shows no list count on "De invitat", whose tab carries its own', () => {
+  api.uninvited.mockReturnValue({ data: [{ memberId: 'x' }] });
+  show('/administrare/membri?vedere=de-invitat');
+  expect(screen.getByRole('button', { name: 'De invitat (1)' })).toBeVisible();
+  expect(screen.queryByText(/^\d.* (membri|membru)$/)).toBeNull();
+});
+
 /* #949: the two ways a Member comes in sit together, as a matched pair, in
    the Membri header — not the CSV import in a panel of its own. */
 it('pairs "Invită membru" with "Import CSV" in the Membri header, for whoever may provision', () => {
@@ -318,7 +356,11 @@ it('confirms a sent invitation and marks the new Member in the list', async () =
   show();
   expect(screen.queryByText('Invitație trimisă')).toBeNull();
   await user.click(screen.getByRole('button', { name: 'Invită membru' }));
-  expect(screen.getByRole('status')).toHaveTextContent(
+  expect(
+    screen
+      .getAllByRole('status')
+      .find((node) => node.textContent?.startsWith('Invitația')),
+  ).toHaveTextContent(
     'Invitația a fost trimisă la ana@osubb.ro. Membrul apare în listă cu „Invitație trimisă”; intră în aplicație când deschide linkul din email.',
   );
   const row = screen

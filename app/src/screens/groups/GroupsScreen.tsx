@@ -258,8 +258,11 @@ function ApplyPanel({
             className="size-3 shrink-0 rounded-full"
             style={{ backgroundColor: group.color ?? '#5C5C61' }}
           />
+          {/* Foreground, like the rows above: a bare link takes the global
+              brand red, which read as the card's button and left the real
+              Aplică looking secondary (#1018). The red belongs to Aplică. */}
           <Link
-            className="min-w-0 underline-offset-4 outline-none hover:underline focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="min-w-0 text-foreground underline-offset-4 outline-none hover:underline focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring"
             to={`/grupuri/${group.id}`}
           >
             {group.name}

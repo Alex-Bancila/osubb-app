@@ -68,7 +68,10 @@ export function ApplicationAction({
   return (
     <>
       <Button
-        variant="outline"
+        // Aplică is the page's call to action and stays red (primary) whatever
+        // else the Member has done (#1018); withdrawing and deciding are
+        // secondary moves and keep the outline.
+        variant={command.kind === 'apply' ? 'default' : 'outline'}
         onClick={() => {
           setOpen(true);
           setError(null);
