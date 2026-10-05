@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import {
   columnFilteringFeature,
   createFilteredRowModel,
@@ -59,6 +59,11 @@ type DataTableProps<TData extends RowData> = {
    */
   columnClassName?: Partial<Record<string, string>>;
   onRowClick?: (row: TData) => void;
+  /**
+   * A line between the filters and the table that follows them: given the
+   * rows shown and the rows in `data` (a count, #1018).
+   */
+  summary?: (shown: number, total: number) => ReactNode;
 };
 
 function columnLabel<TData extends RowData>(
@@ -107,6 +112,7 @@ function DataTable<TData extends RowData>({
   rowClassName,
   columnClassName,
   onRowClick,
+  summary,
 }: DataTableProps<TData>) {
   const filterId = useId();
   const [sorting, setSorting] = useState<SortingState>(() =>
@@ -165,6 +171,7 @@ function DataTable<TData extends RowData>({
           })}
         </div>
       )}
+      {summary?.(table.getRowModel().rows.length, data.length)}
       <Table>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (

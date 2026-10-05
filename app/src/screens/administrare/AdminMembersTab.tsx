@@ -22,6 +22,7 @@ import {
 } from '../../queries/groups-admin';
 import { useUninvitedMembers } from '../../queries/volunteer-import';
 import { normalizeSearch, statusLabel } from '../volunteers/directory-filters';
+import { MemberCount } from '../volunteers/MemberCount';
 import { CsvImportDialog } from './CsvImportDialog';
 import { InviteMemberDialog, type InvitedMember } from './InviteMemberDialog';
 import { UninvitedGrid } from './UninvitedGrid';
@@ -136,6 +137,11 @@ function memberColumns(
     : [name, roleColumn];
 }
 
+/** Voluntari's count, in its place under the search, following it (#1018). */
+function memberCount(shown: number, total: number) {
+  return <MemberCount shown={shown} total={total} />;
+}
+
 /** Rol and Status fold under the name on a phone (layout AD1). */
 const columnClassName = {
   name: 'min-w-40 whitespace-normal',
@@ -248,6 +254,7 @@ function MembersPanel({ provision }: { provision: boolean }) {
           emptyTitle="Niciun membru găsit."
           columnClassName={columnClassName}
           onRowClick={(row) => void navigate(memberPagePath(row.memberId))}
+          summary={memberCount}
         />
       )}
     </Panel>

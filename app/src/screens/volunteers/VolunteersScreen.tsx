@@ -22,6 +22,7 @@ import {
   type DirectoryMember,
 } from '../../queries/member-directory';
 import { DirectoryFilterBar } from './DirectoryFilterBar';
+import { MemberCount } from './MemberCount';
 import { MemberGroups } from './MemberGroups';
 import { useMinWidth } from './use-min-width';
 import {
@@ -301,11 +302,7 @@ export default function VolunteersScreen() {
               />
             }
           />
-          <p role="status" className="text-sm text-muted-foreground">
-            {visible.length === members.length
-              ? `${members.length} membri`
-              : `${visible.length} din ${members.length} membri`}
-          </p>
+          <MemberCount shown={visible.length} total={members.length} />
           {view === 'list' && wide ? (
             <DataTable
               columns={columnsFor(optional, openProfile)}
