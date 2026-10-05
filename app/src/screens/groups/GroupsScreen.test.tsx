@@ -210,6 +210,46 @@ it('applies in a dialog and renders the pending server state with withdrawal', a
   );
   expect(screen.getByRole('button', { name: 'Aplică' })).toBeInTheDocument();
 });
+/* #1018: Aplică is the primary (red) action before and after the Member's
+   first Application; only the pending Group's own control is secondary, and
+   the Group's name is not dressed in the brand red. */
+it('keeps every Aplică primary after an Application exists', () => {
+  api.groups.mockReturnValue(
+    ready([
+      ...api.groups().data,
+      group(7, 'Echipa Media', { parent_id: 1, path: [1, 7] }),
+      group(8, 'Echipa IT', { parent_id: 1, path: [1, 8] }),
+    ]),
+  );
+  const view = list();
+  const apply = () => screen.getAllByRole('button', { name: 'Aplică' });
+  expect(apply()).toHaveLength(3);
+  for (const button of apply()) {
+    expect(button).toHaveClass('bg-primary', 'text-primary-foreground');
+    expect(button).not.toHaveClass('bg-background');
+  }
+  api.applications.mockReturnValue(ready([application]));
+  view.rerender(
+    <MemoryRouter>
+      <GroupsScreen />
+    </MemoryRouter>,
+  );
+  expect(apply()).toHaveLength(2);
+  for (const button of apply())
+    expect(button).toHaveClass('bg-primary', 'text-primary-foreground');
+  expect(
+    screen.getByRole('button', { name: 'Retrage aplicația' }),
+  ).not.toHaveClass('bg-primary');
+  expect(screen.getByRole('link', { name: 'Echipa Media' })).toHaveClass(
+    'text-foreground',
+  );
+});
+it('keeps Aplică primary on a Group page too', () => {
+  detail();
+  expect(screen.getByRole('button', { name: 'Aplică' })).toHaveClass(
+    'bg-primary',
+  );
+});
 it('checks the optional note against its 1000-character limit before applying', async () => {
   list();
   const user = userEvent.setup();
