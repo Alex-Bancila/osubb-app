@@ -248,21 +248,27 @@ export function useReadNotificationsAbout(subjects: readonly string[]) {
     ...unreadNotificationSubjectsQueryOptions(memberId ?? ''),
     enabled: Boolean(memberId) && subjectsKey !== '',
   });
-  const inFlight = useRef(new Set<string>());
+  // A subject being written, or whose write failed: a failure is not retried
+  // while this screen stays open, so a refused or broken write never loops.
+  const held = useRef(new Set<string>());
 
   useEffect(() => {
     if (!memberId || !unread.data || subjectsKey === '') return;
     const pending = new Set(unread.data);
     for (const subject of new Set(subjectsKey.split('\n'))) {
-      if (!isUnread(subject, pending) || inFlight.current.has(subject))
-        continue;
-      inFlight.current.add(subject);
-      void markNotificationsReadFor(subject)
-        .then(() =>
-          queryClient.invalidateQueries({ queryKey: keys.notifications.all }),
-        )
-        .catch(() => undefined)
-        .finally(() => inFlight.current.delete(subject));
+      if (!isUnread(subject, pending) || held.current.has(subject)) continue;
+      held.current.add(subject);
+      void markNotificationsReadFor(subject).then(
+        async () => {
+          await queryClient.invalidateQueries({
+            queryKey: keys.notifications.all,
+          });
+          // Read and refetched: a later Notification about it, arriving while
+          // the thing is still open, is read the same way.
+          held.current.delete(subject);
+        },
+        () => undefined,
+      );
     }
   }, [memberId, unread.data, subjectsKey, queryClient]);
 }

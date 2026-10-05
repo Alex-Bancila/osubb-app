@@ -151,6 +151,26 @@ describe('useReadNotificationsAbout', () => {
     expect(db.rpc).not.toHaveBeenCalled();
   });
 
+  it('does not retry a failed write while the thing stays open', async () => {
+    db.state.subjects = ['task:12'];
+    db.rpc.mockResolvedValue({
+      data: null,
+      error: { code: '42501', message: 'notification_read_forbidden' },
+    });
+    const queryClient = client();
+
+    renderHook(() => useReadNotificationsAbout(['task:12']), {
+      wrapper: wrapper(queryClient),
+    });
+
+    await waitFor(() => expect(db.rpc).toHaveBeenCalledTimes(1));
+    // Another refetch of the unread subjects, still listing task:12.
+    db.state.subjects = ['task:12', 'event:3'];
+    await queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(db.rpc).toHaveBeenCalledTimes(1);
+  });
+
   it('the Promotion Candidates list reads every candidate Notification in one request', async () => {
     db.state.subjects = [
       'promotion_candidate:11111111-1111-4111-8111-111111111111',
