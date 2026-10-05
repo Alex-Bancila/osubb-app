@@ -1,7 +1,7 @@
 /**
  * An inline editor in a grid with pinned columns ("De invitat"): on a phone
- * the space beside the pinned Nume column is narrower than an Email, Telefon
- * or Rang editor, so a cell that opens there must neither hide under the
+ * the space beside the pinned Nume column is narrower than an email, phone
+ * or Role editor, so a cell that opens there must neither hide under the
  * pinned column nor run past the grid's right edge.
  *
  * The open editor is lifted over the pinned columns (`editorLayerClass`), and

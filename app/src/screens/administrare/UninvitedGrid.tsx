@@ -118,7 +118,7 @@ const inputClass =
 /**
  * An open editor: lifted over the pinned columns, with the grid scrolled so
  * all of it shows (`grid-reveal.ts`). On a phone the space beside Nume is
- * narrower than the Email, Telefon and Rang editors.
+ * narrower than the email, phone and Role editors.
  */
 function EditorLayer({ children }: { children: ReactNode }) {
   const layer = useRef<HTMLDivElement>(null);
