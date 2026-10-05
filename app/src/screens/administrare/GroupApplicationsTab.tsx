@@ -1,7 +1,9 @@
 import { ListRow, rowListClass } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
 import { Empty, ErrorState, Loading } from '../../components/states';
+import { useMemo } from 'react';
 import { useGroupApplications } from '../../queries/group-applications';
+import { useReadNotificationsAbout } from '../../queries/notifications';
 import { ApplicationAction } from '../groups/ApplicationAction';
 
 export function GroupApplicationsTab({
@@ -12,6 +14,13 @@ export function GroupApplicationsTab({
   canDecide: boolean;
 }) {
   const applications = useGroupApplications(groupId);
+  // #1012 (R37): the Applications listed here are open in front of the
+  // viewer, so their "Cerere de înscriere" Notifications are read.
+  const shownSubjects = useMemo(
+    () => (applications.data ?? []).map((row) => `group_application:${row.id}`),
+    [applications.data],
+  );
+  useReadNotificationsAbout(shownSubjects);
   if (applications.isPending) return <Loading label="Se încarcă cererile…" />;
   if (applications.isError)
     return (

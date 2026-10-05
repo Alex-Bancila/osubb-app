@@ -29,6 +29,7 @@ import {
   useCompletedTaskGroups,
   type CompletedTaskDraft,
 } from '../../queries/completed-tasks';
+import { useReadNotificationsAbout } from '../../queries/notifications';
 import {
   usePendingDecisions,
   useRequestDecision,
@@ -212,6 +213,16 @@ export function RequestDecisionQueue({
   showEmpty?: boolean;
 }) {
   const queue = usePendingDecisions();
+  // #1012 (R37): the Requests waiting here are open in front of the decider,
+  // so their "Cerere nouă" Notifications are read.
+  const queuedSubjects = useMemo(
+    () =>
+      (queue.data ?? []).map(
+        (request) => `completed_work_request:${request.id}`,
+      ),
+    [queue.data],
+  );
+  useReadNotificationsAbout(queuedSubjects);
   const mutation = useRequestDecision();
   // Kept after the dialog closes, so its content does not vanish while it
   // animates out; cleared once it has.

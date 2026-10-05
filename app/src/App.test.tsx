@@ -829,6 +829,26 @@ it('forwards an old /tracker/<id> Task link to /tracker?task=<id> (#844, D1)', a
   );
 }, 15_000);
 
+it('keeps the id of the Notification a push tap opened through the old Task link (#1012)', async () => {
+  auth.useAuth.mockReturnValue(member);
+  grant();
+  window.history.pushState({}, '', '/tracker/12?notificare=9');
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <App />
+    </QueryClientProvider>,
+  );
+  await screen.findByRole(
+    'heading',
+    { name: 'Tracker screen' },
+    { timeout: 10_000 },
+  );
+  // The shell, mocked here, reads it and takes it out of the address.
+  expect(window.location.pathname + window.location.search).toBe(
+    '/tracker?task=12&notificare=9',
+  );
+}, 15_000);
+
 // After the "Task nou" block too, for the same reason.
 it('lands a /cereri link restored after the session arrives on Taskuri’s Cereri view (#973)', async () => {
   auth.useAuth.mockReturnValue(signedOut);

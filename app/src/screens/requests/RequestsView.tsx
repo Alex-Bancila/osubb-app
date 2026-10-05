@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { RequestDecisionQueue } from './RequestDecisionQueue';
 import { CheckCircle2, ClipboardPlus, History } from 'lucide-react';
 import { TaskDetailsSheet } from '../tracker/TaskDetailsSheet';
@@ -33,6 +33,7 @@ import {
   useSubmitCompletedWork,
   type RequestOrigin,
 } from '../../queries/completed-work-requests';
+import { useReadNotificationsAbout } from '../../queries/notifications';
 import { useGroups, type Group } from '../../queries/reference';
 
 // Parent names come from the Groups this Member may read; until they load, a
@@ -84,6 +85,21 @@ export function RequestsView() {
   const canSubmitRequests = submitsWorkRequests(claims);
   const origins = useRequestOrigins();
   const myRequests = useMyCompletedWorkRequests();
+  // #1012 (R37): the member's decided Requests are on screen, so their
+  // "Cerere respinsă" and "Cerere aprobată" Notifications are read.
+  const decidedSubjects = useMemo(
+    () =>
+      (myRequests.data ?? []).flatMap((request) =>
+        request.status === 'pending'
+          ? []
+          : [
+              `completed_work_request:${request.id}`,
+              ...(request.task_id === null ? [] : [`task:${request.task_id}`]),
+            ],
+      ),
+    [myRequests.data],
+  );
+  useReadNotificationsAbout(decidedSubjects);
   const submit = useSubmitCompletedWork();
   const groups = useGroups();
   const groupsById = groups.data ?? NO_GROUPS;

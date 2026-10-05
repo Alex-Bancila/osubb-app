@@ -2,6 +2,14 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
+
+// #1012 (R37): opening a thing reads its Notifications. The hook is observed
+// here; its own behaviour is covered in queries/notifications-read.test.tsx.
+const readNotificationsAbout = vi.hoisted(() => vi.fn());
+vi.mock('../../queries/notifications', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../queries/notifications')>()),
+  useReadNotificationsAbout: readNotificationsAbout,
+}));
 import axe from 'axe-core';
 const state = vi.hoisted(() => ({
   history: vi.fn(),
@@ -236,6 +244,12 @@ it('heads the page with the Member Card summary: Nickname, full name, Role, Grou
   ).toHaveLength(2);
   await user.click(name);
   expect(await screen.findByRole('dialog', { name: 'Ioana' })).toBeVisible();
+});
+it('opening a Member’s history reads the viewer’s Retention Signals about them (#1012)', () => {
+  view();
+  expect(readNotificationsAbout).toHaveBeenCalledWith([
+    `retention_signal:${uid}`,
+  ]);
 });
 it('draws each Assignment with the Task card, read-only, keeping the evaluation record', async () => {
   const user = userEvent.setup();

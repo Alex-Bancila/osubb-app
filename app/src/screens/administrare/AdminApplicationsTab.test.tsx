@@ -4,6 +4,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import axe from 'axe-core';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
+
+// #1012 (R37): opening a thing reads its Notifications. The hook is observed
+// here; its own behaviour is covered in queries/notifications-read.test.tsx.
+const readNotificationsAbout = vi.hoisted(() => vi.fn());
+vi.mock('../../queries/notifications', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../queries/notifications')>()),
+  useReadNotificationsAbout: readNotificationsAbout,
+}));
 import type { ManagedGroupApplication } from '../../queries/group-applications';
 
 const api = vi.hoisted(() => ({
@@ -191,9 +199,14 @@ it('shows one Group’s Applications under ?grup=, and says when it has none', (
   expect(
     screen.queryByRole('button', { name: 'Profilul membrului Ana Pop' }),
   ).toBeNull();
+  // #1012 (R37): only the Applications on screen are read.
+  expect(readNotificationsAbout).toHaveBeenLastCalledWith([
+    'group_application:2',
+  ]);
   unmount();
 
   show('/administrare/cereri?grup=1');
+  expect(readNotificationsAbout).toHaveBeenLastCalledWith([]);
   expect(
     screen.getByRole('heading', { level: 2, name: 'Diverse' }),
   ).toBeVisible();

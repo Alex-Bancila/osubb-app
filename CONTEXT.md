@@ -294,7 +294,7 @@ Whether an Announcement reaches only the Group Audience of its Origin or every a
 _Avoid_: Scope, visibility, org-wide flag
 
 **Notification**:
-A personal in-app alert delivered to one intended Member.
+A personal in-app alert delivered to one intended Member. It is about one thing, its subject — a Task, an Event, an Announcement, a Completed-work Request, an Application, a Promotion Candidate or a Retention Signal's Member — or about nothing but itself (a Role or Group change). It becomes read when its Member opens it: in Notificări, from a push or an Email Digest link, or by opening or acting on its subject (opening the Task, deciding the Application, RSVPing to the Event…), which reads every unread Notification of theirs about that subject and never anyone else's. BCE, BC and the Moderator may also mark all of theirs read at once (ruling R37, 2026-10-05, amending R16).
 
 **Email Digest**:
 An optional daily email to one Member listing the Notifications they have not read, sent only on a day when there is something unread, each Notification at most once. The Member turns it on and off in Profil.

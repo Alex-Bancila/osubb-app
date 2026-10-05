@@ -888,6 +888,7 @@ export type Database = {
           link: string | null
           member_id: string
           read: boolean
+          subject: string | null
           task_id: number | null
           title: string
         }
@@ -903,6 +904,7 @@ export type Database = {
           link?: string | null
           member_id: string
           read?: boolean
+          subject?: string | null
           task_id?: number | null
           title: string
         }
@@ -918,6 +920,7 @@ export type Database = {
           link?: string | null
           member_id?: string
           read?: boolean
+          subject?: string | null
           task_id?: number | null
           title?: string
         }
@@ -3274,6 +3277,11 @@ export type Database = {
           name: string
           path: number[]
         }[]
+      }
+      mark_all_notifications_read: { Args: never; Returns: number }
+      mark_notifications_read_for: {
+        Args: { p_subject: string }
+        Returns: number
       }
       mark_task_unfulfilled: {
         Args: {

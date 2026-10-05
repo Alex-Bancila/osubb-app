@@ -15,7 +15,7 @@ import {
 } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { NetworkOnly } from 'workbox-strategies';
-import { focusOrOpen, parsePushPayload, targetUrl } from './push-payload';
+import { openTappedNotification, parsePushPayload } from './push-payload';
 import { renewSubscription } from './push-renewal';
 import { NAVIGATION_DENYLIST, supabaseOriginPattern } from './sw-routes';
 
@@ -82,16 +82,13 @@ self.addEventListener('pushsubscriptionchange', (event) => {
   );
 });
 
-/* The tap writes nothing: marking the Notification read stays the in-app
-   list's behaviour (#695, R16). */
+/* The tap writes nothing itself: it opens the target with the Notification's
+   id, and the app marks that one Notification read on arrival (#1012, R37). */
 self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  const data = event.notification.data as { link?: unknown } | null;
-  const link = typeof data?.link === 'string' ? data.link : null;
   event.waitUntil(
-    focusOrOpen(
+    openTappedNotification(
+      event.notification,
       self.clients,
-      targetUrl(link, self.location.origin),
       self.location.origin,
     ),
   );

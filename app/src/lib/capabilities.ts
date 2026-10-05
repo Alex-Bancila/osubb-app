@@ -84,3 +84,15 @@ export function useCapability(capability: Capability) {
 export function submitsWorkRequests(claims: MemberClaims | null): boolean {
   return (claims?.member_level ?? 0) < 5;
 }
+
+/**
+ * True for BCE, BC and the Moderator — level 5 and above — who may mark every
+ * Notification of theirs read at once (#1012, ruling R37, amending R16).
+ * Like `submitsWorkRequests`, it reads the token only to decide whether to
+ * offer the control; `mark_all_notifications_read` judges the live rank.
+ */
+export function marksAllNotificationsRead(
+  claims: MemberClaims | null,
+): boolean {
+  return (claims?.member_level ?? 0) >= 5;
+}

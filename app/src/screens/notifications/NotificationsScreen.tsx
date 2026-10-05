@@ -1,5 +1,8 @@
+import { CheckCheck } from 'lucide-react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Empty, ErrorState, Loading } from '../../components/states';
+import { TaskActionSuccess } from '../../components/tasks/TaskActionSuccess';
 import {
   ListRow,
   Page,
@@ -10,13 +13,17 @@ import {
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
+import { marksAllNotificationsRead } from '../../lib/capabilities';
+import { commandErrorMessage } from '../../lib/command-reasons';
 import { cn } from '../../lib/utils';
 import {
+  useMarkAllNotificationsRead,
   useMarkNotificationRead,
   useNotifications,
   useUnreadNotificationCount,
 } from '../../queries/notifications';
 import {
+  markedAllReceipt,
   toNotificationPresentation,
   type NotificationPresentation,
 } from './notifications-presentation';
@@ -95,13 +102,18 @@ function NotificationListItem({
 }
 
 export default function NotificationsScreen() {
-  const { session } = useAuth();
+  const { session, claims } = useAuth();
   const memberId = session?.user.id;
   const navigate = useNavigate();
 
   const feed = useNotifications(memberId);
   const unread = useUnreadNotificationCount(memberId);
   const markRead = useMarkNotificationRead(memberId);
+  // R37 (#1012, amends R16): BCE, BC and the Moderator may also read
+  // everything at once; nobody else is offered it, and the server refuses it.
+  const canMarkAll = marksAllNotificationsRead(claims);
+  const markAll = useMarkAllNotificationsRead();
+  const [marked, setMarked] = useState<number | null>(null);
 
   const notifications = (feed.data?.pages ?? [])
     .flatMap((page) => page.rows)
@@ -123,11 +135,17 @@ export default function NotificationsScreen() {
     if (notification.link) void navigate(notification.link);
   }
 
+  function markAllRead() {
+    setMarked(null);
+    markAll.mutate(undefined, { onSuccess: (count) => setMarked(count) });
+  }
+
   return (
     <Page width="reading">
       {/* B35: no "Necitite: 0" — a zero says it in words, as Anunțuri does.
-          R16: there is no mark-all control; a notification becomes read only
-          when it is opened. */}
+          R37 (amends R16): a notification becomes read when it is opened —
+          here, from a push or an email, or by opening or acting on what it is
+          about; only level 5 and above get "Marchează toate ca citite". */}
       <PageHeader
         title="Notificări"
         description={
@@ -140,7 +158,30 @@ export default function NotificationsScreen() {
                 ? undefined
                 : 'Toate notificările sunt citite'
         }
+        actions={
+          canMarkAll && (
+            <Button
+              variant="outline"
+              disabled={markAll.isPending || !hasUnread}
+              onClick={markAllRead}
+            >
+              <CheckCheck aria-hidden="true" />
+              Marchează toate ca citite
+            </Button>
+          )
+        }
       />
+      {marked !== null && (
+        <TaskActionSuccess>{markedAllReceipt(marked)}</TaskActionSuccess>
+      )}
+      {markAll.isError && (
+        <p role="alert" className="m-0 text-sm text-destructive">
+          {commandErrorMessage(
+            markAll.error,
+            'Nu am putut marca notificările ca citite. Încearcă din nou.',
+          )}
+        </p>
+      )}
 
       {feed.isPending ? (
         <Loading label="Se încarcă notificările…" />

@@ -14,16 +14,19 @@
 // and never also runs the `push` handler: one notification either way.
 //
 // Nothing here is new data: the declarative half repeats the title and body,
-// and `navigate` is the link the service worker would open on a tap.
+// and `navigate` is what the service worker opens on a tap: the link plus the
+// Notification's id, which the app marks read on arrival (#1012).
 
-import { targetUrl } from "../_shared/app-links.ts";
+import { notificationUrl } from "../_shared/app-links.ts";
 
 // Moved to _shared/app-links.ts for the Email Digest (#775); re-exported so
 // the push side reads as before.
 export {
   appOrigin,
   appOriginOf,
+  NOTIFICATION_PARAM,
   NOTIFICATIONS_PATH,
+  notificationUrl,
   targetUrl,
 } from "../_shared/app-links.ts";
 
@@ -59,7 +62,8 @@ function serialize(
     notification: {
       title,
       ...(body === null ? {} : { body }),
-      navigate: targetUrl(link, origin),
+      // #1012: with the id, so a tap reads the Notification (R37).
+      navigate: notificationUrl(link, origin, id),
       // The tag the service worker uses, so a repeat replaces, never stacks.
       tag: `osubb-${id}`,
       lang: "ro",

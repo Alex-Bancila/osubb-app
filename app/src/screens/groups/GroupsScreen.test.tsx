@@ -2,6 +2,14 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
+
+// #1012 (R37): opening a thing reads its Notifications. The hook is observed
+// here; its own behaviour is covered in queries/notifications-read.test.tsx.
+const readNotificationsAbout = vi.hoisted(() => vi.fn());
+vi.mock('../../queries/notifications', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../queries/notifications')>()),
+  useReadNotificationsAbout: readNotificationsAbout,
+}));
 import * as axe from 'axe-core';
 import type { AdminGroup } from '../../queries/groups-admin';
 import type { GroupApplication } from '../../queries/group-applications';
@@ -223,6 +231,10 @@ it.each([true, false])(
     const view = render(<GroupApplicationsTab groupId={2} canDecide />);
     const user = userEvent.setup();
     expect(screen.getByText('Ana Pop')).toBeInTheDocument();
+    // #1012 (R37): the listed Application is open, so its Notification is read.
+    expect(readNotificationsAbout).toHaveBeenLastCalledWith([
+      'group_application:7',
+    ]);
     await user.click(
       screen.getByRole('button', { name: accept ? 'Acceptă' : 'Respinge' }),
     );

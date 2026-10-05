@@ -21,6 +21,11 @@
 const REASON_COPY = new Map<string, string>([
   /* ---- Security pass L3: the per-Member daily cap on every notifying write ---- */
   ['rate_limited', 'Ai atins limita zilnică. Încearcă mâine.'],
+  /* ---- Notifications (#1012, R37) ---- */
+  [
+    'notification_mark_all_forbidden',
+    'Doar BCE, BC și Moderatorul pot marca toate notificările ca citite.',
+  ],
   /* ---- Group Applications (#584, #589); already_group_member is below (#583) ---- */
   [
     'group_not_accepting_applications',

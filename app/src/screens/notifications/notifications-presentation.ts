@@ -154,3 +154,16 @@ export function toNotificationPresentation(
 export function unreadBadgeLabel(count: number): string {
   return count === 1 ? '1 notificare necitită' : `${count} notificări necitite`;
 }
+
+/**
+ * The receipt of "Marchează toate ca citite" (#1012): "Am marcat o notificare
+ * ca citită", "… 3 notificări ca citite", "… 20 de notificări ca citite" —
+ * Romanian puts "de" between a number and its noun when its last two digits
+ * are 00 or 20-99.
+ */
+export function markedAllReceipt(count: number): string {
+  if (count === 1) return 'Am marcat o notificare ca citită.';
+  const lastTwo = count % 100;
+  const de = count !== 0 && (lastTwo === 0 || lastTwo >= 20) ? 'de ' : '';
+  return `Am marcat ${count} ${de}notificări ca citite.`;
+}

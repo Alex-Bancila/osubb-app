@@ -5,6 +5,14 @@ import axe from 'axe-core';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
+// #1012 (R37): opening a thing reads its Notifications. The hook is observed
+// here; its own behaviour is covered in queries/notifications-read.test.tsx.
+const readNotificationsAbout = vi.hoisted(() => vi.fn());
+vi.mock('../../queries/notifications', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../queries/notifications')>()),
+  useReadNotificationsAbout: readNotificationsAbout,
+}));
+
 /*
  * A small fake of the database behind the tab (#827 over #826): the tables it
  * reads through `from()` and the functions it calls through `rpc()`. Each RPC
@@ -947,6 +955,9 @@ it('lists the open Promotion Candidates: Promovează opens Roluri preset, Respin
   const list = await within(candidates).findByRole('list', {
     name: 'Candidați la promovare',
   });
+  // #1012 (R37): the list shows every candidate, so all their Notifications
+  // are read in one request.
+  expect(readNotificationsAbout).toHaveBeenCalledWith(['promotion_candidate']);
   const rows = within(list).getAllByRole('listitem');
   expect(rows[0]).toHaveTextContent(
     '48 de puncte · pragul 30 · vechime din 15.03.2026',

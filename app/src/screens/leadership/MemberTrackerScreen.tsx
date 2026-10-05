@@ -28,6 +28,10 @@ import {
   type MemberTask,
 } from '../../queries/leadership';
 import { useMemberCard, type MemberCardGroup } from '../../queries/member-card';
+import {
+  NO_SUBJECTS,
+  useReadNotificationsAbout,
+} from '../../queries/notifications';
 import { TaskCard } from '../tracker/TaskCard';
 import { AddCompletedTaskForMember } from '../tracker/AddCompletedTaskControl';
 import { TaskActionSuccess } from '../../components/tasks/TaskActionSuccess';
@@ -317,6 +321,13 @@ function MemberHistory({ memberId }: { memberId: string }) {
     ...(params.p_to !== undefined && { p_to: params.p_to }),
   };
   const query = useLeadershipMemberTasks(memberId, range);
+  // #1012 (R37): a Retention Signal links here, so opening the Member's
+  // history reads the viewer's Retention Signals about them.
+  useReadNotificationsAbout(
+    query.data && isUuid(memberId)
+      ? [`retention_signal:${memberId.toLowerCase()}`]
+      : NO_SUBJECTS,
+  );
   // #915: the Member as the completed-Task form names them, and its receipt.
   const card = useMemberCard(memberId);
   const volunteer = card.data

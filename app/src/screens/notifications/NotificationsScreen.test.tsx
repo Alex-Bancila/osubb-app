@@ -10,18 +10,26 @@ const hooks = vi.hoisted(() => ({
   useNotifications: vi.fn(),
   useUnreadNotificationCount: vi.fn(),
   useMarkNotificationRead: vi.fn(),
+  useMarkAllNotificationsRead: vi.fn(),
 }));
+
+// The signed-in Member's level: mark-all is offered from 5 up (#1012, R37).
+const auth = vi.hoisted(() => ({ level: 1 }));
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 
 vi.mock('../../lib/auth', () => ({
-  useAuth: () => ({ session: { user: { id: 'test-user-id' } } }),
+  useAuth: () => ({
+    session: { user: { id: 'test-user-id' } },
+    claims: { member_level: auth.level },
+  }),
 }));
 
 vi.mock('../../queries/notifications', () => ({
   useNotifications: hooks.useNotifications,
   useUnreadNotificationCount: hooks.useUnreadNotificationCount,
   useMarkNotificationRead: hooks.useMarkNotificationRead,
+  useMarkAllNotificationsRead: hooks.useMarkAllNotificationsRead,
 }));
 
 import NotificationsScreen from './NotificationsScreen';
@@ -44,12 +52,14 @@ function notificationRow(
     created_at: '2026-09-20T09:00:00.000Z',
     dedupe_key: null,
     digested_at: null,
+    subject: null,
     task_id: 12,
     ...overrides,
   };
 }
 
 const markRead = vi.fn();
+const markAll = vi.fn();
 
 function feed(
   rows: NotificationRow[],
@@ -86,6 +96,13 @@ describe('NotificationsScreen', () => {
     hooks.useMarkNotificationRead.mockReturnValue({
       mutate: markRead,
       isPending: false,
+    });
+    auth.level = 1;
+    hooks.useMarkAllNotificationsRead.mockReturnValue({
+      mutate: markAll,
+      isPending: false,
+      isError: false,
+      error: null,
     });
     hooks.useUnreadNotificationCount.mockReturnValue({ data: 0 });
     hooks.useNotifications.mockReturnValue(feed([]));
@@ -199,21 +216,115 @@ describe('NotificationsScreen', () => {
     ).toBeInTheDocument();
   });
 
-  it('has no mark-all control: a notification is read only when opened (R16, #695, #886)', () => {
-    hooks.useUnreadNotificationCount.mockReturnValue({ data: 2 });
-    hooks.useNotifications.mockReturnValue(
-      feed([notificationRow({ id: 2 }), notificationRow({ id: 1 })]),
+  describe('Marchează toate ca citite (R37 amends R16, #1012)', () => {
+    beforeEach(() => {
+      hooks.useUnreadNotificationCount.mockReturnValue({ data: 2 });
+      hooks.useNotifications.mockReturnValue(
+        feed([notificationRow({ id: 2 }), notificationRow({ id: 1 })]),
+      );
+    });
+
+    it.each([
+      ['a Voluntar', 1],
+      ['a Voluntar cu Drept de Vot', 3],
+    ])('offers %s (level %i) no mark-all control', (_who, level) => {
+      auth.level = level;
+
+      renderScreen();
+
+      expect(
+        screen.queryByRole('button', { name: /Marchează/ }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText(/Marchează/)).not.toBeInTheDocument();
+      expect(screen.getByText('Necitite: 2')).toBeInTheDocument();
+      // Showing the list writes nothing; only opening a row does.
+      expect(markRead).not.toHaveBeenCalled();
+      expect(markAll).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['BCE', 5],
+      ['BC', 6],
+      ['the Moderator', 9],
+    ])(
+      'offers it to %s (level %i), and showing it writes nothing',
+      (_who, level) => {
+        auth.level = level;
+
+        renderScreen();
+
+        expect(
+          screen.getByRole('button', { name: 'Marchează toate ca citite' }),
+        ).toBeEnabled();
+        expect(markAll).not.toHaveBeenCalled();
+      },
     );
 
-    renderScreen();
+    it('sends one request and shows a receipt', async () => {
+      auth.level = 6;
+      markAll.mockImplementation(
+        (_: unknown, options: { onSuccess: (count: number) => void }) =>
+          options.onSuccess(2),
+      );
+      const user = userEvent.setup();
 
-    expect(
-      screen.queryByRole('button', { name: /Marchează/ }),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText(/Marchează/)).not.toBeInTheDocument();
-    expect(screen.getByText('Necitite: 2')).toBeInTheDocument();
-    // Showing the list writes nothing; only opening a row does.
-    expect(markRead).not.toHaveBeenCalled();
+      renderScreen();
+      await user.click(
+        screen.getByRole('button', { name: 'Marchează toate ca citite' }),
+      );
+
+      expect(markAll).toHaveBeenCalledTimes(1);
+      expect(markRead).not.toHaveBeenCalled();
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Am marcat 2 notificări ca citite.',
+      );
+    });
+
+    it('is disabled while it runs', () => {
+      auth.level = 5;
+      hooks.useMarkAllNotificationsRead.mockReturnValue({
+        mutate: markAll,
+        isPending: true,
+        isError: false,
+        error: null,
+      });
+
+      renderScreen();
+
+      expect(
+        screen.getByRole('button', { name: 'Marchează toate ca citite' }),
+      ).toBeDisabled();
+    });
+
+    it('is disabled when nothing is unread', () => {
+      auth.level = 9;
+      hooks.useUnreadNotificationCount.mockReturnValue({ data: 0 });
+      hooks.useNotifications.mockReturnValue(
+        feed([notificationRow({ id: 1, read: true })]),
+      );
+
+      renderScreen();
+
+      expect(
+        screen.getByRole('button', { name: 'Marchează toate ca citite' }),
+      ).toBeDisabled();
+    });
+
+    it('says why when the server refuses it', () => {
+      auth.level = 5;
+      hooks.useMarkAllNotificationsRead.mockReturnValue({
+        mutate: markAll,
+        isPending: false,
+        isError: true,
+        error: { code: '42501', message: 'notification_mark_all_forbidden' },
+      });
+
+      renderScreen();
+
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Doar BCE, BC și Moderatorul pot marca toate notificările ca citite.',
+      );
+    });
   });
 
   describe('header counter (B35)', () => {

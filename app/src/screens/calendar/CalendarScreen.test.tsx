@@ -3,6 +3,14 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// #1012 (R37): opening a thing reads its Notifications. The hook is observed
+// here; its own behaviour is covered in queries/notifications-read.test.tsx.
+const readNotificationsAbout = vi.hoisted(() => vi.fn());
+vi.mock('../../queries/notifications', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../queries/notifications')>()),
+  useReadNotificationsAbout: readNotificationsAbout,
+}));
+
 import type { CalendarTaskRow } from '../../queries/calendar-tasks';
 import type { EventGroup, EventPresentation } from '../../queries/events';
 import type { MyGroup } from '../../queries/my-groups';
@@ -623,6 +631,8 @@ describe('CalendarScreen', () => {
       renderCalendar('/calendar?event=9');
 
       expect(hooks.useEvent).toHaveBeenCalledWith(9);
+      // #1012 (R37): the linked Event is open, so its Notifications are read.
+      expect(readNotificationsAbout).toHaveBeenCalledWith(['event:9']);
       expect(screen.getByRole('button', { name: 'Agendă' })).toHaveAttribute(
         'aria-pressed',
         'true',
