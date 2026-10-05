@@ -468,6 +468,89 @@ describe('inline edits', () => {
   });
 });
 
+describe('an editor beside the pinned Nume column (phone, 375 px)', () => {
+  // The real grid at 375 px: the view runs 16–340, the pinned checkbox and
+  // Nume end at 218, and an Email/Telefon/Rang editor opens at 222–438 —
+  // wider than the 122 px beside Nume, so before the fix it opened half under
+  // Nume and half past the edge.
+  function phoneGeometry() {
+    const rect = (left: number, right: number) =>
+      ({
+        left,
+        right,
+        x: left,
+        width: right - left,
+        top: 0,
+        bottom: 32,
+        y: 0,
+        height: 32,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    return vi
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: Element) {
+        if (this.getAttribute('role') === 'region') return rect(16, 340);
+        if (this.matches('td') && this.querySelector('[role=checkbox]'))
+          return rect(16, 56);
+        if (this.matches('td') && this.textContent?.startsWith('Exemplu'))
+          return rect(56, 218);
+        if (this.querySelector('input,select')) return rect(222, 438);
+        return rect(0, 0);
+      });
+  }
+
+  function scrollSpy() {
+    const scrollTo = vi.fn();
+    Object.assign(grid(), { scrollTo });
+    Object.defineProperty(grid(), 'clientWidth', { value: 324 });
+    return scrollTo;
+  }
+
+  it.each([
+    ['Editează emailul pentru Exemplu 01', 'Emailul pentru Exemplu 01'],
+    ['Editează telefonul pentru Exemplu 01', 'Telefonul pentru Exemplu 01'],
+    ['Editează rangul pentru Exemplu 01', 'Rangul pentru Exemplu 01'],
+  ])(
+    '%s: scrolls the grid so the whole editor shows, lifted over the pinned columns',
+    async (button, field) => {
+      const user = userEvent.setup();
+      listed([person(1)]);
+      show();
+      const geometry = phoneGeometry();
+      const scrollTo = scrollSpy();
+      await user.click(screen.getByRole('button', { name: button }));
+      // The right edge comes to the grid's edge: 438 - 340.
+      expect(scrollTo).toHaveBeenCalledWith({ left: 98, behavior: 'instant' });
+      // Lifted over the pinned body cells (z-[1]), under the header.
+      const layer = screen
+        .getByLabelText(field)
+        .closest('[data-cell-editor]') as HTMLElement;
+      expect(layer).toHaveClass('relative', 'z-[3]', 'bg-card');
+      expect(grid().querySelector('thead')).toHaveClass('z-[4]');
+      // While it is open, the grid drops the scroll padding that would push
+      // the editor back out from under the pinned columns.
+      expect(grid()).toHaveClass('has-[[data-cell-editor]]:scroll-pl-0');
+      geometry.mockRestore();
+    },
+  );
+
+  it('leaves the grid where it is for the pinned name editor', async () => {
+    const user = userEvent.setup();
+    listed([person(1)]);
+    show();
+    const geometry = phoneGeometry();
+    const scrollTo = scrollSpy();
+    await user.click(
+      screen.getByRole('button', { name: 'Editează numele pentru Exemplu 01' }),
+    );
+    expect(
+      screen.getByRole('textbox', { name: 'Numele pentru Exemplu 01' }),
+    ).toHaveFocus();
+    expect(scrollTo).not.toHaveBeenCalled();
+    geometry.mockRestore();
+  });
+});
+
 describe('Trimite invitațiile', () => {
   it('sends to the ticked rows only, after a confirmation, and marks them sent', async () => {
     const user = userEvent.setup();
