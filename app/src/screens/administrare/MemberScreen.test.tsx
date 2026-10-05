@@ -387,6 +387,16 @@ it('lists only the returned ledger rows and links a Task through the Tracker', (
     data: member({
       points: [
         {
+          id: 3,
+          delta: -4,
+          reason: 'task_reversal',
+          created_at: '2026-09-22T10:00:00Z',
+          task_id: null,
+          task_title: null,
+          // #1017: the Task was deleted for good; its title stays on the row.
+          deleted_task_title: 'Afiș șters',
+        },
+        {
           id: 2,
           delta: -3,
           reason: 'sanction',
@@ -417,6 +427,8 @@ it('lists only the returned ledger rows and links a Task through the Tracker', (
   expect(screen.getByText('+5 puncte')).toBeVisible();
   expect(screen.getByText('−3 puncte')).toBeVisible();
   expect(screen.getByText(/Sancțiune/)).toBeVisible();
+  expect(screen.getByText(/Task șters: Afiș șters/)).toBeVisible();
+  expect(screen.queryByRole('link', { name: /Afiș șters/ })).toBeNull();
   // The Task by its title (B61); the id only when it is unreadable.
   expect(
     screen.getByRole('link', { name: 'Raport parteneriate' }),

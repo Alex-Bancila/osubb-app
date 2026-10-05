@@ -31,6 +31,8 @@ export type LedgerRow = {
   task_id: number | null;
   /** The Task's title, or null when the Task is not readable to the viewer. */
   task_title: string | null;
+  /** The title a Task deleted for good left on its rows (#1017), else null. */
+  deleted_task_title: string | null;
 };
 
 export type AdminMemberRows = MemberCardRows & {
@@ -60,7 +62,9 @@ export async function fetchAdminMember(
         .from('points_ledger')
         // The embedded Task answers only what `tasks` RLS lets the viewer
         // read: null for anything else, and the page shows the id (B61).
-        .select('id, delta, reason, created_at, task_id, tasks(title)')
+        .select(
+          'id, delta, reason, created_at, task_id, deleted_task_title, tasks(title)',
+        )
         .eq('member_id', memberId)
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })

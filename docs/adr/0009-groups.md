@@ -10,6 +10,7 @@
 - **Amended:** 2026-09-30 — #962: the Group Responsible position has a per-Group display name (`groups.responsible_title`), as the Group Manager's has; each Responsible keeps a title of their own
 - **Amended:** 2026-09-30 — #963: the Biroul de Conducere Group is the home of Board Titles, and `profiles_directory` exposes them to every Member; a BC member may be its Group Responsible
 - **Amended:** 2026-10-01 — #967: each Group Manager may carry a function name of their own (`group_members.position_title` on a manager row, optional) under the Group's name for the position
+- **Amended:** 2026-10-05 — #1017 (ruling R38): whoever may archive a Group may delete it for good, with all its content; protected Groups never
 - **Deciders:** Alex Băncilă (grilling sessions of 2026-09-18, 2026-09-20, and 2026-09-21)
 - **Supersedes:** the work-origin, Campaign, and authorization sections of ADR-0007; the scope model and management rules of ADR-0008; the Voluntar → Membru Activ rule of ADR-0004 (each amended by reference, none retired)
 - **Superseded by:** —
@@ -162,7 +163,7 @@ Each ruling below closes a gap the Wave 3 issue graph exposed. None changes the 
 
 **Archiving refuses on open work.** A Group cannot be archived while it or any Group below it has a Task that is not completed, unfulfilled or cancelled, or a pending Completed-work Request; the Manager finishes or cancels that work first, with the reasons the Tracker already requires. Archiving never cancels a Task. It does settle what has no executor: pending Applications on the subtree are declined with the archiving actor and reason, and future Events are cancelled with the same reason, both preserving history.
 
-**A Group's parent is fixed at creation.** There is no move command and there will be none: a wrongly placed Group is archived and created again. This keeps Department Cup attribution simple, since standings walk each Task's current Group path and no path ever changes.
+**A Group's parent is fixed at creation.** There is no move command and there will be none: a wrongly placed Group is archived and created again _(or, since 2026-10-05, deleted for good — see the amendment below)_. This keeps Department Cup attribution simple, since standings walk each Task's current Group path and no path ever changes.
 
 **Colour and short name are Group settings** (structural, BC/Moderator), already present on `groups` since Wave 1; the interface reads them from the Group, never from a category.
 
@@ -177,3 +178,7 @@ The Organization Group is the one row marked `groups.is_organization` (R1). Colo
 `archive_group` refuses an open Task or pending Request anywhere below the Group, then archives the whole subtree and cancels its future Events through the shared cancellation effect. The parent is immutable. Parent/Umbrella locks are `FOR NO KEY UPDATE`: upgrading a share lock to an update lock can deadlock against a command that already holds the parent and needs the roster row.
 
 The mirror is gone, so rank and Group Role are independent (R15). Human re-ranking is #592; #593 refuses any remaining holder before retiring the live rank. Historical Role History retains old labels without keeping the retired value in the live enum. The public command smoke now creates a native root, appoints its Manager, creates a child, accepts an Application, and creates a Task.
+
+## Amendment (2026-10-05) — delete for good
+
+A Group is no longer only archived (ruling R38, #1017). Whoever may archive it — BC or the Moderator for a top-level Group, a Group Manager on the path for a Child Group — may also delete it for good, after a preview of what it holds. "Șterge tot" removes the Group and every Group below it with all their content (Tasks, Events, Announcements, Campaigns, Applications, Completed-work Requests, rosters), reversing every Task Point through the ledger first, so Member totals and the Department Cup drop by exactly those awards; a Group with no content goes on its own; archiving stays the third choice. The Organization Group, every Automatic-Membership Group, the Groups named in Setări (Biroul de Conducere, Adunarea Generală) and any Group above one of them can never be deleted. The parent stays immutable: deleting is not moving.

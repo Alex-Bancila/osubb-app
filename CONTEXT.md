@@ -57,7 +57,7 @@ A named body of OSUBB people and work, created by BC or Moderator with its own n
 _Avoid_: Scope, structure, org unit, entity
 
 **Child Group**:
-A Group created inside a parent Group and overseen by the parent's Group Managers; a Child Group may have Child Groups of its own, to any depth. Its parent is chosen at creation and never changes; a wrongly placed Group is archived and created again. A Department Team is a Child Group of its Department; a Child Group's Task Points count toward the Department Cup of its nearest competing ancestor when every Group on the path is set to count.
+A Group created inside a parent Group and overseen by the parent's Group Managers; a Child Group may have Child Groups of its own, to any depth. Its parent is chosen at creation and never changes; a wrongly placed Group is archived and created again, or deleted for good by whoever may archive it (ruling R38). A Department Team is a Child Group of its Department; a Child Group's Task Points count toward the Department Cup of its nearest competing ancestor when every Group on the path is set to count.
 _Avoid_: Sub-team, child team, nested team
 
 **Group Category**:

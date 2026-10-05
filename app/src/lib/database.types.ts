@@ -1012,6 +1012,7 @@ export type Database = {
         Row: {
           awarded_by: string | null
           created_at: string
+          deleted_task_title: string | null
           delta: number
           evaluation_id: number | null
           id: number
@@ -1023,6 +1024,7 @@ export type Database = {
         Insert: {
           awarded_by?: string | null
           created_at?: string
+          deleted_task_title?: string | null
           delta: number
           evaluation_id?: number | null
           id?: never
@@ -1034,6 +1036,7 @@ export type Database = {
         Update: {
           awarded_by?: string | null
           created_at?: string
+          deleted_task_title?: string | null
           delta?: number
           evaluation_id?: number | null
           id?: never
@@ -3024,6 +3027,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      delete_campaign: { Args: { p_campaign_id: number }; Returns: Json }
+      delete_event: { Args: { p_event_id: number }; Returns: Json }
+      delete_group: {
+        Args: { p_group_id: number; p_mode: string }
+        Returns: Json
+      }
+      delete_task: {
+        Args: { p_task_id: number; p_with_points?: boolean }
+        Returns: Json
+      }
       department_cup: {
         Args: { p_campaign_id?: number; p_from?: string; p_to?: string }
         Returns: {
@@ -3172,6 +3185,7 @@ export type Database = {
           position_title: string
         }[]
       }
+      group_delete_preview: { Args: { p_group_id: number }; Returns: Json }
       group_roster: {
         Args: { p_group_id?: number }
         Returns: {
@@ -3988,6 +4002,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      task_delete_preview: { Args: { p_task_id: number }; Returns: Json }
       uninvited_members: {
         Args: never
         Returns: {

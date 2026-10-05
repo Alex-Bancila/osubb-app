@@ -165,6 +165,9 @@ function LedgerSource({ row }: { row: LedgerRow }) {
         {row.task_title?.trim() || `Task #${row.task_id}`}
       </Link>
     );
+  // #1017: a Task deleted for good keeps its name on the award and its reversal.
+  if (row.deleted_task_title)
+    return <>Task șters: {row.deleted_task_title}</>;
   return <>{row.reason === 'sanction' ? 'Sancțiune' : 'Ajustare'}</>;
 }
 
