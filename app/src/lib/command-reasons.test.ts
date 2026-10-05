@@ -360,3 +360,23 @@ it('tells a Member over a daily cap to come back tomorrow (security pass L3)', (
   ).toBe('Ai atins limita zilnică. Încearcă mâine.');
   expect(reasonCopy('rate_limited')).not.toMatch(/_/);
 });
+
+/* #1017 (ruling R38): every reason the delete-for-good migration raises. */
+it('has Romanian copy for every delete-for-good refusal', () => {
+  for (const reason of [
+    'task_has_points',
+    'task_manage_forbidden',
+    'task_evaluate_forbidden',
+    'task_not_found',
+    'task_parent_changed',
+    'calendar_manage_forbidden',
+    'event_not_found',
+    'campaign_manage_forbidden',
+    'campaign_not_found',
+    'group_manage_forbidden',
+    'group_protected',
+    'group_not_empty',
+    'invalid_delete_mode',
+  ])
+    expect(reasonCopy(reason), reason).toBeDefined();
+});

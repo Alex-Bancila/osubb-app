@@ -147,6 +147,9 @@ export const keys = {
       ['tasks', 'history', { taskId, memberId }] as const,
     detail: (taskId: number, memberId: string | undefined) =>
       ['tasks', 'detail', { taskId, memberId }] as const,
+    /* #1017: what "Șterge definitiv" would take back, read as the dialog opens. */
+    deletePreview: (taskId: number, memberId: string | undefined) =>
+      ['tasks', 'delete-preview', { taskId, memberId }] as const,
     managed: (memberId: string | undefined) =>
       ['tasks', 'managed', { memberId }] as const,
     /* Tasks where I hold a pending candidature (the Calendar's chips, #692). */
@@ -177,6 +180,9 @@ export const keys = {
       ['groups', 'tree', { memberId }] as const,
     roster: (groupId: number, memberId: string | undefined) =>
       ['groups', 'roster', { groupId, memberId }] as const,
+    /* #1017: what deleting a Group for good would take with it. */
+    deletePreview: (groupId: number, memberId: string | undefined) =>
+      ['groups', 'delete-preview', { groupId, memberId }] as const,
     /* Whom a Group may appoint: every member the caller can see at all. */
     appointable: (memberId: string | undefined) =>
       ['groups', 'appointable', { memberId }] as const,

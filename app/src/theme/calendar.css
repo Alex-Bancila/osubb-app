@@ -651,6 +651,12 @@
   gap: var(--s-2);
 }
 
+/* Șterge definitiv (#1017) sits apart from Editează and Anulează: at the
+   row's far end, where a hand reaching for Editează does not land. */
+.event-manage-delete {
+  margin-left: auto;
+}
+
 .event-manage-receipt {
   margin: var(--s-3) 0 0;
   color: var(--text-muted);

@@ -397,10 +397,15 @@ export function groupTabs(
     canCreateChild: boolean;
     acceptsApplications: boolean;
     pendingApplications: number;
+    /** #1017: Setări holds Șterge definitiv, archived Groups included. */
+    canDelete?: boolean;
   },
 ): (typeof GROUP_TABS)[number][] {
   const shown: Record<GroupTabId, boolean> = {
-    setari: authority.manageGroup || authority.editStructure,
+    setari:
+      authority.manageGroup ||
+      authority.editStructure ||
+      facts.canDelete === true,
     roster: true,
     roluri: authority.appointManager || authority.manageGroup,
     copii: facts.hasChildren || facts.canCreateChild,

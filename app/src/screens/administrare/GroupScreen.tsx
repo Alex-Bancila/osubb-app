@@ -220,7 +220,13 @@ export default function GroupScreen() {
           ),
     [archived, group, id, myGroupsQuery.data, createTopLevel],
   );
+  // #1017: Șterge definitiv follows archiving; an archived Group, which
+  // nobody may change, is still deleted by BC and the Moderator (level ≥ 6).
+  const canDelete = archived
+    ? actorLevel >= 6
+    : group !== undefined && authority.archive;
   const tabs = groupTabs(authority, {
+    canDelete,
     hasChildren: children.length > 0,
     canCreateChild: authority.manageGroup && group?.status === 'active',
     acceptsApplications: group?.accepts_applications === true,
@@ -370,6 +376,7 @@ export default function GroupScreen() {
             error={error}
             lastReason={lastReason}
             onRun={run}
+            canDelete={canDelete}
           />
         )}
         {tab === 'roster' &&

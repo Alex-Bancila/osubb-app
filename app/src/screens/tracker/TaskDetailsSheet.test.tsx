@@ -44,6 +44,18 @@ vi.mock('../../queries/task-review', () => ({
   useTaskEvaluationCapability: () => ({ data: false }),
 }));
 vi.mock('../../queries/task-details', () => ({ useTaskDetails }));
+const deleteTask = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({ deletedTasks: 1, pointsReversed: 0, members: 0 }),
+);
+vi.mock('../../queries/delete-for-good', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../queries/delete-for-good')>()),
+  useTaskDeletePreview: () => ({
+    isPending: false,
+    isError: false,
+    data: { subtasks: 0, total: 0, members: [] },
+  }),
+  useDeleteTask: () => ({ mutateAsync: deleteTask, isPending: false }),
+}));
 vi.mock('../../queries/task-cancel', () => ({
   useCancelTask: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));
@@ -707,5 +719,60 @@ describe('Task details sheet', () => {
     expect(
       screen.queryByRole('region', { name: 'Notă la trimitere' }),
     ).not.toBeInTheDocument();
+  });
+
+  /* #1017: Șterge definitiv, for the Task's managers in every status. */
+  it('offers Șterge definitiv to a manager, finished Tasks included, and closes on delete', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const onDeleted = vi.fn();
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({ status: 'completed' }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    const { rerender } = render(
+      <TaskDetailsSheet
+        taskId={1}
+        managedTaskIds={new Set<number>()}
+        onClose={onClose}
+        onDeleted={onDeleted}
+      />,
+    );
+    await screen.findByRole('dialog', { name: 'Detalii task' });
+    expect(
+      screen.queryByRole('button', { name: 'Șterge definitiv' }),
+    ).toBeNull();
+
+    rerender(
+      <TaskDetailsSheet
+        taskId={1}
+        managedTaskIds={new Set([1])}
+        onClose={onClose}
+        onDeleted={onDeleted}
+      />,
+    );
+    // A completed Task has no Anulează, but may still be deleted.
+    expect(
+      screen.queryByRole('button', { name: 'Anulează taskul' }),
+    ).toBeNull();
+    const actions = document.querySelector('[data-slot="task-actions"]');
+    const trigger = within(actions as HTMLElement).getByRole('button', {
+      name: 'Șterge definitiv',
+    });
+    await user.click(trigger);
+    const confirm = await screen.findByRole('dialog', {
+      name: 'Ștergi definitiv taskul?',
+    });
+    await user.click(
+      within(confirm).getByRole('button', { name: 'Șterge definitiv' }),
+    );
+    expect(deleteTask).toHaveBeenCalledWith({ taskId: 1, withPoints: false });
+    await vi.waitFor(() =>
+      expect(onDeleted).toHaveBeenCalledWith('Taskul a fost șters definitiv.'),
+    );
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

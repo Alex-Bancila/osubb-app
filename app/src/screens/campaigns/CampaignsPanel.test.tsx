@@ -8,6 +8,10 @@ const api = vi.hoisted(() => ({
   campaigns: vi.fn(),
   mutate: vi.fn(),
   report: vi.fn(),
+  remove: vi.fn(),
+}));
+vi.mock('../../queries/delete-for-good', () => ({
+  useDeleteCampaign: () => ({ mutateAsync: api.remove, isPending: false }),
 }));
 vi.mock('../../queries/campaigns', async (original) => ({
   ...(await original<object>()),
@@ -267,6 +271,9 @@ it("offers only the report for an archived owner's Campaign", () => {
     within(archivedRow).queryByRole('button', { name: 'Dezactivează' }),
   ).toBeNull();
   expect(
+    within(archivedRow).queryByRole('button', { name: 'Șterge definitiv' }),
+  ).toBeNull();
+  expect(
     within(archivedRow).getByRole('button', { name: 'Vezi raportul' }),
   ).toBeVisible();
   const activeRow = first(
@@ -317,4 +324,93 @@ it('lists every Campaign without a Group, by owner, and only names the unmanaged
     within(managed).getByRole('button', { name: 'Vezi raportul' }),
   ).toBeVisible();
   await noViolations(container);
+});
+
+/* #1017: Șterge definitiv beside Redenumește, for the same managers. A
+   Campaign is a reporting label: what it labelled stays, without it. */
+describe('Șterge definitiv', () => {
+  beforeEach(() => {
+    api.remove.mockReset().mockResolvedValue({ tasks: 3, events: 1 });
+  });
+
+  function rowOf(name: string) {
+    return first(
+      screen
+        .getAllByRole('listitem')
+        .filter((item) => item.textContent?.includes(name)),
+    );
+  }
+
+  it('is offered on a managed row, last and destructive, never on an unmanaged one', () => {
+    render(
+      <MemoryRouter initialEntries={['/administrare/campanii']}>
+        <CampaignsPanel
+          label="Toate grupurile"
+          groups={groups}
+          manages={(id) => id !== 4}
+        />
+      </MemoryRouter>,
+    );
+    const buttons = within(rowOf('Toamnă')).getAllByRole('button');
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      'Redenumește',
+      'Dezactivează',
+      'Vezi raportul',
+      'Șterge definitiv',
+    ]);
+    expect(buttons.at(-1)).toHaveClass('text-destructive');
+    expect(
+      within(rowOf('Pe frate')).queryByRole('button', {
+        name: 'Șterge definitiv',
+      }),
+    ).toBeNull();
+  });
+
+  it('says the labelled work stays, sends delete_campaign and leaves a receipt', async () => {
+    const user = userEvent.setup();
+    show();
+    await user.click(
+      within(rowOf('Toamnă')).getByRole('button', { name: 'Șterge definitiv' }),
+    );
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Ștergi definitiv campania?',
+    });
+    expect(dialog).toHaveAccessibleDescription(
+      '„Toamnă” dispare din liste, din filtre și din rapoarte. Nu poate fi recuperată.',
+    );
+    expect(
+      within(dialog).getByText(
+        'Taskurile și evenimentele etichetate cu ea rămân, fără etichetă.',
+      ),
+    ).toBeVisible();
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Șterge definitiv' }),
+    );
+    expect(api.remove).toHaveBeenCalledWith(10);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Campania „Toamnă” a fost ștearsă definitiv. 3 taskuri și 1 eveniment au rămas fără etichetă.',
+    );
+  });
+
+  it('keeps the dialog with the refusal in Romanian', async () => {
+    api.remove.mockRejectedValue(
+      new CampaignError(
+        { code: '42501', message: 'campaign_manage_forbidden' },
+        'x',
+      ),
+    );
+    const user = userEvent.setup();
+    show();
+    await user.click(
+      within(rowOf('Toamnă')).getByRole('button', { name: 'Șterge definitiv' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Șterge definitiv' }),
+    );
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Nu mai ai permisiunea de a modifica această campanie.',
+    );
+  });
 });
