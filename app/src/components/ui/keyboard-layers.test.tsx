@@ -50,7 +50,7 @@ describe('a dialog above a phone keyboard (#1013)', () => {
     const dialog = await openDialog();
 
     expect(dialog).toHaveClass(
-      'top-[calc((100%-var(--keyboard-inset))/2)]',
+      'top-[calc(var(--visible-top)+var(--visible-height)/2)]',
       'max-h-[calc(var(--visible-height)-2rem)]',
       'overflow-y-auto',
     );
@@ -71,7 +71,7 @@ describe('a dialog above a phone keyboard (#1013)', () => {
     const dialog = await openDialog(true);
 
     expect(dialog).toHaveClass(
-      'max-sm:top-0',
+      'max-sm:top-(--visible-top)',
       'max-sm:h-(--visible-height)',
       'max-sm:max-h-none',
       'max-sm:rounded-none',
@@ -112,7 +112,10 @@ describe('a sheet above a phone keyboard (#1013)', () => {
     async (side) => {
       const sheet = await openSheet(side);
 
-      expect(sheet).toHaveClass('top-0', 'bottom-(--keyboard-inset)');
+      expect(sheet).toHaveClass(
+        'top-(--visible-top)',
+        'bottom-(--keyboard-inset)',
+      );
       expect(sheet).not.toHaveClass('inset-y-0');
     },
   );

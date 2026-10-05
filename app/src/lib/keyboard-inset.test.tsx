@@ -37,7 +37,7 @@ describe('measureKeyboard', () => {
   it('reads the keyboard height on iOS, where only the visual viewport shrinks', () => {
     expect(
       measureKeyboard({ ...closed, visualHeight: PHONE - KEYBOARD }),
-    ).toEqual({ open: true, inset: KEYBOARD });
+    ).toEqual({ open: true, inset: KEYBOARD, offsetTop: 0 });
   });
 
   it('subtracts how far iOS panned the visual viewport', () => {
@@ -47,7 +47,7 @@ describe('measureKeyboard', () => {
         visualHeight: PHONE - KEYBOARD,
         offsetTop: 40,
       }),
-    ).toEqual({ open: true, inset: KEYBOARD - 40 });
+    ).toEqual({ open: true, inset: KEYBOARD - 40, offsetTop: 40 });
   });
 
   it('opens with no inset on Android, where the layout itself shrinks', () => {
@@ -57,7 +57,7 @@ describe('measureKeyboard', () => {
         layoutHeight: PHONE - KEYBOARD,
         visualHeight: PHONE - KEYBOARD,
       }),
-    ).toEqual({ open: true, inset: 0 });
+    ).toEqual({ open: true, inset: 0, offsetTop: 0 });
   });
 
   it('ignores a browser toolbar coming and going', () => {
@@ -66,7 +66,7 @@ describe('measureKeyboard', () => {
         ...closed,
         visualHeight: PHONE - KEYBOARD_MIN_HEIGHT,
       }),
-    ).toEqual({ open: false, inset: 0 });
+    ).toEqual({ open: false, inset: 0, offsetTop: 0 });
   });
 
   it('opens only for a focused field, but closes on the geometry alone', () => {
@@ -74,17 +74,18 @@ describe('measureKeyboard', () => {
     expect(measureKeyboard({ ...shrunk, editing: false })).toEqual({
       open: false,
       inset: 0,
+      offsetTop: 0,
     });
     // The tap on a footer button blurs the field: the button stays put.
     expect(
       measureKeyboard({ ...shrunk, editing: false, wasOpen: true }),
-    ).toEqual({ open: true, inset: KEYBOARD });
+    ).toEqual({ open: true, inset: KEYBOARD, offsetTop: 0 });
   });
 
   it('leaves a pinch-zoomed page alone', () => {
     expect(
       measureKeyboard({ ...closed, visualHeight: PHONE / 2, scale: 2 }),
-    ).toEqual({ open: false, inset: 0 });
+    ).toEqual({ open: false, inset: 0, offsetTop: 0 });
   });
 });
 
@@ -268,6 +269,25 @@ describe('useKeyboardInset', () => {
     expect(root.style.getPropertyValue('--keyboard-inset')).toBe('');
     expect(root.dataset.keyboard).toBeUndefined();
     expect(screen.getByRole('status')).toHaveTextContent('closed');
+  });
+
+  it('publishes how far iOS panned the visible area, for sheets and dialogs', () => {
+    render(<Probe />);
+    act(() => screen.getByRole('textbox').focus());
+
+    act(() => {
+      viewport.offsetTop = 60;
+      viewport.height = PHONE - KEYBOARD - 60;
+      viewport.dispatchEvent(new Event('scroll'));
+    });
+    const root = document.documentElement;
+    expect(root.style.getPropertyValue('--keyboard-offset-top')).toBe('60px');
+    expect(root.style.getPropertyValue('--keyboard-inset')).toBe(
+      `${KEYBOARD}px`,
+    );
+
+    keyboard(0);
+    expect(root.style.getPropertyValue('--keyboard-offset-top')).toBe('');
   });
 
   it('brings the focused field into view once the keyboard is up', () => {

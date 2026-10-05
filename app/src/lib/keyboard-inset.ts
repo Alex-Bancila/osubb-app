@@ -13,8 +13,11 @@ import { useEffect, useSyncExternalStore } from 'react';
  *   so there it is the keyboard's height; Android Chrome resizes the layout
  *   viewport itself (`interactive-widget=resizes-content` in index.html), so
  *   there it stays 0 and `100dvh` already ends at the keyboard.
- *   `--visible-height` (tailwind.css) is `100dvh` minus it: the shell, sheets
- *   and dialogs size to that.
+ *   The shell ends there (`100dvh` minus it).
+ * - `--keyboard-offset-top`: how far iOS panned the visual viewport down to
+ *   show the field (0 elsewhere). The visible area of the layout viewport is
+ *   `--visible-top` to `--visible-top + --visible-height` (tailwind.css);
+ *   sheets and dialogs, which are fixed to the layout viewport, sit in it.
  * - `data-keyboard="open"`: the keyboard is up, on either platform. The
  *   `keyboard:` variant hides the phone navigation bar, and every element
  *   marked `data-keyboard-pin` (the sheet and dialog footers, a form's own
@@ -30,12 +33,18 @@ import { useEffect, useSyncExternalStore } from 'react';
  * attribute, so desktop behaviour never changes.
  */
 
-export type KeyboardState = { open: boolean; inset: number };
+export type KeyboardState = {
+  open: boolean;
+  /** The layout viewport the keyboard covers, at its bottom (px). */
+  inset: number;
+  /** How far iOS panned the visual viewport down the layout one (px). */
+  offsetTop: number;
+};
 
 /** A keyboard is taller than this; browser toolbars that come and go are not. */
 export const KEYBOARD_MIN_HEIGHT = 120;
 
-const CLOSED: KeyboardState = { open: false, inset: 0 };
+const CLOSED: KeyboardState = { open: false, inset: 0, offsetTop: 0 };
 
 /** The viewport numbers one measurement needs; `measureKeyboard` is pure. */
 export type ViewportSample = {
@@ -64,11 +73,12 @@ export function measureKeyboard(sample: ViewportSample): KeyboardState {
   const open =
     keyboardHeight > KEYBOARD_MIN_HEIGHT && (sample.wasOpen || sample.editing);
   if (!open) return CLOSED;
+  const offsetTop = Math.max(0, Math.round(sample.offsetTop));
   const inset = Math.max(
     0,
     Math.round(sample.layoutHeight - sample.offsetTop - sample.visualHeight),
   );
-  return { open, inset };
+  return { open, inset, offsetTop };
 }
 
 const NON_TEXT_INPUTS = new Set([
@@ -192,9 +202,17 @@ function publish(next: KeyboardState) {
   if (next.inset > 0)
     root.style.setProperty('--keyboard-inset', `${next.inset}px`);
   else root.style.removeProperty('--keyboard-inset');
+  if (next.offsetTop > 0)
+    root.style.setProperty('--keyboard-offset-top', `${next.offsetTop}px`);
+  else root.style.removeProperty('--keyboard-offset-top');
   if (next.open) root.dataset.keyboard = 'open';
   else delete root.dataset.keyboard;
-  if (next.open === state.open && next.inset === state.inset) return;
+  if (
+    next.open === state.open &&
+    next.inset === state.inset &&
+    next.offsetTop === state.offsetTop
+  )
+    return;
   state = next;
   subscribers.forEach((notify) => notify());
 }

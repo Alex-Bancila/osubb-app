@@ -14,7 +14,7 @@ describe('SessionScreen', () => {
     expect(frame).toHaveClass(
       'grid',
       'place-items-center',
-      'h-(--visible-height)',
+      'h-[calc(100dvh-var(--keyboard-inset))]',
     );
     // `place-content` would clip a card taller than the screen at its top.
     expect(frame).not.toHaveClass('place-content-center');

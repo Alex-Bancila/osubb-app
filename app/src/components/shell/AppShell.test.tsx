@@ -343,7 +343,7 @@ describe('AppShell', () => {
     const { container } = renderShell();
 
     const root = container.firstElementChild as HTMLElement;
-    expect(root).toHaveClass('h-(--visible-height)');
+    expect(root).toHaveClass('h-[calc(100dvh-var(--keyboard-inset))]');
     expect(root).not.toHaveClass('h-dvh');
     expect(
       screen.getByRole('navigation', { name: 'Navigare rapidă' }),

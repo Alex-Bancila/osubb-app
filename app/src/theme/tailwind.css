@@ -124,10 +124,16 @@
   --sidebar-ring: var(--focus-ring-color);
 
   /* The phone keyboard (#1013): `useKeyboardInset` sets the inset while the
-     keyboard covers part of the layout viewport (iOS), and the shell, sheets
-     and dialogs size to what stays visible above it. */
+     keyboard covers part of the layout viewport (iOS), and how far iOS panned
+     the visible area down it. The shell ends at the keyboard
+     (`100dvh - inset`); sheets and dialogs, fixed to the layout viewport, sit
+     in the visible area: from `--visible-top`, `--visible-height` tall. */
   --keyboard-inset: 0px;
-  --visible-height: calc(100dvh - var(--keyboard-inset));
+  --keyboard-offset-top: 0px;
+  --visible-top: var(--keyboard-offset-top);
+  --visible-height: calc(
+    100dvh - var(--keyboard-inset) - var(--keyboard-offset-top)
+  );
 }
 
 /* A form's actions while the keyboard is open (#1013): the sheet and dialog

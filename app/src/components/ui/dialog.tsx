@@ -69,9 +69,9 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          'fixed top-[calc((100%-var(--keyboard-inset))/2)] left-1/2 z-70 grid max-h-[calc(var(--visible-height)-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-card p-4 text-sm text-card-foreground shadow-xl ring-1 ring-foreground/10 outline-none transition-[opacity,scale] motion-reduce:transition-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0 sm:max-w-md',
+          'fixed top-[calc(var(--visible-top)+var(--visible-height)/2)] left-1/2 z-70 grid max-h-[calc(var(--visible-height)-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-card p-4 text-sm text-card-foreground shadow-xl ring-1 ring-foreground/10 outline-none transition-[opacity,scale] motion-reduce:transition-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0 sm:max-w-md',
           fullScreenOnPhone &&
-            'max-sm:top-0 max-sm:left-0 max-sm:h-(--visible-height) max-sm:max-h-none max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none',
+            'max-sm:top-(--visible-top) max-sm:left-0 max-sm:h-(--visible-height) max-sm:max-h-none max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none',
           className,
         )}
         {...props}

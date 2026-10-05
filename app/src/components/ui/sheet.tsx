@@ -38,16 +38,17 @@ function SheetBackdrop({
   );
 }
 
-// Both sides end where a phone keyboard starts (#1013): the sheet's own
+// Both sides fill the area a phone keyboard leaves visible (#1013), from
+// where iOS panned it to down to the keyboard: the sheet's own
 // scroll then reaches every field, and its footer pins above the keyboard.
 const sheetSides = {
   // The navigation drawer: narrow, from the left.
-  left: 'top-0 bottom-(--keyboard-inset) left-0 w-[min(280px,calc(100%-2rem))] data-ending-style:-translate-x-full data-starting-style:-translate-x-full',
+  left: 'top-(--visible-top) bottom-(--keyboard-inset) left-0 w-[min(280px,calc(100%-2rem))] data-ending-style:-translate-x-full data-starting-style:-translate-x-full',
   // A details or form panel: the full width of a phone, from the right, and
   // slides in and out on that side. Set the width cap (`max-w-md`, …) and the
   // padding at the call site.
   right:
-    'top-0 bottom-(--keyboard-inset) right-0 w-full overflow-y-auto data-ending-style:translate-x-full data-starting-style:translate-x-full',
+    'top-(--visible-top) bottom-(--keyboard-inset) right-0 w-full overflow-y-auto data-ending-style:translate-x-full data-starting-style:translate-x-full',
 } as const;
 
 function SheetPopup({
