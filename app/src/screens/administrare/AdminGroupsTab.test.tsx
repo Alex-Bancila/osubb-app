@@ -140,7 +140,10 @@ function LocationProbe() {
 }
 
 /** The tab inside the Administrare layout, whose header carries its action. */
-function show(entry = '/administrare/grupuri') {
+function show(
+  entry:
+    string | { pathname: string; state: unknown } = '/administrare/grupuri',
+) {
   const client = new QueryClient();
   return render(
     <QueryClientProvider client={client}>
@@ -982,4 +985,18 @@ it('shows a Manager their led Groups with no switch: the page already is that vi
   expect(screen.queryByRole('group', { name: 'Grupuri afișate' })).toBeNull();
   expect(screen.getByRole('region', { name: 'Grupurile mele' })).toBeVisible();
   expect(screen.queryByRole('link', { name: 'Balul Bobocilor' })).toBeNull();
+});
+
+/* #1017: a Group deleted for good on its page lands here with a receipt,
+   read once: the history entry loses it, so a reload does not repeat it. */
+it('says a Group was deleted for good when its page sends the member back', async () => {
+  show({
+    pathname: '/administrare/grupuri',
+    state: { receipt: 'Grupul Logistică a fost șters definitiv.' },
+  });
+  const receipt = await screen.findByText(
+    'Grupul Logistică a fost șters definitiv.',
+  );
+  expect(receipt).toHaveAttribute('role', 'status');
+  expect(receipt).toHaveFocus();
 });

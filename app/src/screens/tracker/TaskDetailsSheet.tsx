@@ -1,5 +1,6 @@
 import { TaskAssignControl } from './TaskAssignControl';
 import { TaskCancelControl } from './TaskCancelControl';
+import { TaskDeleteControl } from './TaskDeleteControl';
 import { TaskReopenControl } from './TaskReopenControl';
 import { TaskFeedbackControl } from './TaskFeedbackControl';
 import { TaskReviewCapabilityNotice } from './TaskReviewCapabilityNotice';
@@ -101,10 +102,12 @@ function TaskDetails({
   taskId,
   onNavigate,
   canManage,
+  onDeleted,
 }: {
   taskId: number;
   onNavigate: (id: number) => void;
   canManage: boolean;
+  onDeleted: (receipt: string) => void;
 }) {
   const query = useTaskDetails(taskId);
   const progress = useTaskProgress();
@@ -245,6 +248,13 @@ function TaskDetails({
           executorName={query.data.executorName}
           groupId={query.data.task.group_id}
         />
+        {/* Last and apart from the rest (#1017): the one act that cannot be
+            undone, offered to the Task's managers in every status. */}
+        <TaskDeleteControl
+          taskId={taskId}
+          canManage={canManage}
+          onDeleted={onDeleted}
+        />
       </div>
       {task.kind === 'task' && <TaskReviewCapabilityNotice taskId={taskId} />}
       {task.kind === 'umbrella' && (
@@ -315,12 +325,18 @@ export function TaskDetailsSheet({
   managedTaskIds = new Set<number>(),
   notice = null,
   onClose,
+  onDeleted,
 }: {
   taskId: number | null;
   managedTaskIds?: ReadonlySet<number>;
   /** A confirmation for the opened Task, e.g. after it was just created. */
   notice?: string | null;
   onClose: () => void;
+  /**
+   * The shown Task was deleted for good (#1017): the sheet closes and the
+   * list says so. Without it the sheet only closes.
+   */
+  onDeleted?: (receipt: string) => void;
 }) {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const [trail, setTrail] = useState<SheetTrail | null>(null);
@@ -383,6 +399,11 @@ export function TaskDetailsSheet({
                 taskId={shownId}
                 canManage={managedTaskIds.has(shownId)}
                 onNavigate={(id) => go(sheetTrailPush(current, id))}
+                onDeleted={(receipt) => {
+                  setTrail(null);
+                  if (onDeleted) onDeleted(receipt);
+                  else onClose();
+                }}
               />
             )}
           </ReceiptTurnScope>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, ListIcon } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 
@@ -27,13 +27,26 @@ import {
   type EventRelevance,
 } from './calendar-presentation';
 import { useCalendarView, type CalendarView } from './calendar-view';
-import { clearEventReceipts } from './event-receipts';
+import { clearEventReceipts, useCalendarReceipt } from './event-receipts';
 import { NewEventControl } from './NewEventControl';
 
 const VIEWS: ReadonlyArray<SegmentedOption<CalendarView>> = [
   { value: 'month', label: 'Lună', icon: CalendarDays },
   { value: 'agenda', label: 'Agendă', icon: ListIcon },
 ];
+
+/** An Event deleted for good (#1017): its card is gone, the page says so. */
+function CalendarReceipt({ children }: { children: string }) {
+  const message = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    message.current?.focus();
+  }, []);
+  return (
+    <p ref={message} role="status" tabIndex={-1} className="calendar-notice">
+      {children}
+    </p>
+  );
+}
 
 /**
  * The Calendar (#692, ruling R14): **Lună**, a month grid of readable Events
@@ -57,6 +70,7 @@ export default function CalendarScreen() {
   }, []);
   // An edit or cancel receipt belongs to this visit (#849).
   useEffect(() => clearEventReceipts, []);
+  const deleted = useCalendarReceipt();
   const todayKey = bucharestDayKey(new Date(now)) ?? '';
 
   const groups = useGroups();
@@ -156,6 +170,10 @@ export default function CalendarScreen() {
         work={calendarWork.work}
         hint="Grupul include subgrupurile sale."
       />
+
+      {deleted && (
+        <CalendarReceipt key={deleted.key}>{deleted.text}</CalendarReceipt>
+      )}
 
       {view === 'month' ? (
         <CalendarMonth

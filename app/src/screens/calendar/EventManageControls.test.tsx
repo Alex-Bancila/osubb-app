@@ -11,6 +11,8 @@ const state = vi.hoisted(() => ({
   cancel: vi.fn(),
   updateAsync: vi.fn(),
   cancelAsync: vi.fn(),
+  deleteAsync: vi.fn(),
+  attendance: vi.fn(),
 }));
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -22,6 +24,12 @@ vi.mock('../../queries/event-creation', () => ({
   useEventFormOptions: state.options,
 }));
 vi.mock('../../queries/campaigns', () => ({ useCampaigns: state.campaigns }));
+vi.mock('../../queries/delete-for-good', () => ({
+  useDeleteEvent: () => ({ mutateAsync: state.deleteAsync, isPending: false }),
+}));
+vi.mock('../../queries/event-attendance', () => ({
+  useEventAttendance: state.attendance,
+}));
 vi.mock('../../queries/event-edit', async (importActual) => ({
   ...(await importActual<typeof import('../../queries/event-edit')>()),
   useUpdateEvent: state.update,
@@ -30,7 +38,7 @@ vi.mock('../../queries/event-edit', async (importActual) => ({
 
 import type { EventPresentation } from '../../queries/events';
 import { EventManageControls } from './EventManageControls';
-import { clearEventReceipts } from './event-receipts';
+import { clearEventReceipts, useCalendarReceipt } from './event-receipts';
 
 const MEMBER = 'd0000000-0000-0000-0000-000000000006';
 
@@ -106,6 +114,10 @@ describe('EventManageControls', () => {
     state.campaigns.mockReturnValue({ data: [] });
     state.updateAsync.mockReset().mockResolvedValue({ id: 31 });
     state.cancelAsync.mockReset().mockResolvedValue({ id: 31 });
+    state.deleteAsync.mockReset().mockResolvedValue({ rsvps: 4 });
+    state.attendance.mockReset().mockReturnValue({
+      data: { going: ['a', 'b', 'c'], declined: ['d'] },
+    });
     state.update.mockReturnValue({
       mutateAsync: state.updateAsync,
       isPending: false,
@@ -391,5 +403,102 @@ describe('EventManageControls', () => {
     expect(within(dialog).getByLabelText('Motiv (obligatoriu)')).toHaveValue(
       'Motiv',
     );
+  });
+
+  /* #1017: Șterge definitiv, for the same managers, cancelled Events too. */
+  describe('Șterge definitiv', () => {
+    function CalendarLine() {
+      const receipt = useCalendarReceipt();
+      return <p data-testid="calendar-receipt">{receipt?.text ?? ''}</p>;
+    }
+
+    it('sits apart from Editează, for a manager of the Group', () => {
+      setup();
+      const remove = screen.getByRole('button', { name: 'Șterge definitiv' });
+      expect(remove).toHaveClass('event-manage-delete');
+      expect(remove).toHaveClass('text-destructive');
+    });
+
+    it('stays on a cancelled Event, without Editează or Anulează', () => {
+      setup(
+        event({
+          cancelledAt: '2030-09-01T10:00:00Z',
+          cancelReason: 'Sala nu mai este liberă.',
+        }),
+      );
+      expect(
+        screen.getByRole('button', { name: 'Șterge definitiv' }),
+      ).toBeVisible();
+      expect(screen.queryByRole('button', { name: 'Editează' })).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: 'Anulează evenimentul' }),
+      ).toBeNull();
+    });
+
+    it('is not offered to a non-manager', () => {
+      const { container } = setup(event({ groupId: 20 }));
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it('names the answers that go and the Announcement that stays, then sends delete_event', async () => {
+      const { user } = setup();
+      render(<CalendarLine />);
+      await user.click(
+        screen.getByRole('button', { name: 'Șterge definitiv' }),
+      );
+      const dialog = await screen.findByRole('dialog', {
+        name: 'Ștergi definitiv evenimentul?',
+      });
+      expect(dialog).toHaveAccessibleDescription(
+        '„Ședință Educațional” dispare din Calendar pentru toți. Nu poate fi recuperat.',
+      );
+      expect(state.attendance).toHaveBeenCalledWith(31, true);
+      expect(
+        within(dialog).getByText(
+          'Se șterg și răspunsurile membrilor: 3 confirmări și 1 refuz.',
+        ),
+      ).toBeVisible();
+      expect(
+        within(dialog).getByText(
+          'Un anunț publicat odată cu evenimentul rămâne.',
+        ),
+      ).toBeVisible();
+      await user.click(
+        within(dialog).getByRole('button', { name: 'Șterge definitiv' }),
+      );
+      expect(state.deleteAsync).toHaveBeenCalledWith(31);
+      expect(await screen.findByTestId('calendar-receipt')).toHaveTextContent(
+        'Evenimentul „Ședință Educațional” a fost șters definitiv.',
+      );
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('reads no answers for a deadline', async () => {
+      const { user } = setup(event({ type: 'deadline' }));
+      await user.click(
+        screen.getByRole('button', { name: 'Șterge definitiv' }),
+      );
+      const dialog = await screen.findByRole('dialog');
+      expect(state.attendance).toHaveBeenCalledWith(31, false);
+      expect(within(dialog).queryByText(/răspunsurile/)).toBeNull();
+    });
+
+    it('shows a refusal in Romanian and keeps the dialog', async () => {
+      state.deleteAsync.mockRejectedValue({
+        code: '42501',
+        message: 'calendar_manage_forbidden',
+      });
+      const { user } = setup();
+      await user.click(
+        screen.getByRole('button', { name: 'Șterge definitiv' }),
+      );
+      const dialog = await screen.findByRole('dialog');
+      await user.click(
+        within(dialog).getByRole('button', { name: 'Șterge definitiv' }),
+      );
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+        'Nu mai ai permisiunea să gestionezi evenimentele acestui grup.',
+      );
+    });
   });
 });

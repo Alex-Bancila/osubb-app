@@ -115,6 +115,16 @@ const REASON_COPY = new Map<string, string>([
     'Unii membri au nivelul sub noul nivel minim. Confirmă scoaterea lor.',
   ],
   ['group_has_open_work', 'Grupul are lucru neterminat.'],
+  /* ---- Delete for good (#1017, ruling R38) ---- */
+  [
+    'group_protected',
+    'Grupul nu poate fi șters definitiv: el sau un subgrup este grupul organizației, un grup cu membri adăugați automat ori grupul Biroului de Conducere sau al Adunării Generale ales în Setări. Îl poți arhiva.',
+  ],
+  [
+    'group_not_empty',
+    'Între timp, grupul a primit conținut. Redeschide ștergerea ca să vezi ce se șterge.',
+  ],
+  ['invalid_delete_mode', 'Alege ce se întâmplă cu conținutul grupului.'],
   ['nothing_to_update', 'Nu ai schimbat nimic.'],
   /* ---- The Group's application form link (#698, ruling R18) ---- */
   /* browser: update_group judges the pair with #684's Attached Link reasons
@@ -214,6 +224,11 @@ const REASON_COPY = new Map<string, string>([
     'Nu mai ai permisiunea să gestionezi taskurile acestui grup.',
   ],
   ['task_not_found', 'Taskul nu mai este disponibil.'],
+  // #1017: the Task gained points after the dialog read them.
+  [
+    'task_has_points',
+    'Taskul a acordat puncte între timp. Alege dacă le retragi odată cu taskul.',
+  ],
   ['task_group_required', 'Alege exact un grup de origine.'],
   ['invalid_task_kind', 'Alege un tip de task valid.'],
   ['deadline_required', 'Alege termenul taskului.'],
@@ -309,7 +324,7 @@ const REASON_COPY = new Map<string, string>([
   /* ---- Completed Tasks: shaped on approval, or added directly (#915) ---- */
   [
     'task_evaluate_forbidden',
-    'Nu poți evalua munca acestui membru în grupul ales.',
+    'Nu poți evalua munca acestui membru în grupul ales și nici să-i retragi punctele.',
   ],
   [
     'executor_not_group_member',

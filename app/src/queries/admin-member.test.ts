@@ -81,7 +81,7 @@ it('reads the Member Card, the status and only the ledger rows RLS returns', asy
   });
   // The Task's title comes with the row (B61).
   expect(tables.points_ledger.select).toHaveBeenCalledWith(
-    'id, delta, reason, created_at, task_id, tasks(title)',
+    'id, delta, reason, created_at, task_id, deleted_task_title, tasks(title)',
   );
   expect(supabaseMock.rpc).toHaveBeenCalledWith('member_card', {
     p_member_id: 'member',

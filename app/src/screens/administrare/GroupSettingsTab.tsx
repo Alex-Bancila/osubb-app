@@ -40,6 +40,7 @@ import {
   PRIVATE_GROUP_HINT,
   unfinishedTasksPath,
 } from './group-tree';
+import { GroupDeleteDialog } from './GroupDeleteDialog';
 
 const control =
   'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
@@ -273,7 +274,7 @@ function ArchiveGroupDialog({
 }
 
 /**
- * A Group's settings, structure and archiving (layout AD3): three panels in
+ * A Group's settings, structure, archiving and deletion (layout AD3): three panels in
  * a reading-width column, each as tall as its content. Each form saves on its own, and
  * each field shows once — a top-level Group's Minimum Level is structure
  * (BC's), a Child Group's is its Managers' setting (relevance B52).
@@ -290,6 +291,7 @@ export function GroupSettingsTab({
   error,
   lastReason,
   onRun,
+  canDelete = false,
 }: {
   group: AdminGroup;
   parent: AdminGroup | undefined;
@@ -304,6 +306,11 @@ export function GroupSettingsTab({
   /** The server's last refusal reason, so a stale form re-asks (R23). */
   lastReason: string | undefined;
   onRun: RunGroupCommand;
+  /**
+   * Offer **Șterge definitiv** (#1017): whoever may archive the Group, and
+   * BC and the Moderator on an archived one.
+   */
+  canDelete?: boolean;
 }) {
   const root = group.parent_id === null;
   const [name, setName] = useState(group.name);
@@ -464,7 +471,8 @@ export function GroupSettingsTab({
   const showArchive = authority.archive && group.status === 'active';
   // The page shows this tab only to someone with one of the three; the one
   // refusal line lives on the page, not here (relevance B49).
-  if (!showSettings && !showStructure && !showArchive) return null;
+  if (!showSettings && !showStructure && !showArchive && !canDelete)
+    return null;
 
   const settingsPanel = showSettings && (
     <Panel title="Setările grupului">
@@ -794,19 +802,55 @@ export function GroupSettingsTab({
       {settingsPanel}
       {structurePanel}
 
-      {showArchive && (
-        <Panel title="Arhivare">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="m-0 min-w-0 flex-1 basis-60 text-sm text-muted-foreground">
-              Grupul nu mai primește taskuri, evenimente sau membri noi.
-              Istoricul rămâne.
-            </p>
-            <ArchiveGroupDialog
-              group={group}
-              disabled={busy}
-              error={error}
-              onArchive={() => onRun({ kind: 'archive', groupId: group.id })}
-            />
+      {(showArchive || canDelete) && (
+        <Panel
+          title={
+            !canDelete
+              ? 'Arhivare'
+              : showArchive
+                ? 'Arhivare și ștergere'
+                : 'Ștergere'
+          }
+        >
+          <div className="flex flex-col divide-y divide-border">
+            {showArchive && (
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-4 last:pb-0">
+                <p className="m-0 min-w-0 flex-1 basis-60 text-sm text-muted-foreground">
+                  Grupul nu mai primește taskuri, evenimente sau membri noi.
+                  Istoricul rămâne.
+                </p>
+                <ArchiveGroupDialog
+                  group={group}
+                  disabled={busy}
+                  error={error}
+                  onArchive={() =>
+                    onRun({ kind: 'archive', groupId: group.id })
+                  }
+                />
+              </div>
+            )}
+            {canDelete && (
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-4 first:pt-0">
+                <p className="m-0 min-w-0 flex-1 basis-60 text-sm text-muted-foreground">
+                  Grupul dispare cu tot ce conține: subgrupuri, taskuri și
+                  punctele lor, evenimente, anunțuri, campanii. Nu poate fi
+                  recuperat.
+                </p>
+                <GroupDeleteDialog
+                  group={group}
+                  disabled={busy}
+                  onArchive={
+                    showArchive
+                      ? (onFailure) =>
+                          onRun(
+                            { kind: 'archive', groupId: group.id },
+                            onFailure,
+                          )
+                      : undefined
+                  }
+                />
+              </div>
+            )}
           </div>
         </Panel>
       )}

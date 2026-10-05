@@ -13,18 +13,23 @@ import { useCapabilities } from '../../lib/capabilities';
 import { useCampaigns } from '../../queries/campaigns';
 import { useEventFormOptions } from '../../queries/event-creation';
 import {
-  canManageEvent,
   editEventFormOptions,
   eventFormValuesFor,
   keepUntouchedTimes,
+  managesEvent,
   useCancelEvent,
   useUpdateEvent,
 } from '../../queries/event-edit';
 import type { EventPresentation } from '../../queries/events';
 import type { Group } from '../../queries/reference';
 import { TaskReasonDialog } from '../tracker/TaskReasonDialog';
+import { EventDeleteDialog } from './EventDeleteDialog';
 import { EventForm } from './EventForm';
-import { setEventReceipt, useEventReceipt } from './event-receipts';
+import {
+  setCalendarReceipt,
+  setEventReceipt,
+  useEventReceipt,
+} from './event-receipts';
 import {
   groupsAvailableAtLevel,
   type EventDraft,
@@ -33,9 +38,10 @@ import {
 
 /**
  * **Editează** and **Anulează evenimentul** on a Calendar card (#849), for the
- * people `update_event` / `cancel_event` accept (`canManageEvent`). Nobody
- * else sees them; the server still decides, and a refusal is shown in the
- * dialog in Romanian with the values kept.
+ * people `update_event` / `cancel_event` accept (`canManageEvent`), and
+ * **Șterge definitiv** (#1017) for the same managers — on a cancelled Event
+ * too, which `delete_event` accepts. Nobody else sees them; the server still
+ * decides, and a refusal is shown in the dialog in Romanian.
  */
 export function EventManageControls({
   event,
@@ -49,36 +55,47 @@ export function EventManageControls({
   const options = useEventFormOptions();
   const receipt = useEventReceipt(event.id);
 
-  const allowed =
+  const manages =
     capabilities.data !== undefined &&
     options.data !== undefined &&
-    canManageEvent(event, {
+    managesEvent(event, {
       memberId: session?.user.id,
       capabilities: capabilities.data,
       options: options.data,
     });
+  // canManageEvent: a cancelled Event is terminal for Editează and Anulează.
+  const allowed = manages && event.cancelledAt === null;
 
   // The receipt outlives the buttons: after a cancellation the card turns
   // cancelled and the actions go, the sentence stays. It lives outside the
   // card (event-receipts), which a new day remounts.
-  if (!allowed && receipt === null) return null;
+  if (!manages && receipt === null) return null;
   return (
     <div className="event-manage">
-      {allowed && options.data && (
+      {manages && options.data && (
         <div className="event-manage-actions">
-          <EditEventDialog
+          {allowed && (
+            <>
+              <EditEventDialog
+                event={event}
+                groups={groups}
+                options={options.data}
+                onSaved={() =>
+                  setEventReceipt(event.id, 'Modificările sunt salvate.')
+                }
+              />
+              <CancelEventDialog
+                event={event}
+                onCancelled={() =>
+                  setEventReceipt(event.id, 'Evenimentul este anulat.')
+                }
+              />
+            </>
+          )}
+          {/* The card goes with the Event: its receipt is the Calendar's. */}
+          <EventDeleteDialog
             event={event}
-            groups={groups}
-            options={options.data}
-            onSaved={() =>
-              setEventReceipt(event.id, 'Modificările sunt salvate.')
-            }
-          />
-          <CancelEventDialog
-            event={event}
-            onCancelled={() =>
-              setEventReceipt(event.id, 'Evenimentul este anulat.')
-            }
+            onDeleted={(text) => setCalendarReceipt(text)}
           />
         </div>
       )}

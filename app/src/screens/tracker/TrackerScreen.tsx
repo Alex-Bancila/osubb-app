@@ -203,6 +203,11 @@ export default function TrackerScreen() {
     id: number;
     receipt: string;
   } | null>(null);
+  // A Task deleted for good (#1017): its sheet closes, the list says so.
+  const [deleted, setDeleted] = useState<{
+    id: number;
+    receipt: string;
+  } | null>(null);
   // `null` until the page has chosen its opening tab; a click sets it.
   const [tab, setTab] = useState<TrackerTab | null>(null);
   // The deep links (#685, #822, #846): `/tracker?task=<id>` lands on the
@@ -459,6 +464,11 @@ export default function TrackerScreen() {
               </Button>
             </div>
           )}
+          {deleted !== null && (
+            <TaskActionSuccess key={deleted.id}>
+              {deleted.receipt}
+            </TaskActionSuccess>
+          )}
           <Tabs.Root
             // The tab strip has no margin of its own: this stack spaces it (#841).
             className="flex flex-col gap-6"
@@ -466,6 +476,7 @@ export default function TrackerScreen() {
             onValueChange={(value) => {
               if (isTrackerTab(value)) setTab(value);
               setGaveUp(null);
+              setDeleted(null);
             }}
           >
             <Tabs.List
@@ -550,6 +561,12 @@ export default function TrackerScreen() {
           detailId !== null && detailId === created?.id ? created.notice : null
         }
         onClose={() => {
+          setDetailId(null);
+          setCreated(null);
+        }}
+        onDeleted={(receipt) => {
+          setDeleted({ id: detailId ?? 0, receipt });
+          setGaveUp(null);
           setDetailId(null);
           setCreated(null);
         }}

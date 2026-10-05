@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -7,7 +8,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronRight, Network } from 'lucide-react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { cn } from 'cn';
 import {
   DataTable,
@@ -15,6 +16,7 @@ import {
 } from '../../components/data-table/DataTable';
 import { Panel, SegmentedToggle } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
+import { TaskActionSuccess as Receipt } from '../../components/tasks/TaskActionSuccess';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { useCapabilities } from '../../lib/capabilities';
@@ -32,6 +34,7 @@ import {
 } from '../../queries/groups-admin';
 import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { GroupCreateDialog, GroupCreatedReceipt } from './GroupCreateDialog';
+import type { GroupsListState } from './group-delete-summary';
 import { useAdministrareActionSlot } from './administrare-tabs';
 import {
   buildTree,
@@ -556,6 +559,20 @@ export default function AdminGroupsTab() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<ReactNode>(null);
   const submitting = useRef(false);
+  // A Group deleted for good on its page lands here with its receipt (#1017).
+  // Read once, then dropped from history so a reload does not repeat it.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [deleted] = useState(
+    () => (location.state as GroupsListState | null)?.receipt ?? null,
+  );
+  useEffect(() => {
+    if ((location.state as GroupsListState | null)?.receipt)
+      void navigate(
+        { pathname: location.pathname, search: location.search },
+        { replace: true, state: null },
+      );
+  }, [location, navigate]);
 
   const groups = useMemo(() => groupsQuery.data ?? [], [groupsQuery.data]);
   const activeGroups = useMemo(
@@ -660,6 +677,7 @@ export default function AdminGroupsTab() {
           actionSlot,
         )}
 
+      {deleted && message === null && <Receipt>{deleted}</Receipt>}
       {message && <p role="status">{message}</p>}
       {error && (
         <p role="alert" className="text-destructive">

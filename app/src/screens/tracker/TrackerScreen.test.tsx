@@ -141,10 +141,12 @@ vi.mock('./TaskDetailsSheet', () => ({
     taskId,
     notice,
     onClose,
+    onDeleted,
   }: {
     taskId: number | null;
     notice?: string | null;
     onClose: () => void;
+    onDeleted?: (receipt: string) => void;
   }) =>
     taskId === null ? null : (
       <div role="dialog" aria-label="Detalii task">
@@ -152,6 +154,12 @@ vi.mock('./TaskDetailsSheet', () => ({
         {notice && <p role="status">{notice}</p>}
         <button type="button" onClick={onClose}>
           Închide detaliile
+        </button>
+        <button
+          type="button"
+          onClick={() => onDeleted?.('Taskul a fost șters definitiv.')}
+        >
+          Șterge taskul din detalii
         </button>
       </div>
     ),
@@ -433,6 +441,21 @@ describe('My tasks screen', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Închide detaliile' }));
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  // #1017: the sheet closes with a deleted Task; the list keeps the receipt.
+  it('closes the details of a Task deleted for good and says so on the list', async () => {
+    const user = userEvent.setup();
+    query();
+    render(<TrackerScreen />, { wrapper: Router });
+    await user.click(screen.getByRole('button', { name: 'Task nou' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Șterge taskul din detalii' }),
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const receipt = screen.getByRole('status');
+    expect(receipt).toHaveTextContent('Taskul a fost șters definitiv.');
+    expect(receipt).toHaveFocus();
   });
 
   it('opens a Task added as completed, saying the points were given (#915)', async () => {

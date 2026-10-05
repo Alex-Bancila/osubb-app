@@ -1510,6 +1510,10 @@ it("gives the parent's Manager, who appoints this Group's coordinator, Roluri an
 /* Audit D-10: the server refuses every change to an archived Group with
    `group_archived`; the page says so once and offers no edit control. */
 it('shows an archived Group read-only, whoever looks', async () => {
+  // Below level 6: an archived Group offers nothing at all (BC and the
+  // Moderator may still delete it for good, #1017 — tested below).
+  api.level.value = 5;
+  capabilities(false);
   api.groups.mockReturnValue({
     data: [
       tree[0],
@@ -1533,6 +1537,7 @@ it('shows an archived Group read-only, whoever looks', async () => {
   // No Setări or Roluri to edit; Roster, Subgrupuri and Campanii only read.
   expect(tabNames()).not.toContain('Setări');
   expect(tabNames()).not.toContain('Roluri');
+  expect(screen.queryByRole('button', { name: /Șterge definitiv/ })).toBeNull();
   const edits =
     /Adaugă|Scoate|Numește|Retrage|Arhivează|Salvează|Subgrup nou|Campanie nouă/;
   expect(screen.queryAllByRole('button', { name: edits })).toEqual([]);
@@ -1614,4 +1619,56 @@ it('names what an appointment is missing and confirms a withdrawal', async () =>
     groupRole: 'member',
     positionTitle: null,
   });
+});
+
+/* #1017: Șterge definitiv lives in Setări beside Arhivează, for whoever may
+   archive the Group — and on an archived Group for BC and the Moderator. */
+it('offers Șterge definitiv to whoever may archive the Group, per persona', () => {
+  const removeButton = () =>
+    screen.queryByRole('button', { name: 'Șterge definitiv' });
+  // BC on an active Child Group: one panel, archive and delete.
+  const view = show();
+  const panel = screen.getByRole('region', { name: 'Arhivare și ștergere' });
+  expect(
+    within(panel).getByRole('button', { name: 'Arhivează grupul' }),
+  ).toBeVisible();
+  expect(
+    within(panel).getByRole('button', { name: 'Șterge definitiv' }),
+  ).toHaveClass('text-destructive');
+  view.unmount();
+
+  // The Group's own Manager, below level 6.
+  capabilities(false);
+  api.level.value = 5;
+  api.myGroups.mockReturnValue({ data: [myGroup(2, 'manager')] });
+  const manager = show();
+  expect(removeButton()).toBeVisible();
+  manager.unmount();
+
+  // A Group Responsible may not archive, so is not offered the delete.
+  api.myGroups.mockReturnValue({ data: [myGroup(2, 'responsible')] });
+  const responsible = show();
+  expect(tabNames()).not.toContain('Setări');
+  expect(removeButton()).toBeNull();
+  responsible.unmount();
+});
+
+it('offers BC only Șterge definitiv on an archived Group', () => {
+  api.groups.mockReturnValue({
+    data: [tree[0], group(2, 'Logistică', [1, 2], 1, { status: 'archived' })],
+    isPending: false,
+    isError: false,
+  });
+  show();
+  expect(tabNames()).toContain('Setări');
+  const panel = screen.getByRole('region', { name: 'Ștergere' });
+  expect(
+    within(panel).getByRole('button', { name: 'Șterge definitiv' }),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole('button', { name: /Arhivează|Salvează/ }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole('region', { name: 'Setările grupului' }),
+  ).toBeNull();
 });

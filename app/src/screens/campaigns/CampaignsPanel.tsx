@@ -31,6 +31,7 @@ import {
   type CampaignChange,
   type CampaignReportRange,
 } from '../../queries/campaigns';
+import { CampaignDeleteDialog } from './CampaignDeleteDialog';
 import {
   CAMPAIGN_STATE_KEY,
   subtreeCampaigns,
@@ -228,6 +229,7 @@ function CampaignRow({
   range,
   onRun,
   onToggle,
+  onDeleted,
   disabled,
   readOnly,
   viewOnly,
@@ -240,6 +242,8 @@ function CampaignRow({
   onRun: (change: CampaignChange) => Promise<void>;
   /** Runs a change and shows a refusal above the list. */
   onToggle: (change: CampaignChange) => Promise<void>;
+  /** The Campaign was deleted for good: the panel shows this receipt. */
+  onDeleted: (receipt: string) => void;
   disabled: boolean;
   /** Only the report: an archived Group changes nothing (Audit D-10). */
   readOnly: boolean;
@@ -292,6 +296,15 @@ function CampaignRow({
             >
               {open ? 'Ascunde raportul' : 'Vezi raportul'}
             </Button>
+            {/* #1017: for the same managers as Redenumește, last in the row,
+                apart from the changes. */}
+            {!readOnly && (
+              <CampaignDeleteDialog
+                campaign={campaign}
+                disabled={disabled}
+                onDeleted={onDeleted}
+              />
+            )}
           </>
         )
       }
@@ -495,6 +508,10 @@ export function CampaignsPanel({
               range={range}
               onRun={run}
               onToggle={toggle}
+              onDeleted={(receipt) => {
+                setError(null);
+                setMessage(receipt);
+              }}
               disabled={mutation.isPending}
               readOnly={readOnly || archived.has(campaign.group_id)}
               viewOnly={!manages(campaign.group_id)}
