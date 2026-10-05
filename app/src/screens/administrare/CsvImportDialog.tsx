@@ -165,7 +165,7 @@ export function CsvImportDialog({
       </Button>
       <DialogContent
         className={cn(
-          'max-h-[calc(100dvh-2rem)] grid-cols-[minmax(0,1fr)] overflow-y-auto',
+          'grid-cols-[minmax(0,1fr)]',
           // The volunteer preview is a table: as wide as the screen allows.
           volunteerCsv !== null && 'sm:max-w-5xl',
         )}

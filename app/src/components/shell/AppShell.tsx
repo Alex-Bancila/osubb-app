@@ -276,7 +276,7 @@ export default function AppShell() {
   };
 
   return (
-    <div className="grid h-dvh grid-cols-1 grid-rows-[calc(var(--topbar-h)+env(safe-area-inset-top))_minmax(0,1fr)_auto] [grid-template-areas:'topbar'_'main'_'tabbar'] bg-background lg:grid-cols-[var(--sidebar-w)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:[grid-template-areas:'sidebar_main']">
+    <div className="grid h-(--visible-height) grid-cols-1 grid-rows-[calc(var(--topbar-h)+env(safe-area-inset-top))_minmax(0,1fr)_auto] [grid-template-areas:'topbar'_'main'_'tabbar'] bg-background lg:grid-cols-[var(--sidebar-w)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:[grid-template-areas:'sidebar_main']">
       <aside className="hidden min-h-0 flex-col border-r border-border bg-card lg:flex lg:[grid-area:sidebar]">
         <SidebarContent {...sidebarProps} label="Navigare principală" />
       </aside>
@@ -381,7 +381,7 @@ export default function AppShell() {
         </header>
       </Sheet>
 
-      <main className="relative min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain [grid-area:main] [scrollbar-gutter:stable]">
+      <main className="relative min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain [grid-area:main] [scrollbar-gutter:stable] keyboard:scroll-pb-3">
         <>
           {denied && (
             // On the page's own frame, so it lines up with the header below.
@@ -404,9 +404,11 @@ export default function AppShell() {
           20 px from a 6 px padding, radius 26), and a one-pixel arc that
           carries the border around the cut. `relative z-10` keeps the bar
           above the positioned content area, which otherwise painted over
-          the disc's upper half. */}
+          the disc's upper half. While a phone keyboard is open the bar
+          steps aside, and the page keeps that height for the field and its
+          actions (#1013); the shell itself ends at the keyboard. */}
       <nav
-        className="relative isolate z-10 flex justify-around px-1 pt-1.5 pb-[calc(.375rem+env(safe-area-inset-bottom))] [grid-area:tabbar] before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:border-t before:border-border before:bg-card before:[mask-image:radial-gradient(circle_at_50%_12px,transparent_32px,#000_33px)] after:pointer-events-none after:absolute after:inset-0 after:-z-10 after:bg-[radial-gradient(circle_at_50%_12px,transparent_32px,var(--border)_32.5px,var(--border)_33.5px,transparent_34px)] lg:hidden"
+        className="relative isolate z-10 flex justify-around px-1 pt-1.5 pb-[calc(.375rem+env(safe-area-inset-bottom))] [grid-area:tabbar] before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:border-t before:border-border before:bg-card before:[mask-image:radial-gradient(circle_at_50%_12px,transparent_32px,#000_33px)] after:pointer-events-none after:absolute after:inset-0 after:-z-10 after:bg-[radial-gradient(circle_at_50%_12px,transparent_32px,var(--border)_32.5px,var(--border)_33.5px,transparent_34px)] keyboard:hidden lg:hidden"
         aria-label="Navigare rapidă"
       >
         {tabs.map((item) => {

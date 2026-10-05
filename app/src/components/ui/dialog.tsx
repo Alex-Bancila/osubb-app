@@ -46,20 +46,32 @@ function DialogOverlay({
 
 // A small, centred pop-up: the place for a quick decision that should not
 // cost the member a whole page. Base UI traps focus inside it and hands focus
-// back to the trigger when it closes.
+// back to the trigger when it closes. It centres in, and never outgrows, the
+// area above a phone keyboard (#1013): `--visible-height` is the whole screen
+// otherwise, and a dialog taller than that scrolls inside itself.
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  fullScreenOnPhone = false,
   ...props
-}: DialogPrimitive.Popup.Props & { showCloseButton?: boolean }) {
+}: DialogPrimitive.Popup.Props & {
+  showCloseButton?: boolean;
+  /**
+   * A form too long for a pop-up (Task nou, Eveniment nou, an approval): the
+   * whole screen above the keyboard under `sm`, a centred dialog from `sm`.
+   */
+  fullScreenOnPhone?: boolean;
+}) {
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          'fixed top-1/2 left-1/2 z-70 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-card p-4 text-sm text-card-foreground shadow-xl ring-1 ring-foreground/10 outline-none transition-[opacity,scale] motion-reduce:transition-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0 sm:max-w-md',
+          'fixed top-[calc((100%-var(--keyboard-inset))/2)] left-1/2 z-70 grid max-h-[calc(var(--visible-height)-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-card p-4 text-sm text-card-foreground shadow-xl ring-1 ring-foreground/10 outline-none transition-[opacity,scale] motion-reduce:transition-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0 sm:max-w-md',
+          fullScreenOnPhone &&
+            'max-sm:top-0 max-sm:left-0 max-sm:h-(--visible-height) max-sm:max-h-none max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none',
           className,
         )}
         {...props}
@@ -100,11 +112,13 @@ function DialogHeader({ className, ...props }: ComponentProps<'div'>) {
 // One footer for every dialog and sheet (#842, X11): put the secondary action
 // first and the primary last. From `sm` they sit right-aligned in a row with
 // the primary on the right; under `sm` they stack full-width with the
-// primary on top, nearest the thumb.
+// primary on top, nearest the thumb. While a phone keyboard is open it sticks
+// just above the keyboard (#1013).
 function DialogFooter({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="dialog-footer"
+      data-keyboard-pin=""
       className={cn(
         'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end',
         className,

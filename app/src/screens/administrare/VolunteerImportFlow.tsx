@@ -88,7 +88,7 @@ function PreviewTable({ rows }: { rows: readonly PreviewRow[] }) {
     // The table scrolls inside its own box, both ways; the dialog never does
     // sideways.
     <div
-      className="max-h-[min(50dvh,28rem)] overflow-auto rounded-md border border-border"
+      className="max-h-[min(calc(var(--visible-height)/2),28rem)] overflow-auto rounded-md border border-border"
       tabIndex={0}
       role="region"
       aria-label="Previzualizare import"

@@ -56,7 +56,7 @@ export function RatingGuideDialog({
         <BookOpenIcon aria-hidden="true" />
         {ratingGuide.title}
       </DialogTrigger>
-      <DialogContent className="flex h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:h-auto sm:max-h-[min(48rem,calc(100dvh-4rem))] sm:max-w-2xl">
+      <DialogContent className="flex h-[calc(var(--visible-height)-2rem)] flex-col gap-0 overflow-hidden p-0 sm:h-auto sm:max-h-[min(48rem,calc(var(--visible-height)-4rem))] sm:max-w-2xl">
         <GuideBody groupId={groupId} selection={selection} onSet={onSet} />
       </DialogContent>
     </Dialog>

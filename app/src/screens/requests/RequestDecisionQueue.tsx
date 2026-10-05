@@ -317,11 +317,10 @@ export function RequestDecisionQueue({
       >
         <DialogContent
           finalFocus={() => !decided.current}
+          // A form as long as a Task's: a sheet on a phone (#915).
+          fullScreenOnPhone={selected?.kind === 'approve'}
           className={
-            selected?.kind === 'approve'
-              ? // A form as long as a Task's: a sheet on a phone (#915).
-                'max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-none max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none'
-              : 'max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg'
+            selected?.kind === 'approve' ? 'sm:max-w-2xl' : 'sm:max-w-lg'
           }
         >
           {selected && (

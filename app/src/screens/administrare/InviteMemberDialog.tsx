@@ -152,7 +152,7 @@ export function InviteMemberDialog({
         <UserPlus aria-hidden="true" />
         Invită membru
       </Button>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-cols-[minmax(0,1fr)] overflow-y-auto">
+      <DialogContent className="grid-cols-[minmax(0,1fr)]">
         <form onSubmit={submit} noValidate className="grid gap-4">
           <DialogHeader>
             <DialogTitle>Invită membru</DialogTitle>

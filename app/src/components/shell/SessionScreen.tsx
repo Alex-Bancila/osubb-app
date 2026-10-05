@@ -21,7 +21,7 @@ function SessionScreen({
   return (
     <main
       className={cn(
-        'h-dvh overflow-y-auto bg-background px-4 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]',
+        'h-(--visible-height) overflow-y-auto bg-background px-4 keyboard:scroll-pb-3 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]',
         // A card sits in the middle of the screen at every width (#844,
         // layout S1). `place-items`, not `place-content`: a card taller than
         // the screen grows its row and scrolls from its top, never clipped.

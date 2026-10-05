@@ -38,14 +38,16 @@ function SheetBackdrop({
   );
 }
 
+// Both sides end where a phone keyboard starts (#1013): the sheet's own
+// scroll then reaches every field, and its footer pins above the keyboard.
 const sheetSides = {
   // The navigation drawer: narrow, from the left.
-  left: 'inset-y-0 left-0 w-[min(280px,calc(100%-2rem))] data-ending-style:-translate-x-full data-starting-style:-translate-x-full',
+  left: 'top-0 bottom-(--keyboard-inset) left-0 w-[min(280px,calc(100%-2rem))] data-ending-style:-translate-x-full data-starting-style:-translate-x-full',
   // A details or form panel: the full width of a phone, from the right, and
   // slides in and out on that side. Set the width cap (`max-w-md`, …) and the
   // padding at the call site.
   right:
-    'inset-y-0 right-0 w-full overflow-y-auto data-ending-style:translate-x-full data-starting-style:translate-x-full',
+    'top-0 bottom-(--keyboard-inset) right-0 w-full overflow-y-auto data-ending-style:translate-x-full data-starting-style:translate-x-full',
 } as const;
 
 function SheetPopup({
@@ -142,11 +144,13 @@ function SheetDescription({
 
 // The same footer as a dialog (#842, X11): secondary first, primary last;
 // a right-aligned row from `sm`, a full-width stack with the primary on top
-// under `sm`. `mt-auto` keeps it at the bottom of a short sheet.
+// under `sm`. `mt-auto` keeps it at the bottom of a short sheet. While a
+// phone keyboard is open it sticks just above the keyboard (#1013).
 function SheetFooter({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="sheet-footer"
+      data-keyboard-pin=""
       className={cn(
         'mt-auto flex flex-col-reverse gap-2 pt-4 sm:flex-row sm:justify-end',
         className,
