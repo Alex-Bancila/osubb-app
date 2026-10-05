@@ -1,4 +1,10 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { Link } from 'react-router';
 import { ArrowUpRight, Pause, Play, Send } from 'lucide-react';
 import type { ZodType } from 'zod';
@@ -39,6 +45,7 @@ import {
 } from '../../queries/volunteer-import';
 import { normalizeSearch } from '../volunteers/directory-filters';
 import { planDepartmentChange } from './department-edit';
+import { editorLayerClass, revealBesidePinned } from './grid-reveal';
 import { describePlacements } from './placement-labels';
 import {
   BATCH_SIZES,
@@ -109,6 +116,27 @@ const inputClass =
   'h-8 w-full min-w-0 rounded-sm border border-ring bg-background px-1.5 text-sm outline-none aria-invalid:border-destructive';
 
 /**
+ * An open editor: lifted over the pinned columns, with the grid scrolled so
+ * all of it shows (`grid-reveal.ts`). On a phone the space beside Nume is
+ * narrower than the email, phone and Role editors.
+ */
+function EditorLayer({ children }: { children: ReactNode }) {
+  const layer = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (layer.current) revealBesidePinned(layer.current);
+  }, []);
+  return (
+    <div
+      ref={layer}
+      data-cell-editor
+      className={cn('grid gap-0.5', editorLayerClass)}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
  * One editable cell: text at rest, an input on click. Enter or leaving the
  * field saves, Escape puts the text back. A refusal stays under the input
  * with the input still open, so the fix is one keystroke away.
@@ -176,7 +204,7 @@ function TextCell({
       </button>
     );
   return (
-    <div className="grid gap-0.5">
+    <EditorLayer>
       <input
         // A cell opened on purpose takes the cursor at once.
         // oxlint-disable-next-line jsx-a11y/no-autofocus
@@ -206,7 +234,7 @@ function TextCell({
           {error}
         </p>
       )}
-    </div>
+    </EditorLayer>
   );
 }
 
@@ -251,40 +279,42 @@ function RankCell({
       </div>
     );
   return (
-    <NativeSelect
-      // oxlint-disable-next-line jsx-a11y/no-autofocus
-      autoFocus
-      aria-label={`Rangul pentru ${who}`}
-      className="h-8 rounded-sm pl-1.5"
-      value={member.role ?? ''}
-      disabled={saving}
-      onBlur={() => setEditing(false)}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') setEditing(false);
-      }}
-      onChange={(event) => {
-        const role = event.target.value as MemberRole;
-        setSaving(true);
-        onSave(role)
-          .then(() => setError(null))
-          .catch((failure: unknown) =>
-            setError(describeFailure(failure, SAVE_FAILED).message),
-          )
-          .finally(() => {
-            setSaving(false);
-            setEditing(false);
-          });
-      }}
-    >
-      {member.role === null && (
-        <NativeSelectOption value="">—</NativeSelectOption>
-      )}
-      {roles.map((role) => (
-        <NativeSelectOption key={role.id} value={role.id}>
-          {role.name}
-        </NativeSelectOption>
-      ))}
-    </NativeSelect>
+    <EditorLayer>
+      <NativeSelect
+        // oxlint-disable-next-line jsx-a11y/no-autofocus
+        autoFocus
+        aria-label={`Rangul pentru ${who}`}
+        className="h-8 rounded-sm pl-1.5"
+        value={member.role ?? ''}
+        disabled={saving}
+        onBlur={() => setEditing(false)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') setEditing(false);
+        }}
+        onChange={(event) => {
+          const role = event.target.value as MemberRole;
+          setSaving(true);
+          onSave(role)
+            .then(() => setError(null))
+            .catch((failure: unknown) =>
+              setError(describeFailure(failure, SAVE_FAILED).message),
+            )
+            .finally(() => {
+              setSaving(false);
+              setEditing(false);
+            });
+        }}
+      >
+        {member.role === null && (
+          <NativeSelectOption value="">—</NativeSelectOption>
+        )}
+        {roles.map((role) => (
+          <NativeSelectOption key={role.id} value={role.id}>
+            {role.name}
+          </NativeSelectOption>
+        ))}
+      </NativeSelect>
+    </EditorLayer>
   );
 }
 
@@ -851,13 +881,18 @@ export function UninvitedGrid() {
         <Empty text="Nu e nimeni de invitat. Membrii importați apar aici până primesc invitația." />
       ) : (
         <div
-          className="max-h-[calc(var(--visible-height)*0.7)] scroll-pl-[12.5rem] overflow-auto sm:scroll-pl-[16rem] rounded-md border border-border"
+          // The scroll padding keeps a focused cell clear of the pinned
+          // columns. An open editor lies over them instead, and with the
+          // padding the browser's caret reveal while typing (and #1013's
+          // `scrollIntoView`) would push it back past the grid's edge.
+          className="max-h-[calc(var(--visible-height)*0.7)] scroll-pl-[12.5rem] overflow-auto has-[[data-cell-editor]]:scroll-pl-0 sm:scroll-pl-[16rem] rounded-md border border-border"
+          data-grid-scroller
           role="region"
           aria-label="Membri de invitat"
           tabIndex={0}
         >
           <table className="w-full min-w-[68rem] text-sm">
-            <thead className="sticky top-0 z-[2]">
+            <thead className="sticky top-0 z-[4]">
               <tr>
                 <th scope="col" className={cn(th, stickyCheck)}>
                   <Checkbox
@@ -924,7 +959,7 @@ export function UninvitedGrid() {
                       done && 'text-muted-foreground',
                     )}
                   >
-                    <td className={cn(td, stickyCheck)}>
+                    <td className={cn(td, stickyCheck)} data-pinned>
                       {!done && (
                         <Checkbox
                           aria-label={`Selectează ${who}`}
@@ -943,6 +978,7 @@ export function UninvitedGrid() {
                     </td>
                     <Cell
                       className={stickyName}
+                      pinned
                       done={done}
                       text={member.name}
                       sent={
@@ -1064,10 +1100,13 @@ function Cell({
   text,
   sent,
   className,
+  pinned = false,
   children,
 }: {
   done: boolean;
   text: string;
+  /** Stays put while the grid scrolls sideways (`grid-reveal.ts`). */
+  pinned?: boolean;
   /** What a sent row shows instead of `text` (the name, as `MemberName`). */
   sent?: ReactNode;
   className?: string;
@@ -1075,12 +1114,12 @@ function Cell({
 }) {
   if (done && sent)
     return (
-      <td className={cn(td, className)}>
+      <td className={cn(td, className)} data-pinned={pinned || undefined}>
         <span className="block px-1.5 py-2">{sent}</span>
       </td>
     );
   return (
-    <td className={cn(td, className)}>
+    <td className={cn(td, className)} data-pinned={pinned || undefined}>
       {done ? (
         <span className="block px-1.5 py-2">{text || '—'}</span>
       ) : (
