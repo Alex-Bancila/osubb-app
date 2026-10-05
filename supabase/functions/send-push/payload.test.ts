@@ -9,7 +9,9 @@ import {
   appOriginOf,
   buildPushPayload,
   MAX_PAYLOAD_BYTES,
+  NOTIFICATION_PARAM,
   NOTIFICATIONS_PATH,
+  notificationUrl,
   type PushNotification,
   targetUrl,
 } from "./payload.ts";
@@ -47,7 +49,7 @@ Deno.test("both shapes in one payload: the service worker's four keys and web_pu
     notification: {
       title: "Task nou",
       body: "Ai primit „Afiș”.",
-      navigate: "https://app.osubb.ro/tracker/12",
+      navigate: "https://app.osubb.ro/tracker/12?notificare=42",
       tag: "osubb-42",
       lang: "ro",
     },
@@ -62,7 +64,7 @@ Deno.test("navigate is absolute: a Notification without a link opens the list", 
   assertEquals(payload.link, null);
   assertEquals(payload.notification, {
     title: "Task nou",
-    navigate: `https://app.osubb.ro${NOTIFICATIONS_PATH}`,
+    navigate: `https://app.osubb.ro${NOTIFICATIONS_PATH}?notificare=42`,
     tag: "osubb-42",
     lang: "ro",
   });
@@ -129,7 +131,10 @@ Deno.test("a long body is cut on a code point, with an ellipsis, the same in bot
   assertEquals(payload.notification.body, payload.body);
   assertEquals(payload.title, "Task nou");
   assertEquals(payload.link, "/tracker/12");
-  assertEquals(payload.notification.navigate, `${ORIGIN}/tracker/12`);
+  assertEquals(
+    payload.notification.navigate,
+    `${ORIGIN}/tracker/12?notificare=42`,
+  );
 });
 
 Deno.test("a body that fits is never cut", () => {
@@ -160,7 +165,10 @@ Deno.test("a title or link that overflows alone: the link goes, then the title i
   const payload = JSON.parse(text);
   assertEquals(payload.body, null);
   assertEquals(payload.link, null);
-  assertEquals(payload.notification.navigate, `${ORIGIN}/notificari`);
+  assertEquals(
+    payload.notification.navigate,
+    `${ORIGIN}/notificari?notificare=42`,
+  );
   assert(payload.title.startsWith("Ț") && payload.title.endsWith("…"));
   assertEquals(payload.notification.title, payload.title);
 });
@@ -186,4 +194,33 @@ Deno.test("the longest payload encrypts to one push message of at most 4096 byte
   });
   assert(request.body !== null);
   assert(request.body.length <= 4096, `${request.body.length} bytes`);
+});
+
+Deno.test("#1012: navigate carries the Notification's id, appended to the link's own query", () => {
+  const payload = JSON.parse(
+    buildPushPayload(
+      notification({
+        notification_id: 7,
+        link: "/administrare/grupuri/3?tab=cereri",
+      }),
+      ORIGIN,
+    ),
+  );
+  const url = new URL(payload.notification.navigate);
+  assertEquals(url.pathname, "/administrare/grupuri/3");
+  assertEquals(url.searchParams.get("tab"), "cereri");
+  assertEquals(url.searchParams.get(NOTIFICATION_PARAM), "7");
+  // The service worker's half keeps the bare link: it adds the id itself.
+  assertEquals(payload.link, "/administrare/grupuri/3?tab=cereri");
+});
+
+Deno.test("#1012: notificationUrl never adds a nonsense id", () => {
+  assertEquals(
+    notificationUrl("/tracker?task=4", ORIGIN, 0),
+    `${ORIGIN}/tracker?task=4`,
+  );
+  assertEquals(
+    notificationUrl("https://evil.example/x", ORIGIN, 5),
+    `${ORIGIN}/notificari?notificare=5`,
+  );
 });

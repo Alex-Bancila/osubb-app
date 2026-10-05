@@ -6,6 +6,7 @@ import {
   formatNotificationMoment,
   inAppLink,
   isGroupNotification,
+  markedAllReceipt,
   notificationKindMeta,
   toNotificationPresentation,
   unreadBadgeLabel,
@@ -30,6 +31,7 @@ function notificationRow(
     created_at: '2026-09-20T09:00:00.000Z',
     dedupe_key: null,
     digested_at: null,
+    subject: null,
     task_id: 12,
     ...overrides,
   };
@@ -177,5 +179,15 @@ describe('notification presentation', () => {
         }),
       ).toBe(false);
     });
+  });
+});
+
+describe('markedAllReceipt (#1012)', () => {
+  it('counts in Romanian, with "de" from twenty', () => {
+    expect(markedAllReceipt(1)).toBe('Am marcat o notificare ca citită.');
+    expect(markedAllReceipt(3)).toBe('Am marcat 3 notificări ca citite.');
+    expect(markedAllReceipt(19)).toBe('Am marcat 19 notificări ca citite.');
+    expect(markedAllReceipt(20)).toBe('Am marcat 20 de notificări ca citite.');
+    expect(markedAllReceipt(101)).toBe('Am marcat 101 notificări ca citite.');
   });
 });

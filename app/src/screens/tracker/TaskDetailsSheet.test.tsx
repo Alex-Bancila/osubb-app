@@ -7,6 +7,14 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { describe, expect, it, vi } from 'vitest';
+
+// #1012 (R37): opening a thing reads its Notifications. The hook is observed
+// here; its own behaviour is covered in queries/notifications-read.test.tsx.
+const readNotificationsAbout = vi.hoisted(() => vi.fn());
+vi.mock('../../queries/notifications', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../queries/notifications')>()),
+  useReadNotificationsAbout: readNotificationsAbout,
+}));
 const duplicate = vi.hoisted(() => vi.fn().mockResolvedValue({ id: 8 }));
 vi.mock('../../queries/task-duplication', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../queries/task-duplication')>()),
@@ -126,6 +134,18 @@ describe('Task details sheet', () => {
     await user.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledOnce();
   });
+  it('opening a Task reads the member’s Notifications about it, only once it loads (#1012)', async () => {
+    useTaskDetails.mockReturnValue({ isPending: true });
+    const view = render(<TaskDetailsSheet taskId={7} onClose={vi.fn()} />);
+    expect(readNotificationsAbout).toHaveBeenLastCalledWith([]);
+    useTaskDetails.mockReturnValue({
+      data: { task: taskRow(), executorName: null, subtasks: [] },
+    });
+    view.rerender(<TaskDetailsSheet taskId={7} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Detalii task' });
+    expect(readNotificationsAbout).toHaveBeenLastCalledWith(['task:7']);
+  });
+
   it('shows the Audiență row on a public Task (R26)', async () => {
     useTaskDetails.mockReturnValue({
       data: {

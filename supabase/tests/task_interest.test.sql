@@ -26,7 +26,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(104);
+select plan(105);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -289,6 +289,13 @@ select lives_ok(format($$ select public.select_task_candidate(%s, %s, false) $$,
   (select queue_task_id from f330), (select candidate_id from sel330)),
   'the manager selects that Candidate as Executor -- select_task_candidate is the only way in');
 reset role;
+-- #1012 (R37): acting on the queue reads the manager's own "Coadă" row, so
+-- the next join below opens a new unread row instead of rewriting a read one.
+select is((select count(*) from public.notifications as notification
+            where notification.task_id = (select queue_task_id from f330)
+              and notification.member_id = '33000000-0000-0000-0000-000000000001'
+              and not notification.read), 0::bigint,
+  'selecting a Candidate reads the manager''s own queue Notification about the Task (#1012)');
 
 select pg_temp.test_login('33000000-0000-0000-0000-000000000003', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
@@ -311,13 +318,14 @@ select is((select format('%s|%s|%s|%s', activity.kind, activity.actor_id,
 select is((select format('%s|%s|%s', notification.title, notification.body, notification.dedupe_key)
              from public.notifications as notification
             where notification.task_id = (select queue_task_id from f330)
-              and notification.dedupe_key is not null),
+              and notification.dedupe_key is not null
+              and not notification.read),
   format('Coadă: Queue order #330|1 candidat în așteptare.|task:%s:queue',
          (select queue_task_id from f330)),
   'the first join writes the coalesced queue notification under task:<id>:queue, singular at n = 1');
 select set_eq(
   format($$ select notification.member_id from public.notifications as notification
-             where notification.task_id = %s and notification.dedupe_key is not null $$,
+             where notification.task_id = %s and notification.dedupe_key is not null and not notification.read $$,
     (select queue_task_id from f330)),
   $$ values ('33000000-0000-0000-0000-000000000001'::uuid) $$,
   'the coalesced queue notification recipient set is exactly the Task manager, not merely one row');
@@ -335,13 +343,15 @@ reset role;
 select is((select format('%s|%s', count(*), min(notification.body))
              from public.notifications as notification
             where notification.task_id = (select queue_task_id from f330)
-              and notification.dedupe_key = format('task:%s:queue', (select queue_task_id from f330))),
+              and notification.dedupe_key = format('task:%s:queue', (select queue_task_id from f330))
+              and not notification.read),
   '1|2 candidați în așteptare.',
   'the second join coalesces into the SAME manager row, whose body now reads the live pending count');
 select set_eq(
   format($$ select notification.member_id from public.notifications as notification
              where notification.task_id = %1$s
-               and notification.dedupe_key = 'task:%1$s:queue' $$,
+               and notification.dedupe_key = 'task:%1$s:queue'
+               and not notification.read $$,
     (select queue_task_id from f330)),
   $$ values ('33000000-0000-0000-0000-000000000001'::uuid) $$,
   'coalescing a second join does not add a second recipient -- still exactly the Task manager');
@@ -384,13 +394,15 @@ select is((select format('%s|%s|%s', activity.kind, activity.actor_id,
 select is((select format('%s|%s', count(*), min(notification.body))
              from public.notifications as notification
             where notification.task_id = (select queue_task_id from f330)
-              and notification.dedupe_key = format('task:%s:queue', (select queue_task_id from f330))),
+              and notification.dedupe_key = format('task:%s:queue', (select queue_task_id from f330))
+              and not notification.read),
   '1|1 candidat în așteptare.',
   'the withdrawal rewrites the same coalesced manager row down to the new pending count, singular at n = 1');
 select set_eq(
   format($$ select notification.member_id from public.notifications as notification
              where notification.task_id = %1$s
-               and notification.dedupe_key = 'task:%1$s:queue' $$,
+               and notification.dedupe_key = 'task:%1$s:queue'
+               and not notification.read $$,
     (select queue_task_id from f330)),
   $$ values ('33000000-0000-0000-0000-000000000001'::uuid) $$,
   'the withdrawal still coalesces into the manager''s one row -- no second recipient appears');
@@ -413,13 +425,15 @@ select is((select count(*) from public.task_candidates
 select is((select format('%s|%s', count(*), min(notification.body))
              from public.notifications as notification
             where notification.task_id = (select queue_task_id from f330)
-              and notification.dedupe_key = format('task:%s:queue', (select queue_task_id from f330))),
+              and notification.dedupe_key = format('task:%s:queue', (select queue_task_id from f330))
+              and not notification.read),
   '1|2 candidați în așteptare.',
   'the rejoin coalesces into the same row again, back up to two pending Candidates');
 select set_eq(
   format($$ select notification.member_id from public.notifications as notification
              where notification.task_id = %1$s
-               and notification.dedupe_key = 'task:%1$s:queue' $$,
+               and notification.dedupe_key = 'task:%1$s:queue'
+               and not notification.read $$,
     (select queue_task_id from f330)),
   $$ values ('33000000-0000-0000-0000-000000000001'::uuid) $$,
   'through every join, withdrawal and rejoin the coalesced row''s recipient never drifts from the Task manager');

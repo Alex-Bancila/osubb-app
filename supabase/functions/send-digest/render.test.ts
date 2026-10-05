@@ -59,10 +59,11 @@ Deno.test("each Notification gets one line and an absolute link into the app", (
   assert(text.startsWith("Salut, Ana!\n"));
   // The time is Bucharest's, not UTC's.
   assert(text.includes("- Task nou (27 sept., 14:05)"));
-  assert(text.includes("  https://app.osubb.ro/tracker/12\n"));
+  // #1012: each line carries its Notification's id, so following it reads it.
+  assert(text.includes("  https://app.osubb.ro/tracker/12?notificare=1\n"));
   // No usable link opens the notification list.
-  assert(text.includes("  https://app.osubb.ro/notificari\n"));
-  assert(html.includes('href="https://app.osubb.ro/tracker/12"'));
+  assert(text.includes("  https://app.osubb.ro/notificari?notificare=2\n"));
+  assert(html.includes('href="https://app.osubb.ro/tracker/12?notificare=1"'));
   assert(text.includes("Toate notificările: https://app.osubb.ro/notificari"));
 });
 

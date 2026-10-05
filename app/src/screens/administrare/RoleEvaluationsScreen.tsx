@@ -60,6 +60,11 @@ import {
 import { useFormValidation } from '../../lib/use-form-validation';
 import { useMemberIdentities } from '../../queries/member-identities';
 import {
+  NO_SUBJECTS,
+  PROMOTION_CANDIDATES_SUBJECT,
+  useReadNotificationsAbout,
+} from '../../queries/notifications';
+import {
   latestRun,
   percentText,
   retentionSignals,
@@ -1284,6 +1289,11 @@ function CandidatesPanel({
     [candidates.data],
   );
   const identities = useMemberIdentities(memberIds);
+  // #1012 (R37): the list shows every Promotion Candidate at once, so every
+  // "Candidat la promovare" Notification of the viewer is read.
+  useReadNotificationsAbout(
+    candidates.data ? [PROMOTION_CANDIDATES_SUBJECT] : NO_SUBJECTS,
+  );
   const [notice, setNotice] = useState<string | null>(null);
   return (
     <Panel

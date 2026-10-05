@@ -32,6 +32,9 @@ export function useNotificationRealtime(memberId?: string) {
           void queryClient.invalidateQueries({
             queryKey: keys.notifications.unread(memberId),
           });
+          void queryClient.invalidateQueries({
+            queryKey: keys.notifications.subjects(memberId),
+          });
           // #68 fans every Announcement out as a notification. The signal
           // carries no row (never read payloads), so any change refreshes the
           // Anunțuri badge, and the feed if it is on screen, to match it.

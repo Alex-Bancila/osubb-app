@@ -15,6 +15,14 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// #1012 (R37): opening a thing reads its Notifications. The hook is observed
+// here; its own behaviour is covered in queries/notifications-read.test.tsx.
+const readNotificationsAbout = vi.hoisted(() => vi.fn());
+vi.mock('../../queries/notifications', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../queries/notifications')>()),
+  useReadNotificationsAbout: readNotificationsAbout,
+}));
+
 const hooks = vi.hoisted(() => ({
   useRequestOrigins: vi.fn(),
   useMyCompletedWorkRequests: vi.fn(),
@@ -129,6 +137,13 @@ describe('RequestsView', () => {
         (row) => row.querySelector('[data-slot="request-group"]')?.textContent,
       ),
     ).toEqual(['Echipa Media · Educațional', 'OSUBB Fest', undefined]);
+    // #1012 (R37): the decided Requests are on screen, so the requester's
+    // "Cerere aprobată" (about its Task) and "Cerere respinsă" are read.
+    expect(readNotificationsAbout).toHaveBeenCalledWith([
+      'completed_work_request:2',
+      'task:42',
+      'completed_work_request:3',
+    ]);
     expect(screen.getByText('În așteptare')).toBeVisible();
     expect(screen.getByText('Aprobată')).toBeVisible();
     expect(screen.getByText('Respinsă')).toBeVisible();

@@ -11,7 +11,10 @@ import { useSignOutAction } from '../../lib/use-sign-out-action';
 import { cn } from '../../lib/utils';
 import { useUnreadAnnouncementsCount } from '../../queries/announcements';
 import { useLiveChanges } from '../../queries/live-changes';
-import { useUnreadNotificationCount } from '../../queries/notifications';
+import {
+  useReadOpenedNotification,
+  useUnreadNotificationCount,
+} from '../../queries/notifications';
 import { useNotificationRealtime } from '../../queries/notifications-realtime';
 import { useMyRoleLabel } from '../../queries/my-role-label';
 import { useMyProfile } from '../../queries/profile';
@@ -212,6 +215,9 @@ export default function AppShell() {
   // #769: keep this device's push subscription working across VAPID key
   // rotations and push-service renewals, silently, from every app start.
   usePushSelfRepair();
+  // #1012 (R37): a push tap or an Email Digest link opened this page with
+  // the Notification's id; that Notification is read now.
+  useReadOpenedNotification();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const firstMobileLinkRef = useRef<HTMLAnchorElement>(null);

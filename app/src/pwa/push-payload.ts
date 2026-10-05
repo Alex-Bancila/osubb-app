@@ -8,6 +8,7 @@
  * without waking this worker. Every other top-level key is ignored here.
  */
 import { inAppPath } from '../lib/links';
+import { withNotificationParam } from '../lib/notification-param';
 
 export type PushPayload = {
   id: number;
@@ -57,6 +58,20 @@ export function targetUrl(link: string | null | undefined, origin: string) {
   return new URL(inAppPath(link, origin) ?? NOTIFICATIONS_PATH, origin).href;
 }
 
+/**
+ * What a tap opens (#1012, R37): the target with the Notification's id, so
+ * the app marks that one Notification read on arrival. Without a usable id
+ * (an old payload) the tap opens the target alone.
+ */
+export function tapUrl(
+  link: string | null | undefined,
+  id: unknown,
+  origin: string,
+) {
+  const url = targetUrl(link, origin);
+  return typeof id === 'number' ? withNotificationParam(url, id) : url;
+}
+
 /** The slice of the worker's `Clients` and `WindowClient` a tap needs. */
 type WindowClientLike = {
   url: string;
@@ -102,4 +117,26 @@ export async function focusOrOpen(
     }
   }
   await clients.openWindow(url);
+}
+
+/** The slice of a shown `Notification` a tap reads. */
+type TappedNotification = {
+  data: unknown;
+  close(): void;
+};
+
+/**
+ * The `notificationclick` handler's whole job (#704, #1012): close the system
+ * notification and open its target, carrying the Notification's id so the
+ * app marks it read. It writes nothing itself.
+ */
+export function openTappedNotification(
+  notification: TappedNotification,
+  clients: ClientsLike,
+  origin: string,
+) {
+  notification.close();
+  const data = notification.data as { link?: unknown; id?: unknown } | null;
+  const link = typeof data?.link === 'string' ? data.link : null;
+  return focusOrOpen(clients, tapUrl(link, data?.id, origin), origin);
 }

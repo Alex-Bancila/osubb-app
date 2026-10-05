@@ -16,6 +16,10 @@ import {
 import { useCapabilities, type Capability } from './lib/capabilities';
 import { useKeyboardInset } from './lib/keyboard-inset';
 import {
+  NOTIFICATION_PARAM,
+  openedNotificationId,
+} from './lib/notification-param';
+import {
   administrareTab,
   type AdministrareTabPath,
 } from './screens/administrare/administrare-tabs';
@@ -233,13 +237,18 @@ function LoginRoute() {
  * answered. Pushes and emails already delivered still do, so a numeric id opens
  * the Task the way every link now does; anything else is an unknown route.
  * Unguarded on purpose: the Tracker route it forwards to is guarded, so a
- * signed-out Member keeps `/tracker?task=<id>` through sign-in.
+ * signed-out Member keeps `/tracker?task=<id>` through sign-in. The id of the
+ * Notification a push tap opened (#1012) travels with it, so the shell can
+ * still mark that Notification read.
  */
 function TaskAlias() {
   const { taskId = '' } = useParams();
+  const { search } = useLocation();
+  const opened = openedNotificationId(search);
+  const carried = opened === null ? '' : `&${NOTIFICATION_PARAM}=${opened}`;
   return (
     <Navigate
-      to={/^[0-9]+$/.test(taskId) ? `/tracker?task=${taskId}` : '/'}
+      to={/^[0-9]+$/.test(taskId) ? `/tracker?task=${taskId}${carried}` : '/'}
       replace
     />
   );

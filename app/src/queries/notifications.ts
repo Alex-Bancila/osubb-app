@@ -6,8 +6,15 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 
+import { useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router';
+
 import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
+import {
+  openedNotificationId,
+  withoutNotificationParam,
+} from '../lib/notification-param';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 
@@ -162,4 +169,164 @@ export function useMarkNotificationRead(memberId?: string) {
   return useMutation(
     markNotificationReadMutationOptions(queryClient, effectiveMemberId),
   );
+}
+
+/**
+ * #1012 (R37): the subjects of the member's unread Notifications —
+ * `task:12`, `event:3`, `promotion_candidate:<uuid>`… A screen that opens a
+ * thing reads its Notifications only when one of them is about it, so
+ * opening a Task with nothing unread about it sends no write at all.
+ */
+export async function fetchUnreadNotificationSubjects(
+  memberId: string,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('subject')
+    .eq('member_id', memberId)
+    .eq('read', false)
+    .not('subject', 'is', null);
+
+  if (error) throw error;
+  return [
+    ...new Set(
+      ((data ?? []) as { subject: string | null }[]).flatMap((row) =>
+        row.subject ? [row.subject] : [],
+      ),
+    ),
+  ];
+}
+
+export function unreadNotificationSubjectsQueryOptions(memberId: string) {
+  return {
+    queryKey: keys.notifications.subjects(memberId),
+    queryFn: () => fetchUnreadNotificationSubjects(memberId),
+  } as const;
+}
+
+/** No subject: a screen with nothing open yet. Stable, so effects stay put. */
+export const NO_SUBJECTS: readonly string[] = [];
+
+/** The subject that stands for the whole Promotion Candidates list. */
+export const PROMOTION_CANDIDATES_SUBJECT = 'promotion_candidate';
+
+function isUnread(subject: string, unread: ReadonlySet<string>): boolean {
+  if (subject !== PROMOTION_CANDIDATES_SUBJECT) return unread.has(subject);
+  for (const candidate of unread)
+    if (candidate.startsWith(`${PROMOTION_CANDIDATES_SUBJECT}:`)) return true;
+  return false;
+}
+
+/**
+ * Marks the caller's own unread Notifications about one thing read
+ * (`public.mark_notifications_read_for`, #1012): one request, own rows only.
+ */
+export async function markNotificationsReadFor(
+  subject: string,
+): Promise<number> {
+  const { data, error } = await supabase.rpc('mark_notifications_read_for', {
+    p_subject: subject,
+  });
+  if (error) throw error;
+  return data ?? 0;
+}
+
+/**
+ * Opening a thing reads its Notifications (#1012, R37). Pass the subjects a
+ * screen shows — the Task in the details sheet, the linked Event, the
+ * Requests and Applications on a list, `PROMOTION_CANDIDATES_SUBJECT` for the
+ * candidates list. For each one the member has an unread Notification about,
+ * one request marks them read, once; the badge and the list refresh after.
+ * A failed write leaves them unread, which is the honest outcome.
+ */
+export function useReadNotificationsAbout(subjects: readonly string[]) {
+  const { session } = useAuth();
+  const memberId = session?.user.id;
+  const queryClient = useQueryClient();
+  const subjectsKey = subjects.join('\n');
+  const unread = useQuery({
+    ...unreadNotificationSubjectsQueryOptions(memberId ?? ''),
+    enabled: Boolean(memberId) && subjectsKey !== '',
+  });
+  // A subject being written, or whose write failed: a failure is not retried
+  // while this screen stays open, so a refused or broken write never loops.
+  const held = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (!memberId || !unread.data || subjectsKey === '') return;
+    const pending = new Set(unread.data);
+    for (const subject of new Set(subjectsKey.split('\n'))) {
+      if (!isUnread(subject, pending) || held.current.has(subject)) continue;
+      held.current.add(subject);
+      void markNotificationsReadFor(subject).then(
+        async () => {
+          await queryClient.invalidateQueries({
+            queryKey: keys.notifications.all,
+          });
+          // Read and refetched: a later Notification about it, arriving while
+          // the thing is still open, is read the same way.
+          held.current.delete(subject);
+        },
+        () => undefined,
+      );
+    }
+  }, [memberId, unread.data, subjectsKey, queryClient]);
+}
+
+/**
+ * "Marchează toate ca citite" (#1012, R37 — amends R16): one request,
+ * `public.mark_all_notifications_read()`, which the server allows only for a
+ * live level ≥ 5 (BCE, BC, the Moderator) and confines to the caller's own
+ * rows. Returns how many were marked.
+ */
+export async function markAllNotificationsRead(): Promise<number> {
+  const { data, error } = await supabase.rpc('mark_all_notifications_read');
+  if (error) throw error;
+  return data ?? 0;
+}
+
+export function markAllNotificationsReadMutationOptions(
+  queryClient: QueryClient,
+) {
+  return {
+    mutationFn: markAllNotificationsRead,
+    // The list, the bell badge and the unread subjects all read "mine".
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: keys.notifications.all });
+    },
+  } as const;
+}
+
+export function useMarkAllNotificationsRead() {
+  const queryClient = useQueryClient();
+  return useMutation(markAllNotificationsReadMutationOptions(queryClient));
+}
+
+/**
+ * A push tap or an Email Digest link opened the app with `?notificare=<id>`
+ * (#1012, R37): mark that one Notification read — the same single-row update
+ * as opening it in Notificări — and take the parameter out of the address,
+ * replacing the history entry so Back does not bring it back.
+ */
+export function useReadOpenedNotification() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { mutate } = useMarkNotificationRead();
+  const handled = useRef(new Set<number>());
+
+  useEffect(() => {
+    const id = openedNotificationId(location.search);
+    if (id === null) return;
+    void navigate(
+      {
+        pathname: location.pathname,
+        search: withoutNotificationParam(location.search),
+        hash: location.hash,
+      },
+      { replace: true, state: location.state as unknown },
+    );
+    if (handled.current.has(id)) return;
+    handled.current.add(id);
+    mutate(id);
+  }, [location, navigate, mutate]);
 }

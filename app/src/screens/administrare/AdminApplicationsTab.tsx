@@ -18,6 +18,7 @@ import {
   type ManagedGroupApplication,
 } from '../../queries/group-applications';
 import { useAdminGroups, useMyGroupRoles } from '../../queries/groups-admin';
+import { useReadNotificationsAbout } from '../../queries/notifications';
 import { useMyGroups } from '../../queries/reference';
 import { ApplicationAction } from '../groups/ApplicationAction';
 import {
@@ -72,6 +73,22 @@ export default function AdminApplicationsTab() {
     return rows;
   }, [applications.data]);
 
+  const asked = Number(params.get('grup'));
+  // One Group is its own "all"; an unknown `?grup=` shows every section.
+  const selected =
+    list.find((group) => group.id === asked) ??
+    (list.length === 1 ? list[0] : undefined);
+  const sections = selected
+    ? [selected]
+    : list.filter((group) => group.pending > 0);
+  // #1012 (R37): the Applications on screen are open in front of the viewer,
+  // so their "Cerere de înscriere" Notifications are read.
+  useReadNotificationsAbout(
+    sections.flatMap((group) =>
+      (byGroup.get(group.id) ?? []).map((row) => `group_application:${row.id}`),
+    ),
+  );
+
   if (applications.isPending || myGroups.isPending || groups.isPending)
     return <Loading label="Se încarcă cererile…" />;
   if (applications.isError)
@@ -82,14 +99,6 @@ export default function AdminApplicationsTab() {
       />
     );
 
-  const asked = Number(params.get('grup'));
-  // One Group is its own "all"; an unknown `?grup=` shows every section.
-  const selected =
-    list.find((group) => group.id === asked) ??
-    (list.length === 1 ? list[0] : undefined);
-  const sections = selected
-    ? [selected]
-    : list.filter((group) => group.pending > 0);
   // A single Group needs no list: its section already names it, with the
   // viewer's role and its count.
   const showList = list.length > 1;

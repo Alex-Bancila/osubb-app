@@ -46,3 +46,27 @@ export function targetUrl(link: string | null, origin: string): string {
   const url = new URL(trimmed, origin);
   return url.origin === fallback.origin ? url.href : fallback.href;
 }
+
+/**
+ * #1012 (ruling R37): the query parameter that tells the app which
+ * Notification a link from outside it opened -- the same name as
+ * app/src/lib/notification-param.ts. The app marks that one Notification read
+ * on arrival and removes the parameter.
+ */
+export const NOTIFICATION_PARAM = "notificare";
+
+/**
+ * What a push tap or an Email Digest line opens: `targetUrl` with the
+ * Notification's id, so opening it from outside the app reads it.
+ */
+export function notificationUrl(
+  link: string | null,
+  origin: string,
+  id: number,
+): string {
+  const url = new URL(targetUrl(link, origin));
+  if (Number.isSafeInteger(id) && id > 0) {
+    url.searchParams.set(NOTIFICATION_PARAM, String(id));
+  }
+  return url.href;
+}

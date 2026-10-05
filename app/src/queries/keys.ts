@@ -247,6 +247,10 @@ export const keys = {
       ['notifications', 'list', { memberId }] as const,
     unread: (memberId?: string) =>
       ['notifications', 'unread', { memberId }] as const,
+    /* #1012: the subjects of the member's unread Notifications -- what a
+       screen opening a thing checks before it reads them. */
+    subjects: (memberId?: string) =>
+      ['notifications', 'subjects', { memberId }] as const,
   },
   /* The Privacy Notice (#771): whether the member still has to acknowledge
      the current version ("mine"), BC's list of every active Member's latest

@@ -13,6 +13,7 @@ const queries = vi.hoisted(() => ({
   useUnreadAnnouncementsCount: vi.fn(),
   useCapabilities: vi.fn(),
   usePendingDecisions: vi.fn(),
+  useReadOpenedNotification: vi.fn(),
 }));
 
 vi.mock('../../lib/auth', () => ({ useAuth: auth.useAuth }));
@@ -40,6 +41,7 @@ vi.mock('../../queries/announcements', () => ({
 }));
 vi.mock('../../queries/notifications', () => ({
   useUnreadNotificationCount: queries.useUnreadNotificationCount,
+  useReadOpenedNotification: queries.useReadOpenedNotification,
 }));
 
 vi.mock('../../lib/capabilities', () => ({
@@ -118,6 +120,12 @@ describe('AppShell', () => {
     queries.useUnreadAnnouncementsCount.mockReturnValue({ data: 0 });
     queries.useCapabilities.mockReturnValue({ data: capabilities() });
     queries.usePendingDecisions.mockReturnValue({ data: [] });
+  });
+
+  it('reads a Notification opened from a push or an email, on every page (#1012)', () => {
+    renderShell();
+
+    expect(queries.useReadOpenedNotification).toHaveBeenCalled();
   });
 
   it('keeps ordinary navigation gated and marks the current route in both menus', () => {

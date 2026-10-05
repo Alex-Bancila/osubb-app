@@ -358,7 +358,7 @@ Deno.test("the payload is the Notification's id, title, body and link, twice: fo
     notification: {
       title: "Titlu 1",
       body: "Corp",
-      navigate: "https://app.osubb.ro/tracker/1",
+      navigate: "https://app.osubb.ro/tracker/1?notificare=1001",
       tag: "osubb-1001",
       lang: "ro",
     },

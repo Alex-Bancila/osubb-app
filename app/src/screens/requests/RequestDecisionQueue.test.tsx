@@ -1,6 +1,14 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
+
+// #1012 (R37): opening a thing reads its Notifications. The hook is observed
+// here; its own behaviour is covered in queries/notifications-read.test.tsx.
+const readNotificationsAbout = vi.hoisted(() => vi.fn());
+vi.mock('../../queries/notifications', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../queries/notifications')>()),
+  useReadNotificationsAbout: readNotificationsAbout,
+}));
 import axe from 'axe-core';
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 const state = vi.hoisted(() => ({
@@ -84,6 +92,12 @@ beforeEach(() => {
   });
   state.queue.mockReturnValue({ data: [request] });
   state.mutate.mockResolvedValue({ id: 7 });
+});
+it('the Requests waiting for a decision are open, so their "Cerere nouă" is read (#1012)', () => {
+  render(<RequestDecisionQueue />);
+  expect(readNotificationsAbout).toHaveBeenCalledWith([
+    'completed_work_request:7',
+  ]);
 });
 it('shares evaluation fields and retains success after the queue refetches empty', async () => {
   const user = userEvent.setup();

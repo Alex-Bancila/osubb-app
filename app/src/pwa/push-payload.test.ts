@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { focusOrOpen, parsePushPayload, targetUrl } from './push-payload';
+import {
+  focusOrOpen,
+  openTappedNotification,
+  parsePushPayload,
+  tapUrl,
+  targetUrl,
+} from './push-payload';
 
 const ORIGIN = 'https://app.osubb.ro';
 
@@ -171,5 +177,65 @@ describe('focusOrOpen', () => {
     expect(clients.openWindow).toHaveBeenCalledWith(
       'https://app.osubb.ro/tracker/12',
     );
+  });
+});
+
+describe('a tap reads its Notification (#1012, R37)', () => {
+  it('opens the target with the Notification id beside the link’s own query', () => {
+    expect(tapUrl('/calendar?event=3', 42, ORIGIN)).toBe(
+      'https://app.osubb.ro/calendar?event=3&notificare=42',
+    );
+    expect(tapUrl(null, 42, ORIGIN)).toBe(
+      'https://app.osubb.ro/notificari?notificare=42',
+    );
+  });
+
+  it('opens the bare target for a payload without a usable id', () => {
+    expect(tapUrl('/tracker?task=12', undefined, ORIGIN)).toBe(
+      'https://app.osubb.ro/tracker?task=12',
+    );
+    expect(tapUrl('/tracker?task=12', '42', ORIGIN)).toBe(
+      'https://app.osubb.ro/tracker?task=12',
+    );
+  });
+
+  it('the click handler closes the notification and opens the target with its id', async () => {
+    const close = vi.fn();
+    const clients = {
+      matchAll: vi.fn().mockResolvedValue([]),
+      openWindow: vi.fn().mockResolvedValue(null),
+    };
+
+    await openTappedNotification(
+      { close, data: { link: '/anunturi?anunt=8', id: 77 } },
+      clients,
+      ORIGIN,
+    );
+
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(clients.openWindow).toHaveBeenCalledWith(
+      'https://app.osubb.ro/anunturi?anunt=8&notificare=77',
+    );
+  });
+
+  it('the click handler takes an open app window to the target instead', async () => {
+    const focused = { url: ORIGIN, focus: vi.fn(), navigate: vi.fn() };
+    focused.focus.mockResolvedValue(focused);
+    focused.navigate.mockResolvedValue(focused);
+    const clients = {
+      matchAll: vi.fn().mockResolvedValue([focused]),
+      openWindow: vi.fn(),
+    };
+
+    await openTappedNotification(
+      { close: vi.fn(), data: { link: null, id: 5 } },
+      clients,
+      ORIGIN,
+    );
+
+    expect(focused.navigate).toHaveBeenCalledWith(
+      'https://app.osubb.ro/notificari?notificare=5',
+    );
+    expect(clients.openWindow).not.toHaveBeenCalled();
   });
 });

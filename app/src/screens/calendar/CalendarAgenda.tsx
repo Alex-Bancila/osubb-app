@@ -7,6 +7,10 @@ import {
   useEventsInRange,
   type EventPresentation,
 } from '../../queries/events';
+import {
+  NO_SUBJECTS,
+  useReadNotificationsAbout,
+} from '../../queries/notifications';
 import type { Group } from '../../queries/reference';
 import {
   eventCardId,
@@ -53,6 +57,11 @@ export function CalendarAgenda({
 }) {
   const linked = useEvent(linkedId);
   const linkedEvent = linkedId !== null ? (linked.data ?? null) : null;
+  // #1012 (R37): a link that opens an Event reads the member's Notifications
+  // about it.
+  useReadNotificationsAbout(
+    linkedEvent ? [`event:${linkedEvent.id}`] : NO_SUBJECTS,
+  );
   const waitingForLink = linkedId !== null && linked.isPending;
 
   const to = filter.value.to;

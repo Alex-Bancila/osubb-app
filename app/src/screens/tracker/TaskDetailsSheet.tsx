@@ -22,6 +22,10 @@ import {
 } from '../../lib/calendar-time';
 import { useTaskHistory } from '../../queries/task-history';
 import { cn } from '../../lib/utils';
+import {
+  NO_SUBJECTS,
+  useReadNotificationsAbout,
+} from '../../queries/notifications';
 import { useTaskDetails } from '../../queries/task-details';
 import { useTaskProgress } from '../../queries/task-progress';
 import { TaskDuplicateControl } from './TaskDuplicateControl';
@@ -105,6 +109,8 @@ function TaskDetails({
   const query = useTaskDetails(taskId);
   const progress = useTaskProgress();
   const memberId = useAuth().session?.user.id;
+  // #1012 (R37): opening a Task reads the member's Notifications about it.
+  useReadNotificationsAbout(query.data ? [`task:${taskId}`] : NO_SUBJECTS);
   if (query.isPending) return <p role="status">Se încarcă taskul…</p>;
   if (query.isError)
     return (

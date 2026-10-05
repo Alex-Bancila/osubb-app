@@ -38,6 +38,7 @@ function notificationRow(
     created_at: '2026-09-20T09:00:00.000Z',
     dedupe_key: null,
     digested_at: null,
+    subject: null,
     task_id: 12,
     ...overrides,
   };
@@ -170,12 +171,49 @@ describe('notifications query layer', () => {
     });
   });
 
-  it('exports no bulk mark-all-read mutation (R16, #695, #886)', () => {
-    expect('markAllNotificationsRead' in notificationsModule).toBe(false);
-    expect(
-      'markAllNotificationsReadMutationOptions' in notificationsModule,
-    ).toBe(false);
-    expect('useMarkAllNotificationsRead' in notificationsModule).toBe(false);
+  describe('the only bulk write is the gated server command (R37 amends R16, #1012)', () => {
+    it('marks all through mark_all_notifications_read, never a table-wide update', async () => {
+      supabaseMock.rpc.mockResolvedValue({ data: 4, error: null });
+
+      await expect(
+        notificationsModule.markAllNotificationsRead(),
+      ).resolves.toBe(4);
+
+      expect(supabaseMock.rpc).toHaveBeenCalledTimes(1);
+      expect(supabaseMock.rpc).toHaveBeenCalledWith(
+        'mark_all_notifications_read',
+      );
+      expect(supabaseMock.from).not.toHaveBeenCalled();
+      expect(supabaseMock.update).not.toHaveBeenCalled();
+    });
+
+    it('throws the server refusal for a Member below level 5', async () => {
+      supabaseMock.rpc.mockResolvedValue({
+        data: null,
+        error: { code: '42501', message: 'notification_mark_all_forbidden' },
+      });
+
+      await expect(
+        notificationsModule.markAllNotificationsRead(),
+      ).rejects.toEqual({
+        code: '42501',
+        message: 'notification_mark_all_forbidden',
+      });
+    });
+
+    it('reads one thing through mark_notifications_read_for, one request', async () => {
+      supabaseMock.rpc.mockResolvedValue({ data: 2, error: null });
+
+      await expect(
+        notificationsModule.markNotificationsReadFor('task:12'),
+      ).resolves.toBe(2);
+
+      expect(supabaseMock.rpc).toHaveBeenCalledWith(
+        'mark_notifications_read_for',
+        { p_subject: 'task:12' },
+      );
+      expect(supabaseMock.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('query options', () => {

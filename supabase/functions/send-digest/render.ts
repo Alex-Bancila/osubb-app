@@ -3,7 +3,7 @@
 // (a Notification's title and body, the Member's Nickname) is escaped before
 // it reaches the HTML, and flattened to one line in the text body.
 
-import { NOTIFICATIONS_PATH, targetUrl } from "../_shared/app-links.ts";
+import { NOTIFICATIONS_PATH, notificationUrl } from "../_shared/app-links.ts";
 
 /** One Notification as public.claim_email_digests lists it. */
 export interface DigestItem {
@@ -102,7 +102,8 @@ export function renderDigest(input: DigestInput): RenderedDigest {
     title: oneLine(item.title),
     body: excerpt(item.body),
     when: when(item.created_at),
-    url: targetUrl(item.link, origin),
+    // #1012: with the id, so following the line reads the Notification.
+    url: notificationUrl(item.link, origin, item.id),
   }));
 
   const text = [
