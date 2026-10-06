@@ -46,7 +46,9 @@ function TreeRow({
   disabled: boolean;
 }) {
   const state = tickState(node, unselected);
-  const reasonId = `preferred-group-${node.group.id}-lock`;
+  const reasonId = (id: number) => `preferred-group-${id}-lock`;
+  // Below a position's own Group the lock line is not repeated.
+  const ownReason = node.lock !== null && node.lockSource === node.group.id;
   const name = node.group.is_organization ? 'OSUBB' : node.group.name;
   return (
     <li className="flex min-w-0 items-stretch">
@@ -71,7 +73,9 @@ function TreeRow({
           checked={state === 'checked'}
           indeterminate={state === 'mixed'}
           disabled={disabled || node.lock !== null}
-          aria-describedby={node.lock ? reasonId : undefined}
+          aria-describedby={
+            node.lockSource !== null ? reasonId(node.lockSource) : undefined
+          }
           onCheckedChange={() => onToggle(node)}
         />
         <span
@@ -99,11 +103,11 @@ function TreeRow({
           >
             {name}
           </span>
-          {node.lock && (
+          {node.lock && ownReason && (
             // Hidden from the label, so the Group alone names the box; the
             // box's description still reads it.
             <span
-              id={reasonId}
+              id={reasonId(node.group.id)}
               aria-hidden="true"
               className="truncate text-xs text-muted-foreground"
             >
@@ -145,34 +149,37 @@ function SheetBody({
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div className="flex flex-wrap items-center justify-between gap-x-3">
         <p
           role="status"
-          className="m-0 mr-auto text-sm text-muted-foreground tabular-nums"
+          className="m-0 text-sm text-muted-foreground tabular-nums"
         >
           <span className="font-medium text-foreground">
             {summary.selected}
           </span>{' '}
           din {summary.total} selectate
         </p>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={busy || unselected.size === 0}
-          onClick={() => setUnselected(new Set())}
-        >
-          Selectează tot
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={busy || [...allOff].every((id) => unselected.has(id))}
-          onClick={() => setUnselected(new Set([...unselected, ...allOff]))}
-        >
-          Deselectează tot
-        </Button>
+        {/* The two bulk choices travel together, so they never split a line. */}
+        <div className="-mr-2.5 flex shrink-0">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={busy || unselected.size === 0}
+            onClick={() => setUnselected(new Set())}
+          >
+            Selectează tot
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={busy || [...allOff].every((id) => unselected.has(id))}
+            onClick={() => setUnselected(new Set([...unselected, ...allOff]))}
+          >
+            Deselectează tot
+          </Button>
+        </div>
       </div>
       {nodes.length > SEARCH_FROM && (
         <FilterSearch

@@ -26,10 +26,10 @@ export type GroupPreferenceRow = {
 
 /** The one line under a locked Group: why it stays ticked. */
 export const LOCK_REASON: Record<GroupPreferenceLock, string> = {
-  organization: 'Toată organizația — rămâne mereu.',
-  adunarea_generala: 'Adunarea Generală — rămâne mereu.',
-  board: 'Biroul de Conducere — rămâne mereu.',
-  position: 'Ai o funcție aici — rămâne mereu.',
+  organization: 'Mereu selectat',
+  adunarea_generala: 'Mereu selectat',
+  board: 'Mereu selectat',
+  position: 'Ai o funcție aici',
 };
 
 export function lockOf(row: GroupPreferenceRow | undefined) {
@@ -58,6 +58,12 @@ export type PreferenceNode = {
   lock: GroupPreferenceLock | null;
   /** The ids of every unlocked Group at or below this one, itself first when unlocked. */
   subtree: readonly number[];
+  /**
+   * The Group whose lock line explains this one: itself, or -- for a
+   * subgroup of a Group where the member holds a position -- that Group, so
+   * the reason is said once, at the top.
+   */
+  lockSource: number | null;
 };
 
 /**
@@ -85,7 +91,15 @@ export function preferenceTree(
     const depth = group.path.filter(
       (id) => id !== group.id && shownIds.has(id),
     ).length;
-    return { group, depth, lock, subtree };
+    // A position reaches every Group below it: say so once, where it is held.
+    const holder =
+      lock === 'position'
+        ? group.path.find(
+            (id) => shownIds.has(id) && lockOf(byId.get(id)) === 'position',
+          )
+        : undefined;
+    const lockSource = lock ? (holder ?? group.id) : null;
+    return { group, depth, lock, subtree, lockSource };
   });
 }
 

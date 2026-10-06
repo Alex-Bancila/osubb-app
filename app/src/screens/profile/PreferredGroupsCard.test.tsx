@@ -161,15 +161,11 @@ describe('PreferredGroupsCard (R43)', () => {
     await openSheet();
     expect(box('OSUBB')).toBeChecked();
     expect(box('OSUBB')).toHaveAttribute('aria-disabled', 'true');
-    expect(box('OSUBB')).toHaveAccessibleDescription(
-      'Toată organizația — rămâne mereu.',
-    );
+    expect(box('OSUBB')).toHaveAccessibleDescription('Mereu selectat');
     expect(box('Adunarea Generală')).toHaveAccessibleDescription(
-      'Adunarea Generală — rămâne mereu.',
+      'Mereu selectat',
     );
-    expect(box('Recrutare')).toHaveAccessibleDescription(
-      'Ai o funcție aici — rămâne mereu.',
-    );
+    expect(box('Recrutare')).toHaveAccessibleDescription('Ai o funcție aici');
     expect(box('Educațional')).toBeChecked();
     expect(box('Educațional')).not.toHaveAttribute('aria-disabled', 'true');
   });
