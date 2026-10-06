@@ -475,6 +475,13 @@ function subgroupNarrows(
  * option means the page already shows only that Group or Campaign. Without
  * `work` (Campanii, R13: the caller's managed Groups), every given option
  * is offered and every level is drawn, bar a Subgrup with no option.
+ *
+ * `alwaysShowGroups` (Calendar, ruling R40) lifts Rule W from the Group
+ * levels only: Grup principal and Subgrup are always drawn and offer every
+ * given Group in tree order, whether or not it owns an item — a Group with
+ * nothing that month is still a choice, and the page says it is empty. A
+ * Subgrup with no option is drawn too (disabled), so the sheet never shifts.
+ * Campanie and the dates keep Rule W.
  */
 export function workFilterChoices<
   G extends WorkFilterGroup,
@@ -486,7 +493,12 @@ export function workFilterChoices<
   {
     work,
     roots = 'top-level',
-  }: { work?: readonly WorkItem[]; roots?: WorkFilterRoots } = {},
+    alwaysShowGroups = false,
+  }: {
+    work?: readonly WorkItem[];
+    roots?: WorkFilterRoots;
+    alwaysShowGroups?: boolean;
+  } = {},
 ): WorkFilterChoices<G, C> {
   if (!work) {
     const rootOptions = rootGroups(groups, roots);
@@ -496,20 +508,25 @@ export function workFilterChoices<
       below,
       campaigns: campaignsFor(campaigns, groups, chosenGroupId(value)),
       showRoot: true,
-      showSub: below.length > 0,
+      showSub: below.length > 0 || (alwaysShowGroups && rootOptions.length > 0),
       showCampaign: true,
       rootId: value.rootGroupId,
     };
   }
-  const offered = groupsWithWork(
-    groups,
-    work.map((item) => item.group_id),
-    [value.rootGroupId, value.groupId],
-  );
+  const offered = alwaysShowGroups
+    ? groups
+    : groupsWithWork(
+        groups,
+        work.map((item) => item.group_id),
+        [value.rootGroupId, value.groupId],
+      );
   const rootOptions = rootGroups(offered, roots);
+  // A drawn Grup principal is never inferred: its lone option stays a choice.
   const rootId =
     value.rootGroupId ??
-    (rootOptions.length === 1 ? rootOptions[0]?.id : undefined);
+    (!alwaysShowGroups && rootOptions.length === 1
+      ? rootOptions[0]?.id
+      : undefined);
   const below = subgroupOptions(offered, rootOptions, rootId);
   const campaignOptions = campaignsWithWork(
     campaigns,
@@ -522,8 +539,12 @@ export function workFilterChoices<
     roots: rootOptions,
     below,
     campaigns: campaignOptions,
-    showRoot: rootOptions.length > 1,
-    showSub: subgroupNarrows(work, groups, value, rootId, below),
+    showRoot: alwaysShowGroups
+      ? rootOptions.length > 0
+      : rootOptions.length > 1,
+    showSub: alwaysShowGroups
+      ? rootOptions.length > 0
+      : subgroupNarrows(work, groups, value, rootId, below),
     showCampaign: campaignOptions.length > 1,
     rootId,
   };

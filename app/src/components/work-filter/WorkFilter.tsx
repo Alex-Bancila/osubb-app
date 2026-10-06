@@ -113,7 +113,10 @@ function WorkFilterFields({
               if (group && rootId !== undefined) setSubgroup(group.id, rootId);
               else set('groupId', group?.id);
             }}
-            placeholder="Toate subgrupurile"
+            placeholder={
+              choices.below.length ? 'Toate subgrupurile' : 'Fără subgrupuri'
+            }
+            disabled={!choices.below.length}
           />
         </div>
       )}
@@ -211,6 +214,8 @@ function WorkFilterFields({
  * parents, and whatever the URL already carries); a level with one option or
  * none is not drawn, and its URL value shows as a chip. Campanii passes no
  * `work`: it offers the Groups the caller manages, rooted at the topmost.
+ * Calendar passes `alwaysShowGroups` (ruling R40): its Group levels offer
+ * every Group the member can see, while Campanie keeps Rule W.
  *
  * At every width it is the filter toolbar (#903): **Filtrează** first, which
  * opens the controls in a sheet, then the page's search, then the active
@@ -222,6 +227,7 @@ export function WorkFilter({
   work,
   levels = {},
   roots = 'top-level',
+  alwaysShowGroups = false,
   groupNames,
   state,
   hint,
@@ -239,6 +245,11 @@ export function WorkFilter({
   levels?: WorkFilterLevels;
   /** Where **Grup principal** starts; `topmost` for a page offering only managed Groups. */
   roots?: WorkFilterRoots;
+  /**
+   * Draw Grup principal and Subgrup always, over every given Group, even
+   * with `work` (Calendar, ruling R40); Campanie keeps Rule W.
+   */
+  alwaysShowGroups?: boolean;
   /** Names of Groups outside `groups` (a managed Team's parent), so an option shows its parent. */
   groupNames?: readonly { id: number; name: string }[];
   /**
@@ -286,8 +297,13 @@ export function WorkFilter({
     [named, groupNames],
   );
   const choices = useMemo(
-    () => workFilterChoices(named, campaigns, value, { work, roots }),
-    [named, campaigns, value, work, roots],
+    () =>
+      workFilterChoices(named, campaigns, value, {
+        work,
+        roots,
+        alwaysShowGroups,
+      }),
+    [named, campaigns, value, work, roots, alwaysShowGroups],
   );
 
   if (status?.failed)

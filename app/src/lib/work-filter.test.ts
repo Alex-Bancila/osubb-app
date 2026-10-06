@@ -396,6 +396,85 @@ describe('Rule W', () => {
   });
 });
 
+describe('alwaysShowGroups (Calendar, ruling R40)', () => {
+  // One root, the Organization, with two Groups and a Child Group below it;
+  // the only item the page can show sits in Comunicare.
+  const tree: WorkFilterGroup[] = [
+    {
+      id: 5,
+      name: 'Organizația',
+      path: [5],
+      status: 'active',
+      is_organization: true,
+    },
+    { id: 1, name: 'Educațional', path: [5, 1], status: 'active' },
+    { id: 2, name: 'Mentorat', path: [5, 1, 2], status: 'active' },
+    { id: 8, name: 'Comunicare', path: [5, 8], status: 'active' },
+    { id: 6, name: 'Arhivă', path: [5, 6], status: 'archived' },
+  ];
+  const work = [{ group_id: 8, campaign_id: 14 }];
+
+  it('draws both Group levels with a single root, though Rule W would hide them', () => {
+    const ruleW = workFilterChoices(tree, campaigns, {}, { work });
+    expect([ruleW.showRoot, ruleW.showSub]).toEqual([false, false]);
+
+    const choices = workFilterChoices(
+      tree,
+      campaigns,
+      {},
+      { work, alwaysShowGroups: true },
+    );
+    expect(ids(choices.roots)).toEqual([5]);
+    expect(choices.showRoot).toBe(true);
+    // The lone root stays a choice: nothing is inferred.
+    expect(choices.rootId).toBeUndefined();
+    expect(choices.showSub).toBe(true);
+  });
+
+  it('offers every active Group in tree order, those with no work included', () => {
+    const choices = workFilterChoices(
+      tree,
+      campaigns,
+      {},
+      { work, alwaysShowGroups: true },
+    );
+    // Educațional and Mentorat own nothing; the archived Group is not offered.
+    expect(ids(choices.below)).toEqual([8, 1, 2]);
+    expect(
+      ids(
+        workFilterChoices(
+          tree,
+          campaigns,
+          { rootGroupId: 5 },
+          { work: [], alwaysShowGroups: true },
+        ).below,
+      ),
+    ).toEqual([8, 1, 2]);
+  });
+
+  it('keeps Rule W for the Campaign level', () => {
+    const choices = workFilterChoices(
+      tree,
+      campaigns,
+      {},
+      { work, alwaysShowGroups: true },
+    );
+    expect(ids(choices.campaigns)).toEqual([14]);
+    expect(choices.showCampaign).toBe(false);
+  });
+
+  it('draws the Subgrup with no option under a leaf root, for the page to disable', () => {
+    const choices = workFilterChoices(
+      groups,
+      campaigns,
+      { rootGroupId: 8 },
+      { work: [], alwaysShowGroups: true },
+    );
+    expect(choices.below).toEqual([]);
+    expect(choices.showSub).toBe(true);
+  });
+});
+
 describe('rangeBounds', () => {
   it('sends Bucharest midnight of De la and the midnight after Până la', () => {
     expect(rangeBounds({ from: '2026-09-01', to: '2026-09-30' })).toEqual({
