@@ -631,6 +631,18 @@ describe('push on by default where it is allowed (2026-10-06)', () => {
     expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('skipped');
   });
 
+  it('does nothing where storage cannot keep a switch-off (CodeRabbit on #1024)', async () => {
+    // A private window whose storage refuses writes: an off could not be
+    // recorded, so nothing is switched on by itself.
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('quota', 'QuotaExceededError');
+    });
+
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('skipped');
+    expect(browser.subscribe).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
   it('a switch-off queued behind a switch-on stays recorded', async () => {
     installLocks();
 

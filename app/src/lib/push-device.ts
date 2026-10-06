@@ -90,8 +90,9 @@ function rememberPushOn(memberId: string, on: boolean) {
  * on again (the switch, or Acasă's card) clears it. A sign-out never sets
  * it: it deletes this device's row so the next person on a shared device gets
  * nothing of this Member's, but the Member who signs in again here is the one
- * the pushes are for. Storage that throws reads as "not turned off", and
- * without storage nothing is subscribed on its own anyway (the write fails).
+ * the pushes are for. Storage that throws reads as "not turned off", so
+ * {@link autoEnableDevice} does nothing where storage cannot be written: a
+ * switch-off it could not record must not be undone (CodeRabbit on #1024).
  */
 function pushOffKey(memberId: string) {
   return `osubb.push-off.${memberId}`;
@@ -100,6 +101,17 @@ function pushOffKey(memberId: string) {
 export function pushTurnedOffHere(memberId: string): boolean {
   try {
     return localStorage.getItem(pushOffKey(memberId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Whether this browser can keep the switch-off at all (a probe write). */
+function canRememberPushOff(): boolean {
+  try {
+    localStorage.setItem('osubb.push-off.probe', '1');
+    localStorage.removeItem('osubb.push-off.probe');
+    return true;
   } catch {
     return false;
   }
@@ -410,7 +422,8 @@ export function subscribeDevice(
  * (2026-10-06, Alex: "set by default the notification as approved and on").
  * Only when the permission is `granted` (so nothing can prompt), the Member
  * never turned push off on this device ({@link pushTurnedOffHere}), and the
- * browser holds no subscription at all: one it holds without this Member's
+ * browser holds no subscription at all, and storage can keep a switch-off
+ * (otherwise one could never be recorded): one it holds without this Member's
  * row (the self-repair has already looked) may be another Member's leftover
  * on a shared device, and is never adopted. Same path as the switch, under
  * the device lock, so tabs opening together subscribe once.
@@ -422,6 +435,7 @@ export async function autoEnableDevice(
   if (
     !pushSupported() ||
     Notification.permission !== 'granted' ||
+    !canRememberPushOff() ||
     pushTurnedOffHere(memberId)
   )
     return 'skipped';
