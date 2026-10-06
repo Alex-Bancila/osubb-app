@@ -166,8 +166,9 @@ export function resetPushSelfRepairForTests() {
  * back to the foreground, at most once per {@link PUSH_REPAIR_INTERVAL_MS},
  * and while the app is open it stores the subscription the worker renewed on
  * `pushsubscriptionchange`. When the repair finds nothing of this Member's to
- * repair, `autoEnableDevice` switches push on where the permission is already
- * granted and the Member never turned it off here (2026-10-06).
+ * repair, `autoEnableDevice` switches push back on where it was on when this
+ * Member's last session here ended and the permission is still granted
+ * (2026-10-06).
  * Silent by design: a failure leaves the Profil switch showing the true state
  * and is tried again at the next start.
  */

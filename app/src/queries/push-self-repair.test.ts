@@ -18,7 +18,9 @@ vi.mock('../lib/auth', () => ({
 
 import {
   autoEnableDevice,
+  forgetPushOn,
   pushOnHere,
+  pushResumesHere,
   pushTurnedOffHere,
   repairDevice,
   subscribeDevice,
@@ -535,10 +537,12 @@ describe('push stays on (2026-10-06)', () => {
 });
 
 /* 2026-10-06, Alex: "is there any way in which i can set by default the
-   notification as approved and on?" Where the browser already grants the
-   permission, push switches itself on unless the Member turned it off here. */
-describe('push on by default where it is allowed (2026-10-06)', () => {
+   notification as approved and on?" Push switches itself back on where it was
+   on when this Member's session here ended -- never on absent history, which
+   is also what a switch-off from before the off flag existed looks like. */
+describe('push back on where it was on (2026-10-06)', () => {
   const offKey = `osubb.push-off.${MEMBER}`;
+  const resumeKey = `osubb.push-resume.${MEMBER}`;
 
   function installLocks() {
     let tail: Promise<unknown> = Promise.resolve();
@@ -557,6 +561,11 @@ describe('push on by default where it is allowed (2026-10-06)', () => {
     return request;
   }
 
+  /** Push was on here when this Member's last session ended. */
+  function wasOnAtSignOut() {
+    localStorage.setItem(resumeKey, '1');
+  }
+
   beforeEach(() => {
     resetSupabaseMock();
     resetPushSelfRepairForTests();
@@ -569,11 +578,14 @@ describe('push on by default where it is allowed (2026-10-06)', () => {
   afterEach(() => {
     Reflect.deleteProperty(navigator, 'serviceWorker');
     Reflect.deleteProperty(navigator, 'locks');
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
 
-  it('switches push on at app start: granted, nothing subscribed, never turned off', async () => {
+  it('switches push back on at app start: on at the last sign-out, granted, nothing subscribed', async () => {
+    wasOnAtSignOut();
+
     renderHook(() => usePushSelfRepair(), { wrapper });
 
     await waitFor(() => expect(supabaseMock.insert).toHaveBeenCalledTimes(1));
@@ -587,12 +599,87 @@ describe('push on by default where it is allowed (2026-10-06)', () => {
       platform: 'web',
     });
     expect(pushOnHere(MEMBER)).toBe(true);
+    // Resumed: nothing is left to resume.
+    expect(pushResumesHere(MEMBER)).toBe(false);
   });
 
-  it('never after the Member turned it off with the switch', async () => {
+  it('a switch-off from before this release (no flags, granted, no subscription) stays off', async () => {
+    // Production since 2026-10-02: the switch unsubscribed and cleared the
+    // push-on flag, and nothing recorded the off.
+    renderHook(() => usePushSelfRepair(), { wrapper });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('skipped');
+    expect(browser.subscribe).not.toHaveBeenCalled();
+    expect(supabaseMock.insert).not.toHaveBeenCalled();
+  });
+
+  it('a sign-out while push is on resumes it at the next sign-in here', async () => {
+    browser.current = fakeSubscription('https://push.example.test/ok', NEW_KEY);
+    localStorage.setItem(markerKey, '1');
+    // What signOut() runs: the row goes, the choice is not recorded.
+    await unsubscribeDevice(MEMBER);
+    expect(browser.current).toBeNull();
+    expect(pushTurnedOffHere(MEMBER)).toBe(false);
+    expect(pushResumesHere(MEMBER)).toBe(true);
+
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('enabled');
+    expect(supabaseMock.insert).toHaveBeenCalledTimes(1);
+  });
+
+  it('a sign-out on a device subscribed before the push-on flag resumes it too, read from its row', async () => {
+    browser.current = fakeSubscription('https://push.example.test/ok', NEW_KEY);
+    rowPresent(true);
+
+    await unsubscribeDevice(MEMBER);
+
+    expect(pushResumesHere(MEMBER)).toBe(true);
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('enabled');
+  });
+
+  it('a sign-out while push is off leaves nothing to resume', async () => {
+    rowPresent(false);
+
+    await unsubscribeDevice(MEMBER);
+
+    expect(pushResumesHere(MEMBER)).toBe(false);
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('skipped');
+    expect(browser.subscribe).not.toHaveBeenCalled();
+  });
+
+  it('a sign-out with a subscription this Member has no row for leaves nothing to resume', async () => {
+    browser.current = fakeSubscription('https://push.example.test/x', NEW_KEY);
+    rowPresent(false);
+
+    await unsubscribeDevice(MEMBER);
+
+    expect(pushResumesHere(MEMBER)).toBe(false);
+  });
+
+  it('a session that expires while push is on resumes it at the next sign-in here', async () => {
+    localStorage.setItem(markerKey, '1');
+
+    // What auth.tsx runs when a session ends without the sign-out button.
+    forgetPushOn(MEMBER);
+    expect(pushOnHere(MEMBER)).toBe(false);
+    expect(pushResumesHere(MEMBER)).toBe(true);
+
+    // The browser dropped the subscription meanwhile.
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('enabled');
+  });
+
+  it('a session that expires while push is off leaves nothing to resume', () => {
+    forgetPushOn(MEMBER);
+    expect(pushResumesHere(MEMBER)).toBe(false);
+  });
+
+  it('never after the Member turned it off with the switch, and the off drops the resume marker', async () => {
+    wasOnAtSignOut();
     browser.current = fakeSubscription('https://push.example.test/ok', NEW_KEY);
     await unsubscribeDevice(MEMBER, { turnedOff: true });
     expect(pushTurnedOffHere(MEMBER)).toBe(true);
+    expect(pushResumesHere(MEMBER)).toBe(false);
 
     renderHook(() => usePushSelfRepair(), { wrapper });
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -603,20 +690,20 @@ describe('push on by default where it is allowed (2026-10-06)', () => {
     expect(supabaseMock.insert).not.toHaveBeenCalled();
   });
 
-  it('a sign-out is not a switch-off: the Member who signs in again gets it back', async () => {
-    browser.current = fakeSubscription('https://push.example.test/ok', NEW_KEY);
-    // What signOut() runs: the row goes, the choice is not recorded.
-    await unsubscribeDevice(MEMBER);
-    expect(pushTurnedOffHere(MEMBER)).toBe(false);
+  it('never while the switch-off stands, even with a resume marker', async () => {
+    wasOnAtSignOut();
+    localStorage.setItem(offKey, '1');
 
-    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('enabled');
-    expect(supabaseMock.insert).toHaveBeenCalledTimes(1);
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('skipped');
+    expect(browser.subscribe).not.toHaveBeenCalled();
   });
 
-  it('turning push on again lifts the switch-off', async () => {
+  it('turning push on again lifts the switch-off and the resume marker', async () => {
     localStorage.setItem(offKey, '1');
+    wasOnAtSignOut();
     await subscribeDevice(MEMBER, NEW_KEY);
     expect(pushTurnedOffHere(MEMBER)).toBe(false);
+    expect(pushResumesHere(MEMBER)).toBe(false);
   });
 
   it('a failed switch-on keeps the earlier switch-off (CodeRabbit on #1024)', async () => {
@@ -628,10 +715,12 @@ describe('push on by default where it is allowed (2026-10-06)', () => {
     await expect(subscribeDevice(MEMBER, NEW_KEY)).rejects.toBeTruthy();
 
     expect(pushTurnedOffHere(MEMBER)).toBe(true);
+    wasOnAtSignOut();
     expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('skipped');
   });
 
   it('does nothing where storage cannot keep a switch-off (CodeRabbit on #1024)', async () => {
+    wasOnAtSignOut();
     // A private window whose storage refuses writes: an off could not be
     // recorded, so nothing is switched on by itself.
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
@@ -640,7 +729,6 @@ describe('push on by default where it is allowed (2026-10-06)', () => {
 
     expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('skipped');
     expect(browser.subscribe).not.toHaveBeenCalled();
-    vi.restoreAllMocks();
   });
 
   it('a switch-off queued behind a switch-on stays recorded', async () => {
@@ -656,6 +744,7 @@ describe('push on by default where it is allowed (2026-10-06)', () => {
   });
 
   it('never asks: without a granted permission nothing is read or changed', async () => {
+    wasOnAtSignOut();
     browser.permission = 'default';
 
     renderHook(() => usePushSelfRepair(), { wrapper });
@@ -666,6 +755,7 @@ describe('push on by default where it is allowed (2026-10-06)', () => {
   });
 
   it('does nothing in a build without the VAPID key', async () => {
+    wasOnAtSignOut();
     vi.stubEnv('VITE_VAPID_PUBLIC_KEY', '');
 
     renderHook(() => usePushSelfRepair(), { wrapper });
@@ -676,6 +766,7 @@ describe('push on by default where it is allowed (2026-10-06)', () => {
   });
 
   it('never adopts a subscription this Member has no row for', async () => {
+    wasOnAtSignOut();
     // Another Member's leftover on a shared device (their session expired).
     const leftover = fakeSubscription('https://push.example.test/x', NEW_KEY);
     browser.current = leftover;
@@ -692,6 +783,7 @@ describe('push on by default where it is allowed (2026-10-06)', () => {
 
   it('subscribes once when several tabs start together', async () => {
     installLocks();
+    wasOnAtSignOut();
 
     const outcomes = await Promise.all([
       autoEnableDevice(MEMBER, NEW_KEY),
@@ -705,6 +797,7 @@ describe('push on by default where it is allowed (2026-10-06)', () => {
 
   it('a switch-off waiting behind it in another tab wins', async () => {
     installLocks();
+    wasOnAtSignOut();
     rowPresent(true);
 
     await Promise.all([
@@ -719,6 +812,7 @@ describe('push on by default where it is allowed (2026-10-06)', () => {
 
   it('a switch-off that lands while it waits for the lock stops it', async () => {
     installLocks();
+    wasOnAtSignOut();
     // Another device change holds the lock first.
     let release!: () => void;
     const held = navigator.locks.request(
@@ -727,6 +821,24 @@ describe('push on by default where it is allowed (2026-10-06)', () => {
     );
     const auto = autoEnableDevice(MEMBER, NEW_KEY);
     localStorage.setItem(offKey, '1');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    release();
+    await held;
+
+    expect(await auto).toBe('skipped');
+    expect(browser.subscribe).not.toHaveBeenCalled();
+  });
+
+  it('a resume used up while it waits for the lock stops it', async () => {
+    installLocks();
+    wasOnAtSignOut();
+    let release!: () => void;
+    const held = navigator.locks.request(
+      'osubb-push-device',
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+    const auto = autoEnableDevice(MEMBER, NEW_KEY);
+    localStorage.removeItem(resumeKey);
     await new Promise((resolve) => setTimeout(resolve, 0));
     release();
     await held;

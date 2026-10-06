@@ -67,9 +67,12 @@ export function pushOnHere(memberId: string): boolean {
 /**
  * Forget that push is on here for a Member whose session ended without the
  * sign-out button (expiry, another tab, a forced sign-out). Clears the flag
- * only: the browser subscription may already belong to the next Member.
+ * only: the browser subscription may already belong to the next Member. If
+ * push was on, it leaves the resume marker, so the same Member signing in
+ * here again gets it back ({@link autoEnableDevice}).
  */
 export function forgetPushOn(memberId: string) {
+  if (pushOnHere(memberId)) rememberResume(memberId, true);
   rememberPushOn(memberId, false);
 }
 
@@ -79,6 +82,39 @@ function rememberPushOn(memberId: string, on: boolean) {
     else localStorage.removeItem(pushOnKey(memberId));
   } catch {
     // Without storage the self-repair only works while the row exists.
+  }
+  // Push is on here again: nothing is left to resume.
+  if (on) rememberResume(memberId, false);
+}
+
+/**
+ * The resume marker (2026-10-06, lead review of #1024): push was on here for
+ * this Member when their session ended (a sign-out, an expiry), so it may be
+ * switched on again by itself when they sign in here again. It is the only
+ * history that lets {@link autoEnableDevice} act. Absent history never means
+ * on: a Member who turned the switch off before the switch-off was recorded
+ * (production since 2026-10-02) has a granted permission and no subscription
+ * either, and must stay off. Cleared when push is on here again and by the
+ * switch turning it off.
+ */
+function resumeKey(memberId: string) {
+  return `osubb.push-resume.${memberId}`;
+}
+
+export function pushResumesHere(memberId: string): boolean {
+  try {
+    return localStorage.getItem(resumeKey(memberId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function rememberResume(memberId: string, resume: boolean) {
+  try {
+    if (resume) localStorage.setItem(resumeKey(memberId), '1');
+    else localStorage.removeItem(resumeKey(memberId));
+  } catch {
+    // Without storage there is nothing to resume: push stays as it is.
   }
 }
 
@@ -418,15 +454,19 @@ export function subscribeDevice(
 }
 
 /**
- * Switch push on by itself where the browser already grants the permission
- * (2026-10-06, Alex: "set by default the notification as approved and on").
- * Only when the permission is `granted` (so nothing can prompt), the Member
- * never turned push off on this device ({@link pushTurnedOffHere}), and the
- * browser holds no subscription at all, and storage can keep a switch-off
- * (otherwise one could never be recorded): one it holds without this Member's
- * row (the self-repair has already looked) may be another Member's leftover
- * on a shared device, and is never adopted. Same path as the switch, under
- * the device lock, so tabs opening together subscribe once.
+ * Switch push back on by itself where it was on when this Member's session
+ * here ended (2026-10-06, Alex: "set by default the notification as approved
+ * and on"). Only when push was on here at that sign-out or expiry
+ * ({@link pushResumesHere}), the permission is `granted` (so nothing can
+ * prompt), the Member did not turn push off here ({@link pushTurnedOffHere}),
+ * storage can keep a switch-off (otherwise one could never be recorded), and
+ * the browser holds no subscription at all: one it holds without this
+ * Member's row (the self-repair has already looked) may be another Member's
+ * leftover on a shared device, and is never adopted. Without that history it
+ * does nothing: a granted permission and no subscription is also what a
+ * switch-off from before the switch-off was recorded looks like. Same path
+ * as the switch, under the device lock, so tabs opening together subscribe
+ * once.
  */
 export async function autoEnableDevice(
   memberId: string,
@@ -436,12 +476,14 @@ export async function autoEnableDevice(
     !pushSupported() ||
     Notification.permission !== 'granted' ||
     !canRememberPushOff() ||
+    !pushResumesHere(memberId) ||
     pushTurnedOffHere(memberId)
   )
     return 'skipped';
   return withDeviceLock(async () => {
     // Again under the lock: a switch-off that landed while this waited wins.
-    if (pushTurnedOffHere(memberId)) return 'skipped';
+    if (!pushResumesHere(memberId) || pushTurnedOffHere(memberId))
+      return 'skipped';
     const registration = await withTimeout(
       navigator.serviceWorker.ready,
       SERVICE_WORKER_TIMEOUT_MS,
@@ -491,24 +533,42 @@ async function subscribeUnlocked(
  * even when the browser's own unsubscribe fails: without them nothing is sent
  * here, which is what turning the switch off (or signing out) promises.
  */
+/** Record how push ends here: turned off by the switch, or a sign-out. */
+function markEnd(memberId: string, turnedOff: boolean, wasOn: boolean) {
+  if (turnedOff) {
+    rememberPushOff(memberId, true);
+    rememberResume(memberId, false);
+  } else if (wasOn) {
+    rememberResume(memberId, true);
+  }
+  rememberPushOn(memberId, false);
+}
+
 export async function unsubscribeDevice(
   memberId: string,
   { turnedOff = false }: { turnedOff?: boolean } = {},
 ): Promise<void> {
   // Off is off even if what follows fails: the self-repair must not turn it
-  // back on (#769). The switch also records the choice, so push is not
-  // switched on again by itself (2026-10-06); a sign-out does not.
-  rememberPushOn(memberId, false);
-  if (turnedOff) rememberPushOff(memberId, true);
+  // back on (#769). The switch also records the choice and drops any resume
+  // marker, so push is not switched on again by itself (2026-10-06). A
+  // sign-out instead leaves the resume marker when push was on here, so the
+  // same Member gets it back at their next sign-in here; it is written now,
+  // before anything that the sign-out's time limit could cut short.
+  markEnd(memberId, turnedOff, pushOnHere(memberId));
   return withDeviceLock(async () => {
     // Again under the lock: a repair or renewal that held it may have set
     // the flag after the first clear, and an enable queued before this one
     // may have lifted the switch-off: off must stay off.
-    rememberPushOn(memberId, false);
-    if (turnedOff) rememberPushOff(memberId, true);
+    markEnd(memberId, turnedOff, pushOnHere(memberId));
     const subscription = await currentSubscription();
     const token = subscription ? tokenFor(subscription) : null;
     const remembered = rememberedToken(memberId);
+    // A device subscribed before the push-on flag existed (#769) is on when
+    // its row is: read it before the row goes.
+    if (!turnedOff && token && !pushResumesHere(memberId)) {
+      const rowExists = await hasRow(memberId, token).catch(() => false);
+      if (rowExists) rememberResume(memberId, true);
+    }
 
     if (subscription) {
       try {
