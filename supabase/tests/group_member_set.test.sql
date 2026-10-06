@@ -221,10 +221,11 @@ select set_eq(
 insert into public.tasks(title, description, deadline, group_id, audience, assignment_mode, status, created_by)
 values ('Board-run task #929', 'x', '2027-05-01 09:00+00', pg_temp.g929('Board-run #929'), 'local', 'direct', 'todo',
         pg_temp.u929(3));
-select is(
-  (select count(*) from private.task_managers((select id from public.tasks where title = 'Board-run task #929'), null)),
-  0::bigint,
-  'a Group whose only Manager is a BC member notifies nobody of its Task -- no Task Notification through Group management');
+-- R42 (2026-10-07) amends R32 here: a BC member's Manager position brings its notices.
+select results_eq(
+  $$select * from private.task_managers((select id from public.tasks where title = 'Board-run task #929'), null)$$,
+  $$values (pg_temp.u929(1))$$,
+  'a Group whose only Manager is a BC member notifies that BC Manager of its Task -- a position brings its notices (R42)');
 update public.tasks set created_by = pg_temp.u929(1) where title = 'Board-run task #929';
 select results_eq(
   $$select * from private.task_managers((select id from public.tasks where title = 'Board-run task #929'), pg_temp.u929(6))$$,

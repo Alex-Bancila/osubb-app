@@ -25,7 +25,6 @@ const api = vi.hoisted(() => ({
   applications: vi.fn(),
   level: { value: 6 },
   coordination: vi.fn(),
-  settings: vi.fn(),
 }));
 
 /** The Roluri tab reads the Groups above through TanStack Query. */
@@ -46,10 +45,6 @@ vi.mock('../../lib/auth', () => ({
   }),
 }));
 vi.mock('../../queries/reference', () => ({ useRoles: api.roles }));
-// #963: Roluri reads board_group_id to know the board Group.
-vi.mock('../../queries/org-settings', () => ({
-  useOrgSettings: api.settings,
-}));
 vi.mock('../../queries/groups-admin', async (original) => ({
   ...(await original<object>()),
   useAdminGroups: api.groups,
@@ -204,9 +199,6 @@ beforeEach(() => {
   api.level.value = 6;
   api.coordination.mockReset();
   api.coordination.mockResolvedValue([]);
-  api.settings.mockReturnValue({
-    data: new Map([['board_group_id', null]]),
-  });
   api.groups.mockReturnValue({ data: tree, isPending: false, isError: false });
   api.myGroups.mockReturnValue({ data: [], isPending: false, isError: false });
   api.roster.mockReturnValue({ data: roster, isPending: false });
@@ -902,13 +894,14 @@ it('offers the position pickers only Members who could take the position (F-27)'
   const user = userEvent.setup();
   show();
   await user.click(tab('Roluri'));
-  // #957: a BC member is offered as Coordonator, never as Responsabil; the
-  // Moderator, the inactive and the holders above are offered for neither.
+  // R42 (amends #957): a BC member is offered as Coordonator and as
+  // Responsabil; the Moderator, the inactive and the holders above are
+  // offered for neither.
   for (const [button, title, offered] of [
     [
       'Numește un responsabil',
       'Responsabil în Logistică',
-      ['CRCarmen RaduVoluntar'],
+      ['CRCarmen RaduVoluntar', 'DBDan BCBC'],
     ],
     [
       'Numește un coordonator',
@@ -928,62 +921,6 @@ it('offers the position pickers only Members who could take the position (F-27)'
     await user.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   }
-});
-
-it('offers BC as Responsabil on the board Group, where the title is the Board Title, and on no other Group (#963)', async () => {
-  api.members.mockReturnValue({
-    data: [
-      ...members,
-      {
-        memberId: 'd',
-        name: 'Dan BC',
-        avatarColor: null,
-        status: 'activ',
-        roleId: 'bc',
-        roleLabel: 'BC',
-        level: 6,
-      },
-      {
-        memberId: 'm',
-        name: 'Mara Mod',
-        avatarColor: null,
-        status: 'activ',
-        roleId: 'moderator',
-        roleLabel: 'Moderator',
-        level: 9,
-      },
-    ],
-  });
-  const user = userEvent.setup();
-  const responsabili = async () => {
-    await user.click(tab('Roluri'));
-    await user.click(
-      screen.getByRole('button', { name: 'Numește un responsabil' }),
-    );
-    const dialog = await screen.findByRole('dialog', {
-      name: 'Responsabil în Logistică',
-    });
-    await user.click(within(dialog).getByRole('combobox', { name: 'Membru' }));
-    let options: (string | null)[] = [];
-    await waitFor(() => {
-      options = screen
-        .getAllByRole('option')
-        .map((option) => option.textContent);
-      expect(options.length).toBeGreaterThan(0);
-    });
-    return options;
-  };
-
-  // Logistică is the Group board_group_id names.
-  api.settings.mockReturnValue({ data: new Map([['board_group_id', '2']]) });
-  const view = show();
-  expect(await responsabili()).toEqual(['CRCarmen RaduVoluntar', 'DBDan BCBC']);
-  view.unmount();
-
-  // Another Group is the board: Logistică keeps #957.
-  api.settings.mockReturnValue({ data: new Map([['board_group_id', '5']]) });
-  show();
-  expect(await responsabili()).toEqual(['CRCarmen RaduVoluntar']);
 });
 
 it('offers no appointment until the positions above are known (F-27)', async () => {
