@@ -1277,27 +1277,30 @@ describe('ProfileScreen', () => {
       render(<ProfileScreen />, { wrapper: wrapper() });
 
       // The header keeps the theme switch only.
-      const heading = screen.getByRole('heading', {
-        level: 1,
-        name: 'Profilul meu',
-      });
-      const header = heading.closest('header') ?? heading.parentElement!;
+      const header = screen
+        .getByRole('heading', { level: 1, name: 'Profilul meu' })
+        .closest<HTMLElement>('[data-slot="page-header"]');
+      if (!header) throw new Error('no page header');
+      expect(
+        within(header).getByRole('button', { name: 'Temă întunecată' }),
+      ).toBeInTheDocument();
       expect(
         within(header).queryByRole('button', { name: /deconect/i }),
       ).toBeNull();
 
       const signOuts = screen.getAllByRole('button', { name: /deconect/i });
       expect(signOuts).toHaveLength(1);
-      expect(signOuts[0]).toHaveAccessibleName(LINK);
+      const [link] = signOuts as [HTMLElement];
+      expect(link).toHaveAccessibleName(LINK);
       // Below the last panel on the page.
       const lastPanel = screen.getByRole('region', {
         name: 'Confidențialitate',
       });
       expect(
-        lastPanel.compareDocumentPosition(signOuts[0]) &
+        lastPanel.compareDocumentPosition(link) &
           Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
-      expect(lastPanel).not.toContainElement(signOuts[0]);
+      expect(lastPanel).not.toContainElement(link);
     });
 
     it('asks first, then signs out', async () => {
