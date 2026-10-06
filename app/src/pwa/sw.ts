@@ -15,6 +15,7 @@ import {
 } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { NetworkOnly } from 'workbox-strategies';
+import { NOTIFICATION_BADGE, NOTIFICATION_ICON } from './app-icons';
 import { openTappedNotification, parsePushPayload } from './push-payload';
 import { renewSubscription } from './push-renewal';
 import { NAVIGATION_DENYLIST, supabaseOriginPattern } from './sw-routes';
@@ -57,7 +58,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body ?? undefined,
-      icon: '/pwa-192x192.png',
+      icon: NOTIFICATION_ICON,
+      badge: NOTIFICATION_BADGE,
       data: { link: payload.link, id: payload.id },
       tag: `osubb-${payload.id}`,
     }),
