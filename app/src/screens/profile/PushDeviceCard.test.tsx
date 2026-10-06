@@ -29,6 +29,8 @@ function answer(overrides: Partial<PushState> = {}) {
     configured: true,
     permission: 'default',
     subscribed: false,
+    target: null,
+    revoked: false,
     loading: false,
     pending: false,
     error: null,
@@ -43,7 +45,11 @@ function theSwitch() {
 }
 
 describe('PushDeviceCard', () => {
-  beforeEach(() => answer());
+  beforeEach(() => {
+    hook.enable.mockClear();
+    hook.disable.mockClear();
+    answer();
+  });
 
   it('is off with its copy, and turning it on enables push', async () => {
     const user = userEvent.setup();
@@ -122,6 +128,39 @@ describe('PushDeviceCard', () => {
     answer({ pending: true });
     render(<PushDeviceCard />);
     expect(theSwitch()).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('moves at the tap: shows the state a change is heading to while it runs (2026-10-06)', () => {
+    // Subscribing can take seconds; a switch that sat still drew a second tap
+    // that turned push straight back off (production, six times in four days).
+    answer({ pending: true, target: true });
+    const { rerender } = render(<PushDeviceCard />);
+    expect(theSwitch()).toBeChecked();
+    expect(theSwitch()).toHaveAttribute('aria-disabled', 'true');
+    expect(theSwitch()).toHaveAccessibleDescription(
+      'Se pornesc notificările pe acest dispozitiv…',
+    );
+
+    answer({ pending: true, target: false, subscribed: true });
+    rerender(<PushDeviceCard />);
+    expect(theSwitch()).not.toBeChecked();
+    expect(theSwitch()).toHaveAccessibleDescription(
+      'Se opresc notificările pe acest dispozitiv…',
+    );
+  });
+
+  it('says so when the browser took back the permission of a device that had push on', async () => {
+    answer({ permission: 'default', revoked: true });
+    const user = userEvent.setup();
+    const { container } = render(<PushDeviceCard />);
+
+    expect(theSwitch()).not.toBeChecked();
+    expect(theSwitch()).toHaveAccessibleDescription(
+      'Browserul a oprit notificările pe acest dispozitiv. Pornește-le din nou.',
+    );
+    await user.click(theSwitch());
+    expect(hook.enable).toHaveBeenCalledTimes(1);
+    expect((await axe.run(container)).violations).toEqual([]);
   });
 
   it('announces a failure in Romanian', () => {

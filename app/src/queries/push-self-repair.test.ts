@@ -16,10 +16,15 @@ vi.mock('../lib/auth', () => ({
   useAuth: () => ({ session: { user: { id: MEMBER } } }),
 }));
 
-import { pushOnHere, unsubscribeDevice } from '../lib/push-device';
+import {
+  pushOnHere,
+  repairDevice,
+  unsubscribeDevice,
+} from '../lib/push-device';
 import { bytesToUrlBase64, urlBase64ToUint8Array } from '../lib/vapid-key';
 import { PUSH_SUBSCRIPTION_CHANGED } from '../pwa/push-renewal';
 import {
+  PUSH_REPAIR_INTERVAL_MS,
   resetPushSelfRepairForTests,
   usePushSelfRepair,
 } from './push-subscription';
@@ -356,5 +361,157 @@ describe('usePushSelfRepair (#769)', () => {
     await unsubscribeDevice(MEMBER);
 
     expect(pushOnHere(MEMBER)).toBe(false);
+  });
+});
+
+/* 2026-10-06, "push turns itself off": production showed a browser losing its
+   subscription in the background, its old row filling the five-device cap so
+   the repair was refused, and five tabs repairing at once into two rows. */
+describe('push stays on (2026-10-06)', () => {
+  const tokenKey = `osubb.push-token.${MEMBER}`;
+
+  function installLocks() {
+    let tail: Promise<unknown> = Promise.resolve();
+    const request = vi.fn((_name: string, work: () => Promise<unknown>) => {
+      const run = tail.then(() => work());
+      tail = run.then(
+        () => undefined,
+        () => undefined,
+      );
+      return run;
+    });
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: { request },
+    });
+    return request;
+  }
+
+  beforeEach(() => {
+    resetSupabaseMock();
+    resetPushSelfRepairForTests();
+    localStorage.clear();
+    installBrowser();
+    vi.stubEnv('VITE_VAPID_PUBLIC_KEY', NEW_KEY);
+    supabaseMock.insert.mockResolvedValue({ error: null });
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'serviceWorker');
+    Reflect.deleteProperty(navigator, 'locks');
+    Reflect.deleteProperty(document, 'visibilityState');
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('replaces the row this browser stored last when the browser lost its subscription', async () => {
+    const lost = fakeSubscription('https://push.example.test/lost', NEW_KEY);
+    localStorage.setItem(markerKey, '1');
+    localStorage.setItem(tokenKey, tokenOf(lost));
+
+    renderHook(() => usePushSelfRepair(), { wrapper });
+
+    await waitFor(() => expect(supabaseMock.delete).toHaveBeenCalledTimes(1));
+    expect(supabaseMock.insert).toHaveBeenCalledWith({
+      member_id: MEMBER,
+      token: tokenOf(browser.fresh),
+      platform: 'web',
+    });
+    expect(supabaseMock.eq).toHaveBeenCalledWith('token', tokenOf(lost));
+    // Stored first, then the old row goes.
+    expect(supabaseMock.insert.mock.invocationCallOrder[0]).toBeLessThan(
+      supabaseMock.delete.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(localStorage.getItem(tokenKey)).toBe(tokenOf(browser.fresh));
+  });
+
+  it('at the five-device cap, frees the row this browser stored last and stores again', async () => {
+    // Production 2026-10-05: five refused inserts (push_devices_limit) and the
+    // switch stuck off, because nothing knew which row was this browser's.
+    const lost = fakeSubscription('https://push.example.test/lost', NEW_KEY);
+    localStorage.setItem(markerKey, '1');
+    localStorage.setItem(tokenKey, tokenOf(lost));
+    supabaseMock.insert
+      .mockResolvedValueOnce({
+        error: { code: '23514', message: 'push_devices_limit' },
+      })
+      .mockResolvedValueOnce({ error: null });
+
+    renderHook(() => usePushSelfRepair(), { wrapper });
+
+    await waitFor(() => expect(supabaseMock.insert).toHaveBeenCalledTimes(2));
+    expect(supabaseMock.delete).toHaveBeenCalledTimes(1);
+    expect(supabaseMock.eq).toHaveBeenCalledWith('token', tokenOf(lost));
+    expect(supabaseMock.delete.mock.invocationCallOrder[0]).toBeLessThan(
+      supabaseMock.insert.mock.invocationCallOrder[1] ?? 0,
+    );
+  });
+
+  it('remembers the token of a healthy device', async () => {
+    const current = fakeSubscription('https://push.example.test/ok', NEW_KEY);
+    browser.current = current;
+    rowPresent(true);
+
+    expect(await repairDevice(MEMBER, NEW_KEY)).toBe('healthy');
+    expect(localStorage.getItem(tokenKey)).toBe(tokenOf(current));
+  });
+
+  it('repairs once when several tabs start together', async () => {
+    installLocks();
+    localStorage.setItem(markerKey, '1');
+    // The second tab, behind the lock, finds the row the first one stored.
+    rowPresent(true);
+
+    const outcomes = await Promise.all([
+      repairDevice(MEMBER, NEW_KEY),
+      repairDevice(MEMBER, NEW_KEY),
+    ]);
+
+    expect(outcomes).toEqual(['repaired', 'healthy']);
+    expect(browser.subscribe).toHaveBeenCalledTimes(1);
+    expect(supabaseMock.insert).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs again when the app comes back after the interval, and not before', async () => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'visible',
+    });
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    browser.current = fakeSubscription('https://push.example.test/ok', NEW_KEY);
+    rowPresent(true, true);
+
+    renderHook(() => usePushSelfRepair(), { wrapper });
+    await waitFor(() =>
+      expect(supabaseMock.maybeSingle).toHaveBeenCalledTimes(1),
+    );
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(supabaseMock.maybeSingle).toHaveBeenCalledTimes(1);
+
+    now.mockReturnValue(1_000_000 + PUSH_REPAIR_INTERVAL_MS + 1);
+    document.dispatchEvent(new Event('visibilitychange'));
+    await waitFor(() =>
+      expect(supabaseMock.maybeSingle).toHaveBeenCalledTimes(2),
+    );
+  });
+
+  it('turning the switch off also deletes the row of a subscription this browser lost', async () => {
+    const current = fakeSubscription('https://push.example.test/ok', NEW_KEY);
+    browser.current = current;
+    localStorage.setItem(markerKey, '1');
+    localStorage.setItem(tokenKey, 'lost-subscription-json');
+
+    await unsubscribeDevice(MEMBER);
+
+    expect(supabaseMock.delete).toHaveBeenCalledTimes(2);
+    expect(supabaseMock.eq).toHaveBeenCalledWith('token', tokenOf(current));
+    expect(supabaseMock.eq).toHaveBeenCalledWith(
+      'token',
+      'lost-subscription-json',
+    );
+    expect(localStorage.getItem(tokenKey)).toBeNull();
   });
 });
