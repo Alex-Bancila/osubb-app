@@ -1,14 +1,19 @@
 -- #941 (R32 amended): when a Task's creator is not a live recipient, its manager
 -- Notifications go to the Managers of the nearest Group on the Task's path -- its own
--- Group first, then each ancestor up to the root -- that has a live Manager below BC.
+-- Group first, then each ancestor up to the root -- that has a live Manager (below BC until R42; never the Moderator).
 -- With no such Manager anywhere, the chain's live peer Responsibles (ruling D4); with
--- none of those either, nobody. BC members and the Moderator are never recipients
--- through Group management and never stop the walk (their roster rows do not count),
--- the membri de drept are never added, and the actor is never a recipient.
+-- none of those either, nobody. The Moderator is never a recipient through Group
+-- management and never stops the walk (their roster rows do not count), the membri
+-- de drept are never added, and the actor is never a recipient.
+--
+-- R42 (2026-10-07) amends #941 for BC: a BC member's Manager row is a live Manager
+-- like anyone's -- it stops the walk and is notified -- and a BC Responsible is a peer.
 --
 -- Mutation proof: rebuilding private.task_managers from 20260929200000 (the walk in
 -- private.group_managers stopping at a BC/Moderator Manager, then filtered) turns the
--- "BC/Moderator never stop the walk" assertions red; confining the walk to the Task's
+-- "the Moderator never stops the walk" assertions red; restoring #941's `level < 6`
+-- turns the R42 "a BC Manager stops the walk" and "a BC peer Responsible" assertions
+-- red; confining the walk to the Task's
 -- own Group turns the parent and grandparent assertions red; skipping the Task's own
 -- Group turns the own-Group assertion red.
 --
@@ -108,35 +113,35 @@ select set_eq(
 update public.group_members set group_role = 'member'
  where member_id = pg_temp.u941(9) and group_id = (select id from public.groups where name = 'Leaf A #941');
 
--- ==================== BC and the Moderator never stop the walk ====================
+-- ==================== a BC Manager stops the walk; the Moderator never ====================
 
 select set_eq(
   $$select * from private.task_managers(pg_temp.t941('C'), null)$$,
-  $$values (pg_temp.u941(3))$$,
-  'a parent managed only by a BC member and the Moderator does not end the walk: the grandparent''s Manager is notified, never BC or the Moderator (#941)');
+  $$values (pg_temp.u941(1))$$,
+  'a parent managed by a BC member and the Moderator ends the walk at the BC Manager, who is notified -- never the Moderator, never the grandparent (R42)');
 select is(
-  (select count(*) from private.task_managers(pg_temp.t941('C'), pg_temp.u941(3))),
+  (select count(*) from private.task_managers(pg_temp.t941('C'), pg_temp.u941(1))),
   0::bigint,
-  'the grandparent''s Manager as the actor is excluded, and BC/the Moderator do not take their place');
+  'the BC Manager as the actor is excluded and still marks the parent as managed: the grandparent''s Manager does not take their place');
 select set_eq(
   $$select * from private.task_managers(pg_temp.t941('E'), null)$$,
-  $$values (pg_temp.u941(5)), (pg_temp.u941(8))$$,
-  'with no Manager below BC anywhere on the path, the chain''s live peer Responsibles are notified -- the Moderator''s Manager row neither stops the walk nor is added, the BC Responsible is left out (#941, D4)');
+  $$values (pg_temp.u941(1)), (pg_temp.u941(5)), (pg_temp.u941(8))$$,
+  'with no Manager below the Moderator anywhere on the path, the chain''s live peer Responsibles are notified, the BC Responsible included (R42) -- the Moderator''s Manager row neither stops the walk nor is added (#941, D4)');
 select set_eq(
   $$select * from private.task_managers(pg_temp.t941('E'), pg_temp.u941(5))$$,
-  $$values (pg_temp.u941(8))$$,
+  $$values (pg_temp.u941(1)), (pg_temp.u941(8))$$,
   'the acting peer Responsible is excluded from the peers');
 
--- ==================== nobody when no Group above has one ====================
+-- ==================== a BC Manager of the root ====================
 
-select is(
-  (select count(*) from private.task_managers(pg_temp.t941('D'), null)),
-  0::bigint,
-  'no live Manager or Responsible below BC up to the root notifies nobody -- the BC member managing the root is not added');
-select is(
-  (select count(*) from private.task_managers(pg_temp.t941('D'), pg_temp.u941(2))),
-  0::bigint,
-  'nor when the Moderator acts: BC and the Moderator are never the fallback');
+select set_eq(
+  $$select * from private.task_managers(pg_temp.t941('D'), null)$$,
+  $$values (pg_temp.u941(1))$$,
+  'the BC member managing the root is the nearest live Manager above the Leaf, and is notified (R42)');
+select set_eq(
+  $$select * from private.task_managers(pg_temp.t941('D'), pg_temp.u941(2))$$,
+  $$values (pg_temp.u941(1))$$,
+  'the Moderator acting changes nothing and is never the fallback');
 
 -- ==================== the creator branch is unchanged ====================
 
@@ -147,8 +152,8 @@ select set_eq(
   'a live creator who is not the actor is the sole recipient');
 select set_eq(
   $$select * from private.task_managers(pg_temp.t941('C'), pg_temp.u941(7))$$,
-  $$values (pg_temp.u941(3))$$,
-  'a creator acting on their own Task falls through to the nearest Manager above the BC-managed parent');
+  $$values (pg_temp.u941(1))$$,
+  'a creator acting on their own Task falls through to the nearest Manager: the BC Manager of the parent (R42)');
 update public.tasks set created_by = pg_temp.u941(6) where id = pg_temp.t941('C');
 
 -- ==================== never a membre de drept ====================
@@ -160,9 +165,9 @@ select is(
     cross join lateral private.task_managers(pg_temp.t941(chain), actor) as recipient
      join public.profiles as profile on profile.id = recipient
      join public.roles as role on role.id = profile.role
-    where role.level >= 6),
+    where role.level >= 6 and recipient <> pg_temp.u941(1)),
   0::bigint,
-  'no BC member or Moderator is a recipient of any of these Tasks, whoever acts');
+  'no Moderator and no BC member without a position here (a membre de drept) is a recipient of any of these Tasks, whoever acts');
 
 select * from finish();
 rollback;

@@ -8,7 +8,7 @@ The shared language for the OSUBB app. Use these terms consistently in product d
 Organizația Studenților din Universitatea Babeș-Bolyai, the student NGO whose internal work this application supports.
 
 **BC**:
-Biroul de Conducere, the organization’s highest operational leadership group. Every active BC member, like the Moderator, grants and removes the BC and Moderator Roles, changes the Membership Status of a Member holding either, and invites new Members at either rank. The organization always keeps at least one active BC member: whoever removes the last one names who replaces them in the same change. Every active BC member is a member of every Group by that Role (a Membru de drept), yet receives no Task, Event or Announcement Notification through Group membership, Group Audience or Group management; only what asks them to decide or concerns them personally reaches them. A BC member may hold the Group Manager position of any Group — each Department's Vicepreședinte is one — and never the Group Responsible position, except in Biroul de Conducere, where the Responsible title is the Board Title. A BC member who holds a Board Title is named by it wherever the app names their Role.
+Biroul de Conducere, the organization’s highest operational leadership group. Every active BC member, like the Moderator, grants and removes the BC and Moderator Roles, changes the Membership Status of a Member holding either, and invites new Members at either rank. The organization always keeps at least one active BC member: whoever removes the last one names who replaces them in the same change. Every active BC member is a member of every Group by that Role (a Membru de drept), yet receives no Task, Event or Announcement Notification through that membership; only what asks them to decide, concerns them personally, or comes with a position they hold reaches them. A BC member may hold the Group Manager or the Group Responsible position of any Group or Child Group — each Department's Vicepreședinte is a Manager, and in Biroul de Conducere the Responsible title is the Board Title — and that position brings the Group's notices as it would for anyone: its Tasks, Events and Announcements, for that Group and every Group below it (ruling R42, 2026-10-07). A BC member who holds a Board Title is named by it wherever the app names their Role.
 
 **BCE**:
 Biroul de Conducere Extins, the extended leadership group immediately below BC. A Department's Group Responsibles are its BCE members, each under their own display name. A BCE member who holds a Board Title is named by it wherever the app names their Role.
@@ -22,7 +22,7 @@ The display name of a Department's Group Manager: the BC member who runs that De
 _Avoid_: BCE (as the Department's Manager), department head, coordinator
 
 **Moderator**:
-The highest Role, a transferable seat held by the IT Coordinator. BC members and the Moderator grant and remove it, never on themselves; the organization always keeps at least one active Moderator, so whoever removes the last one names the replacement in the same change, and may name themselves. BC members and the Moderator change the Membership Status of a BC member or a Moderator; taking the last active holder of either rank out of Activ names the replacement the same way. Like a BC member, the Moderator is a Membru de drept of every Group and receives no Notification through membership.
+The highest Role, a transferable seat held by the IT Coordinator. BC members and the Moderator grant and remove it, never on themselves; the organization always keeps at least one active Moderator, so whoever removes the last one names the replacement in the same change, and may name themselves. BC members and the Moderator change the Membership Status of a BC member or a Moderator; taking the last active holder of either rank out of Activ names the replacement the same way. Like a BC member, the Moderator is a Membru de drept of every Group and receives no Notification through membership; unlike one, the Moderator holds no Group position.
 
 **AG / AGO**:
 Adunarea Generală / Adunarea Generală Ordinară, where voting members make organization decisions. In the application the Adunarea Generală is a Group with Automatic Membership at Minimum Level 3, created and named by BC; a Member joins it by gaining Drept de Vot and leaves it only when BC withdraws that Role.
@@ -109,11 +109,11 @@ The members of a Group: its roster rows, its automatic members under Automatic M
 _Avoid_: Roster when the automatic members or the Membri de drept are meant
 
 **Membru de drept**:
-A BC member or the Moderator in their standing as a member of every Group by their Role, listed apart at the end of each roster and never removed from it. It carries no Notification: a Membru de drept is not in the Group Audience that Notifications reach.
+A BC member or the Moderator in their standing as a member of every Group by their Role, listed apart at the end of each roster and never removed from it. It carries no Notification: a Membru de drept is not in the Group Audience that Notifications reach. A BC member who also holds a position (Group Manager or Group Responsible) on a Group or on one above it is reached through that position, never through this standing (ruling R42).
 _Avoid_: Ex officio member, board member of the Group
 
 **Group Audience**:
-Every active Member of a Group or of any Group below it, whether through a roster row or through Automatic Membership; the Membri de drept are not part of it. A Group's Announcements, its new Events and the important changes to its Events reach its Group Audience, except BC members and the Moderator, who are never notified through it, and a Member's Relevant Events are those of the Groups whose Audience they are in. Task notifications never use it; they target the Executor, the Task Manager, and the Candidates.
+Every active Member of a Group or of any Group below it, whether through a roster row or through Automatic Membership; the Membri de drept are not part of it. A Group's Announcements, its new Events and the important changes to its Events reach its Group Audience, except BC members and the Moderator, who are never notified through it — save a BC member who holds a Group Manager or Group Responsible position on that Group or on a Group above it, who is notified as any position holder is (ruling R42) — and a Member's Relevant Events are those of the Groups whose Audience they are in. Task notifications never use it; they target the Executor, the Task Manager, and the Candidates.
 _Avoid_: Recipients, subscribers, the roster when Automatic Membership is meant
 
 **Organization Group**:
@@ -183,7 +183,7 @@ A Task that groups Subtasks one level deep. It has no Executor, Candidate Queue,
 An ordinary Task whose Origin is inherited immutably from its Umbrella Task.
 
 **Task Manager**:
-The Member who created a Task, recorded by the server. They receive the Task's manager notifications; when they are the actor or no longer active, the Managers of the nearest Group on the Origin's path that has a Manager receive them instead (else its peer Responsibles), never a BC member or the Moderator through a Group, and nobody when no such manager is left.
+The Member who created a Task, recorded by the server. They receive the Task's manager notifications; when they are the actor or no longer active, the Managers of the nearest Group on the Origin's path that has a Manager receive them instead (else its peer Responsibles), a BC member's position counting like anyone's (ruling R42) and the Moderator's never, and nobody when no such manager is left.
 
 **Executor**:
 The one Member currently accountable for completing a Task.

@@ -452,51 +452,34 @@ export function rosterBackState(groupId: number): BackLinkState {
 }
 
 /**
- * Ranks a position picker never offers (Alex, 2026-09-29, F-27; amended
- * 2026-09-30, #957): the Moderator holds no Group position at all, and a BC
- * member — a Department's Vicepreședinte — may be a Group Manager of any
- * Group but never a Group Responsible, the position the BCE members hold —
- * except in Biroul de Conducere, where the Responsible title is the Board
- * Title (#963), a BC member's included.
+ * Ranks a position picker never offers (Alex, 2026-09-29, F-27; ruling R42,
+ * 2026-10-07): the Moderator holds no Group position at all. A BC member may
+ * be a Group Manager (Coordonator) and, since R42, a Group Responsible of any
+ * Group or Child Group — no longer only on Biroul de Conducere (#957, #963) —
+ * and the position brings that Group's notices.
  */
 const OUTSIDE_POSITIONS: Record<
-  'manager' | 'responsible' | 'boardResponsible',
+  'manager' | 'responsible',
   ReadonlySet<string>
 > = {
   manager: new Set(['moderator']),
-  responsible: new Set(['bc', 'moderator']),
-  boardResponsible: new Set(['moderator']),
+  responsible: new Set(['moderator']),
 };
 
 /**
- * Whether this is the board Group (#824, decision D1): the one the
- * organization setting `board_group_id` names, by id and never by name.
- */
-export function isBoardGroup(
-  groupId: number,
-  boardGroupId: string | null | undefined,
-): boolean {
-  return Boolean(boardGroupId) && Number(boardGroupId) === groupId;
-}
-
-/**
- * Who the Coordonator or the Responsabil picker offers (F-27, #957): a live
- * active Member at or above the Group's Minimum Level, not of a rank kept
- * outside that position, who holds no position here yet — on this roster or
- * inherited from a Group above. On the board Group the Responsabil picker
- * offers BC members too (#963). The Roster's add picker keeps its own list.
+ * Who the Coordonator or the Responsabil picker offers (F-27, #957, R42): a
+ * live active Member at or above the Group's Minimum Level, not of a rank
+ * kept outside that position, who holds no position here yet — on this
+ * roster or inherited from a Group above. The Roster's add picker keeps its
+ * own list.
  */
 export function positionCandidates(
   members: readonly AppointableMember[],
   group: Pick<AdminGroup, 'min_level'>,
   holders: ReadonlySet<string>,
   position: 'manager' | 'responsible',
-  { boardGroup = false }: { boardGroup?: boolean } = {},
 ): AppointableMember[] {
-  const outside =
-    OUTSIDE_POSITIONS[
-      position === 'responsible' && boardGroup ? 'boardResponsible' : position
-    ];
+  const outside = OUTSIDE_POSITIONS[position];
   return members.filter(
     (member) =>
       member.status === 'activ' &&
