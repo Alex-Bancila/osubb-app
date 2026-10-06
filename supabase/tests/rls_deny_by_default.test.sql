@@ -161,6 +161,10 @@ insert into notification_push_preferences (member_id, kind, push_enabled) values
 insert into notification_email_preferences (member_id, digest_enabled) values
   ('ffffffff-0000-0000-0000-000000000006', true),
   ('eeeeeeee-0000-0000-0000-000000000156', true);
+-- R43: Grupuri preferate are self-only too; the same two owners.
+insert into member_group_unselected (member_id, group_id) values
+  ('ffffffff-0000-0000-0000-000000000006', pg_temp.dept_group('edu')),
+  ('eeeeeeee-0000-0000-0000-000000000156', pg_temp.dept_group('edu'));
 -- #771: Privacy Acknowledgements are own-row plus level >= 6. The row owned
 -- by the claimless uid is what exercises the own-row limb of
 -- privacy_notice_acknowledgements_read for the real claimless user below.
