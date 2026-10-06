@@ -17,7 +17,11 @@ export type CupRow = Functions['department_cup']['Returns'][number];
 export type MemberTask =
   Functions['leadership_member_tasks']['Returns'][number];
 /** The Work Filter's arguments (#677, #678); the Cup takes all but the Group. */
-export type LeadershipFilters = WorkFilterParams;
+/**
+ * The board's arguments: the Work Filter's, and `p_preferred` (R43) when it
+ * opens on the caller's Grupuri preferate.
+ */
+export type LeadershipFilters = WorkFilterParams & { p_preferred?: boolean };
 export type CupFilters = Omit<WorkFilterParams, 'p_group_id'>;
 /** The Member tracker's range reads the Task deadline (#677); no Group, no Campaign. */
 export type MemberTaskRange = Pick<WorkFilterParams, 'p_from' | 'p_to'>;

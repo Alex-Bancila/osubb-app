@@ -30,6 +30,8 @@ export const keys = {
         p_campaign_id?: number;
         p_from?: string;
         p_to?: string;
+        /* R43: the board on the caller's Grupuri preferate. */
+        p_preferred?: boolean;
       } | null,
     ) => ['points', 'leadership', memberId, filters] as const,
     /* #906: one Member's total on Trackerul membrului, under the same filter. */
@@ -188,6 +190,11 @@ export const keys = {
       ['groups', 'appointable', { memberId }] as const,
     mine: (memberId: string | undefined) =>
       ['groups', 'mine', { memberId }] as const,
+    /* R43: Grupuri preferate -- every Group the member can see, selected or
+       not, and why a Group is locked. Under `['groups']`, so a new Group or a
+       new position refreshes it. */
+    preferences: (memberId: string | undefined) =>
+      ['groups', 'preferences', { memberId }] as const,
     /* The Work Filter's Group and Campaign choices on the Tracker. */
     filterOptions: (memberId: string | undefined) =>
       ['groups', 'filter-options', { memberId }] as const,

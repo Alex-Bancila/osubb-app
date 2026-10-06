@@ -54,6 +54,7 @@ import { EmailDigestCard } from './EmailDigestCard';
 import { JoiningSection } from './JoiningSection';
 import { PHONE_HINT } from './profile-copy';
 import { PushDeviceCard } from './PushDeviceCard';
+import { PreferredGroupsCard } from './PreferredGroupsCard';
 import { RoleTimeline } from './RoleTimeline';
 import { useRoleTimelineShown } from './role-timeline-shown';
 
@@ -461,13 +462,17 @@ export default function ProfileScreen() {
         </PageGrid>
 
         <PageGrid columns={2}>
-          <Panel
-            eyebrow="Setări"
-            icon={BellRing}
-            title="Notificări pe acest dispozitiv"
-          >
-            <PushDeviceCard />
-          </Panel>
+          <div className={stackClass}>
+            <Panel
+              eyebrow="Setări"
+              icon={BellRing}
+              title="Notificări pe acest dispozitiv"
+            >
+              <PushDeviceCard />
+            </Panel>
+            {/* R43: BCE, BC and the Moderator only -- nothing for anyone else. */}
+            <PreferredGroupsCard />
+          </div>
           <div className={stackClass}>
             <Panel eyebrow="Setări" icon={Mail} title="Email zilnic">
               <EmailDigestCard />

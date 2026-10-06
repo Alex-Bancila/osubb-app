@@ -119,6 +119,7 @@ export function FilterToolbar({
   hidden = false,
   pending = false,
   search,
+  notice,
   trailing,
   children,
   className,
@@ -139,6 +140,11 @@ export function FilterToolbar({
   /** The options are loading: the button waits, disabled, and says so. */
   pending?: boolean;
   search?: ReactNode;
+  /**
+   * A standing note about what the page shows, after the search (the
+   * Grupuri preferate chip, R43). Not a filter: not counted, not cleared.
+   */
+  notice?: ReactNode;
   trailing?: ReactNode;
   /** The surface's controls, given a unique id prefix. */
   children: (id: string) => ReactNode;
@@ -186,7 +192,7 @@ export function FilterToolbar({
     onClear();
   }
 
-  if (hidden && !search && !chips.length && !trailing) return null;
+  if (hidden && !search && !notice && !chips.length && !trailing) return null;
 
   return (
     <div
@@ -232,6 +238,7 @@ export function FilterToolbar({
         </p>
       )}
       {search}
+      {notice}
       {chips.length > 0 && (
         <div
           ref={chipRow}

@@ -9,6 +9,8 @@ import { workFilterCellClass } from '../../components/work-filter/field-class';
 import { formatTaskCount } from '../../lib/format';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import { matchesWorkFilter } from '../../lib/work-filter';
+import { executesTask } from '../../lib/preferred-groups';
+import { usePreferredGroups } from '../../components/preferred-groups/preferred-groups';
 import { RANGE_FIRST, TrackerWorkFilter } from './TrackerWorkFilter';
 import { TaskRow } from './TaskRow';
 import {
@@ -48,6 +50,9 @@ export function ManagerTaskList({
   onOpenTask?: (id: number) => void;
 }) {
   const { params } = useWorkFilter();
+  // R43: the list opens on the preferred Groups; a Task the member executes
+  // stays whatever its Group.
+  const preferred = usePreferredGroups();
   const [chosenState, setState] = useState('');
   const [search, setSearch] = useState('');
   const [needle, setNeedle] = useState('');
@@ -91,13 +96,15 @@ export function ManagerTaskList({
             .filter(
               ({ row, task }) =>
                 matchesWorkFilter(row, params) &&
+                (preferred.keepGroup(row.group_id) ||
+                  executesTask(row, preferred.memberId)) &&
                 matchesTaskState(task, state) &&
                 (!query || searchableTitle(task.title).includes(query)),
             )
             .map(({ task }) => task)
             .sort(compareManagedTasks(sort))
         : [],
-    [presented, params, state, query, sort],
+    [presented, params, state, query, sort, preferred],
   );
 
   const fields = listControls
@@ -184,7 +191,11 @@ export function ManagerTaskList({
               </ul>
             </>
           ) : (
-            <EmptyState bare>Niciun task nu corespunde filtrelor.</EmptyState>
+            <EmptyState bare>
+              {preferred.active && rows.length > 0
+                ? 'Niciun task în grupurile tale preferate.'
+                : 'Niciun task nu corespunde filtrelor.'}
+            </EmptyState>
           )}
         </section>
       )}

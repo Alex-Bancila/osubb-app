@@ -1,5 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { GroupFilterCombobox } from '../group/GroupFilterCombobox';
+import { PreferredGroupsChip } from '../preferred-groups/PreferredGroupsChip';
+import { usePreferredGroups } from '../preferred-groups/preferred-groups';
 import { Button } from '../ui/button';
 import {
   Combobox,
@@ -276,6 +278,11 @@ export function WorkFilter({
   const showCampaign = levels.campaign ?? true;
   const showDates = levels.dates ?? true;
   const own = useWorkFilter(levels);
+  // R43: inside a page that opens on the preferred Groups, the chip saying so
+  // sits in the toolbar -- only where the Group levels apply.
+  const preferred = usePreferredGroups();
+  const notice =
+    showGroup && preferred.available ? <PreferredGroupsChip /> : undefined;
   const filter = state ?? own;
   const { value, set, clear } = filter;
 
@@ -395,6 +402,7 @@ export function WorkFilter({
       hidden={!status?.pending && !offers}
       pending={status?.pending}
       search={search}
+      notice={notice}
       trailing={trailing}
     >
       {(id) => (

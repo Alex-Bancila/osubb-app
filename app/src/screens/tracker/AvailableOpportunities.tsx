@@ -2,6 +2,7 @@ import { EmptyState, Panel } from '../../components/layout';
 import { formatTaskCount } from '../../lib/format';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import { matchesWorkFilter } from '../../lib/work-filter';
+import { usePreferredGroups } from '../../components/preferred-groups/preferred-groups';
 import type { Opportunity } from '../../queries/task-opportunities';
 import { TaskCardGrid } from './TaskCardGrid';
 import { RANGE_FIRST, TrackerWorkFilter } from './TrackerWorkFilter';
@@ -22,8 +23,13 @@ export function AvailableOpportunities({
   onOpenTask: (id: number) => void;
 }) {
   const { params, active } = useWorkFilter();
+  // R43: Disponibile opens on the preferred Groups.
+  const preferred = usePreferredGroups();
   const shown = params
-    ? opportunities.filter((task) => matchesWorkFilter(task, params))
+    ? opportunities.filter(
+        (task) =>
+          matchesWorkFilter(task, params) && preferred.keepGroup(task.group_id),
+      )
     : [];
   return (
     <div className="space-y-6">
@@ -55,7 +61,9 @@ export function AvailableOpportunities({
             <EmptyState bare>
               {active
                 ? 'Nicio oportunitate nu corespunde filtrelor.'
-                : 'Nu sunt oportunități deschise pentru tine.'}
+                : preferred.active && opportunities.length > 0
+                  ? 'Nicio oportunitate în grupurile tale preferate.'
+                  : 'Nu sunt oportunități deschise pentru tine.'}
             </EmptyState>
           )}
         </Panel>

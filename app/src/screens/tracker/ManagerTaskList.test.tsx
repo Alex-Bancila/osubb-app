@@ -4,6 +4,13 @@ import axe from 'axe-core';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+// R43: Grupuri preferate, read by the page's scope.
+const preferences = vi.hoisted(() => ({
+  muted: new Set<number>() as ReadonlySet<number>,
+}));
+vi.mock('../../queries/group-preferences', () => ({
+  usePreferredGroupsData: () => ({ muted: preferences.muted, memberId: 'me' }),
+}));
 vi.mock('../../queries/work-filter-options', () => ({
   useWorkFilterOptions: () => ({
     isPending: false,
@@ -25,6 +32,7 @@ vi.mock('../../queries/work-filter-options', () => ({
 }));
 import { closeFilters, filterButton, openFilters } from '../../test/filters';
 import { taskRow } from '../../test/task-fixtures';
+import { PreferredGroupsScope } from '../../components/preferred-groups/PreferredGroupsScope';
 import { ManagerTaskList } from './ManagerTaskList';
 import { compareManagedTasks } from './manager-task-list';
 import { toTaskPresentation } from './task-presentation';
@@ -405,5 +413,66 @@ describe('compareManagedTasks', () => {
     expect(
       [...tasks].sort(compareManagedTasks('title')).map((task) => task.id),
     ).toEqual([5, 7, 8, 9, 6]);
+  });
+});
+
+describe('ManagerTaskList under Grupuri preferate (R43)', () => {
+  const mentorat = { ...edu, name: 'Mentorat', category: 'team', path: [1, 2] };
+  const gala = { ...edu, name: 'Gala', path: [30] };
+  const preferredRows = [
+    taskRow({ id: 61, title: 'Din Educațional', assignments: [], group: edu }),
+    taskRow({
+      id: 62,
+      title: 'Din Gala',
+      group_id: 30,
+      assignments: [],
+      group: gala,
+    }),
+    taskRow({
+      id: 63,
+      title: 'Din Gala, al meu',
+      group_id: 30,
+      assignments: [{ id: 9, member_id: 'me', ended_at: null }],
+      group: gala,
+    }),
+    taskRow({
+      id: 64,
+      title: 'Din Mentorat',
+      group_id: 2,
+      assignments: [],
+      group: mentorat,
+    }),
+  ];
+  function renderPreferred(search = '') {
+    return render(
+      <MemoryRouter initialEntries={[`/tracker${search}`]}>
+        <PreferredGroupsScope>
+          <ManagerTaskList rows={preferredRows} now={now} />
+        </PreferredGroupsScope>
+      </MemoryRouter>,
+    );
+  }
+
+  it('leaves out the unselected Groups -- a subgroup alone too -- but never a Task the member executes', () => {
+    preferences.muted = new Set([30, 2]);
+    renderPreferred();
+    expect(titles().sort()).toEqual(['Din Educațional', 'Din Gala, al meu']);
+    preferences.muted = new Set();
+  });
+
+  it('shows everything after Arată tot', async () => {
+    preferences.muted = new Set([30, 2]);
+    const user = userEvent.setup();
+    renderPreferred();
+    await user.click(screen.getByRole('button', { name: 'Arată tot' }));
+    expect(titles()).toHaveLength(4);
+    preferences.muted = new Set();
+  });
+
+  it('changes nothing outside a page that follows the preference', () => {
+    preferences.muted = new Set([30, 2]);
+    renderList('', vi.fn(), preferredRows);
+    expect(titles()).toHaveLength(4);
+    preferences.muted = new Set();
   });
 });

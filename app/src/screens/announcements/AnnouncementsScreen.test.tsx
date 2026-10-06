@@ -2,9 +2,21 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter, useLocation } from 'react-router';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AnnouncementFeedRow } from '../../queries/announcements';
 import type { Group } from '../../queries/reference';
+
+// R43: Grupuri preferate. Nothing is unselected unless a test says so.
+const preferences = vi.hoisted(() => ({
+  muted: new Set<number>() as ReadonlySet<number>,
+  memberId: undefined as string | undefined,
+}));
+vi.mock('../../queries/group-preferences', () => ({
+  usePreferredGroupsData: () => ({
+    muted: preferences.muted,
+    memberId: preferences.memberId,
+  }),
+}));
 
 const hooks = vi.hoisted(() => ({
   useAnnouncementsFeed: vi.fn(),
@@ -521,6 +533,100 @@ describe('AnnouncementsScreen', () => {
         screen.getByRole('dialog', { name: 'Anunț indisponibil' }),
       ).toBeInTheDocument();
       expect(mutate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Grupuri preferate (R43)', () => {
+    const second: Group = {
+      ...mockGroup,
+      id: 20,
+      name: 'Educațional',
+      path: [20],
+    };
+    beforeEach(() => {
+      preferences.muted = new Set([20]);
+      preferences.memberId = 'test-user-id';
+      hooks.useGroups.mockReturnValue({
+        data: new Map([
+          [10, mockGroup],
+          [20, second],
+        ]),
+        isPending: false,
+      });
+      hooks.useAnnouncementsFeed.mockReturnValue({
+        isPending: false,
+        isError: false,
+        data: [
+          createRow({ id: 1, title: 'Din IT', group_id: 10 }),
+          createRow({ id: 2, title: 'Local din Educațional', group_id: 20 }),
+          createRow({
+            id: 3,
+            title: 'Critic din Educațional',
+            group_id: 20,
+            priority: 'critical',
+          }),
+          createRow({
+            id: 4,
+            title: 'Pentru toți din Educațional',
+            group_id: 20,
+            audience: 'org',
+          }),
+          createRow({
+            id: 5,
+            title: 'Al meu din Educațional',
+            group_id: 20,
+            created_by: 'test-user-id',
+          }),
+        ],
+      });
+    });
+    afterEach(() => {
+      preferences.muted = new Set();
+      preferences.memberId = undefined;
+    });
+
+    it('opens on the preferred Groups, keeping critical, organization-wide and own Announcements', () => {
+      renderAt('/anunturi');
+      expect(screen.getByText('Din IT')).toBeInTheDocument();
+      expect(
+        screen.queryByText('Local din Educațional'),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getAllByText('Critic din Educațional').length,
+      ).toBeGreaterThan(0);
+      expect(
+        screen.getByText('Pentru toți din Educațional'),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Al meu din Educațional')).toBeInTheDocument();
+      expect(
+        screen.getByRole('link', { name: 'Doar grupurile preferate' }),
+      ).toHaveAttribute('href', '/profil#grupuri-preferate');
+    });
+
+    it('shows everything for the visit after Arată tot, and goes back', async () => {
+      const user = userEvent.setup();
+      renderAt('/anunturi');
+      await user.click(screen.getByRole('button', { name: 'Arată tot' }));
+      expect(screen.getByText('Local din Educațional')).toBeInTheDocument();
+      expect(screen.getByText('Toate grupurile')).toBeInTheDocument();
+      await user.click(
+        screen.getByRole('button', { name: 'Doar preferatele' }),
+      );
+      expect(
+        screen.queryByText('Local din Educațional'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('changes nothing for a member who unselected nothing', () => {
+      preferences.muted = new Set();
+      renderAt('/anunturi');
+      expect(screen.getByText('Local din Educațional')).toBeInTheDocument();
+      expect(
+        screen.queryByText('Doar grupurile preferate'),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Arată tot' }),
+      ).not.toBeInTheDocument();
     });
   });
 });

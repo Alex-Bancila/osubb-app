@@ -20,6 +20,9 @@ import CriticalAnnouncementBanner from './CriticalAnnouncementBanner';
 import AnnouncementComposeSheet from './AnnouncementComposeSheet';
 import { Empty, ErrorState, Loading } from '../../components/states';
 import { Page, PageGrid, PageHeader } from '../../components/layout';
+import { PreferredGroupsChip } from '../../components/preferred-groups/PreferredGroupsChip';
+import { PreferredGroupsScope } from '../../components/preferred-groups/PreferredGroupsScope';
+import { usePreferredGroups } from '../../components/preferred-groups/preferred-groups';
 
 /** The deep link a "Anunț nou" notification carries: `/anunturi?anunt=<id>` (#843). */
 const ANNOUNCEMENT_PARAM = 'anunt';
@@ -30,7 +33,21 @@ function parseAnnouncementId(value: string | null): number | null {
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
+/**
+ * Anunțuri opens on the member's Grupuri preferate (R43): a local
+ * Announcement of a Group they unselected waits behind **Arată tot**. A
+ * critical or organization-wide Announcement, and the member's own, always
+ * show — the same ones the badge still counts.
+ */
 export default function AnnouncementsScreen() {
+  return (
+    <PreferredGroupsScope>
+      <AnnouncementsContent />
+    </PreferredGroupsScope>
+  );
+}
+
+function AnnouncementsContent() {
   const { session } = useAuth();
   const memberId = session?.user.id;
   const feedQuery = useAnnouncementsFeed(memberId);
@@ -81,10 +98,18 @@ export default function AnnouncementsScreen() {
   const authors = useMemberIdentities(
     rawAnnouncements.flatMap((row) => (row.created_by ? [row.created_by] : [])),
   );
-  const announcements: AnnouncementPresentation[] = sortAnnouncements(
+  const allAnnouncements: AnnouncementPresentation[] = sortAnnouncements(
     rawAnnouncements.map((row) =>
       toAnnouncementPresentation(row, groupsQuery.data, authors.data),
     ),
+  );
+  const preferred = usePreferredGroups();
+  const announcements = allAnnouncements.filter(
+    (announcement) =>
+      preferred.keepGroup(announcement.groupId) ||
+      announcement.priority === 'critical' ||
+      announcement.audience === 'org' ||
+      announcement.authorMember?.memberId === memberId,
   );
 
   const unreadCount = countUnreadAnnouncements(announcements);
@@ -96,7 +121,7 @@ export default function AnnouncementsScreen() {
     unreadCritical !== null && announcements[0]?.id !== unreadCritical.id;
 
   const selectedAnnouncement =
-    announcements.find((a) => a.id === selectedAnnouncementId) ?? null;
+    allAnnouncements.find((a) => a.id === selectedAnnouncementId) ?? null;
 
   const isPending = feedQuery.isPending || groupsQuery.isPending;
   const feedReady = !isPending && !feedQuery.isError;
@@ -109,7 +134,7 @@ export default function AnnouncementsScreen() {
   const linkedAnnouncement =
     linkedId === null
       ? null
-      : (announcements.find((a) => a.id === linkedId) ?? null);
+      : (allAnnouncements.find((a) => a.id === linkedId) ?? null);
   const [linkUnavailable, setLinkUnavailable] = useState(false);
 
   useEffect(() => {
@@ -178,9 +203,20 @@ export default function AnnouncementsScreen() {
           onRetry={() => void feedQuery.refetch()}
         />
       ) : announcements.length === 0 ? (
-        <Empty bare text="Nu sunt anunțuri disponibile în acest moment." />
+        <div className="space-y-4">
+          <PreferredGroupsChip />
+          <Empty
+            bare
+            text={
+              allAnnouncements.length > 0
+                ? 'Niciun anunț în grupurile tale preferate.'
+                : 'Nu sunt anunțuri disponibile în acest moment.'
+            }
+          />
+        </div>
       ) : (
         <div className="space-y-6">
+          <PreferredGroupsChip />
           {showCriticalBanner && (
             <CriticalAnnouncementBanner
               announcement={unreadCritical}

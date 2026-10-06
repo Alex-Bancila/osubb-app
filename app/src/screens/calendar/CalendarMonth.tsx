@@ -44,6 +44,9 @@ import EventCard from './EventCard';
 /** Chips a day cell draws before it says "+N". */
 const CHIPS_PER_DAY = 3;
 
+/** No preferred-Groups filter: everything is shown. */
+const keepAll = () => true;
+
 /**
  * **Lună**: the month grid (#692). Each day carries the readable Events that
  * start on it and the member's Task deadlines; tapping a day lists it below.
@@ -57,6 +60,8 @@ export function CalendarMonth({
   filter,
   groups,
   relevanceOf,
+  keepEvent = keepAll,
+  keepGroup = keepAll,
   showManaged,
   onShowManagedChange: setShowManaged,
 }: {
@@ -67,6 +72,10 @@ export function CalendarMonth({
   filter: WorkFilterState;
   groups: Map<number, Group> | undefined;
   relevanceOf: (event: EventPresentation) => EventRelevance;
+  /** R43: whether an Event is shown under the preferred Groups. */
+  keepEvent?: (event: EventPresentation) => boolean;
+  /** R43: whether a managed Task's Group is shown; the member's own deadlines always are. */
+  keepGroup?: (groupId: number) => boolean;
   /** **Taskurile gestionate**, kept by the screen: its Work Filter reads it too (#845). */
   showManaged: boolean;
   onShowManagedChange: (next: boolean) => void;
@@ -111,10 +120,12 @@ export function CalendarMonth({
   const byDay = useMemo(
     () =>
       itemsByDay(
-        filterEvents(events.data ?? [], filter.value),
-        filterTasks(tasks, filter.value),
+        filterEvents(events.data ?? [], filter.value).filter(keepEvent),
+        filterTasks(tasks, filter.value).filter(
+          (task) => task.source !== 'managed' || keepGroup(task.groupId),
+        ),
       ),
-    [events.data, tasks, filter.value],
+    [events.data, tasks, filter.value, keepEvent, keepGroup],
   );
 
   // The day listed below the grid; today's when today is in this month. A day
