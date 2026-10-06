@@ -23,11 +23,88 @@
 --   * one set-based insert through private.notify, as the change notices do;
 --   * NOT when p_announce is true: the Announcement's fan-out already reaches the
 --     same Members (its Group Audience minus BC/Moderator, those who can see the
---     Group, at or above the Minimum Level), so one notice per Member, not two.
+--     Group, at or above the Minimum Level), so one notice per Member, not two;
+--   * a daily cap: a notified write is capped per Member (security pass L3), so
+--     create_event spends a new event_create cap of 50 per rolling 24 hours
+--     (PT409 rate_limited), whatever p_announce says.
 --
 -- private.create_event_impl is rebuilt from its latest body on main
 -- (20260929170000_announcement_deadline.sql); the signature is unchanged, so the
 -- grants and public.create_event stay as they are.
+
+-- ==================== the daily cap for a new Event ====================
+-- Security pass L3 capped every write that notifies other people; a new Event
+-- now does (R39), so create_event spends a cap of its own: 50 Events per Member
+-- in any 24 hours, counted on public.events (created_by, created_at). An Event
+-- published with its Announcement also spends the announcement cap, as before.
+-- require_daily_cap is rebuilt from its only definition
+-- (20260927190000_daily_caps_latin_nickname.sql) with the one new cap.
+
+create or replace function private.require_daily_cap(p_cap text, p_actor uuid)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  v_limit integer;
+  v_used  bigint;
+  v_since timestamptz;
+begin
+  v_limit := case p_cap
+    when 'group_application'      then 10
+    when 'task_interest'          then 30
+    when 'completed_work_request' then 30
+    when 'task_create'            then 100
+    when 'announcement'           then 20
+    when 'event_create'           then 50
+  end;
+  if v_limit is null then
+    raise exception 'unknown daily cap: %', p_cap;
+  end if;
+  if p_actor is null then
+    return;
+  end if;
+
+  -- One writer per (cap, Member) at a time; released at commit or rollback.
+  perform pg_advisory_xact_lock(hashtextextended('osubb.daily_cap:' || p_cap || ':' || p_actor::text, 0));
+  v_since := clock_timestamp() - interval '24 hours';
+
+  v_used := case p_cap
+    when 'group_application' then
+      (select count(*) from public.group_applications as row_
+        where row_.member_id = p_actor and row_.created_at > v_since)
+    when 'task_interest' then
+      (select count(*) from public.task_activity as row_
+        where row_.actor_id = p_actor and row_.kind = 'interest_expressed' and row_.created_at > v_since)
+    when 'completed_work_request' then
+      (select count(*) from public.completed_work_requests as row_
+        where row_.requester_id = p_actor and row_.created_at > v_since)
+    when 'task_create' then
+      (select count(*) from public.task_activity as row_
+        where row_.actor_id = p_actor and row_.kind = 'created' and row_.created_at > v_since)
+    when 'announcement' then
+      (select count(*) from public.announcements as row_
+        where row_.created_by = p_actor and row_.published_at > v_since)
+    -- R39: a new Event now notifies its audience, so creating one is capped too.
+    when 'event_create' then
+      (select count(*) from public.events as row_
+        where row_.created_by = p_actor and row_.created_at > v_since)
+  end;
+
+  if v_used >= v_limit then
+    raise sqlstate 'PT409' using
+      message = 'rate_limited',
+      detail  = format('%s: at most %s per Member in any 24 hours', p_cap, v_limit);
+  end if;
+end;
+$$;
+
+comment on function private.require_daily_cap(text, uuid) is
+  'Security pass L3: refuses PT409 rate_limited when p_actor already has the cap''s limit of writes in the last 24 hours (group_application 10, task_interest 30, completed_work_request 30, task_create 100, announcement 20, event_create 50 -- ruling R39), counted on the write''s own rows under a (cap, Member) advisory lock. A null actor (a server-side write) is never capped.';
+
+-- ==================== create_event ====================
 
 create or replace function private.create_event_impl(
   p_title text, p_type text, p_group_id bigint, p_starts_at timestamptz,
@@ -129,6 +206,9 @@ begin
       raise exception using errcode = '42501', message = 'announcement_publish_forbidden';
     end if;
   end if;
+  -- R39: the Event notifies its audience, so it spends a daily cap (security
+  -- pass L3), judged after every row lock the gate took.
+  perform private.require_daily_cap('event_create', v_actor);
   -- #691: events_validate_campaign judges the Campaign against the Event's Group;
   -- its two reasons, and an unknown id, reach the caller as create_task_impl's
   -- PT400 invalid_campaign (same condition, same string).
@@ -180,4 +260,4 @@ end;
 $$;
 
 comment on function private.create_event_impl(text, text, bigint, timestamptz, timestamptz, text, integer, text, integer, bigint, boolean) is
-  'Creates an Event on a Group, authorized by Group Role (ADR-0009 Wave 2, #370). Malformed input is judged first, for everyone, so a caller without organization claims learns what is wrong with the call: PT400 invalid_event_title / invalid_event_type / invalid_event_interval / invalid_event_capacity / invalid_event_min_level / event_group_required. The Organization Group — since #582 the Group carrying groups.is_organization, not the row mirroring the legacy org pseudo-department — is open to any live Member holding any Group Role anywhere, which is how a Department''s leadership gets an organization-wide Event, or to level >= 6; every other Group goes through private.require_group_work_manager, so a Group Manager or Group Responsible on the path, an ancestor''s included, qualifies and an ordinary member does not. Every refusal is the single non-disclosing 42501 calendar_manage_forbidden, so a missing, archived or forbidden Group are indistinguishable. Minimum Level is then judged against the loaded rows: PT400 event_min_level_below_group (an Event may not be more open than its Group) and PT400 event_min_level_above_actor (nobody raises an Event above their own live level), the latter with Moderator exempt. An optional Campaign (#691, ADR-0008 amended 2026-09-23) must be owned by the Event''s Group or a Group above it and be active (events_validate_campaign); anything else is PT400 invalid_campaign, the string create_task uses for the same condition. #909: p_announce = true also publishes one Announcement in the same transaction (title, a Romanian date/time/place/description body from private.event_announcement_body, the Event''s Group, audience org for the Organization Group else local, min_level = the Event''s, deadline = starts_at, the caller as author, normal fan-out); it is judged before the Event is written by the announcements_create predicate private.can_publish_announcement (42501 announcement_publish_forbidden). Any refusal, including the Announcement''s own row guards, leaves no Event behind. Ruling R39 (2026-10-06): without p_announce the new Event notifies its audience once -- private.event_notification_recipients (the Group Audience that Notifications reach, minus BC and the Moderator per R32, read through private.can_read_event: Minimum Level and Private Groups), never the creator -- with kind event, title Eveniment nou: <title>, the date line and place of private.event_announcement_body as body, link /calendar?event=<id> and dedupe key event:<id>:created (subject event:<id>, R37), in one private.notify insert. With p_announce the Announcement''s fan-out is that notice, so no Event Notification is written: one notice per Member.';
+  'Creates an Event on a Group, authorized by Group Role (ADR-0009 Wave 2, #370). Malformed input is judged first, for everyone, so a caller without organization claims learns what is wrong with the call: PT400 invalid_event_title / invalid_event_type / invalid_event_interval / invalid_event_capacity / invalid_event_min_level / event_group_required. The Organization Group — since #582 the Group carrying groups.is_organization, not the row mirroring the legacy org pseudo-department — is open to any live Member holding any Group Role anywhere, which is how a Department''s leadership gets an organization-wide Event, or to level >= 6; every other Group goes through private.require_group_work_manager, so a Group Manager or Group Responsible on the path, an ancestor''s included, qualifies and an ordinary member does not. Every refusal is the single non-disclosing 42501 calendar_manage_forbidden, so a missing, archived or forbidden Group are indistinguishable. Minimum Level is then judged against the loaded rows: PT400 event_min_level_below_group (an Event may not be more open than its Group) and PT400 event_min_level_above_actor (nobody raises an Event above their own live level), the latter with Moderator exempt. An optional Campaign (#691, ADR-0008 amended 2026-09-23) must be owned by the Event''s Group or a Group above it and be active (events_validate_campaign); anything else is PT400 invalid_campaign, the string create_task uses for the same condition. #909: p_announce = true also publishes one Announcement in the same transaction (title, a Romanian date/time/place/description body from private.event_announcement_body, the Event''s Group, audience org for the Organization Group else local, min_level = the Event''s, deadline = starts_at, the caller as author, normal fan-out); it is judged before the Event is written by the announcements_create predicate private.can_publish_announcement (42501 announcement_publish_forbidden). Any refusal, including the Announcement''s own row guards, leaves no Event behind. Ruling R39 (2026-10-06): without p_announce the new Event notifies its audience once -- private.event_notification_recipients (the Group Audience that Notifications reach, minus BC and the Moderator per R32, read through private.can_read_event: Minimum Level and Private Groups), never the creator -- with kind event, title Eveniment nou: <title>, the date line and place of private.event_announcement_body as body, link /calendar?event=<id> and dedupe key event:<id>:created (subject event:<id>, R37), in one private.notify insert. With p_announce the Announcement''s fan-out is that notice, so no Event Notification is written: one notice per Member. Every creation spends the event_create daily cap (50 per Member in any 24 hours, private.require_daily_cap; PT409 rate_limited), judged after the gate and before the Event is written.';

@@ -7,7 +7,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(24);
+select plan(27);
 
 -- Personas (prefix 3939): 1 Responsible of Root R39 (level 3), the creator;
 -- 2 Member of Root (Voluntar); 3 Member of Child R39, below Root (Voluntar);
@@ -155,6 +155,21 @@ select is((select count(*)::int from notifications as notification
   'no BC member or Moderator is among them (R32)');
 select is((select count(*)::int from notifications where title='Eveniment nou: Adunare R39' and member_id=pg_temp.u39(5)), 0,
   'the BC creator is not echoed');
+
+-- ==================== 6. the daily cap (security pass L3) ====================
+-- The creator has made five Events above; fill the rest of the 50 directly.
+insert into events(title,type,group_id,starts_at,created_by)
+select 'Plin R39 '||n,'sedinta',(select root from fx),'2030-10-01 15:00+00'::timestamptz + n * interval '1 hour',pg_temp.u39(1)
+from generate_series(1, 50 - (select count(*)::int from events where created_by = pg_temp.u39(1))) n;
+select pg_temp.test_login_leadership(pg_temp.u39(1));
+select throws_ok($$select public.create_event('Peste R39','sedinta',(select root from fx),'2030-10-05 15:00+00')$$,
+  'PT409','rate_limited',
+  'a Member who created 50 Events in the last 24 hours is refused the 51st');
+reset role;
+select is((select count(*)::int from events where title='Peste R39'), 0,
+  'the refused Event was not written');
+select is((select count(*)::int from notifications where title='Eveniment nou: Peste R39'), 0,
+  'and nobody was notified of it');
 
 select * from finish();
 rollback;
