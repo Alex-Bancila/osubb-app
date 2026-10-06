@@ -55,4 +55,28 @@ describe('useSignOutAction', () => {
     expect(alert).not.toHaveTextContent(/AuthApiError|network|account/i);
     expect(screen.getByRole('button', { name: 'Deconectare' })).toBeEnabled();
   });
+
+  it('tells the caller whether the session is gone (R41: the confirm closes on success only)', async () => {
+    const results: boolean[] = [];
+    function Probe({ action }: { action: () => Promise<void> }) {
+      const signOut = useSignOutAction(action);
+      return (
+        <button
+          onClick={() => void signOut.run().then((ok) => results.push(ok))}
+        >
+          Deconectare
+        </button>
+      );
+    }
+    const action = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(undefined);
+    render(<Probe action={action} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Deconectare' }));
+    await waitFor(() => expect(results).toEqual([false]));
+    fireEvent.click(screen.getByRole('button', { name: 'Deconectare' }));
+    await waitFor(() => expect(results).toEqual([false, true]));
+  });
 });

@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef, useState, type Ref } from 'react';
-import { Bell, LogOut, Menu, X } from 'lucide-react';
+import { useEffect, useRef, useState, type Ref } from 'react';
+import { Bell, Menu, X } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router';
 import logoDark from '../../assets/brand/osubb-logo-on-dark.png';
 import logoLight from '../../assets/brand/osubb-logo-on-light.png';
@@ -7,7 +7,6 @@ import { useAuth } from '../../lib/auth';
 import { useCapabilities } from '../../lib/capabilities';
 import { safeHexColor } from '../../lib/color';
 import { initials } from '../../lib/format';
-import { useSignOutAction } from '../../lib/use-sign-out-action';
 import { cn } from '../../lib/utils';
 import { useUnreadAnnouncementsCount } from '../../queries/announcements';
 import { useLiveChanges } from '../../queries/live-changes';
@@ -96,7 +95,6 @@ type SidebarContentProps = {
   memberEmail: string | undefined;
   avatarColor: string | null | undefined;
   roleLabel: string;
-  signOutAction: ReturnType<typeof useSignOutAction>;
   onNavigate?: () => void;
 };
 
@@ -122,10 +120,8 @@ function SidebarContent({
   memberEmail,
   avatarColor,
   roleLabel,
-  signOutAction,
   onNavigate,
 }: SidebarContentProps) {
-  const signOutErrorId = useId();
   const { pathname } = useLocation();
   return (
     <>
@@ -163,7 +159,9 @@ function SidebarContent({
           );
         })}
       </nav>
-      <div className="flex flex-col gap-2 border-t border-border p-3">
+      {/* Who is signed in, never a way out (R41): sign-out lives once, at the
+          foot of Profil, behind a confirmation. */}
+      <div className="border-t border-border p-3">
         <div className="flex min-w-0 items-center gap-3 rounded-lg p-2">
           <span
             className="grid size-9 shrink-0 place-items-center rounded-full text-sm font-bold text-white"
@@ -183,32 +181,13 @@ function SidebarContent({
             </Badge>
           </span>
         </div>
-        <Button
-          variant="ghost"
-          className="w-full justify-start"
-          disabled={signOutAction.pending}
-          aria-describedby={signOutAction.error ? signOutErrorId : undefined}
-          onClick={() => void signOutAction.run()}
-        >
-          <LogOut aria-hidden="true" />
-          {signOutAction.pending ? 'Se deconectează…' : 'Deconectare'}
-        </Button>
-        {signOutAction.error && (
-          <p
-            id={signOutErrorId}
-            className="text-sm text-destructive"
-            role="alert"
-          >
-            {signOutAction.error}
-          </p>
-        )}
       </div>
     </>
   );
 }
 
 export default function AppShell() {
-  const { session, signOut } = useAuth();
+  const { session } = useAuth();
   useNotificationRealtime(session?.user.id);
   // #961: every other change arrives on the org:changes broadcast.
   useLiveChanges(session?.user.id);
@@ -221,7 +200,6 @@ export default function AppShell() {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const firstMobileLinkRef = useRef<HTMLAnchorElement>(null);
-  const signOutAction = useSignOutAction(signOut);
   const profile = useMyProfile();
   const unreadNotifications = useUnreadNotificationCount();
   const unreadCount = unreadNotifications.data ?? 0;
@@ -277,7 +255,6 @@ export default function AppShell() {
     memberEmail: session?.user.email,
     avatarColor: profile.data?.avatar_color,
     roleLabel,
-    signOutAction,
     badges,
   };
 
