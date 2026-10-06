@@ -7,6 +7,7 @@
 - **Superseded by:** —
 - **Amended:** 2026-09-25 — re-examined against OneSignal, FCM, Novu, Knock, Courier, MagicBell, Pusher Beams and a Cloudflare Worker sender and kept (ruling L8 of `docs/superpowers/plans/2026-09-25-launch-infrastructure-grill.md`); the cron-to-function authentication changes and six hardening items are added; see the notes below
 - **Amended:** 2026-09-27 — Declarative Web Push alongside the service-worker payload (#778); see the note under Privacy
+- **Amended:** 2026-10-06 — push stays on: self-repair on return to the foreground and before the switch reads off, one row per browser, Web Locks across tabs; see the note under Operations
 - **Related:** ADR-0001, ADR-0002, ADR-0005, #703 (outbox and `send-push`), #704 (service worker and device subscription), #635 (per-Member push preferences), `CONTEXT.md`
 
 ## Context
@@ -42,6 +43,8 @@ ADR-0005 deferred browser push until after the Task Tracker and Calendar and ask
 **Operations.** The IT Coordinator owns the VAPID pair, the function secrets and the two Vault rows per environment. Functions are deployed by hand per environment (`supabase functions deploy send-push`), as `invite-member` is today. The cost is zero beyond the Supabase plan.
 
 > **Amended 2026-09-25 (L8, L12).** Functions are deployed from CI: on every merge to `main` for staging, and inside the gated Release for production. Before production, five more hardening items land: an hourly `pg_cron` health check that writes a `system` Notification to the Moderator when the outbox has stale `pending` rows or too many `failed` rows; a daily purge of `cron.job_run_details`; an app-start self-repair that re-subscribes when the stored subscription's key differs from `VITE_VAPID_PUBLIC_KEY` or the `push_tokens` row is gone, plus a `pushsubscriptionchange` handler; and a canary device per environment in the runbook. Alternatives re-examined and rejected on 2026-09-25: every vendor adds a data processor receiving member identifiers and plaintext text, removes no per-environment step, and either offers no EU/DPA option on a free plan or no iOS web push; Cloudflare has no push product.
+
+> **Amended 2026-10-06 (push stays on).** The self-repair is no longer once per app start only: it also runs when the app returns to the foreground (throttled) and before the device switch reads off, each browser replaces the row it stored last instead of adding beside it (one row per browser, so lost subscriptions no longer fill the five-device cap), and device changes are serialized across tabs with the Web Locks API. Security is unchanged: it never prompts, never adopts another Member's subscription, and sign-out still deletes this device's row. Evidence and details in `docs/backend/push.md`.
 
 ### Alternatives rejected
 

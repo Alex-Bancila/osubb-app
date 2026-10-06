@@ -14,7 +14,11 @@ export function PushDeviceCard() {
   const unsupported = !push.supported;
   const denied = !unsupported && push.permission === 'denied';
   const unconfigured = !unsupported && !denied && !push.configured;
-  const checked = !unsupported && !denied && push.subscribed;
+  // While a change is in flight the switch already shows where it is going
+  // (2026-10-06): subscribing can take a few seconds, and a switch that sat
+  // still meanwhile drew a second tap that turned push straight back off.
+  const changing = push.target !== null;
+  const checked = !unsupported && !denied && (push.target ?? push.subscribed);
 
   const status = unsupported
     ? 'Instalează aplicația pe ecranul principal pentru a primi notificări'
@@ -22,9 +26,15 @@ export function PushDeviceCard() {
       ? 'Notificările sunt blocate din setările browserului'
       : unconfigured
         ? 'Notificările pe dispozitiv nu sunt disponibile încă'
-        : checked
-          ? 'Primești notificări pe acest dispozitiv'
-          : 'Nu primești notificări pe acest dispozitiv';
+        : changing
+          ? push.target
+            ? 'Se pornesc notificările pe acest dispozitiv…'
+            : 'Se opresc notificările pe acest dispozitiv…'
+          : checked
+            ? 'Primești notificări pe acest dispozitiv'
+            : push.revoked
+              ? 'Browserul a oprit notificările pe acest dispozitiv. Pornește-le din nou.'
+              : 'Nu primești notificări pe acest dispozitiv';
 
   return (
     <div data-testid="push-device-card">

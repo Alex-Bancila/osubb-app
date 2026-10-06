@@ -36,6 +36,7 @@ const SUBSCRIPTION_JSON = {
   keys: { p256dh: 'p256dh-key', auth: 'auth-secret' },
 };
 const TOKEN = JSON.stringify(SUBSCRIPTION_JSON);
+const PUSH_ON = 'osubb.push-on.' + MEMBER;
 
 type FakeSubscription = {
   toJSON: () => typeof SUBSCRIPTION_JSON;
@@ -109,6 +110,7 @@ function rowPresent(present: boolean) {
 describe('usePushSubscription', () => {
   beforeEach(() => {
     resetSupabaseMock();
+    localStorage.clear();
     installBrowser();
     vi.stubEnv('VITE_VAPID_PUBLIC_KEY', VAPID_KEY);
     rowPresent(false);
@@ -239,9 +241,10 @@ describe('usePushSubscription', () => {
     supabaseMock.eq
       .mockReturnValueOnce(supabaseMock)
       .mockResolvedValueOnce({ error: null });
+    rowPresent(true);
     act(() => result.current.enable());
 
-    await waitFor(() => expect(supabaseMock.insert).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.subscribed).toBe(true));
     expect(supabaseMock.delete).toHaveBeenCalledTimes(1);
     expect(supabaseMock.eq).toHaveBeenCalledWith(
       'token',
@@ -311,6 +314,93 @@ describe('usePushSubscription', () => {
       expect(result.current.subscribed).toBe(false);
     },
   );
+
+  it('repairs before it reads off: push on here, permission granted, subscription dropped by the browser (2026-10-06)', async () => {
+    // Production: a Chrome on Windows lost its subscription overnight and the
+    // switch read off until a full reload. Now reading the switch repairs.
+    localStorage.setItem(PUSH_ON, '1');
+    browser.notification.permission = 'granted';
+    supabaseMock.insert.mockResolvedValue({ error: null });
+    rowPresent(true);
+
+    const { result } = renderHook(() => usePushSubscription(), { wrapper });
+
+    await waitFor(() => expect(result.current.subscribed).toBe(true));
+    expect(browser.pushManager.subscribe).toHaveBeenCalledTimes(1);
+    expect(supabaseMock.insert).toHaveBeenCalledWith({
+      member_id: MEMBER,
+      token: TOKEN,
+      platform: 'web',
+    });
+    expect(browser.notification.requestPermission).not.toHaveBeenCalled();
+  });
+
+  it('never repairs from the switch on a device where push was not turned on', async () => {
+    browser.notification.permission = 'granted';
+    const { result } = renderHook(() => usePushSubscription(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.subscribed).toBe(false);
+    expect(browser.pushManager.subscribe).not.toHaveBeenCalled();
+    expect(supabaseMock.insert).not.toHaveBeenCalled();
+  });
+
+  it('says the browser took the permission back when push was on here', async () => {
+    localStorage.setItem(PUSH_ON, '1');
+    const { result } = renderHook(() => usePushSubscription(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.permission).toBe('default');
+    expect(result.current.revoked).toBe(true);
+    expect(result.current.subscribed).toBe(false);
+    // It never prompts by itself.
+    expect(browser.notification.requestPermission).not.toHaveBeenCalled();
+  });
+
+  it('is not revoked on a device where push was never on', async () => {
+    const { result } = renderHook(() => usePushSubscription(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.revoked).toBe(false);
+  });
+
+  it('reads the permission again when the app comes back', async () => {
+    const { result } = renderHook(() => usePushSubscription(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.permission).toBe('default');
+
+    browser.notification.permission = 'denied';
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    expect(result.current.permission).toBe('denied');
+  });
+
+  it('reports the state a change is heading to while it runs', async () => {
+    let finish: (value: FakeSubscription) => void = () => undefined;
+    browser.pushManager.subscribe.mockImplementationOnce(
+      () =>
+        new Promise<FakeSubscription>((resolve) => {
+          finish = (value) => {
+            browser.current = value;
+            resolve(value);
+          };
+        }),
+    );
+    supabaseMock.insert.mockResolvedValue({ error: null });
+    const { result } = renderHook(() => usePushSubscription(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.target).toBeNull();
+
+    act(() => result.current.enable());
+    await waitFor(() => expect(result.current.target).toBe(true));
+    expect(result.current.subscribed).toBe(false);
+
+    rowPresent(true);
+    act(() => finish(browser.subscription));
+    await waitFor(() => expect(result.current.subscribed).toBe(true));
+    expect(result.current.target).toBeNull();
+  });
 
   it('disable unsubscribes and deletes this device row', async () => {
     browser.current = browser.subscription;
