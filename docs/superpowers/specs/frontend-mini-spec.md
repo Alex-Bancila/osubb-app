@@ -87,6 +87,8 @@ Paths are Romanian because members read them; code identifiers stay English (`CO
 
 > **Amended 2026-10-01 (#972).** On a phone the bar is `tracker · calendar · dashboard (centre, raised) · anunturi · grupuri`; Notificări opens only from the bell in the top bar and Profil only from the avatar beside it, and the hamburger drawer appears only for a Member with a page that fits neither the bar nor the top bar (Clasament, Voluntari, Campanii, Administrare). Profil carries Deconectare for the Members without the drawer. From `lg` (1024 px) the sidebar is unchanged.
 
+> **Amended 2026-10-07 (R41).** Sign-out leaves the sidebar, the drawer and the Profil header. It lives once, as a quiet link at the very bottom of Profil, "Deconectează-te de pe acest dispozitiv", behind a confirmation. The no-active-profile screen keeps its button.
+
 **Three session states**, and every one of them is a real screen (#85):
 signed out → `/login` · signed in **without claims** → `/no-profile` · signed in with claims → the app. The middle one is not an error; it's ADR-0003 working, and it must look intentional.
 

@@ -1261,27 +1261,133 @@ describe('ProfileScreen', () => {
       ).toBeInTheDocument();
     });
   });
-});
 
-describe('sign-out from Profil (#972)', () => {
-  it('offers Deconectare in the header and signs out', async () => {
-    const user = userEvent.setup();
-    authMock.signOut.mockResolvedValueOnce(undefined);
-    render(<ProfileScreen />, { wrapper: wrapper() });
+  // Nested so the screen's own setup runs first: alone, it once depended on
+  // the order of the tests above it.
+  describe('one quiet sign-out at the foot of Profil (R41)', () => {
+    const LINK = 'Deconectează-te de pe acest dispozitiv';
+    const CONFIRM = 'Deconectează-te';
 
-    await user.click(screen.getByRole('button', { name: 'Deconectare' }));
+    beforeEach(() => {
+      authMock.signOut.mockReset();
+      authMock.signOut.mockResolvedValue(undefined);
+    });
 
-    expect(authMock.signOut).toHaveBeenCalledTimes(1);
-  });
+    it('keeps the header free of sign-out and puts one link after everything else', () => {
+      render(<ProfileScreen />, { wrapper: wrapper() });
 
-  it('keeps a failed sign-out on the page and unlocks a retry', async () => {
-    const user = userEvent.setup();
-    authMock.signOut.mockRejectedValueOnce(new Error('offline'));
-    render(<ProfileScreen />, { wrapper: wrapper() });
+      // The header keeps the theme switch only.
+      const header = screen
+        .getByRole('heading', { level: 1, name: 'Profilul meu' })
+        .closest<HTMLElement>('[data-slot="page-header"]');
+      if (!header) throw new Error('no page header');
+      expect(
+        within(header).getByRole('button', { name: 'Temă întunecată' }),
+      ).toBeInTheDocument();
+      expect(
+        within(header).queryByRole('button', { name: /deconect/i }),
+      ).toBeNull();
 
-    await user.click(screen.getByRole('button', { name: 'Deconectare' }));
+      const signOuts = screen.getAllByRole('button', { name: /deconect/i });
+      expect(signOuts).toHaveLength(1);
+      const [link] = signOuts as [HTMLElement];
+      expect(link).toHaveAccessibleName(LINK);
+      // Below the last panel on the page.
+      const lastPanel = screen.getByRole('region', {
+        name: 'Confidențialitate',
+      });
+      expect(
+        lastPanel.compareDocumentPosition(link) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(lastPanel).not.toContainElement(link);
+    });
 
-    expect(await screen.findByRole('alert')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Deconectare' })).toBeEnabled();
+    it('asks first, then signs out', async () => {
+      const user = userEvent.setup();
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      await user.click(screen.getByRole('button', { name: LINK }));
+
+      const dialog = screen.getByRole('dialog', {
+        name: 'Te deconectezi de pe acest dispozitiv?',
+      });
+      expect(dialog).toHaveTextContent(
+        'Vei avea nevoie de un nou link de conectare pe email.',
+      );
+      expect(authMock.signOut).not.toHaveBeenCalled();
+
+      await user.click(within(dialog).getByRole('button', { name: CONFIRM }));
+
+      expect(authMock.signOut).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    });
+
+    it('keeps the link when Profil cannot load, the only way out (R41)', async () => {
+      const user = userEvent.setup();
+      profileQueryMock.isError = true;
+      profileQueryMock.error = new Error('Database disconnected');
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      expect(
+        screen.getByText(/nu am putut încărca profilul/i),
+      ).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: LINK }));
+      await user.click(
+        within(screen.getByRole('dialog')).getByRole('button', {
+          name: CONFIRM,
+        }),
+      );
+      expect(authMock.signOut).toHaveBeenCalledTimes(1);
+    });
+
+    it('does nothing on Renunță', async () => {
+      const user = userEvent.setup();
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      await user.click(screen.getByRole('button', { name: LINK }));
+      await user.click(screen.getByRole('button', { name: 'Renunță' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(authMock.signOut).not.toHaveBeenCalled();
+    });
+
+    it('keeps a failed sign-out in the dialog and unlocks a retry', async () => {
+      const user = userEvent.setup();
+      authMock.signOut.mockRejectedValueOnce(new Error('offline'));
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      await user.click(screen.getByRole('button', { name: LINK }));
+      const dialog = screen.getByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: CONFIRM }));
+
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+        'Nu te-am putut deconecta. Încearcă din nou.',
+      );
+      expect(within(dialog).queryByText(/offline/)).toBeNull();
+      const retry = within(dialog).getByRole('button', { name: CONFIRM });
+      expect(retry).toBeEnabled();
+
+      await user.click(retry);
+      expect(authMock.signOut).toHaveBeenCalledTimes(2);
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    });
+
+    it('forgets an earlier failure when the dialog opens again', async () => {
+      const user = userEvent.setup();
+      authMock.signOut.mockRejectedValueOnce(new Error('offline'));
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      await user.click(screen.getByRole('button', { name: LINK }));
+      await user.click(screen.getByRole('button', { name: CONFIRM }));
+      expect(await screen.findByRole('alert')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Renunță' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+      await user.click(screen.getByRole('button', { name: LINK }));
+      expect(
+        within(screen.getByRole('dialog')).queryByRole('alert'),
+      ).toBeNull();
+    });
   });
 });

@@ -1,7 +1,6 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   BellRing,
-  LogOut,
   Calendar,
   Contact,
   GraduationCap,
@@ -37,7 +36,6 @@ import { useAuth } from '../../lib/auth';
 import { safeHexColor } from '../../lib/color';
 import { formatLongDate, initials } from '../../lib/format';
 import { useTheme } from '../../lib/theme';
-import { useSignOutAction } from '../../lib/use-sign-out-action';
 import { useMyRoleLabel } from '../../queries/my-role-label';
 import { useOrgSettings } from '../../queries/org-settings';
 import { useMyPoints } from '../../queries/points';
@@ -55,6 +53,7 @@ import { JoiningSection } from './JoiningSection';
 import { PHONE_HINT } from './profile-copy';
 import { PushDeviceCard } from './PushDeviceCard';
 import { RoleTimeline } from './RoleTimeline';
+import { SignOutDeviceLink } from './SignOutDeviceLink';
 import { useRoleTimelineShown } from './role-timeline-shown';
 
 /**
@@ -90,11 +89,7 @@ const stackClass = 'flex min-w-0 flex-col gap-4 md:gap-6';
  * in the Editează profilul sheet; the page shows the address read-only.
  */
 export default function ProfileScreen() {
-  const { claims, signOut } = useAuth();
-  // Deconectare lives here too (#972): on a phone the drawer that held it is
-  // gone for a volunteer, and the account's own page is where it belongs.
-  const signOutAction = useSignOutAction(signOut);
-  const signOutErrorId = useId();
+  const { claims } = useAuth();
   const profileQuery = useMyProfile();
   const rolesQuery = useRoles();
   const groupsQuery = useMyGroups();
@@ -160,6 +155,8 @@ export default function ProfileScreen() {
             if (isPointsEligible) void pointsQuery.refetch?.();
           }}
         />
+        {/* R41: the only way out stays reachable when the page cannot load. */}
+        <SignOutDeviceLink />
       </Page>
     );
   }
@@ -176,6 +173,7 @@ export default function ProfileScreen() {
     return (
       <Page aria-label="Profilul meu">
         <Empty text="Nu am găsit date despre profilul tău." />
+        <SignOutDeviceLink />
       </Page>
     );
   }
@@ -209,53 +207,26 @@ export default function ProfileScreen() {
             : 'Informații personale, punctaj și setări de cont'
         }
         actions={
-          <>
-            <Button
-              variant="outline"
-              onClick={toggleTheme}
-              className="w-full gap-2 sm:w-auto"
-              aria-label={
-                theme === 'dark' ? 'Temă luminoasă' : 'Temă întunecată'
-              }
-            >
-              {theme === 'dark' ? (
-                <>
-                  <Sun className="size-4" aria-hidden="true" />
-                  <span>Temă luminoasă</span>
-                </>
-              ) : (
-                <>
-                  <Moon className="size-4" aria-hidden="true" />
-                  <span>Temă întunecată</span>
-                </>
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full gap-2 sm:w-auto"
-              disabled={signOutAction.pending}
-              aria-describedby={
-                signOutAction.error ? signOutErrorId : undefined
-              }
-              onClick={() => void signOutAction.run()}
-            >
-              <LogOut className="size-4" aria-hidden="true" />
-              <span>
-                {signOutAction.pending ? 'Se deconectează…' : 'Deconectare'}
-              </span>
-            </Button>
-          </>
+          <Button
+            variant="outline"
+            onClick={toggleTheme}
+            className="w-full gap-2 sm:w-auto"
+            aria-label={theme === 'dark' ? 'Temă luminoasă' : 'Temă întunecată'}
+          >
+            {theme === 'dark' ? (
+              <>
+                <Sun className="size-4" aria-hidden="true" />
+                <span>Temă luminoasă</span>
+              </>
+            ) : (
+              <>
+                <Moon className="size-4" aria-hidden="true" />
+                <span>Temă întunecată</span>
+              </>
+            )}
+          </Button>
         }
       />
-      {signOutAction.error && (
-        <p
-          id={signOutErrorId}
-          role="alert"
-          className="m-0 text-sm text-destructive"
-        >
-          {signOutAction.error}
-        </p>
-      )}
 
       {/* PageGrid is m-0, which cancels the Page's space-y between rows;
           the rows keep the grid's own gap between them instead. */}
@@ -490,6 +461,9 @@ export default function ProfileScreen() {
             </Panel>
           </div>
         </PageGrid>
+
+        {/* R41: the one way out, last and quiet, after everything else. */}
+        <SignOutDeviceLink />
       </div>
 
       <EditProfileSheet
