@@ -17,8 +17,13 @@ vi.mock('../lib/auth', () => ({
 }));
 
 import {
+  autoEnableDevice,
+  forgetPushOn,
   pushOnHere,
+  pushResumesHere,
+  pushTurnedOffHere,
   repairDevice,
+  subscribeDevice,
   unsubscribeDevice,
 } from '../lib/push-device';
 import { bytesToUrlBase64, urlBase64ToUint8Array } from '../lib/vapid-key';
@@ -528,5 +533,317 @@ describe('push stays on (2026-10-06)', () => {
       'lost-subscription-json',
     );
     expect(localStorage.getItem(tokenKey)).toBeNull();
+  });
+});
+
+/* 2026-10-06, Alex: "is there any way in which i can set by default the
+   notification as approved and on?" Push switches itself back on where it was
+   on when this Member's session here ended -- never on absent history, which
+   is also what a switch-off from before the off flag existed looks like. */
+describe('push back on where it was on (2026-10-06)', () => {
+  const offKey = `osubb.push-off.${MEMBER}`;
+  const resumeKey = `osubb.push-resume.${MEMBER}`;
+
+  function installLocks() {
+    let tail: Promise<unknown> = Promise.resolve();
+    const request = vi.fn((_name: string, work: () => Promise<unknown>) => {
+      const run = tail.then(() => work());
+      tail = run.then(
+        () => undefined,
+        () => undefined,
+      );
+      return run;
+    });
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: { request },
+    });
+    return request;
+  }
+
+  /** Push was on here when this Member's last session ended. */
+  function wasOnAtSignOut() {
+    localStorage.setItem(resumeKey, '1');
+  }
+
+  beforeEach(() => {
+    resetSupabaseMock();
+    resetPushSelfRepairForTests();
+    localStorage.clear();
+    installBrowser();
+    vi.stubEnv('VITE_VAPID_PUBLIC_KEY', NEW_KEY);
+    supabaseMock.insert.mockResolvedValue({ error: null });
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'serviceWorker');
+    Reflect.deleteProperty(navigator, 'locks');
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('switches push back on at app start: on at the last sign-out, granted, nothing subscribed', async () => {
+    wasOnAtSignOut();
+
+    renderHook(() => usePushSelfRepair(), { wrapper });
+
+    await waitFor(() => expect(supabaseMock.insert).toHaveBeenCalledTimes(1));
+    expect(browser.subscribe).toHaveBeenCalledWith({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(NEW_KEY),
+    });
+    expect(supabaseMock.insert).toHaveBeenCalledWith({
+      member_id: MEMBER,
+      token: tokenOf(browser.fresh),
+      platform: 'web',
+    });
+    expect(pushOnHere(MEMBER)).toBe(true);
+    // Resumed: nothing is left to resume.
+    expect(pushResumesHere(MEMBER)).toBe(false);
+  });
+
+  it('a switch-off from before this release (no flags, granted, no subscription) stays off', async () => {
+    // Production since 2026-10-02: the switch unsubscribed and cleared the
+    // push-on flag, and nothing recorded the off.
+    renderHook(() => usePushSelfRepair(), { wrapper });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('skipped');
+    expect(browser.subscribe).not.toHaveBeenCalled();
+    expect(supabaseMock.insert).not.toHaveBeenCalled();
+  });
+
+  it('a sign-out while push is on resumes it at the next sign-in here', async () => {
+    browser.current = fakeSubscription('https://push.example.test/ok', NEW_KEY);
+    localStorage.setItem(markerKey, '1');
+    // What signOut() runs: the row goes, the choice is not recorded.
+    await unsubscribeDevice(MEMBER);
+    expect(browser.current).toBeNull();
+    expect(pushTurnedOffHere(MEMBER)).toBe(false);
+    expect(pushResumesHere(MEMBER)).toBe(true);
+
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('enabled');
+    expect(supabaseMock.insert).toHaveBeenCalledTimes(1);
+  });
+
+  it('a sign-out on a device subscribed before the push-on flag resumes it too, read from its row', async () => {
+    browser.current = fakeSubscription('https://push.example.test/ok', NEW_KEY);
+    rowPresent(true);
+
+    await unsubscribeDevice(MEMBER);
+
+    expect(pushResumesHere(MEMBER)).toBe(true);
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('enabled');
+  });
+
+  it('a sign-out while push is off leaves nothing to resume', async () => {
+    rowPresent(false);
+
+    await unsubscribeDevice(MEMBER);
+
+    expect(pushResumesHere(MEMBER)).toBe(false);
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('skipped');
+    expect(browser.subscribe).not.toHaveBeenCalled();
+  });
+
+  it('a sign-out with a subscription this Member has no row for leaves nothing to resume', async () => {
+    browser.current = fakeSubscription('https://push.example.test/x', NEW_KEY);
+    rowPresent(false);
+
+    await unsubscribeDevice(MEMBER);
+
+    expect(pushResumesHere(MEMBER)).toBe(false);
+  });
+
+  it('a session that expires while push is on resumes it at the next sign-in here', async () => {
+    localStorage.setItem(markerKey, '1');
+
+    // What auth.tsx runs when a session ends without the sign-out button.
+    forgetPushOn(MEMBER);
+    expect(pushOnHere(MEMBER)).toBe(false);
+    expect(pushResumesHere(MEMBER)).toBe(true);
+
+    // The browser dropped the subscription meanwhile.
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('enabled');
+  });
+
+  it('a session that expires while push is off leaves nothing to resume', () => {
+    forgetPushOn(MEMBER);
+    expect(pushResumesHere(MEMBER)).toBe(false);
+  });
+
+  it('never after the Member turned it off with the switch, and the off drops the resume marker', async () => {
+    wasOnAtSignOut();
+    browser.current = fakeSubscription('https://push.example.test/ok', NEW_KEY);
+    await unsubscribeDevice(MEMBER, { turnedOff: true });
+    expect(pushTurnedOffHere(MEMBER)).toBe(true);
+    expect(pushResumesHere(MEMBER)).toBe(false);
+
+    renderHook(() => usePushSelfRepair(), { wrapper });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('skipped');
+    expect(browser.subscribe).not.toHaveBeenCalled();
+    expect(supabaseMock.insert).not.toHaveBeenCalled();
+  });
+
+  it('never while the switch-off stands, even with a resume marker', async () => {
+    wasOnAtSignOut();
+    localStorage.setItem(offKey, '1');
+
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('skipped');
+    expect(browser.subscribe).not.toHaveBeenCalled();
+  });
+
+  it('turning push on again lifts the switch-off and the resume marker', async () => {
+    localStorage.setItem(offKey, '1');
+    wasOnAtSignOut();
+    await subscribeDevice(MEMBER, NEW_KEY);
+    expect(pushTurnedOffHere(MEMBER)).toBe(false);
+    expect(pushResumesHere(MEMBER)).toBe(false);
+  });
+
+  it('a failed switch-on keeps the earlier switch-off (CodeRabbit on #1024)', async () => {
+    localStorage.setItem(offKey, '1');
+    supabaseMock.insert.mockResolvedValueOnce({
+      error: { code: '23514', message: 'push_devices_limit' },
+    });
+
+    await expect(subscribeDevice(MEMBER, NEW_KEY)).rejects.toBeTruthy();
+
+    expect(pushTurnedOffHere(MEMBER)).toBe(true);
+    wasOnAtSignOut();
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('skipped');
+  });
+
+  it('does nothing where storage cannot keep a switch-off (CodeRabbit on #1024)', async () => {
+    wasOnAtSignOut();
+    // A private window whose storage refuses writes: an off could not be
+    // recorded, so nothing is switched on by itself.
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('quota', 'QuotaExceededError');
+    });
+
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('skipped');
+    expect(browser.subscribe).not.toHaveBeenCalled();
+  });
+
+  it('a switch-off queued behind a switch-on stays recorded', async () => {
+    installLocks();
+
+    await Promise.all([
+      subscribeDevice(MEMBER, NEW_KEY),
+      unsubscribeDevice(MEMBER, { turnedOff: true }),
+    ]);
+
+    expect(pushTurnedOffHere(MEMBER)).toBe(true);
+    expect(pushOnHere(MEMBER)).toBe(false);
+  });
+
+  it('never asks: without a granted permission nothing is read or changed', async () => {
+    wasOnAtSignOut();
+    browser.permission = 'default';
+
+    renderHook(() => usePushSelfRepair(), { wrapper });
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('skipped');
+
+    expect(supabaseMock.from).not.toHaveBeenCalled();
+    expect(browser.subscribe).not.toHaveBeenCalled();
+  });
+
+  it('does nothing in a build without the VAPID key', async () => {
+    wasOnAtSignOut();
+    vi.stubEnv('VITE_VAPID_PUBLIC_KEY', '');
+
+    renderHook(() => usePushSelfRepair(), { wrapper });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(browser.subscribe).not.toHaveBeenCalled();
+    expect(supabaseMock.from).not.toHaveBeenCalled();
+  });
+
+  it('never adopts a subscription this Member has no row for', async () => {
+    wasOnAtSignOut();
+    // Another Member's leftover on a shared device (their session expired).
+    const leftover = fakeSubscription('https://push.example.test/x', NEW_KEY);
+    browser.current = leftover;
+    rowPresent(false);
+
+    renderHook(() => usePushSelfRepair(), { wrapper });
+    await waitFor(() => expect(supabaseMock.maybeSingle).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(browser.subscribe).not.toHaveBeenCalled();
+    expect(supabaseMock.insert).not.toHaveBeenCalled();
+    expect(leftover.unsubscribe).not.toHaveBeenCalled();
+  });
+
+  it('subscribes once when several tabs start together', async () => {
+    installLocks();
+    wasOnAtSignOut();
+
+    const outcomes = await Promise.all([
+      autoEnableDevice(MEMBER, NEW_KEY),
+      autoEnableDevice(MEMBER, NEW_KEY),
+    ]);
+
+    expect(outcomes).toEqual(['enabled', 'skipped']);
+    expect(browser.subscribe).toHaveBeenCalledTimes(1);
+    expect(supabaseMock.insert).toHaveBeenCalledTimes(1);
+  });
+
+  it('a switch-off waiting behind it in another tab wins', async () => {
+    installLocks();
+    wasOnAtSignOut();
+    rowPresent(true);
+
+    await Promise.all([
+      autoEnableDevice(MEMBER, NEW_KEY),
+      unsubscribeDevice(MEMBER, { turnedOff: true }),
+    ]);
+
+    expect(pushOnHere(MEMBER)).toBe(false);
+    expect(pushTurnedOffHere(MEMBER)).toBe(true);
+    expect(browser.current).toBeNull();
+  });
+
+  it('a switch-off that lands while it waits for the lock stops it', async () => {
+    installLocks();
+    wasOnAtSignOut();
+    // Another device change holds the lock first.
+    let release!: () => void;
+    const held = navigator.locks.request(
+      'osubb-push-device',
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+    const auto = autoEnableDevice(MEMBER, NEW_KEY);
+    localStorage.setItem(offKey, '1');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    release();
+    await held;
+
+    expect(await auto).toBe('skipped');
+    expect(browser.subscribe).not.toHaveBeenCalled();
+  });
+
+  it('a resume used up while it waits for the lock stops it', async () => {
+    installLocks();
+    wasOnAtSignOut();
+    let release!: () => void;
+    const held = navigator.locks.request(
+      'osubb-push-device',
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+    const auto = autoEnableDevice(MEMBER, NEW_KEY);
+    localStorage.removeItem(resumeKey);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    release();
+    await held;
+
+    expect(await auto).toBe('skipped');
+    expect(browser.subscribe).not.toHaveBeenCalled();
   });
 });

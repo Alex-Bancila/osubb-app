@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
 import { commandReason, reasonCopy } from '../lib/command-reasons';
 import {
+  autoEnableDevice,
   pushOnHere,
   pushSupported,
   readDevice,
@@ -39,8 +40,10 @@ export type PushPermission = NotificationPermission | 'unsupported';
  * - `revoked`: push was on here, but the browser no longer grants the
  *   permission (reset, or revoked on its own): the switch says so.
  * - `enable()` asks for permission, subscribes and stores the row;
- *   `disable()` unsubscribes and deletes it. A failure becomes `error`, in
- *   Romanian.
+ *   `disable()` unsubscribes and deletes it, and records that the Member
+ *   turned push off here, so it is not switched on again by itself
+ *   (2026-10-06). A failure becomes `error`, in Romanian. The Profil switch
+ *   and Acasă's **Pornește notificările** card share it.
  */
 export function usePushSubscription() {
   const { session } = useAuth();
@@ -75,9 +78,10 @@ export function usePushSubscription() {
   const settle = () => queryClient.invalidateQueries({ queryKey });
 
   const enableMutation = useMutation({
-    mutationFn: async () => {
-      if (!memberId || !publicKey) throw new Error('push_not_configured');
-      const answer = await Notification.requestPermission();
+    mutationFn: async (asked: Promise<NotificationPermission> | null) => {
+      if (!asked || !memberId || !publicKey)
+        throw new Error('push_not_configured');
+      const answer = await asked;
       setPermission(answer);
       // Dismissed or blocked: nothing to subscribe, and not a failure.
       if (answer !== 'granted') return;
@@ -89,7 +93,7 @@ export function usePushSubscription() {
   const disableMutation = useMutation({
     mutationFn: async () => {
       if (!memberId) return;
-      await unsubscribeDevice(memberId);
+      await unsubscribeDevice(memberId, { turnedOff: true });
     },
     onSettled: settle,
   });
@@ -123,7 +127,14 @@ export function usePushSubscription() {
       : null,
     enable: () => {
       disableMutation.reset();
-      enableMutation.mutate();
+      // Asked here, in the tap's own call stack: the mutation function runs
+      // a microtask later, and Safari and Firefox grant the prompt only to a
+      // direct result of the gesture.
+      const asked =
+        supported && memberId && publicKey
+          ? Promise.resolve(Notification.requestPermission())
+          : null;
+      enableMutation.mutate(asked);
     },
     disable: () => {
       enableMutation.reset();
@@ -154,7 +165,10 @@ export function resetPushSelfRepairForTests() {
  * ready it runs `repairDevice` at app start and again whenever the app comes
  * back to the foreground, at most once per {@link PUSH_REPAIR_INTERVAL_MS},
  * and while the app is open it stores the subscription the worker renewed on
- * `pushsubscriptionchange`.
+ * `pushsubscriptionchange`. When the repair finds nothing of this Member's to
+ * repair, `autoEnableDevice` switches push back on where it was on when this
+ * Member's last session here ended and the permission is still granted
+ * (2026-10-06).
  * Silent by design: a failure leaves the Profil switch showing the true state
  * and is tried again at the next start.
  */
@@ -174,12 +188,18 @@ export function usePushSelfRepair() {
       if (last !== undefined && Date.now() - last < PUSH_REPAIR_INTERVAL_MS)
         return;
       lastRepairAt.set(memberId, Date.now());
-      repairDevice(memberId, publicKey).then(
-        (outcome) => {
-          if (outcome === 'repaired') void refresh();
-        },
-        () => undefined,
-      );
+      repairDevice(memberId, publicKey)
+        .then((outcome) =>
+          outcome === 'skipped'
+            ? autoEnableDevice(memberId, publicKey)
+            : outcome,
+        )
+        .then(
+          (outcome) => {
+            if (outcome === 'repaired' || outcome === 'enabled') void refresh();
+          },
+          () => undefined,
+        );
     };
     repair();
     const onVisible = () => {
