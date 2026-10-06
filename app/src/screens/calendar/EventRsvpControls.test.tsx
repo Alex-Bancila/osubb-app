@@ -1,162 +1,248 @@
-import { render, screen, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const hooks = vi.hoisted(() => {
-  class EventRsvpMutationError extends Error {
-    constructor(kind: string) {
-      super(
-        kind === 'forbidden'
-          ? 'Nu mai ai permisiunea să răspunzi la acest eveniment.'
-          : 'Nu am putut salva răspunsul. Încearcă din nou.',
-      );
-    }
-  }
+import { resetSupabaseMock, supabaseMock } from '../../test/supabase-mock';
 
-  return {
-    EventRsvpMutationError,
-    useEventRsvp: vi.fn(),
-    useSetEventRsvp: vi.fn(),
-  };
+const auth = vi.hoisted(() => ({ useAuth: vi.fn() }));
+
+vi.mock('../../lib/supabase', async () => {
+  const { supabaseClientMock } = await vi.importActual<
+    typeof import('../../test/supabase-mock')
+  >('../../test/supabase-mock');
+  return { supabase: supabaseClientMock };
 });
+vi.mock('../../lib/auth', () => ({ useAuth: auth.useAuth }));
 
-vi.mock('../../queries/event-rsvp', () => ({
-  EventRsvpMutationError: hooks.EventRsvpMutationError,
-  useEventRsvp: hooks.useEventRsvp,
-  useSetEventRsvp: hooks.useSetEventRsvp,
-}));
-
-import { EventRsvpMutationError } from '../../queries/event-rsvp';
 import EventRsvpControls from './EventRsvpControls';
 
-function rsvpButton(name: string): HTMLElement {
+const memberId = 'a1000000-0000-0000-0000-000000000238';
+
+type Row = {
+  event_id: number;
+  member_id: string;
+  status: 'going' | 'declined';
+  checked_in: boolean;
+};
+
+/** The server's one answer for this member and Event (null: none yet). */
+let stored: Row | null;
+
+function row(status: Row['status']): Row {
+  return { event_id: 7, member_id: memberId, status, checked_in: false };
+}
+
+/** An RPC reply held until the test lets it go. */
+function deferredRpc() {
+  let release: (status: Row['status']) => void = () => {};
+  supabaseMock.rpc.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        release = (status) => {
+          stored = row(status);
+          resolve({ data: stored, error: null });
+        };
+      }),
+  );
+  return (status: Row['status']) => release(status);
+}
+
+function renderControls() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <EventRsvpControls eventId={7} eventTitle="Ședință BC" />
+    </QueryClientProvider>,
+  );
+}
+
+function answer(name: 'Particip' | 'Nu particip'): HTMLElement {
   return screen.getByRole('button', { name });
+}
+
+function receipt(): HTMLElement {
+  return screen.getByRole('status');
+}
+
+async function loaded() {
+  await waitFor(() =>
+    expect(answer('Particip')).not.toHaveAttribute('aria-disabled', 'true'),
+  );
 }
 
 describe('EventRsvpControls', () => {
   beforeEach(() => {
-    hooks.useEventRsvp.mockReturnValue({
-      data: {
-        eventId: 7,
-        memberId: 'member-1',
-        status: 'going',
-        checkedIn: false,
+    resetSupabaseMock();
+    auth.useAuth.mockReturnValue({ session: { user: { id: memberId } } });
+    stored = row('going');
+    supabaseMock.maybeSingle.mockImplementation(() =>
+      Promise.resolve({ data: stored, error: null }),
+    );
+    supabaseMock.rpc.mockImplementation(
+      (_name: string, args: { p_status: Row['status'] }) => {
+        stored = row(args.p_status);
+        return Promise.resolve({ data: stored, error: null });
       },
-      error: null,
-      isError: false,
-      isPending: false,
-      refetch: vi.fn(),
-    });
-    hooks.useSetEventRsvp.mockReturnValue({
-      isPending: false,
-      mutateAsync: vi.fn(),
-    });
-  });
-
-  it('marks the server-confirmed RSVP as selected', () => {
-    render(<EventRsvpControls eventId={7} eventTitle="Ședință BC" />);
-
-    expect(rsvpButton('Particip')).toHaveAttribute('aria-pressed', 'true');
-    expect(rsvpButton('Nu particip')).toHaveAttribute('aria-pressed', 'false');
-  });
-
-  // B4: the pressed button is the answer; no "Ai răspuns" line beside it.
-  it('shows no status line at rest, answered or not', () => {
-    const { unmount } = render(
-      <EventRsvpControls eventId={7} eventTitle="Ședință BC" />,
     );
-    expect(screen.getByRole('status')).toBeEmptyDOMElement();
-    expect(screen.queryByText(/Ai răspuns/)).not.toBeInTheDocument();
-    unmount();
+  });
 
-    hooks.useEventRsvp.mockReturnValue({
-      data: null,
-      error: null,
-      isError: false,
-      isPending: false,
-      refetch: vi.fn(),
-    });
-    const unanswered = render(
-      <EventRsvpControls eventId={7} eventTitle="Ședință BC" />,
+  it('shows the saved answer as a chosen button, and nothing else at rest', async () => {
+    renderControls();
+    await loaded();
+
+    expect(answer('Particip')).toHaveAttribute('aria-pressed', 'true');
+    expect(answer('Particip')).toHaveClass('bg-primary');
+    expect(answer('Particip').querySelector('svg')).not.toBeNull();
+    expect(answer('Nu particip')).toHaveAttribute('aria-pressed', 'false');
+    expect(answer('Nu particip').querySelector('svg')).toBeNull();
+    expect(receipt()).toBeEmptyDOMElement();
+  });
+
+  it('fills a chosen "Nu particip" in ink, apart from the red "Particip"', async () => {
+    stored = row('declined');
+    renderControls();
+    await loaded();
+
+    expect(answer('Nu particip')).toHaveAttribute('aria-pressed', 'true');
+    expect(answer('Nu particip')).toHaveClass(
+      'bg-foreground',
+      'text-background',
     );
-    expect(
-      within(unanswered.container).getByRole('status'),
-    ).toBeEmptyDOMElement();
-    expect(screen.queryByText(/Nu ai răspuns/)).not.toBeInTheDocument();
+    expect(answer('Nu particip')).not.toHaveClass('bg-primary');
+    expect(answer('Particip')).not.toHaveClass('bg-primary');
+    expect(answer('Particip')).not.toHaveClass('bg-foreground');
   });
 
-  it('disables both answers while one RSVP is being saved', () => {
-    hooks.useSetEventRsvp.mockReturnValue({
-      isPending: true,
-      mutateAsync: vi.fn(),
-    });
-
-    render(<EventRsvpControls eventId={7} eventTitle="Ședință BC" />);
-
-    expect(rsvpButton('Particip')).toHaveProperty('disabled', true);
-    expect(rsvpButton('Nu particip')).toHaveProperty('disabled', true);
-  });
-
-  it('saves the chosen answer and announces success in Romanian', async () => {
+  it('sends nothing when the chosen answer is clicked again, and says so', async () => {
     const user = userEvent.setup();
-    const mutateAsync = vi.fn().mockResolvedValue({
-      eventId: 7,
-      memberId: 'member-1',
-      status: 'declined',
-      checkedIn: false,
-    });
-    hooks.useSetEventRsvp.mockReturnValue({
-      isPending: false,
-      mutateAsync,
-    });
+    renderControls();
+    await loaded();
 
-    render(<EventRsvpControls eventId={7} eventTitle="Ședință BC" />);
-    await user.click(rsvpButton('Nu particip'));
+    await user.click(answer('Particip'));
+    await user.click(answer('Particip'));
 
-    expect(mutateAsync).toHaveBeenCalledWith({
-      eventId: 7,
-      status: 'declined',
-    });
-    // Announced, not shown: the pressed button already says it (B4).
-    const status = await screen.findByRole('status');
-    expect(status).toHaveTextContent('Răspuns salvat: nu participi.');
-    expect(screen.getByText('Răspuns salvat: nu participi.')).toHaveClass(
-      'sr-only',
+    expect(supabaseMock.rpc).not.toHaveBeenCalled();
+    expect(receipt()).toHaveTextContent(
+      'Participarea ta este deja confirmată.',
     );
+    expect(answer('Particip')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('says it is saving while the answer is sent', () => {
-    hooks.useSetEventRsvp.mockReturnValue({
-      isPending: true,
-      mutateAsync: vi.fn(),
+  it('sends exactly one request for a different answer, however fast the taps', async () => {
+    const user = userEvent.setup();
+    const release = deferredRpc();
+    renderControls();
+    await loaded();
+
+    await user.click(answer('Nu particip'));
+    await user.click(answer('Nu particip'));
+    await user.click(answer('Particip'));
+    release('declined');
+
+    await waitFor(() => expect(receipt()).toHaveTextContent(/nu participi/));
+    expect(supabaseMock.rpc).toHaveBeenCalledOnce();
+    expect(supabaseMock.rpc).toHaveBeenCalledWith('set_event_rsvp', {
+      p_event_id: 7,
+      p_status: 'declined',
     });
+  });
 
-    render(<EventRsvpControls eventId={7} eventTitle="Ședință BC" />);
+  it('flips the choice at once and disables both answers while it saves', async () => {
+    const user = userEvent.setup();
+    const release = deferredRpc();
+    renderControls();
+    await loaded();
 
-    expect(screen.getByRole('status')).toHaveTextContent('Se salvează…');
+    await user.click(answer('Nu particip'));
+
+    // Optimistic: the new answer is the chosen one before the server replies.
+    await waitFor(() =>
+      expect(answer('Nu particip')).toHaveAttribute('aria-pressed', 'true'),
+    );
+    expect(answer('Particip')).toHaveAttribute('aria-pressed', 'false');
+    expect(answer('Particip')).toHaveAttribute('aria-disabled', 'true');
+    expect(answer('Nu particip')).toHaveAttribute('aria-disabled', 'true');
+    expect(answer('Nu particip').querySelector('.animate-spin')).not.toBeNull();
     expect(
       screen.getByRole('group', { name: 'Alege răspunsul' }),
     ).toHaveAttribute('aria-busy', 'true');
+    // Focus stays on the tapped button rather than falling to the page.
+    expect(answer('Nu particip')).toHaveFocus();
+
+    release('declined');
+    await waitFor(() =>
+      expect(answer('Nu particip')).not.toHaveAttribute(
+        'aria-disabled',
+        'true',
+      ),
+    );
   });
 
-  it('keeps the confirmed answer selected and announces a safe failure', async () => {
+  it('shows a visible receipt naming the Event after a save', async () => {
     const user = userEvent.setup();
-    hooks.useSetEventRsvp.mockReturnValue({
-      isPending: false,
-      mutateAsync: vi
-        .fn()
-        .mockRejectedValue(
-          new EventRsvpMutationError('forbidden', { code: '42501' }),
-        ),
-    });
+    renderControls();
+    await loaded();
 
-    render(<EventRsvpControls eventId={7} eventTitle="Ședință BC" />);
-    await user.click(rsvpButton('Nu particip'));
+    await user.click(answer('Nu particip'));
+
+    await waitFor(() =>
+      expect(receipt()).toHaveTextContent(
+        'Ai anunțat că nu participi la „Ședință BC”.',
+      ),
+    );
+    // Seen, not only announced (the old line was `sr-only`).
+    expect(within(receipt()).queryByText(/nu participi/)).not.toHaveClass(
+      'sr-only',
+    );
+    expect(receipt()).not.toHaveClass('sr-only');
+    expect(answer('Nu particip')).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(answer('Particip'));
+    await waitFor(() =>
+      expect(receipt()).toHaveTextContent(
+        'Ai confirmat participarea la „Ședință BC”.',
+      ),
+    );
+  });
+
+  it('confirms a first answer to an Event never answered', async () => {
+    const user = userEvent.setup();
+    stored = null;
+    renderControls();
+    await loaded();
+    expect(answer('Particip')).toHaveAttribute('aria-pressed', 'false');
+    expect(answer('Nu particip')).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(answer('Particip'));
+
+    await waitFor(() =>
+      expect(receipt()).toHaveTextContent(
+        'Ai confirmat participarea la „Ședință BC”.',
+      ),
+    );
+    expect(answer('Particip')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('shows the failure and puts the earlier answer back', async () => {
+    const user = userEvent.setup();
+    supabaseMock.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: '42501', message: 'permission denied' },
+    });
+    renderControls();
+    await loaded();
+
+    await user.click(answer('Nu particip'));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Nu mai ai permisiunea să răspunzi la acest eveniment.',
     );
-    expect(rsvpButton('Particip')).toHaveAttribute('aria-pressed', 'true');
-    expect(rsvpButton('Nu particip')).toHaveAttribute('aria-pressed', 'false');
+    expect(answer('Particip')).toHaveAttribute('aria-pressed', 'true');
+    expect(answer('Nu particip')).toHaveAttribute('aria-pressed', 'false');
+    expect(receipt()).not.toHaveTextContent(/Ai anunțat/);
   });
 });
