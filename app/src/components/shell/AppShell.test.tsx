@@ -697,18 +697,28 @@ describe('AppShell', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('keeps sign-out failures in the shell and unlocks retry', async () => {
+  it('offers no sign-out in the sidebar or the phone drawer (R41)', async () => {
+    // A Member with a page off the bars, so the drawer exists (#972).
+    queries.useCapabilities.mockReturnValue({
+      data: capabilities({ seeLeadership: true }),
+    });
     const user = userEvent.setup();
-    auth.signOut.mockRejectedValueOnce(new Error('private provider error'));
     renderShell();
+    const signOut = /deconect/i;
 
-    await user.click(screen.getByRole('button', { name: 'Deconectare' }));
+    const sidebar = screen
+      .getByRole('navigation', { name: 'Navigare principală' })
+      .closest('aside') as HTMLElement;
+    // The footer still says who is signed in, with no way out beside it.
+    expect(within(sidebar).getByText('Mara Pop')).toBeInTheDocument();
+    expect(within(sidebar).queryByRole('button', { name: signOut })).toBeNull();
+    expect(within(sidebar).queryByText(signOut)).toBeNull();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Nu te-am putut deconecta. Încearcă din nou.',
-    );
-    expect(screen.getByRole('button', { name: 'Deconectare' })).toBeEnabled();
-    expect(screen.queryByText(/private provider error/i)).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Deschide meniul' }));
+    const drawer = screen.getByRole('dialog', { name: 'Meniu' });
+    expect(within(drawer).queryByRole('button', { name: signOut })).toBeNull();
+    expect(within(drawer).queryByText(signOut)).toBeNull();
+    expect(auth.signOut).not.toHaveBeenCalled();
   });
 });
 
