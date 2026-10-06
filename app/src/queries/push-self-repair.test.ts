@@ -498,6 +498,21 @@ describe('push stays on (2026-10-06)', () => {
     );
   });
 
+  it('turning the switch off during a repair in another tab stays off', async () => {
+    installLocks();
+    browser.current = fakeSubscription('https://push.example.test/ok', NEW_KEY);
+    rowPresent(true);
+
+    // The repair holds the lock and marks push on (its row exists); the
+    // switch-off waits behind it.
+    await Promise.all([
+      repairDevice(MEMBER, NEW_KEY),
+      unsubscribeDevice(MEMBER),
+    ]);
+
+    expect(pushOnHere(MEMBER)).toBe(false);
+  });
+
   it('turning the switch off also deletes the row of a subscription this browser lost', async () => {
     const current = fakeSubscription('https://push.example.test/ok', NEW_KEY);
     browser.current = current;

@@ -407,6 +407,9 @@ export async function unsubscribeDevice(memberId: string): Promise<void> {
   // back on (#769).
   rememberPushOn(memberId, false);
   return withDeviceLock(async () => {
+    // Again under the lock: a repair or renewal that held it may have set
+    // the flag after the first clear, and off must stay off.
+    rememberPushOn(memberId, false);
     const subscription = await currentSubscription();
     const token = subscription ? tokenFor(subscription) : null;
     const remembered = rememberedToken(memberId);
