@@ -1323,6 +1323,24 @@ describe('ProfileScreen', () => {
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     });
 
+    it('keeps the link when Profil cannot load, the only way out (R41)', async () => {
+      const user = userEvent.setup();
+      profileQueryMock.isError = true;
+      profileQueryMock.error = new Error('Database disconnected');
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      expect(
+        screen.getByText(/nu am putut încărca profilul/i),
+      ).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: LINK }));
+      await user.click(
+        within(screen.getByRole('dialog')).getByRole('button', {
+          name: CONFIRM,
+        }),
+      );
+      expect(authMock.signOut).toHaveBeenCalledTimes(1);
+    });
+
     it('does nothing on Renunță', async () => {
       const user = userEvent.setup();
       render(<ProfileScreen />, { wrapper: wrapper() });

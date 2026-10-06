@@ -155,6 +155,8 @@ export default function ProfileScreen() {
             if (isPointsEligible) void pointsQuery.refetch?.();
           }}
         />
+        {/* R41: the only way out stays reachable when the page cannot load. */}
+        <SignOutDeviceLink />
       </Page>
     );
   }
@@ -171,6 +173,7 @@ export default function ProfileScreen() {
     return (
       <Page aria-label="Profilul meu">
         <Empty text="Nu am găsit date despre profilul tău." />
+        <SignOutDeviceLink />
       </Page>
     );
   }
