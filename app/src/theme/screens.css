@@ -166,3 +166,42 @@
   border-radius: 50%;
   background: var(--red);
 }
+
+/* Acasă's "Pornește notificările" card (2026-10-06): the bell swings once
+   when the card appears, and the "pornite" receipt fades out before it goes.
+   Nothing moves under reduced motion. */
+.push-prompt-glyph {
+  transform-origin: 50% 12%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .push-prompt-glyph {
+    animation: push-prompt-swing 900ms var(--easing-standard) 300ms 1 both;
+  }
+
+  .push-prompt-receipt {
+    animation: push-prompt-receipt-out 600ms ease-in 5400ms 1 forwards;
+  }
+}
+
+@keyframes push-prompt-swing {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  20% {
+    transform: rotate(14deg);
+  }
+  45% {
+    transform: rotate(-10deg);
+  }
+  70% {
+    transform: rotate(5deg);
+  }
+}
+
+@keyframes push-prompt-receipt-out {
+  to {
+    opacity: 0;
+  }
+}

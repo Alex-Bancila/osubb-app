@@ -73,6 +73,11 @@ vi.mock('../../queries/task-review', async (importActual) => ({
   useAwaitingMyReview: hooks.useAwaitingMyReview,
 }));
 
+// The card has its own suite (PushPromptCard.test.tsx); here only its place.
+vi.mock('./PushPromptCard', () => ({
+  default: () => <p data-testid="push-prompt-slot" />,
+}));
+
 import DashboardScreen from './DashboardScreen';
 vi.mock(
   '../../queries/member-card',
@@ -268,6 +273,32 @@ describe('the greeting', () => {
       screen.getByRole('heading', { level: 1, name: 'Salut, Ioni 👋' }),
     ).toBeInTheDocument();
   });
+});
+
+describe('Pornește notificările (2026-10-06)', () => {
+  it.each([
+    ['a Voluntar', false, false],
+    ['a Responsabil', false, true],
+    ['a BC member', true, true],
+  ])(
+    '%s gets the card between the greeting and the panels',
+    (_, leader, reviewer) => {
+      viewer({ seeLeadership: leader, manageTasks: reviewer });
+      renderDashboard();
+      const card = screen.getByTestId('push-prompt-slot');
+      const heading = screen.getByRole('heading', { level: 1 });
+      const firstPanel = document.querySelector('[data-slot="panel"]');
+      expect(
+        heading.compareDocumentPosition(card) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(
+        firstPanel &&
+          card.compareDocumentPosition(firstPanel) &
+            Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    },
+  );
 });
 
 describe('the panels each viewer sees', () => {

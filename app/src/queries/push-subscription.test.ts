@@ -16,7 +16,7 @@ vi.mock('../lib/auth', () => ({
   useAuth: () => ({ session: { user: { id: MEMBER } } }),
 }));
 
-import { urlBase64ToUint8Array } from '../lib/push-device';
+import { pushTurnedOffHere, urlBase64ToUint8Array } from '../lib/push-device';
 import { usePushSubscription } from './push-subscription';
 
 // A synthetic key with a P-256 public key's shape — 65 bytes starting 0x04,
@@ -447,5 +447,79 @@ describe('urlBase64ToUint8Array', () => {
     expect(bytes).toBeInstanceOf(Uint8Array);
     expect(bytes).toHaveLength(65);
     expect(Array.from(bytes)).toEqual(Array.from(VAPID_BYTES));
+  });
+});
+
+/* 2026-10-06: Acasă's card shares this enable, and push now switches itself
+   on where the permission is granted unless the Member turned it off here. */
+describe('usePushSubscription and the Acasă card (2026-10-06)', () => {
+  const PUSH_OFF = 'osubb.push-off.' + MEMBER;
+
+  beforeEach(() => {
+    resetSupabaseMock();
+    localStorage.clear();
+    installBrowser();
+    vi.stubEnv('VITE_VAPID_PUBLIC_KEY', VAPID_KEY);
+    rowPresent(false);
+    supabaseMock.insert.mockResolvedValue({ error: null });
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'serviceWorker');
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('asks for the permission in the tap’s own call stack, before anything is awaited', async () => {
+    const { result } = renderHook(() => usePushSubscription(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    // No await between the tap and the question: Safari and Firefox only
+    // prompt for a direct result of the gesture.
+    rowPresent(true);
+    act(() => {
+      result.current.enable();
+      expect(browser.notification.requestPermission).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => expect(supabaseMock.insert).toHaveBeenCalledTimes(1));
+  });
+
+  it('asks nothing in a build without the VAPID key, and says so', async () => {
+    vi.stubEnv('VITE_VAPID_PUBLIC_KEY', '');
+    const { result } = renderHook(() => usePushSubscription(), { wrapper });
+
+    act(() => result.current.enable());
+
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(browser.notification.requestPermission).not.toHaveBeenCalled();
+  });
+
+  it('turning the switch off records it, so push is not switched on by itself', async () => {
+    browser.current = browser.subscription;
+    rowPresent(true);
+    const { result } = renderHook(() => usePushSubscription(), { wrapper });
+    await waitFor(() => expect(result.current.subscribed).toBe(true));
+
+    supabaseMock.eq
+      .mockReturnValueOnce(supabaseMock)
+      .mockResolvedValueOnce({ error: null });
+    act(() => result.current.disable());
+
+    await waitFor(() => expect(supabaseMock.delete).toHaveBeenCalled());
+    expect(pushTurnedOffHere(MEMBER)).toBe(true);
+  });
+
+  it('turning it on again clears that record', async () => {
+    localStorage.setItem(PUSH_OFF, '1');
+    const { result } = renderHook(() => usePushSubscription(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    rowPresent(true);
+    act(() => result.current.enable());
+
+    await waitFor(() => expect(result.current.subscribed).toBe(true));
+    expect(supabaseMock.insert).toHaveBeenCalledTimes(1);
+    expect(pushTurnedOffHere(MEMBER)).toBe(false);
   });
 });

@@ -17,8 +17,11 @@ vi.mock('../lib/auth', () => ({
 }));
 
 import {
+  autoEnableDevice,
   pushOnHere,
+  pushTurnedOffHere,
   repairDevice,
+  subscribeDevice,
   unsubscribeDevice,
 } from '../lib/push-device';
 import { bytesToUrlBase64, urlBase64ToUint8Array } from '../lib/vapid-key';
@@ -528,5 +531,171 @@ describe('push stays on (2026-10-06)', () => {
       'lost-subscription-json',
     );
     expect(localStorage.getItem(tokenKey)).toBeNull();
+  });
+});
+
+/* 2026-10-06, Alex: "is there any way in which i can set by default the
+   notification as approved and on?" Where the browser already grants the
+   permission, push switches itself on unless the Member turned it off here. */
+describe('push on by default where it is allowed (2026-10-06)', () => {
+  const offKey = `osubb.push-off.${MEMBER}`;
+
+  function installLocks() {
+    let tail: Promise<unknown> = Promise.resolve();
+    const request = vi.fn((_name: string, work: () => Promise<unknown>) => {
+      const run = tail.then(() => work());
+      tail = run.then(
+        () => undefined,
+        () => undefined,
+      );
+      return run;
+    });
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: { request },
+    });
+    return request;
+  }
+
+  beforeEach(() => {
+    resetSupabaseMock();
+    resetPushSelfRepairForTests();
+    localStorage.clear();
+    installBrowser();
+    vi.stubEnv('VITE_VAPID_PUBLIC_KEY', NEW_KEY);
+    supabaseMock.insert.mockResolvedValue({ error: null });
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'serviceWorker');
+    Reflect.deleteProperty(navigator, 'locks');
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('switches push on at app start: granted, nothing subscribed, never turned off', async () => {
+    renderHook(() => usePushSelfRepair(), { wrapper });
+
+    await waitFor(() => expect(supabaseMock.insert).toHaveBeenCalledTimes(1));
+    expect(browser.subscribe).toHaveBeenCalledWith({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(NEW_KEY),
+    });
+    expect(supabaseMock.insert).toHaveBeenCalledWith({
+      member_id: MEMBER,
+      token: tokenOf(browser.fresh),
+      platform: 'web',
+    });
+    expect(pushOnHere(MEMBER)).toBe(true);
+  });
+
+  it('never after the Member turned it off with the switch', async () => {
+    browser.current = fakeSubscription('https://push.example.test/ok', NEW_KEY);
+    await unsubscribeDevice(MEMBER, { turnedOff: true });
+    expect(pushTurnedOffHere(MEMBER)).toBe(true);
+
+    renderHook(() => usePushSelfRepair(), { wrapper });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('skipped');
+    expect(browser.subscribe).not.toHaveBeenCalled();
+    expect(supabaseMock.insert).not.toHaveBeenCalled();
+  });
+
+  it('a sign-out is not a switch-off: the Member who signs in again gets it back', async () => {
+    browser.current = fakeSubscription('https://push.example.test/ok', NEW_KEY);
+    // What signOut() runs: the row goes, the choice is not recorded.
+    await unsubscribeDevice(MEMBER);
+    expect(pushTurnedOffHere(MEMBER)).toBe(false);
+
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('enabled');
+    expect(supabaseMock.insert).toHaveBeenCalledTimes(1);
+  });
+
+  it('turning push on again lifts the switch-off', async () => {
+    localStorage.setItem(offKey, '1');
+    await subscribeDevice(MEMBER, NEW_KEY);
+    expect(pushTurnedOffHere(MEMBER)).toBe(false);
+  });
+
+  it('never asks: without a granted permission nothing is read or changed', async () => {
+    browser.permission = 'default';
+
+    renderHook(() => usePushSelfRepair(), { wrapper });
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('skipped');
+
+    expect(supabaseMock.from).not.toHaveBeenCalled();
+    expect(browser.subscribe).not.toHaveBeenCalled();
+  });
+
+  it('does nothing in a build without the VAPID key', async () => {
+    vi.stubEnv('VITE_VAPID_PUBLIC_KEY', '');
+
+    renderHook(() => usePushSelfRepair(), { wrapper });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(browser.subscribe).not.toHaveBeenCalled();
+    expect(supabaseMock.from).not.toHaveBeenCalled();
+  });
+
+  it('never adopts a subscription this Member has no row for', async () => {
+    // Another Member's leftover on a shared device (their session expired).
+    const leftover = fakeSubscription('https://push.example.test/x', NEW_KEY);
+    browser.current = leftover;
+    rowPresent(false);
+
+    renderHook(() => usePushSelfRepair(), { wrapper });
+    await waitFor(() => expect(supabaseMock.maybeSingle).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(browser.subscribe).not.toHaveBeenCalled();
+    expect(supabaseMock.insert).not.toHaveBeenCalled();
+    expect(leftover.unsubscribe).not.toHaveBeenCalled();
+  });
+
+  it('subscribes once when several tabs start together', async () => {
+    installLocks();
+
+    const outcomes = await Promise.all([
+      autoEnableDevice(MEMBER, NEW_KEY),
+      autoEnableDevice(MEMBER, NEW_KEY),
+    ]);
+
+    expect(outcomes).toEqual(['enabled', 'skipped']);
+    expect(browser.subscribe).toHaveBeenCalledTimes(1);
+    expect(supabaseMock.insert).toHaveBeenCalledTimes(1);
+  });
+
+  it('a switch-off waiting behind it in another tab wins', async () => {
+    installLocks();
+    rowPresent(true);
+
+    await Promise.all([
+      autoEnableDevice(MEMBER, NEW_KEY),
+      unsubscribeDevice(MEMBER, { turnedOff: true }),
+    ]);
+
+    expect(pushOnHere(MEMBER)).toBe(false);
+    expect(pushTurnedOffHere(MEMBER)).toBe(true);
+    expect(browser.current).toBeNull();
+  });
+
+  it('a switch-off that lands while it waits for the lock stops it', async () => {
+    installLocks();
+    // Another device change holds the lock first.
+    let release!: () => void;
+    const held = navigator.locks.request(
+      'osubb-push-device',
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+    const auto = autoEnableDevice(MEMBER, NEW_KEY);
+    localStorage.setItem(offKey, '1');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    release();
+    await held;
+
+    expect(await auto).toBe('skipped');
+    expect(browser.subscribe).not.toHaveBeenCalled();
   });
 });

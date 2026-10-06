@@ -8,6 +8,7 @@ import AwaitingReviewCard from './AwaitingReviewCard';
 import NextEventCard from './NextEventCard';
 import NextTaskCard from './NextTaskCard';
 import PointsStat from './PointsStat';
+import PushPromptCard from './PushPromptCard';
 
 /** "sâmbătă, 27 septembrie 2026" → "Sâmbătă, 27 septembrie 2026". */
 function capitalised(text: string): string {
@@ -45,6 +46,10 @@ const panelRow = 'md:grid-rows-[auto_1fr]';
  * - BC / BCE: **De evaluat** (or **Următorul task** without `manageTasks`)
  *   and **Următorul eveniment**. They do not work by points, so no stat.
  *
+ * Above them, for every Role, **Pornește notificările** (2026-10-06) while
+ * this device could receive Web Push and nobody has answered the permission
+ * yet; it renders nothing otherwise (`PushPromptCard`).
+ *
  * The Clasament and the Cupa Departamentelor live on Clasament, not here.
  * Each panel owns its query and its loading, empty and error states, so a
  * slow or failed read never blanks the panel next to it.
@@ -74,6 +79,7 @@ export default function DashboardScreen() {
         title={`Salut${name ? `, ${name}` : ''} 👋`}
         actions={capabilities.data && !leader ? <PointsStat /> : undefined}
       />
+      <PushPromptCard />
       {/* F-1 (#893): every `equalHeights` row below is Alex's 2026-09-29
           exception to the content-height rule — keep it. */}
       {capabilities.isPending ? (

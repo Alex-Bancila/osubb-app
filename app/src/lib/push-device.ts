@@ -83,6 +83,38 @@ function rememberPushOn(memberId: string, on: boolean) {
 }
 
 /**
+ * Whether this Member turned push off on this device with the switch
+ * (2026-10-06). The push-on flag above cannot say it: it is absent both for
+ * "never chose" and for "turned off", and a sign-out or an expired session
+ * clears it too. Only this flag stops {@link autoEnableDevice}; turning push
+ * on again (the switch, or Acasă's card) clears it. A sign-out never sets
+ * it: it deletes this device's row so the next person on a shared device gets
+ * nothing of this Member's, but the Member who signs in again here is the one
+ * the pushes are for. Storage that throws reads as "not turned off", and
+ * without storage nothing is subscribed on its own anyway (the write fails).
+ */
+function pushOffKey(memberId: string) {
+  return `osubb.push-off.${memberId}`;
+}
+
+export function pushTurnedOffHere(memberId: string): boolean {
+  try {
+    return localStorage.getItem(pushOffKey(memberId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function rememberPushOff(memberId: string, off: boolean) {
+  try {
+    if (off) localStorage.setItem(pushOffKey(memberId), '1');
+    else localStorage.removeItem(pushOffKey(memberId));
+  } catch {
+    // Nothing to keep: see pushTurnedOffHere.
+  }
+}
+
+/**
  * The token this browser last stored for a Member (2026-10-06). When the
  * browser loses or replaces its subscription without the app seeing the old
  * one (production: a Chrome on Windows dropped its subscription overnight),
@@ -360,40 +392,81 @@ export function subscribeDevice(
   memberId: string,
   publicKey: string,
 ): Promise<void> {
+  // The Member chose on: a switch-off from before no longer holds.
+  rememberPushOff(memberId, false);
   return withDeviceLock(async () => {
     const registration = await withTimeout(
       navigator.serviceWorker.ready,
       SERVICE_WORKER_TIMEOUT_MS,
     );
-    const options: PushSubscriptionOptionsInit = {
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
-    };
-
-    let subscription: PushSubscription;
-    try {
-      subscription = await registration.pushManager.subscribe(options);
-    } catch (error) {
-      // A subscription made with an earlier VAPID pair blocks a new one with
-      // InvalidStateError (docs/backend/push.md: rotating the pair means
-      // subscribing again). Only then: delete the stale row — send-push would
-      // otherwise fail every delivery to it with 401/403, never removing it —
-      // drop the stale subscription and try once more. Any other error is a
-      // real failure and leaves a working subscription alone.
-      if (!(
-        error instanceof DOMException && error.name === 'InvalidStateError'
-      ))
-        throw error;
-      const stale = await registration.pushManager.getSubscription();
-      if (!stale) throw error;
-      await deleteRow(memberId, tokenFor(stale));
-      await stale.unsubscribe();
-      subscription = await registration.pushManager.subscribe(options);
-    }
-
-    await replaceRow(memberId, tokenFor(subscription), null);
-    rememberPushOn(memberId, true);
+    await subscribeUnlocked(memberId, publicKey, registration);
   });
+}
+
+/**
+ * Switch push on by itself where the browser already grants the permission
+ * (2026-10-06, Alex: "set by default the notification as approved and on").
+ * Only when the permission is `granted` (so nothing can prompt), the Member
+ * never turned push off on this device ({@link pushTurnedOffHere}), and the
+ * browser holds no subscription at all: one it holds without this Member's
+ * row (the self-repair has already looked) may be another Member's leftover
+ * on a shared device, and is never adopted. Same path as the switch, under
+ * the device lock, so tabs opening together subscribe once.
+ */
+export async function autoEnableDevice(
+  memberId: string,
+  publicKey: string,
+): Promise<'enabled' | 'skipped'> {
+  if (
+    !pushSupported() ||
+    Notification.permission !== 'granted' ||
+    pushTurnedOffHere(memberId)
+  )
+    return 'skipped';
+  return withDeviceLock(async () => {
+    // Again under the lock: a switch-off that landed while this waited wins.
+    if (pushTurnedOffHere(memberId)) return 'skipped';
+    const registration = await withTimeout(
+      navigator.serviceWorker.ready,
+      SERVICE_WORKER_TIMEOUT_MS,
+    );
+    if (await registration.pushManager.getSubscription()) return 'skipped';
+    await subscribeUnlocked(memberId, publicKey, registration);
+    return 'enabled';
+  });
+}
+
+async function subscribeUnlocked(
+  memberId: string,
+  publicKey: string,
+  registration: ServiceWorkerRegistration,
+): Promise<void> {
+  const options: PushSubscriptionOptionsInit = {
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(publicKey),
+  };
+
+  let subscription: PushSubscription;
+  try {
+    subscription = await registration.pushManager.subscribe(options);
+  } catch (error) {
+    // A subscription made with an earlier VAPID pair blocks a new one with
+    // InvalidStateError (docs/backend/push.md: rotating the pair means
+    // subscribing again). Only then: delete the stale row — send-push would
+    // otherwise fail every delivery to it with 401/403, never removing it —
+    // drop the stale subscription and try once more. Any other error is a
+    // real failure and leaves a working subscription alone.
+    if (!(error instanceof DOMException && error.name === 'InvalidStateError'))
+      throw error;
+    const stale = await registration.pushManager.getSubscription();
+    if (!stale) throw error;
+    await deleteRow(memberId, tokenFor(stale));
+    await stale.unsubscribe();
+    subscription = await registration.pushManager.subscribe(options);
+  }
+
+  await replaceRow(memberId, tokenFor(subscription), null);
+  rememberPushOn(memberId, true);
 }
 
 /**
@@ -402,10 +475,15 @@ export function subscribeDevice(
  * even when the browser's own unsubscribe fails: without them nothing is sent
  * here, which is what turning the switch off (or signing out) promises.
  */
-export async function unsubscribeDevice(memberId: string): Promise<void> {
+export async function unsubscribeDevice(
+  memberId: string,
+  { turnedOff = false }: { turnedOff?: boolean } = {},
+): Promise<void> {
   // Off is off even if what follows fails: the self-repair must not turn it
-  // back on (#769).
+  // back on (#769). The switch also records the choice, so push is not
+  // switched on again by itself (2026-10-06); a sign-out does not.
   rememberPushOn(memberId, false);
+  if (turnedOff) rememberPushOff(memberId, true);
   return withDeviceLock(async () => {
     // Again under the lock: a repair or renewal that held it may have set
     // the flag after the first clear, and off must stay off.
