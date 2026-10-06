@@ -392,14 +392,16 @@ export function subscribeDevice(
   memberId: string,
   publicKey: string,
 ): Promise<void> {
-  // The Member chose on: a switch-off from before no longer holds.
-  rememberPushOff(memberId, false);
   return withDeviceLock(async () => {
     const registration = await withTimeout(
       navigator.serviceWorker.ready,
       SERVICE_WORKER_TIMEOUT_MS,
     );
     await subscribeUnlocked(memberId, publicKey, registration);
+    // The Member chose on and it took: a switch-off from before no longer
+    // holds. Only now: a failed attempt (the five-device cap, a stalled
+    // worker) must not leave push to switch itself on later (CodeRabbit).
+    rememberPushOff(memberId, false);
   });
 }
 
@@ -486,8 +488,10 @@ export async function unsubscribeDevice(
   if (turnedOff) rememberPushOff(memberId, true);
   return withDeviceLock(async () => {
     // Again under the lock: a repair or renewal that held it may have set
-    // the flag after the first clear, and off must stay off.
+    // the flag after the first clear, and an enable queued before this one
+    // may have lifted the switch-off: off must stay off.
     rememberPushOn(memberId, false);
+    if (turnedOff) rememberPushOff(memberId, true);
     const subscription = await currentSubscription();
     const token = subscription ? tokenFor(subscription) : null;
     const remembered = rememberedToken(memberId);

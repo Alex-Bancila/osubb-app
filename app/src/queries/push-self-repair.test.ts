@@ -619,6 +619,30 @@ describe('push on by default where it is allowed (2026-10-06)', () => {
     expect(pushTurnedOffHere(MEMBER)).toBe(false);
   });
 
+  it('a failed switch-on keeps the earlier switch-off (CodeRabbit on #1024)', async () => {
+    localStorage.setItem(offKey, '1');
+    supabaseMock.insert.mockResolvedValueOnce({
+      error: { code: '23514', message: 'push_devices_limit' },
+    });
+
+    await expect(subscribeDevice(MEMBER, NEW_KEY)).rejects.toBeTruthy();
+
+    expect(pushTurnedOffHere(MEMBER)).toBe(true);
+    expect(await autoEnableDevice(MEMBER, NEW_KEY)).toBe('skipped');
+  });
+
+  it('a switch-off queued behind a switch-on stays recorded', async () => {
+    installLocks();
+
+    await Promise.all([
+      subscribeDevice(MEMBER, NEW_KEY),
+      unsubscribeDevice(MEMBER, { turnedOff: true }),
+    ]);
+
+    expect(pushTurnedOffHere(MEMBER)).toBe(true);
+    expect(pushOnHere(MEMBER)).toBe(false);
+  });
+
   it('never asks: without a granted permission nothing is read or changed', async () => {
     browser.permission = 'default';
 
