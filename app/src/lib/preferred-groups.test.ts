@@ -168,3 +168,24 @@ describe('the default views', () => {
     ).toBe(true);
   });
 });
+
+describe('a locked Group with a free subgroup', () => {
+  const locked = preferenceTree(
+    [
+      { id: 30, name: 'Adunarea Generală', path: [30], status: 'active' },
+      { id: 31, name: 'Comisia', path: [30, 31], status: 'active' },
+    ],
+    [
+      { group_id: 30, selected: true, locked: 'adunarea_generala' },
+      { group_id: 31, selected: true, locked: null },
+    ],
+  );
+
+  it('does not move, and takes no subgroup with it', () => {
+    const [ag, child] = locked;
+    if (!ag || !child) throw new Error('tree');
+    expect(ag.subtree).toEqual([31]);
+    expect(toggleNode(ag, new Set()).size).toBe(0);
+    expect([...toggleNode(child, new Set())]).toEqual([31]);
+  });
+});
