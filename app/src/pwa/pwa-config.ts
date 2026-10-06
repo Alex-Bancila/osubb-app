@@ -1,4 +1,10 @@
 import type { VitePWAOptions } from 'vite-plugin-pwa';
+import {
+  APPLE_TOUCH_ICON,
+  FAVICONS,
+  MANIFEST_ICONS,
+  NOTIFICATION_BADGE,
+} from './app-icons.ts';
 
 /**
  * The service worker is our own `src/pwa/sw.ts` (ADR-0010, #704): Web Push
@@ -26,7 +32,14 @@ function createPwaOptions() {
     srcDir: 'src/pwa',
     filename: 'sw.ts',
     registerType: 'prompt',
-    includeAssets: ['icon.png'],
+    /* Precached beside the manifest icons (which the plugin adds itself): the
+       tab icons, the iOS icon and the push badge, so an offline start and a
+       push to a closed app still find them. Paths are relative to public/. */
+    includeAssets: [
+      ...FAVICONS.map(({ href }) => href),
+      APPLE_TOUCH_ICON,
+      NOTIFICATION_BADGE,
+    ].map((href) => href.slice(1)),
     manifest: {
       name: 'OSUBB',
       short_name: 'OSUBB',
@@ -37,20 +50,7 @@ function createPwaOptions() {
       display: 'standalone',
       theme_color: '#ED2025',
       background_color: '#FFFFFF',
-      icons: [
-        {
-          src: '/pwa-192x192.png',
-          sizes: '192x192',
-          type: 'image/png',
-          purpose: 'any maskable',
-        },
-        {
-          src: '/pwa-512x512.png',
-          sizes: '512x512',
-          type: 'image/png',
-          purpose: 'any maskable',
-        },
-      ],
+      icons: [...MANIFEST_ICONS],
     },
     injectManifest: createInjectManifestOptions(),
   } satisfies Partial<VitePWAOptions>;

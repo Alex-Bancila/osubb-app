@@ -20,7 +20,7 @@ describe('PWA build options', () => {
     ]);
   });
 
-  it('publishes the Romanian install manifest with official square icons', () => {
+  it('publishes the Romanian install manifest with the app icon', () => {
     const options = createPwaOptions();
     expect(options.manifest).toMatchObject({
       name: 'OSUBB',
@@ -30,8 +30,18 @@ describe('PWA build options', () => {
       theme_color: '#ED2025',
       background_color: '#FFFFFF',
       icons: [
-        { src: '/pwa-192x192.png', sizes: '192x192', purpose: 'any maskable' },
-        { src: '/pwa-512x512.png', sizes: '512x512', purpose: 'any maskable' },
+        { src: '/icon-192.png', sizes: '192x192', purpose: 'any' },
+        { src: '/icon-512.png', sizes: '512x512', purpose: 'any' },
+        {
+          src: '/icon-maskable-192.png',
+          sizes: '192x192',
+          purpose: 'maskable',
+        },
+        {
+          src: '/icon-maskable-512.png',
+          sizes: '512x512',
+          purpose: 'maskable',
+        },
       ],
     });
   });

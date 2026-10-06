@@ -43,3 +43,26 @@ Use the approved full-colour, black, or white variants on a contrasting backgrou
 Write Romanian that is friendly, informal, and accessible. Address a member in second-person singular: use direct, ordinary wording that says what happens.
 
 For the app, preserve keyboard-visible focus, respect reduced-motion preferences, maintain sufficient text and control contrast, and make touch targets at least 44 × 44 px. Pair every colour, motion, or visual state with a text, icon, label, or other non-colour cue where it carries meaning.
+
+## App icon
+
+The app icon is the OSUBB mark on its near-black square: white `#FFFFFF` arcs on the left, red-orange `#FF3017` arcs on the right, on `#0C0D0C`. Its source is Alex's Illustrator export, `sticker 3.pdf` (one 144.567 pt page, six filled paths). The PDF is about 48 MB of private Illustrator data and is not committed; [`osubb-app-icon.svg`](osubb-app-icon.svg) is the same artwork lifted out as vector paths, and is the master in the repository.
+
+Every icon file is generated, never edited by hand:
+
+```sh
+npm --prefix scripts/app-icon ci
+node scripts/app-icon/generate.mjs "/path/to/sticker 3.pdf"
+```
+
+The script draws each PNG from the vector paths at its exact size, refuses a PDF with any colour other than these three, and refuses artwork that leaves the maskable safe zone (the mark reaches 35% of the icon from its centre; the limit is 40%).
+
+| File in `app/public/`                                   | Size        | Surface                                                         |
+| ------------------------------------------------------- | ----------- | --------------------------------------------------------------- |
+| `favicon.svg`, `favicon-32x32.png`, `favicon-16x16.png` | any, 32, 16 | Browser tab; rounded square, mark enlarged to 84% to read small |
+| `apple-touch-icon.png`                                  | 180         | iOS home screen; opaque full-bleed square, iOS rounds it        |
+| `icon-192.png`, `icon-512.png`                          | 192, 512    | Manifest `any`: rounded square for desktop launchers            |
+| `icon-maskable-192.png`, `icon-maskable-512.png`        | 192, 512    | Manifest `maskable`: opaque full-bleed square for Android       |
+| `badge-96.png`                                          | 96          | Push badge in Android's status bar: white silhouette            |
+
+A push Notification shows `icon-maskable-192.png` as its picture. The file names live in `app/src/pwa/app-icons.ts`, and `app-icons.test.ts` checks that each file exists, has its stated size, and that the opaque, safe-zone and silhouette rules hold. The in-app logo (`app/src/assets/brand/`) is separate and is not generated.

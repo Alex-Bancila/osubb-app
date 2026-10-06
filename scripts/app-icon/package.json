@@ -1,0 +1,15 @@
+{
+  "name": "osubb-app-icon-generator",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "description": "Regenerates app/public's app icons from the vector source PDF. Not part of the app build.",
+  "scripts": {
+    "generate": "node generate.mjs"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "1.0.10",
+    "pdfjs-dist": "4.10.38",
+    "pngjs": "7.0.0"
+  }
+}
