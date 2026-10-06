@@ -113,7 +113,7 @@ A BC member or the Moderator in their standing as a member of every Group by the
 _Avoid_: Ex officio member, board member of the Group
 
 **Group Audience**:
-Every active Member of a Group or of any Group below it, whether through a roster row or through Automatic Membership; the Membri de drept are not part of it. A Group's Announcements and the important changes to its Events reach its Group Audience, except BC members and the Moderator, who are never notified through it, and a Member's Relevant Events are those of the Groups whose Audience they are in. Task notifications never use it; they target the Executor, the Task Manager, and the Candidates.
+Every active Member of a Group or of any Group below it, whether through a roster row or through Automatic Membership; the Membri de drept are not part of it. A Group's Announcements, its new Events and the important changes to its Events reach its Group Audience, except BC members and the Moderator, who are never notified through it, and a Member's Relevant Events are those of the Groups whose Audience they are in. Task notifications never use it; they target the Executor, the Task Manager, and the Candidates.
 _Avoid_: Recipients, subscribers, the roster when Automatic Membership is meant
 
 **Organization Group**:
@@ -266,7 +266,7 @@ A deferred BC/Moderator action that may reduce a Member’s Personal Score and m
 ## Calendar
 
 **Event**:
-A future or past OSUBB activity owned by one Group.
+A future or past OSUBB activity owned by one Group. Creating it notifies its Group Audience once, unless its Announcement is published with it and speaks for it (ruling R39).
 
 **Event Scope**:
 The Group that owns an Event. An organization-wide Event belongs to the Organization Group.
