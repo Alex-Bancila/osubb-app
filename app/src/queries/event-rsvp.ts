@@ -10,6 +10,7 @@ import { queryErrorCode } from '../lib/query-error';
 import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
+import type { EventAttendance } from './event-attendance';
 import { keys } from './keys';
 
 export const RSVP_FIELDS = 'event_id, member_id, status, checked_in';
@@ -144,21 +145,127 @@ export async function setEventRsvp(
   return toEventRsvp(data);
 }
 
-export function eventRsvpMutationOptions(queryClient: QueryClient) {
+/** What an answer replaced in the cache, to put back if the save fails. */
+export type EventRsvpSnapshot = {
+  memberId: string;
+  rsvp: EventRsvp | null | undefined;
+  going: number[] | undefined;
+  attendance: EventAttendance | undefined;
+};
+
+/** Move one member's answer between the two lists of **Cine participă**. */
+function withAnswer(
+  attendance: EventAttendance,
+  memberId: string,
+  status: EventRsvpStatus,
+): EventAttendance {
+  const others = (ids: string[]) => ids.filter((id) => id !== memberId);
+  return {
+    going:
+      status === 'going'
+        ? [...others(attendance.going), memberId]
+        : others(attendance.going),
+    declined:
+      status === 'declined'
+        ? [...others(attendance.declined), memberId]
+        : others(attendance.declined),
+  };
+}
+
+/**
+ * The answer shows at once, everywhere it is read: the pressed button, the
+ * Calendar chip's colour (the "Vin" set, #692) and a manager's Cine participă
+ * (#934). A failed save puts back what was there; either way the three are
+ * read again from the server once the command settles.
+ */
+export function eventRsvpMutationOptions(
+  queryClient: QueryClient,
+  memberId: string | undefined,
+) {
   return {
     mutationFn: setEventRsvp,
-    onSuccess: async (rsvp: EventRsvp) => {
+    onMutate: async ({
+      eventId,
+      status,
+    }: SetEventRsvpInput): Promise<EventRsvpSnapshot | null> => {
+      if (!memberId) return null;
+      const rsvpKey = keys.events.rsvp(eventId, memberId);
+      const goingKey = keys.events.going(memberId);
+      const attendanceKey = keys.events.attendance(eventId, memberId);
+      // A read already in flight would land on top of the new answer.
+      await Promise.all(
+        [rsvpKey, goingKey, attendanceKey].map((queryKey) =>
+          queryClient.cancelQueries({ queryKey }),
+        ),
+      );
+
+      const snapshot: EventRsvpSnapshot = {
+        memberId,
+        rsvp: queryClient.getQueryData<EventRsvp | null>(rsvpKey),
+        going: queryClient.getQueryData<number[]>(goingKey),
+        attendance: queryClient.getQueryData<EventAttendance>(attendanceKey),
+      };
+
+      queryClient.setQueryData<EventRsvp | null>(rsvpKey, (previous) =>
+        previous
+          ? { ...previous, status }
+          : { eventId, memberId, status, checkedIn: false },
+      );
+      if (snapshot.going !== undefined) {
+        const others = snapshot.going.filter((id) => id !== eventId);
+        queryClient.setQueryData<number[]>(
+          goingKey,
+          status === 'going' ? [...others, eventId] : others,
+        );
+      }
+      if (snapshot.attendance !== undefined) {
+        queryClient.setQueryData<EventAttendance>(
+          attendanceKey,
+          withAnswer(snapshot.attendance, memberId, status),
+        );
+      }
+      return snapshot;
+    },
+    onError: (
+      _error: unknown,
+      { eventId }: SetEventRsvpInput,
+      snapshot: EventRsvpSnapshot | null | undefined,
+    ) => {
+      if (!snapshot) return;
+      const { memberId: member } = snapshot;
+      if (snapshot.rsvp !== undefined) {
+        queryClient.setQueryData(
+          keys.events.rsvp(eventId, member),
+          snapshot.rsvp,
+        );
+      }
+      if (snapshot.going !== undefined) {
+        queryClient.setQueryData(keys.events.going(member), snapshot.going);
+      }
+      if (snapshot.attendance !== undefined) {
+        queryClient.setQueryData(
+          keys.events.attendance(eventId, member),
+          snapshot.attendance,
+        );
+      }
+    },
+    onSettled: async (
+      _data: EventRsvp | undefined,
+      _error: unknown,
+      { eventId }: SetEventRsvpInput,
+    ) => {
+      if (!memberId) return;
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: keys.events.rsvp(rsvp.eventId, rsvp.memberId),
+          queryKey: keys.events.rsvp(eventId, memberId),
         }),
         // An Other OSUBB Event answered "Vin" moves into colour (#692).
         queryClient.invalidateQueries({
-          queryKey: keys.events.going(rsvp.memberId),
+          queryKey: keys.events.going(memberId),
         }),
         // A manager answering their own Event sees Cine participă move (#934).
         queryClient.invalidateQueries({
-          queryKey: keys.events.attendance(rsvp.eventId, rsvp.memberId),
+          queryKey: keys.events.attendance(eventId, memberId),
         }),
       ]);
     },
@@ -190,5 +297,6 @@ export function useGoingEventIds() {
 
 export function useSetEventRsvp() {
   const queryClient = useQueryClient();
-  return useMutation(eventRsvpMutationOptions(queryClient));
+  const memberId = useAuth().session?.user.id;
+  return useMutation(eventRsvpMutationOptions(queryClient, memberId));
 }

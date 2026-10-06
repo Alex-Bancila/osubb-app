@@ -175,18 +175,16 @@ describe('RSVP mutation', () => {
     },
   );
 
-  it('invalidates the returned member and event, their Vin set, and the Event’s Cine participă, after success', async () => {
+  it('reads the member and event, their Vin set, and the Event’s Cine participă again once settled', async () => {
     const queryClient = new QueryClient();
     const invalidate = vi
       .spyOn(queryClient, 'invalidateQueries')
       .mockResolvedValue(undefined);
-    const options = eventRsvpMutationOptions(queryClient);
+    const options = eventRsvpMutationOptions(queryClient, memberId);
 
-    await options.onSuccess({
+    await options.onSettled(undefined, new Error('x'), {
       eventId: 42,
-      memberId,
       status: 'declined',
-      checkedIn: false,
     });
 
     expect(invalidate).toHaveBeenCalledTimes(3);
@@ -201,8 +199,68 @@ describe('RSVP mutation', () => {
     });
   });
 
+  // Everything that reads the answer moves at once (Alex, 2026-10-06: "show
+  // through ui that their action happened"), and goes back if the save fails.
+  it('shows the new answer everywhere before the server replies, and puts the old one back on failure', async () => {
+    const queryClient = new QueryClient();
+    const rsvpKey = ['events', 'rsvp', { eventId: 42, memberId }];
+    const goingKey = ['events', 'going', { memberId }];
+    const attendanceKey = ['events', 'attendance', { eventId: 42, memberId }];
+    const before = {
+      rsvp: { eventId: 42, memberId, status: 'going', checkedIn: false },
+      going: [4, 42],
+      attendance: { going: ['other', memberId], declined: ['third'] },
+    };
+    queryClient.setQueryData(rsvpKey, before.rsvp);
+    queryClient.setQueryData(goingKey, before.going);
+    queryClient.setQueryData(attendanceKey, before.attendance);
+    const options = eventRsvpMutationOptions(queryClient, memberId);
+    const input = { eventId: 42, status: 'declined' } as const;
+
+    const snapshot = await options.onMutate(input);
+
+    expect(queryClient.getQueryData(rsvpKey)).toMatchObject({
+      status: 'declined',
+    });
+    expect(queryClient.getQueryData(goingKey)).toEqual([4]);
+    expect(queryClient.getQueryData(attendanceKey)).toEqual({
+      going: ['other'],
+      declined: ['third', memberId],
+    });
+
+    options.onError(new Error('x'), input, snapshot);
+
+    expect(queryClient.getQueryData(rsvpKey)).toEqual(before.rsvp);
+    expect(queryClient.getQueryData(goingKey)).toEqual(before.going);
+    expect(queryClient.getQueryData(attendanceKey)).toEqual(before.attendance);
+  });
+
+  it('writes a first answer into an empty cache and adds the Event to the Vin set', async () => {
+    const queryClient = new QueryClient();
+    const rsvpKey = ['events', 'rsvp', { eventId: 42, memberId }];
+    const goingKey = ['events', 'going', { memberId }];
+    queryClient.setQueryData(rsvpKey, null);
+    queryClient.setQueryData(goingKey, [4]);
+    const options = eventRsvpMutationOptions(queryClient, memberId);
+
+    const snapshot = await options.onMutate({ eventId: 42, status: 'going' });
+
+    expect(queryClient.getQueryData(rsvpKey)).toEqual({
+      eventId: 42,
+      memberId,
+      status: 'going',
+      checkedIn: false,
+    });
+    expect(queryClient.getQueryData(goingKey)).toEqual([4, 42]);
+
+    options.onError(new Error('x'), { eventId: 42, status: 'going' }, snapshot);
+    expect(queryClient.getQueryData(rsvpKey)).toBeNull();
+    expect(queryClient.getQueryData(goingKey)).toEqual([4]);
+  });
+
   it('wires the RPC and invalidation through the mutation hook', async () => {
     supabaseMock.rpc.mockResolvedValue({ data: rsvpRow, error: null });
+    auth.useAuth.mockReturnValue({ session: { user: { id: memberId } } });
     const queryClient = new QueryClient();
     const invalidate = vi
       .spyOn(queryClient, 'invalidateQueries')

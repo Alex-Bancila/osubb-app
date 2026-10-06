@@ -817,15 +817,46 @@
   font-weight: var(--fw-bold);
 }
 
-.event-rsvp-button.is-declined {
-  border-color: var(--text);
-  background: var(--text);
-  color: var(--surface);
+/* What the last tap did, in words, under the buttons that now show it. Empty,
+   it takes no room; it stays mounted so a new sentence is announced. */
+.event-rsvp-receipt {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: var(--s-3) 0 0;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
 }
 
-.event-rsvp-button.is-declined:hover {
-  background: color-mix(in srgb, var(--text) 88%, var(--surface));
-  color: var(--surface);
+.event-rsvp-receipt:empty,
+.event-rsvp-receipt:has(> .sr-only:only-child) {
+  margin: 0;
+}
+
+.event-rsvp-receipt.is-kept {
+  color: var(--text-muted);
+  font-weight: var(--fw-medium);
+}
+
+.event-rsvp-receipt-icon {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  color: var(--success);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .event-rsvp-receipt-icon {
+    animation: event-rsvp-receipt-in 180ms ease-out;
+  }
+}
+
+@keyframes event-rsvp-receipt-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
 }
 
 .event-rsvp-live {
