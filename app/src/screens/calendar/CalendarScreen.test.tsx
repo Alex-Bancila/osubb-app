@@ -608,6 +608,17 @@ describe('CalendarScreen', () => {
       expect(screen.getAllByRole('article')).toHaveLength(2);
     });
 
+    it('says the range is empty for a chosen Group with nothing in it (R40)', () => {
+      setEvents([event()]);
+      renderCalendar('/calendar?grup=20');
+      expect(
+        screen.getByText('Nimic programat de acum înainte.'),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Arată toate grupurile' }),
+      ).toBeInTheDocument();
+    });
+
     it('narrows Events by the Campaign level', () => {
       setEvents([
         event(),
@@ -885,7 +896,7 @@ describe('CalendarScreen', () => {
       expect(hooks.useCalendarWork).toHaveBeenLastCalledWith(false);
     });
 
-    it('offers only the Groups and Campaigns with Events or deadlines (Rule W)', async () => {
+    it('offers every Group, those with no work included, and Campaigns by Rule W (R40)', async () => {
       const user = userEvent.setup();
       hooks.useCalendarWork.mockReturnValue({
         ready: true,
@@ -904,15 +915,103 @@ describe('CalendarScreen', () => {
       await user.click(
         screen.getByRole('combobox', { name: 'Grup principal' }),
       );
-      // OSUBB owns nothing here; Educațional is Social Media's parent.
+      // OSUBB owns nothing here, and is offered all the same.
       expect(
         (await screen.findAllByRole('option')).map((o) => o.textContent),
-      ).toEqual(['Educațional', 'Festival']);
-      // One Campaign only: the level is not drawn.
+      ).toEqual(['OSUBB', 'Educațional', 'Festival']);
+      // One Campaign only: Rule W still hides the level.
       expect(screen.queryByRole('combobox', { name: 'Campanie' })).toBeNull();
       expect(sheet).toHaveAccessibleDescription(
         'Grupul include subgrupurile sale.',
       );
+    });
+
+    it('draws both Group levels with the managed toggle off and a single root (R40)', async () => {
+      const user = userEvent.setup();
+      stubStorage({ [CALENDAR_VIEW_STORAGE_KEY]: 'month' });
+      // Everything sits under the Organization and the only item is in
+      // Social Media, so Rule W would draw no Group level at all.
+      hooks.useGroups.mockReturnValue(
+        query(
+          new Map<number, Group>([
+            [5, group(5, osubbGroup)],
+            [7, group(7, { ...eduGroup, path: [5, 7] })],
+            [12, group(12, { ...socialMediaGroup, path: [5, 7, 12] })],
+            [20, group(20, { ...festivalGroup, path: [5, 20] })],
+          ]),
+        ),
+      );
+      hooks.useCalendarWork.mockReturnValue({
+        ready: true,
+        work: [{ group_id: 12, campaign_id: null }],
+      });
+      hooks.useTaskManagement.mockReturnValue(query(true));
+      renderCalendar();
+      expect(
+        screen.getByRole('button', { name: 'Taskurile gestionate' }),
+      ).toHaveAttribute('aria-pressed', 'false');
+      expect(hooks.useCalendarWork).toHaveBeenLastCalledWith(false);
+
+      await openFilters(user);
+      await user.click(
+        screen.getByRole('combobox', { name: 'Grup principal' }),
+      );
+      expect(
+        (await screen.findAllByRole('option')).map((o) => o.textContent),
+      ).toEqual(['OSUBB']);
+      await user.keyboard('{Escape}');
+      await user.click(screen.getByRole('combobox', { name: 'Subgrup' }));
+      // Every Group below, in tree order: Educațional directly before its
+      // Child Group, and Festival, which owns nothing.
+      expect(
+        (await screen.findAllByRole('option')).map(
+          (o) => o.textContent?.split('·')[0]?.trim() ?? '',
+        ),
+      ).toEqual(['Educațional', 'Social Media', 'Festival']);
+    });
+
+    it('keeps the Subgrup drawn, disabled, under a Group with none below it (R40)', async () => {
+      const user = userEvent.setup();
+      renderCalendar('/calendar?grup=20');
+      await openFilters(user);
+      const sub = screen.getByRole('combobox', { name: 'Subgrup' });
+      expect(sub).toBeDisabled();
+      expect(sub).toHaveTextContent('Fără subgrupuri');
+    });
+
+    it('says the month is empty for a Group with nothing in it, and shows every Group again (R40)', async () => {
+      const user = userEvent.setup();
+      stubStorage({ [CALENDAR_VIEW_STORAGE_KEY]: 'month' });
+      setEvents([event()]);
+      renderCalendar('/calendar?grup=20');
+
+      expect(screen.getByText('Nimic în luna aceasta.')).toBeInTheDocument();
+      expect(screen.queryByRole('table')).toBeNull();
+
+      await user.click(
+        screen.getByRole('button', { name: 'Arată toate grupurile' }),
+      );
+      expect(screen.queryByText('Nimic în luna aceasta.')).toBeNull();
+      expect(
+        screen.getByRole('table', { name: 'octombrie 2026' }),
+      ).toBeInTheDocument();
+    });
+
+    it('keeps the grid for a chosen Group with something that month (R40)', () => {
+      stubStorage({ [CALENDAR_VIEW_STORAGE_KEY]: 'month' });
+      // Only a Task deadline in Social Media, below Educațional.
+      renderCalendar('/calendar?grup=7');
+      expect(screen.queryByText('Nimic în luna aceasta.')).toBeNull();
+      expect(
+        screen.getByRole('table', { name: 'octombrie 2026' }),
+      ).toBeInTheDocument();
+    });
+
+    it('does not call a Group empty while its deadlines are still loading (R40)', () => {
+      stubStorage({ [CALENDAR_VIEW_STORAGE_KEY]: 'month' });
+      hooks.useMyTasks.mockReturnValue(query(undefined, { isPending: true }));
+      renderCalendar('/calendar?grup=20');
+      expect(screen.queryByText('Nimic în luna aceasta.')).toBeNull();
     });
 
     it('shows a retry when the Events or deadlines behind the filter fail', async () => {

@@ -76,7 +76,8 @@ export default function CalendarScreen() {
   const groups = useGroups();
   const campaigns = useCampaigns();
   // Taskurile gestionate: only the month grid draws them, so Rule W offers
-  // their Groups only there, while they are on (#845).
+  // their Campaigns only there, while they are on (#845). The Group levels
+  // offer every Group regardless (R40).
   const [showManaged, setShowManaged] = useState(false);
   const calendarWork = useCalendarWork(view === 'month' && showManaged);
   const filterGroups = useMemo(
@@ -168,6 +169,7 @@ export default function CalendarScreen() {
         groups={filterGroups}
         campaigns={campaigns.data ?? []}
         work={calendarWork.work}
+        alwaysShowGroups
         hint="Grupul include subgrupurile sale."
       />
 

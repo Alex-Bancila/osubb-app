@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 
 import { Empty, ErrorState, Loading } from '../../components/states';
 import type { WorkFilterState } from '../../lib/use-work-filter';
+import { chosenGroupId } from '../../lib/work-filter';
 import {
   useEvent,
   useEventsInRange,
@@ -20,6 +21,7 @@ import {
   groupEventsByDay,
 } from './calendar-presentation';
 import type { EventRelevance } from './calendar-presentation';
+import { CalendarGroupEmpty } from './CalendarGroupEmpty';
 import EventCard from './EventCard';
 
 const RANGE_FIRST = 'Corectează perioada din filtre ca să vezi evenimentele.';
@@ -130,6 +132,13 @@ export function CalendarAgenda({
           text="Nu am putut încărca evenimentele."
           onRetry={() => void events.refetch()}
         />
+      ) : days.length === 0 && chosenGroupId(filter.value) !== undefined ? (
+        // R40: the chosen Group holds nothing in this range.
+        <CalendarGroupEmpty filter={filter}>
+          {startsToday && to === undefined
+            ? 'Nimic programat de acum înainte.'
+            : 'Nimic în acest interval.'}
+        </CalendarGroupEmpty>
       ) : days.length === 0 ? (
         <Empty
           text={

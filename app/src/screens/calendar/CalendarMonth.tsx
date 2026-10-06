@@ -7,7 +7,11 @@ import { ErrorState, Loading } from '../../components/states';
 import { Button } from '../../components/ui/button';
 import { cn } from '../../lib/utils';
 import type { WorkFilterState } from '../../lib/use-work-filter';
-import { parseWorkFilter, serializeWorkFilter } from '../../lib/work-filter';
+import {
+  chosenGroupId,
+  parseWorkFilter,
+  serializeWorkFilter,
+} from '../../lib/work-filter';
 import { usePendingCandidatureTasks } from '../../queries/calendar-tasks';
 import { useEventsInRange, type EventPresentation } from '../../queries/events';
 import type { Group } from '../../queries/reference';
@@ -34,6 +38,7 @@ import {
   type EventRelevance,
   type MonthKey,
 } from './calendar-presentation';
+import { CalendarGroupEmpty } from './CalendarGroupEmpty';
 import EventCard from './EventCard';
 
 /** Chips a day cell draws before it says "+N". */
@@ -148,6 +153,14 @@ export function CalendarMonth({
     selected && (selected.events.length > 0 || selected.tasks.length > 0),
   );
   const heading = selectedDay ? dayKeyHeading(selectedDay) : null;
+  // R40: a chosen Group with no Event or deadline in this month says so in
+  // place of an empty grid — once the deadlines have settled, so a slow or
+  // failed Task read never reads as "nothing".
+  const groupMonthEmpty =
+    chosenGroupId(filter.value) !== undefined &&
+    !tasksLoading &&
+    !taskError &&
+    ![...byDay.keys()].some((day) => monthOfDay(day) === month);
 
   return (
     <div className="calendar-month-view">
@@ -212,6 +225,10 @@ export function CalendarMonth({
           text="Nu am putut încărca evenimentele."
           onRetry={() => void events.refetch()}
         />
+      ) : groupMonthEmpty ? (
+        <CalendarGroupEmpty filter={filter}>
+          Nimic în luna aceasta.
+        </CalendarGroupEmpty>
       ) : (
         <>
           <table className="calendar-grid" aria-label={monthLabel(month)}>
