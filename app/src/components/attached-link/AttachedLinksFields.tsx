@@ -183,7 +183,7 @@ export function AttachedLinksFields({
                     onClick={() => remove(index)}
                     aria-label={`Elimină linkul ${n}`}
                     // Level with the inputs, under their labels.
-                    className="mt-7 size-11 shrink-0 text-muted-foreground hover:text-foreground"
+                    className="mt-6.5 size-11 shrink-0 text-muted-foreground hover:text-foreground"
                   >
                     <X className="size-4" aria-hidden="true" />
                   </Button>
