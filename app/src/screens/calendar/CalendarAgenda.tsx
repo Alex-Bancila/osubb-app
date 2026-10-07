@@ -34,6 +34,9 @@ function later(a: string, b: string): string {
   return a >= b ? a : b;
 }
 
+/** No preferred-Groups filter: everything is shown. */
+const keepAll = () => true;
+
 /**
  * The Agendă: readable Events by day, inside the Work Filter's range on the
  * Event start. Without a range it starts today and is open-ended — **Ce
@@ -48,6 +51,7 @@ export function CalendarAgenda({
   linkedId,
   groups,
   relevanceOf,
+  keepEvent = keepAll,
 }: {
   /** The screen's clock, in milliseconds (a render must not read the time). */
   now: number;
@@ -56,6 +60,8 @@ export function CalendarAgenda({
   linkedId: number | null;
   groups: Map<number, Group> | undefined;
   relevanceOf: (event: EventPresentation) => EventRelevance;
+  /** R43: whether an Event is shown under the preferred Groups. */
+  keepEvent?: (event: EventPresentation) => boolean;
 }) {
   const linked = useEvent(linkedId);
   const linkedEvent = linkedId !== null ? (linked.data ?? null) : null;
@@ -80,17 +86,22 @@ export function CalendarAgenda({
   }, [filter.params, waitingForLink, linkedEvent?.dayKey, from, to]);
   const events = useEventsInRange(range);
 
-  const shown = useMemo(() => {
+  const { shown, hiddenByPreference } = useMemo(() => {
     // The range is the query's; the Group and Campaign levels narrow here.
-    const narrowed = filterEvents(events.data ?? [], {
+    const filtered = filterEvents(events.data ?? [], {
       ...filter.value,
       from: undefined,
       to: undefined,
     });
+    const narrowed = filtered.filter(keepEvent);
     if (linkedEvent && !narrowed.some((event) => event.id === linkedEvent.id))
       narrowed.push(linkedEvent);
-    return narrowed;
-  }, [events.data, filter.value, linkedEvent]);
+    return {
+      shown: narrowed,
+      // R43: Events in range, every one of them in a Group the member unselected.
+      hiddenByPreference: filtered.length > 0 && narrowed.length === 0,
+    };
+  }, [events.data, filter.value, linkedEvent, keepEvent]);
   const days = groupEventsByDay(shown);
 
   // Land on the linked card once per link: a refetch must not pull the page
@@ -142,9 +153,11 @@ export function CalendarAgenda({
       ) : days.length === 0 ? (
         <Empty
           text={
-            startsToday
-              ? 'Nu sunt evenimente viitoare pentru tine.'
-              : 'Nu sunt evenimente în acest interval.'
+            hiddenByPreference
+              ? 'Nimic în grupurile tale preferate în acest interval.'
+              : startsToday
+                ? 'Nu sunt evenimente viitoare pentru tine.'
+                : 'Nu sunt evenimente în acest interval.'
           }
         />
       ) : (

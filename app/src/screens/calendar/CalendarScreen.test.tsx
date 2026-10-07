@@ -3,6 +3,18 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// R43: Grupuri preferate. Nothing is unselected unless a test says so.
+const preferences = vi.hoisted(() => ({
+  muted: new Set<number>() as ReadonlySet<number>,
+  memberId: undefined as string | undefined,
+}));
+vi.mock('../../queries/group-preferences', () => ({
+  usePreferredGroupsData: () => ({
+    muted: preferences.muted,
+    memberId: preferences.memberId,
+  }),
+}));
+
 // #1012 (R37): opening a thing reads its Notifications. The hook is observed
 // here; its own behaviour is covered in queries/notifications-read.test.tsx.
 const readNotificationsAbout = vi.hoisted(() => vi.fn());
@@ -705,6 +717,65 @@ describe('CalendarScreen', () => {
         'Evenimentul nu este disponibil.',
       );
       expect(screen.getAllByRole('article')).toHaveLength(1);
+    });
+
+    describe('Grupuri preferate (R43)', () => {
+      afterEach(() => {
+        preferences.muted = new Set();
+      });
+
+      it('opens on the preferred Groups, with the chip in the toolbar', () => {
+        preferences.muted = new Set([20]);
+        setEvents([event(), festivalEvent]);
+        renderCalendar();
+        expect(
+          screen.getByRole('article', { name: 'Ședință Educațional' }),
+        ).toBeInTheDocument();
+        expect(
+          screen.queryByRole('article', { name: 'Festival deschis' }),
+        ).toBeNull();
+        expect(
+          screen.getByRole('link', { name: 'Doar grupurile preferate' }),
+        ).toBeInTheDocument();
+      });
+
+      it('keeps an Event the member answered Particip to', () => {
+        preferences.muted = new Set([20]);
+        hooks.useGoingEventIds.mockReturnValue(query([2]));
+        setEvents([event(), festivalEvent]);
+        renderCalendar();
+        expect(
+          screen.getByRole('article', { name: 'Festival deschis' }),
+        ).toBeInTheDocument();
+      });
+
+      it('shows everything after Arată tot, and says when the preferred Groups hold nothing', async () => {
+        preferences.muted = new Set([20]);
+        setEvents([festivalEvent]);
+        const user = userEvent.setup();
+        renderCalendar();
+        expect(
+          screen.getByText(
+            'Nimic în grupurile tale preferate în acest interval.',
+          ),
+        ).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Arată tot' }));
+        expect(
+          screen.getByRole('article', { name: 'Festival deschis' }),
+        ).toBeInTheDocument();
+      });
+
+      it('lets a Group chosen in the Work Filter win', () => {
+        preferences.muted = new Set([20]);
+        setEvents([event(), festivalEvent]);
+        renderCalendar('/calendar?grup=20');
+        expect(
+          screen.getByRole('article', { name: 'Festival deschis' }),
+        ).toBeInTheDocument();
+        expect(
+          screen.queryByRole('link', { name: 'Doar grupurile preferate' }),
+        ).toBeNull();
+      });
     });
   });
 

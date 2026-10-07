@@ -35,6 +35,7 @@ import { AddCompletedTaskControl } from './AddCompletedTaskControl';
 import { NewTaskControl } from './NewTaskControl';
 import { TaskCardGrid } from './TaskCardGrid';
 import { PersonalScoreHeader } from './PersonalScoreHeader';
+import { PreferredGroupsScope } from '../../components/preferred-groups/PreferredGroupsScope';
 import type { TaskPresentationRow } from './task-presentation';
 import { TaskActionSuccess } from './TaskActionSuccess';
 import type { OnGaveUp } from './give-up-receipt';
@@ -172,7 +173,21 @@ function decisionsLabel(count: number): string {
   return `${new Intl.NumberFormat('ro-RO').format(count)} ${de ? 'de ' : ''}cereri de decis`;
 }
 
+/**
+ * Taskuri opens on the member's Grupuri preferate (R43): Disponibile, De
+ * gestionat and Toate leave the unselected Groups out until **Arată tot**,
+ * for this visit. Taskurile mele is the member's own work and is never
+ * filtered.
+ */
 export default function TrackerScreen() {
+  return (
+    <PreferredGroupsScope>
+      <TrackerContent />
+    </PreferredGroupsScope>
+  );
+}
+
+function TrackerContent() {
   const mine = useMyTasks();
   const available = useTaskOpportunities();
   const management = useTaskManagement();

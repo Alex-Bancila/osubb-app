@@ -1,8 +1,20 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import axe from 'axe-core';
+
+// R43: Grupuri preferate. Nothing is unselected unless a test says so.
+const preferences = vi.hoisted(() => ({
+  muted: new Set<number>() as ReadonlySet<number>,
+  memberId: undefined as string | undefined,
+}));
+vi.mock('../../queries/group-preferences', () => ({
+  usePreferredGroupsData: () => ({
+    muted: preferences.muted,
+    memberId: preferences.memberId,
+  }),
+}));
 const state = vi.hoisted(() => ({
   board: vi.fn(),
   cup: vi.fn(),
@@ -813,4 +825,44 @@ it('says when the row Groups failed to load and offers the read again', async ()
     screen.getByRole('button', { name: 'Reîncarcă grupurile' }),
   );
   expect(retry).toHaveBeenCalled();
+});
+
+describe('Grupuri preferate (R43)', () => {
+  beforeEach(() => {
+    preferences.muted = new Set([9]);
+  });
+  afterEach(() => {
+    preferences.muted = new Set();
+  });
+
+  it('opens the members’ board on the preferred Groups’ points, with the chip', () => {
+    renderPage();
+    expect(state.board).toHaveBeenLastCalledWith({ p_preferred: true });
+    expect(
+      screen.getByRole('link', { name: 'Doar grupurile preferate' }),
+    ).toHaveAttribute('href', '/profil#grupuri-preferate');
+  });
+
+  it('reads every Group’s points after Arată tot', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: 'Arată tot' }));
+    expect(state.board).toHaveBeenLastCalledWith({});
+  });
+
+  it('lets a Group chosen in the Work Filter win', () => {
+    renderPage('?grup=7&subgrup=9');
+    expect(state.board).toHaveBeenLastCalledWith({ p_group_id: 9 });
+    expect(
+      screen.queryByRole('link', { name: 'Doar grupurile preferate' }),
+    ).toBeNull();
+  });
+
+  it('never narrows the Cup, which ranks Groups', async () => {
+    renderPage('?vedere=cupa');
+    expect(state.cup).toHaveBeenLastCalledWith({});
+    expect(
+      screen.queryByRole('link', { name: 'Doar grupurile preferate' }),
+    ).toBeNull();
+  });
 });

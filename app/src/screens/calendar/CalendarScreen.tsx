@@ -29,6 +29,8 @@ import {
 import { useCalendarView, type CalendarView } from './calendar-view';
 import { clearEventReceipts, useCalendarReceipt } from './event-receipts';
 import { NewEventControl } from './NewEventControl';
+import { PreferredGroupsScope } from '../../components/preferred-groups/PreferredGroupsScope';
+import { usePreferredGroups } from '../../components/preferred-groups/preferred-groups';
 
 const VIEWS: ReadonlyArray<SegmentedOption<CalendarView>> = [
   { value: 'month', label: 'Lună', icon: CalendarDays },
@@ -55,6 +57,14 @@ function CalendarReceipt({ children }: { children: string }) {
  * device; `?event=<id>` (Acasă's deep link, R4) opens the Agendă on the Event.
  */
 export default function CalendarScreen() {
+  return (
+    <PreferredGroupsScope>
+      <CalendarContent />
+    </PreferredGroupsScope>
+  );
+}
+
+function CalendarContent() {
   const [params, setParams] = useSearchParams();
   const filter = useWorkFilter();
   const [storedView, storeView] = useCalendarView();
@@ -91,6 +101,16 @@ export default function CalendarScreen() {
     [mine.data],
   );
   const goingIds = useMemo(() => new Set(going.data ?? []), [going.data]);
+  // R43: the Calendar opens on the preferred Groups. An Event the member
+  // answered Particip to, and their own deadlines, stay whatever their Group.
+  const preferred = usePreferredGroups();
+  const keepEvent = useCallback(
+    (event: EventPresentation) =>
+      event.groupId === null ||
+      preferred.keepGroup(event.groupId) ||
+      goingIds.has(event.id),
+    [preferred, goingIds],
+  );
   const relevanceOf = useCallback(
     (event: EventPresentation): EventRelevance =>
       eventRelevance(event, relevant, goingIds),
@@ -185,6 +205,8 @@ export default function CalendarScreen() {
           filter={filter}
           groups={groups.data}
           relevanceOf={relevanceOf}
+          keepEvent={keepEvent}
+          keepGroup={preferred.keepGroup}
           showManaged={showManaged}
           onShowManagedChange={setShowManaged}
         />
@@ -196,6 +218,7 @@ export default function CalendarScreen() {
           linkedId={linkedId}
           groups={groups.data}
           relevanceOf={relevanceOf}
+          keepEvent={keepEvent}
         />
       )}
     </Page>

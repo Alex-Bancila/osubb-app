@@ -21,6 +21,16 @@
 const REASON_COPY = new Map<string, string>([
   /* ---- Security pass L3: the per-Member daily cap on every notifying write ---- */
   ['rate_limited', 'Ai atins limita zilnică. Încearcă mâine.'],
+  /* ---- Grupuri preferate (R43) ---- */
+  [
+    'group_preference_forbidden',
+    'Doar BCE, BC și Moderatorul își aleg grupurile preferate.',
+  ],
+  [
+    'group_preference_locked',
+    'OSUBB, Adunarea Generală și Biroul de Conducere rămân mereu selectate.',
+  ],
+  ['invalid_group_ids', 'Lista de grupuri nu este validă. Reîncarcă pagina.'],
   /* ---- Notifications (#1012, R37) ---- */
   [
     'notification_mark_all_forbidden',

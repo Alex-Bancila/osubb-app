@@ -42,6 +42,8 @@ import {
 import { useGroups } from '../../queries/reference';
 import { MemberGroups } from '../volunteers/MemberGroups';
 import { LeadershipAccess } from './LeadershipAccess';
+import { PreferredGroupsScope } from '../../components/preferred-groups/PreferredGroupsScope';
+import { usePreferredGroups } from '../../components/preferred-groups/preferred-groups';
 import { useClasamentView, type ClasamentView } from './clasament-view';
 
 /**
@@ -374,7 +376,16 @@ function LeadershipContent() {
   const levels = LEVELS[view];
   const { value, params } = useWorkFilter(levels);
   const options = useLeadershipFilters();
-  const board = useLeadershipLeaderboard(view === 'members' ? params : null);
+  // R43: the members' board opens on the preferred Groups' points (the Cup
+  // ranks Groups, so it is never narrowed by them).
+  const preferred = usePreferredGroups();
+  const board = useLeadershipLeaderboard(
+    view === 'members' && params
+      ? preferred.active
+        ? { ...params, p_preferred: true }
+        : params
+      : null,
+  );
   const cup = useLeadershipCup(
     view === 'cup' && params ? withoutGroup(params) : null,
   );
@@ -470,7 +481,9 @@ function LeadershipContent() {
 export default function LeadershipScreen() {
   return (
     <LeadershipAccess>
-      <LeadershipContent />
+      <PreferredGroupsScope>
+        <LeadershipContent />
+      </PreferredGroupsScope>
     </LeadershipAccess>
   );
 }

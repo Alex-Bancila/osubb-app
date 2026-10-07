@@ -690,6 +690,53 @@ export type Database = {
           },
         ]
       }
+      member_group_unselected: {
+        Row: {
+          created_at: string
+          group_id: number
+          member_id: string
+        }
+        Insert: {
+          created_at?: string
+          group_id: number
+          member_id: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: number
+          member_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_group_unselected_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_group_unselected_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "member_group_unselected_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_group_unselected_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_imports: {
         Row: {
           created_at: string
@@ -3226,6 +3273,7 @@ export type Database = {
           p_campaign_id?: number
           p_from?: string
           p_group_id?: number
+          p_preferred?: boolean
           p_to?: string
         }
         Returns: {
@@ -3379,6 +3427,14 @@ export type Database = {
           provision_members: boolean
           see_directory: boolean
           see_leadership: boolean
+        }[]
+      }
+      my_group_preferences: {
+        Args: never
+        Returns: {
+          group_id: number
+          locked: string
+          selected: boolean
         }[]
       }
       my_groups: {
@@ -3897,6 +3953,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_unselected_groups: {
+        Args: { p_group_ids: number[] }
+        Returns: number[]
       }
       settle_email_digest: {
         Args: {

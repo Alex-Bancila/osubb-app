@@ -23,36 +23,36 @@ $$;
 -- ==================== 1. Surface, shape and grants ====================
 
 select has_function('public', 'leadership_leaderboard',
-  array['bigint', 'bigint', 'timestamp with time zone', 'timestamp with time zone'],
+  array['bigint', 'bigint', 'timestamp with time zone', 'timestamp with time zone', 'boolean'],
   'the filtered leadership Leaderboard read exists');
 select has_function('private', 'leadership_leaderboard_impl',
-  array['bigint', 'bigint', 'timestamp with time zone', 'timestamp with time zone'],
+  array['bigint', 'bigint', 'timestamp with time zone', 'timestamp with time zone', 'boolean'],
   'its security-definer body exists in private');
 
 -- ADR-0007: "The leadership Leaderboard contains member name and Task points
 -- only." Pinning the result type is what keeps a later "while we are here"
 -- commit from adding role, email or Department to a leadership export.
 select is(
-  pg_get_function_result('public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz)'::regprocedure),
+  pg_get_function_result('public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz, boolean)'::regprocedure),
   'TABLE(member_id uuid, full_name text, nickname text, points integer, rank integer)',
   'the board returns member id, full name, Nickname (#675), points and rank -- no role, no email, no Department');
 
 select is(
-  (select prosecdef from pg_proc where oid = 'public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz)'::regprocedure),
+  (select prosecdef from pg_proc where oid = 'public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz, boolean)'::regprocedure),
   false, 'the public wrapper is security invoker');
 select is(
-  (select prosecdef from pg_proc where oid = 'private.leadership_leaderboard_impl(bigint, bigint, timestamptz, timestamptz)'::regprocedure),
+  (select prosecdef from pg_proc where oid = 'private.leadership_leaderboard_impl(bigint, bigint, timestamptz, timestamptz, boolean)'::regprocedure),
   true, 'the private body is security definer -- it reads the whole ledger past RLS and gates itself');
 
-select ok(has_function_privilege('authenticated', 'public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz)', 'EXECUTE'),
+select ok(has_function_privilege('authenticated', 'public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz, boolean)', 'EXECUTE'),
   'authenticated may execute the leadership Leaderboard');
-select ok(not has_function_privilege('anon', 'public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz)', 'EXECUTE'),
+select ok(not has_function_privilege('anon', 'public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz, boolean)', 'EXECUTE'),
   'anon cannot execute the leadership Leaderboard');
-select ok(has_function_privilege('authenticated', 'private.leadership_leaderboard_impl(bigint, bigint, timestamptz, timestamptz)', 'EXECUTE'),
+select ok(has_function_privilege('authenticated', 'private.leadership_leaderboard_impl(bigint, bigint, timestamptz, timestamptz, boolean)', 'EXECUTE'),
   'authenticated may execute the body -- the security-invoker wrapper calls it as the caller');
-select ok(not has_function_privilege('anon', 'private.leadership_leaderboard_impl(bigint, bigint, timestamptz, timestamptz)', 'EXECUTE'),
+select ok(not has_function_privilege('anon', 'private.leadership_leaderboard_impl(bigint, bigint, timestamptz, timestamptz, boolean)', 'EXECUTE'),
   'anon cannot reach the body directly');
-select ok(not has_function_privilege('service_role', 'private.leadership_leaderboard_impl(bigint, bigint, timestamptz, timestamptz)', 'EXECUTE'),
+select ok(not has_function_privilege('service_role', 'private.leadership_leaderboard_impl(bigint, bigint, timestamptz, timestamptz, boolean)', 'EXECUTE'),
   'the server role cannot bypass the BCE+ gate through the private body');
 
 -- #936: the legacy all-ledger views (leaderboard, dept_cup, member_points)

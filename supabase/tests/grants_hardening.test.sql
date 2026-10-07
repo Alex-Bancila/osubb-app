@@ -43,7 +43,7 @@ select is(has_table_privilege('authenticated', 'public.profiles_directory', 'ins
 -- successors (leadership_leaderboard, department_cup, a points_ledger sum)
 -- are functions, so "no insert/update/delete" has no equivalent to port --
 -- deleted rather than turned into a meaningless function-grant check.
-select is(has_function_privilege('authenticated', 'public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz)', 'execute'), true, 'leadership_leaderboard: execute kept (#936, was leaderboard: select kept)');
+select is(has_function_privilege('authenticated', 'public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz, boolean)', 'execute'), true, 'leadership_leaderboard: execute kept (#936, was leaderboard: select kept)');
 
 -- dead helper removed.
 select hasnt_function('public', 'in_my_dept', array['uuid'], 'in_my_dept dropped');

@@ -4,6 +4,18 @@ import { Link, MemoryRouter, useLocation, useNavigate } from 'react-router';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// R43: Grupuri preferate. Nothing is unselected unless a test says so.
+const preferences = vi.hoisted(() => ({
+  muted: new Set<number>() as ReadonlySet<number>,
+  memberId: undefined as string | undefined,
+}));
+vi.mock('../../queries/group-preferences', () => ({
+  usePreferredGroupsData: () => ({
+    muted: preferences.muted,
+    memberId: preferences.memberId,
+  }),
+}));
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 import { taskRow } from '../../test/task-fixtures';
 import { orderOpportunities } from '../../queries/task-opportunities';
@@ -860,6 +872,48 @@ describe('My tasks screen', () => {
           })
         ).violations,
       ).toEqual([]);
+    });
+
+    describe('Grupuri preferate (R43)', () => {
+      beforeEach(() => {
+        preferences.muted = new Set([20, 21]);
+      });
+      afterEach(() => {
+        preferences.muted = new Set();
+      });
+
+      it('opens on the preferred Groups, with the chip in the toolbar', async () => {
+        await openAvailable();
+        expect(titles(band())).toEqual([
+          'Voluntari la Balul Bobocilor',
+          'Afișe pentru atelier',
+        ]);
+        expect(
+          screen.getByRole('link', { name: 'Doar grupurile preferate' }),
+        ).toHaveAttribute('href', '/profil#grupuri-preferate');
+      });
+
+      it('shows every Opportunity after Arată tot', async () => {
+        const { user } = await openAvailable();
+        await user.click(screen.getByRole('button', { name: 'Arată tot' }));
+        expect(titles(band())).toEqual([
+          'Voluntari la Balul Bobocilor',
+          'Sondaj pentru membri',
+          'Arhivă de interviuri',
+          'Afișe pentru atelier',
+        ]);
+      });
+
+      it('lets a Group chosen in the Work Filter win, with no chip', async () => {
+        await openAvailable('/tracker?grup=20');
+        expect(titles(band())).toEqual([
+          'Sondaj pentru membri',
+          'Arhivă de interviuri',
+        ]);
+        expect(
+          screen.queryByRole('link', { name: 'Doar grupurile preferate' }),
+        ).not.toBeInTheDocument();
+      });
     });
   });
 
