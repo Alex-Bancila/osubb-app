@@ -242,4 +242,30 @@ describe('Authorized Task timeline', () => {
       }),
     ).toHaveAttribute('rel', 'noopener noreferrer');
   });
+
+  it('names an edit of the Attached Links by their labels (R46)', () => {
+    render(
+      <TaskTimeline
+        activity={[
+          activity({
+            kind: 'task_updated',
+            note: null,
+            details: {
+              changed: ['links'],
+              before: { links: [] },
+              after: {
+                links: [
+                  { label: 'Brief', url: 'https://drive.example/b' },
+                  { label: 'Afiș', url: 'https://drive.example/a' },
+                ],
+              },
+            },
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByText('Task actualizat: linkuri')).toBeVisible();
+    expect(screen.getByText('Linkuri: —')).toBeVisible();
+    expect(screen.getByText('Linkuri: Brief, Afiș')).toBeVisible();
+  });
 });
