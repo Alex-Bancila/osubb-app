@@ -108,11 +108,13 @@ describe('who may edit and delete a Deal (R44)', () => {
     expect(mayEditDeal(theirs, bc)).toBe(false);
   });
 
-  it('keeps the Moderator, who picks the team, to deleting (R44 amended)', () => {
-    // The Moderator's capability row: manage_deals_team without manage_deals.
-    const moderator = viewer({ manageDealsTeam: true, bcOrModerator: true });
-    expect(mayEditDeal(theirs, moderator)).toBe(false);
-    expect(mayEditDeal(mine, moderator)).toBe(false);
+  it('lets the Moderator, with the holder powers, edit and delete every Deal (R44 amended)', () => {
+    const moderator = viewer({
+      manageDeals: true,
+      manageDealsTeam: true,
+      bcOrModerator: true,
+    });
+    expect(mayEditDeal(theirs, moderator)).toBe(true);
     expect(mayDeleteDeal(theirs, moderator)).toBe(true);
   });
 

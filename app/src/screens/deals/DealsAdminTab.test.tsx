@@ -156,14 +156,27 @@ describe('Administrare › OSUBB Deals (R44)', () => {
     expect(screen.getByRole('button', { name: 'Deal nou' })).toBeVisible();
   });
 
-  it('gives the Moderator, who picks the team, no Deal nou and no Editează (R44 amended)', async () => {
+  it('gives the Moderator, with every Atribuție power, Deal nou, Editează and Șterge (R44 amended)', async () => {
+    // The Moderator's live capability row: the holder's powers, not the holder.
     viewer.caps = {
       manageRoles: true,
       administer: true,
       administerBc: true,
+      manageDeals: true,
       manageDealsTeam: true,
       pickDealsCoordinator: true,
     };
+    renderTab();
+    const other = await card('Expirat de la Coordonator');
+    expect(
+      within(other).getByRole('button', { name: /Editează/ }),
+    ).toBeVisible();
+    expect(within(other).getByRole('button', { name: /Șterge/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Deal nou' })).toBeVisible();
+  });
+
+  it('keeps a BC member who does not hold it to Șterge, with no Deal nou', async () => {
+    viewer.caps = { manageRoles: true, administer: true };
     renderTab();
     const other = await card('Expirat de la Coordonator');
     expect(within(other).getByRole('button', { name: /Șterge/ })).toBeVisible();

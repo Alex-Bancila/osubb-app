@@ -129,12 +129,14 @@ describe('the OSUBB Deals team, per persona (R44)', () => {
     expect(screen.getAllByText('Neales')).toHaveLength(2);
   });
 
-  // R44 amended 2026-10-08 — Alex: "I, as a moderator should also be able to
-  // select all members of the team". The Moderator's capability row.
+  // R44 amended 2026-10-08 — Alex: "I am a superuser as a moderator, so i
+  // should be able to do anything a BC member could do". The Moderator's
+  // capability row: every Atribuție's powers, without holding it.
   const MODERATOR = {
     manageRoles: true,
     administer: true,
     administerBc: true,
+    manageDeals: true,
     manageDealsTeam: true,
     pickDealsCoordinator: true,
   };

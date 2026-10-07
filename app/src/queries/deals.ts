@@ -178,7 +178,7 @@ export type DealInput = {
 
 /**
  * Publish a Deal (R45): a direct insert under `announcements_create`, whose
- * check admits kind `deal` for the OSUBB Deals team only. Every setting a
+ * check admits kind `deal` for the OSUBB Deals team and the Moderator only. Every setting a
  * Deal may not choose is fixed here, as the guard trigger demands: the
  * Organization Group, Audience org, Minimum Level 0, Priority normal, never
  * pinned. No RETURNING, as for an Announcement.
