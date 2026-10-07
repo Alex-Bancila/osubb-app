@@ -110,9 +110,9 @@ export function dealCodeMask(seed: number, length: number): string {
 
 export type DealsViewer = {
   memberId: string | undefined;
-  /** Holder or Coordonator (`my_capabilities().manage_deals_team`). */
+  /** Holder, Coordonator or the Moderator (`my_capabilities().manage_deals_team`). */
   manageDealsTeam: boolean;
-  /** On the team at all (`manage_deals`). */
+  /** On the team at all, or the Moderator (`manage_deals`). */
   manageDeals: boolean;
   /** BC or the Moderator by live rank (`manage_roles`, level ≥ 6). */
   bcOrModerator: boolean;
