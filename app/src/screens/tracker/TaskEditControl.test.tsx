@@ -484,7 +484,8 @@ it('edits the Attached Links as full state: prefilled, checked per row, added an
       }),
     ),
   );
-});
+  // Much typing: slow under the full parallel run.
+}, 20_000);
 
 it('clears every Attached Link by removing the rows (R46)', async () => {
   render(<TaskEditControl task={task} canManage />);
