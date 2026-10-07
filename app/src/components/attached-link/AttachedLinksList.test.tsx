@@ -44,6 +44,25 @@ describe('AttachedLinksList (ruling R46)', () => {
     expect(screen.queryByText(/Deschide formular/)).toBeNull();
   });
 
+  it('leaves its block margins to the container, so the row is spaced below as above', () => {
+    // A card's `space-y-3` spaces its children with a `:where()` rule that
+    // any margin utility on the list outranks (an `m-0` left the next line
+    // touching the buttons): the list carries none unless a caller asks.
+    const { rerender } = render(
+      <AttachedLinksList links={links} variant="card" />,
+    );
+    const marginUtility = /(^|\s)-?m[ytb]?-/;
+    expect(
+      screen.getByRole('list', { name: 'Linkuri atașate' }).className,
+    ).not.toMatch(marginUtility);
+    rerender(
+      <AttachedLinksList links={links} variant="card" className="mt-3" />,
+    );
+    expect(screen.getByRole('list', { name: 'Linkuri atașate' })).toHaveClass(
+      'mt-3',
+    );
+  });
+
   it('leaves out an address that is not http(s), and renders nothing when none is left', () => {
     const { rerender } = render(
       <AttachedLinksList

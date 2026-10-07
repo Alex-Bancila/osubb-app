@@ -31,9 +31,12 @@ export function AttachedLinksList({
   const shown = links.filter((link) => link.label && safeHttpUrl(link.url));
   if (!shown.length) return null;
   return (
+    // No margin of its own: preflight already zeroes a list's margins, and an
+    // `m-0` here outranked the container's `space-y-*` (a zero-specificity
+    // `:where()` rule), so whatever followed the links sat on the buttons.
     <ul
       aria-label="Linkuri atașate"
-      className={cn('m-0 flex list-none flex-wrap gap-2 p-0', className)}
+      className={cn('flex list-none flex-wrap gap-2 p-0', className)}
     >
       {shown.map((link, index) => (
         <li key={`${index}-${link.url}`} className="min-w-0 max-w-full">
