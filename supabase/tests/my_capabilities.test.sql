@@ -151,7 +151,7 @@ reset role;
 -- 12. Moderator (level 9): administer_bc and both Deals team pickers (R44 amended
 --     2026-10-08), but not manage_deals -- the Moderator does not publish.
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000011');
-select * from pg_temp.persona_checks('Moderator', '(t,t,t,t,t,t,t,t,t,f,t,t)');
+select * from pg_temp.persona_checks('Moderator', '(t,t,t,t,t,t,t,t,t,t,t,t)');
 reset role;
 
 -- 13. A stale claim: the token still says BC, the live Profile says Voluntar. Live rank wins.

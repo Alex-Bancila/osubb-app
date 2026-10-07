@@ -2,7 +2,8 @@
 -- exactly one BC member; the first is Responsabil OSUBB Deals ('osubb_deals').
 -- Its holder picks a Coordonator (a BCE member) and a Responsabil (any active
 -- Member); the Coordonator picks only the Responsabil; the Moderator picks either
--- place without being on the team (R44 amended 2026-10-08). Taking the Atribuție away
+-- place without being on the team -- they hold every Atribuție's powers (R44
+-- amended 2026-10-08), but never the Atribuție itself. Taking the Atribuție away
 -- dissolves the team and tells the three. Capabilities read live rows.
 --
 -- Mutation proofs (each run once against this suite, then reverted): see the
@@ -270,7 +271,7 @@ reset role;
 select pg_temp.test_login_leadership(pg_temp.u44(1));
 select is((select array_agg(right(member_id::text, 12)::integer order by member_id)
              from public.bc_assignments_directory() where member_id::text like '44440000-%'),
-  array[2, 3], 'the Moderator''s list is every live BC member -- not the inactive one, not BCE');
+  array[2, 3], 'the Moderator''s list is every live BC member -- not the inactive one, not BCE, never the Moderator, who holds every Atribuție''s powers');
 select is((select assignments -> 0 -> 'team' -> 0 ->> 'team_role' || ':' || (assignments -> 0 ->> 'label')
              from public.bc_assignments_directory() where member_id = pg_temp.u44(2)),
   'coordinator:Responsabil OSUBB Deals', 'the holder''s row carries the Atribuție, its label and its team');
@@ -294,8 +295,8 @@ select pg_temp.test_login_leadership(pg_temp.u44(7));
 select is(pg_temp.caps(), 'false,false,false,false,false', 'a Voluntar outside the team: nothing');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.u44(1));
-select is(pg_temp.caps(), 'true,true,false,true,true',
-  'the Moderator: administer_bc and both team pickers (R44 amended), but no manage_deals: they do not publish');
+select is(pg_temp.caps(), 'true,true,true,true,true',
+  'the Moderator: administer_bc and every Deals capability -- every Atribuție''s powers (R44 amended)');
 reset role;
 select pg_temp.test_login('44440000-0000-0000-0000-000000000006', '{"provider":"email"}'::jsonb);
 select is(pg_temp.caps(), 'false,false,false,false,false', 'the Responsabil without organization claims: nothing');
