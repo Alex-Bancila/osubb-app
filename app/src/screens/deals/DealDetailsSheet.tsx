@@ -4,6 +4,7 @@ import { EmptyState } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
+import { cn } from '../../lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -192,7 +193,7 @@ export function DealManageActions({
   deal: DealPresentation;
   viewer: DealsViewer;
   onDeleted: () => void;
-  /** On the team's list: no rule above, smaller buttons. */
+  /** In a card's footer on the team's list: quiet buttons beside "Citește". */
   compact?: boolean;
 }) {
   const remove = useDeleteAnnouncement();
@@ -223,14 +224,22 @@ export function DealManageActions({
   }
 
   return (
-    <div className={compact ? 'space-y-2' : 'space-y-2 border-t pt-4'}>
-      <div className="flex flex-wrap items-center gap-2">
+    <div className={compact ? 'contents' : 'space-y-2 border-t pt-4'}>
+      <div
+        className={
+          compact ? 'flex items-center' : 'flex flex-wrap items-center gap-2'
+        }
+      >
         {canEdit && (
           <Button
             type="button"
-            variant="outline"
+            variant={compact ? 'ghost' : 'outline'}
             size={compact ? 'sm' : 'default'}
-            className="min-h-11 gap-2"
+            className={
+              compact
+                ? 'min-h-11 gap-1.5 text-xs text-foreground'
+                : 'min-h-11 gap-2'
+            }
             disabled={remove.isPending}
             aria-label={compact ? `Editează ${deal.title}` : undefined}
             onClick={() => {
@@ -246,11 +255,11 @@ export function DealManageActions({
         {canDelete && (
           <Button
             type="button"
-            variant={compact ? 'outline' : 'destructive'}
+            variant={compact ? 'ghost' : 'destructive'}
             size={compact ? 'sm' : 'default'}
             className={
               compact
-                ? 'min-h-11 gap-2 text-destructive'
+                ? 'min-h-11 gap-1.5 text-xs text-destructive hover:text-destructive'
                 : 'min-h-11 gap-2 sm:ml-auto'
             }
             disabled={remove.isPending}
@@ -269,11 +278,14 @@ export function DealManageActions({
       {outcome && (
         <p
           role={outcome.tone}
-          className={
+          className={cn(
+            'm-0',
+            // In a footer it reads before the buttons, in the footer's size.
+            compact ? 'order-first pr-2 text-xs' : 'text-sm',
             outcome.tone === 'alert'
-              ? 'm-0 text-sm text-destructive'
-              : 'm-0 text-sm text-muted-foreground'
-          }
+              ? 'text-destructive'
+              : 'text-muted-foreground',
+          )}
         >
           {outcome.text}
         </p>

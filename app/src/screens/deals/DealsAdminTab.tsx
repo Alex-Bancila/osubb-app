@@ -95,21 +95,21 @@ export default function DealsAdminTab() {
                     setDeleted(false);
                     sheet.open(opened);
                   }}
-                  footerExtra={
-                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-                      {deal.code && (
-                        <DealRevealCount
-                          dealId={deal.id}
-                          className="m-0 flex items-center gap-1.5 text-xs font-semibold text-foreground"
-                        />
-                      )}
-                      <DealManageActions
-                        deal={deal}
-                        viewer={viewer}
-                        compact
-                        onDeleted={() => setDeleted(true)}
+                  footerMeta={
+                    deal.code && (
+                      <DealRevealCount
+                        dealId={deal.id}
+                        className="m-0 flex items-center gap-1.5 text-xs text-muted-foreground"
                       />
-                    </div>
+                    )
+                  }
+                  footerActions={
+                    <DealManageActions
+                      deal={deal}
+                      viewer={viewer}
+                      compact
+                      onDeleted={() => setDeleted(true)}
+                    />
                   }
                 />
               </li>

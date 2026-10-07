@@ -103,7 +103,9 @@ describe('Administrare › OSUBB Deals (R44)', () => {
     viewer.caps = { manageDeals: true, manageDealsTeam: true };
     renderTab();
     const expired = await card('Expirat de la Coordonator');
-    expect(within(expired).getByText('Expirat')).toBeVisible();
+    // The Termen row is the expired mark; no badge repeats it.
+    expect(within(expired).getByText(/Termen expirat/)).toBeVisible();
+    expect(within(expired).queryByText('Expirat')).toBeNull();
     expect(screen.getByText('1 active · 1 expirate')).toBeVisible();
   });
 
