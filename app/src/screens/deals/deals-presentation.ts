@@ -1,6 +1,10 @@
 import type { MemberIdentity } from '../../components/member/member-identity';
 import { formatMemberCount } from '../../lib/format';
-import type { DealLink, DealsTeam, RawDealRow } from '../../queries/deals';
+import {
+  attachedLinksFrom,
+  type AttachedLink,
+} from '../../lib/schemas/attached-link';
+import type { DealsTeam, RawDealRow } from '../../queries/deals';
 import { formatAnnouncementDate } from '../announcements/announcements-presentation';
 
 /** Where the OSUBB Deals tab lives, and its deep link (`?deal=<id>`). */
@@ -21,29 +25,13 @@ export type DealPresentation = {
   publishedAt: string;
   publishedLabel: string;
   deadline: string | null;
-  links: DealLink[];
+  links: AttachedLink[];
   /** The Deal Code, or null when the Deal has none. */
   code: string | null;
   isRead: boolean;
   /** The viewer opened the code before, on any device (`deal_code_reveals`). */
   isRevealed: boolean;
 };
-
-/**
- * The Attached Links of a Deal, from the `links` column (R46): an array of
- * `{ label, url }`. Anything else in it — never written by this app — is
- * skipped rather than shown.
- */
-export function dealLinks(value: unknown): DealLink[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((item: unknown) => {
-    if (typeof item !== 'object' || item === null) return [];
-    const { label, url } = item as { label?: unknown; url?: unknown };
-    return typeof label === 'string' && typeof url === 'string'
-      ? [{ label, url }]
-      : [];
-  });
-}
 
 export function toDealPresentation(
   row: RawDealRow,
@@ -65,7 +53,7 @@ export function toDealPresentation(
     publishedAt: row.published_at,
     publishedLabel: formatAnnouncementDate(row.published_at),
     deadline: row.deadline ?? null,
-    links: dealLinks(row.links),
+    links: attachedLinksFrom(row.links),
     code,
     isRead: (row.announcement_reads?.length ?? 0) > 0,
     isRevealed: (row.deal_code_reveals?.length ?? 0) > 0,

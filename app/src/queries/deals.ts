@@ -8,6 +8,7 @@ import {
 
 import { useAuth } from '../lib/auth';
 import type { Json } from '../lib/database.types';
+import type { AttachedLink } from '../lib/schemas/attached-link';
 import { supabase } from '../lib/supabase';
 import { AnnouncementRefusedError } from './announcements';
 import { keys } from './keys';
@@ -40,7 +41,7 @@ const DEAL_FIELDS = `
   )
 `;
 
-export type DealLink = { label: string; url: string };
+export type DealLink = AttachedLink;
 
 export type RawDealRow = {
   id: number;

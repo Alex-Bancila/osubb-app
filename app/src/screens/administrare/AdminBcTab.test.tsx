@@ -121,7 +121,14 @@ describe('Administrare BC (R44)', () => {
     state.holders = new Map([['osubb_deals', 'ana']]);
     render(<AdminBcTab />);
     await open(user, 'Bogdan Ilie');
-    expect(screen.getByText('Acum la Ana Pop')).toBeVisible();
+    // The holder is named through the Member Card button, outside the label.
+    const panel = screen.getByRole('group', {
+      name: 'Atribuțiile lui Bogdan Ilie',
+    });
+    expect(panel).toHaveTextContent('Acum la');
+    expect(
+      within(panel).getByRole('button', { name: 'Profilul membrului Ana Pop' }),
+    ).toBeVisible();
     await user.click(
       screen.getByRole('checkbox', { name: /Responsabil OSUBB Deals/ }),
     );

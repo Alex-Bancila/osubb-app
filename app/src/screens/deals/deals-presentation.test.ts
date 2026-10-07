@@ -3,7 +3,6 @@ import type { RawDealRow } from '../../queries/deals';
 import {
   coordinatorCandidates,
   dealCodeMask,
-  dealLinks,
   isDealActive,
   mayDeleteDeal,
   mayEditDeal,
@@ -61,23 +60,6 @@ describe('toDealPresentation', () => {
   it('treats a blank code as no code, so no stub', () => {
     expect(toDealPresentation(row({ code: '   ' })).code).toBeNull();
     expect(toDealPresentation(row({ code: null })).code).toBeNull();
-  });
-});
-
-describe('dealLinks (R46)', () => {
-  it('keeps every { label, url } pair in order and skips anything else', () => {
-    expect(
-      dealLinks([
-        { label: 'A', url: 'https://a.ro' },
-        'junk',
-        { label: 'B' },
-        { label: 'C', url: 'https://c.ro' },
-      ]),
-    ).toEqual([
-      { label: 'A', url: 'https://a.ro' },
-      { label: 'C', url: 'https://c.ro' },
-    ]);
-    expect(dealLinks(null)).toEqual([]);
   });
 });
 

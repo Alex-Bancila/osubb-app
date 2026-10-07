@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetSupabaseMock, supabaseMock } from '../../test/supabase-mock';
 
 const caps = vi.hoisted(() => ({ manageDeals: true }));
+const groupsState = vi.hoisted(() => ({ pending: false }));
 
 vi.mock('../../lib/supabase', async () => {
   const { supabaseClientMock } = await vi.importActual<
@@ -23,6 +24,7 @@ vi.mock('../../lib/capabilities', () => ({
 }));
 vi.mock('../../queries/reference', () => ({
   useGroups: () => ({
+    isPending: groupsState.pending,
     data: new Map([
       [1, { id: 1, name: 'OSUBB', is_organization: true }],
       [2, { id: 2, name: 'Educațional', is_organization: false }],
@@ -45,6 +47,7 @@ function renderWith(ui: ReactElement) {
 beforeEach(() => {
   resetSupabaseMock();
   caps.manageDeals = true;
+  groupsState.pending = false;
   supabaseMock.insert.mockResolvedValue({ error: null });
 });
 
@@ -64,14 +67,12 @@ describe('Deal nou (R45)', () => {
     const user = userEvent.setup();
     renderWith(<NewDealControl />);
     const sheet = await openCompose(user);
-    for (const label of [
-      'Titlu',
-      'Descriere',
-      /Termen/,
-      /Cod/,
-      'Etichetă link',
-    ])
+    for (const label of ['Titlu', 'Descriere', /Termen/, /Cod/])
       expect(within(sheet).getByLabelText(label)).toBeInTheDocument();
+    // Up to five Attached Links, one row at a time (R46).
+    expect(
+      within(sheet).getByRole('button', { name: 'Adaugă link' }),
+    ).toBeVisible();
     for (const absent of [
       /Grup de origine/,
       /Audiență/,
@@ -88,11 +89,19 @@ describe('Deal nou (R45)', () => {
     const sheet = await openCompose(user);
     await user.type(within(sheet).getByLabelText('Titlu'), '  Reducere 20%  ');
     await user.type(within(sheet).getByLabelText('Descriere'), 'Cărți.');
-    await user.type(within(sheet).getByLabelText('Etichetă link'), 'Magazin');
-    await user.type(
-      within(sheet).getByLabelText('Adresă link'),
-      'https://example.ro',
-    );
+    for (const [n, label, url] of [
+      [1, 'Magazin', 'https://example.ro'],
+      [2, 'Regulament', 'https://example.ro/r'],
+    ] as const) {
+      await user.click(
+        within(sheet).getByRole('button', { name: 'Adaugă link' }),
+      );
+      await user.type(
+        within(sheet).getByLabelText(`Etichetă link ${n}`),
+        label,
+      );
+      await user.type(within(sheet).getByLabelText(`Adresă link ${n}`), url);
+    }
     await user.type(within(sheet).getByLabelText(/Cod/), ' OSUBB20 ');
     await user.click(
       within(sheet).getByRole('button', { name: 'Publică deal-ul' }),
@@ -109,10 +118,23 @@ describe('Deal nou (R45)', () => {
       title: 'Reducere 20%',
       body: 'Cărți.',
       deadline: null,
-      links: [{ label: 'Magazin', url: 'https://example.ro' }],
+      links: [
+        { label: 'Magazin', url: 'https://example.ro' },
+        { label: 'Regulament', url: 'https://example.ro/r' },
+      ],
       code: 'OSUBB20',
     });
     expect(await screen.findByText('Deal-ul a fost publicat.')).toBeVisible();
+  });
+
+  it('waits for the Groups before it can publish, instead of calling OSUBB missing', async () => {
+    const user = userEvent.setup();
+    groupsState.pending = true;
+    renderWith(<NewDealControl />);
+    const sheet = await openCompose(user);
+    expect(
+      within(sheet).getByRole('button', { name: 'Publică deal-ul' }),
+    ).toBeDisabled();
   });
 
   it('stores no link and no code when both are left empty', async () => {
@@ -185,7 +207,7 @@ describe('Editează deal-ul', () => {
     isRevealed: false,
   };
 
-  it('sends only what changed, and keeps the links it does not show', async () => {
+  it('sends only what changed, every link kept as it was', async () => {
     const user = userEvent.setup();
     supabaseMock.select.mockResolvedValue({ data: [{ id: 5 }], error: null });
     const onDone = vi.fn();

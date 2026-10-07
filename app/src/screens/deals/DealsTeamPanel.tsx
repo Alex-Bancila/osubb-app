@@ -28,7 +28,12 @@ const ROLE_NAME: Record<TeamRole, string> = {
   responsible: 'Responsabil',
 };
 
-type Outcome = { tone: 'status' | 'alert'; text: string };
+type Outcome = {
+  tone: 'status' | 'alert';
+  text: string;
+  /** The Member the receipt is about, named before the text. */
+  member?: MemberIdentity;
+};
 
 /**
  * The OSUBB Deals team (ruling R44): the Atribuție's holder, then the
@@ -107,9 +112,18 @@ export function DealsTeamPanel() {
           className={
             outcome.tone === 'alert'
               ? 'm-0 text-sm text-destructive'
-              : 'm-0 text-sm text-emerald-700 dark:text-emerald-400'
+              : 'm-0 flex flex-wrap items-center gap-x-1 text-sm text-emerald-700 dark:text-emerald-400'
           }
         >
+          {outcome.member && (
+            <>
+              <MemberName
+                {...outcome.member}
+                size="sm"
+                className="text-sm"
+              />{' '}
+            </>
+          )}
           {outcome.text}
         </p>
       )}
@@ -177,9 +191,17 @@ function TeamPicker({
         onSuccess: () =>
           onOutcome({
             tone: 'status',
-            text: next
-              ? `${next.name} este acum ${ROLE_NAME[role]} OSUBB Deals.`
-              : `Locul de ${ROLE_NAME[role]} este liber.`,
+            ...(next
+              ? {
+                  member: {
+                    memberId: next.memberId,
+                    nickname: next.nickname,
+                    fullName: next.name,
+                    avatarColor: next.avatarColor,
+                  },
+                  text: `este acum ${ROLE_NAME[role]} OSUBB Deals.`,
+                }
+              : { text: `Locul de ${ROLE_NAME[role]} este liber.` }),
           }),
         onError: (cause) =>
           onOutcome({

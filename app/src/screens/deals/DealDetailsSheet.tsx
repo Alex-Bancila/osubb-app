@@ -30,7 +30,7 @@ import AnnouncementReaders from '../announcements/AnnouncementReaders';
 import { AnnouncementTermen } from '../announcements/AnnouncementTermen';
 import { DealCodeStub } from './DealCodeStub';
 import DealFormSheet from './DealFormSheet';
-import { DealLinkList } from './DealLinks';
+import { AttachedLinksList } from '../../components/attached-link/AttachedLinksList';
 import {
   isDealActive,
   mayDeleteDeal,
@@ -132,7 +132,7 @@ function DealDetails({
         </div>
       )}
 
-      <DealLinkList links={deal.links} />
+      <AttachedLinksList links={deal.links} variant="details" />
 
       <AnnouncementReaders
         announcement={{

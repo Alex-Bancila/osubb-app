@@ -48,7 +48,6 @@ const REASON_COPY = new Map<string, string>([
     'invalid_deal_settings',
     'Un deal se publică doar din OSUBB, pentru toți membrii.',
   ],
-  ['too_many_links', 'Poți atașa cel mult 5 linkuri.'],
   /* ---- Notifications (#1012, R37) ---- */
   [
     'notification_mark_all_forbidden',

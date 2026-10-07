@@ -182,25 +182,39 @@ export default function AdminBcTab() {
                         {ASSIGNMENTS.map((assignment) => {
                           const holder = holders.data.get(assignment.id);
                           const mine = holder === member.memberId;
+                          const holderMember = holder
+                            ? byId.get(holder)
+                            : undefined;
                           return (
-                            <ChoiceRow key={assignment.id}>
-                              <Checkbox
-                                checked={mine}
-                                onCheckedChange={(next) =>
-                                  toggle(member, assignment.id, next === true)
-                                }
-                              />
-                              <span className="min-w-0">
+                            <div key={assignment.id}>
+                              <ChoiceRow>
+                                <Checkbox
+                                  checked={mine}
+                                  onCheckedChange={(next) =>
+                                    toggle(member, assignment.id, next === true)
+                                  }
+                                />
                                 <span className="font-medium">
                                   {assignment.label}
                                 </span>
-                                {holder && !mine && (
-                                  <span className="block text-xs text-muted-foreground">
-                                    Acum la {nameOf(holder)}
-                                  </span>
-                                )}
-                              </span>
-                            </ChoiceRow>
+                              </ChoiceRow>
+                              {/* Outside the label: the name is a button of its own. */}
+                              {holder && !mine && (
+                                <p className="m-0 -mt-1 flex min-w-0 items-center gap-1.5 pb-1 pl-8 text-xs text-muted-foreground">
+                                  Acum la
+                                  <MemberName
+                                    memberId={holder}
+                                    nickname={holderMember?.nickname}
+                                    fullName={
+                                      holderMember?.name ?? 'alt membru'
+                                    }
+                                    avatarColor={holderMember?.avatarColor}
+                                    size="sm"
+                                    className="text-xs"
+                                  />
+                                </p>
+                              )}
+                            </div>
                           );
                         })}
                       </fieldset>

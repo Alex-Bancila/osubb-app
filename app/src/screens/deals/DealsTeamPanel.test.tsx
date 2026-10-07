@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppointableMember } from '../../queries/groups-admin';
@@ -140,8 +140,14 @@ describe('the OSUBB Deals team, per persona (R44)', () => {
       { role: 'coordinator', memberId: 'bce' },
       expect.anything(),
     );
+    const receipt = screen.getByRole('status');
+    expect(receipt).toHaveTextContent(
+      'Carmen BCE este acum Coordonator OSUBB Deals.',
+    );
     expect(
-      screen.getByText('Carmen BCE este acum Coordonator OSUBB Deals.'),
+      within(receipt).getByRole('button', {
+        name: 'Profilul membrului Carmen BCE',
+      }),
     ).toBeVisible();
   });
 });

@@ -27,7 +27,7 @@ import {
   announcementFieldClass,
   announcementInputClass,
 } from '../announcements/AnnouncementFields';
-import { DealLinksField } from './DealLinks';
+import { AttachedLinksFields } from '../../components/attached-link/AttachedLinksFields';
 import {
   dealChanges,
   draftFromDeal,
@@ -131,6 +131,9 @@ function DealForm({
     (group) => group.is_organization,
   );
   const pending = create.isPending || update.isPending;
+  // A new Deal needs the Organization Group: wait for the Groups to load
+  // rather than call a slow read "not found".
+  const waitingForGroups = !deal && groups.isPending;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -247,18 +250,13 @@ function DealForm({
         </p>
         <FieldError {...form.errorProps('code')} />
       </div>
-      <div
-        role="group"
-        aria-label="Linkuri (opțional)"
-        className="space-y-3 rounded-md border p-4"
-      >
-        <p className="m-0 text-sm font-medium">Link (opțional)</p>
-        <DealLinksField
+      <div className="rounded-md border p-4">
+        <AttachedLinksFields
           value={draft.links}
           onChange={(links) => patch({ links })}
           form={form}
+          name="links"
         />
-        <FieldError {...form.errorProps('links')} />
       </div>
       <FieldError>{form.formError}</FieldError>
       <SheetFooter>
@@ -270,7 +268,7 @@ function DealForm({
         >
           Renunță
         </Button>
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" disabled={pending || waitingForGroups}>
           {deal
             ? update.isPending
               ? 'Se salvează…'

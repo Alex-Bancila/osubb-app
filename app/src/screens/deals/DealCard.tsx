@@ -6,7 +6,7 @@ import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { AnnouncementTermen } from '../announcements/AnnouncementTermen';
 import { DealCodeStub } from './DealCodeStub';
-import { DealLinkButtons } from './DealLinks';
+import { AttachedLinksList } from '../../components/attached-link/AttachedLinksList';
 import { isDealActive, type DealPresentation } from './deals-presentation';
 
 type DealCardProps = {
@@ -76,11 +76,12 @@ export default function DealCard({
           {deal.body}
         </p>
 
-        {deal.links.length > 0 && (
-          <div className="mt-3">
-            <DealLinkButtons links={deal.links} />
-          </div>
-        )}
+        <AttachedLinksList
+          links={deal.links}
+          variant="card"
+          className="mt-3"
+          buttonClassName="max-w-full"
+        />
 
         {footerExtra}
 

@@ -1,6 +1,7 @@
 import { isoToBucharestWallTime } from '../../lib/calendar-time';
 import type { DealInput } from '../../queries/deals';
-import type { DealLinkDraft } from './DealLinks';
+import type { AttachedLinkValue } from '../../components/attached-link/AttachedLinkFields';
+import { sameAttachedLinks } from '../../lib/schemas/attached-link';
 import type { DealPresentation } from './deals-presentation';
 
 /** What the Deal form holds as its inputs hold it; the Termen in Romania's time. */
@@ -8,7 +9,7 @@ export type DealDraft = {
   title: string;
   body: string;
   deadline: string;
-  links: DealLinkDraft[];
+  links: AttachedLinkValue[];
   code: string;
 };
 
@@ -16,7 +17,7 @@ export const EMPTY_DEAL_DRAFT: DealDraft = {
   title: '',
   body: '',
   deadline: '',
-  links: [{ label: '', url: '' }],
+  links: [],
   code: '',
 };
 
@@ -30,10 +31,7 @@ export function draftFromDeal(
     title: deal.title,
     body: deal.body,
     deadline: deal.deadline ? isoToBucharestWallTime(deal.deadline) : '',
-    links:
-      deal.links.length > 0
-        ? deal.links.map((link) => ({ ...link }))
-        : [{ label: '', url: '' }],
+    links: deal.links.map((link) => ({ ...link })),
     code: deal.code ?? '',
   };
 }
@@ -56,13 +54,7 @@ export function dealChanges(
   if (parsed.title !== initial.title.trim()) changes.title = parsed.title;
   if (parsed.body !== initial.body.trim()) changes.body = parsed.body;
   if (draft.deadline !== initial.deadline) changes.deadline = parsed.deadline;
-  // The stored links, as the schema would have kept them.
-  const initialLinks = initial.links.flatMap((link) => {
-    const label = link.label.trim();
-    const url = link.url.trim();
-    return label && url ? [{ label, url }] : [];
-  });
-  if (JSON.stringify(parsed.links) !== JSON.stringify(initialLinks))
+  if (!sameAttachedLinks(parsed.links, initial.links))
     changes.links = parsed.links;
   if (parsed.code !== (initial.code.trim() || null)) changes.code = parsed.code;
   return changes;
