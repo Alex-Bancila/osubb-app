@@ -77,6 +77,10 @@ function capabilities(granted: Partial<Capabilities> = {}): Capabilities {
     provisionMembers: false,
     createTopLevelGroups: false,
     administer: false,
+    administerBc: false,
+    manageDeals: false,
+    manageDealsTeam: false,
+    pickDealsCoordinator: false,
     ...granted,
   };
 }
@@ -376,6 +380,10 @@ describe('AppShell', () => {
         provisionMembers: true,
         createTopLevelGroups: true,
         administer: true,
+        administerBc: false,
+        manageDeals: false,
+        manageDealsTeam: false,
+        pickDealsCoordinator: false,
       }),
     });
     renderShell('/administrare');
@@ -406,6 +414,10 @@ describe('AppShell', () => {
         provisionMembers: true,
         createTopLevelGroups: true,
         administer: true,
+        administerBc: false,
+        manageDeals: false,
+        manageDealsTeam: false,
+        pickDealsCoordinator: false,
       }),
     });
     renderShell();
@@ -470,6 +482,10 @@ describe('AppShell', () => {
           provisionMembers: true,
           createTopLevelGroups: true,
           administer: true,
+          administerBc: false,
+          manageDeals: false,
+          manageDealsTeam: false,
+          pickDealsCoordinator: false,
         }),
       });
       renderShell(path);
@@ -492,6 +508,10 @@ describe('AppShell', () => {
         managesAnyGroup: true,
         manageTasks: true,
         administer: true,
+        administerBc: false,
+        manageDeals: false,
+        manageDealsTeam: false,
+        pickDealsCoordinator: false,
       }),
     });
     const view = renderShell('/administrare/campanii');

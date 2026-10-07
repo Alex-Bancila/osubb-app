@@ -191,6 +191,22 @@ insert into promotion_candidates (role_evaluation_id, member_id, task_points, te
 insert into member_imports (member_id, sheet_email, sheet_row, imported_by) values
   ('ffffffff-0000-0000-0000-000000000006', 'rls-import-991@test.local', 2, null),
   ('eeeeeeee-0000-0000-0000-000000000156', 'rls-import-claimless-991@test.local', 3, null);
+-- R44/R45: the Atribuție, its team and the Deal Code reveals. The seed may
+-- already hold the Atribuție; these rows stand on their own. The reveal owned by
+-- the claimless uid exercises the own-row limb of deal_code_reveals_read_self.
+delete from bc_assignments;
+insert into bc_assignments (assignment, member_id) values
+  ('osubb_deals', 'ffffffff-0000-0000-0000-000000000006');
+insert into assignment_team (assignment, team_role, member_id) values
+  ('osubb_deals', 'responsible', 'eeeeeeee-0000-0000-0000-000000000156');
+insert into announcements (kind, title, body, group_id, audience)
+  select 'deal', 'rls-deal', 'x', id, 'org' from groups where is_organization;
+insert into deal_code_reveals (announcement_id, member_id)
+select announcement.id, member.id
+  from announcements as announcement,
+       (values ('ffffffff-0000-0000-0000-000000000006'::uuid),
+               ('eeeeeeee-0000-0000-0000-000000000156'::uuid)) as member (id)
+ where announcement.title = 'rls-deal';
 
 -- ==================== The claimless sweep (AC) ====================
 -- `set role authenticated` with no JWT has no caller identity at all:

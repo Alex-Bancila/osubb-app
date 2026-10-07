@@ -274,7 +274,7 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   ('set_member_status',  'p_member_id uuid, p_status member_status, p_reason text, p_replacement_id uuid', false, true,  false, false),
   -- #327: the first Task command wrapper. Every later wrapper (#328-#345)
   -- adds its own row here the same way.
-  ('create_task',        'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_link_label text, p_link_url text',
+  ('create_task',        'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_link_label text, p_link_url text, p_links jsonb',
                                                                      false, true,  false, false),
   -- #328 (update_task_content) and #329 (convert_task_mode) were retired by #936.
   -- #330: the Candidate Queue pair, added the same way.
@@ -311,11 +311,11 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- #344: the three Completed-work Request wrappers, added the same way.
   ('create_completed_work_request',  'p_description text, p_group_id bigint',
                                                                      false, true,  false, false),
-  ('approve_completed_work_request', 'p_request_id bigint, p_difficulty integer, p_rating integer, p_note text, p_title text, p_description text, p_group_id bigint, p_link_label text, p_link_url text, p_campaign_id bigint',
+  ('approve_completed_work_request', 'p_request_id bigint, p_difficulty integer, p_rating integer, p_note text, p_title text, p_description text, p_group_id bigint, p_link_label text, p_link_url text, p_campaign_id bigint, p_links jsonb',
                                                                      false, true,  false, false),
   -- #915: adding a completed Task directly, and the two picker reads over
   -- the same predicate. Same wrapper shape.
-  ('create_completed_task',          'p_executor_id uuid, p_group_id bigint, p_title text, p_description text, p_link_label text, p_link_url text, p_campaign_id bigint, p_difficulty integer, p_rating integer, p_note text',
+  ('create_completed_task',          'p_executor_id uuid, p_group_id bigint, p_title text, p_description text, p_link_label text, p_link_url text, p_campaign_id bigint, p_difficulty integer, p_rating integer, p_note text, p_links jsonb',
                                                                      false, true,  false, false),
   ('completed_task_groups',          'p_executor_id uuid',           false, true,  false, false),
   ('completed_task_executors',       'p_group_id bigint',            false, true,  false, false),
@@ -340,9 +340,9 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   ('campaign_report',                'p_campaign_id bigint, p_from timestamp with time zone, p_to timestamp with time zone',         false, true,  false, false),
   ('campaign_totals',                'p_campaign_id bigint, p_from timestamp with time zone, p_to timestamp with time zone',         false, true,  false, false),
   -- #626: the full-state Task edit and its read-only consequence preview.
-  ('update_task',            'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_accept_consequences boolean',
+  ('update_task',            'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_accept_consequences boolean, p_links jsonb',
                                                                      false, true,  false, false),
-  ('preview_task_update',    'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text',
+  ('preview_task_update',    'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_links jsonb',
                                                                      false, true,  false, false),
   -- #576: the capability row and the caller's effective Groups. Read-only
   -- wrappers with the same grant shape as every other wrapper.
@@ -378,7 +378,7 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
    'p_application_id bigint, p_accept boolean, p_note text',         false, true,  false, false),
   -- #693: the Announcement readers list and the unread badge count.
   ('announcement_readers',          'p_announcement_id bigint',      false, true,  false, false),
-  ('my_unread_announcements_count', '',                              false, true,  false, false),
+  ('my_unread_announcements_count', 'p_kind text',                    false, true,  false, false),
   -- #681: the organization settings command. Same wrapper shape -- only BC
   -- and the Moderator get past its gate.
   ('set_org_setting',               'p_key text, p_value text',      false, true,  false, false),
@@ -415,7 +415,15 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- R43: Grupuri preferate -- the save command and the read. Same wrapper shape;
   -- the level >= 5 gate lives inside the bodies.
   ('set_unselected_groups',         'p_group_ids bigint[]',         false, true,  false, false),
-  ('my_group_preferences',          '',                             false, true,  false, false);
+  ('my_group_preferences',          '',                             false, true,  false, false),
+  -- R44: the Atribuție commands and the Moderator's Administrare BC read. Same
+  -- wrapper shape; the Moderator / holder / Coordonator gates live in the bodies.
+  ('set_bc_assignment',             'p_assignment text, p_member_id uuid, p_granted boolean, p_move boolean', false, true, false, false),
+  ('set_assignment_team_member',    'p_assignment text, p_team_role text, p_member_id uuid', false, true, false, false),
+  ('bc_assignments_directory',      '',                             false, true,  false, false),
+  -- R45: the Deal Code reveal and the team's reveal count. Same wrapper shape.
+  ('reveal_deal_code',              'p_announcement_id bigint',     false, true,  false, false),
+  ('deal_code_reveal_count',        'p_announcement_id bigint',     false, true,  false, false);
 
 create function pg_temp.public_function_mismatches() returns text[]
 language plpgsql as $$
@@ -461,11 +469,11 @@ create temporary table pinned_private_functions (
 insert into pinned_private_functions (proname, args, category) values
   -- #344: approving a Completed-work Request mints the completed Task, its
   -- Evaluation and its ledger credit in one transaction.
-  ('approve_completed_work_request_impl',         'p_request_id bigint, p_difficulty integer, p_rating integer, p_note text, p_title text, p_description text, p_group_id bigint, p_link_label text, p_link_url text, p_campaign_id bigint', 'impl'),
+  ('approve_completed_work_request_impl',         'p_request_id bigint, p_difficulty integer, p_rating integer, p_note text, p_title text, p_description text, p_group_id bigint, p_link_label text, p_link_url text, p_campaign_id bigint, p_links jsonb', 'impl'),
   -- #915: adding a completed Task for a Group member, the one decider rule it
   -- shares with the Requests (and its set), who may be credited, the pickers'
   -- predicate and the Group gate both completed-Task writes pass.
-  ('create_completed_task_impl',                  'p_executor_id uuid, p_group_id bigint, p_title text, p_description text, p_link_label text, p_link_url text, p_campaign_id bigint, p_difficulty integer, p_rating integer, p_note text', 'impl'),
+  ('create_completed_task_impl',                  'p_executor_id uuid, p_group_id bigint, p_title text, p_description text, p_link_label text, p_link_url text, p_campaign_id bigint, p_difficulty integer, p_rating integer, p_note text, p_links jsonb', 'impl'),
   ('is_work_decider',                             'p_group_id bigint, p_executor uuid, p_actor uuid',                                                                   'none'),
   ('work_deciders',                               'p_group_id bigint, p_executor uuid',                                                                                 'none'),
   ('meets_group_min_level',                       'p_group_id bigint, p_member uuid',                                                                                   'none'),
@@ -500,7 +508,7 @@ insert into pinned_private_functions (proname, args, category) values
   ('create_campaign_impl',                        'p_group_id bigint, p_name text',                                                                                  'impl'),
   -- #344: filing a Completed-work Request -- membership, not management.
   ('create_completed_work_request_impl',          'p_description text, p_group_id bigint',                                            'impl'),
-  ('create_task_impl',                            'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_link_label text, p_link_url text', 'impl'),
+  ('create_task_impl',                            'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_link_label text, p_link_url text, p_links jsonb', 'impl'),
   -- #259: the Department Cup body (#936 dropped the legacy `dept_cup` view) behind
   -- the filtered `public.department_cup(p_campaign_id)` wrapper.
   ('department_cup_rows',                         'p_campaign_id bigint, p_from timestamp with time zone, p_to timestamp with time zone',                                                                                               'authenticated_only'),
@@ -600,9 +608,9 @@ insert into pinned_private_functions (proname, args, category) values
   -- #626: the full-state Task edit body, its preview body, and the two shared
   -- helpers both bodies read (validation/diff and the one consequence
   -- definition) -- callable only from inside those definer bodies.
-  ('update_task_impl',                            'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_accept_consequences boolean', 'impl'),
-  ('preview_task_update_impl',                    'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text', 'impl'),
-  ('plan_task_update',                            'p_task tasks, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text', 'none'),
+  ('update_task_impl',                            'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_accept_consequences boolean, p_links jsonb', 'impl'),
+  ('preview_task_update_impl',                    'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_links jsonb', 'impl'),
+  ('plan_task_update',                            'p_task tasks, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_links jsonb', 'none'),
   ('task_update_consequences',                    'p_task_id bigint, p_group_id bigint, p_campaign_id bigint, p_assignment_mode text, p_audience text', 'none'),
   -- #936 retired update_task_content_impl and convert_task_mode_impl. It made
   -- set_event_rsvp a command (this body) and froze an Announcement's Group and
@@ -672,7 +680,7 @@ insert into pinned_private_functions (proname, args, category) values
   -- policy (for the caller) and by event_notification_recipients (per recipient).
   ('can_read_event', 'p_group_id bigint, p_min_level integer, p_member uuid', 'predicate'),
   -- #581: the live announcement visibility predicate called by announcements_read.
-  ('can_read_announcement', 'p_group_id bigint, p_audience text, p_min_level integer, p_created_by uuid', 'predicate'),
+  ('can_read_announcement', 'p_group_id bigint, p_audience text, p_min_level integer, p_created_by uuid, p_kind text, p_deadline timestamp with time zone', 'predicate'),
   -- #68: the trigger body has no client execute grant; it fans out through
   -- private.group_audience and private.notify with broadcast suppression.
   ('fan_out_announcement', '', 'trigger'),
@@ -832,7 +840,7 @@ insert into pinned_private_functions (proname, args, category) values
   -- announcements_create and create_event(p_announce) both read, and the
   -- Event Announcement body only create_event_impl calls as definer.
   ('guard_announcement_settings',        '',                  'trigger'),
-  ('can_publish_announcement',           'p_group_id bigint', 'predicate'),
+  ('can_publish_announcement',           'p_group_id bigint, p_kind text', 'predicate'),
   ('event_announcement_body',            'p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_description text', 'none'),
   -- #934: who manages an Event -- one rule for update_event, cancel_event and
   -- the event_attendance_read policy, so authenticated keeps execute.
@@ -894,11 +902,28 @@ insert into pinned_private_functions (proname, args, category) values
   ('require_group_remover',              'p_group_id bigint', 'require'),
   ('delete_tasks_effect',                'p_task_ids bigint[], p_actor uuid, p_reason text', 'none'),
   ('task_points_at_stake',               'p_task_ids bigint[]', 'none'),
-  ('group_delete_summary',               'p_group_id bigint', 'none');
+  ('group_delete_summary',               'p_group_id bigint', 'none'),
+  -- R46: the Attached Links list rule (called by the definer Task commands and
+  -- announcements_guard_text) and the tasks mirror trigger body.
+  ('require_attached_links',             'p_links jsonb, p_label text, p_url text', 'require'),
+  ('mirror_task_links',                  '',                  'trigger'),
+  -- R44: the one live team-place definition (definer callers only), the
+  -- caller-only policy predicate over it, the Atribuție label, and the two
+  -- command bodies and the directory body, granted to authenticated like every _impl.
+  ('assignment_team_role',               'p_assignment text, p_member uuid', 'none'),
+  ('deals_team_role',                    '',                  'predicate'),
+  ('assignment_label',                   'p_assignment text', 'none'),
+  ('set_bc_assignment_impl',             'p_assignment text, p_member_id uuid, p_granted boolean, p_move boolean', 'impl'),
+  ('set_assignment_team_member_impl',    'p_assignment text, p_team_role text, p_member_id uuid', 'impl'),
+  ('bc_assignments_directory_impl',      '',                  'impl'),
+  -- R45: the Deal edit/delete predicate, the reveal body and the count body.
+  ('can_manage_deal',                    'p_created_by uuid', 'predicate'),
+  ('reveal_deal_code_impl',              'p_announcement_id bigint', 'impl'),
+  ('deal_code_reveal_count_impl',        'p_announcement_id bigint', 'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 209,
-  'the audited roster includes R43''s six Grupuri preferate functions (the lock reason, the muting rule, the caller-only muted predicate, the unmuted audience and the save and read bodies), R42''s BC position holders, #1017''s six delete-for-good command and preview bodies, Group remover gate, Task deletion effect, points-at-stake read and Group delete summary, #1012''s Notification subject rule, subject trigger body, own-rows read write, read-for and mark-all command bodies and five act-on trigger bodies, #1006''s contact read body, #991''s "De invitat" read body, #983''s live Promotion Candidate refresh and its statement-trigger body, #968''s invitation re-send verdict body, #963''s Board Title view helper, #961''s live change broadcast trigger body, #936''s RSVP command body and Announcement Group/Audience guard trigger body (less its two retired Task command bodies, update_task_content_impl and convert_task_mode_impl), #935''s Promotion Rule command body, #934''s Event manager predicate, #929''s Group member set, notification audience and roster read body, #915''s completed-Task command body, decider rule and set, Minimum Level check, caller standing, award predicate and set, and Group gate, #909''s Announcement Termen and Minimum Level guard trigger body, compose predicate and Event Announcement body, #905''s rank-change effect, #891''s changed-field label map, #861''s Announcement-read Notification trigger body, #866''s share command body, #775''s Email Digest quota read, selection and job body, the security pass''s daily cap and Announcement cap trigger body, the Web Push registration guard trigger body, Announcement authorship stamp trigger body and profile text guard trigger body, #776''s Resend delivery-problem body, #771''s Privacy Acknowledgement command body and status read body, #632''s profile email sync trigger body, #589''s Group coordination reader body, #794''s groups_read org-Opportunity limb predicate, #826''s Role Evaluation core over a range, full ranking and ranking read body, standing read body, three command bodies (run, threshold, reject) and candidate-closing trigger body, #52''s tenure-rule job body and its one-row core, #51''s tenure-rule detection, #512''s eligibility-data read predicate, #769''s Web Push health job body, #756''s Private Group visibility predicate, #703''s Web Push enqueue trigger body, #681''s organization settings command body, #693''s Announcement readers body, #691''s Event Campaign trigger body, #677''s Work Filter range check, #684''s Attached Link rule, #673''s constraints kit (the step-1 length check, the http(s) and phone helpers, and the two row-guard trigger bodies), #675''s Nickname fold, its guard trigger body and the Member Card body, #68''s Announcement fan-out trigger body, #581''s live announcement visibility predicate, #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager), less #585''s twenty-three private helpers and gate functions behind the retired legacy Department Team / Independent Team / Project structure commands (the ten command impl bodies, eight require_*/predicate gates, and five project-manager trigger functions), and less #586''s fourteen forward-mirror sync/rederive functions (the three mirror-on-insert bodies, three mirror-on-membership bodies, the Role rederivation body, and the seven sync/repair bodies), and less #590''s three legacy structure predicates (can_read_team, is_active_project_member, can_manage_department_memberships)');
+  (select count(*) from pinned_private_functions)::int, 220,
+  'the audited roster includes R46''s Attached Links list rule and tasks mirror trigger body, R44''s team-place definition, its policy predicate, the Atribuție label and the two command and directory bodies, R45''s Deal edit predicate and reveal and count bodies, R43''s six Grupuri preferate functions (the lock reason, the muting rule, the caller-only muted predicate, the unmuted audience and the save and read bodies), R42''s BC position holders, #1017''s six delete-for-good command and preview bodies, Group remover gate, Task deletion effect, points-at-stake read and Group delete summary, #1012''s Notification subject rule, subject trigger body, own-rows read write, read-for and mark-all command bodies and five act-on trigger bodies, #1006''s contact read body, #991''s "De invitat" read body, #983''s live Promotion Candidate refresh and its statement-trigger body, #968''s invitation re-send verdict body, #963''s Board Title view helper, #961''s live change broadcast trigger body, #936''s RSVP command body and Announcement Group/Audience guard trigger body (less its two retired Task command bodies, update_task_content_impl and convert_task_mode_impl), #935''s Promotion Rule command body, #934''s Event manager predicate, #929''s Group member set, notification audience and roster read body, #915''s completed-Task command body, decider rule and set, Minimum Level check, caller standing, award predicate and set, and Group gate, #909''s Announcement Termen and Minimum Level guard trigger body, compose predicate and Event Announcement body, #905''s rank-change effect, #891''s changed-field label map, #861''s Announcement-read Notification trigger body, #866''s share command body, #775''s Email Digest quota read, selection and job body, the security pass''s daily cap and Announcement cap trigger body, the Web Push registration guard trigger body, Announcement authorship stamp trigger body and profile text guard trigger body, #776''s Resend delivery-problem body, #771''s Privacy Acknowledgement command body and status read body, #632''s profile email sync trigger body, #589''s Group coordination reader body, #794''s groups_read org-Opportunity limb predicate, #826''s Role Evaluation core over a range, full ranking and ranking read body, standing read body, three command bodies (run, threshold, reject) and candidate-closing trigger body, #52''s tenure-rule job body and its one-row core, #51''s tenure-rule detection, #512''s eligibility-data read predicate, #769''s Web Push health job body, #756''s Private Group visibility predicate, #703''s Web Push enqueue trigger body, #681''s organization settings command body, #693''s Announcement readers body, #691''s Event Campaign trigger body, #677''s Work Filter range check, #684''s Attached Link rule, #673''s constraints kit (the step-1 length check, the http(s) and phone helpers, and the two row-guard trigger bodies), #675''s Nickname fold, its guard trigger body and the Member Card body, #68''s Announcement fan-out trigger body, #581''s live announcement visibility predicate, #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager), less #585''s twenty-three private helpers and gate functions behind the retired legacy Department Team / Independent Team / Project structure commands (the ten command impl bodies, eight require_*/predicate gates, and five project-manager trigger functions), and less #586''s fourteen forward-mirror sync/rederive functions (the three mirror-on-insert bodies, three mirror-on-membership bodies, the Role rederivation body, and the seven sync/repair bodies), and less #590''s three legacy structure predicates (can_read_team, is_active_project_member, can_manage_department_memberships)');
 
 create function pg_temp.unpinned_private_functions() returns text[]
 language sql as $$

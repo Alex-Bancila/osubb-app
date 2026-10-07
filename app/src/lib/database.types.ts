@@ -60,12 +60,15 @@ export type Database = {
         Row: {
           audience: string
           body: string
+          code: string | null
           created_by: string | null
           deadline: string | null
           form_label: string | null
           form_url: string | null
           group_id: number
           id: number
+          kind: string
+          links: Json
           min_level: number
           pinned: boolean
           priority: Database["public"]["Enums"]["announce_priority"]
@@ -75,12 +78,15 @@ export type Database = {
         Insert: {
           audience?: string
           body: string
+          code?: string | null
           created_by?: string | null
           deadline?: string | null
           form_label?: string | null
           form_url?: string | null
           group_id: number
           id?: never
+          kind?: string
+          links?: Json
           min_level?: number
           pinned?: boolean
           priority?: Database["public"]["Enums"]["announce_priority"]
@@ -90,12 +96,15 @@ export type Database = {
         Update: {
           audience?: string
           body?: string
+          code?: string | null
           created_by?: string | null
           deadline?: string | null
           form_label?: string | null
           form_url?: string | null
           group_id?: number
           id?: never
+          kind?: string
+          links?: Json
           min_level?: number
           pinned?: boolean
           priority?: Database["public"]["Enums"]["announce_priority"]
@@ -129,6 +138,144 @@ export type Database = {
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assignment_team: {
+        Row: {
+          assignment: string
+          member_id: string
+          set_at: string
+          set_by: string | null
+          team_role: string
+        }
+        Insert: {
+          assignment: string
+          member_id: string
+          set_at?: string
+          set_by?: string | null
+          team_role: string
+        }
+        Update: {
+          assignment?: string
+          member_id?: string
+          set_at?: string
+          set_by?: string | null
+          team_role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assignment_team_assignment_fkey"
+            columns: ["assignment"]
+            isOneToOne: false
+            referencedRelation: "bc_assignments"
+            referencedColumns: ["assignment"]
+          },
+          {
+            foreignKeyName: "assignment_team_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "assignment_team_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignment_team_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignment_team_set_by_fkey"
+            columns: ["set_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "assignment_team_set_by_fkey"
+            columns: ["set_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignment_team_set_by_fkey"
+            columns: ["set_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bc_assignments: {
+        Row: {
+          assignment: string
+          granted_at: string
+          granted_by: string | null
+          member_id: string
+        }
+        Insert: {
+          assignment: string
+          granted_at?: string
+          granted_by?: string | null
+          member_id: string
+        }
+        Update: {
+          assignment?: string
+          granted_at?: string
+          granted_by?: string | null
+          member_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bc_assignments_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "bc_assignments_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bc_assignments_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bc_assignments_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "bc_assignments_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bc_assignments_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
             referencedColumns: ["id"]
           },
         ]
@@ -291,6 +438,53 @@ export type Database = {
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deal_code_reveals: {
+        Row: {
+          announcement_id: number
+          member_id: string
+          revealed_at: string
+        }
+        Insert: {
+          announcement_id: number
+          member_id: string
+          revealed_at?: string
+        }
+        Update: {
+          announcement_id?: number
+          member_id?: string
+          revealed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_code_reveals_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_code_reveals_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "deal_code_reveals_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_code_reveals_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
             referencedColumns: ["id"]
           },
         ]
@@ -2226,6 +2420,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -2257,6 +2452,7 @@ export type Database = {
           kind?: string
           link_label?: string | null
           link_url?: string | null
+          links?: Json
           parent_task_id?: number | null
           queue_closed_at?: string | null
           queue_opened_at?: string | null
@@ -2288,6 +2484,7 @@ export type Database = {
           kind?: string
           link_label?: string | null
           link_url?: string | null
+          links?: Json
           parent_task_id?: number | null
           queue_closed_at?: string | null
           queue_opened_at?: string | null
@@ -2505,6 +2702,7 @@ export type Database = {
           p_group_id?: number
           p_link_label?: string
           p_link_url?: string
+          p_links?: Json
           p_note: string
           p_rating: number
           p_request_id: number
@@ -2584,6 +2782,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -2610,6 +2809,18 @@ export type Database = {
       auth_role: {
         Args: never
         Returns: Database["public"]["Enums"]["member_role"]
+      }
+      bc_assignments_directory: {
+        Args: never
+        Returns: {
+          assignments: Json
+          avatar_color: string
+          board_title: string
+          full_name: string
+          is_bc: boolean
+          member_id: string
+          nickname: string
+        }[]
       }
       campaign_report: {
         Args: { p_campaign_id: number; p_from?: string; p_to?: string }
@@ -2680,6 +2891,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -2748,6 +2960,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -2788,6 +3001,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -2846,15 +3060,16 @@ export type Database = {
       }
       create_completed_task: {
         Args: {
-          p_campaign_id: number
+          p_campaign_id?: number
           p_description: string
-          p_difficulty: number
+          p_difficulty?: number
           p_executor_id: string
           p_group_id: number
-          p_link_label: string
-          p_link_url: string
-          p_note: string
-          p_rating: number
+          p_link_label?: string
+          p_link_url?: string
+          p_links?: Json
+          p_note?: string
+          p_rating?: number
           p_title: string
         }
         Returns: {
@@ -2875,6 +3090,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3012,6 +3228,7 @@ export type Database = {
           p_kind?: string
           p_link_label?: string
           p_link_url?: string
+          p_links?: Json
           p_parent_task_id?: number
           p_title: string
         }
@@ -3033,6 +3250,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3054,6 +3272,10 @@ export type Database = {
         }
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      deal_code_reveal_count: {
+        Args: { p_announcement_id: number }
+        Returns: number
+      }
       decide_group_application: {
         Args: { p_accept: boolean; p_application_id: number; p_note?: string }
         Returns: {
@@ -3113,6 +3335,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3162,6 +3385,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3202,6 +3426,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3311,6 +3536,7 @@ export type Database = {
           is_overdue: boolean
           link_label: string
           link_url: string
+          links: Json
           member_id: string
           parent_task_id: number
           parent_task_title: string
@@ -3370,6 +3596,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3420,10 +3647,14 @@ export type Database = {
         Args: never
         Returns: {
           administer: boolean
+          administer_bc: boolean
           create_top_level_groups: boolean
+          manage_deals: boolean
+          manage_deals_team: boolean
           manage_roles: boolean
           manage_tasks: boolean
           manages_any_group: boolean
+          pick_deals_coordinator: boolean
           provision_members: boolean
           see_directory: boolean
           see_leadership: boolean
@@ -3468,7 +3699,10 @@ export type Database = {
           threshold: number
         }[]
       }
-      my_unread_announcements_count: { Args: never; Returns: number }
+      my_unread_announcements_count: {
+        Args: { p_kind?: string }
+        Returns: number
+      }
       notify_email_delivery_problem: {
         Args: {
           p_delivery_id: string
@@ -3499,8 +3733,9 @@ export type Database = {
           p_deadline: string
           p_description: string
           p_group_id: number
-          p_link_label: string
-          p_link_url: string
+          p_link_label?: string
+          p_link_url?: string
+          p_links?: Json
           p_task_id: number
           p_title: string
         }
@@ -3624,6 +3859,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3668,6 +3904,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3688,6 +3925,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      reveal_deal_code: { Args: { p_announcement_id: number }; Returns: string }
       role_evaluation_ranking: {
         Args: { p_from: string; p_kind: string; p_to: string }
         Returns: {
@@ -3733,6 +3971,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3749,6 +3988,42 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "tasks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_assignment_team_member: {
+        Args: { p_assignment: string; p_member_id: string; p_team_role: string }
+        Returns: {
+          assignment: string
+          member_id: string
+          set_at: string
+          set_by: string | null
+          team_role: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "assignment_team"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_bc_assignment: {
+        Args: {
+          p_assignment: string
+          p_granted: boolean
+          p_member_id: string
+          p_move?: boolean
+        }
+        Returns: {
+          assignment: string
+          granted_at: string
+          granted_by: string | null
+          member_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "bc_assignments"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -3934,6 +4209,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3997,6 +4273,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -4042,6 +4319,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -4266,8 +4544,9 @@ export type Database = {
           p_deadline: string
           p_description: string
           p_group_id: number
-          p_link_label: string
-          p_link_url: string
+          p_link_label?: string
+          p_link_url?: string
+          p_links?: Json
           p_task_id: number
           p_title: string
         }
@@ -4289,6 +4568,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -4359,6 +4639,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
+          links: Json
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null

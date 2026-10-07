@@ -31,7 +31,7 @@ select 'Bad Audience #581','x',id,'elsewhere' from groups where name = 'Educați
 '23514','new row for relation "announcements" violates check constraint "announcements_audience_ck"','announcements_audience_ck rejects an unknown Audience');
 select throws_ok($$insert into announcements(title,body,group_id,form_label)
 select 'Dead link #581','x',id,'Form' from groups where name = 'Educațional'$$,
-'23514','new row for relation "announcements" violates check constraint "announcements_form_ck"','form button still requires a URL');
+'23514','link_incomplete','form button still requires a URL (R46: announcements_guard_text names the rule)');
 -- #673 (R8): announcements_guard_text names the rule a direct write breaks
 -- and stores the trimmed text. Every reason is covered in constraints_kit.
 select throws_ok($$insert into announcements(title,body,group_id,audience)

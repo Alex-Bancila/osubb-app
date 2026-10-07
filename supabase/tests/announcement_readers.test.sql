@@ -274,7 +274,7 @@ select is(my_unread_announcements_count(),0,'BC''s Anunțuri badge counts no Ann
 reset role;
 
 -- ==================== catalog ====================
-select is((select prosecdef from pg_proc where oid='public.my_unread_announcements_count()'::regprocedure),
+select is((select prosecdef from pg_proc where oid='public.my_unread_announcements_count(text)'::regprocedure),
   false,'the unread count is security invoker, so announcements_read decides which rows count');
 select is((select proconfig from pg_proc where oid='private.announcement_readers_impl(bigint)'::regprocedure),
   array['search_path=""'],'the readers body pins an empty search_path');

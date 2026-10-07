@@ -26,7 +26,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(69);
+select plan(74);
 
 -- ==================== Fixtures ====================
 create function pg_temp.u915(n integer) returns uuid language sql immutable as $$
@@ -120,10 +120,10 @@ grant execute on function pg_temp.t915(text) to authenticated, anon;
 
 -- ==================== 1. Grants ====================
 select ok(not has_function_privilege('anon',
-  'public.create_completed_task(uuid, bigint, text, text, text, text, bigint, integer, integer, text)', 'execute'),
+  'public.create_completed_task(uuid, bigint, text, text, text, text, bigint, integer, integer, text, jsonb)', 'execute'),
   'anon cannot execute create_completed_task');
 select ok(has_function_privilege('authenticated',
-  'public.create_completed_task(uuid, bigint, text, text, text, text, bigint, integer, integer, text)', 'execute'),
+  'public.create_completed_task(uuid, bigint, text, text, text, text, bigint, integer, integer, text, jsonb)', 'execute'),
   'authenticated may call create_completed_task; its gate is inside');
 select ok(not has_function_privilege('anon', 'public.completed_task_groups(uuid)', 'execute')
       and not has_function_privilege('anon', 'public.completed_task_executors(bigint)', 'execute'),
@@ -433,16 +433,47 @@ select is((select count(*) from public.completed_work_requests
   'every refused approval left its Request pending, with no Task');
 
 -- ==================== 8. Points are written in one place ====================
-select ok((select pg_get_functiondef('private.create_completed_task_impl(uuid, bigint, text, text, text, text, bigint, integer, integer, text)'::regprocedure))
+select ok((select pg_get_functiondef('private.create_completed_task_impl(uuid, bigint, text, text, text, text, bigint, integer, integer, text, jsonb)'::regprocedure))
             !~ 'points_ledger|task_evaluations'
-      and (select pg_get_functiondef('private.create_completed_task_impl(uuid, bigint, text, text, text, text, bigint, integer, integer, text)'::regprocedure))
+      and (select pg_get_functiondef('private.create_completed_task_impl(uuid, bigint, text, text, text, text, bigint, integer, integer, text, jsonb)'::regprocedure))
             ~ 'private\.evaluate_task\(',
   'create_completed_task writes no points itself: private.evaluate_task does');
-select ok((select pg_get_functiondef('private.approve_completed_work_request_impl(bigint, integer, integer, text, text, text, bigint, text, text, bigint)'::regprocedure))
+select ok((select pg_get_functiondef('private.approve_completed_work_request_impl(bigint, integer, integer, text, text, text, bigint, text, text, bigint, jsonb)'::regprocedure))
             !~ 'points_ledger|insert into public.task_evaluations|rating_mult'
-      and (select pg_get_functiondef('private.approve_completed_work_request_impl(bigint, integer, integer, text, text, text, bigint, text, text, bigint)'::regprocedure))
+      and (select pg_get_functiondef('private.approve_completed_work_request_impl(bigint, integer, integer, text, text, text, bigint, text, text, bigint, jsonb)'::regprocedure))
             ~ 'private\.evaluate_task\(',
   'nor does an approval: it reads back the points evaluate_task wrote and never recomputes them (#985)');
+
+-- ==================== 8b. R46: up to five Attached Links ====================
+select pg_temp.test_login_leadership(pg_temp.u915(2));
+select lives_ok(format($q$
+  select public.create_completed_task(%L, %s, 'Linkuri finalizat #915', null,
+    p_difficulty => 2, p_rating => 3, p_note => 'n',
+    p_links => '[{"label": " Poze ", "url": "https://example.org/poze"}, {"label": "Raport", "url": "https://example.org/raport"}]')
+$q$, pg_temp.u915(4), pg_temp.g915('Echipa A1 #915')),
+  'R46: create_completed_task takes a list of Attached Links');
+reset role;
+select is((select format('%s|%s', task.links, task.link_label) from public.tasks as task
+            where task.id = pg_temp.t915('Linkuri finalizat #915')),
+  '[{"url": "https://example.org/poze", "label": "Poze"}, {"url": "https://example.org/raport", "label": "Raport"}]|Poze',
+  'R46: the completed Task stores both links, trimmed, and mirrors the first into link_label');
+insert into public.completed_work_requests (requester_id, group_id, description)
+values (pg_temp.u915(4), pg_temp.g915('Echipa A1 #915'), 'Q11 cerere cu linkuri #915');
+select pg_temp.test_login_leadership(pg_temp.u915(2));
+select lives_ok(format($q$
+  select public.approve_completed_work_request(%s, 2, 3, 'Aprobat cu linkuri',
+    p_links => '[{"label": "A", "url": "https://example.org/a"}, {"label": "B", "url": "https://example.org/b"}, {"label": "C", "url": "https://example.org/c"}]')
+$q$, pg_temp.q915('Q11')),
+  'R46: approve_completed_work_request takes a list of Attached Links');
+select throws_ok(format($q$
+  select public.approve_completed_work_request(%s, 2, 3, 'n',
+    p_links => '[{"label": "A", "url": "ftp://example.org/a"}]')
+$q$, pg_temp.q915('Q8')),
+  'PT400', 'link_url_invalid', 'R46: each link of the list is judged by the one-link rule');
+reset role;
+select is((select jsonb_array_length(task.links) from public.tasks as task
+            where task.title = 'Q11 cerere cu linkuri #915'),
+  3, 'R46: the approved Task carries the three links');
 
 -- ==================== 9. The daily cap ====================
 -- Fill the Manager's task_create allowance to one below its limit with

@@ -88,7 +88,7 @@ grant execute on function pg_temp.persona_checks(text, text) to authenticated;
 select set_config('request.jwt.claims',
   '{"sub":"57600000-0000-0000-0000-000000000004","role":"authenticated"}', true);
 set local role authenticated;
-select * from pg_temp.persona_checks('claimless Coordonator', '(f,f,f,f,f,f,f,f)');
+select * from pg_temp.persona_checks('claimless Coordonator', '(f,f,f,f,f,f,f,f,f,f,f,f)');
 select is(private.holds_any_group_role(), false, 'claimless Coordonator: holds_any_group_role() is false');
 reset role;
 
@@ -96,71 +96,71 @@ reset role;
 select set_config('request.jwt.claims',
   '{"sub":"57600000-0000-0000-0000-000000000010","role":"authenticated"}', true);
 set local role authenticated;
-select * from pg_temp.persona_checks('claimless BC', '(f,f,f,f,f,f,f,f)');
+select * from pg_temp.persona_checks('claimless BC', '(f,f,f,f,f,f,f,f,f,f,f,f)');
 reset role;
 
 -- 3. Recrut (level 0), no Group Role.
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000002');
-select * from pg_temp.persona_checks('Recrut', '(f,f,f,f,f,f,f,f)');
+select * from pg_temp.persona_checks('Recrut', '(f,f,f,f,f,f,f,f,f,f,f,f)');
 reset role;
 
 -- 4. Voluntar (level 1), no Group Role.
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000003');
-select * from pg_temp.persona_checks('Voluntar', '(f,f,f,f,f,f,f,f)');
+select * from pg_temp.persona_checks('Voluntar', '(f,f,f,f,f,f,f,f,f,f,f,f)');
 select is(private.holds_any_group_role(), false, 'Voluntar: holds_any_group_role() is false');
 reset role;
 
 -- 5. Level-1 Coordonator Principal (Project Group Manager): Group-Role columns only.
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000004');
-select * from pg_temp.persona_checks('level-1 Coordonator Principal', '(t,t,f,f,f,f,f,t)');
+select * from pg_temp.persona_checks('level-1 Coordonator Principal', '(t,t,f,f,f,f,f,t,f,f,f,f)');
 select is(private.holds_any_group_role(), true, 'level-1 Coordonator Principal: holds_any_group_role() is true');
 reset role;
 
 -- 6. Level-1 Group Responsible of a Team.
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000005');
-select * from pg_temp.persona_checks('level-1 Group Responsible', '(t,t,f,f,f,f,f,t)');
+select * from pg_temp.persona_checks('level-1 Group Responsible', '(t,t,f,f,f,f,f,t,f,f,f,f)');
 reset role;
 
 -- 7. Voluntar cu Drept de Vot (level 3), no Group Role.
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000006');
-select * from pg_temp.persona_checks('Drept de Vot', '(f,f,f,f,f,f,f,f)');
+select * from pg_temp.persona_checks('Drept de Vot', '(f,f,f,f,f,f,f,f,f,f,f,f)');
 reset role;
 
 -- 8. The retired level 4 grants nothing by rank (manageTasks: 4 is gone, ADR-0009 Ranks).
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000007');
-select * from pg_temp.persona_checks('level-4 responsabil without a Group Role', '(f,f,f,f,f,f,f,f)');
+select * from pg_temp.persona_checks('level-4 responsabil without a Group Role', '(f,f,f,f,f,f,f,f,f,f,f,f)');
 reset role;
 
 -- 9. BCE holding no Group Role: reads by rank, writes nothing by rank (ADR-0009 Authority).
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000008');
-select * from pg_temp.persona_checks('BCE without a Group Role', '(f,f,t,t,f,f,f,f)');
+select * from pg_temp.persona_checks('BCE without a Group Role', '(f,f,t,t,f,f,f,f,f,f,f,f)');
 select is(private.holds_any_group_role(), false, 'BCE without a Group Role: holds_any_group_role() is false');
 reset role;
 
 -- 10. BCE who is a Department Group Manager.
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000009');
-select * from pg_temp.persona_checks('BCE Department Manager', '(t,t,t,t,f,f,f,t)');
+select * from pg_temp.persona_checks('BCE Department Manager', '(t,t,t,t,f,f,f,t,f,f,f,f)');
 reset role;
 
 -- 11. BC (level 6).
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000010');
-select * from pg_temp.persona_checks('BC', '(t,t,t,t,t,t,t,t)');
+select * from pg_temp.persona_checks('BC', '(t,t,t,t,t,t,t,t,f,f,f,f)');
 reset role;
 
 -- 12. Moderator (level 9).
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000011');
-select * from pg_temp.persona_checks('Moderator', '(t,t,t,t,t,t,t,t)');
+select * from pg_temp.persona_checks('Moderator', '(t,t,t,t,t,t,t,t,t,f,f,f)');
 reset role;
 
 -- 13. A stale claim: the token still says BC, the live Profile says Voluntar. Live rank wins.
 select pg_temp.test_login('57600000-0000-0000-0000-000000000012',
   '{"member_role":"bc","member_level":6,"dept_ids":[],"team_ids":[],"group_ids":[]}'::jsonb);
-select * from pg_temp.persona_checks('stale BC claim over a live Voluntar', '(f,f,f,f,f,f,f,f)');
+select * from pg_temp.persona_checks('stale BC claim over a live Voluntar', '(f,f,f,f,f,f,f,f,f,f,f,f)');
 reset role;
 
 -- 14. An inactive BC with a stale claim and a Group Manager row: nothing, Group Role included.
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000013');
-select * from pg_temp.persona_checks('inactive BC with a stale claim and a Group Role', '(f,f,f,f,f,f,f,f)');
+select * from pg_temp.persona_checks('inactive BC with a stale claim and a Group Role', '(f,f,f,f,f,f,f,f,f,f,f,f)');
 select is(private.holds_any_group_role(), false,
   'inactive member with a stale claim: holds_any_group_role() is false despite the roster row');
 reset role;
@@ -168,14 +168,14 @@ reset role;
 -- The two Group-Role columns part ways on an archived Group: the position is still held
 -- (manages_any_group, administer), but no work in an archived Group is manageable.
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000014');
-select * from pg_temp.persona_checks('Manager of an archived Group only', '(t,f,f,f,f,f,f,t)');
+select * from pg_temp.persona_checks('Manager of an archived Group only', '(t,f,f,f,f,f,f,t,f,f,f,f)');
 reset role;
 
 -- ==================== each column flips only with its own input ====================
 -- Rank crosses 5: see_directory and see_leadership, nothing else.
 update public.profiles set role = 'bce' where id = '57600000-0000-0000-0000-000000000003';
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000003');
-select is((select c::text from public.my_capabilities() as c), '(f,f,t,t,f,f,f,f)',
+select is((select c::text from public.my_capabilities() as c), '(f,f,t,t,f,f,f,f,f,f,f,f)',
   'Voluntar promoted to BCE: only see_directory and see_leadership flip');
 reset role;
 
@@ -183,14 +183,14 @@ reset role;
 -- (manages_any_group, administer) and manage_tasks, whose can_manage_tasks() admits BC.
 update public.profiles set role = 'bc' where id = '57600000-0000-0000-0000-000000000003';
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000003');
-select is((select c::text from public.my_capabilities() as c), '(t,t,t,t,t,t,t,t)',
+select is((select c::text from public.my_capabilities() as c), '(t,t,t,t,t,t,t,t,f,f,f,f)',
   'BCE promoted to BC: every level-6 input flips, see_* stay on');
 reset role;
 
 -- Back below 5: every rank-derived column falls together.
 update public.profiles set role = 'voluntar' where id = '57600000-0000-0000-0000-000000000003';
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000003');
-select is((select c::text from public.my_capabilities() as c), '(f,f,f,f,f,f,f,f)',
+select is((select c::text from public.my_capabilities() as c), '(f,f,f,f,f,f,f,f,f,f,f,f)',
   'BC demoted to Voluntar: every rank-derived column falls');
 reset role;
 
@@ -198,7 +198,7 @@ reset role;
 insert into public.group_members (group_id, member_id, group_role)
 select id, '57600000-0000-0000-0000-000000000003', 'responsible' from public.groups where name = 'Team #576';
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000003');
-select is((select c::text from public.my_capabilities() as c), '(t,t,f,f,f,f,f,t)',
+select is((select c::text from public.my_capabilities() as c), '(t,t,f,f,f,f,f,t,f,f,f,f)',
   'Voluntar appointed Group Responsible: only the Group-Role columns flip');
 reset role;
 
@@ -206,7 +206,7 @@ reset role;
 delete from public.group_members
  where member_id = '57600000-0000-0000-0000-000000000003';
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000003');
-select is((select c::text from public.my_capabilities() as c), '(f,f,f,f,f,f,f,f)',
+select is((select c::text from public.my_capabilities() as c), '(f,f,f,f,f,f,f,f,f,f,f,f)',
   'Group Responsible removed: the Group-Role columns flip back');
 reset role;
 
@@ -214,7 +214,7 @@ reset role;
 insert into public.group_members (group_id, member_id, group_role)
 select id, '57600000-0000-0000-0000-000000000003', 'member' from public.groups where name = 'Team #576';
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000003');
-select is((select c::text from public.my_capabilities() as c), '(f,f,f,f,f,f,f,f)',
+select is((select c::text from public.my_capabilities() as c), '(f,f,f,f,f,f,f,f,f,f,f,f)',
   'ordinary membership of a Group moves no column');
 reset role;
 
@@ -222,7 +222,7 @@ reset role;
 update public.profiles set status = 'inactiv' where id = '57600000-0000-0000-0000-000000000009';
 select pg_temp.test_login('57600000-0000-0000-0000-000000000009',
   '{"member_role":"bce","member_level":5,"dept_ids":[],"team_ids":[],"group_ids":[]}'::jsonb);
-select is((select c::text from public.my_capabilities() as c), '(f,f,f,f,f,f,f,f)',
+select is((select c::text from public.my_capabilities() as c), '(f,f,f,f,f,f,f,f,f,f,f,f)',
   'BCE Department Manager deactivated: every column falls with the roster row still in place');
 reset role;
 
