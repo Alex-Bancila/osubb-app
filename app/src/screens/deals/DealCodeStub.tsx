@@ -160,10 +160,10 @@ export function DealCodeStub({
             </span>
             {/* A row of blurred characters across the stub, the pill on it:
                 at every width the code reads as covered, not as missing. */}
-            <span className="relative flex min-h-12 w-full items-center overflow-hidden">
+            <span className="relative flex min-h-12 w-full items-center overflow-hidden [mask-image:linear-gradient(to_right,transparent,#000_10%,#000_90%,transparent)]">
               <span
                 aria-hidden="true"
-                className="deal-code-mask font-mono text-2xl font-bold tracking-[0.22em] whitespace-nowrap text-foreground/80"
+                className="deal-code-mask font-mono text-2xl font-bold tracking-[0.22em] whitespace-nowrap text-foreground"
               >
                 {dealCodeMask(deal.id, 14) + dealCodeMask(deal.id + 1, 14)}
               </span>

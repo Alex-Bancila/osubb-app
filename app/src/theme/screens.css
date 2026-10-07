@@ -263,7 +263,7 @@
 }
 
 .deal-code-mask {
-  filter: blur(7px);
+  filter: blur(6px);
   user-select: none;
 }
 
@@ -279,7 +279,7 @@
 
 @keyframes deal-code-unblur {
   from {
-    filter: blur(7px);
+    filter: blur(6px);
     opacity: 0.5;
   }
   to {
