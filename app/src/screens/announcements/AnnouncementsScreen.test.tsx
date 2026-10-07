@@ -112,6 +112,9 @@ function createRow(
     created_by: null,
     form_label: null,
     form_url: null,
+    links: [],
+    kind: 'announcement',
+    code: null,
     announcement_reads: [],
     ...overrides,
   };

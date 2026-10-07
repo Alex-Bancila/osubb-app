@@ -28,6 +28,10 @@ const NONE: Capabilities = {
   provisionMembers: false,
   createTopLevelGroups: false,
   administer: false,
+  administerBc: false,
+  manageDeals: false,
+  manageDealsTeam: false,
+  pickDealsCoordinator: false,
 };
 const BC: Capabilities = {
   managesAnyGroup: true,
@@ -38,12 +42,20 @@ const BC: Capabilities = {
   provisionMembers: true,
   createTopLevelGroups: true,
   administer: true,
+  administerBc: false,
+  manageDeals: false,
+  manageDealsTeam: false,
+  pickDealsCoordinator: false,
 };
 const MANAGER: Capabilities = {
   ...NONE,
   managesAnyGroup: true,
   manageTasks: true,
   administer: true,
+  administerBc: false,
+  manageDeals: false,
+  manageDealsTeam: false,
+  pickDealsCoordinator: false,
 };
 
 function Where() {

@@ -67,6 +67,10 @@ function capabilities(overrides: Partial<Capabilities> = {}): Capabilities {
     provisionMembers: false,
     createTopLevelGroups: false,
     administer: false,
+    administerBc: false,
+    manageDeals: false,
+    manageDealsTeam: false,
+    pickDealsCoordinator: false,
     ...overrides,
   };
 }

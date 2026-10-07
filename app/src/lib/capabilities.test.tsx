@@ -30,6 +30,10 @@ const serverRow = {
   provision_members: false,
   create_top_level_groups: false,
   administer: true,
+  administer_bc: false,
+  manage_deals: true,
+  manage_deals_team: true,
+  pick_deals_coordinator: false,
 };
 
 const expected: Capabilities = {
@@ -41,6 +45,10 @@ const expected: Capabilities = {
   provisionMembers: false,
   createTopLevelGroups: false,
   administer: true,
+  administerBc: false,
+  manageDeals: true,
+  manageDealsTeam: true,
+  pickDealsCoordinator: false,
 };
 
 function wrapper(queryClient: QueryClient) {

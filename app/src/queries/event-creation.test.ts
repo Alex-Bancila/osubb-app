@@ -69,6 +69,10 @@ const managerCapabilities = {
   provisionMembers: false,
   createTopLevelGroups: false,
   administer: true,
+  administerBc: false,
+  manageDeals: false,
+  manageDealsTeam: false,
+  pickDealsCoordinator: false,
 };
 
 function myGroup(
