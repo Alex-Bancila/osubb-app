@@ -14,7 +14,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(45);
+select plan(48);
 
 create function pg_temp.u46(n integer) returns uuid language sql immutable as $$
   select ('46460000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -190,8 +190,21 @@ select throws_ok(replace(replace(pg_temp.edit('Task pereche R46', pg_temp.links(
 select lives_ok(pg_temp.edit('Task pereche R46', null, 'Doar una', 'https://example.org/una'),
   'an old app''s update_task sends only the pair (p_links not sent)');
 reset role;
-select is((pg_temp.task('Task pereche R46')).links, '[{"url": "https://example.org/una", "label": "Doar una"}]'::jsonb,
-  'the pair, sent alone, is the one link (full state)');
+select is((select jsonb_agg(element ->> 'label') from jsonb_array_elements((pg_temp.task('Task pereche R46')).links) as list(element)),
+  '["Doar una", "Link 2", "Link 3"]'::jsonb,
+  'the pair, sent alone, replaces the first link and keeps the two the old app cannot show');
+-- An old app changing only the title sends the pair it shows, unchanged.
+select pg_temp.test_login_leadership(pg_temp.u46(1));
+select lives_ok(replace(pg_temp.edit('Task pereche R46', null, 'Doar una', 'https://example.org/una'),
+    quote_literal('Task pereche R46'), quote_literal('Task pereche R46 titlu')),
+  'an old app edits only the title');
+reset role;
+select is(jsonb_array_length((pg_temp.task('Task pereche R46 titlu')).links), 3,
+  'a title edit from an old app keeps every Attached Link');
+select is((select details -> 'changed' from public.task_activity
+            where task_id = (pg_temp.task('Task pereche R46 titlu')).id and kind = 'task_updated' order by id desc limit 1),
+  '["title"]'::jsonb, 'and names only the title in changed');
+update public.tasks set title = 'Task pereche R46' where title = 'Task pereche R46 titlu';
 select pg_temp.test_login_leadership(pg_temp.u46(1));
 select lives_ok(pg_temp.edit('Task pereche R46', '[]'::jsonb), 'a sent empty list clears the links');
 reset role;

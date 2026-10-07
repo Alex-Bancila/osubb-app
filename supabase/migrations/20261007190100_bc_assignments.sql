@@ -194,9 +194,11 @@ begin
   -- 3. One writer per Atribuție: the row may not exist yet, so a row lock alone
   --    cannot serialize two first grants.
   perform pg_advisory_xact_lock(hashtextextended('osubb.bc_assignment:' || p_assignment, 0));
+  -- The parent of assignment_team: FOR NO KEY UPDATE (conventions section 2);
+  -- a delete below takes the stronger lock itself.
   select * into v_row from public.bc_assignments
    where assignment = p_assignment
-   for update;
+   for no key update;
 
   if p_granted then
     -- 4. Only a live BC member may hold an Atribuție.
@@ -262,7 +264,7 @@ end;
 $$;
 
 comment on function private.set_bc_assignment_impl(text, uuid, boolean, boolean) is
-  'R44: body of public.set_bc_assignment. Step 1: PT400 invalid_assignment, bc_assignment_not_bc (no member), granted_required. Then 42501 bc_assignment_forbidden unless the caller is the live Moderator (level 9; profile held FOR SHARE). One writer per Atribuție (transaction advisory lock, then the row FOR UPDATE). Granting: the target must be live bc (PT400 bc_assignment_not_bc); granting to the holder changes nothing; while another member holds it, PT409 bc_assignment_held unless p_move -- then the holder is replaced, the team kept (minus the new holder if they were its Responsabil), the old holder told "Atribuția Responsabil OSUBB Deals a fost retrasă". The new holder is told "Ai primit atribuția Responsabil OSUBB Deals" (link /administrare/deals). Taking it away from its holder deletes the row and, by cascade, the team, and tells the holder, the Coordonator and the Responsabil "Atribuția Responsabil OSUBB Deals a fost retrasă" (kind system, no link); from anyone else it changes nothing. Returns the row, or null when nothing is held.';
+  'R44: body of public.set_bc_assignment. Step 1: PT400 invalid_assignment, bc_assignment_not_bc (no member), granted_required. Then 42501 bc_assignment_forbidden unless the caller is the live Moderator (level 9; profile held FOR SHARE). One writer per Atribuție (transaction advisory lock, then the row FOR NO KEY UPDATE). Granting: the target must be live bc (PT400 bc_assignment_not_bc); granting to the holder changes nothing; while another member holds it, PT409 bc_assignment_held unless p_move -- then the holder is replaced, the team kept (minus the new holder if they were its Responsabil), the old holder told "Atribuția Responsabil OSUBB Deals a fost retrasă". The new holder is told "Ai primit atribuția Responsabil OSUBB Deals" (link /administrare/deals). Taking it away from its holder deletes the row and, by cascade, the team, and tells the holder, the Coordonator and the Responsabil "Atribuția Responsabil OSUBB Deals a fost retrasă" (kind system, no link); from anyone else it changes nothing. Returns the row, or null when nothing is held.';
 
 create function public.set_bc_assignment(p_assignment text, p_member_id uuid, p_granted boolean, p_move boolean default false)
 returns public.bc_assignments

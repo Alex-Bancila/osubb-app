@@ -548,6 +548,12 @@ begin
   if p_group_id is distinct from v_task.group_id and not coalesce(private.can_manage_group_work(p_group_id), false) then
     raise exception using errcode = '42501', message = 'group_manage_forbidden';
   end if;
+  -- R46: an app version from before R46 sends only the pair (p_links not sent):
+  -- it edits the first link it shows and keeps the others it cannot show.
+  if p_links is null then
+    v_links := v_links || case when jsonb_array_length(v_task.links) > 1
+                               then v_task.links - 0 else '[]'::jsonb end;
+  end if;
   perform private.plan_task_update(v_task, p_group_id, p_title, p_description, p_deadline,
     p_campaign_id, p_assignment_mode, p_audience, v_links);
   return query
@@ -628,6 +634,12 @@ begin
   end if;
   -- 4. Authority under lock.
   perform private.require_task_manager(p_task_id);
+  -- R46: an app version from before R46 sends only the pair (p_links not sent):
+  -- it edits the first link it shows and keeps the others it cannot show.
+  if p_links is null then
+    v_links := v_links || case when jsonb_array_length(v_task.links) > 1
+                               then v_task.links - 0 else '[]'::jsonb end;
+  end if;
   if v_task.parent_task_id is distinct from v_parent_id then
     raise sqlstate 'PT409' using message = 'task_parent_changed';
   end if;
@@ -770,7 +782,7 @@ end;
 $function$;
 
 comment on function private.update_task_impl(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, boolean, jsonb) is
-  'Atomic #627 full-state Task update. Locks Umbrella then Task FOR NO KEY UPDATE; for a move, authorizes both Groups, locks both Groups in ID order, rechecks authority, and holds Executor/Candidate Profiles FOR SHARE before applying the shared consequence plan. PT409 task_update_needs_confirmation protects every listed consequence. Uses the #583 Appointment core, ends an ineligible Assignment (group_changed on a move, task_updated on Audience narrowing) and returns the Task to todo, closes ineligible Candidatures, clears an incompatible Campaign, and logs one task_updated activity with the accepted consequences and field diff. No Candidate is ever promoted (#682): the remaining queue stays pending for the manager to select from. R46: the Attached Links are part of the full state (p_links, an empty list clears them; from an app version before R46 the pair p_link_label + p_link_url is the one link), judged at step 1 by private.require_attached_links.';
+  'Atomic #627 full-state Task update. Locks Umbrella then Task FOR NO KEY UPDATE; for a move, authorizes both Groups, locks both Groups in ID order, rechecks authority, and holds Executor/Candidate Profiles FOR SHARE before applying the shared consequence plan. PT409 task_update_needs_confirmation protects every listed consequence. Uses the #583 Appointment core, ends an ineligible Assignment (group_changed on a move, task_updated on Audience narrowing) and returns the Task to todo, closes ineligible Candidatures, clears an incompatible Campaign, and logs one task_updated activity with the accepted consequences and field diff. No Candidate is ever promoted (#682): the remaining queue stays pending for the manager to select from. R46: the Attached Links are part of the full state (p_links, a sent empty list clears them), judged at step 1 by private.require_attached_links. From an app version before R46, which sends only the pair p_link_label + p_link_url (p_links null), the pair replaces the first link and the others are kept, so an old app never deletes links it cannot show.';
 
 create function public.update_task(p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text default null, p_link_url text default null, p_accept_consequences boolean default false, p_links jsonb default null)
  returns public.tasks
@@ -782,7 +794,7 @@ as $function$
 $function$;
 
 comment on function public.update_task(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, boolean, jsonb) is
-  'Sets every editable field, including Group and the Attached Links (R46: p_links, up to five; a sent empty list clears them; p_links not sent (null) takes p_link_label + p_link_url, kept for one release, as the one link, and neither sent clears them -- full state), at once while todo or in_progress. A real Group move requires authority over source and target. Consequences require explicit acceptance after public.preview_task_update.';
+  'Sets every editable field, including Group and the Attached Links (R46: p_links, up to five, full state -- a sent empty list clears them; p_links not sent (null) is an app version from before R46: p_link_label + p_link_url, kept for one release, replace the first link and the others are kept), at once while todo or in_progress. A real Group move requires authority over source and target. Consequences require explicit acceptance after public.preview_task_update.';
 
 create function private.create_completed_task_impl(p_executor_id uuid, p_group_id bigint, p_title text, p_description text, p_link_label text, p_link_url text, p_campaign_id bigint, p_difficulty integer, p_rating integer, p_note text, p_links jsonb)
  returns public.tasks
