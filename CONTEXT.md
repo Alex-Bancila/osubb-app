@@ -24,6 +24,10 @@ _Avoid_: BCE (as the Department's Manager), department head, coordinator
 **Moderator**:
 The highest Role, a transferable seat held by the IT Coordinator. BC members and the Moderator grant and remove it, never on themselves; the organization always keeps at least one active Moderator, so whoever removes the last one names the replacement in the same change, and may name themselves. BC members and the Moderator change the Membership Status of a BC member or a Moderator; taking the last active holder of either rank out of Activ names the replacement the same way. Like a BC member, the Moderator is a Membru de drept of every Group and receives no Notification through membership; unlike one, the Moderator holds no Group position.
 
+**Atribuție** (BC Assignment):
+A named responsibility the Moderator gives to exactly one BC member in Administrare › Administrare BC, independent of Roles and Group positions (ruling R44, 2026-10-07). The first is Responsabil OSUBB Deals: its holder picks a Coordonator (a BCE member) and a Responsabil (any active Member); the Coordonator can do everything the holder can except pick the Coordonator, and the Responsabil publishes Deals and manages their own. Taking the Atribuție away dissolves the team and leaves the Deals in place.
+_Avoid_: Feature, permission, role, Group position
+
 **AG / AGO**:
 Adunarea Generală / Adunarea Generală Ordinară, where voting members make organization decisions. In the application the Adunarea Generală is a Group with Automatic Membership at Minimum Level 3, created and named by BC; a Member joins it by gaining Drept de Vot and leaves it only when BC withdraws that Role.
 
@@ -225,7 +229,7 @@ The optional note an Executor attaches when submitting a Task for review, with a
 _Avoid_: Feedback (the reviewer's note), completion description, comment
 
 **Attached Link**:
-One labelled external address carried by an Announcement, a Task, or a Submission Note, shown as a button under its label. Text fields stay plain text and never carry links themselves.
+A labelled external address shown as a button under its label and, in a details view, as "Deschide: <etichetă>". An Announcement or a Task carries up to five Attached Links; a Submission Note or a Group's application form carries one (ruling R46, 2026-10-07). Text fields stay plain text and never carry links themselves.
 _Avoid_: Form link, URL field, inline link
 
 **Task Activity**:
@@ -286,8 +290,16 @@ Informational attendance guidance for an Event. It does not reject an RSVP or cr
 ## Communication
 
 **Announcement**:
-An OSUBB message posted on behalf of one Group, its Origin, by one of that Group's Managers or Responsibles, with an Announcement Audience, a normal, important, or critical Priority, an optional link to an external form, an optional **Termen** (the date by which its readers should act, never in the past when posted), and a Minimum Level: only Members of its Audience at or above it read the Announcement or are notified of it (everyone by default). An Announcement of the Organization Group may be posted by anyone holding a Group Role. Creating an Event may publish its Announcement in the same step, with the Event's Group, Audience and Minimum Level and Termen = the Event's start.
+An OSUBB message posted on behalf of one Group, its Origin, by one of that Group's Managers or Responsibles, with an Announcement Audience, a normal, important, or critical Priority, up to five Attached Links, an optional **Termen** (the date by which its readers should act, never in the past when posted), and a Minimum Level: only Members of its Audience at or above it read the Announcement or are notified of it (everyone by default). An Announcement of the Organization Group may be posted by anyone holding a Group Role. Creating an Event may publish its Announcement in the same step, with the Event's Group, Audience and Minimum Level and Termen = the Event's start.
 _Avoid_: Post, news item, broadcast when the Audience is local
+
+**Deal** (OSUBB Deal):
+An Announcement of kind deal: an offer, discount or access that a company gives OSUBB members, posted by the OSUBB Deals team from the Organization Group to every active Member, Recruți included, with Titlu, Descriere, an optional Termen, up to five Attached Links and an optional Deal Code (ruling R45, 2026-10-07). It is never critical or pinned. It lives on the OSUBB Deals tab of Anunțuri, never among the Announcements, and after its Termen only its team still sees it.
+_Avoid_: Offer, promo, partnership post
+
+**Deal Code**:
+The discount or access code a Deal may carry, hidden on the card until the Member taps it. Revealing it is remembered for that Member on every device, and the Deal's team sees how many Members have revealed it.
+_Avoid_: Voucher, coupon
 
 **Announcement Audience**:
 Whether an Announcement reaches only the Group Audience of its Origin or every active Member of OSUBB. A Group may speak to the whole organization without ceasing to be the Origin.
