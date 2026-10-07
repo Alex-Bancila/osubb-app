@@ -110,9 +110,9 @@ export function dealCodeMask(seed: number, length: number): string {
 
 export type DealsViewer = {
   memberId: string | undefined;
-  /** Holder or Coordonator (`my_capabilities().manage_deals_team`). */
+  /** Holder, Coordonator or the Moderator (`my_capabilities().manage_deals_team`). */
   manageDealsTeam: boolean;
-  /** On the team at all (`manage_deals`). */
+  /** On the team at all, or the Moderator (`manage_deals`). */
   manageDeals: boolean;
   /** BC or the Moderator by live rank (`manage_roles`, level ≥ 6). */
   bcOrModerator: boolean;
@@ -120,8 +120,10 @@ export type DealsViewer = {
 
 /**
  * Editează (R44): the holder and the Coordonator on every Deal, the
- * Responsabil on their own. BC and the Moderator delete leftovers but do not
- * edit, unless they are on the team. Presentation only: the policies decide.
+ * Responsabil on their own. The Moderator holds the holder's powers (R44
+ * amended 2026-10-08), so edits every Deal too; BC members who do not hold
+ * the Atribuție delete leftovers but do not edit. Presentation only: the
+ * policies decide.
  */
 export function mayEditDeal(
   deal: Pick<DealPresentation, 'authorId'>,

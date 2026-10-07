@@ -3,6 +3,8 @@
 -- Organization Group to every active Member -- Audience org, Minimum Level 0,
 -- normal, never pinned -- with an optional Deal Code. Edit/delete: holder and
 -- Coordonator any Deal, the Responsabil their own, BC and the Moderator any.
+-- The Moderator holds every Atribuție's powers (R44 amended 2026-10-08), so
+-- publishes Deals too, without being the holder.
 -- After its Termen only the team and BC / the Moderator read it. The fan-out is
 -- the organization-wide rule titled "Deal nou: <titlu>". Revealing the code is
 -- recorded once per Member; the team reads the count.
@@ -18,7 +20,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(78);
+select plan(79);
 
 create function pg_temp.u45(n integer) returns uuid language sql immutable as $$
   select ('45450000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -102,10 +104,19 @@ select throws_ok($$insert into public.announcements(kind, title, body, group_id,
   '42501', null, 'a BC member outside the team cannot publish a Deal');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.u45(1));
+select lives_ok($$insert into public.announcements(kind, title, body, group_id, audience)
+  values ('deal', 'Deal R45 mod', 'Corp.', pg_temp.org(), 'org')$$,
+  'the Moderator publishes a Deal without holding the Atribuție (R44 amended: every Atribuție''s powers)');
+reset role;
+-- Live rows, not the token: a Moderator demoted to BC keeps the token but not the power.
+update public.profiles set role = 'bc' where id = pg_temp.u45(1);
+select pg_temp.test_login('45450000-0000-0000-0000-000000000001',
+  '{"member_role":"moderator","member_level":9,"group_ids":[]}'::jsonb);
 select throws_ok($$insert into public.announcements(kind, title, body, group_id, audience)
   values ('deal', 'Deal R45 x1', 'Corp.', pg_temp.org(), 'org')$$,
-  '42501', null, 'the Moderator cannot publish a Deal either');
+  '42501', null, 'a Moderator demoted to BC cannot publish a Deal, whatever the token says');
 reset role;
+update public.profiles set role = 'moderator' where id = pg_temp.u45(1);
 select pg_temp.test_login_leadership(pg_temp.u45(8));
 select throws_ok($$insert into public.announcements(kind, title, body, group_id, audience)
   values ('deal', 'Deal R45 x8', 'Corp.', pg_temp.org(), 'org')$$,

@@ -29,11 +29,15 @@ export type Capabilities = {
   administer: boolean;
   /** The Moderator: Administrare › Administrare BC, where Atribuții are given (R44). */
   administerBc: boolean;
-  /** Holder, Coordonator or Responsabil of OSUBB Deals: Administrare › OSUBB Deals (R44/R45). */
+  /**
+   * Holder, Coordonator or Responsabil of OSUBB Deals: Administrare › OSUBB
+   * Deals (R44/R45). The Moderator holds every Atribuție's powers (R44
+   * amended 2026-10-08), so has this and the two below as the holder does.
+   */
   manageDeals: boolean;
-  /** Holder or Coordonator: picks the Responsabil, manages every Deal. */
+  /** Holder or Coordonator (and the Moderator): picks the Responsabil, manages every Deal. */
   manageDealsTeam: boolean;
-  /** Holder only: picks the Coordonator. */
+  /** Holder only (and the Moderator): picks the Coordonator. */
   pickDealsCoordinator: boolean;
 };
 

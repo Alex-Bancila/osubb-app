@@ -283,8 +283,8 @@ function DealForm({
 }
 
 /**
- * The "Deal nou" button and its sheet, for the OSUBB Deals team only
- * (`manage_deals`); nothing for anyone else. Says "Deal-ul a fost publicat."
+ * The "Deal nou" button and its sheet, for the OSUBB Deals team and the
+ * Moderator (`manage_deals`, R44 amended); nothing for anyone else. Says "Deal-ul a fost publicat."
  * once it is.
  */
 export function NewDealControl() {

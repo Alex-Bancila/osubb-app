@@ -4,7 +4,8 @@
 -- Every row is compared as a whole (`c::text`), so an assertion that one column moved also
 -- proves no other column did. Column order:
 --   (manages_any_group, manage_tasks, see_directory, see_leadership,
---    manage_roles, provision_members, create_top_level_groups, administer)
+--    manage_roles, provision_members, create_top_level_groups, administer, administer_bc,
+--    manage_deals, manage_deals_team, pick_deals_coordinator)
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
@@ -147,9 +148,10 @@ select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000010');
 select * from pg_temp.persona_checks('BC', '(t,t,t,t,t,t,t,t,f,f,f,f)');
 reset role;
 
--- 12. Moderator (level 9).
+-- 12. Moderator (level 9): administer_bc and both Deals team pickers (R44 amended
+--     2026-10-08), but not manage_deals -- the Moderator does not publish.
 select pg_temp.test_login_leadership('57600000-0000-0000-0000-000000000011');
-select * from pg_temp.persona_checks('Moderator', '(t,t,t,t,t,t,t,t,t,f,f,f)');
+select * from pg_temp.persona_checks('Moderator', '(t,t,t,t,t,t,t,t,t,t,t,t)');
 reset role;
 
 -- 13. A stale claim: the token still says BC, the live Profile says Voluntar. Live rank wins.

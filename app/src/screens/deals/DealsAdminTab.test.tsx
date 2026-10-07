@@ -6,6 +6,8 @@ import type { RawDealRow } from '../../queries/deals';
 import { resetSupabaseMock, supabaseMock } from '../../test/supabase-mock';
 
 const viewer = vi.hoisted(() => ({ caps: {} as Record<string, boolean> }));
+// The Administrare header's action slot, where "Deal nou" is portalled.
+const slot = vi.hoisted(() => ({ el: null as HTMLElement | null }));
 
 vi.mock('../../lib/supabase', async () => {
   const { supabaseClientMock } = await vi.importActual<
@@ -35,6 +37,12 @@ vi.mock(
 );
 // The team has its own suite (DealsTeamPanel.test.tsx).
 vi.mock('./DealsTeamPanel', () => ({ DealsTeamPanel: () => null }));
+vi.mock('../administrare/administrare-tabs', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('../administrare/administrare-tabs')
+  >()),
+  useAdministrareActionSlot: () => slot.el,
+}));
 
 import DealsAdminTab from './DealsAdminTab';
 
@@ -83,6 +91,8 @@ function renderTab() {
 const card = (name: string) => screen.findByRole('article', { name });
 
 beforeEach(() => {
+  slot.el?.remove();
+  slot.el = document.body.appendChild(document.createElement('div'));
   resetSupabaseMock();
   supabaseMock.order.mockResolvedValue({ data: ROWS, error: null });
   supabaseMock.rpc.mockResolvedValue({ data: 3, error: null });
@@ -126,6 +136,47 @@ describe('Administrare › OSUBB Deals (R44)', () => {
 
   it('gives BC and the Moderator Șterge only, and no Deal nou', async () => {
     viewer.caps = { manageRoles: true };
+    renderTab();
+    const other = await card('Expirat de la Coordonator');
+    expect(within(other).getByRole('button', { name: /Șterge/ })).toBeVisible();
+    expect(
+      within(other).queryByRole('button', { name: /Editează/ }),
+    ).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Deal nou' })).toBeNull();
+  });
+
+  it('offers Deal nou to the team', async () => {
+    viewer.caps = {
+      manageDeals: true,
+      manageDealsTeam: true,
+      pickDealsCoordinator: true,
+    };
+    renderTab();
+    await card('Al meu');
+    expect(screen.getByRole('button', { name: 'Deal nou' })).toBeVisible();
+  });
+
+  it('gives the Moderator, with every Atribuție power, Deal nou, Editează and Șterge (R44 amended)', async () => {
+    // The Moderator's live capability row: the holder's powers, not the holder.
+    viewer.caps = {
+      manageRoles: true,
+      administer: true,
+      administerBc: true,
+      manageDeals: true,
+      manageDealsTeam: true,
+      pickDealsCoordinator: true,
+    };
+    renderTab();
+    const other = await card('Expirat de la Coordonator');
+    expect(
+      within(other).getByRole('button', { name: /Editează/ }),
+    ).toBeVisible();
+    expect(within(other).getByRole('button', { name: /Șterge/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Deal nou' })).toBeVisible();
+  });
+
+  it('keeps a BC member who does not hold it to Șterge, with no Deal nou', async () => {
+    viewer.caps = { manageRoles: true, administer: true };
     renderTab();
     const other = await card('Expirat de la Coordonator');
     expect(within(other).getByRole('button', { name: /Șterge/ })).toBeVisible();

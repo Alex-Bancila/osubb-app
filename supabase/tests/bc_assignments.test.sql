@@ -1,7 +1,9 @@
 -- Ruling R44 (2026-10-07): Atribuții BC. The Moderator gives an Atribuție to
 -- exactly one BC member; the first is Responsabil OSUBB Deals ('osubb_deals').
 -- Its holder picks a Coordonator (a BCE member) and a Responsabil (any active
--- Member); the Coordonator picks only the Responsabil. Taking the Atribuție away
+-- Member); the Coordonator picks only the Responsabil; the Moderator picks either
+-- place without being on the team -- they hold every Atribuție's powers (R44
+-- amended 2026-10-08), but never the Atribuție itself. Taking the Atribuție away
 -- dissolves the team and tells the three. Capabilities read live rows.
 --
 -- Mutation proofs (each run once against this suite, then reverted): see the
@@ -17,7 +19,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
-select plan(67);
+select plan(80);
 
 create function pg_temp.u44(n integer) returns uuid language sql immutable as $$
   select ('44440000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -204,6 +206,49 @@ select pg_temp.test_login_leadership(pg_temp.u44(6));
 select throws_ok($$select public.set_assignment_team_member('osubb_deals', 'responsible', pg_temp.u44(7))$$,
   '42501', 'assignment_team_forbidden', 'the Responsabil cannot pick the team');
 reset role;
+select pg_temp.test_login_leadership(pg_temp.u44(3));
+select throws_ok($$select public.set_assignment_team_member('osubb_deals', 'responsible', pg_temp.u44(7))$$,
+  '42501', 'assignment_team_forbidden', 'a BC member who does not hold it cannot pick the Responsabil either');
+reset role;
+
+-- ==================== The Moderator sets the team (R44 amended 2026-10-08) ====================
+-- Alex: "I, as a moderator should also be able to select all members of the
+-- team". The Moderator is not on the team; the same validations hold.
+delete from public.notifications where member_id::text like '44440000-%';
+select pg_temp.test_login_leadership(pg_temp.u44(1));
+select is((public.set_assignment_team_member('osubb_deals', 'coordinator', pg_temp.u44(5))).member_id, pg_temp.u44(5),
+  'the Moderator picks the Coordonator without being on the team');
+select is((public.set_assignment_team_member('osubb_deals', 'responsible', pg_temp.u44(7))).member_id, pg_temp.u44(7),
+  'the Moderator picks the Responsabil without being on the team');
+select throws_ok($$select public.set_assignment_team_member('osubb_deals', 'coordinator', pg_temp.u44(6))$$,
+  'PT400', 'coordinator_not_bce', 'the Moderator''s Coordonator must still be a BCE member');
+select throws_ok($$select public.set_assignment_team_member('osubb_deals', 'responsible', pg_temp.u44(2))$$,
+  'PT400', 'assignment_team_duplicate', 'the Moderator cannot make the holder the Responsabil');
+select throws_ok($$select public.set_assignment_team_member('osubb_deals', 'responsible', pg_temp.u44(5))$$,
+  'PT400', 'assignment_team_duplicate', 'the Moderator cannot make the Coordonator the Responsabil');
+reset role;
+select is(pg_temp.notified('Ești acum Coordonator OSUBB Deals') || pg_temp.notified('Nu mai ești Coordonator OSUBB Deals'),
+  array[5, 4], 'the Coordonator the Moderator set is told, and the one replaced');
+select is((select count(*) from public.notifications
+            where member_id = pg_temp.u44(1) and member_id::text like '44440000-%')::int, 0,
+  'the Moderator is not told anything: they are not on the team');
+select is((select set_by from public.assignment_team where team_role = 'responsible'), pg_temp.u44(1),
+  'set_by records the Moderator');
+-- Live rows, not the token: a Moderator demoted to BC keeps the token but loses the power.
+update public.profiles set role = 'bc' where id = pg_temp.u44(1);
+select pg_temp.test_login('44440000-0000-0000-0000-000000000001',
+  '{"member_role":"moderator","member_level":9,"group_ids":[]}'::jsonb);
+select throws_ok($$select public.set_assignment_team_member('osubb_deals', 'responsible', pg_temp.u44(6))$$,
+  '42501', 'assignment_team_forbidden', 'a Moderator demoted to BC cannot pick the team, whatever the token says');
+reset role;
+update public.profiles set role = 'moderator' where id = pg_temp.u44(1);
+-- The team as the rest of this suite expects it: Coordonator 4, Responsabil 6.
+select pg_temp.test_login_leadership(pg_temp.u44(1));
+select is((public.set_assignment_team_member('osubb_deals', 'coordinator', pg_temp.u44(4))).member_id, pg_temp.u44(4),
+  'the Moderator replaces the Coordonator they set');
+select is((public.set_assignment_team_member('osubb_deals', 'responsible', pg_temp.u44(6))).member_id, pg_temp.u44(6),
+  'and the Responsabil');
+reset role;
 
 -- ==================== Reads ====================
 select pg_temp.test_login_leadership(pg_temp.u44(7));
@@ -226,7 +271,7 @@ reset role;
 select pg_temp.test_login_leadership(pg_temp.u44(1));
 select is((select array_agg(right(member_id::text, 12)::integer order by member_id)
              from public.bc_assignments_directory() where member_id::text like '44440000-%'),
-  array[2, 3], 'the Moderator''s list is every live BC member -- not the inactive one, not BCE');
+  array[2, 3], 'the Moderator''s list is every live BC member -- not the inactive one, not BCE, never the Moderator, who holds every Atribuție''s powers');
 select is((select assignments -> 0 -> 'team' -> 0 ->> 'team_role' || ':' || (assignments -> 0 ->> 'label')
              from public.bc_assignments_directory() where member_id = pg_temp.u44(2)),
   'coordinator:Responsabil OSUBB Deals', 'the holder''s row carries the Atribuție, its label and its team');
@@ -250,7 +295,8 @@ select pg_temp.test_login_leadership(pg_temp.u44(7));
 select is(pg_temp.caps(), 'false,false,false,false,false', 'a Voluntar outside the team: nothing');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.u44(1));
-select is(pg_temp.caps(), 'true,true,false,false,false', 'the Moderator: administer_bc');
+select is(pg_temp.caps(), 'true,true,true,true,true',
+  'the Moderator: administer_bc and every Deals capability -- every Atribuție''s powers (R44 amended)');
 reset role;
 select pg_temp.test_login('44440000-0000-0000-0000-000000000006', '{"provider":"email"}'::jsonb);
 select is(pg_temp.caps(), 'false,false,false,false,false', 'the Responsabil without organization claims: nothing');
@@ -305,6 +351,10 @@ select pg_temp.test_login_leadership(pg_temp.u44(6));
 select is(pg_temp.caps(), 'false,false,false,false,false', 'the former Responsabil has no Deals capability left');
 select throws_ok($$select public.set_assignment_team_member('osubb_deals', 'responsible', pg_temp.u44(7))$$,
   '42501', 'assignment_team_forbidden', 'nobody picks the team of an Atribuție nobody holds');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.u44(1));
+select throws_ok($$select public.set_assignment_team_member('osubb_deals', 'coordinator', pg_temp.u44(4))$$,
+  '42501', 'assignment_team_forbidden', 'not even the Moderator: an Atribuție nobody holds has no team');
 reset role;
 
 select * from finish();

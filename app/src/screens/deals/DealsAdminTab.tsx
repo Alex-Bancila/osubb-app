@@ -20,9 +20,10 @@ import { useOpenDeal } from './use-open-deal';
  * Administrare › OSUBB Deals (ruling R44): the team, then every Deal —
  * active and expired — each with Editează and Șterge as the viewer may, and
  * how many Members opened its code. The holder, the Coordonator and the
- * Responsabil see it; BC and the Moderator see the list too, to delete what a
- * dissolved team left, but neither pick the team nor publish unless they are
- * on it.
+ * Responsabil see it, and the Moderator, who holds every Atribuție's powers
+ * (R44 amended 2026-10-08): Deal nou, Editează, Șterge and both team pickers.
+ * BC members who do not hold it see the list too, to delete what a dissolved
+ * team left, but neither pick the team nor publish.
  */
 export default function DealsAdminTab() {
   const memberId = useAuth().session?.user.id;

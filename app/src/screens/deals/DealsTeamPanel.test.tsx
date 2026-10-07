@@ -122,11 +122,65 @@ describe('the OSUBB Deals team, per persona (R44)', () => {
     expect(screen.getByText('Victor Voluntar')).toBeVisible();
   });
 
-  it('shows BC and the Moderator names only', () => {
-    state.caps = { manageRoles: true };
+  it('shows BC names only', () => {
+    state.caps = { manageRoles: true, administer: true };
     render(<DealsTeamPanel />);
     expect(pickers()).toHaveLength(0);
     expect(screen.getAllByText('Neales')).toHaveLength(2);
+  });
+
+  // R44 amended 2026-10-08 — Alex: "I am a superuser as a moderator, so i
+  // should be able to do anything a BC member could do". The Moderator's
+  // capability row: every Atribuție's powers, without holding it.
+  const MODERATOR = {
+    manageRoles: true,
+    administer: true,
+    administerBc: true,
+    manageDeals: true,
+    manageDealsTeam: true,
+    pickDealsCoordinator: true,
+  };
+
+  it('lets the Moderator pick both places without being on the team', () => {
+    state.caps = MODERATOR;
+    state.team = { ...state.team, coordinatorId: 'bce' };
+    render(<DealsTeamPanel />);
+    const [coordinator, responsible] = pickers();
+    expect(pickers()).toHaveLength(2);
+    expect(coordinator).toBeEnabled();
+    expect(coordinator).toHaveTextContent('Carmen BCE');
+    expect(responsible).toBeEnabled();
+    expect(responsible).toHaveTextContent('Fără responsabil');
+  });
+
+  it('sets the Responsabil the Moderator picks', async () => {
+    const user = userEvent.setup();
+    state.caps = MODERATOR;
+    state.mutate.mockImplementation(
+      (_input: unknown, options?: { onSuccess?: () => void }) =>
+        options?.onSuccess?.(),
+    );
+    render(<DealsTeamPanel />);
+    const responsible = pickers()[1];
+    if (!responsible) throw new Error('no Responsabil picker');
+    await user.click(responsible);
+    await screen.findByPlaceholderText('Caută un membru');
+    await user.click(screen.getByRole('option', { name: /Victor Voluntar/ }));
+    expect(state.mutate).toHaveBeenCalledWith(
+      { role: 'responsible', memberId: 'vol' },
+      expect.anything(),
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Victor Voluntar este acum Responsabil OSUBB Deals.',
+    );
+  });
+
+  it('gives the Moderator no pickers while nobody holds the Atribuție', () => {
+    state.caps = MODERATOR;
+    state.team = { holderId: null, coordinatorId: null, responsibleId: null };
+    render(<DealsTeamPanel />);
+    expect(pickers()).toHaveLength(0);
+    expect(screen.getByText('Fără titular')).toBeVisible();
   });
 
   it('offers BCE members alone as Coordonator and sets the one picked', async () => {
