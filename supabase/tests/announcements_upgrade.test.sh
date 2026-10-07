@@ -31,7 +31,7 @@ drop policy announcements_delete on public.announcements;
 -- give it back its pre-#581 self-only check for this rollback replay.
 alter policy announcement_reads_manage_self on public.announcement_reads
   with check (public.auth_is_member() and member_id = (select auth.uid()));
-drop function private.can_read_announcement(bigint,text,integer,uuid);
+drop function private.can_read_announcement(bigint,text,integer,uuid,text,timestamptz);
 -- #590 removed the final legacy column; restore it only for this historical replay.
 alter table public.announcements add column dept_id text;
 -- #936 dropped the free-text author byline; the pre-#581 rows below still carry one.

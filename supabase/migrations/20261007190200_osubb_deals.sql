@@ -64,15 +64,16 @@ begin
     raise sqlstate 'PT400' using message = 'deal_code_too_long';
   end if;
   -- R45: a Deal goes from the Organization Group to everyone, never critical
-  -- or pinned.
-  if new.kind = 'deal'
-     and (new.audience is distinct from 'org'
-          or new.min_level is distinct from 0
-          or new.priority is distinct from 'normal'
-          or new.pinned is distinct from false
-          or not exists (select 1 from public.groups as grp
-                          where grp.id = new.group_id and grp.is_organization)) then
-    raise exception using errcode = '23514', message = 'invalid_deal_settings';
+  -- or pinned. Nested, so an Announcement row never plans the Deal test.
+  if new.kind = 'deal' then
+    if new.audience is distinct from 'org'
+       or new.min_level is distinct from 0
+       or new.priority is distinct from 'normal'
+       or new.pinned is distinct from false
+       or not exists (select 1 from public.groups as grp
+                       where grp.id = new.group_id and grp.is_organization) then
+      raise exception using errcode = '23514', message = 'invalid_deal_settings';
+    end if;
   end if;
   return new;
 end;
