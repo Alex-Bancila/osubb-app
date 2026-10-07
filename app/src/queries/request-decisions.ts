@@ -7,6 +7,7 @@ import {
 import { useAuth } from '../lib/auth';
 import { CommandError } from '../lib/command-reasons';
 import { parseOrRefuse } from '../lib/form-errors';
+import type { AttachedLink } from '../lib/schemas/attached-link';
 import { evaluationSchema } from '../lib/schemas/evaluation';
 import { noteSchema } from '../lib/schemas/note';
 import { supabase } from '../lib/supabase';
@@ -57,7 +58,8 @@ export type RequestDecision =
         title: string;
         description: string | null;
         groupId: number;
-        link: { label: string | null; url: string | null };
+        /** The Attached Links, complete rows only (R46). */
+        links: AttachedLink[];
         campaignId: number | null;
       };
     }
@@ -79,9 +81,8 @@ async function sendDecision(input: RequestDecision) {
         // '' clears the details; null would keep the Request's text.
         p_description: task.description ?? '',
         p_group_id: task.groupId,
+        p_links: task.links,
         // Generated argument types omit nullability: none is NULL.
-        p_link_label: task.link.label as string,
-        p_link_url: task.link.url as string,
         p_campaign_id: task.campaignId as number,
       }),
     });

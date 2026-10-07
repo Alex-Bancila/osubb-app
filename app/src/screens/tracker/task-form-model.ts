@@ -1,4 +1,6 @@
 import { bucharestWallTimeToIso } from '../../lib/calendar-time';
+import type { AttachedLinkValue } from '../../components/attached-link/AttachedLinkFields';
+import type { AttachedLink } from '../../lib/schemas/attached-link';
 import type { TaskDraftInput } from '../../lib/schemas/task';
 
 export type ManagedWorkGroup = {
@@ -28,8 +30,8 @@ export type TaskDraft = {
   assignmentMode: 'direct' | 'public' | null;
   executorId: string | null;
   campaignId: number | null;
-  /** The Attached Link (#684): both set, or both null for none. */
-  link: { label: string | null; url: string | null };
+  /** The Attached Links (ruling R46): complete rows only, at most five. */
+  links: AttachedLink[];
 };
 export type TaskFormValues = {
   title: string;
@@ -42,7 +44,8 @@ export type TaskFormValues = {
   assignmentMode: 'direct' | 'public';
   executorId: string | null;
   campaignId: number | null;
-  link: { label: string; url: string };
+  /** The Attached Links as typed, one row each (R46). */
+  links: AttachedLinkValue[];
 };
 
 /**
@@ -202,6 +205,6 @@ export function taskDraftInput(
         ? values.executorId
         : null,
     campaignId: umbrella ? null : campaignId,
-    link: values.link,
+    links: values.links,
   };
 }

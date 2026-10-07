@@ -146,8 +146,8 @@ describe('Task nou', () => {
       p_group_id: 3,
       p_kind: 'task',
       p_parent_task_id: null,
-      p_link_label: null,
-      p_link_url: null,
+      // R46: the links only, never the old pair.
+      p_links: [],
       p_executor_id: 'executor-1',
       p_campaign_id: 7,
       p_audience: 'local',
@@ -196,8 +196,8 @@ describe('Task nou', () => {
       p_group_id: 3,
       p_kind: 'umbrella',
       p_parent_task_id: null,
-      p_link_label: null,
-      p_link_url: null,
+      // R46: the links only, never the old pair.
+      p_links: [],
       p_executor_id: null,
       p_campaign_id: null,
       p_audience: null,

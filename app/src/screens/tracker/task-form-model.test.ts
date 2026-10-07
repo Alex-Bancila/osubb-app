@@ -88,14 +88,14 @@ describe('taskDraftInput', () => {
     assignmentMode: 'direct',
     executorId: 'ana',
     campaignId: 12,
-    link: { label: 'Brief', url: 'https://example.org' },
+    links: [{ label: 'Brief', url: 'https://example.org' }],
   };
-  it('sends exactly the one chosen Group, the Campaign it shows and the link as typed', () => {
+  it('sends exactly the one chosen Group, the Campaign it shows and the links as typed', () => {
     expect(taskDraftInput(values, options)).toMatchObject({
       groupId: 6,
       campaignId: 12,
       deadline: '2030-10-01T09:30:00.000Z',
-      link: { label: 'Brief', url: 'https://example.org' },
+      links: [{ label: 'Brief', url: 'https://example.org' }],
     });
   });
   it('drops a Campaign the chosen Group cannot carry', () => {

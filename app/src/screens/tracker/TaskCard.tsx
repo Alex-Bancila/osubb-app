@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { CalendarClock, UserRound } from 'lucide-react';
-import { AttachedLinkButton } from '../../components/attached-link/AttachedLinkButton';
+import { AttachedLinksList } from '../../components/attached-link/AttachedLinksList';
 import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { MemberName } from '../../components/member/MemberName';
 import { Badge } from '../../components/ui/badge';
@@ -463,13 +463,13 @@ export function TaskCard({
             showSubmissionNote &&
             task.status === 'in_review' &&
             task.submission && <SubmissionNote submission={task.submission} />}
-          {task.link && (
-            <AttachedLinkButton
-              label={task.link.label}
-              url={task.link.url}
-              className="max-w-full text-left wrap-anywhere"
-            />
-          )}
+          {/* R46: the bare label on a card, "Deschide: <etichetă>" in the
+              details sheet's copy. */}
+          <AttachedLinksList
+            links={task.links}
+            variant={inSheet ? 'details' : 'card'}
+            buttonClassName="max-w-full text-left wrap-anywhere"
+          />
           {task.points !== null && (
             <p className="text-sm font-medium tabular-nums">
               {formatPoints(task.points)} puncte ·{' '}

@@ -162,13 +162,21 @@ describe('announcements-presentation', () => {
     it('handles form links correctly', () => {
       const item = toAnnouncementPresentation(
         rawRow({
-          form_label: 'Completează formularul',
-          form_url: 'https://forms.gle/exemplu',
+          links: [
+            {
+              label: 'Completează formularul',
+              url: 'https://forms.gle/exemplu',
+            },
+            { label: '', url: 'https://ignored.example' },
+            { label: 'Program', url: 'https://osubb.ro/p' },
+          ],
         }),
       );
 
-      expect(item.formLabel).toBe('Completează formularul');
-      expect(item.formUrl).toBe('https://forms.gle/exemplu');
+      expect(item.links).toEqual([
+        { label: 'Completează formularul', url: 'https://forms.gle/exemplu' },
+        { label: 'Program', url: 'https://osubb.ro/p' },
+      ]);
     });
   });
 

@@ -7,6 +7,7 @@ import {
 import { useAuth } from '../lib/auth';
 import { CommandError } from '../lib/command-reasons';
 import type { Database } from '../lib/database.types';
+import type { AttachedLink } from '../lib/schemas/attached-link';
 import { supabase } from '../lib/supabase';
 import type { ManagedWorkGroup } from '../screens/tracker/task-form-model';
 import { fetchCampaigns } from './campaigns';
@@ -176,7 +177,8 @@ export type CompletedTaskDraft = {
   groupId: number;
   title: string;
   description: string | null;
-  link: { label: string | null; url: string | null };
+  /** The Attached Links, complete rows only (R46). */
+  links: AttachedLink[];
   campaignId: number | null;
   difficulty: number;
   rating: number;
@@ -192,8 +194,7 @@ export async function createCompletedTask(draft: CompletedTaskDraft) {
     p_group_id: draft.groupId,
     p_title: draft.title,
     p_description: draft.description,
-    p_link_label: draft.link.label,
-    p_link_url: draft.link.url,
+    p_links: draft.links,
     p_campaign_id: draft.campaignId,
     p_difficulty: draft.difficulty,
     p_rating: draft.rating,

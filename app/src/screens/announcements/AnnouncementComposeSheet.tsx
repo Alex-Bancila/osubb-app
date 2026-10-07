@@ -76,7 +76,7 @@ export default function AnnouncementComposeSheet() {
       title: draft.title,
       body: draft.body,
       groupId: originId ? Number(originId) : null,
-      link: { label: draft.linkLabel, url: draft.linkUrl },
+      links: draft.links,
       deadline: draft.deadline
         ? (bucharestWallTimeToIso(draft.deadline) ?? '')
         : null,
@@ -119,8 +119,7 @@ export default function AnnouncementComposeSheet() {
         audience,
         priority: draft.priority,
         pinned,
-        form_label: values.link.label,
-        form_url: values.link.url,
+        links: values.links,
         deadline: values.deadline,
         min_level: draft.minLevel,
       });

@@ -138,7 +138,7 @@ it('shares evaluation fields and retains success after the queue refetches empty
       title: 'Am pregătit materialele.',
       description: 'Am pregătit materialele.',
       groupId: 3,
-      link: { label: null, url: null },
+      links: [],
       campaignId: null,
     },
   });
@@ -333,9 +333,10 @@ it('prefills the Task from the Request and approves it as the decider shaped it 
     await screen.findByRole('option', { name: /^Ateliere Junior/ }),
   );
   await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
-  await user.type(within(dialog).getByLabelText('Etichetă link'), 'Poze');
+  await user.click(within(dialog).getByRole('button', { name: 'Adaugă link' }));
+  await user.type(within(dialog).getByLabelText('Etichetă link 1'), 'Poze');
   await user.type(
-    within(dialog).getByLabelText('Adresă link'),
+    within(dialog).getByLabelText('Adresă link 1'),
     'https://example.org/poze',
   );
   await score(user);
@@ -352,7 +353,7 @@ it('prefills the Task from the Request and approves it as the decider shaped it 
       title: 'Materiale pentru atelier',
       description: null,
       groupId: 4,
-      link: { label: 'Poze', url: 'https://example.org/poze' },
+      links: [{ label: 'Poze', url: 'https://example.org/poze' }],
       campaignId: 11,
     },
   });

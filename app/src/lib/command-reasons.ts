@@ -201,6 +201,8 @@ const REASON_COPY = new Map<string, string>([
   ['link_label_too_long', 'Numele linkului are cel mult 60 de caractere.'],
   ['link_url_invalid', 'Adresa trebuie să înceapă cu http:// sau https://.'],
   ['link_url_too_long', 'Adresa are cel mult 2048 de caractere.'],
+  // R46: an Announcement or a Task carries at most five Attached Links.
+  ['too_many_links', 'Poți atașa cel mult 5 linkuri.'],
   // Security pass 2026-09-27: the column limits that had none.
   ['location_too_long', 'Locul are cel mult 200 de caractere.'],
   ['short_too_long', 'Prescurtarea are cel mult 16 caractere.'],

@@ -186,9 +186,10 @@ it('adds the completed Task with every chosen field and reports it (#915)', asyn
     within(dialog).getByLabelText('Campanie (opțional)'),
     '3',
   );
-  await user.type(within(dialog).getByLabelText('Etichetă link'), 'Poze');
+  await user.click(within(dialog).getByRole('button', { name: 'Adaugă link' }));
+  await user.type(within(dialog).getByLabelText('Etichetă link 1'), 'Poze');
   await user.type(
-    within(dialog).getByLabelText('Adresă link'),
+    within(dialog).getByLabelText('Adresă link 1'),
     'https://example.org',
   );
   await evaluate(user, dialog);
@@ -208,7 +209,7 @@ it('adds the completed Task with every chosen field and reports it (#915)', asyn
     groupId: 9,
     title: 'Atelier',
     description: 'Sala 2',
-    link: { label: 'Poze', url: 'https://example.org' },
+    links: [{ label: 'Poze', url: 'https://example.org' }],
     campaignId: 3,
     difficulty: 4,
     rating: 5,

@@ -17,9 +17,8 @@ const input: TaskUpdateInput = {
   campaignId: null,
   assignmentMode: 'direct',
   audience: 'local',
-  // #684: the Attached Link, full state like every other field.
-  linkLabel: 'Brief',
-  linkUrl: 'https://example.org/brief',
+  // R46: the Attached Links, full state like every other field.
+  links: [{ label: 'Brief', url: 'https://example.org/brief' }],
 };
 const args = {
   p_task_id: 1,
@@ -30,8 +29,7 @@ const args = {
   p_campaign_id: null,
   p_assignment_mode: 'direct',
   p_audience: 'local',
-  p_link_label: 'Brief',
-  p_link_url: 'https://example.org/brief',
+  p_links: [{ label: 'Brief', url: 'https://example.org/brief' }],
 };
 beforeEach(() => vi.resetAllMocks());
 
@@ -49,23 +47,21 @@ it('sends every field as a full replacement value to update_task, NULL clears in
   });
 });
 
-it('moves the Task with p_group_id and clears the link with nulls (#627, #684)', async () => {
+it('moves the Task with p_group_id and clears the links with [] (#627, R46)', async () => {
   api.rpc.mockResolvedValue({ data: [], error: null });
-  const moved = { ...input, groupId: 7, linkLabel: null, linkUrl: null };
+  const moved = { ...input, groupId: 7, links: [] };
   await previewTaskUpdate(moved);
   expect(api.rpc).toHaveBeenCalledWith('preview_task_update', {
     ...args,
     p_group_id: 7,
-    p_link_label: null,
-    p_link_url: null,
+    p_links: [],
   });
   api.rpc.mockResolvedValue({ data: { id: 1 }, error: null });
   await updateTask({ ...moved, acceptConsequences: true });
   expect(api.rpc).toHaveBeenLastCalledWith('update_task', {
     ...args,
     p_group_id: 7,
-    p_link_label: null,
-    p_link_url: null,
+    p_links: [],
     p_accept_consequences: true,
   });
 });

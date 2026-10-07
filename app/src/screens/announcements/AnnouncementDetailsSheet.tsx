@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ExternalLink, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
+import { Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
+import { AttachedLinksList } from '../../components/attached-link/AttachedLinksList';
 import { EmptyState } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
@@ -21,7 +22,6 @@ import {
   SheetTitle,
 } from '../../components/ui/sheet';
 import { useCapability } from '../../lib/capabilities';
-import { safeHttpUrl } from '../../lib/links';
 import {
   isAnnouncementRefusal,
   useDeleteAnnouncement,
@@ -101,10 +101,6 @@ function AnnouncementDetails({
   announcement: AnnouncementPresentation;
   onDeleted: () => void;
 }) {
-  // The Attached Link rule (`safeHttpUrl`): a legacy row that is not http(s)
-  // renders no form link rather than an href the server never checked.
-  const formUrl = safeHttpUrl(announcement.formUrl);
-
   return (
     <>
       <SheetHeader>
@@ -139,20 +135,13 @@ function AnnouncementDetails({
         {announcement.body}
       </div>
 
-      {announcement.formLabel && formUrl && (
-        <div className="space-y-2 rounded-md border border-primary/20 bg-primary/5 p-4">
-          <p className="m-0 text-xs font-semibold text-primary">Link atașat</p>
-          <a
-            href={formUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex min-h-11 items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-xs transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            <span>Deschide formular: {announcement.formLabel}</span>
-            <ExternalLink className="size-4" aria-hidden="true" />
-          </a>
-        </div>
-      )}
+      {/* R46: each link reads "Deschide: <etichetă>" here; the list drops
+          any address that is not http(s) (`safeHttpUrl`). */}
+      <AttachedLinksList
+        links={announcement.links}
+        variant="details"
+        buttonClassName="max-w-full text-left wrap-anywhere"
+      />
 
       <AnnouncementReaders announcement={announcement} />
 

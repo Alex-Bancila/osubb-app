@@ -40,7 +40,7 @@ const draft: TaskDraftInput = {
   assignmentMode: 'public',
   executorId: null,
   campaignId: null,
-  link: { label: '', url: '' },
+  links: [],
 };
 const schema = taskDraftSchema(options, { now });
 const check = (patch: Partial<TaskDraftInput>) => {
@@ -162,31 +162,44 @@ describe('taskDraftSchema', () => {
       ]);
   });
 
-  it('checks the Attached Link as a pair and sends blanks as none (#684)', () => {
-    expect(schema.parse(draft).link).toEqual({ label: null, url: null });
+  it('checks each Attached Link as a pair, drops blank rows, keeps five (R46)', () => {
+    expect(schema.parse(draft).links).toEqual([]);
     expect(
       schema.parse({
         ...draft,
-        link: { label: ' Brief ', url: ' https://example.org/b ' },
-      }).link,
-    ).toEqual({ label: 'Brief', url: 'https://example.org/b' });
-    expect(check({ link: { label: 'Brief', url: '' } })).toEqual([
-      'link.url: link_url_required',
+        links: [
+          { label: ' Brief ', url: ' https://example.org/b ' },
+          { label: ' ', url: '' },
+          { label: 'Poze', url: 'https://example.org/p' },
+        ],
+      }).links,
+    ).toEqual([
+      { label: 'Brief', url: 'https://example.org/b' },
+      { label: 'Poze', url: 'https://example.org/p' },
     ]);
-    expect(check({ link: { label: '', url: 'https://example.org' } })).toEqual([
-      'link.label: link_label_required',
+    const ok = { label: 'Brief', url: 'https://example.org' };
+    // Each row's issue lands under that row.
+    expect(check({ links: [ok, { label: 'Brief', url: '' }] })).toEqual([
+      'links.1.url: link_url_required',
     ]);
     expect(
-      check({ link: { label: 'l'.repeat(61), url: 'https://example.org' } }),
-    ).toEqual(['link.label: link_label_too_long']);
+      check({ links: [{ label: '', url: 'https://example.org' }] }),
+    ).toEqual(['links.0.label: link_label_required']);
     expect(
-      check({ link: { label: 'Brief', url: 'ftp://example.org' } }),
-    ).toEqual(['link.url: link_url_invalid']);
+      check({ links: [{ label: 'l'.repeat(61), url: 'https://example.org' }] }),
+    ).toEqual(['links.0.label: link_label_too_long']);
+    expect(
+      check({ links: [ok, ok, { label: 'Brief', url: 'ftp://example.org' }] }),
+    ).toEqual(['links.2.url: link_url_invalid']);
     expect(
       check({
-        link: { label: 'Brief', url: `https://${'a'.repeat(2041)}` },
+        links: [{ label: 'Brief', url: `https://${'a'.repeat(2041)}` }],
       }),
-    ).toEqual(['link.url: link_url_too_long']);
+    ).toEqual(['links.0.url: link_url_too_long']);
+    expect(check({ links: Array(5).fill(ok) })).toEqual([]);
+    expect(check({ links: Array(6).fill(ok) })).toEqual([
+      'links: too_many_links',
+    ]);
     // An Umbrella may carry a link like any Task.
     expect(
       check({
@@ -194,7 +207,7 @@ describe('taskDraftSchema', () => {
         deadline: null,
         audience: null,
         assignmentMode: null,
-        link: { label: 'Plan', url: 'https://example.org' },
+        links: [{ label: 'Plan', url: 'https://example.org' }],
       }),
     ).toEqual([]);
   });
@@ -221,7 +234,7 @@ describe('taskUpdateSchema', () => {
     campaignId: null,
     assignmentMode: 'direct' as const,
     audience: 'local' as const,
-    link: { label: 'Brief', url: 'https://example.org/brief' },
+    links: [{ label: 'Brief', url: 'https://example.org/brief' }],
   };
   const checkEdit = (patch: object, editSchema = edit) => {
     const result = editSchema.safeParse({ ...values, ...patch });
@@ -283,7 +296,7 @@ describe('taskUpdateSchema: Group and Attached Link (#627, #684)', () => {
     campaignId: null,
     assignmentMode: 'direct' as const,
     audience: 'local' as const,
-    link: { label: '', url: '' },
+    links: [] as { label: string; url: string }[],
   };
   const checkMove = (patch: object, groupIds?: number[]) => {
     const result = taskUpdateSchema({
@@ -301,11 +314,13 @@ describe('taskUpdateSchema: Group and Attached Link (#627, #684)', () => {
     ]);
     expect(checkMove({ groupId: 0 })).toEqual(['groupId: task_group_required']);
   });
-  it('clears the link with blanks and refuses half of one', () => {
+  it('clears the links with blank rows and refuses half of one', () => {
     const edit = taskUpdateSchema({ umbrella: false, campaignIds: [] });
-    expect(edit.parse(values).link).toEqual({ label: null, url: null });
-    expect(checkMove({ link: { label: 'Brief', url: ' ' } })).toEqual([
-      'link.url: link_url_required',
+    expect(
+      edit.parse({ ...values, links: [{ label: ' ', url: '' }] }).links,
+    ).toEqual([]);
+    expect(checkMove({ links: [{ label: 'Brief', url: ' ' }] })).toEqual([
+      'links.0.url: link_url_required',
     ]);
   });
 });
@@ -342,8 +357,7 @@ it('maps every reason a Task command raises to a Task field', () => {
       'assignmentMode',
       'executorId',
       'campaignId',
-      'link.label',
-      'link.url',
+      'links',
     ],
     [
       // #673
@@ -378,6 +392,8 @@ it('maps every reason a Task command raises to a Task field', () => {
       'link_label_too_long',
       'link_url_too_long',
       'link_url_invalid',
+      // R46: at most five
+      'too_many_links',
     ],
   );
 });

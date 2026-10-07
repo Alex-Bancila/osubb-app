@@ -3,6 +3,10 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { BUCHAREST_TIME_ZONE, bucharestDayKey } from '../../lib/calendar-time';
 import type { Database } from '../../lib/database.types';
 import { minimumLevelText } from '../../lib/minimum-level';
+import {
+  attachedLinksFrom,
+  type AttachedLink,
+} from '../../lib/schemas/attached-link';
 import type { MemberIdentity } from '../../components/member/member-identity';
 import type { Group } from '../../queries/reference';
 
@@ -48,8 +52,8 @@ export type AnnouncementPresentation = {
   authorMember: MemberIdentity | null;
   priority: AnnouncementPriority;
   pinned: boolean;
-  formLabel: string | null;
-  formUrl: string | null;
+  /** Its Attached Links (ruling R46), in order; empty when there are none. */
+  links: AttachedLink[];
   publishedAt: string;
   publishedLabel: string;
   /** The optional Termen (#909), an ISO instant; null when there is none. */
@@ -204,8 +208,7 @@ export function toAnnouncementPresentation(
       : null,
     priority: row.priority,
     pinned: row.pinned,
-    formLabel: row.form_label,
-    formUrl: row.form_url,
+    links: attachedLinksFrom(row.links),
     publishedAt: row.published_at,
     publishedLabel: formatAnnouncementDate(row.published_at),
     deadline: row.deadline ?? null,

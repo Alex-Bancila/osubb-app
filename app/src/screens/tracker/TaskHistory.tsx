@@ -7,6 +7,7 @@ import {
   formatBucharestTime,
 } from '../../lib/calendar-time';
 import type { Database, Json } from '../../lib/database.types';
+import { attachedLinksFrom } from '../../lib/schemas/attached-link';
 import { useGroups } from '../../queries/reference';
 import { useTaskHistory, type TaskActivity } from '../../queries/task-history';
 
@@ -55,6 +56,8 @@ const fields: Record<string, string> = {
   group_id: 'Grup',
   link_label: 'Etichetă link',
   link_url: 'Adresă link',
+  // R46: an edit to the Attached Links records the whole list.
+  links: 'Linkuri',
 };
 // #626's task_updated activity carries `details.changed`: the raw field
 // names an edit touched, in server order. Reused as the sentence's field
@@ -130,6 +133,11 @@ function changes(
   const values = details[side] ?? details[side === 'before' ? 'from' : 'to'];
   if (!values || typeof values !== 'object' || Array.isArray(values)) return [];
   return Object.entries(values).flatMap(([field, value]): ChangeLine[] => {
+    if (field === 'links' && Array.isArray(value)) {
+      const labels = attachedLinksFrom(value).map((link) => link.label);
+      const line = `${fields.links}: ${labels.join(', ') || '—'}`;
+      return [{ key: line, content: line }];
+    }
     if (
       !fields[field] ||
       (value !== null && typeof value !== 'string' && typeof value !== 'number')

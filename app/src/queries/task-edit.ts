@@ -3,6 +3,7 @@ import { memberDisplayName } from '../components/member/member-identity';
 import { CommandError } from '../lib/command-reasons';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../lib/database.types';
+import type { AttachedLink } from '../lib/schemas/attached-link';
 import { keys } from './keys';
 
 /** The full new state of every editable Task field (never a patch). */
@@ -17,10 +18,9 @@ export type TaskUpdateInput = {
   /** Null for an Umbrella, which has neither. */
   assignmentMode: 'direct' | 'public' | null;
   audience: 'local' | 'org' | null;
-  /** The Attached Link, full state like every other field: both null means
-   *  no link, so leaving them null clears it (#684). */
-  linkLabel: string | null;
-  linkUrl: string | null;
+  /** The Attached Links, full state like every other field: `[]` clears
+   *  them (R46). */
+  links: AttachedLink[];
 };
 
 export type TaskUpdateConsequence = {
@@ -51,8 +51,7 @@ function commandArgs(input: TaskUpdateInput) {
     p_campaign_id: input.campaignId,
     p_assignment_mode: input.assignmentMode,
     p_audience: input.audience,
-    p_link_label: input.linkLabel,
-    p_link_url: input.linkUrl,
+    p_links: input.links,
   } as unknown as Database['public']['Functions']['preview_task_update']['Args'];
 }
 

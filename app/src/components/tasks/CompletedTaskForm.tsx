@@ -6,7 +6,7 @@ import {
   useState,
   type FormEvent,
 } from 'react';
-import { AttachedLinkFields } from '../attached-link/AttachedLinkFields';
+import { AttachedLinksFields } from '../attached-link/AttachedLinksFields';
 import { SubHeading } from '../layout';
 import { MemberName } from '../member/MemberName';
 import { Button } from '../ui/button';
@@ -108,7 +108,7 @@ export function CompletedTaskForm({
         initial?.groupId ??
         (options.groups.length === 1 && roots[0] ? roots[0].id : null),
       executorId: volunteer?.id ?? null,
-      link: { label: '', url: '' },
+      links: [],
       campaignId: null,
       difficulty: '',
       rating: '',
@@ -164,7 +164,7 @@ export function CompletedTaskForm({
         groupId: parsed.groupId,
         title: parsed.title,
         description: parsed.description,
-        link: parsed.link,
+        links: parsed.links,
         campaignId: parsed.campaignId,
         difficulty: parsed.difficulty,
         rating: parsed.rating,
@@ -306,18 +306,13 @@ export function CompletedTaskForm({
             </p>
           )}
         </div>
-        <fieldset className="grid min-w-0 gap-3">
-          <legend className="mb-3 text-sm font-medium">
-            Link atașat (opțional)
-          </legend>
-          <AttachedLinkFields
-            value={values.link}
-            onChange={(link) => update({ link })}
-            form={form}
-            name="link"
-            disabled={isPending}
-          />
-        </fieldset>
+        <AttachedLinksFields
+          value={values.links}
+          onChange={(links) => update({ links })}
+          form={form}
+          name="links"
+          disabled={isPending}
+        />
       </fieldset>
       <div className="grid gap-4 border-t border-border pt-5">
         <div className="flex flex-wrap items-center justify-between gap-2">

@@ -3,6 +3,10 @@ import {
   formatBucharestDay,
   formatBucharestTime,
 } from '../../lib/calendar-time';
+import {
+  attachedLinksFrom,
+  type AttachedLink,
+} from '../../lib/schemas/attached-link';
 import { AUDIENCE_LABELS } from './task-form-model';
 
 type Tables = Database['public']['Tables'];
@@ -27,8 +31,7 @@ export type TaskPresentationRow = Pick<
   | 'campaign_id'
   | 'duplicated_from_task_id'
   | 'queue_closed_at'
-  | 'link_label'
-  | 'link_url'
+  | 'links'
 > & {
   /** The Task's Origin Group; null when RLS withholds it. */
   group?:
@@ -121,8 +124,8 @@ export type TaskPresentation = {
   parent: { id: number; title: string } | null;
   campaign: { id: number; name: string } | null;
   duplicatedFromTaskId: number | null;
-  /** The Task's one Attached Link (#684), or null. */
-  link: { label: string; url: string } | null;
+  /** The Task's Attached Links (ruling R46), in order; empty for none. */
+  links: AttachedLink[];
   /**
    * The latest Submission Note (CONTEXT.md, ruling R7): what the Executor
    * wrote and linked when they last submitted. Null when there is none, or
@@ -326,7 +329,7 @@ export function toTaskPresentation(
             name: row.campaign?.name?.trim() || 'Campanie',
           },
     duplicatedFromTaskId: row.duplicated_from_task_id,
-    link: linkPair(row.link_label, row.link_url),
+    links: attachedLinksFrom(row.links),
     submission: kind === 'task' ? latestSubmission(row.submission) : null,
   };
 }

@@ -270,12 +270,6 @@ describe('Announcement composer', () => {
     const dialog = screen.getByRole('dialog', { name: 'Anunț nou' });
     const title = within(dialog).getByRole('textbox', { name: 'Titlu' });
     const message = within(dialog).getByRole('textbox', { name: 'Mesaj' });
-    const formName = within(dialog).getByRole('textbox', {
-      name: 'Etichetă link',
-    });
-    const formUrl = within(dialog).getByRole('textbox', {
-      name: 'Adresă link',
-    });
     const publish = within(dialog).getByRole('button', {
       name: 'Publică anunțul',
     });
@@ -291,15 +285,25 @@ describe('Announcement composer', () => {
     expect(mutateAsync).not.toHaveBeenCalled();
     await user.clear(title);
     await user.type(title, 'Anunț');
+    // R46: links are added one row at a time.
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Adaugă link' }),
+    );
+    const formName = within(dialog).getByRole('textbox', {
+      name: 'Etichetă link 1',
+    });
+    const formUrl = within(dialog).getByRole('textbox', {
+      name: 'Adresă link 1',
+    });
     await user.type(formName, 'Formular');
     await user.click(publish);
     expect(formUrl).toHaveAccessibleDescription(
-      'Scrie adresa linkului sau lasă linkul gol.',
+      /Scrie adresa linkului sau lasă linkul gol\./,
     );
     await user.type(formUrl, 'ftp://example.com');
     await user.click(publish);
     expect(formUrl).toHaveAccessibleDescription(
-      'Adresa trebuie să înceapă cu http:// sau https://.',
+      /Adresa trebuie să înceapă cu http:\/\/ sau https:\/\/\./,
     );
     expect(mutateAsync).not.toHaveBeenCalled();
   });

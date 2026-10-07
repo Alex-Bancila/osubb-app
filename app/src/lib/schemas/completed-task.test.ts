@@ -14,7 +14,7 @@ const valid: CompletedTaskInput = {
   description: '   ',
   groupId: 9,
   executorId: 'ana',
-  link: { label: '', url: '' },
+  links: [{ label: '', url: '' }],
   campaignId: 3,
   difficulty: '4',
   rating: '5',
@@ -33,7 +33,7 @@ it('parses a completed Task: trimmed text, blank details as none, scores as numb
     description: null,
     groupId: 9,
     executorId: 'ana',
-    link: { label: null, url: null },
+    links: [],
     campaignId: 3,
     difficulty: 4,
     rating: 5,
@@ -54,7 +54,7 @@ it('mirrors the server: the constraints kit, an offered Group, a volunteer, a Ca
   ]);
   expect(reasons({ executorId: null })).toEqual(['executor_required']);
   expect(reasons({ groupId: 7 })).toEqual(['invalid_campaign']);
-  expect(reasons({ link: { label: 'Poze', url: 'ftp://x' } })).toEqual([
+  expect(reasons({ links: [{ label: 'Poze', url: 'ftp://x' }] })).toEqual([
     'link_url_invalid',
   ]);
   expect(reasons({ difficulty: '', rating: '6', note: ' ' })).toEqual([
@@ -77,8 +77,9 @@ it('puts a refusal about a fixed volunteer under Grup, a chosen one under Volunt
   expect(
     completedTaskFieldForReason('executorId').executor_below_min_level,
   ).toBe('executorId');
+  // R46: a server refusal cannot name the row, so it lands on the list.
   expect(completedTaskFieldForReason('executorId').link_url_invalid).toBe(
-    'link.url',
+    'links',
   );
   expect(completedTaskFieldForReason('groupId').evaluation_note_required).toBe(
     'note',

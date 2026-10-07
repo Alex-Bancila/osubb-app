@@ -700,11 +700,34 @@ describe('Task details sheet', () => {
     expect(notes[0]).toHaveTextContent('15 septembrie 2026, 12:30');
     expect(
       within(notes[0] as HTMLElement).getByRole('link', {
-        name: 'Prezentare (se deschide într-o filă nouă)',
+        // R46: a details view says what the button does.
+        name: 'Deschide: Prezentare (se deschide într-o filă nouă)',
       }),
     ).toHaveAttribute('target', '_blank');
     // The sheet's card is not the deep-link anchor.
     expect(document.getElementById('task-1')).toBeNull();
+  });
+  it('shows the Task’s Attached Links as "Deschide: <etichetă>" (R46)', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({
+          links: [
+            { label: 'Brief', url: 'https://drive.example/brief' },
+            { label: 'Afiș', url: 'https://drive.example/afis' },
+          ],
+        }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Detalii task' });
+    const list = screen.getByRole('list', { name: 'Linkuri atașate' });
+    expect(
+      within(list)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['Deschide: Brief', 'Deschide: Afiș']);
   });
   it('shows no Submission Note for a Task never submitted', async () => {
     useTaskDetails.mockReturnValue({

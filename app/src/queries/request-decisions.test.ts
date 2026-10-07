@@ -85,7 +85,10 @@ it('sends the Task as the decider shaped it, blank details as an empty text (#91
       title: 'Stand la târg',
       description: null,
       groupId: 9,
-      link: { label: 'Poze', url: 'https://example.org' },
+      links: [
+        { label: 'Poze', url: 'https://example.org' },
+        { label: 'Raport', url: 'https://example.org/r' },
+      ],
       campaignId: null,
     },
   });
@@ -98,8 +101,11 @@ it('sends the Task as the decider shaped it, blank details as an empty text (#91
     // null would keep the Request's text; '' clears the details.
     p_description: '',
     p_group_id: 9,
-    p_link_label: 'Poze',
-    p_link_url: 'https://example.org',
+    // R46: the links only, never the old pair.
+    p_links: [
+      { label: 'Poze', url: 'https://example.org' },
+      { label: 'Raport', url: 'https://example.org/r' },
+    ],
     p_campaign_id: null,
   });
 });

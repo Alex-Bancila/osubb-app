@@ -58,8 +58,7 @@ const task = taskRow({
   deadline: '2026-09-20T12:00:37Z',
   campaign_id: 9,
   campaign: { name: 'Istoric' },
-  link_label: 'Brief',
-  link_url: 'https://example.org/brief',
+  links: [{ label: 'Brief', url: 'https://example.org/brief' }],
 });
 beforeEach(() => {
   state.options.mockReturnValue({ data, refetch: state.refetch });
@@ -131,9 +130,8 @@ it('edits every field through update_task after a preview with no consequences',
     campaignId: 11,
     assignmentMode: 'public',
     audience: 'org',
-    // Full state: the prefilled link travels as the form shows it.
-    linkLabel: 'Brief',
-    linkUrl: 'https://example.org/brief',
+    // Full state: the prefilled links travel as the form shows them.
+    links: [{ label: 'Brief', url: 'https://example.org/brief' }],
   };
   expect(state.refetch).toHaveBeenCalledTimes(1);
   expect(state.preview).toHaveBeenCalledWith(values);
@@ -451,11 +449,11 @@ it('refuses a Group a fresh read no longer offers, under the Group field', async
   expect(state.preview).not.toHaveBeenCalled();
 });
 
-it('edits the Attached Link as full state: prefilled, checked as a pair, cleared with blanks', async () => {
+it('edits the Attached Links as full state: prefilled, checked per row, added and removed (R46)', async () => {
   render(<TaskEditControl task={task} canManage />);
   const user = await openEditor();
-  const label = screen.getByLabelText('Etichetă link');
-  const url = screen.getByLabelText('Adresă link');
+  const label = screen.getByLabelText('Etichetă link 1');
+  const url = screen.getByLabelText('Adresă link 1');
   expect(label).toHaveValue('Brief');
   expect(url).toHaveValue('https://example.org/brief');
   await user.clear(url);
@@ -463,16 +461,42 @@ it('edits the Attached Link as full state: prefilled, checked as a pair, cleared
     screen.getByRole('button', { name: 'Salvează modificările' }),
   );
   expect(url).toHaveAccessibleDescription(
-    'Scrie adresa linkului sau lasă linkul gol.',
+    /Scrie adresa linkului sau lasă linkul gol./,
   );
   expect(state.preview).not.toHaveBeenCalled();
-  await user.clear(label);
+  await user.type(url, 'https://example.org/nou');
+  await user.click(screen.getByRole('button', { name: 'Adaugă link' }));
+  await user.type(screen.getByLabelText('Etichetă link 2'), 'Afiș');
+  await user.type(
+    screen.getByLabelText('Adresă link 2'),
+    'https://example.org/afis',
+  );
   await user.click(
     screen.getByRole('button', { name: 'Salvează modificările' }),
   );
   await waitFor(() =>
     expect(state.mutate).toHaveBeenCalledWith(
-      expect.objectContaining({ linkLabel: null, linkUrl: null }),
+      expect.objectContaining({
+        links: [
+          { label: 'Brief', url: 'https://example.org/nou' },
+          { label: 'Afiș', url: 'https://example.org/afis' },
+        ],
+      }),
+    ),
+  );
+});
+
+it('clears every Attached Link by removing the rows (R46)', async () => {
+  render(<TaskEditControl task={task} canManage />);
+  const user = await openEditor();
+  await user.click(screen.getByRole('button', { name: 'Elimină linkul 1' }));
+  expect(screen.queryByLabelText('Etichetă link 1')).toBeNull();
+  await user.click(
+    screen.getByRole('button', { name: 'Salvează modificările' }),
+  );
+  await waitFor(() =>
+    expect(state.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ links: [] }),
     ),
   );
 });

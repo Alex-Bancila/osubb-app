@@ -7,6 +7,9 @@ type AttachedLinkButtonProps = {
   label: string | null | undefined;
   /** The address, already normalised (trimmed, empty turned to `null`). */
   url: string | null | undefined;
+  /** What the button reads, when not the bare label: a details view's
+   *  "Deschide: <etichetă>" (ruling R46). */
+  text?: string;
   className?: string;
 };
 
@@ -23,10 +26,12 @@ type AttachedLinkButtonProps = {
 export function AttachedLinkButton({
   label,
   url,
+  text,
   className,
 }: AttachedLinkButtonProps) {
   const href = safeHttpUrl(url);
   if (!label || !href) return null;
+  const shown = text ?? label;
   return (
     <a
       href={href}
@@ -35,13 +40,13 @@ export function AttachedLinkButton({
       // The accessible name is set explicitly, not composed from the visible
       // label plus a hidden span: joining text nodes across elements is not
       // guaranteed to insert the space between them.
-      aria-label={`${label} (se deschide într-o filă nouă)`}
+      aria-label={`${shown} (se deschide într-o filă nouă)`}
       className={cn(
         'inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-input bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:text-sm',
         className,
       )}
     >
-      <span aria-hidden="true">{label}</span>
+      <span aria-hidden="true">{shown}</span>
       <ExternalLink className="size-3.5" aria-hidden="true" />
     </a>
   );

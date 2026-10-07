@@ -466,14 +466,23 @@ describe('Member Task cards', () => {
     expect(sheet.container.querySelector('article')).not.toHaveAttribute('id');
   });
 
-  it('opens the Attached Link in a new tab with safe attributes', () => {
-    card({ link_label: 'Brief', link_url: 'https://drive.example/brief' });
+  it('opens each Attached Link in a new tab with safe attributes, the bare label on a card (R46)', () => {
+    card({
+      links: [
+        { label: 'Brief', url: 'https://drive.example/brief' },
+        { label: 'Afiș', url: 'https://drive.example/afis' },
+      ],
+    });
     const link = screen.getByRole('link', {
       name: 'Brief (se deschide într-o filă nouă)',
     });
+    expect(link).toHaveTextContent(/^Brief$/);
     expect(link).toHaveAttribute('href', 'https://drive.example/brief');
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(
+      screen.getByRole('link', { name: 'Afiș (se deschide într-o filă nouă)' }),
+    ).toHaveAttribute('href', 'https://drive.example/afis');
   });
 
   it('shows the latest Submission Note while the Task is in review', () => {
@@ -621,8 +630,7 @@ describe('Member Task cards', () => {
       audience: 'org',
       campaign_id: 3,
       campaign: { name: 'Toamnă' },
-      link_label: 'Brief',
-      link_url: 'https://drive.example/brief',
+      links: [{ label: 'Brief', url: 'https://drive.example/brief' }],
       visibleExecutor: { memberId: 'member', fullName: 'Ana Pop' },
     });
     const result = await axe.run(container, {
@@ -634,8 +642,7 @@ describe('Member Task cards', () => {
   it('passes automated accessibility checks with a Submission Note in review', async () => {
     const { container } = card({
       status: 'in_review',
-      link_label: 'Brief',
-      link_url: 'https://drive.example/brief',
+      links: [{ label: 'Brief', url: 'https://drive.example/brief' }],
       submission: [
         {
           id: 2,
