@@ -208,14 +208,16 @@
 
 /* ---------- OSUBB Deals: the Deal Code's ticket stub (ruling R45) ----------
    The one bold thing on the Deals tab. At every width the stub is the card's
-   bottom strip, torn off along a perforation of punched holes with a
+   bottom strip, torn off along a dotted perforation with a
    half-moon notch cut into each edge of the card; its height is its content,
    so no column of empty tint stands beside a long card. On reveal the code
    un-blurs once; under reduced motion it simply appears. */
 .deal-stub {
-  /* A row of punched holes along the tear, not a rule: round dots, 3 px every
-     8 px, on the stub's top edge. The stub's tint is its background-color, so
-     the holes ride on it as a background-image. */
+  /* The tear line: a printed row of round dots in the brand red, 3 px every
+     8 px, on the stub's top edge — read as a perforation, not as a divider.
+     Printed, not cut: holes in the page colour vanish on the light tint. The
+     stub's tint is its background-color, so the dots ride on it as a
+     background-image. */
   --deal-perforation: color-mix(in srgb, var(--brand-red) 55%, transparent);
   position: relative;
   background-image: radial-gradient(

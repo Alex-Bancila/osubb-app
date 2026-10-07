@@ -227,7 +227,9 @@ export function DealManageActions({
     <div className={compact ? 'contents' : 'space-y-2 border-t pt-4'}>
       <div
         className={
-          compact ? 'flex items-center' : 'flex flex-wrap items-center gap-2'
+          compact
+            ? 'flex flex-wrap items-center'
+            : 'flex flex-wrap items-center gap-2'
         }
       >
         {canEdit && (
