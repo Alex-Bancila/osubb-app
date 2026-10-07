@@ -1836,7 +1836,48 @@ insert into announcements (title, body, priority, pinned, form_label, form_url, 
    'Dificultatea și nota se înmulțesc — detaliile sunt în aplicație, la Ghid.',
    'normal', false, null, null,
    now() - interval '8 days', 'd0000000-0000-0000-0000-000000000007', (select id from groups where is_organization), 'org', null);
+
+-- ==================== OSUBB Deals (R44, R45) ====================
+-- The demo BC member holds Responsabil OSUBB Deals, with the demo BCE member as
+-- Coordonator and the demo Voluntar as Responsabil. On a staging database where
+-- a real BC member already holds it, the demo leaves it alone (on conflict do
+-- nothing) and adds no team. The rows go with the demo profiles on the next run
+-- (on delete cascade). Two Deals: an active one with a code and two Attached
+-- Links, and an expired one only the team still sees.
+insert into bc_assignments (assignment, member_id, granted_by) values
+  ('osubb_deals', 'd0000000-0000-0000-0000-000000000007', 'd0000000-0000-0000-0000-000000000008')
+on conflict (assignment) do nothing;
+insert into assignment_team (assignment, team_role, member_id, set_by)
+select 'osubb_deals', team.team_role, team.member_id, 'd0000000-0000-0000-0000-000000000007'
+  from (values ('coordinator', 'd0000000-0000-0000-0000-000000000006'::uuid),
+               ('responsible', 'd0000000-0000-0000-0000-000000000002'::uuid)) as team (team_role, member_id)
+ where exists (select 1 from bc_assignments
+                where assignment = 'osubb_deals'
+                  and member_id = 'd0000000-0000-0000-0000-000000000007')
+on conflict do nothing;
+
+insert into announcements (kind, title, body, code, links, published_at, created_by, group_id, audience, deadline) values
+  ('deal', '20% reducere la Librăria Universității',
+   'Arată codul la casă sau folosește-l pe site. Valabil pentru cărți și papetărie.',
+   'OSUBB20',
+   '[{"label": "Site-ul librăriei", "url": "https://example.com/librarie"},
+     {"label": "Condiții", "url": "https://example.com/librarie/conditii"}]'::jsonb,
+   now() - interval '1 day', 'd0000000-0000-0000-0000-000000000002', (select id from groups where is_organization), 'org',
+   now() + interval '20 days'),
+  ('deal', 'Intrare gratuită la Muzeul de Artă',
+   'Pentru membrii OSUBB, în weekendul porților deschise.',
+   'MUZEU-OSUBB',
+   '[]'::jsonb,
+   now() - interval '20 days', 'd0000000-0000-0000-0000-000000000006', (select id from groups where is_organization), 'org',
+   now() - interval '3 days');
 alter table announcements enable trigger announcements_fan_out;
+
+-- The demo Activ member has already revealed the active Deal's code.
+insert into deal_code_reveals (announcement_id, member_id)
+select a.id, 'd0000000-0000-0000-0000-000000000003'
+  from announcements a
+ where a.kind = 'deal' and a.title = '20% reducere la Librăria Universității'
+   and a.created_by = 'd0000000-0000-0000-0000-000000000002';
 
 -- A few members have already read things, so the unread badge shows a real
 -- number instead of "everything" or "nothing".

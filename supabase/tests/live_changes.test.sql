@@ -16,6 +16,8 @@ create function pg_temp.excluded_tables() returns text[] language sql as $$
                'notification_push_preferences', 'notification_email_preferences',
                -- R43: Grupuri preferate, a self-only setting like the two above.
                'member_group_unselected',
+               -- R45: a Member's own Deal Code reveals; the team reads only a count.
+               'deal_code_reveals',
                'notif_suppression',
                -- #991: the volunteer import's record; the grid refetches
                -- after each import call it makes.

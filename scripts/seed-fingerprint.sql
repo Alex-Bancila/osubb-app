@@ -105,9 +105,19 @@ select md5(string_agg(x, '|' order by x))
                 from event_attendance a
                 join events e on e.id = a.event_id
                 join profiles p on p.id = a.member_id
-    union all select format('announce:%s:%s:%s:%s:%s', a.title, g.name,
-                            a.audience, a.priority, a.pinned)
+    union all select format('announce:%s:%s:%s:%s:%s:%s:%s:%s', a.title, g.name,
+                            a.audience, a.priority, a.pinned, a.kind,
+                            coalesce(a.code, '-'), a.links)
                 from announcements a join groups g on g.id=a.group_id
+    -- R44/R45: the Atribuție, its team and the Deal Code reveals.
+    union all select format('bc-assignment:%s:%s', b.assignment, p.full_name)
+                from bc_assignments b join profiles p on p.id = b.member_id
+    union all select format('assignment-team:%s:%s:%s', t.assignment, t.team_role, p.full_name)
+                from assignment_team t join profiles p on p.id = t.member_id
+    union all select format('deal-reveal:%s:%s', a.title, p.full_name)
+                from deal_code_reveals r
+                join announcements a on a.id = r.announcement_id
+                join profiles p on p.id = r.member_id
     union all select format('notif:%s:%s:%s', p.full_name, n.kind, n.title)
                 from notifications n join profiles p on p.id = n.member_id
   ) s (x);

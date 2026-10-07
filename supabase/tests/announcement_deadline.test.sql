@@ -238,7 +238,7 @@ select is((select count(*) from events where title='Peste cotă #909'), 0::bigin
 -- may also publish from its Group, so the rule is proven by withdrawing it:
 -- with can_publish_announcement answering false, both the direct insert and
 -- create_event(p_announce) are refused, while create_event alone still works.
-create or replace function private.can_publish_announcement(p_group_id bigint)
+create or replace function private.can_publish_announcement(p_group_id bigint, p_kind text default 'announcement')
 returns boolean language sql stable security definer set search_path = '' as $$ select false $$;
 select pg_temp.test_login_leadership(pg_temp.u909(1));
 select throws_ok($$insert into announcements(title,body,group_id,audience)
