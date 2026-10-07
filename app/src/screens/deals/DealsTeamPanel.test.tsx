@@ -84,6 +84,22 @@ describe('the OSUBB Deals team, per persona (R44)', () => {
     expect(pickers()).toHaveLength(2);
   });
 
+  it('never shows an occupied place as free when its holder is not a candidate', () => {
+    state.caps = {
+      manageDeals: true,
+      manageDealsTeam: true,
+      pickDealsCoordinator: true,
+    };
+    state.team = { ...state.team, coordinatorId: 'bce' };
+    // No longer a candidate (here: no longer BCE); the place is still taken.
+    state.members = state.members.map((m) =>
+      m.memberId === 'bce' ? { ...m, level: 4 } : m,
+    );
+    render(<DealsTeamPanel />);
+    expect(pickers()[0]).toHaveTextContent('Carmen BCE');
+    expect(screen.queryByText('Fără coordonator')).toBeNull();
+  });
+
   it('lets the Coordonator pick the Responsabil only', () => {
     state.caps = { manageDeals: true, manageDealsTeam: true };
     state.team = { ...state.team, coordinatorId: 'bce' };

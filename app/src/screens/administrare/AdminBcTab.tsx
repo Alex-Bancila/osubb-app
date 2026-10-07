@@ -3,7 +3,10 @@ import { ChevronDown } from 'lucide-react';
 import { cn } from 'cn';
 import { ListRow, Panel, rowListClass } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
-import { memberDisplayName } from '../../components/member/member-identity';
+import {
+  memberDisplayName,
+  type MemberIdentity,
+} from '../../components/member/member-identity';
 import { Empty, ErrorState, Loading } from '../../components/states';
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
@@ -34,14 +37,24 @@ import {
   type AppointableMember,
 } from '../../queries/groups-admin';
 
-type Outcome = { tone: 'status' | 'alert'; text: string };
+/** A receipt: text around the Member it names, who renders as MemberName. */
+type Outcome = {
+  tone: 'status' | 'alert';
+  lead?: string;
+  member?: MemberIdentity;
+  text: string;
+};
 
-function receiptFor(input: SetBcAssignmentInput, name: string): string {
+function receiptFor(
+  input: SetBcAssignmentInput,
+  member: MemberIdentity,
+): Outcome {
   const label = assignmentLabel(input.assignment);
-  if (!input.granted) return `${label}: atribuția a fost retrasă.`;
+  if (!input.granted)
+    return { tone: 'status', text: `${label}: atribuția a fost retrasă.` };
   return input.move
-    ? `${label} a fost mutată la ${name}.`
-    : `${name} are acum atribuția ${label}.`;
+    ? { tone: 'status', lead: `${label} a fost mutată la`, member, text: '' }
+    : { tone: 'status', member, text: `are acum atribuția ${label}.` };
 }
 
 /**
@@ -57,7 +70,7 @@ export default function AdminBcTab() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [pending, setPending] = useState<{
     change: AssignmentChange;
-    name: string;
+    member: MemberIdentity;
   } | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
@@ -85,12 +98,12 @@ export default function AdminBcTab() {
       : 'alt membru';
   };
 
-  function run(change: AssignmentChange, name: string) {
+  function run(change: AssignmentChange, member: MemberIdentity) {
     setOutcome(null);
     set.mutate(change.input, {
       onSuccess: () => {
         setPending(null);
-        setOutcome({ tone: 'status', text: receiptFor(change.input, name) });
+        setOutcome(receiptFor(change.input, member));
       },
       onError: (cause) => {
         setPending(null);
@@ -117,9 +130,14 @@ export default function AdminBcTab() {
       holderMap,
       nameOf,
     );
-    const name = memberDisplayName(member.nickname, member.name);
-    if (change.confirm) setPending({ change, name });
-    else run(change, name);
+    const identity: MemberIdentity = {
+      memberId: member.memberId,
+      nickname: member.nickname,
+      fullName: member.name,
+      avatarColor: member.avatarColor,
+    };
+    if (change.confirm) setPending({ change, member: identity });
+    else run(change, identity);
   }
 
   return (
@@ -247,10 +265,14 @@ export default function AdminBcTab() {
           className={
             outcome.tone === 'alert'
               ? 'm-0 text-sm text-destructive'
-              : 'm-0 text-sm text-emerald-700 dark:text-emerald-400'
+              : 'm-0 flex flex-wrap items-center gap-x-1 text-sm text-emerald-700 dark:text-emerald-400'
           }
         >
-          {outcome.text}
+          {outcome.lead && <span>{outcome.lead}</span>}
+          {outcome.member && (
+            <MemberName {...outcome.member} size="sm" className="text-sm" />
+          )}
+          {outcome.text && <span>{outcome.text}</span>}
         </p>
       )}
 
@@ -285,7 +307,7 @@ export default function AdminBcTab() {
                     pending.change.input.granted ? 'default' : 'destructive'
                   }
                   disabled={set.isPending}
-                  onClick={() => run(pending.change, pending.name)}
+                  onClick={() => run(pending.change, pending.member)}
                 >
                   {set.isPending
                     ? 'Se salvează…'

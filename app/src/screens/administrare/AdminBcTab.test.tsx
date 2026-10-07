@@ -109,10 +109,15 @@ describe('Administrare BC (R44)', () => {
       { assignment: 'osubb_deals', memberId: 'bogdan', granted: true },
       expect.anything(),
     );
+    const receipt = screen.getByRole('status');
+    expect(receipt).toHaveTextContent(
+      /Bogdan Ilies*are acum atribuția Responsabil OSUBB Deals./,
+    );
+    // The Member is named through their Member Card (house rule).
     expect(
-      screen.getByText(
-        'Bogdan Ilie are acum atribuția Responsabil OSUBB Deals.',
-      ),
+      within(receipt).getByRole('button', {
+        name: 'Profilul membrului Bogdan Ilie',
+      }),
     ).toBeVisible();
   });
 
@@ -148,8 +153,14 @@ describe('Administrare BC (R44)', () => {
       },
       expect.anything(),
     );
+    const receipt = screen.getByRole('status');
+    expect(receipt).toHaveTextContent(
+      /^Responsabil OSUBB Deals a fost mutată la/,
+    );
     expect(
-      screen.getByText('Responsabil OSUBB Deals a fost mutată la Bogdan Ilie.'),
+      within(receipt).getByRole('button', {
+        name: 'Profilul membrului Bogdan Ilie',
+      }),
     ).toBeVisible();
   });
 

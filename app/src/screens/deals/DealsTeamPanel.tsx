@@ -78,6 +78,7 @@ export function DealsTeamPanel() {
             <TeamPicker
               role="coordinator"
               team={team.data}
+              holder={nameOf(team.data.coordinatorId)}
               members={coordinatorCandidates(members.data ?? [], team.data)}
               loading={members.isPending}
               onOutcome={setOutcome}
@@ -94,6 +95,7 @@ export function DealsTeamPanel() {
             <TeamPicker
               role="responsible"
               team={team.data}
+              holder={nameOf(team.data.responsibleId)}
               members={responsibleCandidates(members.data ?? [], team.data)}
               loading={members.isPending}
               onOutcome={setOutcome}
@@ -165,12 +167,16 @@ function PlaceName({
 function TeamPicker({
   role,
   team,
+  holder,
   members,
   loading,
   onOutcome,
 }: {
   role: TeamRole;
   team: DealsTeam;
+  /** Who holds the place now, from the names read: shown even when the
+   *  candidates are still loading or no longer list them. */
+  holder: MemberIdentity | null;
   members: AppointableMember[];
   loading: boolean;
   onOutcome: (outcome: Outcome | null) => void;
@@ -179,8 +185,24 @@ function TeamPicker({
   const set = useSetDealsTeamMember();
   const currentId =
     role === 'coordinator' ? team.coordinatorId : team.responsibleId;
-  const current =
+  const listed =
     members.find((member) => member.memberId === currentId) ?? null;
+  // The place is taken even when the candidates do not list its holder.
+  const current: AppointableMember | null =
+    listed ??
+    (currentId && holder
+      ? {
+          memberId: currentId,
+          name: holder.fullName,
+          nickname: holder.nickname,
+          avatarColor: holder.avatarColor ?? null,
+          status: 'activ',
+          roleId: null,
+          roleLabel: '',
+          level: 0,
+        }
+      : null);
+  const options = listed || !current ? members : [current, ...members];
 
   function choose(next: AppointableMember | null) {
     if ((next?.memberId ?? null) === currentId) return;
@@ -222,7 +244,7 @@ function TeamPicker({
       </span>
       <MemberPicker
         ariaLabelledBy={labelId}
-        members={members}
+        members={options}
         value={current}
         onValueChange={choose}
         noneLabel={
