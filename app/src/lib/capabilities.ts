@@ -31,9 +31,14 @@ export type Capabilities = {
   administerBc: boolean;
   /** Holder, Coordonator or Responsabil of OSUBB Deals: Administrare › OSUBB Deals (R44/R45). */
   manageDeals: boolean;
-  /** Holder or Coordonator: picks the Responsabil, manages every Deal. */
+  /**
+   * Picks the Responsabil: the holder, the Coordonator, and the Moderator
+   * (R44 amended 2026-10-08). With `manageDeals` it also edits every Deal;
+   * the Moderator has it without `manageDeals`, so sets the team but neither
+   * publishes nor edits.
+   */
   manageDealsTeam: boolean;
-  /** Holder only: picks the Coordonator. */
+  /** Picks the Coordonator: the holder and the Moderator (R44 amended). */
   pickDealsCoordinator: boolean;
 };
 

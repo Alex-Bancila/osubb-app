@@ -37,17 +37,20 @@ type Outcome = {
 
 /**
  * The OSUBB Deals team (ruling R44): the Atribuție's holder, then the
- * Coordonator — a BCE member, picked by the holder alone — and the
- * Responsabil — any active Member, picked by the holder or the Coordonator.
- * Whoever may not pick a place sees its name. Each pick takes effect at
- * once: the server tells the person set and the one replaced, and a receipt
- * says it here.
+ * Coordonator — a BCE member, picked by the holder — and the Responsabil —
+ * any active Member, picked by the holder or the Coordonator. The Moderator
+ * picks both without being on the team (R44 amended 2026-10-08). Whoever may
+ * not pick a place sees its name, and nobody picks while nobody holds the
+ * Atribuție. Each pick takes effect at once: the server tells the person set
+ * and the one replaced, and a receipt says it here.
  */
 export function DealsTeamPanel() {
   const capabilities = useCapabilities().data;
   const team = useDealsTeam();
-  const pickCoordinator = capabilities?.pickDealsCoordinator === true;
-  const pickResponsible = capabilities?.manageDealsTeam === true;
+  // An Atribuție nobody holds has no team to pick (the server refuses too).
+  const held = Boolean(team.data?.holderId);
+  const pickCoordinator = held && capabilities?.pickDealsCoordinator === true;
+  const pickResponsible = held && capabilities?.manageDealsTeam === true;
   const members = useAppointableMembers(pickCoordinator || pickResponsible);
   const names = useMemberIdentities(teamMemberIds(team.data));
   const [outcome, setOutcome] = useState<Outcome | null>(null);

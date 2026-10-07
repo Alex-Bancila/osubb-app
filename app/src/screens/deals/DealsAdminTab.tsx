@@ -21,8 +21,8 @@ import { useOpenDeal } from './use-open-deal';
  * active and expired — each with Editează and Șterge as the viewer may, and
  * how many Members opened its code. The holder, the Coordonator and the
  * Responsabil see it; BC and the Moderator see the list too, to delete what a
- * dissolved team left, but neither pick the team nor publish unless they are
- * on it.
+ * dissolved team left. The Moderator also picks both places of the team
+ * (R44 amended 2026-10-08); neither publishes nor edits unless on the team.
  */
 export default function DealsAdminTab() {
   const memberId = useAuth().session?.user.id;

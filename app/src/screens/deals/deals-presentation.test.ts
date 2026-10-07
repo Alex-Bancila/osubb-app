@@ -108,6 +108,14 @@ describe('who may edit and delete a Deal (R44)', () => {
     expect(mayEditDeal(theirs, bc)).toBe(false);
   });
 
+  it('keeps the Moderator, who picks the team, to deleting (R44 amended)', () => {
+    // The Moderator's capability row: manage_deals_team without manage_deals.
+    const moderator = viewer({ manageDealsTeam: true, bcOrModerator: true });
+    expect(mayEditDeal(theirs, moderator)).toBe(false);
+    expect(mayEditDeal(mine, moderator)).toBe(false);
+    expect(mayDeleteDeal(theirs, moderator)).toBe(true);
+  });
+
   it('gives a member nothing, even on a Deal they wrote before leaving the team', () => {
     expect(mayEditDeal(mine, viewer())).toBe(false);
     expect(mayDeleteDeal(mine, viewer())).toBe(false);
