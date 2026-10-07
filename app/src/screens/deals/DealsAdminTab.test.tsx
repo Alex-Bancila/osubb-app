@@ -103,7 +103,9 @@ describe('Administrare › OSUBB Deals (R44)', () => {
     viewer.caps = { manageDeals: true, manageDealsTeam: true };
     renderTab();
     const expired = await card('Expirat de la Coordonator');
-    expect(within(expired).getByText('Expirat')).toBeVisible();
+    // The Termen row is the expired mark; no badge repeats it.
+    expect(within(expired).getByText(/Termen expirat/)).toBeVisible();
+    expect(within(expired).queryByText('Expirat')).toBeNull();
     expect(screen.getByText('1 active · 1 expirate')).toBeVisible();
   });
 
@@ -173,6 +175,21 @@ describe('Administrare › OSUBB Deals (R44)', () => {
     ).toBeVisible();
     expect(within(other).getByRole('button', { name: /Șterge/ })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Deal nou' })).toBeVisible();
+    // Both sit in the card's footer row, beside Citește, not mid-card.
+    const footer = other.querySelector<HTMLElement>(
+      '[data-slot="card-footer"]',
+    );
+    expect(footer).not.toBeNull();
+    if (!footer) return;
+    expect(
+      within(footer).getByRole('button', { name: /Editează/ }),
+    ).toBeVisible();
+    expect(
+      within(footer).getByRole('button', { name: /Șterge/ }),
+    ).toBeVisible();
+    expect(
+      within(footer).getByRole('button', { name: /Citește deal-ul/ }),
+    ).toBeVisible();
   });
 
   it('keeps a BC member who does not hold it to Șterge, with no Deal nou', async () => {
