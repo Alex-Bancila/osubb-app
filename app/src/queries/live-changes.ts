@@ -16,6 +16,8 @@ type Prefix = readonly unknown[];
 const CAPABILITIES: Prefix = ['capabilities'];
 const MEMBER_ROLE_GROUPS: Prefix = ['member-role-groups'];
 const ANNOUNCEMENT_READERS: Prefix = ['announcements', 'readers'];
+const DEAL_REVEALS: Prefix = ['announcements', 'deal-reveals'];
+const DEALS: Prefix = ['announcements', 'deals'];
 
 /**
  * Which query families each broadcasting table feeds (#961). A table that
@@ -85,6 +87,11 @@ const FAMILIES_BY_TABLE: ReadonlyMap<string, readonly Prefix[]> = new Map<
   // marks their "Anunț nou" Notification read, and that UPDATE reaches them
   // on the member-filtered notifications channel, which refreshes both.
   ['announcement_reads', [ANNOUNCEMENT_READERS]],
+  // R44: an Atribuție or a team place changes who may do what.
+  ['bc_assignments', [keys.assignments.all, CAPABILITIES]],
+  ['assignment_team', [keys.assignments.all, CAPABILITIES]],
+  // R45: a reveal moves the team's count; the revealer's own devices too.
+  ['deal_code_reveals', [DEAL_REVEALS, DEALS]],
   [
     'campaigns',
     [

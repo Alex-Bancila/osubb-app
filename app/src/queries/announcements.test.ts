@@ -63,8 +63,12 @@ describe('announcements query layer', () => {
         order: mockOrderDate,
       });
 
-      const mockSelect = vi.fn().mockReturnValue({
+      const mockKind = vi.fn().mockReturnValue({
         order: mockOrderPinned,
+      });
+
+      const mockSelect = vi.fn().mockReturnValue({
+        eq: mockKind,
       });
 
       (supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -79,6 +83,8 @@ describe('announcements query layer', () => {
       );
       expect(mockSelect.mock.calls[0]?.[0]).toContain('group_id');
       expect(mockSelect.mock.calls[0]?.[0]).toContain('audience');
+      // R45: a Deal never shows among the Announcements.
+      expect(mockKind).toHaveBeenCalledWith('kind', 'announcement');
       expect(mockOrderPinned).toHaveBeenCalledWith('pinned', {
         ascending: false,
       });
@@ -99,8 +105,12 @@ describe('announcements query layer', () => {
         order: mockOrderDate,
       });
 
-      const mockSelect = vi.fn().mockReturnValue({
+      const mockKind = vi.fn().mockReturnValue({
         order: mockOrderPinned,
+      });
+
+      const mockSelect = vi.fn().mockReturnValue({
+        eq: mockKind,
       });
 
       (supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({

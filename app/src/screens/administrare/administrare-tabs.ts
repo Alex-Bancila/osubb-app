@@ -21,7 +21,10 @@ export const ADMINISTRARE_PATH = '/administrare';
 /** The Group Applications queue: shown only when it can hold something. */
 export const APPLICATIONS_TAB_PATH = '/administrare/cereri';
 
-/** The tabs, in the order Alex listed them (R27). */
+/** OSUBB Deals' page in Administrare (R44); notifications link here. */
+export const DEALS_TAB_PATH = '/administrare/deals';
+
+/** The tabs, in the order Alex listed them (R27), then R44's two. */
 export const ADMINISTRARE_TABS = [
   {
     path: '/administrare/membri',
@@ -31,7 +34,9 @@ export const ADMINISTRARE_TABS = [
   {
     path: '/administrare/grupuri',
     label: 'Grupuri',
-    capabilities: ['administer'],
+    // Not `administer`: that one also opens the area to the OSUBB Deals
+    // team (R44), who hold no Group Role.
+    capabilities: ['managesAnyGroup'],
     hasHeaderAction: (capabilities) => capabilities.createTopLevelGroups,
   },
   {
@@ -43,7 +48,7 @@ export const ADMINISTRARE_TABS = [
     // "de aderare": the nav's Cereri are Completed-work Requests (B55).
     path: APPLICATIONS_TAB_PATH,
     label: 'Cereri de aderare',
-    capabilities: ['administer'],
+    capabilities: ['managesAnyGroup'],
   },
   {
     // Ruling R28: the Perioade tab is Evaluări de rol (#826, #827 rebuild it).
@@ -60,6 +65,21 @@ export const ADMINISTRARE_TABS = [
     path: '/administrare/setari',
     label: 'Setări',
     capabilities: ['manageRoles'],
+  },
+  {
+    // R44: the team's page — the only tab a Responsabil with nothing else
+    // sees. BC and the Moderator see every Deal here too, to delete one the
+    // dissolved team left behind.
+    path: DEALS_TAB_PATH,
+    label: 'OSUBB Deals',
+    capabilities: ['manageDeals', 'manageRoles'],
+    hasHeaderAction: (capabilities) => capabilities.manageDeals,
+  },
+  {
+    // R44: the Moderator's Atribuții, never shown to BC.
+    path: '/administrare/bc',
+    label: 'Administrare BC',
+    capabilities: ['administerBc'],
   },
 ] as const satisfies readonly AdministrareTab[];
 

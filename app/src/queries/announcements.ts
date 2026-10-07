@@ -49,6 +49,8 @@ export async function fetchAnnouncementsFeed(): Promise<RawAnnouncementRow[]> {
   const { data, error } = await supabase
     .from('announcements')
     .select(ANNOUNCEMENT_FIELDS)
+    // A Deal is an Announcement of kind deal (R45); it lives on its own tab.
+    .eq('kind', 'announcement')
     .order('pinned', { ascending: false })
     .order('published_at', { ascending: false });
 

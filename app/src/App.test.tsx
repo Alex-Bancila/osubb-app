@@ -35,6 +35,10 @@ const EVERY_CAPABILITY = vi.hoisted(() => [
   'provisionMembers',
   'createTopLevelGroups',
   'administer',
+  'administerBc',
+  'manageDeals',
+  'manageDealsTeam',
+  'pickDealsCoordinator',
 ]);
 function grant(...names: string[]) {
   capabilities.granted = new Set(names);
@@ -88,6 +92,12 @@ vi.mock('./screens/administrare/PrivacyPanel', () => ({
 }));
 vi.mock('./screens/administrare/AdminSettingsTab', () => ({
   default: () => <h2>Setări tab</h2>,
+}));
+vi.mock('./screens/deals/DealsAdminTab', () => ({
+  default: () => <h2>OSUBB Deals tab</h2>,
+}));
+vi.mock('./screens/administrare/AdminBcTab', () => ({
+  default: () => <h2>Administrare BC tab</h2>,
 }));
 vi.mock('./screens/groups/GroupsScreen', () => ({
   default: () => <h1>Grupuri screen</h1>,
@@ -259,7 +269,7 @@ describe('route guards', () => {
 
   it('opens Administrare behind the administer capability, and /bc is gone', async () => {
     auth.useAuth.mockReturnValue(ordinaryMember);
-    grant('administer');
+    grant('administer', 'managesAnyGroup');
     window.history.pushState({}, '', '/administrare');
     const view = render(<App />);
     expect(
@@ -290,7 +300,7 @@ describe('route guards', () => {
   it('opens a Group screen behind the same capability as the panel', async () => {
     auth.useAuth.mockReturnValue(ordinaryMember);
     // A Group Manager reaches their own Group's screen …
-    grant('administer');
+    grant('administer', 'managesAnyGroup');
     window.history.pushState({}, '', '/administrare/grupuri/2');
     const view = render(<App />);
     expect(
@@ -309,7 +319,7 @@ describe('route guards', () => {
   it('opens Evaluări de rol only for BC and the Moderator (manageRoles, #702), and /administrare/perioade still arrives there (R28)', async () => {
     // A BCE administers a Group but does not manage Roles: sent home.
     auth.useAuth.mockReturnValue(member);
-    grant('administer', 'seeDirectory', 'seeLeadership');
+    grant('administer', 'managesAnyGroup', 'seeDirectory', 'seeLeadership');
     window.history.pushState({}, '', '/administrare/evaluari');
     const denied = render(<App />);
     await waitFor(() => expect(window.location.pathname).toBe('/'));
@@ -318,7 +328,7 @@ describe('route guards', () => {
     ).toBeNull();
     denied.unmount();
 
-    grant('administer', 'manageRoles');
+    grant('administer', 'managesAnyGroup', 'manageRoles');
     window.history.pushState({}, '', '/administrare/perioade');
     render(<App />);
     expect(
@@ -344,7 +354,7 @@ describe('route guards', () => {
     'renders %s as its own tab page (%s), and only with its capability',
     async (path, page, needs) => {
       auth.useAuth.mockReturnValue(member);
-      grant('administer', ...needs);
+      grant('administer', 'managesAnyGroup', ...needs);
       window.history.pushState({}, '', path);
       const view = render(<App />);
       expect(await screen.findByRole('heading', { name: page })).toBeVisible();
@@ -356,13 +366,79 @@ describe('route guards', () => {
       if (needs.length === 0) return;
 
       // Without it the route refuses, even typed into the address bar.
-      grant('administer');
+      grant('administer', 'managesAnyGroup');
       window.history.pushState({}, '', path);
       render(<App />);
       await waitFor(() => expect(window.location.pathname).toBe('/'));
       expect(screen.queryByRole('heading', { name: page })).toBeNull();
     },
   );
+
+  describe('Atribuții BC and OSUBB Deals (R44)', () => {
+    it('opens Administrare to a Responsabil with nothing else, on OSUBB Deals alone', async () => {
+      auth.useAuth.mockReturnValue(ordinaryMember);
+      grant('administer', 'manageDeals');
+      window.history.pushState({}, '', '/administrare');
+      const view = render(<App />);
+      expect(
+        await screen.findByRole('heading', { name: 'OSUBB Deals tab' }),
+      ).toBeVisible();
+      expect(window.location.pathname).toBe('/administrare/deals');
+      // One section needs no tab strip: no Grupuri, no Cereri de aderare.
+      expect(screen.queryByRole('link', { name: 'Grupuri' })).toBeNull();
+      view.unmount();
+
+      // A Group page or a Member page is not theirs: sent home.
+      for (const path of [
+        '/administrare/grupuri',
+        '/administrare/grupuri/2',
+        '/administrare/membri/target',
+      ]) {
+        window.history.pushState({}, '', path);
+        const refused = render(<App />);
+        await waitFor(() => expect(window.location.pathname).toBe('/'));
+        refused.unmount();
+      }
+    });
+
+    it('lets BC and the Moderator into OSUBB Deals, and a member without either nowhere', async () => {
+      auth.useAuth.mockReturnValue(member);
+      grant('administer', 'managesAnyGroup', 'manageRoles');
+      window.history.pushState({}, '', '/administrare/deals');
+      const view = render(<App />);
+      expect(
+        await screen.findByRole('heading', { name: 'OSUBB Deals tab' }),
+      ).toBeVisible();
+      view.unmount();
+
+      grant('administer', 'managesAnyGroup');
+      window.history.pushState({}, '', '/administrare/deals');
+      render(<App />);
+      await waitFor(() => expect(window.location.pathname).toBe('/'));
+      expect(
+        screen.queryByRole('heading', { name: 'OSUBB Deals tab' }),
+      ).toBeNull();
+    });
+
+    it('opens Administrare BC to the Moderator only, never to BC', async () => {
+      auth.useAuth.mockReturnValue(member);
+      grant(...EVERY_CAPABILITY);
+      window.history.pushState({}, '', '/administrare/bc');
+      const view = render(<App />);
+      expect(
+        await screen.findByRole('heading', { name: 'Administrare BC tab' }),
+      ).toBeVisible();
+      view.unmount();
+
+      grant(...EVERY_CAPABILITY.filter((name) => name !== 'administerBc'));
+      window.history.pushState({}, '', '/administrare/bc');
+      render(<App />);
+      await waitFor(() => expect(window.location.pathname).toBe('/'));
+      expect(
+        screen.queryByRole('heading', { name: 'Administrare BC tab' }),
+      ).toBeNull();
+    });
+  });
 
   it('lands /administrare on the first tab BC may open: Membri', async () => {
     auth.useAuth.mockReturnValue(member);
@@ -378,7 +454,7 @@ describe('route guards', () => {
   it('opens a Member screen behind the same capability as the panel', async () => {
     auth.useAuth.mockReturnValue(ordinaryMember);
     // A Group Manager reaches their own Group's screen …
-    grant('administer');
+    grant('administer', 'managesAnyGroup');
     window.history.pushState({}, '', '/administrare/membri/target');
     const view = render(<App />);
     expect(
@@ -705,6 +781,21 @@ describe('route guards', () => {
     expect(
       screen.getByRole('heading', { name: 'Anunțuri screen' }),
     ).toBeInTheDocument();
+  });
+
+  it('answers the OSUBB Deals tab and its deep link (R45)', () => {
+    auth.useAuth.mockReturnValue(member);
+    grant();
+    window.history.pushState({}, '', '/anunturi/deals?deal=7');
+
+    render(<App />);
+
+    expect(
+      screen.getByRole('heading', { name: 'Anunțuri screen' }),
+    ).toBeInTheDocument();
+    expect(window.location.pathname + window.location.search).toBe(
+      '/anunturi/deals?deal=7',
+    );
   });
 
   it.each([

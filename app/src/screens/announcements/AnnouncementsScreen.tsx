@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { useLocation, useSearchParams } from 'react-router';
 import { useAuth } from '../../lib/auth';
 import {
   useAnnouncementsFeed,
@@ -23,6 +23,10 @@ import { Page, PageGrid, PageHeader } from '../../components/layout';
 import { PreferredGroupsChip } from '../../components/preferred-groups/PreferredGroupsChip';
 import { PreferredGroupsScope } from '../../components/preferred-groups/PreferredGroupsScope';
 import { usePreferredGroups } from '../../components/preferred-groups/preferred-groups';
+import { NewDealControl } from '../deals/DealFormSheet';
+import DealsTab from '../deals/DealsTab';
+import { DEALS_PATH } from '../deals/deals-presentation';
+import { AnnouncementsTabs } from './AnnouncementsTabs';
 
 /** The deep link a "Anunț nou" notification carries: `/anunturi?anunt=<id>` (#843). */
 const ANNOUNCEMENT_PARAM = 'anunt';
@@ -40,10 +44,28 @@ function parseAnnouncementId(value: string | null): number | null {
  * show — the same ones the badge still counts.
  */
 export default function AnnouncementsScreen() {
+  const { pathname } = useLocation();
+  // Two tabs, routed (R45): Anunțuri never shows a Deal, OSUBB Deals only Deals.
+  if (pathname === DEALS_PATH || pathname.startsWith(`${DEALS_PATH}/`))
+    return <DealsScreen />;
   return (
     <PreferredGroupsScope>
       <AnnouncementsContent />
     </PreferredGroupsScope>
+  );
+}
+
+function DealsScreen() {
+  return (
+    <Page width="reading">
+      <PageHeader
+        title="Anunțuri"
+        description="Oferte, reduceri și acces pentru membrii OSUBB."
+        actions={<NewDealControl />}
+      />
+      <AnnouncementsTabs />
+      <DealsTab />
+    </Page>
   );
 }
 
@@ -184,6 +206,7 @@ function AnnouncementsContent() {
         }
         actions={<AnnouncementComposeSheet />}
       />
+      <AnnouncementsTabs />
 
       {deleted && (
         <p

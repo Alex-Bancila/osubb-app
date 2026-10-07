@@ -243,6 +243,21 @@ export const keys = {
       ['announcements', 'unread', { memberId }] as const,
     readers: (announcementId: number, memberId: string | undefined) =>
       ['announcements', 'readers', { announcementId, memberId }] as const,
+    /* OSUBB Deals (R45): Announcements of kind deal, with the viewer's own
+       reveals. Under `['announcements']`, so a read or a reveal refreshes
+       them with the feed and the badge. */
+    deals: (memberId: string | undefined) =>
+      ['announcements', 'deals', { memberId }] as const,
+    dealReveals: (announcementId: number, memberId: string | undefined) =>
+      ['announcements', 'deal-reveals', { announcementId, memberId }] as const,
+  },
+  /* Atribuții BC (R44): who holds each one and the OSUBB Deals team. */
+  assignments: {
+    all: ['assignments'] as const,
+    holders: (memberId: string | undefined) =>
+      ['assignments', 'holders', { memberId }] as const,
+    team: (memberId: string | undefined) =>
+      ['assignments', 'team', { memberId }] as const,
   },
   /* Leadership page support reads (the metrics themselves live under points
      and tasks, so evaluations refresh them). */

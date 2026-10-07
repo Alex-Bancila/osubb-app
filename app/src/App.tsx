@@ -76,6 +76,8 @@ const AdminPrivacyTab = lazy(() =>
 const AdminSettingsTab = lazy(
   () => import('./screens/administrare/AdminSettingsTab'),
 );
+const AdminDealsTab = lazy(() => import('./screens/deals/DealsAdminTab'));
+const AdminBcTab = lazy(() => import('./screens/administrare/AdminBcTab'));
 const MemberScreen = lazy(() => import('./screens/administrare/MemberScreen'));
 const GroupScreen = lazy(() => import('./screens/administrare/GroupScreen'));
 
@@ -397,6 +399,9 @@ export default function App() {
             element={<Navigate to="/tracker?vedere=cereri" replace />}
           />
           <Route path="/anunturi" element={<AnnouncementsScreen />} />
+          {/* OSUBB Deals, the second tab of Anunțuri (R45); `?deal=<id>`
+                opens one, as "Deal nou" notifications link. */}
+          <Route path="/anunturi/deals" element={<AnnouncementsScreen />} />
           <Route path="/notificari" element={<NotificationsScreen />} />
           <Route
             path="/voluntari"
@@ -481,11 +486,29 @@ export default function App() {
                 </AdministrareTabRoute>
               }
             />
+            <Route
+              path="deals"
+              element={
+                <AdministrareTabRoute path="/administrare/deals">
+                  <AdminDealsTab />
+                </AdministrareTabRoute>
+              }
+            />
+            <Route
+              path="bc"
+              element={
+                <AdministrareTabRoute path="/administrare/bc">
+                  <AdminBcTab />
+                </AdministrareTabRoute>
+              }
+            />
           </Route>
+          {/* A Group Role or BC+ (`managesAnyGroup`): `administer` also
+                admits the OSUBB Deals team (R44), who manage no Group. */}
           <Route
             path="/administrare/membri/:memberId"
             element={
-              <RequireCapability capability="administer">
+              <RequireCapability capability="managesAnyGroup">
                 <DeferredRoute>
                   <MemberScreen />
                 </DeferredRoute>
@@ -495,7 +518,7 @@ export default function App() {
           <Route
             path="/administrare/grupuri/:groupId"
             element={
-              <RequireCapability capability="administer">
+              <RequireCapability capability="managesAnyGroup">
                 <DeferredRoute>
                   <GroupRoute />
                 </DeferredRoute>

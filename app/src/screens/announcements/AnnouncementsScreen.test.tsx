@@ -22,6 +22,8 @@ const hooks = vi.hoisted(() => ({
   useAnnouncementsFeed: vi.fn(),
   useMarkAnnouncementRead: vi.fn(),
   useGroups: vi.fn(),
+  useUnreadAnnouncementsCount: vi.fn(),
+  useDeals: vi.fn(),
 }));
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -40,7 +42,14 @@ vi.mock('../../queries/announcements', () => ({
   useUpdateAnnouncement: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeleteAnnouncement: () => ({ mutate: vi.fn(), isPending: false }),
   isAnnouncementRefusal: () => false,
+  useUnreadAnnouncementsCount: hooks.useUnreadAnnouncementsCount,
 }));
+// R45: the OSUBB Deals tab has its own suite (DealsTab.test.tsx).
+vi.mock('../../queries/deals', () => ({ useDeals: hooks.useDeals }));
+vi.mock('../deals/DealsTab', () => ({
+  default: () => <p>Conținutul tabului OSUBB Deals</p>,
+}));
+vi.mock('../deals/DealFormSheet', () => ({ NewDealControl: () => null }));
 vi.mock('../../queries/member-identities', () => ({
   useMemberIdentities: () => ({ data: undefined }),
 }));
@@ -106,6 +115,9 @@ function createRow(
     pinned: false,
     group_id: 10,
     audience: 'local',
+    kind: 'announcement',
+    code: null,
+    links: [],
     published_at: '2026-09-18T10:00:00Z',
     deadline: null,
     min_level: 0,
@@ -140,6 +152,75 @@ describe('AnnouncementsScreen', () => {
     );
     hooks.useGroups.mockReturnValue({ data: mockGroups, isPending: false });
     hooks.useMarkAnnouncementRead.mockReturnValue({ mutate, isPending: false });
+    hooks.useUnreadAnnouncementsCount.mockReturnValue({ data: 0 });
+    hooks.useDeals.mockReturnValue({ data: [] });
+  });
+
+  describe('Anunțuri | OSUBB Deals tabs (R45)', () => {
+    it('puts the two tabs under the title, Anunțuri open, each with its own unread count', () => {
+      hooks.useAnnouncementsFeed.mockReturnValue({
+        isPending: false,
+        isError: false,
+        data: [],
+      });
+      // The server counts 5 unread, Deals included: two unread Deals, one
+      // of them past its Termen (the team still reads it), one read.
+      hooks.useUnreadAnnouncementsCount.mockReturnValue({ data: 5 });
+      hooks.useDeals.mockReturnValue({
+        data: [
+          { deadline: null, announcement_reads: [] },
+          { deadline: '2000-01-01T00:00:00Z', announcement_reads: [] },
+          { deadline: null, announcement_reads: [{ read_at: 'x' }] },
+        ],
+      });
+
+      renderAt('/anunturi');
+
+      const tabs = screen.getByRole('navigation', {
+        name: 'Anunțuri și deal-uri',
+      });
+      const announcements = within(tabs).getByRole('link', {
+        name: /Anunțuri/,
+      });
+      const deals = within(tabs).getByRole('link', { name: /OSUBB Deals/ });
+      expect(announcements).toHaveAttribute('aria-current', 'page');
+      expect(announcements).toHaveAttribute('href', '/anunturi');
+      expect(deals).toHaveAttribute('href', '/anunturi/deals');
+      expect(within(announcements).getByLabelText('3 necitite')).toBeVisible();
+      expect(within(deals).getByLabelText('1 necitite')).toBeVisible();
+    });
+
+    it('shows only the Deals at /anunturi/deals, never the Announcements feed', () => {
+      hooks.useAnnouncementsFeed.mockReturnValue({
+        isPending: false,
+        isError: false,
+        data: [createRow({ title: 'Ședință' })],
+      });
+
+      renderAt('/anunturi/deals');
+
+      expect(
+        screen.getByText('Conținutul tabului OSUBB Deals'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('Ședință')).toBeNull();
+      expect(screen.getByRole('link', { name: /OSUBB Deals/ })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+    });
+
+    it('never shows the Deals tab on Anunțuri', () => {
+      hooks.useAnnouncementsFeed.mockReturnValue({
+        isPending: false,
+        isError: false,
+        data: [createRow({ title: 'Ședință' })],
+      });
+
+      renderAt('/anunturi');
+
+      expect(screen.getByText('Ședință')).toBeInTheDocument();
+      expect(screen.queryByText('Conținutul tabului OSUBB Deals')).toBeNull();
+    });
   });
 
   it('renders loading state when feed query is pending', () => {

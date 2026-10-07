@@ -30,7 +30,11 @@ import {
 export default function AnnouncementReaders({
   announcement,
 }: {
-  announcement: AnnouncementPresentation;
+  // A Deal (R45) asks with the same four fields.
+  announcement: Pick<
+    AnnouncementPresentation,
+    'id' | 'authorMember' | 'audience' | 'groupId'
+  >;
 }) {
   const { session } = useAuth();
   const bcOrModerator = useCapability('manageRoles').data === true;

@@ -20,6 +20,8 @@ const memberRoutes = [
   // Links to the Cereri page before #973; App.tsx forwards them to Taskuri.
   '/cereri',
   '/anunturi',
+  // R45: the OSUBB Deals tab, where "Deal nou" links (`?deal=<id>`).
+  '/anunturi/deals',
   // #775: the Email Digest's "Deschide notificările" button survives the login.
   '/notificari',
   '/voluntari',
