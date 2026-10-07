@@ -111,7 +111,7 @@ describe('Administrare BC (R44)', () => {
     );
     const receipt = screen.getByRole('status');
     expect(receipt).toHaveTextContent(
-      /Bogdan Ilies*are acum atribuția Responsabil OSUBB Deals./,
+      /Bogdan Ilie\s*are acum atribuția Responsabil OSUBB Deals\./,
     );
     // The Member is named through their Member Card (house rule).
     expect(
