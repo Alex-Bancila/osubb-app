@@ -59,6 +59,7 @@ export default function DealsTab() {
                   setDeleted(false);
                   sheet.open(opened);
                 }}
+                onRevealed={sheet.markAsRead}
               />
             </li>
           ))}

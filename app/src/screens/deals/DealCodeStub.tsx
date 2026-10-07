@@ -10,6 +10,8 @@ type DealCodeStubProps = {
   deal: Pick<DealPresentation, 'id' | 'title' | 'code' | 'isRevealed'>;
   /** Torn off a card (the perforation and notches); false inside a sheet. */
   torn?: boolean;
+  /** After the server recorded the reveal (the card marks the Deal read). */
+  onRevealed?: () => void;
   className?: string;
 };
 
@@ -25,6 +27,7 @@ type DealCodeStubProps = {
 export function DealCodeStub({
   deal,
   torn = true,
+  onRevealed,
   className,
 }: DealCodeStubProps) {
   const reveal = useRevealDealCode();
@@ -50,6 +53,7 @@ export function DealCodeStub({
       onSuccess: (value) => {
         setAnswered(value || deal.code);
         setJustRevealed(true);
+        onRevealed?.();
         // The button is gone: keep the keyboard on the code it revealed.
         window.requestAnimationFrame(() => codeRef.current?.focus());
       },
@@ -150,14 +154,18 @@ export function DealCodeStub({
             )}
           >
             <span className="text-[11px] font-bold tracking-[0.14em] text-accent-foreground uppercase">
-              Cod OSUBB · atinge ca să-l vezi
+              {/* Wraps at the dot, never inside "să-l". */}
+              Cod OSUBB ·{' '}
+              <span className="whitespace-nowrap">atinge ca să-l vezi</span>
             </span>
-            <span className="relative flex min-h-12 items-center">
+            {/* A row of blurred characters across the stub, the pill on it:
+                at every width the code reads as covered, not as missing. */}
+            <span className="relative flex min-h-12 w-full items-center overflow-hidden">
               <span
                 aria-hidden="true"
-                className="deal-code-mask font-mono text-2xl font-bold tracking-[0.08em] text-foreground/80 sm:text-[1.65rem]"
+                className="deal-code-mask font-mono text-2xl font-bold tracking-[0.22em] whitespace-nowrap text-foreground/80"
               >
-                {dealCodeMask(deal.id, deal.code.length)}
+                {dealCodeMask(deal.id, 14) + dealCodeMask(deal.id + 1, 14)}
               </span>
               <span
                 aria-hidden="true"

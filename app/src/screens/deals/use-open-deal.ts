@@ -28,15 +28,19 @@ export function useOpenDeal(
   const marked = useRef(new Set<number>());
   const handledParam = useRef<string | null>(null);
 
+  // Once per Deal per visit, however it is engaged with.
+  function markAsRead(deal: DealPresentation) {
+    if (deal.isRead || marked.current.has(deal.id)) return;
+    marked.current.add(deal.id);
+    markRead.mutate(deal.id, {
+      onError: () => marked.current.delete(deal.id),
+    });
+  }
+
   function open(deal: DealPresentation) {
     setUnavailable(false);
     setSelectedId(deal.id);
-    if (!deal.isRead && !marked.current.has(deal.id)) {
-      marked.current.add(deal.id);
-      markRead.mutate(deal.id, {
-        onError: () => marked.current.delete(deal.id),
-      });
-    }
+    markAsRead(deal);
   }
 
   const paramValue = searchParams.get(DEAL_PARAM);
@@ -78,5 +82,7 @@ export function useOpenDeal(
     unavailable,
     open,
     close,
+    /** Revealing the code from the card reads the Deal too. */
+    markAsRead,
   };
 }

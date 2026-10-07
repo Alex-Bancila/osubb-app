@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RawDealRow } from '../../queries/deals';
@@ -139,6 +140,27 @@ describe('Anunțuri › OSUBB Deals (R45)', () => {
     );
     // A member does not see the reveal count.
     expect(within(sheet).queryByText(/Codul a fost deschis/)).toBeNull();
+  });
+
+  it('counts a Deal read once its code is revealed from the card', async () => {
+    const user = userEvent.setup();
+    supabaseMock.rpc.mockResolvedValue({ data: 'CAFE10', error: null });
+    renderAt('/anunturi/deals');
+    const cafe = await screen.findByRole('article', {
+      name: 'Reducere la cafenea',
+    });
+    await user.click(
+      within(cafe).getByRole('button', { name: /Arată codul OSUBB/ }),
+    );
+    expect(await within(cafe).findByText('CAFE10')).toBeVisible();
+    await waitFor(() =>
+      expect(supabaseMock.upsert).toHaveBeenCalledWith(
+        { announcement_id: 1, member_id: 'me' },
+        expect.anything(),
+      ),
+    );
+    // Revealing is not opening: no sheet.
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('says an expired or deleted Deal is unavailable', async () => {

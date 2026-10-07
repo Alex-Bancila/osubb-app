@@ -100,7 +100,8 @@ const MASK_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 /**
  * What the hidden stub shows under its blur: characters shaped like a code,
- * as many as the real one has (between 6 and 14), but never the code itself
+ * `length` of them (kept between 6 and 14; the stub asks for a full row of
+ * 14, so the mask says nothing about the code's length), never the code itself
  * — the real one is not rendered, not even blurred, until the Member taps and
  * the reveal is recorded. Seeded by the Deal's id, so the mask does not
  * reshuffle on every render.

@@ -11,7 +11,7 @@ function TabLabel({ text, unread }: { text: string; unread: number }) {
       {unread > 0 && (
         <span
           aria-label={`${unread} necitite`}
-          className="inline-flex min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] leading-5 font-bold text-white tabular-nums"
+          className="inline-flex min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] leading-5 font-bold text-white tabular-nums in-aria-[current=page]:bg-brand-black in-aria-[current=page]:text-brand-white"
         >
           {unread > 99 ? '99+' : unread}
         </span>

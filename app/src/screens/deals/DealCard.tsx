@@ -14,6 +14,8 @@ type DealCardProps = {
   onOpen: (deal: DealPresentation) => void;
   /** Under the body on the team's page: who opened the code, the actions. */
   footerExtra?: ReactNode;
+  /** The code was revealed from this card: the Deal counts as read. */
+  onRevealed?: (deal: DealPresentation) => void;
 };
 
 /**
@@ -22,7 +24,12 @@ type DealCardProps = {
  * "Citește" — with the Deal Code torn off as a ticket stub, on the right from
  * 640 px and under the text on a phone. A Deal without a code has no stub.
  */
-export default function DealCard({ deal, onOpen, footerExtra }: DealCardProps) {
+export default function DealCard({
+  deal,
+  onOpen,
+  footerExtra,
+  onRevealed,
+}: DealCardProps) {
   const titleId = `deal-title-${deal.id}`;
   const expired = !isDealActive(deal);
 
@@ -100,7 +107,11 @@ export default function DealCard({ deal, onOpen, footerExtra }: DealCardProps) {
         </div>
       </div>
 
-      <DealCodeStub deal={deal} className="shrink-0 sm:w-60" />
+      <DealCodeStub
+        deal={deal}
+        className="shrink-0 sm:w-64"
+        onRevealed={() => onRevealed?.(deal)}
+      />
     </Card>
   );
 }

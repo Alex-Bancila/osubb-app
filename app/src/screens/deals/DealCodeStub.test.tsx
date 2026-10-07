@@ -45,7 +45,7 @@ describe('DealCodeStub (R45)', () => {
       name: 'Arată codul OSUBB pentru Reducere la Librăria X',
     });
     expect(button).toBeVisible();
-    expect(screen.getByText('Cod OSUBB · atinge ca să-l vezi')).toBeVisible();
+    expect(button).toHaveTextContent('Cod OSUBB · atinge ca să-l vezi');
     expect(screen.getByText('Cod ascuns')).toBeVisible();
     // The blurred characters are a mask, never the code.
     expect(container.textContent).not.toContain('OSUBB-2026');
