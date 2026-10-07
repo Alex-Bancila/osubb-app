@@ -145,6 +145,12 @@ describe('the default views', () => {
   it('mutes exactly the unselected Groups the server answered', () => {
     expect([...mutedGroupIds(rows)].sort()).toEqual([11, 40]);
     expect(mutedGroupIds(undefined).size).toBe(0);
+    // A locked Group never mutes, whatever `selected` says.
+    expect(
+      mutedGroupIds([
+        { group_id: 30, selected: false, locked: 'adunarea_generala' },
+      ]).size,
+    ).toBe(0);
   });
 
   it('knows a Task the member executes now', () => {

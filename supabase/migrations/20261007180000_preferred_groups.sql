@@ -513,6 +513,10 @@ begin
   perform 1 from public.profiles as profile
    where profile.id = v_actor and profile.status = 'activ'
      for share;
+  -- Deactivated between the level check and the lock: refused the same way.
+  if not found then
+    raise exception using errcode = '42501', message = 'group_preference_forbidden';
+  end if;
 
   -- 3. Every id names a Group the caller can see.
   foreach v_id in array v_ids loop
@@ -639,6 +643,16 @@ as $$
             and caller.status = 'activ'
        )
   ),
+  muted as (
+    -- R43: the caller's muted Groups, judged once -- the rows they unselected
+    -- that private.group_muted_for still honours -- for the preferred view only.
+    select unselected.group_id
+      from gate
+     cross join public.member_group_unselected as unselected
+     where coalesce(p_preferred, false)
+       and unselected.member_id = (select auth.uid())
+       and private.group_muted_for(unselected.group_id, unselected.member_id)
+  ),
   task_points as (
     select entry.member_id as member_id,
            sum(entry.delta)::int as points
@@ -653,9 +667,8 @@ as $$
        and (p_from is null or evaluation.evaluated_at >= p_from)
        and (p_to is null or evaluation.evaluated_at < p_to)
        -- R43: the preferred view counts only the Tasks of the caller's selected
-       -- Groups (the Task's own Group).
-       and (not coalesce(p_preferred, false)
-            or not private.group_muted_for(task.group_id, (select auth.uid())))
+       -- Groups (the Task's own Group); empty unless p_preferred.
+       and task.group_id not in (select muted.group_id from muted)
      group by entry.member_id
   ),
   roster as (

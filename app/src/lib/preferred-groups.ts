@@ -44,7 +44,9 @@ export function mutedGroupIds(
   rows: readonly GroupPreferenceRow[] | undefined,
 ): ReadonlySet<number> {
   return new Set(
-    (rows ?? []).filter((row) => !row.selected).map((row) => row.group_id),
+    (rows ?? [])
+      .filter((row) => !row.selected && !row.locked)
+      .map((row) => row.group_id),
   );
 }
 
