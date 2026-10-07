@@ -59,7 +59,10 @@ export default function AdministrareLayout() {
         description={
           capabilities.data?.createTopLevelGroups === true
             ? 'Grupurile OSUBB, membrii, rolurile și setările organizației.'
-            : 'Grupurile în care ai o funcție.'
+            : capabilities.data?.managesAnyGroup === true
+              ? 'Grupurile în care ai o funcție.'
+              : // The OSUBB Deals team alone (R44).
+                'Echipa OSUBB Deals și deal-urile ei.'
         }
         actions={
           hasAction ? (

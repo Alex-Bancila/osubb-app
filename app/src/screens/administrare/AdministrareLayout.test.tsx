@@ -47,6 +47,14 @@ const BC: Capabilities = {
   manageDealsTeam: false,
   pickDealsCoordinator: false,
 };
+/* R44: the Moderator alone holds administerBc. */
+const MODERATOR: Capabilities = { ...BC, administerBc: true };
+/* A Responsabil OSUBB Deals with no Group Role and no rank. */
+const DEALS_RESPONSABIL: Capabilities = {
+  ...NONE,
+  administer: true,
+  manageDeals: true,
+};
 const MANAGER: Capabilities = {
   ...NONE,
   managesAnyGroup: true,
@@ -77,6 +85,8 @@ function show(path: string, capabilities: Capabilities | undefined) {
             'evaluari',
             'confidentialitate',
             'setari',
+            'deals',
+            'bc',
           ].map((tab) => (
             <Route key={tab} path={tab} element={<Where />} />
           ))}
@@ -100,7 +110,7 @@ beforeEach(() => {
   api.applications.mockReturnValue(true);
 });
 
-it('shows BC and the Moderator all seven tabs, in the order Alex listed', async () => {
+it('shows BC the seven tabs in the order Alex listed, then OSUBB Deals (R44)', async () => {
   const { container } = show('/administrare/grupuri', BC);
   expect(tabNames()).toEqual([
     'Membri',
@@ -110,6 +120,7 @@ it('shows BC and the Moderator all seven tabs, in the order Alex listed', async 
     'Evaluări de rol',
     'Confidențialitate',
     'Setări',
+    'OSUBB Deals',
   ]);
   expect(
     screen.getByRole('heading', { level: 1, name: 'Administrare' }),
@@ -125,6 +136,27 @@ it('shows BC and the Moderator all seven tabs, in the order Alex listed', async 
     within(tabBar()).getByRole('link', { name: 'Evaluări de rol' }),
   ).toHaveAttribute('href', '/administrare/evaluari');
   expect((await axe.run(container)).violations).toEqual([]);
+});
+
+it('adds Administrare BC for the Moderator alone (R44)', () => {
+  show('/administrare/bc', MODERATOR);
+  expect(tabNames().slice(-2)).toEqual(['OSUBB Deals', 'Administrare BC']);
+  expect(
+    within(tabBar()).getByRole('link', { name: 'Administrare BC' }),
+  ).toHaveAttribute('aria-current', 'page');
+});
+
+it('shows a Responsabil OSUBB Deals with nothing else that one page, no tab strip (R44)', () => {
+  const view = show('/administrare', DEALS_RESPONSABIL);
+  expect(screen.getByTestId('where')).toHaveTextContent('/administrare/deals');
+  view.unmount();
+  show('/administrare/deals', DEALS_RESPONSABIL);
+  expect(
+    screen.queryByRole('navigation', { name: 'Secțiunile administrării' }),
+  ).toBeNull();
+  expect(
+    screen.getByText('Echipa OSUBB Deals și deal-urile ei.'),
+  ).toBeVisible();
 });
 
 it('shows a Group Manager or Responsible Grupuri and Cereri de aderare only', () => {

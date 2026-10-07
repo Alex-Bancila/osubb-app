@@ -22,6 +22,7 @@ const hooks = vi.hoisted(() => ({
   useAnnouncementsFeed: vi.fn(),
   useMarkAnnouncementRead: vi.fn(),
   useGroups: vi.fn(),
+  useUnreadCountByKind: vi.fn(),
 }));
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -41,6 +42,14 @@ vi.mock('../../queries/announcements', () => ({
   useDeleteAnnouncement: () => ({ mutate: vi.fn(), isPending: false }),
   isAnnouncementRefusal: () => false,
 }));
+// R45: the OSUBB Deals tab has its own suite (DealsTab.test.tsx).
+vi.mock('../../queries/deals', () => ({
+  useUnreadCountByKind: hooks.useUnreadCountByKind,
+}));
+vi.mock('../deals/DealsTab', () => ({
+  default: () => <p>Conținutul tabului OSUBB Deals</p>,
+}));
+vi.mock('../deals/DealFormSheet', () => ({ NewDealControl: () => null }));
 vi.mock('../../queries/member-identities', () => ({
   useMemberIdentities: () => ({ data: undefined }),
 }));
@@ -140,6 +149,68 @@ describe('AnnouncementsScreen', () => {
     );
     hooks.useGroups.mockReturnValue({ data: mockGroups, isPending: false });
     hooks.useMarkAnnouncementRead.mockReturnValue({ mutate, isPending: false });
+    hooks.useUnreadCountByKind.mockReturnValue({ data: 0 });
+  });
+
+  describe('Anunțuri | OSUBB Deals tabs (R45)', () => {
+    it('puts the two tabs under the title, Anunțuri open, each with its own unread count', () => {
+      hooks.useAnnouncementsFeed.mockReturnValue({
+        isPending: false,
+        isError: false,
+        data: [],
+      });
+      // The server counts each tab under the badge's own rule (R45).
+      hooks.useUnreadCountByKind.mockImplementation((kind: string) => ({
+        data: kind === 'deal' ? 1 : 3,
+      }));
+
+      renderAt('/anunturi');
+
+      const tabs = screen.getByRole('navigation', {
+        name: 'Anunțuri și deal-uri',
+      });
+      const announcements = within(tabs).getByRole('link', {
+        name: /Anunțuri/,
+      });
+      const deals = within(tabs).getByRole('link', { name: /OSUBB Deals/ });
+      expect(announcements).toHaveAttribute('aria-current', 'page');
+      expect(announcements).toHaveAttribute('href', '/anunturi');
+      expect(deals).toHaveAttribute('href', '/anunturi/deals');
+      expect(within(announcements).getByLabelText('3 necitite')).toBeVisible();
+      expect(within(deals).getByLabelText('1 necitite')).toBeVisible();
+    });
+
+    it('shows only the Deals at /anunturi/deals, never the Announcements feed', () => {
+      hooks.useAnnouncementsFeed.mockReturnValue({
+        isPending: false,
+        isError: false,
+        data: [createRow({ title: 'Ședință' })],
+      });
+
+      renderAt('/anunturi/deals');
+
+      expect(
+        screen.getByText('Conținutul tabului OSUBB Deals'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('Ședință')).toBeNull();
+      expect(screen.getByRole('link', { name: /OSUBB Deals/ })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+    });
+
+    it('never shows the Deals tab on Anunțuri', () => {
+      hooks.useAnnouncementsFeed.mockReturnValue({
+        isPending: false,
+        isError: false,
+        data: [createRow({ title: 'Ședință' })],
+      });
+
+      renderAt('/anunturi');
+
+      expect(screen.getByText('Ședință')).toBeInTheDocument();
+      expect(screen.queryByText('Conținutul tabului OSUBB Deals')).toBeNull();
+    });
   });
 
   it('renders loading state when feed query is pending', () => {
