@@ -1,8 +1,7 @@
 import { PageTabs } from '../../components/layout';
-import { useUnreadAnnouncementsCount } from '../../queries/announcements';
-import { useDeals } from '../../queries/deals';
+import { useUnreadCountByKind } from '../../queries/deals';
 import { ANNOUNCEMENTS_PATH } from '../../components/shell/navItems';
-import { DEALS_PATH, splitUnread } from '../deals/deals-presentation';
+import { DEALS_PATH } from '../deals/deals-presentation';
 
 function TabLabel({ text, unread }: { text: string; unread: number }) {
   return (
@@ -22,9 +21,12 @@ function TabLabel({ text, unread }: { text: string; unread: number }) {
 
 /** Anunțuri | OSUBB Deals, routed (`/anunturi`, `/anunturi/deals`). */
 export function AnnouncementsTabs() {
-  const total = useUnreadAnnouncementsCount();
-  const deals = useDeals();
-  const unread = splitUnread(total.data ?? 0, deals.data ?? []);
+  const announcements = useUnreadCountByKind('announcement');
+  const deals = useUnreadCountByKind('deal');
+  const unread = {
+    announcements: announcements.data ?? 0,
+    deals: deals.data ?? 0,
+  };
   return (
     <PageTabs
       label="Anunțuri și deal-uri"

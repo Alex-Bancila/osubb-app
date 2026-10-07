@@ -209,27 +209,3 @@ export function responsibleCandidates<T extends Candidate>(
         notOnTeam(team, member.memberId)),
   );
 }
-
-/**
- * The unread split between the two tabs (ruling R45), without a second count
- * from the server: `my_unread_announcements_count` counts Deals under the
- * Deal read rule, and the Deals feed holds exactly those rows with the
- * viewer's own reads, so the Deals' unread are counted here and the rest are
- * the Announcements'. The Deals tab shows only the active ones' count.
- */
-export function splitUnread(
-  total: number,
-  deals: readonly {
-    deadline: string | null;
-    announcement_reads?: readonly unknown[] | null;
-  }[],
-  now: Date = new Date(),
-): { announcements: number; deals: number } {
-  const unread = deals.filter(
-    (deal) => (deal.announcement_reads?.length ?? 0) === 0,
-  );
-  return {
-    announcements: Math.max(0, total - unread.length),
-    deals: unread.filter((deal) => isDealActive(deal, now)).length,
-  };
-}

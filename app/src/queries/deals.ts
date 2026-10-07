@@ -82,10 +82,10 @@ export function useDeals() {
 }
 
 /**
- * Reveal a Deal Code (R45): the server records the reveal once, whatever how
+ * Reveal a Deal Code (R45): the server records the reveal once, however
  * many times it is asked, and answers the code. The feed refetches, so every
- * other card of this Member — on this device and, through the live signal, on
- * theirs — shows it revealed.
+ * card of this Member shows it revealed; their other devices read the reveal
+ * the next time they load the Deals.
  */
 export async function revealDealCode(announcementId: number): Promise<string> {
   const { data, error } = await supabase.rpc('reveal_deal_code', {
@@ -112,6 +112,32 @@ export function revealDealCodeMutationOptions(queryClient: QueryClient) {
 export function useRevealDealCode() {
   const queryClient = useQueryClient();
   return useMutation(revealDealCodeMutationOptions(queryClient));
+}
+
+export type AnnouncementKind = 'announcement' | 'deal';
+
+/**
+ * The unread count of one tab of Anunțuri (R45): the badge's own function,
+ * `my_unread_announcements_count(p_kind)`, so each tab counts under exactly
+ * the read rule the badge does. Keyed under the badge's key, so whatever
+ * refreshes the badge refreshes both.
+ */
+export async function fetchUnreadCountByKind(
+  kind: AnnouncementKind,
+): Promise<number> {
+  const { data, error } = await supabase.rpc('my_unread_announcements_count', {
+    p_kind: kind,
+  });
+  if (error) throw error;
+  return data ?? 0;
+}
+
+export function useUnreadCountByKind(kind: AnnouncementKind) {
+  const memberId = useAuth().session?.user.id;
+  return useQuery({
+    queryKey: [...keys.announcements.unread(memberId), kind] as const,
+    queryFn: memberId ? () => fetchUnreadCountByKind(kind) : skipToken,
+  });
 }
 
 /** How many Members opened a Deal's code: the team, BC and the Moderator only. */

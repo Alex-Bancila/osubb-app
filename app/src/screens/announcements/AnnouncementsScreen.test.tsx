@@ -22,8 +22,7 @@ const hooks = vi.hoisted(() => ({
   useAnnouncementsFeed: vi.fn(),
   useMarkAnnouncementRead: vi.fn(),
   useGroups: vi.fn(),
-  useUnreadAnnouncementsCount: vi.fn(),
-  useDeals: vi.fn(),
+  useUnreadCountByKind: vi.fn(),
 }));
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -42,10 +41,11 @@ vi.mock('../../queries/announcements', () => ({
   useUpdateAnnouncement: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeleteAnnouncement: () => ({ mutate: vi.fn(), isPending: false }),
   isAnnouncementRefusal: () => false,
-  useUnreadAnnouncementsCount: hooks.useUnreadAnnouncementsCount,
 }));
 // R45: the OSUBB Deals tab has its own suite (DealsTab.test.tsx).
-vi.mock('../../queries/deals', () => ({ useDeals: hooks.useDeals }));
+vi.mock('../../queries/deals', () => ({
+  useUnreadCountByKind: hooks.useUnreadCountByKind,
+}));
 vi.mock('../deals/DealsTab', () => ({
   default: () => <p>Conținutul tabului OSUBB Deals</p>,
 }));
@@ -149,8 +149,7 @@ describe('AnnouncementsScreen', () => {
     );
     hooks.useGroups.mockReturnValue({ data: mockGroups, isPending: false });
     hooks.useMarkAnnouncementRead.mockReturnValue({ mutate, isPending: false });
-    hooks.useUnreadAnnouncementsCount.mockReturnValue({ data: 0 });
-    hooks.useDeals.mockReturnValue({ data: [] });
+    hooks.useUnreadCountByKind.mockReturnValue({ data: 0 });
   });
 
   describe('Anunțuri | OSUBB Deals tabs (R45)', () => {
@@ -160,16 +159,10 @@ describe('AnnouncementsScreen', () => {
         isError: false,
         data: [],
       });
-      // The server counts 5 unread, Deals included: two unread Deals, one
-      // of them past its Termen (the team still reads it), one read.
-      hooks.useUnreadAnnouncementsCount.mockReturnValue({ data: 5 });
-      hooks.useDeals.mockReturnValue({
-        data: [
-          { deadline: null, announcement_reads: [] },
-          { deadline: '2000-01-01T00:00:00Z', announcement_reads: [] },
-          { deadline: null, announcement_reads: [{ read_at: 'x' }] },
-        ],
-      });
+      // The server counts each tab under the badge's own rule (R45).
+      hooks.useUnreadCountByKind.mockImplementation((kind: string) => ({
+        data: kind === 'deal' ? 1 : 3,
+      }));
 
       renderAt('/anunturi');
 

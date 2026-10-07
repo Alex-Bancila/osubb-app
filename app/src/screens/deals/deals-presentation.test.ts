@@ -10,7 +10,6 @@ import {
   responsibleCandidates,
   revealCountLabel,
   seesRevealCount,
-  splitUnread,
   toDealPresentation,
   type DealsViewer,
 } from './deals-presentation';
@@ -163,27 +162,6 @@ describe('the team pickers (R44)', () => {
     expect(responsibleCandidates(members, team).map((m) => m.memberId)).toEqual(
       ['bce', 'volunteer'],
     );
-  });
-});
-
-describe('splitUnread', () => {
-  it('takes the unread Deals out of the server total; the Deals tab counts only active ones', () => {
-    const now = new Date('2026-10-07T12:00:00Z');
-    expect(
-      splitUnread(
-        5,
-        [
-          { deadline: null, announcement_reads: [] },
-          { deadline: '2026-10-01T00:00:00Z', announcement_reads: [] },
-          { deadline: null, announcement_reads: [{ read_at: 'x' }] },
-        ],
-        now,
-      ),
-    ).toEqual({ announcements: 3, deals: 1 });
-    expect(splitUnread(0, [{ deadline: null }], now)).toEqual({
-      announcements: 0,
-      deals: 1,
-    });
   });
 });
 

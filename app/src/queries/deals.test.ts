@@ -17,6 +17,7 @@ import {
   fetchDealRevealCount,
   fetchDeals,
   fetchDealsTeam,
+  fetchUnreadCountByKind,
   revealDealCode,
   setDealsTeamMember,
   updateDeal,
@@ -107,6 +108,17 @@ describe('the Deal Code', () => {
       { p_announcement_id: 9 },
     );
   });
+});
+
+it("counts one tab of Anunțuri with the badge's own function", async () => {
+  supabaseMock.rpc.mockResolvedValue({ data: 2, error: null });
+  await expect(fetchUnreadCountByKind('deal')).resolves.toBe(2);
+  expect(supabaseMock.rpc).toHaveBeenCalledWith(
+    'my_unread_announcements_count',
+    {
+      p_kind: 'deal',
+    },
+  );
 });
 
 describe('the OSUBB Deals team (R44)', () => {
