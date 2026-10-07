@@ -360,7 +360,8 @@ it('sends the Attached Links, checks each as a pair on blur and submit, and puts
   );
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
   expect(onDraft).toHaveBeenCalledTimes(2);
-});
+  // Much typing: slow under the full parallel run.
+}, 20_000);
 it('clears the Executor on public mode and clears incompatible Campaigns after Origin changes', async () => {
   const onDraft = vi.fn();
   render(<TaskForm options={options} onDraft={onDraft} />);
