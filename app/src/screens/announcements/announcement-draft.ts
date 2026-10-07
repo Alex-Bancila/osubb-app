@@ -1,5 +1,10 @@
+import type { AttachedLinkValue } from '../../components/attached-link/AttachedLinkFields';
 import { isoToBucharestWallTime } from '../../lib/calendar-time';
 import type { Database } from '../../lib/database.types';
+import {
+  sameAttachedLinks,
+  type AttachedLink,
+} from '../../lib/schemas/attached-link';
 import type {
   AnnouncementPresentation,
   AnnouncementPriority,
@@ -8,7 +13,7 @@ import type {
 /**
  * What the Anunț nou sheet holds while a manager writes, as its inputs hold
  * it: the Termen is the `datetime-local` value in Romania's time (#909), the
- * Attached Link the raw label/address pair (ruling R7).
+ * Attached Links the raw label/address rows (ruling R46).
  */
 export type AnnouncementDraft = {
   title: string;
@@ -16,8 +21,7 @@ export type AnnouncementDraft = {
   deadline: string;
   minLevel: number;
   priority: AnnouncementPriority;
-  linkLabel: string;
-  linkUrl: string;
+  links: AttachedLinkValue[];
 };
 
 export const EMPTY_ANNOUNCEMENT_DRAFT: AnnouncementDraft = {
@@ -26,21 +30,14 @@ export const EMPTY_ANNOUNCEMENT_DRAFT: AnnouncementDraft = {
   deadline: '',
   minLevel: 0,
   priority: 'normal',
-  linkLabel: '',
-  linkUrl: '',
+  links: [],
 };
 
 /** The sheet prefilled from a published Announcement (#930). */
 export function draftFromAnnouncement(
   announcement: Pick<
     AnnouncementPresentation,
-    | 'title'
-    | 'body'
-    | 'deadline'
-    | 'minLevel'
-    | 'priority'
-    | 'formLabel'
-    | 'formUrl'
+    'title' | 'body' | 'deadline' | 'minLevel' | 'priority' | 'links'
   >,
 ): AnnouncementDraft {
   return {
@@ -51,20 +48,13 @@ export function draftFromAnnouncement(
       : '',
     minLevel: announcement.minLevel,
     priority: announcement.priority,
-    linkLabel: announcement.formLabel ?? '',
-    linkUrl: announcement.formUrl ?? '',
+    links: announcement.links.map((link) => ({ ...link })),
   };
 }
 
 export type AnnouncementChanges = Pick<
   Database['public']['Tables']['announcements']['Update'],
-  | 'title'
-  | 'body'
-  | 'deadline'
-  | 'min_level'
-  | 'priority'
-  | 'form_label'
-  | 'form_url'
+  'title' | 'body' | 'deadline' | 'min_level' | 'priority' | 'links'
 >;
 
 /**
@@ -80,7 +70,7 @@ export function announcementChanges(
     title: string;
     body: string;
     deadline: string | null;
-    link: { label: string | null; url: string | null };
+    links: AttachedLink[];
   },
 ): AnnouncementChanges {
   const changes: AnnouncementChanges = {};
@@ -89,13 +79,9 @@ export function announcementChanges(
   if (draft.deadline !== initial.deadline) changes.deadline = parsed.deadline;
   if (draft.minLevel !== initial.minLevel) changes.min_level = draft.minLevel;
   if (draft.priority !== initial.priority) changes.priority = draft.priority;
-  // The pair is stored both-or-neither (R7), so a change sends both halves.
-  if (
-    parsed.link.label !== (initial.linkLabel || null) ||
-    parsed.link.url !== (initial.linkUrl || null)
-  ) {
-    changes.form_label = parsed.link.label;
-    changes.form_url = parsed.link.url;
-  }
+  // The list is replaced whole (R46): any change to a row, its order or
+  // their number sends every link the manager kept.
+  if (!sameAttachedLinks(parsed.links, initial.links))
+    changes.links = parsed.links;
   return changes;
 }

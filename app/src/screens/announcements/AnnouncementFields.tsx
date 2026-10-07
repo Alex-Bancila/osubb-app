@@ -1,5 +1,5 @@
-import { useId, type ReactNode } from 'react';
-import { AttachedLinkFields } from '../../components/attached-link/AttachedLinkFields';
+import type { ReactNode } from 'react';
+import { AttachedLinksFields } from '../../components/attached-link/AttachedLinksFields';
 import { FieldError } from '../../components/ui/field';
 import {
   NativeSelect,
@@ -15,14 +15,17 @@ export const announcementInputClass =
 export const announcementFieldClass =
   'block space-y-1.5 text-sm font-medium text-foreground';
 
-type Bound = Pick<ReturnType<typeof useFormValidation>, 'field' | 'errorProps'>;
+type Bound = Pick<
+  ReturnType<typeof useFormValidation>,
+  'field' | 'errorProps' | 'slot'
+>;
 
 /**
  * The fields an Announcement is written with, shared by "Anunț nou" and
  * "Editează anunțul" (#930) so the two can never drift: Titlu, Mesaj, Termen,
  * then the Origin (`origin`: a picker when composing, read-only when editing),
  * Cine îl vede, Prioritate, anything the caller adds (`extra`), and the
- * Attached Link.
+ * Attached Links (up to five, ruling R46).
  */
 export function AnnouncementFields({
   draft,
@@ -39,8 +42,6 @@ export function AnnouncementFields({
   origin: ReactNode;
   extra?: ReactNode;
 }) {
-  const linkGroupLabelId = useId();
-
   return (
     <>
       <div className="space-y-1.5">
@@ -117,21 +118,12 @@ export function AnnouncementFields({
         </NativeSelect>
       </label>
       {extra}
-      <div
-        role="group"
-        aria-labelledby={linkGroupLabelId}
-        className="space-y-3 rounded-md border p-4"
-      >
-        <p id={linkGroupLabelId} className="text-sm font-medium">
-          Link atașat (opțional)
-        </p>
-        <AttachedLinkFields
-          value={{ label: draft.linkLabel, url: draft.linkUrl }}
-          onChange={(next) =>
-            onChange({ linkLabel: next.label, linkUrl: next.url })
-          }
+      <div className="rounded-md border p-4">
+        <AttachedLinksFields
+          value={draft.links}
+          onChange={(links) => onChange({ links })}
           form={form}
-          name="link"
+          name="links"
         />
       </div>
     </>

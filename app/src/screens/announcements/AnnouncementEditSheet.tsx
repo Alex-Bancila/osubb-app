@@ -115,7 +115,7 @@ function EditForm({
       title: draft.title,
       body: draft.body,
       groupId: announcement.groupId,
-      link: { label: draft.linkLabel, url: draft.linkUrl },
+      links: draft.links,
       // R8 judges a Termen at creation only: an untouched one that has since
       // passed is not checked (nor sent); a new one must not be in the past.
       deadline:

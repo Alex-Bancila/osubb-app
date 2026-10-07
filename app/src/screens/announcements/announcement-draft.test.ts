@@ -12,8 +12,10 @@ const stored = {
   deadline: '2026-10-02T20:59:00.000Z',
   minLevel: 2,
   priority: 'important' as const,
-  formLabel: 'Formular',
-  formUrl: 'https://forms.gle/x',
+  links: [
+    { label: 'Formular', url: 'https://forms.gle/x' },
+    { label: 'Program', url: 'https://osubb.ro/program' },
+  ],
 };
 
 function parsed(draft: AnnouncementDraft, deadline: string | null = null) {
@@ -21,7 +23,9 @@ function parsed(draft: AnnouncementDraft, deadline: string | null = null) {
     title: draft.title.trim(),
     body: draft.body.trim(),
     deadline,
-    link: { label: draft.linkLabel || null, url: draft.linkUrl || null },
+    links: draft.links
+      .map((link) => ({ label: link.label.trim(), url: link.url.trim() }))
+      .filter((link) => link.label && link.url),
   };
 }
 
@@ -33,8 +37,10 @@ describe('draftFromAnnouncement (#930)', () => {
       deadline: '2026-10-02T23:59',
       minLevel: 2,
       priority: 'important',
-      linkLabel: 'Formular',
-      linkUrl: 'https://forms.gle/x',
+      links: [
+        { label: 'Formular', url: 'https://forms.gle/x' },
+        { label: 'Program', url: 'https://osubb.ro/program' },
+      ],
     });
   });
 });
@@ -80,16 +86,34 @@ describe('announcementChanges (#930)', () => {
     });
   });
 
-  it('sends both halves of the Attached Link when either changes', () => {
-    const draft = { ...initial, linkUrl: 'https://forms.gle/y' };
+  it('sends the whole list of Attached Links when any row changes (R46)', () => {
+    const [first, second] = initial.links as [
+      { label: string; url: string },
+      { label: string; url: string },
+    ];
+    const draft = {
+      ...initial,
+      links: [{ ...first, url: 'https://forms.gle/y' }, second],
+    };
     expect(announcementChanges(initial, draft, parsed(draft))).toEqual({
-      form_label: 'Formular',
-      form_url: 'https://forms.gle/y',
+      links: [
+        { label: 'Formular', url: 'https://forms.gle/y' },
+        { label: 'Program', url: 'https://osubb.ro/program' },
+      ],
     });
-    const removed = { ...initial, linkLabel: '', linkUrl: '' };
+    const reordered = { ...initial, links: [second, first] };
+    expect(
+      announcementChanges(initial, reordered, parsed(reordered)).links,
+    ).toEqual([second, first]);
+    const removed = { ...initial, links: [] };
     expect(announcementChanges(initial, removed, parsed(removed))).toEqual({
-      form_label: null,
-      form_url: null,
+      links: [],
     });
+    // A blank row left open is not a change.
+    const blank = {
+      ...initial,
+      links: [first, second, { label: '', url: '' }],
+    };
+    expect(announcementChanges(initial, blank, parsed(blank))).toEqual({});
   });
 });

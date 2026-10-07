@@ -24,8 +24,7 @@ const ANNOUNCEMENT_FIELDS = `
   audience,
   priority,
   pinned,
-  form_label,
-  form_url,
+  links,
   published_at,
   deadline,
   min_level,
@@ -157,8 +156,7 @@ export type CreateAnnouncementInput = Pick<
   | 'audience'
   | 'priority'
   | 'pinned'
-  | 'form_label'
-  | 'form_url'
+  | 'links'
   | 'deadline'
   | 'min_level'
 >;

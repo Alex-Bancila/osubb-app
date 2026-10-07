@@ -25,8 +25,7 @@ function presentation(
     authorMember: null,
     priority: 'critical',
     pinned: true,
-    formLabel: null,
-    formUrl: null,
+    links: [],
     publishedAt: '2026-09-18T15:00:00.000Z',
     publishedLabel: '18 septembrie 2026, 18:00',
     deadline: null,
@@ -237,32 +236,42 @@ describe('AnnouncementCard', () => {
     expect(screen.queryByText('Necitit')).not.toBeInTheDocument();
   });
 
-  it('renders the Attached Link button with safe attributes when form_url is present', () => {
+  it('renders every Attached Link as a bare-label button with safe attributes (R46)', () => {
     render(
       <AnnouncementCard
         announcement={presentation({
-          formLabel: 'Completează formularul',
-          formUrl: 'https://forms.gle/exemplu',
+          links: [
+            {
+              label: 'Completează formularul',
+              url: 'https://forms.gle/exemplu',
+            },
+            { label: 'Program', url: 'https://osubb.ro/program' },
+          ],
         })}
         onOpen={vi.fn()}
       />,
     );
 
     // AttachedLinkButton's own accessible name (#679): the label plus the
-    // new-tab hint, not the card's old "Deschide formular:" prefix.
+    // new-tab hint; a card shows the bare label, never "Deschide".
     const formLink = screen.getByRole('link', {
       name: 'Completează formularul (se deschide într-o filă nouă)',
     });
-    expect(formLink).toBeInTheDocument();
     expect(formLink).toHaveAttribute('href', 'https://forms.gle/exemplu');
     expect(formLink).toHaveAttribute('target', '_blank');
     expect(formLink).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(
+      screen.getByRole('link', {
+        name: 'Program (se deschide într-o filă nouă)',
+      }),
+    ).toHaveAttribute('href', 'https://osubb.ro/program');
+    expect(screen.queryByText(/Deschide/)).toBeNull();
   });
 
-  it('renders no Attached Link button when form_url is absent', () => {
+  it('renders no Attached Link button when there are no links', () => {
     render(
       <AnnouncementCard
-        announcement={presentation({ formLabel: null, formUrl: null })}
+        announcement={presentation({ links: [] })}
         onOpen={vi.fn()}
       />,
     );
@@ -300,8 +309,7 @@ describe('AnnouncementCard', () => {
     const user = userEvent.setup();
     const onOpen = vi.fn();
     const item = presentation({
-      formLabel: 'Formular',
-      formUrl: 'https://forms.gle/test',
+      links: [{ label: 'Formular', url: 'https://forms.gle/test' }],
     });
 
     render(<AnnouncementCard announcement={item} onOpen={onOpen} />);
@@ -317,8 +325,7 @@ describe('AnnouncementCard', () => {
     const user = userEvent.setup();
     const onOpen = vi.fn();
     const item = presentation({
-      formLabel: 'Formular',
-      formUrl: 'https://forms.gle/test',
+      links: [{ label: 'Formular', url: 'https://forms.gle/test' }],
     });
 
     render(<AnnouncementCard announcement={item} onOpen={onOpen} />);

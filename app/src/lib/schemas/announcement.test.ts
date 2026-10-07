@@ -10,7 +10,7 @@ const valid = {
   title: 'Titlu',
   body: 'Corp',
   groupId: 3,
-  link: { label: '', url: '' },
+  links: [] as { label: string; url: string }[],
   deadline: null as string | null,
 };
 const check = (patch: Partial<typeof valid>) => {
@@ -25,13 +25,16 @@ it('trims every text, as announcements_guard_text does', () => {
       ...valid,
       title: '  Titlu  ',
       body: ` ${'b'.repeat(2000)} `,
-      link: { label: `  ${'l'.repeat(60)}  `, url: '  https://osubb.ro/f  ' },
+      links: [
+        { label: `  ${'l'.repeat(60)}  `, url: '  https://osubb.ro/f  ' },
+        { label: '', url: ' ' },
+      ],
     }),
   ).toEqual({
     title: 'Titlu',
     body: 'b'.repeat(2000),
     groupId: 3,
-    link: { label: 'l'.repeat(60), url: 'https://osubb.ro/f' },
+    links: [{ label: 'l'.repeat(60), url: 'https://osubb.ro/f' }],
     deadline: null,
   });
   // #909: a future Termen passes as the ISO instant the form produced.
@@ -49,12 +52,22 @@ it.each([
   [{ body: 'b'.repeat(2001) }, ['body: body_too_long']],
   [{ groupId: null as never }, ['groupId: announcement_group_required']],
   [
-    { link: { label: 'l'.repeat(61), url: 'https://osubb.ro' } },
-    ['link.label: link_label_too_long'],
+    { links: [{ label: 'l'.repeat(61), url: 'https://osubb.ro' }] },
+    ['links.0.label: link_label_too_long'],
   ],
   [
-    { link: { label: 'Formular', url: 'osubb.ro/formular' } },
-    ['link.url: link_url_invalid'],
+    {
+      links: [
+        { label: 'Program', url: 'https://osubb.ro/p' },
+        { label: 'Formular', url: 'osubb.ro/formular' },
+      ],
+    },
+    ['links.1.url: link_url_invalid'],
+  ],
+  // R46: up to five Attached Links.
+  [
+    { links: Array(6).fill({ label: 'Formular', url: 'https://osubb.ro' }) },
+    ['links: too_many_links'],
   ],
   // #909: announcements_guard_deadline's rule, and a wall time Romania skips.
   [{ deadline: '2020-01-01T10:00:00.000Z' }, ['deadline: deadline_in_past']],
@@ -66,7 +79,7 @@ it.each([
 it('maps every reason the announcement guard raises to its field', () => {
   expectMapComplete(
     fieldForReason,
-    ['title', 'body', 'groupId', 'link.label', 'link.url', 'deadline'],
+    ['title', 'body', 'groupId', 'links', 'deadline'],
     [
       'title_required',
       'title_too_short',
@@ -76,6 +89,7 @@ it('maps every reason the announcement guard raises to its field', () => {
       'link_label_too_long',
       'link_url_invalid',
       'link_url_too_long',
+      'too_many_links',
       'deadline_in_past',
     ],
   );

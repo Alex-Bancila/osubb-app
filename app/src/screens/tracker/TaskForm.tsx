@@ -1,5 +1,5 @@
 import { useId, useMemo, useState, type FormEvent } from 'react';
-import { AttachedLinkFields } from '../../components/attached-link/AttachedLinkFields';
+import { AttachedLinksFields } from '../../components/attached-link/AttachedLinksFields';
 import { Button } from '../../components/ui/button';
 import { DialogFooter } from '../../components/ui/dialog';
 import {
@@ -109,7 +109,7 @@ export function TaskForm({
       assignmentMode: 'direct',
       executorId: null,
       campaignId: null,
-      link: { label: '', url: '' },
+      links: [],
     };
   });
   const schema = useMemo(() => taskDraftSchema(options), [options]);
@@ -455,15 +455,13 @@ export function TaskForm({
           </div>
         </>
       )}
-      <fieldset className="grid min-w-0 gap-3 border-t border-border pt-4">
-        <legend className="text-sm font-medium">Link atașat (opțional)</legend>
-        <AttachedLinkFields
-          value={values.link}
-          onChange={(link) => update({ link })}
-          form={form}
-          name="link"
-        />
-      </fieldset>
+      <AttachedLinksFields
+        value={values.links}
+        onChange={(links) => update({ links })}
+        form={form}
+        name="links"
+        className="border-t border-border pt-4"
+      />
       <FieldError>{form.formError}</FieldError>
       <DialogFooter>
         {onCancel && (

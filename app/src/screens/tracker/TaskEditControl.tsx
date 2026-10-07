@@ -6,7 +6,11 @@ import {
   useState,
   type FormEvent,
 } from 'react';
-import { AttachedLinkFields } from '../../components/attached-link/AttachedLinkFields';
+import { AttachedLinksFields } from '../../components/attached-link/AttachedLinksFields';
+import {
+  attachedLinksFrom,
+  sameAttachedLinks,
+} from '../../lib/schemas/attached-link';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
 import {
@@ -185,10 +189,8 @@ function TaskEditForm({
     task.audience === 'org' ? 'org' : 'local',
   );
   const [groupId, setGroupId] = useState(task.group_id);
-  const [link, setLink] = useState({
-    label: task.link_label ?? '',
-    url: task.link_url ?? '',
-  });
+  const [initialLinks] = useState(() => attachedLinksFrom(task.links));
+  const [links, setLinks] = useState(initialLinks);
   const locked = groupLock(task);
   const [checking, setChecking] = useState(false);
   // The values waiting for the manager to accept their consequences.
@@ -236,7 +238,7 @@ function TaskEditForm({
       : assignmentMode === 'direct' || localOnly
         ? 'local'
         : (audience as TaskUpdateValues['audience']),
-    link,
+    links,
   };
   const form = useFormValidation(
     taskUpdateSchema({
@@ -248,8 +250,7 @@ function TaskEditForm({
   );
   const changed =
     groupId !== task.group_id ||
-    (link.label.trim() || null) !== task.link_label ||
-    (link.url.trim() || null) !== task.link_url ||
+    !sameAttachedLinks(links, initialLinks) ||
     title.trim() !== task.title ||
     (description.trim() || null) !== (task.description ?? null) ||
     deadline !== initialDeadline ||
@@ -300,14 +301,8 @@ function TaskEditForm({
     if (submitting.current) return;
     const parsed = form.validate();
     if (!parsed) return;
-    const { link: parsedLink, ...fields } = parsed;
-    const input: TaskUpdateInput = {
-      taskId: task.id,
-      ...fields,
-      // update_task is a full-state replace: the link as the form shows it.
-      linkLabel: parsedLink.label,
-      linkUrl: parsedLink.url,
-    };
+    // update_task is a full-state replace: the links as the form shows them.
+    const input: TaskUpdateInput = { taskId: task.id, ...parsed };
     submitting.current = true;
     setChecking(true);
     try {
@@ -530,15 +525,13 @@ function TaskEditForm({
             </div>
           </>
         )}
-        <fieldset className="min-w-0 space-y-3 border-t border-border pt-3">
-          <legend className="font-medium">Link atașat (opțional)</legend>
-          <AttachedLinkFields
-            value={link}
-            onChange={setLink}
-            form={form}
-            name="link"
-          />
-        </fieldset>
+        <AttachedLinksFields
+          value={links}
+          onChange={setLinks}
+          form={form}
+          name="links"
+          className="border-t border-border pt-3"
+        />
       </fieldset>
       {options.isPending && (
         <p role="status">Se verifică grupul și campaniile…</p>

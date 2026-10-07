@@ -20,7 +20,9 @@ export function issues(result: Parsed): string[] {
 /**
  * Every issue a schema raises must be a reason with Romanian copy, and its
  * module's `fieldForReason` must send that reason to the same field — so a
- * server refusal with the same reason lands where the browser's would.
+ * server refusal with the same reason lands where the browser's would. A
+ * list's row (`links.2.url`, ruling R46) is the exception the server cannot
+ * name: its reason maps to the list (`links`), where a refusal shows.
  */
 export function expectRoutable(
   result: Parsed,
@@ -29,9 +31,12 @@ export function expectRoutable(
   if (result.success) return;
   for (const issue of result.error.issues) {
     expect(knownReasons().has(issue.message), issue.message).toBe(true);
-    expect(fieldForReason[issue.message], issue.message).toBe(
-      issue.path.map(String).join('.'),
-    );
+    // `links.2.url` is a row of the list `links`.
+    const field = issue.path
+      .map(String)
+      .join('.')
+      .replace(/\.\d+(\..*)?$/, '');
+    expect(fieldForReason[issue.message], issue.message).toBe(field);
   }
 }
 

@@ -370,7 +370,7 @@ export function RequestDecisionQueue({
                         title: draft.title,
                         description: draft.description,
                         groupId: draft.groupId,
-                        link: draft.link,
+                        links: draft.links,
                         campaignId: draft.campaignId,
                       },
                     })

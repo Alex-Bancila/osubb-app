@@ -73,8 +73,7 @@ function presentation(
     authorMember: null,
     priority: 'critical',
     pinned: true,
-    formLabel: null,
-    formUrl: null,
+    links: [],
     publishedAt: '2026-09-18T15:00:00.000Z',
     publishedLabel: '18 septembrie 2026, 18:00',
     deadline: null,
@@ -137,10 +136,12 @@ describe('AnnouncementDetailsSheet', () => {
     expect(screen.getByText(/18 septembrie 2026/)).toBeInTheDocument();
   });
 
-  it('renders form link when formLabel and formUrl are present', () => {
+  it('renders every Attached Link as "Deschide: <etichetă>" (R46)', () => {
     const item = presentation({
-      formLabel: 'Feedback formular',
-      formUrl: 'https://forms.gle/feedback',
+      links: [
+        { label: 'Feedback formular', url: 'https://forms.gle/feedback' },
+        { label: 'Program', url: 'https://osubb.ro/program' },
+      ],
     });
 
     renderSheet(
@@ -148,28 +149,34 @@ describe('AnnouncementDetailsSheet', () => {
     );
 
     const formLink = screen.getByRole('link', {
-      name: /Deschide formular: Feedback formular/,
+      name: 'Deschide: Feedback formular (se deschide într-o filă nouă)',
     });
-    expect(formLink).toBeInTheDocument();
+    expect(formLink).toHaveTextContent('Deschide: Feedback formular');
     expect(formLink).toHaveAttribute('href', 'https://forms.gle/feedback');
     expect(formLink).toHaveAttribute('target', '_blank');
     expect(formLink).toHaveAttribute('rel', 'noopener noreferrer');
-    expect(screen.getByText('Link atașat')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /^Deschide: Program/ }),
+    ).toHaveAttribute('href', 'https://osubb.ro/program');
+    // "Deschide formular" is retired.
+    expect(screen.queryByText(/Deschide formular/)).toBeNull();
   });
 
   it.each(['javascript:alert(1)', 'data:text/html,hi', 'forms.gle/feedback'])(
     'renders no form link for a stored address that is not http(s): %s',
-    (formUrl) => {
-      const item = presentation({ formLabel: 'Feedback formular', formUrl });
+    (url) => {
+      const item = presentation({
+        links: [{ label: 'Feedback formular', url }],
+      });
 
       renderSheet(
         <AnnouncementDetailsSheet announcement={item} onClose={vi.fn()} />,
       );
 
+      expect(screen.queryByRole('link', { name: /Deschide/ })).toBeNull();
       expect(
-        screen.queryByRole('link', { name: /Deschide formular/ }),
+        screen.queryByRole('list', { name: 'Linkuri atașate' }),
       ).toBeNull();
-      expect(screen.queryByText('Link atașat')).toBeNull();
     },
   );
 

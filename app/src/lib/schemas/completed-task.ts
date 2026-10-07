@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import {
-  attachedLinkSchema,
-  fieldForReason as linkFieldForReason,
+  attachedLinksSchema,
+  linksFieldForReason,
+  type AttachedLink,
 } from './attached-link';
 import {
   evaluationShape,
@@ -13,7 +14,7 @@ import { isId } from './text';
 /**
  * A completed Task (#915), as `approve_completed_work_request` (shaping a
  * Request's Task) and `create_completed_task` (adding one directly) accept
- * it: the Task's title, details, Group, Attached Link and Campaign — no
+ * it: the Task's title, details, Group, Attached Links (up to five, R46) and Campaign — no
  * deadline, no Audience — then the Evaluation's Difficulty, Rating and note.
  * The commands stay authoritative; this keeps a draft they would refuse in
  * the browser.
@@ -24,7 +25,8 @@ export type CompletedTaskInput = {
   groupId: number | null;
   /** The volunteer; always set when approving (the requester). */
   executorId: string | null;
-  link: { label: string; url: string };
+  /** The rows as typed; a blank row is dropped (R46). */
+  links: AttachedLink[];
   campaignId: number | null;
   difficulty: string;
   rating: string;
@@ -63,7 +65,7 @@ export function completedTaskSchema({
           if (!executorId?.trim())
             ctx.addIssue({ code: 'custom', message: 'executor_required' });
         }),
-      link: attachedLinkSchema,
+      links: attachedLinksSchema,
       campaignId: z.number().nullable(),
       ...evaluationShape,
     })
@@ -114,12 +116,7 @@ export function completedTaskFieldForReason(
       EXECUTOR_REASONS.map((reason) => [reason, volunteerField]),
     ),
     invalid_campaign: 'campaignId',
-    ...Object.fromEntries(
-      Object.entries(linkFieldForReason).map(([reason, field]) => [
-        reason,
-        `link.${field}`,
-      ]),
-    ),
+    ...linksFieldForReason('links'),
     ...evaluationFields,
   };
 }

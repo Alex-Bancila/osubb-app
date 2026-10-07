@@ -295,10 +295,11 @@ it("shows the Task's Attached Link like every other Task view, and none where th
     data: [
       {
         ...workshop,
-        link_label: 'Dosar atelier',
-        link_url: 'https://drive.example/atelier',
+        links: [
+          { label: 'Dosar atelier', url: 'https://drive.example/atelier' },
+        ],
       },
-      { ...budget, link_label: null, link_url: null },
+      { ...budget, links: [] },
     ],
   });
   view();
@@ -587,7 +588,7 @@ it('adds a completed Task for the tracked Member, preselected, and says so (#915
     groupId: 9,
     title: 'Atelier de vară',
     description: null,
-    link: { label: null, url: null },
+    links: [],
     campaignId: null,
     difficulty: 3,
     rating: 4,

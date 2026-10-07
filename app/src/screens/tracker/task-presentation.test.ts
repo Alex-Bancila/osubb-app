@@ -387,10 +387,12 @@ describe('TaskPresentation', () => {
     ).toEqual({ terminal: 0, total: 0 });
   });
 
-  it('carries the Attached Link and the latest Submission Note', () => {
+  it('carries the Attached Links and the latest Submission Note', () => {
     const row = taskRow({
-      link_label: '  Brief ',
-      link_url: 'https://drive.example/brief',
+      links: [
+        { label: '  Brief ', url: 'https://drive.example/brief' },
+        { label: 'Surse', url: 'https://drive.example/surse' },
+      ],
       submission: [
         {
           id: 4,
@@ -409,10 +411,10 @@ describe('TaskPresentation', () => {
       ],
     });
     const task = toTaskPresentation(row, now);
-    expect(task.link).toEqual({
-      label: 'Brief',
-      url: 'https://drive.example/brief',
-    });
+    expect(task.links).toEqual([
+      { label: 'Brief', url: 'https://drive.example/brief' },
+      { label: 'Surse', url: 'https://drive.example/surse' },
+    ]);
     expect(task.submission).toEqual({
       note: null,
       link: { label: 'Surse', url: 'https://x.example' },
@@ -443,9 +445,9 @@ describe('TaskPresentation', () => {
     ).toBeNull();
     // A half link is no link.
     expect(
-      toTaskPresentation(taskRow({ link_label: 'Brief', link_url: null }), now)
-        .link,
-    ).toBeNull();
+      toTaskPresentation(taskRow({ links: [{ label: 'Brief', url: '' }] }), now)
+        .links,
+    ).toEqual([]);
   });
 });
 

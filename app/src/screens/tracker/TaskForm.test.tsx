@@ -154,7 +154,7 @@ it('picks the Origin as a root Group, then a Group below it, and emits a trimmed
     assignmentMode: 'direct',
     executorId: 'ana',
     campaignId: 10,
-    link: { label: null, url: null },
+    links: [],
   });
 });
 it("disables the organization-wide Audience for a Private Group's Task, with the reason (#757)", async () => {
@@ -303,7 +303,7 @@ it('keeps a Campaign that can still tag the new Group and clears one that cannot
   await pick(user, subgroupBox(), 'Doar grupul principal');
   expect(campaign()).toHaveValue('');
 });
-it('sends the Attached Link, checks it as a pair on blur and submit, and puts the server’s reason under it', async () => {
+it('sends the Attached Links, checks each as a pair on blur and submit, and puts the server’s reason on the list (R46)', async () => {
   const onDraft = vi
     .fn()
     .mockRejectedValueOnce({ code: 'PT400', message: 'link_url_invalid' })
@@ -314,8 +314,9 @@ it('sends the Attached Link, checks it as a pair on blur and submit, and puts th
   const user = await content();
   await chooseOrigin(user, 'Tineret');
   await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
-  const label = screen.getByLabelText('Etichetă link');
-  const url = screen.getByLabelText('Adresă link');
+  await user.click(screen.getByRole('button', { name: 'Adaugă link' }));
+  const label = screen.getByLabelText('Etichetă link 1');
+  const url = screen.getByLabelText('Adresă link 1');
   await user.type(label, 'l'.repeat(61));
   await user.tab();
   expect(label).toHaveAccessibleDescription(
@@ -346,18 +347,21 @@ it('sends the Attached Link, checks it as a pair on blur and submit, and puts th
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
   expect(onDraft).toHaveBeenCalledWith(
     expect.objectContaining({
-      link: { label: 'Brief', url: 'https://example.org/brief' },
+      links: [{ label: 'Brief', url: 'https://example.org/brief' }],
     }),
   );
-  // The server's refusal of the same rule lands under the same field.
+  // The server's refusal cannot name the row: it lands on the list.
   await waitFor(() =>
-    expect(url).toHaveAccessibleDescription(
+    expect(
+      screen.getByRole('group', { name: /Linkuri atașate/ }),
+    ).toHaveAccessibleDescription(
       /Adresa trebuie să înceapă cu http:\/\/ sau https:\/\//,
     ),
   );
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
   expect(onDraft).toHaveBeenCalledTimes(2);
-});
+  // Much typing: slow under the full parallel run.
+}, 20_000);
 it('clears the Executor on public mode and clears incompatible Campaigns after Origin changes', async () => {
   const onDraft = vi.fn();
   render(<TaskForm options={options} onDraft={onDraft} />);

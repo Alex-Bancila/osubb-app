@@ -1,5 +1,5 @@
 import { ChevronRight } from 'lucide-react';
-import { AttachedLinkButton } from '../../components/attached-link/AttachedLinkButton';
+import { AttachedLinksList } from '../../components/attached-link/AttachedLinksList';
 import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardFooter } from '../../components/ui/card';
@@ -70,14 +70,12 @@ export default function AnnouncementCard({
           {announcement.body}
         </p>
 
-        {announcement.formLabel && announcement.formUrl && (
-          <div className="mt-3">
-            <AttachedLinkButton
-              label={announcement.formLabel}
-              url={announcement.formUrl}
-            />
-          </div>
-        )}
+        <AttachedLinksList
+          links={announcement.links}
+          variant="card"
+          className="mt-3"
+          buttonClassName="max-w-full text-left wrap-anywhere"
+        />
       </CardContent>
 
       <CardFooter className="justify-between gap-3 py-3 text-xs text-muted-foreground">

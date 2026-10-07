@@ -1,17 +1,14 @@
 import { z } from 'zod';
-import {
-  attachedLinkSchema,
-  fieldForReason as linkFieldForReason,
-} from './attached-link';
+import { attachedLinksSchema, linksFieldForReason } from './attached-link';
 import { isId, requiredText } from './text';
 
 /**
  * An Announcement, as `announcements_guard_text` stores it (#673, ruling R8):
- * a title of 3–120 characters, a body of at most 2000, an optional Attached
- * Link, an Origin Group the author may publish from, and an optional Termen
- * that is not in the past (#909, `announcements_guard_deadline`). `deadline`
- * is an ISO instant, `null` for none, or `''` for a wall-clock time that does
- * not exist in Romania.
+ * a title of 3–120 characters, a body of at most 2000, up to five Attached
+ * Links (ruling R46), an Origin Group the author may publish from, and an
+ * optional Termen that is not in the past (#909,
+ * `announcements_guard_deadline`). `deadline` is an ISO instant, `null` for
+ * none, or `''` for a wall-clock time that does not exist in Romania.
  */
 export const announcementSchema = z.object({
   title: requiredText({
@@ -27,7 +24,7 @@ export const announcementSchema = z.object({
     tooLong: 'body_too_long',
   }),
   groupId: z.number().nullable().refine(isId, 'announcement_group_required'),
-  link: attachedLinkSchema,
+  links: attachedLinksSchema,
   deadline: z
     .string()
     .nullable()
@@ -51,10 +48,5 @@ export const fieldForReason: Readonly<Record<string, string>> = {
   announcement_group_required: 'groupId',
   deadline_invalid: 'deadline',
   deadline_in_past: 'deadline',
-  ...Object.fromEntries(
-    Object.entries(linkFieldForReason).map(([reason, field]) => [
-      reason,
-      `link.${field}`,
-    ]),
-  ),
+  ...linksFieldForReason('links'),
 };

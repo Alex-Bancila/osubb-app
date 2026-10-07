@@ -51,6 +51,8 @@ export function SubmissionNote({
         <AttachedLinkButton
           label={submission.link.label}
           url={submission.link.url}
+          // R46: the details sheet says what the button does.
+          text={showTime ? `Deschide: ${submission.link.label}` : undefined}
           className="max-w-full text-left wrap-anywhere"
         />
       )}
