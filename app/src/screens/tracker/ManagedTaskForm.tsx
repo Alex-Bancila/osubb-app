@@ -60,7 +60,8 @@ export function ManagedTaskForm({
   if (query.isPending)
     return <p role="status">Se încarcă opțiunile taskului…</p>;
   return (
-    <div className="space-y-3">
+    // The chain down to the form's pinned footer stays as tall as the sheet.
+    <div className="flex min-w-0 flex-1 flex-col gap-3">
       {query.isError && (
         <div role="alert" className="space-y-2">
           <p>Nu am putut încărca opțiunile taskului.</p>
@@ -74,7 +75,7 @@ export function ManagedTaskForm({
         </div>
       )}
       {query.data && (
-        <fieldset disabled={pending} className="min-w-0">
+        <fieldset disabled={pending} className="flex min-w-0 flex-1 flex-col">
           <TaskForm
             key={parentTaskId ?? 'new-task'}
             options={query.data}
@@ -85,10 +86,10 @@ export function ManagedTaskForm({
             submitLabel={submitLabel}
             onCancel={onCancel}
             cancelLabel={cancelLabel}
+            status={pending && <p role="status">{pendingLabel}</p>}
           />
         </fieldset>
       )}
-      {pending && <p role="status">{pendingLabel}</p>}
     </div>
   );
 }

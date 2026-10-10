@@ -143,77 +143,77 @@ export function GroupChildrenTab({
   // (relevance B48).
   const showCategory = varies(childGroups, (child) => child.category);
   return (
-    <Panel
-      title="Subgrupuri"
-      flush={childGroups.length > 0}
-      control={
-        authority.manageGroup &&
-        group.status === 'active' && (
-          <GroupCreateDialog
-            trigger="Subgrup nou"
-            title={`Subgrup al ${group.name}`}
-            parent={group}
-            groups={[]}
-            groupsById={new Map()}
-            levels={levels}
-            actorLevel={actorLevel}
-            members={members}
-            disabled={busy}
-            choosePrivate={authority.editStructure}
-            onCreate={onRun}
-          />
-        )
-      }
-    >
-      {childGroups.length === 0 ? (
-        <EmptyState>Grupul nu are subgrupuri.</EmptyState>
-      ) : (
-        <ul className={rowListClass} aria-label="Subgrupuri">
-          {childGroups.map((child) => (
-            <ListRow
-              key={child.id}
-              action={
-                child.status === 'active' &&
-                authorityFor(child).archive && (
-                  <ArchiveChildDialog
-                    child={child}
-                    busy={busy}
-                    error={error}
-                    onArchive={() =>
-                      onRun({ kind: 'archive', groupId: child.id })
-                    }
-                  />
-                )
-              }
-            >
-              <span className="flex min-w-0 flex-wrap items-center gap-x-2">
-                <span
-                  aria-hidden="true"
-                  className="size-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: child.color ?? 'var(--brand-red)' }}
-                />
-                <Link
-                  to={`/administrare/grupuri/${child.id}`}
-                  className="inline-flex min-h-11 min-w-0 items-center truncate font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-                >
-                  {child.name}
-                </Link>
-                {showCategory && (
-                  <Badge variant="outline">
-                    {categoryLabel(child.category)}
-                  </Badge>
-                )}
-                <PrivateGroupBadge isPrivate={child.is_private} />
-                {child.status !== 'active' && (
-                  <Badge variant="secondary">
-                    {groupStatusLabel(child.status)}
-                  </Badge>
-                )}
-              </span>
-            </ListRow>
-          ))}
-        </ul>
+    <>
+      {/* The page's plus button; the tab already says Subgrupuri. */}
+      {authority.manageGroup && group.status === 'active' && (
+        <GroupCreateDialog
+          trigger="Subgrup nou"
+          title={`Subgrup al ${group.name}`}
+          parent={group}
+          groups={[]}
+          groupsById={new Map()}
+          levels={levels}
+          actorLevel={actorLevel}
+          members={members}
+          disabled={busy}
+          choosePrivate={authority.editStructure}
+          onCreate={onRun}
+        />
       )}
-    </Panel>
+      {/* Not "Subgrupuri": the tab's own region around it has that name. */}
+      <Panel aria-label="Subgrupurile grupului" flush={childGroups.length > 0}>
+        {childGroups.length === 0 ? (
+          <EmptyState>Grupul nu are subgrupuri.</EmptyState>
+        ) : (
+          <ul className={rowListClass} aria-label="Subgrupuri">
+            {childGroups.map((child) => (
+              <ListRow
+                key={child.id}
+                action={
+                  child.status === 'active' &&
+                  authorityFor(child).archive && (
+                    <ArchiveChildDialog
+                      child={child}
+                      busy={busy}
+                      error={error}
+                      onArchive={() =>
+                        onRun({ kind: 'archive', groupId: child.id })
+                      }
+                    />
+                  )
+                }
+              >
+                <span className="flex min-w-0 flex-wrap items-center gap-x-2">
+                  <span
+                    aria-hidden="true"
+                    className="size-2.5 shrink-0 rounded-full"
+                    style={{
+                      backgroundColor: child.color ?? 'var(--brand-red)',
+                    }}
+                  />
+                  <Link
+                    to={`/administrare/grupuri/${child.id}`}
+                    className="inline-flex min-h-11 min-w-0 items-center truncate font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                  >
+                    {child.name}
+                  </Link>
+                  {showCategory && (
+                    <Badge variant="outline">
+                      {categoryLabel(child.category)}
+                    </Badge>
+                  )}
+                  <PrivateGroupBadge isPrivate={child.is_private} />
+                  {child.status !== 'active' && (
+                    <Badge variant="secondary">
+                      {groupStatusLabel(child.status)}
+                    </Badge>
+                  )}
+                </span>
+              </ListRow>
+            ))}
+          </ul>
+        )}
+      </Panel>
+    </>
   );
 }

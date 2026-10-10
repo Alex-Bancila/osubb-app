@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { CommandError } from '../../lib/command-reasons';
+import { chooseOption } from '../../test/select';
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 const state = vi.hoisted(() => ({
@@ -87,8 +88,7 @@ async function pick(user: User, box: HTMLElement, name: RegExp | string) {
   await user.click(await screen.findByRole('option', { name }));
   await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
 }
-const volunteerBox = () =>
-  screen.getByRole('combobox', { name: 'Voluntar (obligatoriu)' });
+const volunteerBox = () => screen.getByRole('combobox', { name: 'Voluntar' });
 
 async function open(user: User) {
   render(<AddCompletedTaskControl onAdded={onAdded} />);
@@ -100,14 +100,9 @@ async function open(user: User) {
 
 async function evaluate(user: User, dialog: HTMLElement) {
   await user.click(within(dialog).getByRole('radio', { name: /^4 stele — / }));
-  await user.click(
-    within(dialog).getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
-  );
+  await user.click(within(dialog).getByRole('spinbutton', { name: 'Nota' }));
   await user.keyboard('5');
-  await user.type(
-    within(dialog).getByLabelText('Observații (obligatoriu)'),
-    'Excelent',
-  );
+  await user.type(within(dialog).getByLabelText('Observații'), 'Excelent');
 }
 
 it('is offered only to a viewer who may create Tasks, beside "Task nou" (#915)', () => {
@@ -127,13 +122,22 @@ it('is offered only to a viewer who may create Tasks, beside "Task nou" (#915)',
 it('lists the volunteers of the chosen Group and re-filters them when the Group changes', async () => {
   const user = userEvent.setup();
   const dialog = await open(user);
+  // A form sheet with no intro paragraph and its actions pinned.
+  expect(dialog).toHaveAttribute('data-slot', 'form-sheet');
+  expect(dialog).not.toHaveTextContent(/Înregistrează munca/);
+  expect(
+    within(dialog)
+      .getByRole('button', { name: 'Adaugă și acordă punctele' })
+      .closest('[data-slot="sheet-footer"][data-pinned]'),
+  ).not.toBeNull();
+  expect(dialog).not.toHaveTextContent('(obligatoriu)');
   expect(
     within(dialog).getByText('Alege întâi grupul: lista arată membrii lui.'),
   ).toBeVisible();
   await pick(
     user,
     within(dialog).getByRole('combobox', {
-      name: 'Grup principal (obligatoriu)',
+      name: 'Grup principal',
     }),
     /^Educație/,
   );
@@ -167,7 +171,7 @@ it('adds the completed Task with every chosen field and reports it (#915)', asyn
   await pick(
     user,
     within(dialog).getByRole('combobox', {
-      name: 'Grup principal (obligatoriu)',
+      name: 'Grup principal',
     }),
     /^Educație/,
   );
@@ -177,14 +181,15 @@ it('adds the completed Task with every chosen field and reports it (#915)', asyn
     /^Mentorat/,
   );
   await pick(user, volunteerBox(), 'Ana');
+  await user.type(within(dialog).getByLabelText('Titlu'), '  Atelier  ');
   await user.type(
-    within(dialog).getByLabelText('Titlu (obligatoriu)'),
-    '  Atelier  ',
+    within(dialog).getByLabelText('Detalii (opțional)'),
+    'Sala 2',
   );
-  await user.type(within(dialog).getByLabelText('Detalii'), 'Sala 2');
-  await user.selectOptions(
+  await chooseOption(
+    user,
     within(dialog).getByLabelText('Campanie (opțional)'),
-    '3',
+    'Bun venit',
   );
   await user.click(within(dialog).getByRole('button', { name: 'Adaugă link' }));
   await user.type(within(dialog).getByLabelText('Etichetă link 1'), 'Poze');
@@ -235,9 +240,9 @@ it('asks for the Group, the volunteer, the title and the scores before sending',
     within(dialog).getByText('Alege exact un grup de origine.'),
   ).toBeVisible();
   expect(within(dialog).getByText('Alege voluntarul.')).toBeVisible();
-  expect(
-    within(dialog).getByLabelText('Titlu (obligatoriu)'),
-  ).toHaveAccessibleDescription('Scrie titlul.');
+  expect(within(dialog).getByLabelText('Titlu')).toHaveAccessibleDescription(
+    'Scrie titlul.',
+  );
   expect(within(dialog).getByText('Alege Dificultatea.')).toBeVisible();
   expect(within(dialog).getByText('Alege Nota.')).toBeVisible();
 });
@@ -254,15 +259,12 @@ it('puts a server refusal under the field it names, in Romanian', async () => {
   await pick(
     user,
     within(dialog).getByRole('combobox', {
-      name: 'Grup principal (obligatoriu)',
+      name: 'Grup principal',
     }),
     /^Educație/,
   );
   await pick(user, volunteerBox(), 'Bogdan');
-  await user.type(
-    within(dialog).getByLabelText('Titlu (obligatoriu)'),
-    'Stand',
-  );
+  await user.type(within(dialog).getByLabelText('Titlu'), 'Stand');
   await evaluate(user, dialog);
   await user.click(
     within(dialog).getByRole('button', { name: 'Adaugă și acordă punctele' }),
@@ -274,9 +276,7 @@ it('puts a server refusal under the field it names, in Romanian', async () => {
   ).toBeVisible();
   expect(onAdded).not.toHaveBeenCalled();
   // The draft stays for another try.
-  expect(within(dialog).getByLabelText('Titlu (obligatoriu)')).toHaveValue(
-    'Stand',
-  );
+  expect(within(dialog).getByLabelText('Titlu')).toHaveValue('Stand');
 });
 
 it('sets the Evaluation from the guide of the chosen Group (#986)', async () => {
@@ -309,7 +309,7 @@ it('sets the Evaluation from the guide of the chosen Group (#986)', async () => 
   await pick(
     user,
     within(dialog).getByRole('combobox', {
-      name: 'Grup principal (obligatoriu)',
+      name: 'Grup principal',
     }),
     /^Educație/,
   );
@@ -344,7 +344,7 @@ it('sets the Evaluation from the guide of the chosen Group (#986)', async () => 
     within(dialog).getByRole('radio', { name: /^4 stele — / }),
   ).toBeChecked();
   expect(
-    within(dialog).getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
+    within(dialog).getByRole('spinbutton', { name: 'Nota' }),
   ).toHaveAttribute('aria-valuenow', '5');
   expect(within(dialog).getByText(/Previzualizare: 12 puncte/)).toBeVisible();
   state.groups = new Map() as never;

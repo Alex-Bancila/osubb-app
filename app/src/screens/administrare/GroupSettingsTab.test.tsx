@@ -12,7 +12,9 @@ import type {
 } from '../../queries/groups-admin';
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+import { chooseOption } from '../../test/select';
 import { GroupSettingsTab } from './GroupSettingsTab';
+import { optionNames, optionsOf } from './select-test-options';
 
 /*
  * #698 (ruling R18): the Group's "Formular de înscriere" link in the settings
@@ -89,6 +91,10 @@ function show(stored: Partial<AdminGroup> = {}) {
 
 const labelField = () => screen.getByLabelText('Eticheta butonului');
 const urlField = () => screen.getByLabelText('Adresa formularului');
+/** Behind the address field's "i", and always part of its description. */
+const URL_HINT = 'Adresa începe cu http:// sau https://';
+const formSwitch = () =>
+  screen.getByRole('switch', { name: 'Formular de înscriere' });
 const save = () =>
   userEvent.click(screen.getByRole('button', { name: 'Salvează setările' }));
 
@@ -104,8 +110,22 @@ it('shows the two fields in a "Formular de înscriere" fieldset, filled from the
   expect(
     screen.getByRole('group', { name: 'Formular de înscriere' }),
   ).toBeVisible();
+  expect(formSwitch()).toBeChecked();
   expect(labelField()).toHaveValue('Înscrie-te');
   expect(urlField()).toHaveValue(FORM_URL);
+  // A form has both halves: neither is marked optional.
+  expect(labelField()).toBeRequired();
+  expect(urlField()).toBeRequired();
+  // The address rule waits behind the "i", and still describes the field.
+  expect(
+    screen.getByText('Adresa începe cu http:// sau https://'),
+  ).not.toBeVisible();
+  expect(urlField()).toHaveAccessibleDescription(
+    'Adresa începe cu http:// sau https://',
+  );
+  expect(
+    screen.getByRole('button', { name: 'Despre adresa formularului' }),
+  ).toBeVisible();
   expect(
     (
       await axe.run(container, {
@@ -115,9 +135,30 @@ it('shows the two fields in a "Formular de înscriere" fieldset, filled from the
   ).toEqual([]);
 });
 
+it('keeps the form off, its two fields away, for a Group with no stored link', async () => {
+  show();
+  expect(formSwitch()).not.toBeChecked();
+  expect(screen.queryByLabelText('Eticheta butonului')).toBeNull();
+  expect(screen.queryByLabelText('Adresa formularului')).toBeNull();
+  expect(
+    screen.queryByRole('group', { name: 'Formular de înscriere' }),
+  ).toBeNull();
+  // Off is "no form": the pair is saved as null, as before.
+  await save();
+  expect(run).toHaveBeenCalledWith(
+    expect.objectContaining({
+      kind: 'settings',
+      applicationFormLabel: null,
+      applicationFormUrl: null,
+    }),
+    expect.any(Function),
+  );
+});
+
 it('saves the pair together, trimmed, as p_application_form_label / _url', async () => {
   const user = userEvent.setup();
   show();
+  await user.click(formSwitch());
   await user.type(labelField(), '  Completează formularul ');
   await user.type(urlField(), ` ${FORM_URL} `);
   await save();
@@ -145,11 +186,13 @@ it('saves the pair together, trimmed, as p_application_form_label / _url', async
  * "Coordonator" for a Department's BCE members.
  */
 const responsibleField = () =>
-  screen.getByLabelText('Cum se numesc responsabilii');
+  screen.getByLabelText('Cum se numesc responsabilii (opțional)');
 
 it("names the Responsible position right after the Manager's, filled from the stored setting (#962)", () => {
   show({ manager_title: 'Vicepreședinte', responsible_title: 'Coordonator' });
-  const manager = screen.getByLabelText('Cum se numește coordonatorul');
+  const manager = screen.getByLabelText(
+    'Cum se numește coordonatorul (opțional)',
+  );
   expect(manager).toHaveValue('Vicepreședinte');
   expect(responsibleField()).toHaveValue('Coordonator');
   expect(responsibleField()).toHaveAttribute('maxLength', '80');
@@ -203,14 +246,15 @@ it("shows update_group's responsible_title_too_long under the Responsible field 
   );
 });
 
-it('clears the pair together when both fields are emptied', async () => {
+it('clears the pair together when the form is turned off', async () => {
   const user = userEvent.setup();
   show({
     application_form_label: 'Înscrie-te',
     application_form_url: FORM_URL,
   });
-  await user.clear(labelField());
-  await user.clear(urlField());
+  await user.click(formSwitch());
+  expect(formSwitch()).not.toBeChecked();
+  expect(screen.queryByLabelText('Eticheta butonului')).toBeNull();
   await save();
   expect(run).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -220,21 +264,41 @@ it('clears the pair together when both fields are emptied', async () => {
     }),
     expect.any(Function),
   );
+  // Turned on again, the fields come back empty: off cleared them.
+  await user.click(formSwitch());
+  expect(labelField()).toHaveValue('');
+  expect(urlField()).toHaveValue('');
+});
+
+it('asks for the pair when the form is on with both fields empty, and saves nothing', async () => {
+  const user = userEvent.setup();
+  show({
+    application_form_label: 'Înscrie-te',
+    application_form_url: FORM_URL,
+  });
+  await user.clear(labelField());
+  await user.clear(urlField());
+  await save();
+  expect(run).not.toHaveBeenCalled();
+  expect(urlField()).toHaveAccessibleDescription(
+    `${URL_HINT} Completează și eticheta, și adresa.`,
+  );
 });
 
 it('asks for both halves, on blur and on save, under the half left empty', async () => {
   const user = userEvent.setup();
   show();
+  await user.click(formSwitch());
   await user.type(labelField(), 'Înscrie-te');
   await user.click(urlField());
   await user.tab();
   expect(urlField()).toHaveAccessibleDescription(
-    'Completează și eticheta, și adresa.',
+    `${URL_HINT} Completează și eticheta, și adresa.`,
   );
   await save();
   expect(run).not.toHaveBeenCalled();
   expect(urlField()).toHaveAccessibleDescription(
-    'Completează și eticheta, și adresa.',
+    `${URL_HINT} Completează și eticheta, și adresa.`,
   );
 
   // The other way round: an address with no label.
@@ -252,6 +316,7 @@ it('limits the label to 60 characters, checked on blur', async () => {
   show();
   // Pasted, not typed: each keystroke re-renders the whole Setări form, and
   // ~150 of them ran into the 5 s timeout under a loaded suite.
+  await user.click(formSwitch());
   await user.click(urlField());
   await user.paste(FORM_URL);
   await user.click(labelField());
@@ -271,11 +336,12 @@ it('limits the label to 60 characters, checked on blur', async () => {
 it('asks for an http(s) address of at most 2048 characters', async () => {
   const user = userEvent.setup();
   show();
+  await user.click(formSwitch());
   await user.type(labelField(), 'Înscrie-te');
   await user.type(urlField(), 'forms.example.org/logistica');
   await user.tab();
   expect(urlField()).toHaveAccessibleDescription(
-    'Adresa trebuie să înceapă cu http:// sau https://.',
+    `${URL_HINT} Adresa trebuie să înceapă cu http:// sau https://.`,
   );
   await user.clear(urlField());
   // Pasted, not typed: 2049 keystrokes would be slow for no gain.
@@ -283,7 +349,7 @@ it('asks for an http(s) address of at most 2048 characters', async () => {
   await user.paste(`https://${'a'.repeat(2041)}`);
   await user.tab();
   expect(urlField()).toHaveAccessibleDescription(
-    'Adresa are cel mult 2048 de caractere.',
+    `${URL_HINT} Adresa are cel mult 2048 de caractere.`,
   );
   await save();
   expect(run).not.toHaveBeenCalled();
@@ -307,17 +373,21 @@ it.each([
       return false;
     });
     show();
+    await user.click(formSwitch());
     await user.type(labelField(), 'Înscrie-te');
     await user.type(urlField(), FORM_URL);
     await save();
     expect(run).toHaveBeenCalledTimes(1);
     expect(
       field === 'label' ? labelField() : urlField(),
-    ).toHaveAccessibleDescription(copy);
+    ).toHaveAccessibleDescription(
+      field === 'label' ? copy : `${URL_HINT} ${copy}`,
+    );
   },
 );
 
-it('offers every Minimum Level picker by Role name, the six rungs only, in ladder order (R29b)', () => {
+it('offers every Minimum Level picker by Role name, the six rungs only, in ladder order (R29b)', async () => {
+  const user = userEvent.setup();
   render(
     <MemoryRouter>
       <GroupSettingsTab
@@ -334,10 +404,7 @@ it('offers every Minimum Level picker by Role name, the six rungs only, in ladde
       />
     </MemoryRouter>,
   );
-  const texts = (field: HTMLElement) =>
-    Array.from((field as HTMLSelectElement).options).map(
-      (option) => option.text,
-    );
+  const texts = (field: HTMLElement) => optionNames(user, field);
   const six = [
     'Recrut',
     'Voluntar',
@@ -355,9 +422,15 @@ it('offers every Minimum Level picker by Role name, the six rungs only, in ladde
       screen.getByRole('form', { name: 'Structura grupului' }),
     ).getByLabelText('Nivel minim'),
   ).toBe(pickers[0]);
-  for (const picker of pickers) expect(texts(picker)).toEqual(six);
+  // The app's own drop-down, never the browser's.
+  for (const picker of pickers) {
+    expect(picker).toHaveAttribute('data-slot', 'select');
+    expect(await texts(picker)).toEqual(six);
+  }
   expect(
-    texts(screen.getByLabelText('Nivelul de la care se poate cere înscrierea')),
+    await texts(
+      screen.getByLabelText('Nivelul de la care se poate cere înscrierea'),
+    ),
   ).toEqual(['Ca nivelul minim al grupului', ...six]);
 });
 
@@ -392,7 +465,11 @@ it('names the Minimum Level by Role in the removal preview (R29b)', async () => 
       />
     </MemoryRouter>,
   );
-  await user.selectOptions(screen.getByLabelText('Nivel minim'), '3');
+  await chooseOption(
+    user,
+    screen.getByLabelText('Nivel minim'),
+    'Voluntar cu Drept de Vot',
+  );
   expect(
     screen.getByText(
       /iese din grup la nivelul minim Voluntar cu Drept de Vot:/,
@@ -400,7 +477,8 @@ it('names the Minimum Level by Role in the removal preview (R29b)', async () => 
   ).toBeVisible();
 });
 
-it('keeps a stored Moderator level readable but never offers it as a choice (R29b)', () => {
+it('keeps a stored Moderator level readable but never offers it as a choice (R29b)', async () => {
+  const user = userEvent.setup();
   render(
     <MemoryRouter>
       <GroupSettingsTab
@@ -418,16 +496,13 @@ it('keeps a stored Moderator level readable but never offers it as a choice (R29
     </MemoryRouter>,
   );
   for (const picker of screen.getAllByLabelText('Nivel minim')) {
-    const select = picker as HTMLSelectElement;
-    expect(select.value).toBe('9');
-    const stored = Array.from(select.options).find((o) => o.value === '9');
-    expect(stored?.text).toBe('Moderator');
-    expect(stored?.disabled).toBe(true);
-    expect(
-      Array.from(select.options)
-        .filter((o) => !o.disabled)
-        .map((o) => o.text),
-    ).toEqual([
+    expect(picker.dataset.value).toBe('9');
+    expect(picker).toHaveTextContent('Moderator');
+    const options = await optionsOf(user, picker);
+    expect(options.filter((o) => o.disabled)).toEqual([
+      { text: 'Moderator', disabled: true },
+    ]);
+    expect(options.filter((o) => !o.disabled).map((o) => o.text)).toEqual([
       'Recrut',
       'Voluntar',
       'Voluntar Activ',
@@ -438,20 +513,19 @@ it('keeps a stored Moderator level readable but never offers it as a choice (R29
   }
 });
 
-it('keeps a stored Moderator Application Level readable but never offers it (R29b)', () => {
+it('keeps a stored Moderator Application Level readable but never offers it (R29b)', async () => {
+  const user = userEvent.setup();
   show({ application_level: 9 });
   const select = screen.getByLabelText(
     'Nivelul de la care se poate cere înscrierea',
-  ) as HTMLSelectElement;
-  expect(select.value).toBe('9');
-  const stored = Array.from(select.options).find((o) => o.value === '9');
-  expect(stored?.text).toBe('Moderator');
-  expect(stored?.disabled).toBe(true);
-  expect(
-    Array.from(select.options)
-      .filter((o) => !o.disabled)
-      .map((o) => o.text),
-  ).toEqual([
+  );
+  expect(select.dataset.value).toBe('9');
+  expect(select).toHaveTextContent('Moderator');
+  const options = await optionsOf(user, select);
+  expect(options.filter((o) => o.disabled)).toEqual([
+    { text: 'Moderator', disabled: true },
+  ]);
+  expect(options.filter((o) => !o.disabled).map((o) => o.text)).toEqual([
     'Ca nivelul minim al grupului',
     'Voluntar',
     'Voluntar Activ',
@@ -554,7 +628,11 @@ it("names who leaves before a top-level Group's structure raises its Minimum Lev
       roleLabel: 'Voluntar',
     },
   ]);
-  await user.selectOptions(screen.getByLabelText('Nivel minim'), '3');
+  await chooseOption(
+    user,
+    screen.getByLabelText('Nivel minim'),
+    'Voluntar cu Drept de Vot',
+  );
   await user.click(
     screen.getByRole('button', { name: 'Vezi cine iese din grup' }),
   );
@@ -587,9 +665,12 @@ it('lays Setări, Structura and Arhivare out as panels with their own headers (A
   root();
   for (const name of ['Setările grupului', 'Structura grupului', 'Arhivare'])
     expect(screen.getByRole('region', { name })).toBeVisible();
-  // Every select is the kit's (#842), none native-styled.
-  for (const select of document.querySelectorAll('select'))
-    expect(select).toHaveAttribute('data-slot', 'native-select');
+  // Every drop-down is the app's own, never the browser's.
+  expect(document.querySelector('select')).toBeNull();
+  const dropDowns = screen.getAllByRole('combobox');
+  expect(dropDowns.length).toBeGreaterThan(0);
+  for (const field of dropDowns)
+    expect(field).toHaveAttribute('data-slot', 'select');
   // At most one primary action per panel.
   const primaries = (name: string) =>
     within(screen.getByRole('region', { name }))

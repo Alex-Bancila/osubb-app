@@ -1,9 +1,10 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 import axe from 'axe-core';
 import { BackLink } from '../../components/layout';
+import { pickDate } from '../../test/date-picker';
 const state = vi.hoisted(() => ({
   member: vi.fn(),
   capabilities: vi.fn(),
@@ -85,12 +86,16 @@ import MemberScreen from './MemberScreen';
 
 const ready = { isPending: false, isError: false };
 
-function show(from?: unknown) {
+type Tab = 'cont' | 'grupuri' | 'roluri' | 'puncte';
+
+/** The page, optionally arriving from somewhere and on one of its tabs. */
+function show(from?: unknown, tab?: Tab) {
   return render(
     <MemoryRouter
       initialEntries={[
         {
           pathname: '/administrare/membri/7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+          search: tab ? `?tab=${tab}` : '',
           state: from,
         },
       ]}
@@ -103,6 +108,27 @@ function show(from?: unknown) {
       </Routes>
     </MemoryRouter>,
   );
+}
+
+type User = ReturnType<typeof userEvent.setup>;
+
+const openTab = (user: User, name: string) =>
+  user.click(screen.getByRole('tab', { name }));
+
+/** The identity header's one line under the name. */
+const meta = () =>
+  document.querySelector('[data-slot="member-meta"]') as HTMLElement;
+
+/** A fact of the Cont tab: the row its label sits in. */
+const fact = (label: string) =>
+  screen.getByText(label).closest('li') as HTMLElement;
+
+/** Opens the Nume și poreclă sheet from the Cont panel's pencil. */
+async function openNames(user: User) {
+  await user.click(
+    screen.getByRole('button', { name: 'Editează numele și porecla' }),
+  );
+  return screen.findByRole('dialog', { name: 'Nume și poreclă' });
 }
 
 function member(patch: object = {}) {
@@ -175,31 +201,49 @@ beforeEach(() => {
   state.joined.mockReset().mockResolvedValue(undefined);
 });
 
-it('BC sees the Nickname over the full name, every Group Role and both editors', async () => {
+it('draws the page as Profil is: the identity as its header, then tabs kept in the URL', async () => {
+  const user = userEvent.setup();
   const { container } = show();
   expect(screen.getByRole('heading', { level: 1, name: 'Nana' })).toBeVisible();
-  expect(
-    document.querySelector('[data-slot="page-eyebrow"]'),
-  ).toHaveTextContent(/^Administrare$/);
+  // No eyebrow, on the page or over a panel: the back link already says
+  // where the page belongs.
+  expect(document.querySelector('[data-slot="page-eyebrow"]')).toBeNull();
+  expect(document.querySelector('[data-slot="section-eyebrow"]')).toBeNull();
   expect(
     screen.getByRole('link', { name: 'Înapoi la Administrare' }),
   ).toHaveAttribute('href', '/administrare/membri');
-  expect(screen.getByText('Ana Pop')).toBeVisible();
-  expect(screen.getByText('Rol în grup: Director comunicare')).toBeVisible();
-  expect(screen.getByText('Rol în grup: Responsabil logistică')).toBeVisible();
-  // A plain membership names no Group Role (B60).
-  expect(screen.queryByText('Rol în grup: Membru')).toBeNull();
-  expect(screen.getByRole('link', { name: 'Proiecte' })).toBeVisible();
-  expect(
-    screen.getByRole('link', { name: 'Evenimente · Comunicare' }),
-  ).toHaveAttribute('href', '/administrare/grupuri/2');
-  expect(
-    screen.getByText('Editor rol 7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d'),
-  ).toBeVisible();
+  // The avatar, then one line: role chip, status, since when.
+  const identity = document.querySelector(
+    '[data-slot="member-identity"]',
+  ) as HTMLElement;
+  expect(within(identity).getByText('AP')).toHaveAttribute(
+    'aria-hidden',
+    'true',
+  );
+  expect(meta().querySelector('[data-slot="member-role"]')).toHaveClass(
+    'role-badge',
+  );
+  expect(meta()).toHaveTextContent('VoluntarActivMembru din 1 ianuarie 2025');
+  // Facts are rows of a list, not a definition grid with small labels.
+  expect(container.querySelector('dl')).toBeNull();
+
+  const tabs = within(
+    screen.getByRole('tablist', { name: 'Secțiunile membrului' }),
+  ).getAllByRole('tab');
+  expect(tabs.map((tab) => tab.textContent)).toEqual([
+    'Cont',
+    'Grupuri',
+    'Roluri',
+    'Puncte',
+  ]);
+  for (const tab of tabs) expect(tab.querySelector('svg')).not.toBeNull();
+  expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
+  // Cont: the names, and the invitation to resend.
+  expect(fact('Nume complet')).toHaveTextContent('Ana Pop');
+  expect(fact('Poreclă')).toHaveTextContent('Nana');
   expect(
     screen.getByText('Retrimitere 7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d'),
   ).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Salvează numele' })).toBeVisible();
   expect(
     (
       await axe.run(container, {
@@ -207,6 +251,71 @@ it('BC sees the Nickname over the full name, every Group Role and both editors',
       })
     ).violations,
   ).toEqual([]);
+
+  // Grupuri: a row per Group, opened by the row, its Group Role a chip.
+  await openTab(user, 'Grupuri');
+  expect(screen.getByRole('tab', { name: 'Grupuri' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  const groups = screen.getByRole('region', { name: 'Grupuri' });
+  const rows = within(groups).getAllByRole('listitem');
+  expect(rows.map((row) => row.textContent)).toEqual([
+    'ComunicareDirector comunicare',
+    'Evenimente · ComunicareResponsabil logistică',
+    // A plain membership names no Group Role (B60).
+    'Proiecte',
+  ]);
+  expect(
+    within(rows[0] as HTMLElement).getByText('Director comunicare'),
+  ).toHaveAttribute('data-slot', 'badge');
+  const link = screen.getByRole('link', { name: 'Evenimente · Comunicare' });
+  expect(link).toHaveAttribute('href', '/administrare/grupuri/2');
+  // In the text colour, and the whole row is its target.
+  expect(link).toHaveClass('text-foreground', 'after:absolute');
+  expect(screen.getByRole('link', { name: 'Proiecte' })).toBeVisible();
+
+  // Roluri: the Role editor and the timeline; Puncte: the ledger.
+  await openTab(user, 'Roluri');
+  expect(
+    screen.getByText('Editor rol 7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d'),
+  ).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Istoric roluri' })).toBeVisible();
+  await openTab(user, 'Puncte');
+  expect(screen.getByRole('heading', { name: 'Istoric puncte' })).toBeVisible();
+  expect(
+    (
+      await axe.run(container, {
+        rules: { 'color-contrast': { enabled: false } },
+      })
+    ).violations,
+  ).toEqual([]);
+});
+
+it('opens the tab named in the URL, and Cont for one it does not have', () => {
+  const view = show(undefined, 'puncte');
+  expect(screen.getByRole('tab', { name: 'Puncte' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  expect(screen.getByRole('heading', { name: 'Istoric puncte' })).toBeVisible();
+  view.unmount();
+
+  // A Group Manager has no Roluri tab: the link falls back to Cont.
+  state.capabilities.mockReturnValue({
+    ...ready,
+    data: { manageRoles: false },
+  });
+  state.mine.mockReturnValue({
+    ...ready,
+    data: [{ id: 1, group_role: 'manager' }],
+  });
+  show(undefined, 'roluri');
+  expect(screen.queryByRole('tab', { name: 'Roluri' })).toBeNull();
+  expect(screen.getByRole('tab', { name: 'Cont' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
 });
 
 it('BC sees whether the Member acknowledged the Privacy Notice, and which version', () => {
@@ -242,13 +351,15 @@ it.each(['manager', 'responsible'])(
       data: { manageRoles: false },
     });
     state.mine.mockReturnValue({ ...ready, data: [{ id: 1, group_role }] });
-    show();
+    show(undefined, 'grupuri');
     expect(screen.getByRole('link', { name: 'Comunicare' })).toBeVisible();
     expect(
       screen.getByRole('link', { name: 'Evenimente · Comunicare' }),
     ).toBeVisible();
     expect(screen.queryByRole('link', { name: 'Proiecte' })).toBeNull();
-    expect(screen.queryByLabelText('Pseudonim')).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Editează numele și porecla' }),
+    ).toBeNull();
     expect(
       screen.queryByText('Editor rol 7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d'),
     ).toBeNull();
@@ -272,60 +383,123 @@ it('an ordinary Member of a Group gets no subtree, no editors and no invented po
     ...ready,
     data: [{ id: 1, group_role: 'member' }],
   });
-  show();
+  const view = show(undefined, 'grupuri');
   expect(
     screen.getByText('Nu există grupuri în aria ta de administrare.'),
   ).toBeVisible();
-  expect(screen.queryByLabelText('Pseudonim')).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Editează numele și porecla' }),
+  ).toBeNull();
   expect(
     screen.queryByText('Editor rol 7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d'),
   ).toBeNull();
+  view.unmount();
+  show(undefined, 'puncte');
   expect(
     screen.getByText('Nu există înregistrări pe care le poți vedea.'),
   ).toBeVisible();
 });
 
-it('sends the trimmed names and puts a Nickname refusal under its field', async () => {
+it('edits the names in a sheet: trimmed, a Nickname refusal under its field, the receipt on the page', async () => {
   const user = userEvent.setup();
   state.mutate.mockRejectedValueOnce({
     code: '23514',
     message: 'nickname_taken',
   });
   show();
-  const nickname = screen.getByLabelText('Pseudonim');
+  // The form is not on the page until its pencil opens it.
+  expect(screen.queryByLabelText('Poreclă (opțional)')).toBeNull();
+  const sheet = await openNames(user);
+  expect(sheet).toHaveAttribute('data-slot', 'form-sheet');
+  const nickname = within(sheet).getByLabelText('Poreclă (opțional)');
+  expect(nickname).toHaveValue('Nana');
+  // One filled button on the sheet: Renunță is not.
+  expect(
+    within(sheet).getByRole('button', { name: 'Salvează numele' }),
+  ).toHaveClass('bg-primary');
+  expect(
+    within(sheet).getByRole('button', { name: 'Renunță' }),
+  ).not.toHaveClass('bg-primary');
   await user.clear(nickname);
   await user.type(nickname, '  Anuța ');
-  await user.click(screen.getByRole('button', { name: 'Salvează numele' }));
+  await user.click(
+    within(sheet).getByRole('button', { name: 'Salvează numele' }),
+  );
   expect(state.mutate).toHaveBeenCalledWith({
     memberId: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
     nickname: 'Anuța',
     fullName: 'Ana Pop',
   });
   expect(
-    await screen.findByText(
-      'Pseudonimul este deja folosit de alt membru. Alege altul.',
+    await within(sheet).findByText(
+      'Porecla este deja folosită de alt membru. Alege alta.',
     ),
   ).toBeVisible();
   expect(nickname).toHaveAttribute('aria-invalid', 'true');
+  // A refusal keeps the sheet open, with what was typed.
+  expect(nickname).toHaveValue('  Anuța ');
 
-  await user.click(screen.getByRole('button', { name: 'Salvează numele' }));
+  await user.click(
+    within(sheet).getByRole('button', { name: 'Salvează numele' }),
+  );
   expect(await screen.findByRole('status')).toHaveTextContent(
     'Numele a fost actualizat.',
   );
+  // Saved, the sheet closes and focus goes back to its pencil.
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Nume și poreclă' }),
+    ).toBeNull(),
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Editează numele și porecla' }),
+    ).toHaveFocus(),
+  );
+});
+
+it('Renunță closes the names sheet without saving', async () => {
+  const user = userEvent.setup();
+  show();
+  const sheet = await openNames(user);
+  await user.type(within(sheet).getByLabelText('Nume complet'), ' Maria');
+  await user.click(within(sheet).getByRole('button', { name: 'Renunță' }));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Nume și poreclă' }),
+    ).toBeNull(),
+  );
+  expect(state.mutate).not.toHaveBeenCalled();
+  expect(screen.queryByRole('status')).toBeNull();
+  // Opened again, the sheet starts from the stored names.
+  expect(
+    within(await openNames(user)).getByLabelText('Nume complet'),
+  ).toHaveValue('Ana Pop');
 });
 
 it('shows one receipt at a time: a second command replaces the first (F-11)', async () => {
   const user = userEvent.setup();
   state.mutate.mockResolvedValue(undefined);
   show();
-  await user.click(screen.getByRole('button', { name: 'Salvează numele' }));
+  const sheet = await openNames(user);
+  await user.click(
+    within(sheet).getByRole('button', { name: 'Salvează numele' }),
+  );
   expect(await screen.findByRole('status')).toHaveTextContent(
     'Numele a fost actualizat.',
   );
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Nume și poreclă' }),
+    ).toBeNull(),
+  );
+  // The other tabs stay mounted, so the turn passes across them.
+  await openTab(user, 'Roluri');
   await user.click(screen.getByRole('button', { name: 'Schimbă rolul' }));
   expect(screen.getByRole('status')).toHaveTextContent(
     'Rolul a fost schimbat.',
   );
+  await openTab(user, 'Cont');
   expect(screen.queryByText('Numele a fost actualizat.')).toBeNull();
 });
 
@@ -336,10 +510,10 @@ it('leaves out "Membru din" for an imported Member with no date yet (F-28)', () 
   });
   state.member.mockReturnValue({ ...ready, data: member({ joinedAt: null }) });
   show();
-  expect(screen.queryByText('Membru din')).toBeNull();
+  expect(screen.queryByText(/Membru din/)).toBeNull();
   expect(screen.queryByText('Data intrării')).toBeNull();
   expect(screen.queryByText('—')).toBeNull();
-  expect(screen.getByText('Rol organizațional')).toBeVisible();
+  expect(meta()).toHaveTextContent(/^VoluntarActiv$/);
 });
 
 it('names a board member by their Board Title, the Role muted beside it (#963)', () => {
@@ -348,32 +522,53 @@ it('names a board member by their Board Title, the Role muted beside it (#963)',
     data: member({ role: 'bc', roleLabel: 'Președinte', rankLabel: 'BC' }),
   });
   show();
-  const fact = screen
-    .getByText('Rol organizațional')
-    .closest('div') as HTMLElement;
-  expect(within(fact).getByText('Președinte')).toHaveClass('font-semibold');
-  expect(within(fact).getByText('· BC')).toHaveClass('text-muted-foreground');
+  expect(within(meta()).getByText('Președinte')).toHaveClass('role-badge');
+  // The rank follows the chip, in the line's muted colour.
+  expect(within(meta()).getByText('BC')).toHaveAttribute(
+    'data-slot',
+    'member-rank',
+  );
+  expect(meta()).toHaveClass('text-muted-foreground');
 });
 
 it('says the Role alone when there is no Board Title (#963)', () => {
   show();
-  const fact = screen
-    .getByText('Rol organizațional')
-    .closest('div') as HTMLElement;
-  expect(fact.querySelector('dd')).toHaveTextContent(/^Voluntar$/);
+  expect(within(meta()).getByText('Voluntar')).toHaveClass('role-badge');
+  expect(meta().querySelector('[data-slot="member-rank"]')).toBeNull();
+});
+
+it('puts the contact details the server answered on the header line and in Cont', () => {
+  state.member.mockReturnValue({
+    ...ready,
+    data: member({
+      contact: { email: 'ana@example.org', phone: '0712345678' },
+    }),
+  });
+  show();
+  expect(meta()).toHaveTextContent('ana@example.org');
+  expect(fact('E-mail')).toHaveTextContent('ana@example.org');
+  expect(fact('Telefon')).toHaveTextContent('0712345678');
 });
 
 it('clears the Nickname to none and refuses a blank full name before sending', async () => {
   const user = userEvent.setup();
   show();
-  await user.clear(screen.getByLabelText('Pseudonim'));
-  await user.clear(screen.getByLabelText('Nume complet'));
-  await user.click(screen.getByRole('button', { name: 'Salvează numele' }));
-  expect(screen.getByText('Scrie numele complet.')).toBeVisible();
+  const sheet = await openNames(user);
+  await user.clear(within(sheet).getByLabelText('Poreclă (opțional)'));
+  await user.clear(within(sheet).getByLabelText('Nume complet'));
+  await user.click(
+    within(sheet).getByRole('button', { name: 'Salvează numele' }),
+  );
+  expect(within(sheet).getByText('Scrie numele complet.')).toBeVisible();
   expect(state.mutate).not.toHaveBeenCalled();
 
-  await user.type(screen.getByLabelText('Nume complet'), 'Ana Maria Pop');
-  await user.click(screen.getByRole('button', { name: 'Salvează numele' }));
+  await user.type(
+    within(sheet).getByLabelText('Nume complet'),
+    'Ana Maria Pop',
+  );
+  await user.click(
+    within(sheet).getByRole('button', { name: 'Salvează numele' }),
+  );
   expect(state.mutate).toHaveBeenCalledWith({
     memberId: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
     nickname: null,
@@ -423,7 +618,7 @@ it('lists only the returned ledger rows and links a Task through the Tracker', (
       ],
     }),
   });
-  show();
+  show(undefined, 'puncte');
   expect(screen.getByText('+5 puncte')).toBeVisible();
   expect(screen.getByText('−3 puncte')).toBeVisible();
   expect(screen.getByText(/Sancțiune/)).toBeVisible();
@@ -441,7 +636,7 @@ it('lists only the returned ledger rows and links a Task through the Tracker', (
 });
 
 it('goes back where the member came from, then by capability (D4)', () => {
-  // A Roster, Roluri or Confidențialitate link says where it was.
+  // A Group's Membri, Roluri or Confidențialitate link says where it was.
   const view = show({
     from: { to: '/administrare/grupuri/4?tab=roster', label: 'Înapoi la grup' },
   });
@@ -494,28 +689,38 @@ it('sends a Group page opened from here back to this member (D4, A63)', async ()
       </Routes>
     </MemoryRouter>,
   );
+  await openTab(user, 'Grupuri');
   await user.click(screen.getByRole('link', { name: 'Comunicare' }));
+  // Back on the tab the Group was opened from.
   expect(
     screen.getByRole('link', { name: 'Înapoi la membru' }),
   ).toHaveAttribute(
     'href',
-    '/administrare/membri/7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+    '/administrare/membri/7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d?tab=grupuri',
   );
 });
 
-it('sets the identity facts as a muted label over a larger value (AD2)', () => {
+it('sets each fact as a row: a muted label, its value at the end (AD2)', () => {
   show();
-  const label = screen.getByText('Data intrării');
-  expect(label.tagName).toBe('DT');
-  expect(label).toHaveClass('text-muted-foreground');
-  expect(label.nextElementSibling).toHaveClass('text-[length:var(--fs-md)]');
-  // No m-0 on the list: the page's flex gap spaces it (X2).
-  expect(label.closest('dl')).not.toHaveClass('m-0');
-  // "Salvează numele" is its own width from `sm` (X15).
-  expect(screen.getByRole('button', { name: 'Salvează numele' })).toHaveClass(
-    'w-full',
-    'sm:w-auto',
-    'sm:justify-self-start',
+  const label = screen.getByText('Nume complet');
+  expect(label).toHaveClass('text-sm', 'text-muted-foreground');
+  expect(label.nextElementSibling).toHaveClass('text-right', 'font-medium');
+  expect(label.closest('li')).toHaveClass('min-h-11', 'justify-between');
+  // An unset Nickname says so quietly rather than leaving a gap.
+  state.member.mockReturnValue({ ...ready, data: member({ nickname: null }) });
+  show();
+  expect(screen.getByText('Necompletată')).toHaveClass('text-muted-foreground');
+});
+
+it('keeps the back link’s origin when a tab is chosen (D4)', async () => {
+  const user = userEvent.setup();
+  show({
+    from: { to: '/administrare/grupuri/4?tab=roster', label: 'Înapoi la grup' },
+  });
+  await openTab(user, 'Puncte');
+  expect(screen.getByRole('link', { name: 'Înapoi la grup' })).toHaveAttribute(
+    'href',
+    '/administrare/grupuri/4?tab=roster',
   );
 });
 
@@ -555,10 +760,13 @@ it.each(['target', '7a3c1e2b', 'not-a-uuid-at-all-0000000000000000'])(
 it('keeps the confirmation and the stored names when the page refetches', async () => {
   const user = userEvent.setup();
   const view = show();
-  const nickname = screen.getByLabelText('Pseudonim');
+  const sheet = await openNames(user);
+  const nickname = within(sheet).getByLabelText('Poreclă (opțional)');
   await user.clear(nickname);
   await user.type(nickname, '  Anuța ');
-  await user.click(screen.getByRole('button', { name: 'Salvează numele' }));
+  await user.click(
+    within(sheet).getByRole('button', { name: 'Salvează numele' }),
+  );
   expect(await screen.findByRole('status')).toHaveTextContent(
     'Numele a fost actualizat.',
   );
@@ -584,7 +792,10 @@ it('keeps the confirmation and the stored names when the page refetches', async 
   expect(screen.getByRole('status')).toHaveTextContent(
     'Numele a fost actualizat.',
   );
-  expect(screen.getByLabelText('Pseudonim')).toHaveValue('Anuța');
+  expect(fact('Poreclă')).toHaveTextContent('Anuța');
+  expect(
+    within(await openNames(user)).getByLabelText('Poreclă (opțional)'),
+  ).toHaveValue('Anuța');
 });
 
 it('shows a Member who is not BC the join date read-only, as "Membru din" (#932)', () => {
@@ -593,15 +804,15 @@ it('shows a Member who is not BC the join date read-only, as "Membru din" (#932)
     data: { manageRoles: false },
   });
   show();
-  expect(screen.getByText('Membru din').nextElementSibling).toHaveTextContent(
-    '1 ianuarie 2025',
-  );
+  expect(meta()).toHaveTextContent('Membru din 1 ianuarie 2025');
   expect(screen.queryByText('Data intrării')).toBeNull();
   expect(
     screen.queryByRole('button', { name: 'Editează data intrării' }),
   ).toBeNull();
-  // role_history_read answers another Member's rows to level 6 only.
-  expect(screen.queryByRole('heading', { name: 'Istoric roluri' })).toBeNull();
+  // role_history_read answers another Member's rows to level 6 only: with
+  // no Role editor either, there is no Roluri tab at all.
+  expect(screen.queryByRole('tab', { name: 'Roluri' })).toBeNull();
+  expect(screen.queryByText('Istoric roluri')).toBeNull();
   expect(screen.queryByText(/^Timeline /)).toBeNull();
 });
 
@@ -609,23 +820,33 @@ it('lets BC set a join date that was never recorded (#932)', async () => {
   const user = userEvent.setup();
   state.member.mockReturnValue({ ...ready, data: member({ joinedAt: null }) });
   show();
-  const fact = screen.getByText('Data intrării').nextElementSibling;
-  expect(fact).toHaveTextContent('Nesetată');
-  expect(fact).toHaveTextContent(
-    'Fără ea, membrul nu acumulează vechime pentru promovări.',
-  );
-  await user.click(
-    screen.getByRole('button', { name: 'Editează data intrării' }),
-  );
-  const input = screen.getByLabelText('Data intrării', { selector: 'input' });
+  expect(fact('Data intrării')).toHaveTextContent('Nesetată');
+  // What an unset date costs stays on the page.
+  expect(
+    within(fact('Data intrării')).getByText(
+      'Fără ea, membrul nu acumulează vechime pentru promovări.',
+    ),
+  ).toBeVisible();
+  // One pencil, not a text button.
+  const edit = screen.getByRole('button', { name: 'Editează data intrării' });
+  expect(edit).toHaveTextContent('');
+  expect(edit.querySelector('svg')).not.toBeNull();
+  await user.click(edit);
+  // The app's picker, not the browser's date field; its hint behind an "i".
+  const input = screen.getByRole('button', { name: 'Data intrării' });
   expect(input).toHaveFocus();
-  expect(input).toHaveAttribute('type', 'date');
+  expect(input).toHaveAttribute('data-slot', 'date-picker');
+  expect(document.querySelector('input[type="date"]')).toBeNull();
   expect(input).toHaveAccessibleDescription(
     'Vechimea pentru promovări se numără de la această dată.',
   );
+  expect(
+    screen.getByRole('button', { name: 'Despre data intrării' }),
+  ).toBeVisible();
   // Nothing chosen yet: nothing to save.
   expect(screen.getByRole('button', { name: 'Salvează' })).toBeDisabled();
-  await user.type(input, '2024-10-01');
+  await pickDate(user, input, '2024-10-01');
+  expect(input).toHaveTextContent('mar., 1 oct. 2024');
   await user.click(screen.getByRole('button', { name: 'Salvează' }));
   expect(state.joined).toHaveBeenCalledWith({
     memberId: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
@@ -640,24 +861,21 @@ it('lets BC set a join date that was never recorded (#932)', async () => {
   ).toHaveFocus();
 });
 
-it('refuses a join date in the future before sending (#932)', async () => {
+it('offers no join date in the future (#932)', async () => {
   const user = userEvent.setup();
   show();
-  expect(
-    screen.getByText('Data intrării').nextElementSibling,
-  ).toHaveTextContent('1 ianuarie 2025');
+  expect(fact('Data intrării')).toHaveTextContent('1 ianuarie 2025');
   await user.click(
     screen.getByRole('button', { name: 'Editează data intrării' }),
   );
-  const input = screen.getByLabelText('Data intrării', { selector: 'input' });
-  expect(input).toHaveValue('2025-01-01');
-  await user.clear(input);
-  await user.type(input, '2999-01-01');
-  await user.click(screen.getByRole('button', { name: 'Salvează' }));
+  const input = screen.getByRole('button', { name: 'Data intrării' });
+  expect(input).toHaveAttribute('data-value', '2025-01-01');
+  // The picker ends today: a future day cannot be chosen at all (the schema
+  // still refuses one, should a value arrive another way).
+  await user.click(input);
+  expect(await screen.findByRole('button', { name: 'Mâine' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Azi' })).toBeEnabled();
   expect(state.joined).not.toHaveBeenCalled();
-  expect(
-    screen.getByText('Data intrării nu poate fi în viitor.'),
-  ).toBeVisible();
 });
 
 it('puts a refused join-date write in the editor and keeps it open (#932)', async () => {
@@ -667,9 +885,8 @@ it('puts a refused join-date write in the editor and keeps it open (#932)', asyn
   await user.click(
     screen.getByRole('button', { name: 'Editează data intrării' }),
   );
-  const input = screen.getByLabelText('Data intrării', { selector: 'input' });
-  await user.clear(input);
-  await user.type(input, '2024-03-15');
+  const input = screen.getByRole('button', { name: 'Data intrării' });
+  await pickDate(user, input, '2024-03-15');
   await user.click(screen.getByRole('button', { name: 'Salvează' }));
   expect(
     screen.getByText(
@@ -678,8 +895,7 @@ it('puts a refused join-date write in the editor and keeps it open (#932)', asyn
   ).toBeVisible();
   expect(input).toBeVisible();
   // Changing the date drops the refusal about the old one.
-  await user.clear(input);
-  await user.type(input, '2024-03-16');
+  await pickDate(user, input, '2024-03-16');
   expect(
     screen.queryByText(
       'Nu am putut salva data intrării. Verifică permisiunile și reîncearcă.',
@@ -689,13 +905,11 @@ it('puts a refused join-date write in the editor and keeps it open (#932)', asyn
   expect(
     screen.getByRole('button', { name: 'Editează data intrării' }),
   ).toHaveFocus();
-  expect(
-    screen.getByText('Data intrării').nextElementSibling,
-  ).toHaveTextContent('1 ianuarie 2025');
+  expect(fact('Data intrării')).toHaveTextContent('1 ianuarie 2025');
 });
 
 it("shows BC the Member's Istoric roluri, from their Role and join date (#932)", () => {
-  show();
+  show(undefined, 'roluri');
   expect(screen.getByRole('heading', { name: 'Istoric roluri' })).toBeVisible();
   expect(
     screen.getByText(
@@ -713,13 +927,16 @@ it("offers BC every edit on the Moderator's page, as on anyone's (#944, R31)", (
   expect(
     screen.getByRole('button', { name: 'Editează data intrării' }),
   ).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Salvează numele' })).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: 'Editează numele și porecla' }),
+  ).toBeVisible();
   expect(
     screen.getByText('Retrimitere 7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d'),
   ).toBeVisible();
+  // On the Roluri tab, mounted with the page.
   expect(
     screen.getByText('Editor rol 7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d'),
-  ).toBeVisible();
+  ).toBeInTheDocument();
 });
 
 it('offers BC their own names and join date but no Role panel (#944)', () => {
@@ -735,8 +952,12 @@ it('offers BC their own names and join date but no Role panel (#944)', () => {
   expect(
     screen.getByRole('button', { name: 'Editează data intrării' }),
   ).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Salvează numele' })).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: 'Editează numele și porecla' }),
+  ).toBeVisible();
   expect(screen.queryByText(/^Editor rol /)).toBeNull();
+  // Istoric roluri is still theirs to read.
+  expect(screen.getByRole('tab', { name: 'Roluri' })).toBeVisible();
 });
 
 it('offers a viewer below BC no edit at all (#944)', () => {
@@ -748,7 +969,9 @@ it('offers a viewer below BC no edit at all (#944)', () => {
   expect(
     screen.queryByRole('button', { name: 'Editează data intrării' }),
   ).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Salvează numele' })).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Editează numele și porecla' }),
+  ).toBeNull();
   expect(screen.queryByText(/^Retrimitere /)).toBeNull();
   expect(screen.queryByText(/^Editor rol /)).toBeNull();
 });

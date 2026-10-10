@@ -1,13 +1,5 @@
-import {
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from 'react';
-import { CalendarClock, UserRound } from 'lucide-react';
+import { useId, type CSSProperties, type ReactNode } from 'react';
+import { Clock, UserRound } from 'lucide-react';
 import { AttachedLinksList } from '../../components/attached-link/AttachedLinksList';
 import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { MemberName } from '../../components/member/MemberName';
@@ -23,16 +15,12 @@ import { formatPoints } from '../../lib/format';
 import { cn } from '../../lib/utils';
 import { isTerminalTask, type TaskPresentation } from './task-presentation';
 import { showsExecutorLine } from './task-executor-line';
-import { chipsThatFit } from './task-chips';
 import type { TaskProgressInput } from '../../queries/task-progress';
-import { TaskActionSuccess } from './TaskActionSuccess';
+import { TaskExecutorActions } from './TaskExecutorActions';
 import { TaskInterestControls } from './TaskInterestControls';
 import { TaskQueueStatus } from './TaskQueueStatus';
 import { TaskStageSummary } from './TaskStageSummary';
-import { TaskGiveUpControl } from './TaskGiveUpControl';
-import { gaveUpReceipt, type OnGaveUp } from './give-up-receipt';
-import { useReceiptTurn } from './receipt-turn';
-import { SubmitForReviewDialog } from './SubmitForReviewDialog';
+import type { OnGaveUp } from './give-up-receipt';
 import { SubmissionNote } from './SubmissionNote';
 import { DifficultyMark } from '../../components/tasks/DifficultyMark';
 
@@ -55,27 +43,17 @@ type TaskCardProps = {
   onProgress?: (input: TaskProgressInput) => Promise<unknown>;
   /**
    * The list's copy of a card carries `id="task-<id>"`, the target of
-   * `/tracker?task=<id>`; the details sheet's copy must not repeat it.
+   * `/tracker?task=<id>`; a copy elsewhere (Acasă) must not repeat it.
    */
   anchor?: boolean;
   /** Set briefly when a deep link lands on this card. */
   highlighted?: boolean;
   /**
-   * The card shows the latest Submission Note while the Task is in review;
-   * the details sheet shows it on its own, whenever one exists.
-   */
-  showSubmissionNote?: boolean;
-  /**
    * The read-only history variant (the Member tracker, R11): the card shows
-   * this Assignment's own record in place of the Executor line, the queue and
+   * this Assignment's own record in place of the Executor, the queue and
    * every action — nothing on it changes the Task.
    */
   history?: ReactNode;
-  /**
-   * The details sheet's copy: every chip shows (nothing to line up with),
-   * and the Audience chip gives way to the sheet's Audiență row (B20).
-   */
-  inSheet?: boolean;
   /** The list shows the give-up receipt; the card leaves it (Audit D-3). */
   onGaveUp?: OnGaveUp;
 };
@@ -86,7 +64,7 @@ const chipClass =
 /**
  * The chip naming the Task's Group, its dot in the `--task-stripe` colour the
  * surrounding card or row sets. Colour is never the only carrier: the chip
- * names the Group. `truncate` keeps it on one line (the card's chip line).
+ * names the Group. `truncate` keeps it on one line.
  */
 export function TaskGroupChip({
   task,
@@ -111,139 +89,103 @@ export function TaskGroupChip({
   );
 }
 
-/** A chip after the Group's: the Audience, the Campaign, the Umbrella. */
-type ExtraChip = { key: string; label: string };
-
-function extraChips(
-  task: TaskPresentation,
-  audienceChip: boolean,
-): ExtraChip[] {
-  const chips: ExtraChip[] = [];
-  // A direct Task is local only (R26): its Audience means nothing.
-  if (
-    audienceChip &&
-    task.assignmentMode === 'public' &&
-    task.audience === 'org'
-  )
-    chips.push({ key: 'audience', label: 'OSUBB' });
-  if (task.campaign)
-    chips.push({ key: 'campaign', label: `Campanie: ${task.campaign.name}` });
-  if (task.parent)
-    chips.push({ key: 'parent', label: `Subtask din: ${task.parent.title}` });
-  return chips;
+/**
+ * Where a Task comes from, as one muted line under its title: the Group's
+ * colour dot and name, then its Campaign, its organization-wide Audience and
+ * its Umbrella, each after a "·". It wraps rather than cutting a name short.
+ * Colour is never the only carrier: the line names the Group.
+ */
+function TaskOriginLine({ task }: { task: TaskPresentation }) {
+  const dot = (
+    <span aria-hidden="true" className="text-muted-foreground/70">
+      ·
+    </span>
+  );
+  return (
+    <p
+      data-slot="task-origin"
+      className="m-0 flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground"
+    >
+      <span
+        aria-hidden="true"
+        className="size-2 shrink-0 rounded-full bg-(--task-stripe)"
+      />
+      <span className="min-w-0 wrap-anywhere">{task.origin.label}</span>
+      <PrivateGroupBadge isPrivate={task.origin.isPrivate} compact />
+      {task.campaign && (
+        <>
+          {dot}
+          <span className="min-w-0 wrap-anywhere">
+            <span className="sr-only">Campanie: </span>
+            {task.campaign.name}
+          </span>
+        </>
+      )}
+      {/* A direct Task is local only (R26): its Audience means nothing. */}
+      {task.assignmentMode === 'public' && task.audience === 'org' && (
+        <>
+          {dot}
+          <span>
+            <span className="sr-only">Audiență: </span>
+            OSUBB
+          </span>
+        </>
+      )}
+      {task.parent && (
+        <>
+          {dot}
+          <span className="min-w-0 wrap-anywhere">
+            Subtask din: {task.parent.title}
+          </span>
+        </>
+      )}
+    </p>
+  );
 }
 
 /**
- * The card's chip area: exactly one line in a list, so every card in a row
- * starts its title at the same height (layout T2). Chips that do not fit
- * collapse into "+n", which names them to a screen reader and on hover. In
- * the details sheet (`wrap`) nothing needs to line up, so every chip shows.
+ * A Task's Evaluation on one line: the points, the Difficulty as its mark and
+ * the grade. Shown only once the Task has points.
  */
-function TaskChips({
+export function TaskEvaluationLine({
   task,
-  wrap,
-  audienceChip,
+  className,
 }: {
   task: TaskPresentation;
-  wrap: boolean;
-  audienceChip: boolean;
+  className?: string;
 }) {
-  const extras = extraChips(task, audienceChip);
-  const lineRef = useRef<HTMLDivElement>(null);
-  // Natural chip widths, read once from the first (all-chips) render; the
-  // caller remounts this line when a label changes.
-  const [widths, setWidths] = useState<number[] | null>(null);
-  const [available, setAvailable] = useState(0);
-  useLayoutEffect(() => {
-    const line = lineRef.current;
-    if (wrap || !line) return;
-    if (widths === null) {
-      setWidths(
-        [...line.children].map((child) => child.getBoundingClientRect().width),
-      );
-      setAvailable(line.clientWidth);
-      return;
-    }
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => setAvailable(line.clientWidth));
-    observer.observe(line);
-    return () => observer.disconnect();
-  }, [wrap, widths]);
-  // A first measure may use the fallback font; once the web font is in,
-  // measure the chips again (once — this effect does not follow `widths`).
-  useEffect(() => {
-    if (wrap || typeof document === 'undefined' || !document.fonts) return;
-    let live = true;
-    void document.fonts.ready.then(() => {
-      if (live) setWidths(null);
-    });
-    return () => {
-      live = false;
-    };
-  }, [wrap]);
-  const measuring = widths === null;
-  const shown = measuring ? extras.length + 1 : chipsThatFit(widths, available);
-
-  if (wrap)
-    return (
-      <div className="flex min-w-0 flex-wrap gap-1.5">
-        <TaskGroupChip task={task} />
-        {extras.map((chip) => (
-          <span key={chip.key} className={chipClass}>
-            <span className="min-w-0 wrap-anywhere">{chip.label}</span>
-          </span>
-        ))}
-      </div>
-    );
-
-  const visible = extras.slice(0, Math.max(0, shown - 1));
-  const hidden = extras.slice(visible.length);
-  // While measuring every chip keeps its natural width. After, only the last
-  // chip shown gives way (truncates); the ones before it keep theirs (F-5).
-  const fixed = (last: boolean) => measuring || !last;
+  if (task.points === null) return null;
   return (
-    <div
-      ref={lineRef}
-      data-slot="task-chips"
-      className="flex min-w-0 flex-nowrap gap-1.5 overflow-hidden"
-    >
-      <TaskGroupChip
-        task={task}
-        truncate={!measuring}
-        className={fixed(visible.length === 0) ? 'shrink-0' : undefined}
-      />
-      {visible.map((chip, index) => (
-        <span
-          key={chip.key}
-          title={chip.label}
-          className={cn(
-            chipClass,
-            fixed(index === visible.length - 1) && 'shrink-0',
-          )}
-        >
-          <span className="min-w-0 truncate">{chip.label}</span>
-        </span>
-      ))}
-      {hidden.length > 0 && (
-        <span
-          data-slot="task-chips-more"
-          className={`${chipClass} shrink-0 tabular-nums`}
-          title={hidden.map((chip) => chip.label).join(' · ')}
-        >
-          <span aria-hidden="true">+{hidden.length}</span>
-          <span className="sr-only">
-            {hidden.map((chip) => chip.label).join(', ')}
-          </span>
-        </span>
+    <p
+      data-slot="task-evaluation"
+      className={cn(
+        'm-0 flex min-w-0 flex-wrap items-center gap-x-2 tabular-nums',
+        className,
       )}
-    </div>
+    >
+      <span className="font-semibold">{formatPoints(task.points)} puncte</span>
+      {task.difficulty === null ? (
+        <span>
+          <span className="sr-only">Dificultate </span>—
+        </span>
+      ) : (
+        <DifficultyMark value={task.difficulty} />
+      )}
+      <span>Nota {task.rating ?? '—'}</span>
+    </p>
   );
 }
 
 /** The status badge with the overdue, feedback and late badges beside it. */
-export function TaskStatusBadges({ task }: { task: TaskPresentation }) {
+export function TaskStatusBadges({
+  task,
+  className,
+}: {
+  task: TaskPresentation;
+  className?: string;
+}) {
   return (
-    <div className="flex min-w-0 flex-wrap gap-1.5">
+    <div className={cn('flex min-w-0 flex-wrap gap-1.5', className)}>
       <Badge
         variant={task.status === 'unfulfilled' ? 'destructive' : 'outline'}
       >
@@ -260,6 +202,12 @@ export function TaskStatusBadges({ task }: { task: TaskPresentation }) {
   );
 }
 
+/**
+ * One Task as a card (layout T2): the title with its status beside it, the
+ * Group and Campaign as one muted line, then one meta row — the deadline in
+ * the short form, the Executor, and the Evaluation once there is one. Nothing
+ * has a reserved height, so a one-line title leaves no empty band.
+ */
 export function TaskCard({
   task,
   allowInterest = false,
@@ -271,63 +219,19 @@ export function TaskCard({
   onProgress,
   anchor = true,
   highlighted = false,
-  showSubmissionNote = true,
   history,
-  inSheet = false,
   onGaveUp,
 }: TaskCardProps) {
   const readOnly = history !== undefined;
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [notice, setNoticeState] = useState<string | null>(null);
-  const noticeTurn = useReceiptTurn();
-  const setNotice = (text: string | null) => {
-    setNoticeState(text);
-    if (text) noticeTurn.claim();
-  };
   const titleId = useId();
-  const isExecutor =
-    !readOnly &&
-    onProgress !== undefined &&
-    task.kind === 'task' &&
-    memberId !== undefined &&
-    task.executor?.memberId === memberId &&
-    // Who finished a Task (#861) no longer holds it: no actions.
-    task.executor.isCurrent;
-  const action = isExecutor
-    ? task.status === 'todo'
-      ? 'start'
-      : task.status === 'in_progress'
-        ? 'submit'
-        : null
-    : null;
-  const canGiveUp =
-    isExecutor && (task.status === 'todo' || task.status === 'in_progress');
   // The viewer holds this Task: no queue news for them (relevance B14).
   const ownTask =
     task.kind === 'task' &&
     memberId !== undefined &&
     task.executor?.memberId === memberId;
-  // Colour is never the only carrier: the first chip names the Group.
+  // Colour is never the only carrier: the line under the title names the Group.
   const stripe = task.origin.color ?? 'var(--ink-400)';
   const Title = titleLevel === 3 ? 'h3' : 'h2';
-
-  async function start() {
-    if (pending || saving || !onProgress) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await onProgress({ taskId: task.id, action: 'start' });
-    } catch (failure) {
-      setError(
-        failure instanceof Error
-          ? failure.message
-          : 'Nu am putut salva schimbarea. Încearcă din nou.',
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
 
   return (
     <article
@@ -337,7 +241,7 @@ export function TaskCard({
       className="h-full min-w-0 scroll-mt-24 rounded-md data-highlighted:ring-3 data-highlighted:ring-primary data-highlighted:ring-offset-2 data-highlighted:ring-offset-background motion-safe:transition-shadow motion-safe:duration-300"
     >
       <Card
-        className="relative h-full pl-1.5"
+        className="relative h-full gap-2 pl-1.5"
         style={{ '--task-stripe': stripe } as CSSProperties}
       >
         <span
@@ -345,69 +249,71 @@ export function TaskCard({
           data-slot="task-stripe"
           className="absolute inset-y-0 left-0 w-1.5 bg-(--task-stripe)"
         />
-        <CardHeader className="min-w-0 gap-3">
-          <TaskChips
-            // A new label set is measured afresh.
-            key={[
-              task.origin.label,
-              task.audience,
-              task.campaign?.name,
-              task.parent?.title,
-            ].join('|')}
-            task={task}
-            wrap={inSheet}
-            audienceChip={!inSheet}
-          />
-          <Title
-            id={titleId}
-            data-slot="task-title"
-            tabIndex={-1}
-            className="text-lg leading-snug font-semibold wrap-anywhere outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring"
+        <CardHeader className="min-w-0 gap-0">
+          {/* The status sits on the title's row and drops under it only when
+              the two no longer fit side by side. */}
+          <div
+            data-slot="task-heading"
+            className="flex min-w-0 flex-wrap items-start justify-between gap-x-3"
           >
-            {onOpenTask ? (
-              <Button
-                variant="link"
-                className="h-auto min-h-11 min-w-11 items-start justify-start p-0 text-left text-lg leading-snug font-semibold whitespace-normal wrap-anywhere text-foreground"
-                onClick={() => onOpenTask(task.id)}
-              >
-                {task.title}
-              </Button>
-            ) : (
-              task.title
-            )}
-          </Title>
-          <TaskStatusBadges task={task} />
+            <Title
+              id={titleId}
+              data-slot="task-title"
+              tabIndex={-1}
+              className="m-0 min-w-0 flex-1 basis-48 text-lg leading-snug font-semibold wrap-anywhere outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring"
+            >
+              {onOpenTask ? (
+                <Button
+                  variant="link"
+                  className="h-auto min-h-11 min-w-11 justify-start p-0 text-left text-lg leading-snug font-semibold whitespace-normal wrap-anywhere text-foreground"
+                  onClick={() => onOpenTask(task.id)}
+                >
+                  {task.title}
+                </Button>
+              ) : (
+                <span className="flex min-h-11 items-center">{task.title}</span>
+              )}
+            </Title>
+            <TaskStatusBadges
+              task={task}
+              className="min-h-11 shrink-0 items-center"
+            />
+          </div>
+          <TaskOriginLine task={task} />
         </CardHeader>
-        <CardContent className="min-w-0 space-y-3">
-          <div className="grid gap-1.5 text-sm">
-            <p className="flex min-w-0 items-center gap-2">
-              <CalendarClock
+        <CardContent className="min-w-0 space-y-2">
+          <div
+            data-slot="task-meta"
+            className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-sm"
+          >
+            <p className="m-0 flex min-w-0 items-center gap-1.5">
+              <Clock
                 aria-hidden="true"
-                className="size-4 shrink-0 text-muted-foreground"
-              />
-              <span className="min-w-0">
-                <span className="font-medium">Termen: </span>
-                {task.deadline ? (
-                  <time
-                    dateTime={task.deadline}
-                    className={
-                      task.overdue ? 'font-semibold text-destructive' : ''
-                    }
-                  >
-                    {task.deadlineLabel} (ora României)
-                  </time>
-                ) : (
-                  task.deadlineLabel
+                className={cn(
+                  'size-4 shrink-0',
+                  task.overdue ? 'text-destructive' : 'text-muted-foreground',
                 )}
-              </span>
+              />
+              <span className="sr-only">Termen: </span>
+              {task.deadline ? (
+                <time
+                  dateTime={task.deadline}
+                  className={cn(
+                    'tabular-nums',
+                    task.overdue && 'font-semibold text-destructive',
+                  )}
+                >
+                  {task.deadlineLabel}
+                </time>
+              ) : (
+                <span className="text-muted-foreground">
+                  {task.deadlineLabel}
+                </span>
+              )}
             </p>
             {!readOnly && showsExecutorLine(task, memberId) && (
-              <p className="flex min-w-0 flex-wrap items-center gap-x-2">
-                <UserRound
-                  aria-hidden="true"
-                  className="size-4 shrink-0 text-muted-foreground"
-                />
-                <span className="font-medium">Executor:</span>
+              <p className="m-0 flex min-w-0 items-center gap-1.5">
+                <span className="sr-only">Executor:</span>
                 {/* Only an identity #499's lookup returned becomes a name
                     button; an Executor known by id alone stays anonymous. */}
                 {task.executor?.name ? (
@@ -418,15 +324,23 @@ export function TaskCard({
                     fullName={task.executor.name}
                   />
                 ) : (
-                  <span className="min-w-0 wrap-anywhere">
-                    {task.executor ? 'Nume indisponibil' : 'Neatribuit'}
-                  </span>
+                  <>
+                    <UserRound
+                      aria-hidden="true"
+                      className="size-4 shrink-0 text-muted-foreground"
+                    />
+                    <span className="min-w-0 wrap-anywhere">
+                      {task.executor ? 'Nume indisponibil' : 'Neatribuit'}
+                    </span>
+                  </>
                 )}
               </p>
             )}
+            <TaskEvaluationLine task={task} className="ml-auto" />
           </div>
+          {/* Two lines at most: the details sheet has the whole text. */}
           {task.description && (
-            <p className="text-sm whitespace-pre-wrap wrap-anywhere">
+            <p className="line-clamp-2 text-sm whitespace-pre-wrap wrap-anywhere text-muted-foreground">
               {task.description}
             </p>
           )}
@@ -446,7 +360,7 @@ export function TaskCard({
               joinable ? (
                 <TaskInterestControls taskId={task.id} task={task} />
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <TaskStageSummary task={task} />
                   <p
                     data-slot="audience-notice"
@@ -459,81 +373,31 @@ export function TaskCard({
             ) : (
               <TaskQueueStatus taskId={task.id} task={task} />
             ))}
-          {!readOnly &&
-            showSubmissionNote &&
-            task.status === 'in_review' &&
-            task.submission && <SubmissionNote submission={task.submission} />}
-          {/* R46: the bare label on a card, "Deschide: <etichetă>" in the
-              details sheet's copy. */}
+          {/* The latest Submission Note, while the Task is in review. */}
+          {!readOnly && task.status === 'in_review' && task.submission && (
+            <SubmissionNote submission={task.submission} />
+          )}
+          {/* R46: the bare label on a card. */}
           <AttachedLinksList
             links={task.links}
-            variant={inSheet ? 'details' : 'card'}
+            variant="card"
             buttonClassName="max-w-full text-left wrap-anywhere"
           />
-          {task.points !== null && (
-            <p className="text-sm font-medium tabular-nums">
-              {formatPoints(task.points)} puncte ·{' '}
-              {task.difficulty === null ? (
-                'Dificultate —'
-              ) : (
-                <DifficultyMark value={task.difficulty} label="Dificultate" />
-              )}{' '}
-              · Nota {task.rating ?? '—'}
-            </p>
-          )}
           {history}
-          {notice && noticeTurn.current && (
-            <TaskActionSuccess>{notice}</TaskActionSuccess>
-          )}
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
         </CardContent>
-        {(action || canGiveUp) && (
+        {!readOnly && (
           // One column of full-width actions: equal widths, no ragged wrap
           // (layout T3); `mt-auto` keeps the footer on the card's bottom edge.
-          <CardFooter className="mt-auto grid grid-cols-1 gap-2">
-            {action === 'start' && (
-              <Button
-                className="min-h-11 w-full whitespace-normal"
-                disabled={pending || saving}
-                onClick={start}
-              >
-                {pending || saving ? 'Se salvează…' : 'Începe taskul'}
-              </Button>
-            )}
-            {action === 'submit' && onProgress && (
-              <SubmitForReviewDialog
-                pending={pending}
-                onSubmit={(submission) =>
-                  onProgress({
-                    taskId: task.id,
-                    action: 'submit',
-                    ...submission,
-                  })
-                }
-                onSuccess={() =>
-                  setNotice('Taskul a fost trimis la verificare.')
-                }
-              />
-            )}
-            {canGiveUp && (
-              <TaskGiveUpControl
-                taskId={task.id}
-                assignmentMode={task.assignmentMode}
-                onGaveUp={() => {
-                  // The list shows the receipt when it holds the card; the
-                  // sheet's card keeps it, since the control leaves with the
-                  // Executor's actions (Audit D-3).
-                  const receipt = gaveUpReceipt(task.assignmentMode);
-                  if (onGaveUp) onGaveUp(task.id, receipt);
-                  else setNotice(receipt);
-                }}
-              />
-            )}
-          </CardFooter>
+          <TaskExecutorActions
+            task={task}
+            memberId={memberId}
+            pending={pending}
+            onProgress={onProgress}
+            onGaveUp={onGaveUp}
+            as={CardFooter}
+            className="mt-auto grid grid-cols-1 gap-2"
+            messagesClassName="space-y-2 px-(--card-spacing)"
+          />
         )}
       </Card>
     </article>

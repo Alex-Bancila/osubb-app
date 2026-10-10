@@ -19,17 +19,13 @@ import {
 import { ErrorState, Loading } from '../../components/states';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from '../../components/ui/native-select';
+import { Input } from '../../components/ui/input';
+import { Select } from '../../components/ui/select';
 import { describeFailure } from '../../lib/command-reasons';
 import { safeHttpUrl } from '../../lib/links';
 import {
   adherenceFormFieldForReason,
   adherenceFormSchema,
-  emailQuotaFieldForReason,
-  emailQuotaSchema,
 } from '../../lib/schemas/org-settings';
 import { useFormValidation } from '../../lib/use-form-validation';
 import { useAdminGroups, type AdminGroup } from '../../queries/groups-admin';
@@ -39,15 +35,14 @@ import {
   type OrgSettingChange,
 } from '../../queries/org-settings';
 
-const control =
-  'h-11 w-full min-w-0 rounded-lg border border-border bg-background px-4 text-sm dark:border-input dark:bg-input/30';
-
 type Save = (change: OrgSettingChange) => Promise<void>;
 type SettingKey = OrgSettingChange['key'];
 
 /** The receipt every setting shows after a save (#923). */
 const SAVED_RECEIPT = 'Setare salvată.';
 const SAVE_FAILED = 'Nu am putut salva setarea. Reîncearcă.';
+/** "Niciun grup" in a Group setting's drop-down: clears the setting. */
+const NO_GROUP = 'none';
 
 /* ------------------------------------------------------------------------ */
 /* The settings, by purpose (#923). Each sentence says what the setting      */
@@ -111,18 +106,6 @@ const BOARD: GroupSetting = {
     'Titlul fiecărui responsabil BC sau BCE din acest grup privat apare în locul rolului, peste tot în aplicație.',
   unset: 'Membrii BC și BCE apar cu rolul, nu cu un titlu.',
   fits: (group) => group.is_private,
-};
-
-const EMAIL_QUOTA: Setting = {
-  key: 'email_daily_quota',
-  label: 'Limita zilnică de emailuri',
-  // `public.claim_email_digests` (#775) hands out at most this many Email
-  // Digests per UTC day; the rest stay due and go out once the day turns.
-  // 0 pauses them. Sign-in emails go through the same Resend account.
-  effect:
-    'Câte rezumate cu notificările necitite pleacă pe email într-o zi, la toți membrii la un loc; cele peste limită așteaptă ziua următoare.',
-  // Never null on the server; kept for the row's shape.
-  unset: 'Nu pleacă niciun rezumat pe email.',
 };
 
 /* ------------------------------------------------------------------------ */
@@ -320,12 +303,11 @@ function AdherenceFormEditor({
       aria-labelledby={labelId}
       className="flex max-w-xl flex-col gap-3"
     >
-      <input
+      <Input
         type="url"
         inputMode="url"
         aria-labelledby={labelId}
         placeholder="https://"
-        className={control}
         value={url}
         disabled={disabled || pending}
         onChange={(event) => setUrl(event.target.value)}
@@ -375,87 +357,6 @@ function AdherenceFormValue({ current }: { current: string }) {
       <span className="sr-only"> (se deschide într-o filă nouă)</span>
     </a>
   );
-}
-
-/* ------------------------------------------------------------------------ */
-/* The daily email quota (#775)                                              */
-/* ------------------------------------------------------------------------ */
-
-function EmailQuotaEditor({
-  current,
-  onSave,
-  labelId,
-  disabled,
-  onDone,
-}: EditorProps & { current: string | null; onSave: Save }) {
-  const hintId = useId();
-  const formRef = useFocusOnOpen();
-  const [quota, setQuota] = useState(current ?? '');
-  const [pending, setPending] = useState(false);
-  const form = useFormValidation(
-    emailQuotaSchema,
-    { quota },
-    emailQuotaFieldForReason,
-  );
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    const values = form.validate();
-    if (!values) return;
-    setPending(true);
-    try {
-      await onSave({ key: 'email_daily_quota', value: values.quota });
-      onDone(true);
-    } catch (failure) {
-      form.fail(failure, SAVE_FAILED);
-      setPending(false);
-    }
-  }
-
-  return (
-    <form
-      ref={formRef}
-      onSubmit={submit}
-      noValidate
-      aria-labelledby={labelId}
-      className="flex max-w-xl flex-col gap-3"
-    >
-      <input
-        type="text"
-        inputMode="numeric"
-        autoComplete="off"
-        aria-labelledby={labelId}
-        className={cn(control, 'max-w-40 tabular-nums')}
-        value={quota}
-        disabled={disabled || pending}
-        onChange={(event) => {
-          setQuota(event.target.value);
-          // A refusal was about the old value.
-          form.reset();
-        }}
-        {...form.field('quota', hintId)}
-      />
-      <p id={hintId} className="m-0 text-sm text-muted-foreground">
-        0 oprește rezumatele. Emailurile de conectare folosesc aceeași limită
-        zilnică a furnizorului (100 pe planul gratuit): lasă loc pentru ele.
-      </p>
-      <FieldError {...form.errorProps('quota')} />
-      <FieldError>{form.formError}</FieldError>
-      <EditorActions
-        changed={quota.trim() !== (current ?? '')}
-        pending={pending || disabled}
-        onCancel={() => onDone(false)}
-      />
-    </form>
-  );
-}
-
-/** "90 pe zi", or that the digest is paused at 0. */
-function emailQuotaValue(current: string) {
-  const count = Number(current);
-  if (!Number.isInteger(count)) return current;
-  if (count === 0) return 'Oprit: niciun rezumat pe email';
-  return `${new Intl.NumberFormat('ro-RO').format(count)} pe zi`;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -511,30 +412,31 @@ function GroupEditor({
       aria-labelledby={labelId}
       className="flex max-w-xl flex-col gap-3"
     >
-      <NativeSelect
+      <Select
         aria-labelledby={labelId}
-        value={chosen}
+        // With nothing stored the empty field asks for a Group; with one
+        // stored, "Niciun grup" is the choice that clears it.
+        value={chosen === '' && current !== null ? NO_GROUP : chosen}
+        placeholder="Alege un grup"
+        options={[
+          ...(current === null
+            ? []
+            : [{ value: NO_GROUP, label: 'Niciun grup' }]),
+          ...(current !== null &&
+          !choices.some((group) => String(group.id) === current)
+            ? [{ value: current, label: currentGroup?.name ?? 'Grupul actual' }]
+            : []),
+          ...choices.map((group) => ({
+            value: String(group.id),
+            label: group.name,
+          })),
+        ]}
         disabled={disabled || pending}
-        onChange={(event) => {
-          setChosen(event.target.value);
+        onValueChange={(next) => {
+          setChosen(next === NO_GROUP ? '' : next);
           setError(null);
         }}
-      >
-        <NativeSelectOption value="">
-          {current === null ? 'Alege un grup' : 'Niciun grup'}
-        </NativeSelectOption>
-        {current !== null &&
-          !choices.some((group) => String(group.id) === current) && (
-            <NativeSelectOption value={current}>
-              {currentGroup?.name ?? 'Grupul actual'}
-            </NativeSelectOption>
-          )}
-        {choices.map((group) => (
-          <NativeSelectOption key={group.id} value={String(group.id)}>
-            {group.name}
-          </NativeSelectOption>
-        ))}
-      </NativeSelect>
+      />
       {error && (
         <p role="alert" className="m-0 text-sm text-destructive">
           {error}
@@ -634,7 +536,6 @@ export default function AdminSettingsTab() {
     );
   const value = (key: SettingKey) => settings.data.get(key) ?? null;
   const adherence = value('adherence_form_url');
-  const quota = value('email_daily_quota');
   return (
     <PageGrid columns={1}>
       <Panel
@@ -670,18 +571,6 @@ export default function AdminSettingsTab() {
             current={value('board_group_id')}
             disabled={change.isPending}
             onSave={save}
-          />
-        </ul>
-      </Panel>
-      <Panel title="Emailuri" flush>
-        <ul className={rowListClass}>
-          <SettingRow
-            setting={EMAIL_QUOTA}
-            value={quota && emailQuotaValue(quota)}
-            disabled={change.isPending}
-            renderEditor={(props) => (
-              <EmailQuotaEditor {...props} current={quota} onSave={save} />
-            )}
           />
         </ul>
       </Panel>

@@ -1,72 +1,148 @@
-import { useRef, type ReactNode } from 'react';
-import { matchPath, NavLink, useLocation } from 'react-router';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import type { LucideIcon } from 'lucide-react';
+import { NavLink, useLocation } from 'react-router';
 import { cn } from 'cn';
-import { useActiveTabInView } from './use-active-tab-in-view';
 
 /**
- * The tab bar's classes. `PageTabs` uses them for routed tabs; Base UI `Tabs`
- * (Taskuri) and a hand-rolled `role="tablist"` (the Group page) use the same
- * two constants, so every tab bar in the app looks the same.
+ * The app's one tab look (DESIGN.md, Navigation): a pill track, the selected
+ * tab inked on a light thumb that slides to it — the same control as the
+ * phone's bar and the page view switch. `PageTabs` draws it for routed tabs;
+ * Base UI `Tabs` (Profil, Taskuri, a Member's page) and a hand-rolled
+ * `role="tablist"` use the same constants, so no page has its own.
  *
- * - At every width the tabs stay on one row that scrolls sideways on its own,
- *   with scroll snap and a fade at each edge (layout X7): only the strip
- *   scrolls, never the page, and no tab is ever left alone on a second line
- *   (F-25: wrapping stranded Administrare's seventh tab at 640–1024 px).
- * - The strip reaches 16 px into the `Page` gutter (`-mx-4`, padded back), so
- *   a tab slides out under the fade instead of being cut at the gutter, and
- *   the fade covers only that padding while every tab fits; the 4 px above
- *   and below leave room for the focus ring.
- * - No margin of its own: in a `Page` the 24 px gap spaces it; elsewhere put
- *   it in a `flex flex-col gap-6` stack.
- * - Pair it with `useActiveTabInView` so the active tab opens in view.
+ * - The track is as wide as the content column and its tabs share it; it has
+ *   no margin of its own (in a `Page` the 24 px gap spaces it).
+ * - Nothing scrolls sideways. Tabs that cannot all spell their names give
+ *   each an icon and let only the selected one spell its (`tabLabelsFrom`).
  */
 export const tabListClass =
-  'relative -mx-4 -my-1 flex min-w-0 snap-x scroll-px-4 gap-2 overflow-x-auto px-4 py-1 [scrollbar-width:none] [mask-image:linear-gradient(to_right,transparent,#000_1rem,#000_calc(100%-1rem),transparent)] [&::-webkit-scrollbar]:hidden';
+  'relative flex w-full min-w-0 gap-0.5 rounded-lg border border-border bg-(--surface-3) p-[3px]';
 
 /**
- * One tab: a 44 px target in the text colour, `bg-muted` on hover, the active
- * tab in OSUBB red with a visible focus ring. Active is read from whichever
- * marker the host sets — `data-active` (Base UI), `aria-current` (a route) or
- * `aria-selected` (a tablist). `text-foreground` is explicit because the
- * global `a` colour is OSUBB red (layout X6). The last tab snaps to its end,
- * so the strip's scrolled-to-the-end position is a snap point: without it,
- * scroll snap pulled a last active tab ("Setări") back out of view.
+ * The thumb under the selected tab. For Base UI `Tabs`, put it on a
+ * `Tabs.Indicator` as the list's first child: it reads the indicator's
+ * `--active-tab-left` / `--active-tab-width`. `PageTabs` measures its own.
+ */
+export const tabThumbClass =
+  'pointer-events-none absolute inset-y-[3px] left-0 w-(--active-tab-width) translate-x-(--active-tab-left) rounded-md bg-(--text) transition-[translate,width] duration-200 ease-out motion-reduce:transition-none';
+
+/**
+ * One tab: a 36 px segment with a 44 px hit area, an optional 16 px icon
+ * before its label. Selected is read from whichever marker the host sets —
+ * `data-active` (Base UI), `aria-current` (a route) or `aria-selected` (a
+ * tablist) — and inks the tab itself once the thumb has arrived (the 200 ms
+ * delay), so it is inked even where no thumb is drawn or measured.
  */
 // The focus classes are `focusRingClass`, spelled out so this stays a
 // literal constant.
 export const tabClass =
-  'inline-flex min-h-11 min-w-11 shrink-0 snap-start last:snap-end items-center justify-center rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap text-foreground no-underline hover:bg-muted outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring data-active:bg-primary data-active:text-primary-foreground data-active:hover:bg-primary aria-[current=page]:bg-primary aria-[current=page]:text-primary-foreground aria-[current=page]:hover:bg-primary aria-selected:bg-primary aria-selected:text-primary-foreground aria-selected:hover:bg-primary';
+  'relative z-1 inline-flex min-h-[36px] min-w-11 flex-auto items-center justify-center gap-1.5 rounded-md px-4 text-sm font-bold whitespace-nowrap text-muted-foreground no-underline [transition:color_200ms] after:absolute after:inset-x-0 after:-inset-y-1 hover:text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring motion-reduce:transition-none [&_svg]:size-4 [&_svg]:shrink-0 data-active:bg-(--text) data-active:text-(--surface) data-active:[transition:color_200ms,background-color_0s_200ms] data-active:hover:text-(--surface) aria-[current=page]:bg-(--text) aria-[current=page]:text-(--surface) aria-[current=page]:[transition:color_200ms,background-color_0s_200ms] aria-[current=page]:hover:text-(--surface) aria-selected:bg-(--text) aria-selected:text-(--surface) aria-selected:[transition:color_200ms,background-color_0s_200ms] aria-selected:hover:text-(--surface)';
+
+export type TabLabelsFrom = 'always' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+
+/**
+ * From which width every tab spells its name; below it only the selected one
+ * does and the rest are their icons (each keeps its name for a screen
+ * reader). `tab` goes on the tab beside `tabClass`, `label` on the span
+ * around its text. Every tab needs an icon unless this is `always`.
+ */
+// oxlint-disable-next-line react/only-export-components
+export const tabLabelsFrom: Record<
+  TabLabelsFrom,
+  { tab: string; label: string }
+> = {
+  always: { tab: '', label: 'min-w-0 truncate' },
+  sm: {
+    tab: 'max-sm:flex-none max-sm:px-3 max-sm:aria-selected:flex-auto max-sm:aria-[current=page]:flex-auto max-sm:data-active:flex-auto',
+    label:
+      'min-w-0 truncate max-sm:sr-only max-sm:in-aria-selected:not-sr-only max-sm:in-aria-[current=page]:not-sr-only max-sm:in-data-active:not-sr-only',
+  },
+  md: {
+    tab: 'max-md:flex-none max-md:px-3 max-md:aria-selected:flex-auto max-md:aria-[current=page]:flex-auto max-md:data-active:flex-auto',
+    label:
+      'min-w-0 truncate max-md:sr-only max-md:in-aria-selected:not-sr-only max-md:in-aria-[current=page]:not-sr-only max-md:in-data-active:not-sr-only',
+  },
+  lg: {
+    tab: 'max-lg:flex-none max-lg:px-3 max-lg:aria-selected:flex-auto max-lg:aria-[current=page]:flex-auto max-lg:data-active:flex-auto',
+    label:
+      'min-w-0 truncate max-lg:sr-only max-lg:in-aria-selected:not-sr-only max-lg:in-aria-[current=page]:not-sr-only max-lg:in-data-active:not-sr-only',
+  },
+  xl: {
+    tab: 'max-xl:flex-none max-xl:px-3 max-xl:aria-selected:flex-auto max-xl:aria-[current=page]:flex-auto max-xl:data-active:flex-auto',
+    label:
+      'min-w-0 truncate max-xl:sr-only max-xl:in-aria-selected:not-sr-only max-xl:in-aria-[current=page]:not-sr-only max-xl:in-data-active:not-sr-only',
+  },
+  '2xl': {
+    tab: 'max-2xl:flex-none max-2xl:px-3 max-2xl:aria-selected:flex-auto max-2xl:aria-[current=page]:flex-auto max-2xl:data-active:flex-auto',
+    label:
+      'min-w-0 truncate max-2xl:sr-only max-2xl:in-aria-selected:not-sr-only max-2xl:in-aria-[current=page]:not-sr-only max-2xl:in-data-active:not-sr-only',
+  },
+};
 
 export type PageTab = {
   /** The route this tab opens. */
   to: string;
   label: ReactNode;
+  icon?: LucideIcon;
   /** Match the route exactly, so a parent tab is not active on its children. */
   end?: boolean;
 };
 
 /**
- * Routed tabs: a `nav` of links, the current one marked
- * `aria-current="page"`. Sits right under `PageHeader`. On a phone the
- * current tab is scrolled into the strip, so "Setări" is not hidden past the
- * edge when it is the page you are on.
+ * Routed tabs: a `nav` of links on the pill track, the current one marked
+ * `aria-current="page"` and under the thumb. Sits right under `PageHeader`.
+ * With `labelsFrom`, narrower screens show the other tabs as icons.
  */
 export function PageTabs({
   tabs,
   label,
+  labelsFrom = 'always',
   className,
 }: {
   tabs: readonly PageTab[];
   /** The `nav`'s accessible name. */
   label: string;
+  /** From which width every tab spells its name (each tab then needs an icon). */
+  labelsFrom?: TabLabelsFrom;
   className?: string;
 }) {
   const nav = useRef<HTMLElement>(null);
-  const { pathname } = useLocation();
-  const active = tabs.find((tab) =>
-    matchPath({ path: tab.to, end: tab.end ?? false }, pathname),
-  )?.to;
-  useActiveTabInView(nav, active);
+  // A route change re-renders this, and the thumb is measured after it.
+  useLocation();
+  // Where the current tab is, for the thumb; unmeasured, the tab inks itself.
+  const [thumb, setThumb] = useState<{ left: number; width: number } | null>(
+    null,
+  );
+  const measure = useCallback(() => {
+    const current = nav.current?.querySelector<HTMLElement>(
+      '[aria-current="page"]',
+    );
+    const next =
+      current && current.offsetWidth > 0
+        ? { left: current.offsetLeft, width: current.offsetWidth }
+        : null;
+    setThumb((previous) =>
+      previous?.left === next?.left && previous?.width === next?.width
+        ? previous
+        : next,
+    );
+  }, []);
+  useLayoutEffect(measure);
+  useEffect(() => {
+    const root = nav.current;
+    if (!root || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, [measure]);
+  const sizes = tabLabelsFrom[labelsFrom];
   return (
     <nav
       ref={nav}
@@ -74,11 +150,28 @@ export function PageTabs({
       data-slot="page-tabs"
       className={cn(tabListClass, className)}
     >
-      {tabs.map((tab) => (
-        <NavLink key={tab.to} to={tab.to} end={tab.end} className={tabClass}>
-          {tab.label}
-        </NavLink>
-      ))}
+      {thumb && (
+        <span
+          aria-hidden="true"
+          data-slot="tab-thumb"
+          className="pointer-events-none absolute inset-y-[3px] left-0 rounded-md bg-(--text) transition-[translate,width] duration-200 ease-out motion-reduce:transition-none"
+          style={{ width: thumb.width, translate: `${thumb.left}px 0` }}
+        />
+      )}
+      {tabs.map((tab) => {
+        const Icon = tab.icon;
+        return (
+          <NavLink
+            key={tab.to}
+            to={tab.to}
+            end={tab.end}
+            className={cn(tabClass, sizes.tab)}
+          >
+            {Icon && <Icon aria-hidden="true" />}
+            <span className={sizes.label}>{tab.label}</span>
+          </NavLink>
+        );
+      })}
     </nav>
   );
 }

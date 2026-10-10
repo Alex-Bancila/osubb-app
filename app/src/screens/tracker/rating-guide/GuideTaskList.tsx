@@ -3,6 +3,8 @@ import { SearchIcon } from 'lucide-react';
 import { SubHeading } from '../../../components/layout';
 import { DifficultyMark } from '../../../components/tasks/DifficultyMark';
 import { Button } from '../../../components/ui/button';
+import { Disclosure } from '../../../components/ui/disclosure';
+import { Input } from '../../../components/ui/input';
 import { difficultyName } from '../../../lib/difficulty-levels';
 import { useDifficultyLevels } from '../../../queries/difficulty-levels';
 import { formatTaskCount } from '../../../lib/format';
@@ -64,16 +66,22 @@ export function GuideTaskList({
 
   return (
     <div className="grid gap-4">
-      <details className="group rounded-md border border-border text-sm">
-        <summary className="flex min-h-11 cursor-pointer items-center px-3 font-semibold outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-solid focus-visible:outline-ring">
-          Cum aleg nivelul: Începător
-          {sheet.experiences.includes('intermediar') ? ', Intermediar' : ''} sau
-          Avansat?
-        </summary>
-        <div className="border-t border-border p-3">
+      <Disclosure
+        className="border-y border-(--border-soft) text-sm"
+        summary={
+          <span>
+            Cum aleg nivelul: Începător
+            {sheet.experiences.includes('intermediar')
+              ? ', Intermediar'
+              : ''}{' '}
+            sau Avansat?
+          </span>
+        }
+      >
+        <div className="pb-3">
           <ExperienceRules experiences={sheet.experiences} />
         </div>
-      </details>
+      </Disclosure>
       {searchable && (
         <div className="grid gap-1.5">
           <label htmlFor={`${id}-search`} className="sr-only">
@@ -84,14 +92,14 @@ export function GuideTaskList({
               aria-hidden="true"
               className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
             />
-            <input
+            <Input
               id={`${id}-search`}
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Caută un task"
               autoComplete="off"
-              className="min-h-11 w-full rounded-md border border-input bg-background py-2 pr-3 pl-9 text-sm"
+              className="pl-9"
               aria-describedby={`${id}-count`}
             />
           </div>

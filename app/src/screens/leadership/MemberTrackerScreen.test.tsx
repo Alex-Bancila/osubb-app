@@ -231,19 +231,85 @@ function cards() {
     screen.getByRole('region', { name: 'Atribuiri' }),
   ).queryAllByRole('article');
 }
-it('heads the page with the Member Card summary: Nickname, full name, Role, Groups', async () => {
+it('heads the page with the Member, as Profil does: the name as the h1, then one meta line', async () => {
   const user = userEvent.setup();
-  view();
-  const name = screen.getByRole('button', { name: 'Profilul membrului Ioana' });
-  expect(name).toHaveTextContent('IoanaIoana Popescu');
-  expect(screen.getByText('Voluntar Activ')).toBeInTheDocument();
+  const { container } = view();
+  // The page is about the Member: their name is the title, and the page's
+  // own name is kept in it for a screen reader.
+  const title = screen.getByRole('heading', { level: 1 });
+  expect(title).toHaveAccessibleName('Trackerul membrului: Ioana');
+  expect(within(title).getByText('Trackerul membrului:')).toHaveClass(
+    'sr-only',
+  );
+  expect(title).toHaveTextContent(/Ioana$/);
+  const identity = container.querySelector(
+    '[data-slot="member-identity"]',
+  ) as HTMLElement;
+  expect(identity).toContainElement(title);
+  // No summary card under the header any more.
+  expect(screen.queryByRole('region', { name: 'Membru' })).toBeNull();
+  const meta = identity.querySelector(
+    '[data-slot="member-meta"]',
+  ) as HTMLElement;
+  expect(within(meta).getByText('Voluntar Activ')).toHaveClass('role-badge');
+  expect(within(meta).getByText('Ioana Popescu')).toBeVisible();
+  expect(meta).toContainElement(total());
   expect(
-    within(screen.getByRole('list', { name: 'Grupuri' })).getAllByRole(
+    within(within(meta).getByRole('list', { name: 'Grupuri' })).getAllByRole(
       'listitem',
     ),
   ).toHaveLength(2);
-  await user.click(name);
+  // The avatar opens the Member Card.
+  const avatar = within(identity).getByRole('button', {
+    name: 'Profilul membrului Ioana',
+  });
+  await user.click(avatar);
   expect(await screen.findByRole('dialog', { name: 'Ioana' })).toBeVisible();
+});
+it('names two Groups on the meta line and counts the rest, on one row', () => {
+  // The Member this file's `beforeEach` answers with, in two more Groups.
+  const { data } = useMemberCard() as unknown as {
+    data: { groups: object[] };
+  };
+  useMemberCard.mockReturnValue({
+    data: {
+      ...data,
+      groups: [
+        ...data.groups,
+        { id: 11, name: 'Financiar', label: 'Financiar', color: '#007F33' },
+        { id: 12, name: 'Bal', label: 'Balul Bobocilor', color: null },
+      ],
+    },
+    isPending: false,
+    isError: false,
+    refetch: async () => {},
+  } as never);
+  view();
+  const groups = screen.getByRole('list', { name: 'Grupuri' });
+  expect(groups).not.toHaveClass('flex-wrap');
+  const items = within(groups).getAllByRole('listitem');
+  expect(items.map((item) => item.textContent)).toEqual([
+    'Educație',
+    'Mentorat · Educație',
+    '+2și încă 2 grupuri',
+  ]);
+  expect(within(groups).getByText('și încă 2 grupuri')).toHaveClass('sr-only');
+});
+it('says the page and that the profile is unavailable when the Member Card has no answer', () => {
+  useMemberCard.mockReturnValue({
+    data: undefined,
+    isPending: false,
+    isError: true,
+    refetch: async () => {},
+  } as never);
+  view();
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+    /^Trackerul membrului$/,
+  );
+  expect(screen.getByText('Profilul nu este disponibil.')).toBeVisible();
+  expect(screen.queryByRole('region', { name: 'Puncte' })).toBeNull();
+  // The record is still listed.
+  expect(cards()).toHaveLength(2);
 });
 it('opening a Member’s history reads the viewer’s Retention Signals about them (#1012)', () => {
   view();
@@ -262,24 +328,55 @@ it('draws each Assignment with the Task card, read-only, keeping the evaluation 
   expect(first).toHaveTextContent('Echipă · Mentorat');
   expect(first).toHaveTextContent('Campanie: Bun venit');
   // The standing Evaluation is the one the reversal left.
-  expect(first).toHaveTextContent(/18 puncte · Dificultate\s+· Nota 5/);
+  expect(first).toHaveTextContent(/18 puncte.*Nota 5/);
   expect(
     within(first).getAllByRole('img', { name: 'Dificultate 3 din 5' }),
   ).not.toHaveLength(0);
   expect(
     within(first).getByText(/Finalizat ·/, { selector: 'dd' }),
   ).toBeInTheDocument();
+  // Short dates in the record; the year only once 2026 is not this year.
+  expect(
+    within(first).getByText('Atribuit').nextElementSibling,
+  ).toHaveTextContent(/^joi, 10 sept\.( 2026)?$/);
+  expect(first).not.toHaveTextContent(/septembrie/);
+  // One heading for the page, one for the list: no eyebrow repeats either.
+  expect(container.querySelector('[data-slot="page-eyebrow"]')).toBeNull();
+  expect(container.querySelector('[data-slot="section-eyebrow"]')).toBeNull();
+  expect(
+    screen.getByRole('heading', { level: 2, name: 'Atribuiri' }),
+  ).toBeVisible();
+  expect(
+    container.querySelectorAll('[data-slot="section-header"]'),
+  ).toHaveLength(1);
+  // The count sits on the heading's row; the list starts right under it.
+  const heading = screen
+    .getByRole('heading', { name: 'Atribuiri' })
+    .closest('[data-slot="section-header"]') as HTMLElement;
+  expect(within(heading).getByText('2 atribuiri')).toBeVisible();
+  expect(heading.querySelector('p')).toBeNull();
   // Read-only: no Executor line, no actions.
   expect(within(first).queryByText('Executor:')).toBeNull();
   expect(within(second).queryByRole('button')).toBeNull();
   expect(second).toHaveTextContent('Activă');
+  // The shared disclosure (a chevron that turns), not a bare <details>.
+  const evaluations = within(first)
+    .getByText('Evaluări (2)')
+    .closest('details') as HTMLDetailsElement;
+  expect(evaluations).toHaveAttribute('data-slot', 'disclosure');
+  expect(evaluations.querySelector('summary svg')).not.toBeNull();
+  expect(evaluations.open).toBe(false);
   await user.click(within(first).getByText('Evaluări (2)'));
+  expect(evaluations.open).toBe(true);
   expect(
     within(first).getByText(/−1\.234 puncte · Evaluare anulată/),
   ).toBeVisible();
   expect(within(first).getByText(/Corecție/)).toBeVisible();
   // R29a: each Evaluation reads Difficulty as stars and Nota as a number.
   expect(within(first).getAllByText(/· Nota \d/).length).toBeGreaterThan(0);
+  expect(
+    within(first).getByText('Subtaskuri (1)').closest('details'),
+  ).toHaveAttribute('data-slot', 'disclosure');
   await user.click(within(first).getByText('Subtaskuri (1)'));
   expect(within(first).getByText(/Materiale · Finalizat/)).toBeVisible();
   expect(
@@ -432,16 +529,34 @@ it('lays the Assignment cards on the collection grid, each as tall as its own re
 function total() {
   return screen.getByRole('region', { name: 'Puncte' });
 }
+/** The scope sentence beside the figure. */
+function scope() {
+  return total().querySelector(
+    '[data-slot="member-total-scope"]',
+  ) as HTMLElement;
+}
 it("heads the page with the Member's total points, read for the whole record (#906)", () => {
   view();
   expect(state.total).toHaveBeenLastCalledWith(uid, {});
-  expect(total()).toHaveTextContent('12 puncte');
-  expect(total()).toHaveTextContent('din toate taskurile');
-  // At the top: the total sits in the Member panel, above the Work Filter.
+  // "12 pct" to the eye, the whole noun to a screen reader.
+  expect(total()).toHaveTextContent(/^12 pctpuncte din toate taskurile$/);
+  expect(within(total()).getByText('pct')).toHaveAttribute(
+    'aria-hidden',
+    'true',
+  );
+  expect(within(total()).getByText('puncte')).toHaveClass('sr-only');
+  // The figure alone says "everything"; the sentence is for a screen reader.
+  expect(scope()).toHaveClass('sr-only');
+});
+it('draws Filtrează as an icon on the name’s row, not on a row of its own', () => {
+  const { container } = view();
   const filter = screen.getByRole('button', { name: /^Filtrează/ });
   expect(
-    total().compareDocumentPosition(filter) & Node.DOCUMENT_POSITION_FOLLOWING,
-  ).toBeTruthy();
+    container.querySelector('[data-slot="member-actions"]'),
+  ).toContainElement(filter);
+  // The header's compact button: the icon alone on a phone.
+  expect(within(filter).getByText('Filtrează')).toHaveClass('max-sm:sr-only');
+  expect(filter.querySelector('svg')).not.toBeNull();
 });
 it('re-reads the total with every Work Filter level, as Clasament does (#906)', async () => {
   const user = userEvent.setup();
@@ -457,23 +572,25 @@ it('re-reads the total with every Work Filter level, as Clasament does (#906)', 
   expect(total()).toHaveTextContent(
     'din filtrele alese · acordate între 1 septembrie 2026 și 30 septembrie 2026',
   );
+  // Narrowed: the sentence is on the page, for everyone.
+  expect(scope()).not.toHaveClass('sr-only');
   state.total.mockReturnValue({ data: 30, isPending: false, isError: false });
   await user.click(screen.getByRole('button', { name: 'Șterge filtrele' }));
   expect(state.total).toHaveBeenLastCalledWith(uid, {});
-  expect(total()).toHaveTextContent('30 de puncte');
+  expect(total()).toHaveTextContent('30 pctde puncte');
   expect(total()).toHaveTextContent('din toate taskurile');
 });
 it('says the range alone when only a period is chosen, and a negative total keeps its sign (#906)', () => {
   state.total.mockReturnValue({ data: -2, isPending: false, isError: false });
   view(uid, '?de_la=2026-09-01');
-  expect(total()).toHaveTextContent('−2 puncte');
+  expect(total()).toHaveTextContent('−2 pctpuncte');
   expect(total()).toHaveTextContent('acordate din 1 septembrie 2026');
   expect(total()).not.toHaveTextContent('filtrele alese');
 });
 it('shows 0 points as a figure, a loading line, and a retriable error for the total (#906)', async () => {
   state.total.mockReturnValue({ data: 0, isPending: false, isError: false });
   const first = view();
-  expect(total()).toHaveTextContent('0 puncte');
+  expect(total()).toHaveTextContent('0 pctpuncte');
   first.unmount();
   state.total.mockReturnValue({ isPending: true, isError: false });
   const second = view();
@@ -525,9 +642,11 @@ it('offers "Adaugă task finalizat" only to a viewer who may credit the Member s
     isError: false,
   });
   view();
-  expect(
-    screen.getByRole('button', { name: 'Adaugă task finalizat' }),
-  ).toBeVisible();
+  // The page's plus button, named by the action; no labelled button.
+  const add = screen.getByRole('button', { name: 'Adaugă task finalizat' });
+  expect(add).toBeVisible();
+  expect(add).toHaveAttribute('data-slot', 'fab');
+  expect(add).not.toHaveTextContent('Adaugă task finalizat');
 });
 it('adds a completed Task for the tracked Member, preselected, and says so (#915)', async () => {
   const user = userEvent.setup();
@@ -563,21 +682,21 @@ it('adds a completed Task for the tracked Member, preselected, and says so (#915
   ).toBeNull();
   // Their one shared Group is chosen already.
   expect(
-    within(dialog).getByRole('combobox', {
-      name: 'Grup principal (obligatoriu)',
-    }),
+    within(dialog).getByRole('combobox', { name: 'Grup principal' }),
   ).toHaveTextContent('Mentorat');
   await user.type(
-    within(dialog).getByLabelText('Titlu (obligatoriu)'),
+    within(dialog).getByLabelText(/^Titlu( \(obligatoriu\))?$/),
     'Atelier de vară',
   );
   await user.click(within(dialog).getByRole('radio', { name: /^3 stele — / }));
   await user.click(
-    within(dialog).getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
+    within(dialog).getByRole('spinbutton', {
+      name: /^Nota( \(obligatoriu\))?$/,
+    }),
   );
   await user.keyboard('4');
   await user.type(
-    within(dialog).getByLabelText('Observații (obligatoriu)'),
+    within(dialog).getByLabelText(/^Observații( \(obligatoriu\))?$/),
     'Foarte bine',
   );
   await user.click(

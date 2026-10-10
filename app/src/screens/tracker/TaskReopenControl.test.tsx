@@ -15,7 +15,7 @@ vi.mock('../../queries/task-reopen', () => ({
 }));
 import { TaskReopenControl } from './TaskReopenControl';
 const props = { taskId: 17, status: 'completed' as const, kind: 'task' };
-const noteLabel = 'Motiv (obligatoriu)';
+const noteLabel = 'Motiv';
 beforeEach(() => {
   state.capability = true;
   state.mutation.mutateAsync.mockReset().mockResolvedValue({});

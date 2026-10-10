@@ -2,7 +2,14 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { Tabs } from '@base-ui/react/tabs';
 import type { UseQueryResult } from '@tanstack/react-query';
-import { ClipboardPlus, ListTodo } from 'lucide-react';
+import {
+  ClipboardList,
+  ClipboardPlus,
+  Hand,
+  Layers,
+  UserRound,
+} from 'lucide-react';
+import { cn } from 'cn';
 import { useMyTasks } from '../../queries/tasks';
 import { useTaskOpportunities } from '../../queries/task-opportunities';
 import {
@@ -15,16 +22,15 @@ import { usePendingDecisions } from '../../queries/request-decisions';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import {
-  EmptyState,
+  FabActions,
+  tabListClass,
+  tabThumbClass,
+  focusRingClass,
   Page,
   PageHeader,
-  SegmentedToggle,
-  tabClass,
-  tabListClass,
-  useActiveTabInView,
 } from '../../components/layout';
 import { useAuth } from '../../lib/auth';
-import { submitsWorkRequests, useCapability } from '../../lib/capabilities';
+import { useCapability } from '../../lib/capabilities';
 import { ErrorState, Loading } from '../../components/states';
 import { parsePositiveInt } from '../../lib/ids';
 import { RequestsView } from '../requests/RequestsView';
@@ -33,70 +39,57 @@ import { TaskDetailsSheet } from './TaskDetailsSheet';
 import { ManagerTaskList } from './ManagerTaskList';
 import { AddCompletedTaskControl } from './AddCompletedTaskControl';
 import { NewTaskControl } from './NewTaskControl';
-import { TaskCardGrid } from './TaskCardGrid';
+import { MyTaskList } from './MyTaskList';
+import { trackerListClass, TrackerWorkFilter } from './TrackerWorkFilter';
+import { useTitleSearch, type TitleSearch } from './use-title-search';
 import { PersonalScoreHeader } from './PersonalScoreHeader';
 import { PreferredGroupsScope } from '../../components/preferred-groups/PreferredGroupsScope';
-import type { TaskPresentationRow } from './task-presentation';
 import { TaskActionSuccess } from './TaskActionSuccess';
-import type { OnGaveUp } from './give-up-receipt';
 
-/** The loading and retry states every Tracker list shares. */
+const NO_ROWS: readonly never[] = [];
+
+/**
+ * The loading and retry states every Tracker list shares. The toolbar keeps
+ * its row meanwhile, its search disabled, so nothing moves when the list
+ * lands; `header` is what a list shows between the toolbar and its Tasks.
+ */
 function TaskQueryStates<Row>({
   query,
+  search,
+  preferredNotice,
+  header,
   children,
 }: {
   query: UseQueryResult<Row[], Error>;
+  search: TitleSearch;
+  preferredNotice?: boolean;
+  header?: ReactNode;
   children: (rows: Row[]) => ReactNode;
 }) {
-  if (query.isPending) return <Loading label="Se încarcă taskurile…" />;
-  if (query.isError)
+  if (query.isPending || query.isError)
     return (
-      <ErrorState
-        error={query.error}
-        text="Nu am putut încărca taskurile."
-        onRetry={() => void query.refetch()}
-      />
+      <div className={trackerListClass}>
+        <TrackerWorkFilter
+          rows={NO_ROWS}
+          search={search}
+          disabled
+          preferredNotice={preferredNotice}
+        />
+        {header}
+        {query.isPending ? (
+          <Loading label="Se încarcă taskurile…" />
+        ) : (
+          <ErrorState
+            error={query.error}
+            text="Nu am putut încărca taskurile."
+            onRetry={() => void query.refetch()}
+          />
+        )}
+      </div>
     );
   return children(query.data);
 }
 
-function TaskQueryPanel({
-  query,
-  empty,
-  manager = false,
-  now,
-  onOpenTask,
-  highlightedId = null,
-  onGaveUp,
-}: {
-  query: UseQueryResult<TaskPresentationRow[], Error>;
-  empty: string;
-  manager?: boolean;
-  now: Date;
-  onOpenTask: (id: number) => void;
-  highlightedId?: number | null;
-  onGaveUp?: OnGaveUp;
-}) {
-  return (
-    <TaskQueryStates query={query}>
-      {(rows) =>
-        !rows.length ? (
-          <EmptyState bare>{empty}</EmptyState>
-        ) : manager ? (
-          <ManagerTaskList rows={rows} now={now} onOpenTask={onOpenTask} />
-        ) : (
-          <TaskCardGrid
-            rows={rows}
-            now={now}
-            onOpenTask={onOpenTask}
-            highlightedId={highlightedId}
-            onGaveUp={onGaveUp}
-          />
-        )
-      }
-    </TaskQueryStates>
-  );
-}
 /** `?task=<id>`: a positive whole Task id, or nothing. */
 function linkedTaskId(value: string | null): number | null {
   return parsePositiveInt(value);
@@ -110,6 +103,49 @@ const TRACKER_TABS: readonly unknown[] = [
   'managed',
   'all',
 ];
+
+/**
+ * Taskuri's one navigation: the four Task lists and Cereri as Base UI `Tabs`
+ * drawn like `SegmentedToggle` — a 44 px track the width of the content, 36 px
+ * segments whose hit area reaches 4 px above and below, and the chosen one
+ * inked on a thumb that slides to it (`Tabs.Indicator`). The track and the
+ * thumb are the app's (`tabListClass`, `tabThumbClass`).
+ */
+const navListClass = tabListClass;
+
+const navThumbClass = tabThumbClass;
+
+/**
+ * One segment. The chosen one inks itself too, once the thumb has arrived
+ * (the 200 ms delay), so it is inked even where the thumb has not measured:
+ * the first paint, a hidden page, jsdom.
+ */
+const navTabClass = cn(
+  'relative z-1 inline-flex min-h-[36px] min-w-11 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-bold whitespace-nowrap text-muted-foreground [transition:color_200ms] after:absolute after:inset-x-0 after:-inset-y-1 hover:text-foreground motion-reduce:transition-none aria-selected:bg-(--text) aria-selected:text-(--surface) aria-selected:[transition:color_200ms,background-color_0s_200ms] aria-selected:hover:text-(--surface) motion-reduce:aria-selected:transition-none [&_svg]:size-4 [&_svg]:shrink-0',
+  focusRingClass,
+);
+
+/**
+ * Where the segments spell their names. Below it only the chosen one does,
+ * taking the width the others leave — they are their icons, 44 px each, the
+ * name kept for a screen reader — so five fit at 360 px without scrolling
+ * sideways, and a count rides its icon's corner. From it up every segment is
+ * icon and name, as wide as its name needs. Five names need `md`.
+ */
+const NAV_LABELS_FROM = {
+  sm: {
+    tab: 'max-sm:flex-none max-sm:aria-selected:flex-1 sm:flex-auto sm:px-4',
+    label: 'max-sm:in-[[aria-selected=false]]:sr-only',
+    badge:
+      'max-sm:in-[[aria-selected=false]]:absolute max-sm:in-[[aria-selected=false]]:-top-1.5 max-sm:in-[[aria-selected=false]]:-right-1',
+  },
+  md: {
+    tab: 'max-md:flex-none max-md:aria-selected:flex-1 md:flex-auto md:px-4',
+    label: 'max-md:in-[[aria-selected=false]]:sr-only',
+    badge:
+      'max-md:in-[[aria-selected=false]]:absolute max-md:in-[[aria-selected=false]]:-top-1.5 max-md:in-[[aria-selected=false]]:-right-1',
+  },
+} as const;
 
 function isTrackerTab(value: unknown): value is TrackerTab {
   return TRACKER_TABS.includes(value);
@@ -157,13 +193,16 @@ const nonEmpty = (rows: readonly { id: number }[]) => rows.length > 0;
 const HIGHLIGHT_MS = 4000;
 
 /**
- * Taskuri's two views (#973): the Task Tracker, and **Cereri** — the
- * Completed-work Requests — at `?vedere=cereri`.
+ * Taskuri's two views (#973): the Task lists, and **Cereri** — the
+ * Completed-work Requests — at `?vedere=cereri`, the last tab of the one
+ * navigation.
  */
 type TrackerView = 'taskuri' | 'cereri';
 
 const VIEW_KEY = 'vedere';
 const REQUESTS_VIEW = 'cereri';
+/** The Cereri tab's value, beside the `TrackerTab` ones. */
+const REQUESTS_TAB = 'cereri';
 
 /** "1 cerere de decis", "3 cereri de decis", "20 de cereri de decis". */
 function decisionsLabel(count: number): string {
@@ -175,9 +214,9 @@ function decisionsLabel(count: number): string {
 
 /**
  * Taskuri opens on the member's Grupuri preferate (R43): Disponibile, De
- * gestionat and Toate leave the unselected Groups out until **Arată tot**,
+ * gestionat and Toate leave the unselected Groups out until the star is released,
  * for this visit. Taskurile mele is the member's own work and is never
- * filtered.
+ * filtered by them: only its own search and Work Filter narrow it.
  */
 export default function TrackerScreen() {
   return (
@@ -202,10 +241,11 @@ function TrackerContent() {
   const leader = useCapability('seeLeadership').data === true;
   // Cereri is every Member's (#979): a volunteer files there, leadership
   // and the Group Managers decide there, and an empty queue is shown as
-  // such. The read stays for the count on the segment.
-  const filesRequests = submitsWorkRequests(claims);
+  // such. The read stays for the count on the tab.
   const decisions = usePendingDecisions();
   const toDecide = decisions.data?.length ?? 0;
+  // One search text for the four lists: it stays when the tab changes.
+  const search = useTitleSearch();
   const [detailId, setDetailId] = useState<number | null>(null);
   // The Task this page just created or added, and what its details say (#915).
   const [created, setCreated] = useState<{
@@ -228,11 +268,11 @@ function TrackerContent() {
   // The deep links (#685, #822, #846): `/tracker?task=<id>` lands on the
   // Task, `/tracker?lista=<tab>` opens that tab. `task` wins over `lista`.
   const [params, setParams] = useSearchParams();
-  // `?vedere=cereri` (#973) shows Cereri; anything else the Tracker.
+  // `?vedere=cereri` (#973) shows Cereri; anything else a Task list.
   const view: TrackerView =
     params.get(VIEW_KEY) === REQUESTS_VIEW ? 'cereri' : 'taskuri';
-  // A history entry per choice, so Back returns to the Tracker; every other
-  // parameter is kept.
+  // A history entry per change of view, so Back returns to the Task lists;
+  // every other parameter is kept.
   function chooseView(next: TrackerView) {
     setParams((current) => {
       const nextParams = new URLSearchParams(current);
@@ -377,53 +417,28 @@ function TrackerContent() {
     (current === 'all' && !showAll)
       ? 'mine'
       : current;
-  const tabStrip = useRef<HTMLDivElement>(null);
-  // The strip mounts afresh on the way back from Cereri: centre it again then.
-  useActiveTabInView(tabStrip, view === 'taskuri' ? selected : null);
+  const nav =
+    NAV_LABELS_FROM[
+      3 + Number(Boolean(management.data)) + Number(showAll) >= 5 ? 'md' : 'sm'
+    ];
+  const tabClass = cn(navTabClass, nav.tab);
+  const labelClass = cn('min-w-0 truncate', nav.label);
+  // Between the toolbar and the cards of Taskurile mele, loading or loaded.
+  const mineHeader = (
+    <>
+      {!leader && <PersonalScoreHeader />}
+      {gaveUp !== null && (
+        <TaskActionSuccess key={gaveUp.id}>{gaveUp.receipt}</TaskActionSuccess>
+      )}
+    </>
+  );
   return (
     <Page>
-      <PageHeader
-        title="Taskuri"
-        description={
-          view === 'taskuri'
-            ? 'Lucrul tău și oportunitățile din OSUBB.'
-            : filesRequests
-              ? 'Descrie contribuția, iar coordonatorii grupului o vor evalua.'
-              : 'Cererile de activitate realizată pe care le poți aproba sau respinge.'
-        }
-        actions={
-          <>
-            <SegmentedToggle
-              label="Secțiune"
-              options={[
-                { value: 'taskuri', label: 'Taskuri', icon: ListTodo },
-                {
-                  value: 'cereri',
-                  label: (
-                    <>
-                      Cereri
-                      {toDecide > 0 && (
-                        // Solid, so the count stays legible on the inked
-                        // segment as well as on the track.
-                        <Badge
-                          variant="destructive"
-                          className="min-w-5 bg-destructive text-(--surface) dark:bg-destructive"
-                        >
-                          <span aria-hidden="true">{toDecide}</span>
-                          <span className="sr-only">
-                            , {decisionsLabel(toDecide)}
-                          </span>
-                        </Badge>
-                      )}
-                    </>
-                  ),
-                  icon: ClipboardPlus,
-                },
-              ]}
-              value={view}
-              onChange={chooseView}
-            />
-            {view === 'taskuri' && (
+      <FabActions>
+        <PageHeader
+          title="Taskuri"
+          actions={
+            view === 'taskuri' && (
               <>
                 <NewTaskControl
                   onCreated={(id) => {
@@ -442,150 +457,188 @@ function TrackerContent() {
                   }}
                 />
               </>
-            )}
-          </>
-        }
-      />
-      {view === 'cereri' ? (
-        <RequestsView />
-      ) : (
-        <>
-          {management.isError && (
-            <div role="alert" className="text-sm">
-              <p>Nu am putut verifica accesul la taskurile de gestionat.</p>
-              <Button
-                variant="outline"
-                className="min-h-11 min-w-11"
-                onClick={() => management.refetch()}
-              >
-                Reîncarcă accesul
-              </Button>
-            </div>
-          )}
-          {leadership.isPending && (
-            <p role="status" className="text-sm text-muted-foreground">
-              Se verifică accesul la toate taskurile…
-            </p>
-          )}
-          {leadership.isError && (
-            <div role="alert" className="space-y-3 text-sm">
-              <p>Nu am putut verifica accesul la toate taskurile.</p>
-              <Button
-                variant="outline"
-                className="min-h-11 min-w-11"
-                onClick={() => leadership.refetch()}
-              >
-                Reîncarcă accesul complet
-              </Button>
-            </div>
-          )}
-          {deleted !== null && (
-            <TaskActionSuccess key={deleted.id}>
-              {deleted.receipt}
-            </TaskActionSuccess>
-          )}
-          <Tabs.Root
-            // The tab strip has no margin of its own: this stack spaces it (#841).
-            className="flex flex-col gap-6"
-            value={selected}
-            onValueChange={(value) => {
-              if (isTrackerTab(value)) setTab(value);
-              setGaveUp(null);
-              setDeleted(null);
-            }}
-          >
-            <Tabs.List
-              ref={tabStrip}
-              aria-label="Liste de taskuri"
-              className={tabListClass}
+            )
+          }
+        />
+        {view === 'taskuri' && management.isError && (
+          <div role="alert" className="text-sm">
+            <p>Nu am putut verifica accesul la taskurile de gestionat.</p>
+            <Button
+              variant="outline"
+              className="min-h-11 min-w-11"
+              onClick={() => management.refetch()}
             >
-              <Tabs.Tab value="mine" className={tabClass}>
-                Taskurile mele
+              Reîncarcă accesul
+            </Button>
+          </div>
+        )}
+        {/* The access checks are silent while they run: a line of text
+            here would push the lists down as it left. Only a failure
+            speaks, with its retry. */}
+        {view === 'taskuri' && leadership.isError && (
+          <div role="alert" className="space-y-3 text-sm">
+            <p>Nu am putut verifica accesul la toate taskurile.</p>
+            <Button
+              variant="outline"
+              className="min-h-11 min-w-11"
+              onClick={() => leadership.refetch()}
+            >
+              Reîncarcă accesul complet
+            </Button>
+          </div>
+        )}
+        {view === 'taskuri' && deleted !== null && (
+          <TaskActionSuccess key={deleted.id}>
+            {deleted.receipt}
+          </TaskActionSuccess>
+        )}
+        <Tabs.Root
+          // The nav has no margin of its own: this stack spaces it (#841).
+          className="flex flex-col gap-4"
+          value={view === 'cereri' ? REQUESTS_TAB : selected}
+          onValueChange={(value) => {
+            if (value === REQUESTS_TAB) chooseView('cereri');
+            else if (isTrackerTab(value)) {
+              setTab(value);
+              if (view === 'cereri') chooseView('taskuri');
+            }
+            setGaveUp(null);
+            setDeleted(null);
+          }}
+        >
+          <Tabs.List aria-label="Taskuri și cereri" className={navListClass}>
+            <Tabs.Indicator
+              data-slot="tracker-nav-thumb"
+              className={navThumbClass}
+            />
+            <Tabs.Tab value="mine" className={tabClass}>
+              <UserRound aria-hidden="true" />
+              <span className={labelClass}>Taskurile mele</span>
+            </Tabs.Tab>
+            <Tabs.Tab value="available" className={tabClass}>
+              <Hand aria-hidden="true" />
+              <span className={labelClass}>Disponibile</span>
+            </Tabs.Tab>
+            {management.data && (
+              <Tabs.Tab value="managed" className={tabClass}>
+                <ClipboardList aria-hidden="true" />
+                <span className={labelClass}>De gestionat</span>
               </Tabs.Tab>
-              <Tabs.Tab value="available" className={tabClass}>
-                Disponibile
+            )}
+            {showAll && (
+              <Tabs.Tab value="all" className={tabClass}>
+                <Layers aria-hidden="true" />
+                <span className={labelClass}>Toate</span>
               </Tabs.Tab>
-              {management.data && (
-                <Tabs.Tab value="managed" className={tabClass}>
-                  De gestionat
-                </Tabs.Tab>
+            )}
+            <Tabs.Tab value={REQUESTS_TAB} className={tabClass}>
+              <ClipboardPlus aria-hidden="true" />
+              <span className={labelClass}>Cereri</span>
+              {toDecide > 0 && (
+                // Solid, so the count stays legible on the inked segment as
+                // well as on the track.
+                <Badge
+                  variant="destructive"
+                  className={cn(
+                    'min-w-5 bg-destructive text-(--surface) dark:bg-destructive',
+                    nav.badge,
+                  )}
+                >
+                  <span aria-hidden="true">{toDecide}</span>
+                  <span className="sr-only">, {decisionsLabel(toDecide)}</span>
+                </Badge>
               )}
-              {showAll && (
-                <Tabs.Tab value="all" className={tabClass}>
-                  Toate
-                </Tabs.Tab>
+            </Tabs.Tab>
+          </Tabs.List>
+          <Tabs.Panel value="mine">
+            <TaskQueryStates
+              query={mine}
+              search={search}
+              preferredNotice={false}
+              header={mineHeader}
+            >
+              {(rows) => (
+                <MyTaskList
+                  rows={rows}
+                  now={now}
+                  search={search}
+                  header={mineHeader}
+                  onOpenTask={setDetailId}
+                  linkedId={highlightTarget}
+                  highlightedId={highlightedId}
+                  onGaveUp={(id, receipt) => setGaveUp({ id, receipt })}
+                />
               )}
-            </Tabs.List>
-            <Tabs.Panel value="mine" className="space-y-6">
-              {!leader && <PersonalScoreHeader />}
-              {gaveUp !== null && (
-                <TaskActionSuccess key={gaveUp.id}>
-                  {gaveUp.receipt}
-                </TaskActionSuccess>
+            </TaskQueryStates>
+          </Tabs.Panel>
+          <Tabs.Panel value="available">
+            <TaskQueryStates query={available} search={search}>
+              {(opportunities) => (
+                <AvailableOpportunities
+                  opportunities={opportunities}
+                  now={now}
+                  search={search}
+                  onOpenTask={setDetailId}
+                />
               )}
-              <TaskQueryPanel
-                query={mine}
-                onGaveUp={(id, receipt) => setGaveUp({ id, receipt })}
-                empty="Nu ai niciun task atribuit încă."
-                now={now}
-                onOpenTask={setDetailId}
-                highlightedId={highlightedId}
-              />
-            </Tabs.Panel>
-            <Tabs.Panel value="available">
-              <TaskQueryStates query={available}>
-                {(opportunities) => (
-                  <AvailableOpportunities
-                    opportunities={opportunities}
+            </TaskQueryStates>
+          </Tabs.Panel>
+          {management.data && (
+            <Tabs.Panel value="managed">
+              <TaskQueryStates query={managed} search={search}>
+                {(rows) => (
+                  <ManagerTaskList
+                    rows={rows}
                     now={now}
+                    search={search}
+                    empty="Nu ai taskuri de gestionat acum."
                     onOpenTask={setDetailId}
                   />
                 )}
               </TaskQueryStates>
             </Tabs.Panel>
-            {management.data && (
-              <Tabs.Panel value="managed">
-                <TaskQueryPanel
-                  query={managed}
-                  empty="Nu ai taskuri de gestionat acum."
-                  manager
-                  now={now}
-                  onOpenTask={setDetailId}
-                />
-              </Tabs.Panel>
-            )}
-            {showAll && (
-              <Tabs.Panel value="all">
-                <TaskQueryPanel
-                  query={all}
-                  empty="Nu există taskuri vizibile."
-                  manager
-                  now={now}
-                  onOpenTask={setDetailId}
-                />
-              </Tabs.Panel>
-            )}
-          </Tabs.Root>
-        </>
-      )}
-      <TaskDetailsSheet
-        key={detailId}
-        taskId={detailId}
-        managedTaskIds={managedTaskIds}
-        notice={
-          detailId !== null && detailId === created?.id ? created.notice : null
-        }
-        onClose={() => {
-          setDetailId(null);
-          setCreated(null);
-        }}
-        onDeleted={(receipt) => {
-          setDeleted({ id: detailId ?? 0, receipt });
-          setGaveUp(null);
-          setDetailId(null);
-          setCreated(null);
-        }}
-      />
+          )}
+          {showAll && (
+            <Tabs.Panel value="all">
+              <TaskQueryStates query={all} search={search}>
+                {(rows) => (
+                  <ManagerTaskList
+                    rows={rows}
+                    now={now}
+                    search={search}
+                    empty="Nu există taskuri vizibile."
+                    onOpenTask={setDetailId}
+                  />
+                )}
+              </TaskQueryStates>
+            </Tabs.Panel>
+          )}
+          {/* Cereri is other content: no toolbar, its own blocks 24 px apart. */}
+          <Tabs.Panel value={REQUESTS_TAB} className="flex flex-col gap-6">
+            <RequestsView />
+          </Tabs.Panel>
+        </Tabs.Root>
+        <TaskDetailsSheet
+          key={detailId}
+          taskId={detailId}
+          managedTaskIds={managedTaskIds}
+          notice={
+            detailId !== null && detailId === created?.id
+              ? created.notice
+              : null
+          }
+          onClose={() => {
+            setDetailId(null);
+            setCreated(null);
+          }}
+          onDeleted={(receipt) => {
+            setDeleted({ id: detailId ?? 0, receipt });
+            setGaveUp(null);
+            setDetailId(null);
+            setCreated(null);
+          }}
+        />
+      </FabActions>
     </Page>
   );
 }

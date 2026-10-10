@@ -1,14 +1,18 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { RequestDecisionQueue } from './RequestDecisionQueue';
 import { CheckCircle2, ClipboardPlus, History } from 'lucide-react';
 import { TaskDetailsSheet } from '../tracker/TaskDetailsSheet';
 import { RequestStatusBadge } from './RequestStatusBadge';
 import { Button } from '../../components/ui/button';
+import { FormSheet, FormSheetFooter } from '../../components/ui/form-sheet';
+import { InfoHint } from '../../components/ui/info-hint';
+import { Textarea } from '../../components/ui/input';
 import { useAuth } from '../../lib/auth';
 import { commandErrorMessage } from '../../lib/command-reasons';
 import { submitsWorkRequests } from '../../lib/capabilities';
 import {
   EmptyState,
+  FabAction,
   ListRow,
   PageGrid,
   Panel,
@@ -72,10 +76,12 @@ function safeSubmitError(error: unknown) {
 }
 
 /**
- * **Cereri**, Taskuri's other view (`/tracker?vedere=cereri`, #973): the
- * Requests the viewer may decide, and — for a Member who files them — the
- * form for a new one and their own. Taskuri's header frames it, so it sits
- * directly in that `Page`, one block per child.
+ * **Cereri**, Taskuri's last tab (`/tracker?vedere=cereri`, #973): the
+ * Requests the viewer may decide, and — for a Member who files them — their
+ * own, with "Cerere nouă" as the page's create action: its form opens in a
+ * form sheet, and the receipt takes focus once it is sent. Taskuri's header
+ * and navigation frame the view, so it sits directly in that tab's panel, one
+ * block per child.
  */
 export function RequestsView() {
   const { claims } = useAuth();
@@ -107,6 +113,13 @@ export function RequestsView() {
   const [description, setDescription] = useState('');
   const [taskId, setTaskId] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  // After a Request is sent, focus belongs to its receipt, not the button.
+  const sent = useRef(false);
+  const receipt = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (submitted) receipt.current?.focus();
+  }, [submitted]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -116,6 +129,8 @@ export function RequestsView() {
       await submit.mutateAsync({ origin, description: description.trim() });
       setDescription('');
       setOrigin(null);
+      sent.current = true;
+      setFormOpen(false);
       setSubmitted(true);
     } catch {
       setSubmitted(false);
@@ -128,128 +143,29 @@ export function RequestsView() {
           nothing until there is one to decide (it is not a panel that may go
           missing). For one who only decides it is the view, empty or not. */}
       <RequestDecisionQueue showEmpty={!canSubmitRequests} />
+      {canSubmitRequests && (
+        <FabAction
+          label="Cerere nouă"
+          icon={ClipboardPlus}
+          onSelect={() => {
+            sent.current = false;
+            setSubmitted(false);
+            setFormOpen(true);
+          }}
+        />
+      )}
+      {submitted && (
+        <p
+          ref={receipt}
+          role="status"
+          tabIndex={-1}
+          className="m-0 flex items-center gap-2 text-sm text-green-700"
+        >
+          <CheckCircle2 aria-hidden="true" className="size-4" />
+          Cererea a fost trimisă și apare în Cererile mele.
+        </p>
+      )}
       <PageGrid columns={1}>
-        {canSubmitRequests && (
-          <Panel
-            eyebrow="Cerere nouă"
-            icon={ClipboardPlus}
-            title="Activitatea ta"
-            description="Alege grupul pentru care ai lucrat: departamentul, echipa sau proiectul."
-            descriptionId="request-origin-help"
-          >
-            {origins.isPending ? (
-              <Loading label="Se încarcă grupurile…" />
-            ) : origins.isError ? (
-              <ErrorState
-                error={origins.error}
-                text="Nu am putut încărca grupurile."
-                onRetry={() => void origins.refetch()}
-              />
-            ) : (
-              <form
-                className="space-y-5"
-                onSubmit={(event) => void onSubmit(event)}
-              >
-                <div className="space-y-2">
-                  <span
-                    id="request-origin-label"
-                    className="text-sm font-medium"
-                  >
-                    Grup
-                  </span>
-                  <Combobox<RequestOrigin>
-                    items={origins.data ?? []}
-                    value={origin}
-                    onValueChange={(next) => {
-                      setOrigin(next);
-                      setSubmitted(false);
-                    }}
-                    itemToStringLabel={(item) =>
-                      groupOptionLabel(item, groupsById)
-                    }
-                    isItemEqualToValue={(a, b) => a.id === b.id}
-                    disabled={!origins.data?.length}
-                  >
-                    <ComboboxTrigger
-                      className="min-h-11"
-                      aria-labelledby="request-origin-label"
-                      aria-describedby="request-origin-help"
-                    >
-                      <ComboboxValue placeholder="Alege grupul">
-                        {(item: RequestOrigin | null) =>
-                          item ? (
-                            <GroupOption group={item} groupsById={groupsById} />
-                          ) : (
-                            'Alege grupul'
-                          )
-                        }
-                      </ComboboxValue>
-                    </ComboboxTrigger>
-                    <ComboboxContent>
-                      <ComboboxInput
-                        aria-label="Caută un grup"
-                        placeholder="Caută un grup"
-                      />
-                      <ComboboxEmpty />
-                      <ComboboxList>
-                        {(item: RequestOrigin) => (
-                          <ComboboxItem key={item.id} value={item}>
-                            <GroupOption group={item} groupsById={groupsById} />
-                          </ComboboxItem>
-                        )}
-                      </ComboboxList>
-                    </ComboboxContent>
-                  </Combobox>
-                  {!origins.data?.length && (
-                    <p className="text-sm text-muted-foreground">
-                      Nu ai niciun grup activ disponibil pentru cereri.
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <label
-                    className="text-sm font-medium"
-                    htmlFor="request-description"
-                  >
-                    Descriere
-                  </label>
-                  <textarea
-                    id="request-description"
-                    className="min-h-32 w-full rounded-lg border border-input bg-background p-3"
-                    value={description}
-                    onChange={(event) => {
-                      setDescription(event.target.value);
-                      setSubmitted(false);
-                    }}
-                    placeholder="Ce ai realizat și care a fost rezultatul?"
-                    required
-                  />
-                </div>
-                {submit.isError && (
-                  <p role="alert" className="text-sm text-destructive">
-                    {safeSubmitError(submit.error)}
-                  </p>
-                )}
-                {submitted && (
-                  <p
-                    role="status"
-                    className="flex items-center gap-2 text-sm text-green-700"
-                  >
-                    <CheckCircle2 className="size-4" />
-                    Cererea a fost trimisă și apare în Cererile mele.
-                  </p>
-                )}
-                <Button
-                  block
-                  type="submit"
-                  disabled={submit.isPending || !origin || !description.trim()}
-                >
-                  {submit.isPending ? 'Se trimite…' : 'Trimite cererea'}
-                </Button>
-              </form>
-            )}
-          </Panel>
-        )}
         {canSubmitRequests && (
           <Panel
             eyebrow="Trimise"
@@ -306,6 +222,127 @@ export function RequestsView() {
           </Panel>
         )}
       </PageGrid>
+      {canSubmitRequests && (
+        <FormSheet
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          title="Cerere nouă"
+          busy={submit.isPending}
+          finalFocus={() => !sent.current}
+        >
+          {origins.isPending ? (
+            <Loading label="Se încarcă grupurile…" />
+          ) : origins.isError ? (
+            <ErrorState
+              error={origins.error}
+              text="Nu am putut încărca grupurile."
+              onRetry={() => void origins.refetch()}
+            />
+          ) : (
+            <form
+              className="flex flex-1 flex-col gap-5"
+              onSubmit={(event) => void onSubmit(event)}
+            >
+              <div className="grid gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    id="request-origin-label"
+                    className="text-sm font-medium"
+                  >
+                    Grup
+                  </span>
+                  <InfoHint label="Despre grup" id="request-origin-help">
+                    Alege grupul pentru care ai lucrat: departamentul, echipa
+                    sau proiectul.
+                  </InfoHint>
+                </div>
+                <Combobox<RequestOrigin>
+                  items={origins.data ?? []}
+                  value={origin}
+                  onValueChange={setOrigin}
+                  itemToStringLabel={(item) =>
+                    groupOptionLabel(item, groupsById)
+                  }
+                  isItemEqualToValue={(a, b) => a.id === b.id}
+                  disabled={!origins.data?.length}
+                >
+                  <ComboboxTrigger
+                    aria-labelledby="request-origin-label"
+                    aria-describedby="request-origin-help"
+                    aria-required="true"
+                  >
+                    <ComboboxValue placeholder="Alege grupul">
+                      {(item: RequestOrigin | null) =>
+                        item ? (
+                          <GroupOption group={item} groupsById={groupsById} />
+                        ) : (
+                          'Alege grupul'
+                        )
+                      }
+                    </ComboboxValue>
+                  </ComboboxTrigger>
+                  <ComboboxContent>
+                    <ComboboxInput
+                      aria-label="Caută un grup"
+                      placeholder="Caută un grup"
+                    />
+                    <ComboboxEmpty />
+                    <ComboboxList>
+                      {(item: RequestOrigin) => (
+                        <ComboboxItem key={item.id} value={item}>
+                          <GroupOption group={item} groupsById={groupsById} />
+                        </ComboboxItem>
+                      )}
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
+                {!origins.data?.length && (
+                  <p className="m-0 text-sm text-muted-foreground">
+                    Nu ai niciun grup activ disponibil pentru cereri.
+                  </p>
+                )}
+              </div>
+              <div className="grid gap-1.5">
+                <label
+                  className="text-sm font-medium"
+                  htmlFor="request-description"
+                >
+                  Descriere
+                </label>
+                <Textarea
+                  id="request-description"
+                  className="min-h-32"
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  placeholder="Ce ai realizat și care a fost rezultatul?"
+                  required
+                />
+              </div>
+              {submit.isError && (
+                <p role="alert" className="m-0 text-sm text-destructive">
+                  {safeSubmitError(submit.error)}
+                </p>
+              )}
+              <FormSheetFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={submit.isPending}
+                  onClick={() => setFormOpen(false)}
+                >
+                  Renunță
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={submit.isPending || !origin || !description.trim()}
+                >
+                  {submit.isPending ? 'Se trimite…' : 'Trimite cererea'}
+                </Button>
+              </FormSheetFooter>
+            </form>
+          )}
+        </FormSheet>
+      )}
       <TaskDetailsSheet taskId={taskId} onClose={() => setTaskId(null)} />
     </>
   );

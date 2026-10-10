@@ -1,8 +1,5 @@
 import { AttachedLinkButton } from '../../components/attached-link/AttachedLinkButton';
-import {
-  formatBucharestDay,
-  formatBucharestTime,
-} from '../../lib/calendar-time';
+import { formatBucharestShort } from '../../lib/calendar-time';
 import { cn } from '../../lib/utils';
 import type { TaskPresentation } from './task-presentation';
 
@@ -37,8 +34,7 @@ export function SubmissionNote({
             dateTime={submission.submittedAt}
             className="font-normal tracking-normal normal-case"
           >
-            {formatBucharestDay(submission.submittedAt)},{' '}
-            {formatBucharestTime(submission.submittedAt)}
+            {formatBucharestShort(submission.submittedAt)}
           </time>
         )}
       </p>

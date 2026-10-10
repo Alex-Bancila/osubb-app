@@ -74,7 +74,9 @@ vi.mock('../campaigns/CampaignsPanel', () => ({
     </p>
   ),
 }));
+import { chooseOption } from '../../test/select';
 import GroupScreen from './GroupScreen';
+import { optionNames } from './select-test-options';
 
 vi.setConfig({ testTimeout: 20_000 });
 
@@ -299,6 +301,8 @@ it.each(['2.0', '0x2', '2e0', '02', 'abc'])(
 it('heads the Group with its place in the tree and offers BC every tab it can use', async () => {
   const { container } = show();
   expect(screen.getByRole('heading', { name: 'Logistică' })).toBeVisible();
+  // No eyebrow: the back link already says where the page belongs.
+  expect(document.querySelector('[data-slot="page-eyebrow"]')).toBeNull();
   // Back to the Grupuri tab the page sits under (#825).
   expect(
     screen.getByRole('link', { name: 'Înapoi la Administrare' }),
@@ -310,9 +314,9 @@ it('heads the Group with its place in the tree and offers BC every tab it can us
   // No Cereri: Logistică takes no Applications and has none pending.
   expect(tabNames()).toEqual([
     'Setări',
-    'Roster',
+    'Membri',
     'Roluri',
-    'Grupuri copil',
+    'Subgrupuri',
     'Campanii',
   ]);
   // The first tab opens, marked as the current one.
@@ -351,28 +355,46 @@ it('shows a Manager the operational settings and BC the structural ones', async 
   expect(
     await screen.findByRole('heading', { name: 'Structura grupului' }),
   ).toBeVisible();
-  expect(screen.getByLabelText('Categorie')).toBeVisible();
+  // Three categories are one segmented choice, not a select.
+  const category = screen.getByRole('radiogroup', { name: 'Categorie' });
+  expect(
+    within(category)
+      .getAllByRole('radio')
+      .map((radio) => radio.textContent),
+  ).toEqual(['Departament', 'Echipă', 'Proiect']);
+  // Only the optional fields say so, on the kit's field.
+  expect(screen.getByLabelText('Numele grupului')).toHaveAttribute(
+    'data-slot',
+    'input',
+  );
+  expect(screen.getByLabelText('Prescurtare (opțional)')).toBeVisible();
+  // What a setting means waits behind its "i", and is read with the box.
+  expect(
+    screen.getByRole('checkbox', {
+      name: 'Membrii se adaugă automat, după nivel',
+    }),
+  ).toHaveAccessibleDescription(
+    'Lista de membri nu se mai completează manual.',
+  );
+  expect(
+    screen.getByRole('button', {
+      name: 'Despre: Membrii se adaugă automat, după nivel',
+    }),
+  ).toBeVisible();
 });
 
-it("bounds a Child Group's Minimum Level by its parent below and the caller above", () => {
+it("bounds a Child Group's Minimum Level by its parent below and the caller above", async () => {
+  const user = userEvent.setup();
   // Logistică sits under Educațional (Minimum 0); its own Manager is a BCE.
   capabilities(false);
   api.level.value = 5;
   api.myGroups.mockReturnValue({ data: [myGroup(2, 'manager')] });
   show();
   const field = screen.getByLabelText('Nivel minim');
-  const offered = within(field)
-    .getAllByRole('option')
-    .map((option) => (option as HTMLOptionElement).value);
-  // 0..5 from the parent's Minimum Level up to the Manager's own Level; never
-  // 6 — group_min_level_above_actor would refuse it.
-  expect(offered).toEqual(['0', '1', '2', '3', '5']);
-  // …each named by its Role, never the number (R29b).
-  expect(
-    within(field)
-      .getAllByRole('option')
-      .map((option) => option.textContent),
-  ).toEqual([
+  // Recrut…BCE: from the parent's Minimum Level up to the Manager's own
+  // Level; never BC — group_min_level_above_actor would refuse it. Each is
+  // named by its Role, never the number (R29b).
+  expect(await optionNames(user, field)).toEqual([
     'Recrut',
     'Voluntar',
     'Voluntar Activ',
@@ -389,7 +411,11 @@ it("names the Group's Minimum Level by Role in its header (R29b)", () => {
 it('names who leaves before it raises the Minimum Level, and only then confirms', async () => {
   const user = userEvent.setup();
   show();
-  await user.selectOptions(screen.getByLabelText('Nivel minim'), '3');
+  await chooseOption(
+    user,
+    screen.getByLabelText('Nivel minim'),
+    'Voluntar cu Drept de Vot',
+  );
   await user.click(
     screen.getByRole('button', { name: 'Vezi cine iese din grup' }),
   );
@@ -428,7 +454,11 @@ it('re-asks when the server says the form was stale', async () => {
     ),
   );
   show();
-  await user.selectOptions(screen.getByLabelText('Nivel minim'), '3');
+  await chooseOption(
+    user,
+    screen.getByLabelText('Nivel minim'),
+    'Voluntar cu Drept de Vot',
+  );
   await user.click(
     screen.getByRole('button', { name: 'Vezi cine iese din grup' }),
   );
@@ -453,9 +483,9 @@ it('sends the Minimum Level for "Ca nivelul minim al grupului", following a Mini
   );
   expect(
     screen.getByLabelText('Nivelul de la care se poate cere înscrierea'),
-  ).toHaveValue('');
+  ).toHaveTextContent('Ca nivelul minim al grupului');
   // Lowering the Minimum Level never removes anyone, so this saves directly.
-  await user.selectOptions(screen.getByLabelText('Nivel minim'), '0');
+  await chooseOption(user, screen.getByLabelText('Nivel minim'), 'Recrut');
   await user.click(screen.getByRole('button', { name: 'Salvează setările' }));
   expect(api.mutate).toHaveBeenCalledWith({
     kind: 'settings',
@@ -479,9 +509,10 @@ it('keeps an explicit Application Level as chosen', async () => {
   await user.click(
     screen.getByRole('checkbox', { name: /Primește cereri de înscriere/ }),
   );
-  await user.selectOptions(
+  await chooseOption(
+    user,
     screen.getByLabelText('Nivelul de la care se poate cere înscrierea'),
-    '5',
+    'BCE',
   );
   await user.click(screen.getByRole('button', { name: 'Salvează setările' }));
   expect(api.mutate).toHaveBeenCalledWith({
@@ -517,7 +548,7 @@ it('sends a stored application form link back, so saving the settings never clea
   });
   show();
   // Lowering the Minimum Level never removes anyone, so this saves directly.
-  await user.selectOptions(screen.getByLabelText('Nivel minim'), '0');
+  await chooseOption(user, screen.getByLabelText('Nivel minim'), 'Recrut');
   await user.click(screen.getByRole('button', { name: 'Salvează setările' }));
   expect(api.mutate).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -554,7 +585,7 @@ it('archives through the command and explains unfinished work in the Group', asy
 it('lists the roster with each Member Status and appoints through add_group_member', async () => {
   const user = userEvent.setup();
   show();
-  await user.click(tab('Roster'));
+  await user.click(tab('Membri'));
   const table = screen.getByRole('table');
   expect(within(table).getByText('Inactiv')).toBeVisible();
   expect(within(table).getByText('Activ')).toBeVisible();
@@ -592,7 +623,7 @@ it('lists the roster with each Member Status and appoints through add_group_memb
 it('removes an ordinary Member through remove_group_member, from a pop-up', async () => {
   const user = userEvent.setup();
   show();
-  await user.click(tab('Roster'));
+  await user.click(tab('Membri'));
   await user.click(
     screen.getByRole('button', { name: 'Scoate pe Ana Pop din grup' }),
   );
@@ -796,6 +827,7 @@ it("lets each Coordonator carry a function name of their own, pre-filled with th
   });
   let title = within(dialog).getByLabelText('Numele funcției (opțional)');
   expect(title).toHaveValue('Vicepreședinte');
+  expect(title).toHaveAttribute('data-slot', 'input');
   expect(title).not.toBeRequired();
   await user.click(within(dialog).getByRole('combobox', { name: 'Membru' }));
   await user.click(await screen.findByRole('option', { name: /Carmen Radu/ }));
@@ -966,7 +998,7 @@ it("never offers a Child Group's Manager the appointment that belongs one level 
 it('creates a Child Group under this Group and archives one, in pop-ups', async () => {
   const user = userEvent.setup();
   show();
-  await user.click(tab('Grupuri copil'));
+  await user.click(tab('Subgrupuri'));
   expect(screen.getByRole('link', { name: 'Foto' })).toHaveAttribute(
     'href',
     '/administrare/grupuri/5',
@@ -977,7 +1009,12 @@ it('creates a Child Group under this Group and archives one, in pop-ups', async 
     name: 'Subgrup al Logistică',
   });
   // The parent is fixed at creation — there is no picker and no "Mută grupul".
-  expect(within(create).queryByLabelText('Grup părinte')).toBeNull();
+  expect(within(create).queryByLabelText(/Grup părinte/)).toBeNull();
+  expect(
+    within(create).getByLabelText('Numele grupului'),
+  ).toHaveAccessibleDescription(
+    'Grupul nou va face parte din Logistică. Grupul părinte nu se mai poate schimba după creare.',
+  );
   await user.type(within(create).getByLabelText('Numele grupului'), 'Sunet');
   await user.click(within(create).getByRole('button', { name: 'Creează' }));
   expect(api.mutate).toHaveBeenLastCalledWith({
@@ -1022,7 +1059,7 @@ it('marks a Private Group beside its name on the Group screen and in its Child l
   expect(
     within(heading.parentElement as HTMLElement).getByText('Privat'),
   ).toBeVisible();
-  await user.click(tab('Grupuri copil'));
+  await user.click(tab('Subgrupuri'));
   const children = screen.getByRole('list', { name: 'Subgrupuri' });
   expect(within(children).getByText('Privat')).toBeVisible();
   expect(
@@ -1045,7 +1082,7 @@ it('creates a Child Group of a Private Group private, with the switch on and loc
   capabilities(false);
   api.myGroups.mockReturnValue({ data: [myGroup(2, 'manager')] });
   show(2);
-  await user.click(tab('Grupuri copil'));
+  await user.click(tab('Subgrupuri'));
   await user.click(screen.getByRole('button', { name: 'Subgrup nou' }));
   const create = await screen.findByRole('dialog', {
     name: 'Subgrup al Logistică',
@@ -1070,7 +1107,7 @@ it('offers a private Child under a public parent only to BC and the Moderator', 
   capabilities(false);
   api.myGroups.mockReturnValue({ data: [myGroup(2, 'manager')] });
   const manager = show(2);
-  await user.click(tab('Grupuri copil'));
+  await user.click(tab('Subgrupuri'));
   await user.click(screen.getByRole('button', { name: 'Subgrup nou' }));
   const create = await screen.findByRole('dialog', {
     name: 'Subgrup al Logistică',
@@ -1084,7 +1121,7 @@ it('offers a private Child under a public parent only to BC and the Moderator', 
   capabilities(true);
   api.myGroups.mockReturnValue({ data: [] });
   show(2);
-  await user.click(tab('Grupuri copil'));
+  await user.click(tab('Subgrupuri'));
   await user.click(screen.getByRole('button', { name: 'Subgrup nou' }));
   const bc = await screen.findByRole('dialog', {
     name: 'Subgrup al Logistică',
@@ -1187,7 +1224,7 @@ it('says plainly when the Group is not one the caller may read', () => {
 it('notes on the Cereri tab that a Group with a form link takes sign-ups by form, and still lists Applications (#698)', async () => {
   const user = userEvent.setup();
   const note =
-    'Grupul primește înscrieri prin formular; adaugă membrii din Roster.';
+    'Grupul primește înscrieri prin formular; adaugă membrii din fila Membri.';
   const first = show();
   // Neither taking Applications nor holding one: no Cereri tab at all (B49).
   expect(within(tabBar()).queryByRole('link', { name: 'Cereri' })).toBeNull();
@@ -1264,19 +1301,27 @@ it("resets the settings form to the Group it now shows, so one Group's form link
     await screen.findByRole('heading', { name: 'Educațional' }),
   ).toBeVisible();
   expect(screen.getByLabelText('Numele grupului')).toHaveValue('Educațional');
+  // Educațional has no form: the switch is off, and turning it on shows the
+  // two fields empty, not Logistică's.
+  const formSwitch = screen.getByRole('switch', {
+    name: 'Formular de înscriere',
+  });
+  expect(formSwitch).not.toBeChecked();
+  expect(screen.queryByLabelText('Eticheta butonului')).toBeNull();
+  await user.click(formSwitch);
   expect(screen.getByLabelText('Eticheta butonului')).toHaveValue('');
   expect(screen.getByLabelText('Adresa formularului')).toHaveValue('');
 });
 
 /* ------------------------------ Tabs by authority, in the URL (B49, D6) */
 
-it("shows a Group's Responsible only the Roster and Campanii, opening on the Roster, with no refusal", () => {
+it("shows a Group's Responsible only Membri and Campanii, opening on Membri, with no refusal", () => {
   capabilities(false);
   api.myGroups.mockReturnValue({ data: [myGroup(2, 'responsible')] });
   show();
-  // Logistică has a Child Group, so Grupuri copil stays, read-only.
-  expect(tabNames()).toEqual(['Roster', 'Grupuri copil', 'Campanii']);
-  expect(tab('Roster')).toHaveAttribute('aria-current', 'page');
+  // Logistică has a Child Group, so Subgrupuri stays, read-only.
+  expect(tabNames()).toEqual(['Membri', 'Subgrupuri', 'Campanii']);
+  expect(tab('Membri')).toHaveAttribute('aria-current', 'page');
   expect(screen.getByRole('table')).toBeVisible();
   expect(screen.queryByText(/nu îi poți schimba setările/)).toBeNull();
   expect(screen.queryByText(/schimbările îi revin/)).toBeNull();
@@ -1286,7 +1331,7 @@ it('tells a viewer with no Group Role once that the changes are not theirs', () 
   capabilities(false);
   api.myGroups.mockReturnValue({ data: [myGroup(2, 'member')] });
   show();
-  expect(tabNames()).toEqual(['Roster', 'Grupuri copil', 'Campanii']);
+  expect(tabNames()).toEqual(['Membri', 'Subgrupuri', 'Campanii']);
   expect(
     screen.getAllByText(
       /Poți vedea grupul|schimbările îi revin coordonatorului lui/,
@@ -1296,25 +1341,25 @@ it('tells a viewer with no Group Role once that the changes are not theirs', () 
   expect(screen.queryByRole('columnheader', { name: 'Acțiuni' })).toBeNull();
 });
 
-it("shows a Child Group's Manager Setări, Roluri and Grupuri copil", () => {
+it("shows a Child Group's Manager Setări, Roluri and Subgrupuri", () => {
   capabilities(false);
   api.myGroups.mockReturnValue({ data: [myGroup(5, 'manager')] });
   show(5);
   // Foto has no Child Groups, but its Manager may create one.
   expect(tabNames()).toEqual([
     'Setări',
-    'Roster',
+    'Membri',
     'Roluri',
-    'Grupuri copil',
+    'Subgrupuri',
     'Campanii',
   ]);
 });
 
-it('hides Grupuri copil when there are none and the viewer may not create one', () => {
+it('hides Subgrupuri when there are none and the viewer may not create one', () => {
   capabilities(false);
   api.myGroups.mockReturnValue({ data: [myGroup(5, 'responsible')] });
   show(5);
-  expect(tabNames()).toEqual(['Roster', 'Campanii']);
+  expect(tabNames()).toEqual(['Membri', 'Campanii']);
 });
 
 it('shows Cereri while an Application is pending, even with Applications off', () => {
@@ -1343,9 +1388,9 @@ it('opens the tab ?tab= names, and writes the tab to the URL on a switch', async
   expect(tab('Roluri')).toHaveAttribute('aria-current', 'page');
   expect(screen.getByRole('region', { name: 'Responsabili' })).toBeVisible();
 
-  await user.click(tab('Roster'));
+  await user.click(tab('Membri'));
   expect(where()).toBe('/administrare/grupuri/2?tab=roster');
-  expect(tab('Roster')).toHaveAttribute('aria-current', 'page');
+  expect(tab('Membri')).toHaveAttribute('aria-current', 'page');
   expect(screen.getByRole('table')).toBeVisible();
   // Each tab is a link to its own address, so a reload keeps it.
   expect(tab('Campanii')).toHaveAttribute(
@@ -1377,14 +1422,14 @@ it.each(['necunoscut', 'cereri'])(
   },
 );
 
-it('keeps the Roster as the way back from a member page (D4)', async () => {
+it('keeps the Membri tab as the way back from a member page (D4)', async () => {
   const user = userEvent.setup();
   show('2?tab=roster');
   await user.click(screen.getByRole('link', { name: 'Ana Pop' }));
   const back = screen.getByRole('link', { name: 'Înapoi la grup' });
   expect(back).toHaveAttribute('href', '/administrare/grupuri/2?tab=roster');
   await user.click(back);
-  expect(tab('Roster')).toHaveAttribute('aria-current', 'page');
+  expect(tab('Membri')).toHaveAttribute('aria-current', 'page');
 });
 
 it('goes back to the member page it was opened from, across tab changes', async () => {
@@ -1395,7 +1440,7 @@ it('goes back to the member page it was opened from, across tab changes', async 
   expect(
     screen.getByRole('link', { name: 'Înapoi la membru' }),
   ).toHaveAttribute('href', '/administrare/membri/a');
-  await user.click(tab('Roster'));
+  await user.click(tab('Membri'));
   expect(
     screen.getByRole('link', { name: 'Înapoi la membru' }),
   ).toHaveAttribute('href', '/administrare/membri/a');
@@ -1429,10 +1474,17 @@ it('links a top-level Group’s unfinished work without a Subgrup', async () => 
   ).toHaveAttribute('href', '/tracker?lista=gestionat&grup=1');
 });
 
-it('puts the Group tabs in one strip that keeps a single row at 375 px (X7)', () => {
+it('puts the Group tabs on one pill track that neither wraps nor scrolls: icons, the current tab spelling its name under 768 px', () => {
   show();
-  expect(tabBar().className).toContain('overflow-x-auto');
+  expect(tabBar().className).not.toContain('overflow-x-auto');
   expect(tabBar().className).not.toContain('flex-wrap');
+  expect(tabBar()).toHaveClass('rounded-lg', 'p-[3px]');
+  for (const link of within(tabBar()).getAllByRole('link')) {
+    expect(link.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    expect(link).toHaveClass('max-md:flex-none');
+    // Its name stays for a screen reader when the label is hidden.
+    expect(link.textContent).not.toBe('');
+  }
 });
 
 it("gives the parent's Manager, who appoints this Group's coordinator, Roluri and no refusal line", () => {
@@ -1471,14 +1523,14 @@ it('shows an archived Group read-only, whoever looks', async () => {
       'Vezi grupul, dar schimbările îi revin coordonatorului lui.',
     ),
   ).toBeNull();
-  // No Setări or Roluri to edit; Roster, Subgrupuri and Campanii only read.
+  // No Setări or Roluri to edit; Membri, Subgrupuri and Campanii only read.
   expect(tabNames()).not.toContain('Setări');
   expect(tabNames()).not.toContain('Roluri');
   expect(screen.queryByRole('button', { name: /Șterge definitiv/ })).toBeNull();
   const edits =
     /Adaugă|Scoate|Numește|Retrage|Arhivează|Salvează|Subgrup nou|Campanie nouă/;
   expect(screen.queryAllByRole('button', { name: edits })).toEqual([]);
-  await user.click(tab('Grupuri copil'));
+  await user.click(tab('Subgrupuri'));
   expect(screen.queryAllByRole('button', { name: edits })).toEqual([]);
   await user.click(tab('Campanii'));
   expect(

@@ -216,6 +216,25 @@ it('folds Rol under the name on a phone and keeps the search full width (AD1)', 
   show();
   const [name, role, status] = screen.getAllByRole('columnheader');
   expect(name).toHaveClass('min-w-40');
+  // No header row over one column of names: the row itself leaves the
+  // screen (not its cells, which left an empty row), stays for a screen
+  // reader and returns while a sort button has focus.
+  expect((name as HTMLElement).closest('thead')).toHaveClass(
+    'max-sm:not-focus-within:sr-only',
+  );
+  expect((name as HTMLElement).className).not.toContain('is(th)');
+  expect(
+    within(name as HTMLElement).getByRole('button', {
+      name: /^Sortează Membru/,
+    }),
+  ).toBeVisible();
+  expect(
+    (
+      screen
+        .getByRole('button', { name: 'Profilul membrului Ștefi' })
+        .closest('td') as HTMLElement
+    ).className,
+  ).toContain('min-w-40');
   expect(role).toHaveClass('max-sm:hidden');
   expect(status).toHaveClass('max-sm:hidden');
   const row = screen
@@ -240,12 +259,21 @@ it('finds a Member by name, blind to case and diacritics, and says when none mat
   expect(screen.getByText('Niciun membru găsit.')).toBeVisible();
 });
 
-/* #1018: Voluntari's quiet count, under the search, following it. */
-it('counts the Members in the list, following the search, with the Romanian plural', async () => {
+/* #1018: Voluntari's quiet count. The search field says how many Members
+   there are; the count line appears under it once the search narrows them. */
+it('counts the Members in the search field, then under it while the search narrows them', async () => {
   const user = userEvent.setup();
   show();
   const panel = screen.getByRole('region', { name: 'Membri' });
-  const count = within(panel).getByText('2 membri');
+  const search = within(panel).getByRole('searchbox', {
+    name: 'Caută un membru',
+  });
+  expect(search).toHaveAttribute('placeholder', 'Caută în 2 membri');
+  // The search icon, not an empty box under a label.
+  expect(search.parentElement?.querySelector('svg')).not.toBeNull();
+  expect(within(panel).queryByRole('status')).toBeNull();
+  await user.type(search, 'stefan');
+  const count = within(panel).getByText('1 din 2 membri');
   expect(count).toHaveAttribute('role', 'status');
   expect(count).toHaveClass('text-sm', 'text-muted-foreground');
   // Between the search and the table, where Voluntari puts it.
@@ -257,8 +285,6 @@ it('counts the Members in the list, following the search, with the Romanian plur
     count.compareDocumentPosition(screen.getByRole('table')) &
       Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
-  await user.type(screen.getByLabelText('Caută un membru'), 'stefan');
-  expect(count).toHaveTextContent('1 din 2 membri');
 });
 
 it('says "1 membru" for a list of one', () => {
@@ -268,7 +294,10 @@ it('says "1 membru" for a list of one', () => {
     data: [member('ana', 'Ana Pop')],
   });
   show();
-  expect(screen.getByText('1 membru')).toHaveAttribute('role', 'status');
+  expect(screen.getByLabelText('Caută un membru')).toHaveAttribute(
+    'placeholder',
+    'Caută în 1 membru',
+  );
 });
 
 it('shows no list count on "De invitat", whose tab carries its own', () => {
@@ -278,19 +307,21 @@ it('shows no list count on "De invitat", whose tab carries its own', () => {
   expect(screen.queryByText(/^\d.* (membri|membru)$/)).toBeNull();
 });
 
-/* #949: the two ways a Member comes in sit together, as a matched pair, in
-   the Membri header — not the CSV import in a panel of its own. */
-it('pairs "Invită membru" with "Import CSV" in the Membri header, for whoever may provision', () => {
+/* #949: the two ways a Member comes in sit together. Each is a `FabAction`
+   (its own suite), so on the page they are the plus button: the tab draws no
+   heading and no row of buttons for them. */
+it('offers "Invită membru" and "Import CSV" to whoever may provision, under no heading of its own', () => {
   const view = show();
   const panel = screen.getByRole('region', { name: 'Membri' });
-  const pair = within(panel).getByRole('group', { name: 'Adaugă membri' });
-  expect(pair).toHaveClass('grid', 'grid-cols-2');
   expect(
-    within(pair)
-      .getAllByRole('button')
+    within(panel)
+      .getAllByRole('button', { name: /^(Invită membru|Import CSV)$/ })
       .map((button) => button.textContent),
   ).toEqual(['Invită membru', 'Import CSV']);
-  expect(pair.closest('[data-slot=section-header]')).not.toBeNull();
+  // The tab already says Membri: no heading repeats it.
+  expect(screen.queryByRole('heading')).toBeNull();
+  expect(panel.querySelector('[data-slot=section-header]')).toBeNull();
+  expect(screen.queryByRole('group', { name: 'Adaugă membri' })).toBeNull();
   expect(screen.getAllByRole('region')).toHaveLength(1);
   view.unmount();
 
@@ -298,7 +329,7 @@ it('pairs "Invită membru" with "Import CSV" in the Membri header, for whoever m
     data: { manageRoles: true, provisionMembers: false },
   });
   show();
-  expect(screen.queryByRole('group', { name: 'Adaugă membri' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Invită membru' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Import CSV' })).toBeNull();
 });
 

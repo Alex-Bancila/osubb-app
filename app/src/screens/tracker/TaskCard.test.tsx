@@ -100,16 +100,19 @@ describe('Member Task cards', () => {
       screen.getByText('Taskul este atribuit și așteaptă să fie început.'),
     ).toBeVisible();
   });
-  it('shows a named Origin, Bucharest deadline and the current stage', () => {
-    card();
+  it('shows a named Origin, the short Bucharest deadline and the current stage', () => {
+    const { container } = card();
     expect(
       screen.getByRole('article', { name: 'Pregătește materialele' }),
     ).toBeInTheDocument();
     expect(screen.getByText('Departament · Educațional')).toBeInTheDocument();
-    expect(screen.getByText(/16 septembrie 2026, 13:00/)).toHaveAttribute(
-      'dateTime',
-      '2026-09-16T10:00:00Z',
-    );
+    // One meta row: the clock and the short date, on one line. "Termen:" is
+    // said to a screen reader only, and the time zone is not repeated.
+    const deadline = screen.getByText('mie., 16 sept. · 13:00');
+    expect(deadline).toHaveAttribute('dateTime', '2026-09-16T10:00:00Z');
+    expect(deadline.closest('[data-slot="task-meta"]')).not.toBeNull();
+    expect(screen.getByText('Termen:')).toHaveClass('sr-only');
+    expect(container).not.toHaveTextContent('ora României');
     expect(
       screen.getByText('Taskul este atribuit și așteaptă să fie început.'),
     ).toBeInTheDocument();
@@ -313,9 +316,45 @@ describe('Member Task cards', () => {
       campaign: { name: 'Toamnă' },
     });
     expect(screen.getByText('Subtask din: Recrutare')).toBeInTheDocument();
-    expect(screen.getByText('Campanie: Toamnă')).toBeInTheDocument();
+    expect(screen.getByText('Toamnă')).toHaveTextContent('Campanie: Toamnă');
     expect(screen.getByText('Modificări cerute')).toBeInTheDocument();
     expect(screen.getByText('Termen depășit')).toBeInTheDocument();
+    // Overdue stays red: the date and its clock.
+    const deadline = screen.getByText('lun., 14 sept. · 13:00');
+    expect(deadline).toHaveClass('text-destructive', 'font-semibold');
+    expect(deadline.parentElement?.querySelector('svg')).toHaveClass(
+      'text-destructive',
+    );
+  });
+
+  it('puts the status on the title’s row and the Group and Campaign on one muted line under it', () => {
+    const { container } = card({
+      campaign_id: 3,
+      campaign: { name: 'Bugetare 2026–2027' },
+    });
+    const heading = container.querySelector('[data-slot="task-heading"]');
+    expect(
+      within(heading as HTMLElement).getByRole('heading', {
+        name: 'Pregătește materialele',
+      }),
+    ).toBeVisible();
+    expect(within(heading as HTMLElement).getByText('De făcut')).toBeVisible();
+    // One line, whole: the Campaign's name is never cut to "Campanie: B…".
+    const origin = container.querySelector('[data-slot="task-origin"]');
+    expect(origin).toHaveTextContent(
+      'Departament · Educațional·Campanie: Bugetare 2026–2027',
+    );
+    expect(origin).toHaveClass('flex-wrap', 'text-muted-foreground');
+    expect(origin?.querySelector('.truncate')).toBeNull();
+    expect(within(origin as HTMLElement).getByText('Campanie:')).toHaveClass(
+      'sr-only',
+    );
+    // No chip line, and the title is not a block of reserved height.
+    expect(container.querySelector('[data-slot="task-chips"]')).toBeNull();
+    expect(
+      (heading as Element).compareDocumentPosition(origin as Element) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it.each(['unfulfilled', 'completed'] as const)(
@@ -337,9 +376,10 @@ describe('Member Task cards', () => {
       const stars = screen.getByRole('img', {
         name: 'Dificultate 3 din 5',
       });
-      expect(stars.closest('p')).toHaveTextContent(
-        /^0 puncte · Dificultate\s+· Nota 2$/,
-      );
+      // On the meta row, beside the deadline.
+      const evaluation = stars.closest('p');
+      expect(evaluation).toHaveTextContent(/^0 puncte\s*Nota 2$/);
+      expect(evaluation?.closest('[data-slot="task-meta"]')).not.toBeNull();
       expect(screen.queryByRole('button')).not.toBeInTheDocument();
       expect(screen.queryByText('Termen depășit')).not.toBeInTheDocument();
     },
@@ -659,80 +699,27 @@ describe('Member Task cards', () => {
     expect(result.violations).toEqual([]);
   });
 
-  it('keeps the chips on one line and folds the overflow into "+n" (T2)', () => {
-    // jsdom has no layout: give every chip 120 px and the line 250 px.
-    const rect = vi
-      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
-      .mockReturnValue({ width: 120 } as DOMRect);
-    const width = vi
-      .spyOn(HTMLElement.prototype, 'clientWidth', 'get')
-      .mockReturnValue(250);
-    try {
-      const { container } = card({
-        parent_task_id: 2,
-        parent: { title: 'Recrutare' },
-        campaign_id: 3,
-        campaign: { name: 'Toamnă' },
-      });
-      const line = container.querySelector('[data-slot="task-chips"]');
-      expect(line).toHaveClass('flex-nowrap', 'overflow-hidden');
-      expect(
-        within(line as HTMLElement).getByText('Departament · Educațional'),
-      ).toBeInTheDocument();
-      const more = container.querySelector('[data-slot="task-chips-more"]');
-      expect(more).toHaveTextContent('+2');
-      // Nothing is lost: the folded chips are named to a screen reader.
-      expect(more).toHaveTextContent(
-        'Campanie: Toamnă, Subtask din: Recrutare',
-      );
-      expect(screen.queryByText('Campanie: Toamnă')).toBeNull();
-    } finally {
-      rect.mockRestore();
-      width.mockRestore();
-    }
-  });
-
-  it('shows every chip that fits, with no "+n" (F-5)', () => {
-    // The audit's Acasă line at 1280: 435 px, and two chips 5 px too wide
-    // at their natural widths. The Campaign truncates; it does not fold.
-    const rect = vi
-      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
-      .mockReturnValue({ width: 217 } as DOMRect);
-    const width = vi
-      .spyOn(HTMLElement.prototype, 'clientWidth', 'get')
-      .mockReturnValue(435);
-    try {
-      const { container } = card({
-        campaign_id: 3,
-        campaign: { name: 'Școala de Toamnă 2026' },
-      });
-      expect(
-        container.querySelector('[data-slot="task-chips-more"]'),
-      ).toBeNull();
-      expect(screen.getByText('Campanie: Școala de Toamnă 2026')).toBeVisible();
-    } finally {
-      rect.mockRestore();
-      width.mockRestore();
-    }
-  });
-
-  it('shows every chip, wrapped, in the details sheet, without the Audience chip (B20)', () => {
-    const task = toTaskPresentation(
-      taskRow({
-        assignment_mode: 'public',
-        audience: 'org',
-        campaign_id: 3,
-        campaign: { name: 'Toamnă' },
+  it('names the Executor by avatar and name; "Executor:" is for a screen reader', () => {
+    card(
+      { visibleExecutor: { memberId: 'member', fullName: 'Ioana Executor' } },
+      vi.fn(),
+      'someone-else',
+    );
+    const label = screen.getByText('Executor:');
+    expect(label).toHaveClass('sr-only');
+    expect(
+      within(label.parentElement as HTMLElement).getByRole('button', {
+        name: 'Profilul membrului Ioana Executor',
       }),
-      new Date('2026-09-15T12:00:00Z'),
+    ).toBeVisible();
+    expect(label.closest('[data-slot="task-meta"]')).not.toBeNull();
+  });
+
+  it('keeps a long description to two lines; the details sheet has it whole', () => {
+    card({ description: 'Descriere '.repeat(100) });
+    expect(screen.getByText(/^Descriere Descriere/)).toHaveClass(
+      'line-clamp-2',
     );
-    const { container } = render(
-      <TaskCard task={task} memberId="member" anchor={false} inSheet />,
-    );
-    expect(container.querySelector('[data-slot="task-chips"]')).toBeNull();
-    expect(screen.getByText('Campanie: Toamnă')).toBeVisible();
-    // The sheet’s Audiență row says it once.
-    expect(screen.queryByText('OSUBB')).toBeNull();
   });
 
   it('stacks the footer actions full-width in one column (T3)', () => {

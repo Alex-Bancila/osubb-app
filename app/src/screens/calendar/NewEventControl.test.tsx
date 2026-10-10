@@ -1,13 +1,8 @@
 import * as axe from 'axe-core';
-import {
-  fireEvent,
-  render,
-  renderHook,
-  screen,
-  waitFor,
-} from '@testing-library/react';
+import { render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { chooseOption } from '../../test/select';
 
 const state = vi.hoisted(() => ({
   options: vi.fn(),
@@ -26,6 +21,11 @@ vi.mock('../../queries/event-creation', () => ({
 }));
 vi.mock('../../lib/auth', () => ({ useAuth: state.auth }));
 
+import {
+  bucharestDayKey,
+  bucharestWallTimeToIso,
+} from '../../lib/calendar-time';
+import { pickDate } from '../../test/date-picker';
 import { NewEventControl } from './NewEventControl';
 import { clearEventReceipts, useEventReceipt } from './event-receipts';
 
@@ -84,18 +84,42 @@ async function chooseGroup(
   await user.click(await screen.findByRole('option', { name }));
 }
 
-function campaignOptions() {
-  return Array.from(
-    (screen.getByLabelText('Campanie (opțional)') as HTMLSelectElement).options,
-  ).map((option) => option.text);
+/** What a `Select` offers: its list is opened, read and closed again. */
+async function optionNames(
+  user: ReturnType<typeof userEvent.setup>,
+  label: string,
+) {
+  await user.click(screen.getByLabelText(label));
+  const names = (await screen.findAllByRole('option')).map(
+    (option) => option.textContent,
+  );
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+  return names;
 }
+
+function campaignOptions(user: ReturnType<typeof userEvent.setup>) {
+  return optionNames(user, 'Campanie (opțional)');
+}
+
+/**
+ * The 15th of a month near today, as a picker value: one press of "Luna
+ * următoare" / "Luna anterioară" away, where a fixed far date is dozens.
+ */
+function nearDate(months: number, time: string) {
+  const [year = 1970, month = 1] = (bucharestDayKey(new Date()) ?? '')
+    .split('-')
+    .map(Number);
+  const day = new Date(Date.UTC(year, month - 1 + months, 15));
+  return `${day.toISOString().slice(0, 10)}T${time}`;
+}
+
+const START = nearDate(1, '18:00');
 
 async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
   await chooseGroup(user);
   await user.type(screen.getByLabelText('Titlu'), 'Ședință de toamnă');
-  fireEvent.change(screen.getByLabelText(/Începe/), {
-    target: { value: '2030-10-01T18:00' },
-  });
+  await pickDate(user, screen.getByLabelText(/Începe/), START);
 }
 
 describe('NewEventControl', () => {
@@ -139,29 +163,108 @@ describe('NewEventControl', () => {
     expect(results.violations).toEqual([]);
   });
 
-  // X11, X12: one select look (#842) and the kit footer.
-  it('draws Tip, Cine îl vede and Campanie with the shared select and footer', async () => {
+  // X11, X12: one select look, the app's own; the form is a sheet with a pinned footer.
+  it('draws Tip, Cine îl vede and Campanie with the shared select, in a form sheet with a pinned footer', async () => {
     const user = setup();
     const dialog = await open(user);
     for (const label of ['Tip', 'Cine îl vede', 'Campanie (opțional)'])
       expect(screen.getByLabelText(label)).toHaveAttribute(
         'data-slot',
-        'native-select',
+        'select',
       );
     const submit = screen.getByRole('button', { name: 'Creează evenimentul' });
-    expect(submit.parentElement).toHaveAttribute('data-slot', 'dialog-footer');
-    expect(dialog.querySelector('[data-slot=dialog-header]')).not.toBeNull();
+    expect(submit.parentElement).toHaveAttribute('data-slot', 'sheet-footer');
+    expect(submit.parentElement).toHaveAttribute('data-pinned', 'true');
+    // Renunță first, the one filled button last.
+    expect(submit.previousElementSibling).toHaveTextContent('Renunță');
+    expect(dialog).toHaveAttribute('data-slot', 'form-sheet');
+    // A sheet's header holds the title alone: no intro paragraph.
+    expect(screen.queryByText(/Orele sunt interpretate/)).toBeNull();
+    expect(dialog).not.toHaveAttribute('aria-describedby');
+  });
+
+  it('draws the text fields and both times with the shared field and picker', async () => {
+    const user = setup();
+    const dialog = await open(user);
+    for (const label of ['Titlu', 'Loc (opțional)', 'Capacitate (opțional)'])
+      expect(screen.getByLabelText(label)).toHaveAttribute(
+        'data-slot',
+        'input',
+      );
+    expect(screen.getByLabelText('Descriere (opțional)')).toHaveAttribute(
+      'data-slot',
+      'textarea',
+    );
+    for (const label of [
+      'Începe — ora României',
+      'Se încheie (opțional) — ora României',
+    ])
+      expect(screen.getByLabelText(label)).toHaveAttribute(
+        'data-slot',
+        'date-picker',
+      );
+    expect(dialog.querySelector('input[type="datetime-local"]')).toBeNull();
+  });
+
+  it('opens "Începe" on an evening hour and "Se încheie" two hours later, never before the start', async () => {
+    const user = setup();
+    await open(user);
+    const start = screen.getByLabelText('Începe — ora României');
+    await user.click(start);
+    expect(await screen.findByLabelText('Ora')).toHaveValue('18:00');
+    await user.keyboard('{Escape}');
+    const morning = nearDate(1, '10:30');
+    await pickDate(user, start, morning);
+    expect(start).toHaveAttribute('data-value', morning);
+
+    await user.click(screen.getByLabelText(/Se încheie/));
+    expect(await screen.findByLabelText('Ora')).toHaveValue('12:30');
+    // An empty end opens on the start's month, not today's.
+    const day = morning.slice(0, 10);
+    expect(
+      document.querySelector(`[data-day="${day.slice(0, 8)}14"]`),
+    ).toBeDisabled();
+    expect(document.querySelector(`[data-day="${day}"]`)).not.toBeDisabled();
+  });
+
+  it('does not judge "Începe" when its calendar opens, only once the member leaves the field', async () => {
+    const user = setup();
+    await open(user);
+    const start = screen.getByLabelText('Începe — ora României');
+    await user.click(start);
+    await screen.findByLabelText('Ora');
+    expect(screen.queryByText('Alege ora de început.')).toBeNull();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(start).toHaveFocus());
+    await user.tab();
+    expect(await screen.findByText('Alege ora de început.')).toBeVisible();
+  });
+
+  it('keeps the Campaign explanation behind the hint beside its label', async () => {
+    const user = setup();
+    await open(user);
+    const field = screen.getByLabelText('Campanie (opțional)');
+    expect(field).toHaveAccessibleDescription(
+      'Alege întâi grupul: campaniile vin din grupul evenimentului și din cele de deasupra lui.',
+    );
+    // The sentence is not on the form until the hint is opened.
+    expect(screen.getByText(/Alege întâi grupul/)).not.toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Despre campanie' }));
+    expect(
+      await screen.findByRole('dialog', { name: 'Despre campanie' }),
+    ).toHaveTextContent('Alege întâi grupul');
   });
 
   it('offers "Cine îl vede" by Role name: the Event subset of the ladder, in order (R29b)', async () => {
     const user = setup();
     await open(user);
     await chooseGroup(user);
-    expect(
-      Array.from(
-        (screen.getByLabelText('Cine îl vede') as HTMLSelectElement).options,
-      ).map((option) => option.text),
-    ).toEqual(['Recrut', 'Voluntar cu Drept de Vot', 'BCE', 'BC']);
+    expect(await optionNames(user, 'Cine îl vede')).toEqual([
+      'Recrut',
+      'Voluntar cu Drept de Vot',
+      'BCE',
+      'BC',
+    ]);
   });
 
   it('creates through the normalized RPC draft and closes', async () => {
@@ -178,7 +281,8 @@ describe('NewEventControl', () => {
       expect.objectContaining({
         title: 'Ședință de toamnă',
         groupId: 7,
-        startsAt: '2030-10-01T15:00:00.000Z',
+        // Read in Romania, sent as an instant.
+        startsAt: bucharestWallTimeToIso(START),
         campaignId: null,
       }),
     );
@@ -191,32 +295,55 @@ describe('NewEventControl', () => {
     expect(screen.getByLabelText('Campanie (opțional)')).toBeDisabled();
 
     await chooseGroup(user);
-    expect(campaignOptions()).toEqual(['Fără campanie', 'Bun venit']);
+    expect(await campaignOptions(user)).toEqual(['Fără campanie', 'Bun venit']);
 
     await chooseGroup(user, /^Social Media/);
     // A Child Group reaches its parent's Campaigns, and its own.
-    expect(campaignOptions()).toEqual([
+    expect(await campaignOptions(user)).toEqual([
       'Fără campanie',
       'Bun venit',
       'Doar Social Media',
     ]);
 
     await chooseGroup(user, 'OSUBB');
-    expect(campaignOptions()).toEqual(['Fără campanie', 'Zilele OSUBB']);
+    expect(await campaignOptions(user)).toEqual([
+      'Fără campanie',
+      'Zilele OSUBB',
+    ]);
   });
 
   it('resets the Campaign when the Group changes', async () => {
     const user = setup();
     await open(user);
     await chooseGroup(user);
-    await user.selectOptions(
+    await chooseOption(
+      user,
       screen.getByLabelText('Campanie (opțional)'),
       'Bun venit',
     );
-    expect(screen.getByLabelText('Campanie (opțional)')).toHaveValue('3');
+    expect(screen.getByLabelText('Campanie (opțional)')).toHaveAttribute(
+      'data-value',
+      '3',
+    );
 
     await chooseGroup(user, /^Social Media/);
-    expect(screen.getByLabelText('Campanie (opțional)')).toHaveValue('');
+    expect(screen.getByLabelText('Campanie (opțional)')).toHaveAttribute(
+      'data-value',
+      '',
+    );
+  });
+
+  it('lets a chosen Campaign be taken off again with "Fără campanie"', async () => {
+    const user = setup();
+    await open(user);
+    await chooseGroup(user);
+    const campaign = screen.getByLabelText('Campanie (opțional)');
+    expect(campaign).toHaveTextContent('Fără campanie');
+    await chooseOption(user, campaign, 'Bun venit');
+    expect(campaign).toHaveTextContent('Bun venit');
+    await chooseOption(user, campaign, 'Fără campanie');
+    expect(campaign).toHaveAttribute('data-value', '');
+    expect(campaign).toHaveTextContent('Fără campanie');
   });
 
   it('sends the chosen Campaign with the draft', async () => {
@@ -224,7 +351,8 @@ describe('NewEventControl', () => {
     const user = setup();
     await open(user);
     await fillRequired(user);
-    await user.selectOptions(
+    await chooseOption(
+      user,
       screen.getByLabelText('Campanie (opțional)'),
       'Bun venit',
     );
@@ -247,7 +375,8 @@ describe('NewEventControl', () => {
     const user = setup();
     await open(user);
     await fillRequired(user);
-    await user.selectOptions(
+    await chooseOption(
+      user,
       screen.getByLabelText('Campanie (opțional)'),
       'Bun venit',
     );
@@ -392,9 +521,16 @@ describe('NewEventControl receipt', () => {
       await open(user);
       await fillRequired(user);
       expect(announceBox()).not.toBeChecked();
+      // What the tick does sits behind the hint beside it.
+      expect(announceBox()).toHaveAccessibleDescription(
+        expect.stringContaining('Publică în Anunțuri titlul, data, locul'),
+      );
+      expect(
+        screen.getByRole('button', { name: 'Despre anunțul evenimentului' }),
+      ).toBeInTheDocument();
       expect(
         screen.getByText(/Publică în Anunțuri titlul, data, locul/),
-      ).toBeVisible();
+      ).not.toBeVisible();
       await user.click(
         screen.getByRole('button', { name: 'Creează evenimentul' }),
       );
@@ -445,7 +581,11 @@ describe('NewEventControl receipt', () => {
       await open(user);
       await fillRequired(user);
       await user.click(announceBox() as HTMLElement);
-      await user.selectOptions(screen.getByLabelText('Cine îl vede'), '3');
+      await chooseOption(
+        user,
+        screen.getByLabelText('Cine îl vede'),
+        'Voluntar cu Drept de Vot',
+      );
       expect(announceBox()).not.toHaveAttribute('aria-disabled', 'true');
       expect(announceBox()).toBeChecked();
       await user.click(

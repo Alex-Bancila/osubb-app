@@ -73,6 +73,15 @@ export function useApplicationsTabShown(
   ]);
 }
 
+/**
+ * How many Applications wait on the viewer's Groups — the same read the tab's
+ * visibility rests on, so the section menu's badge costs nothing more. 0
+ * until it answers.
+ */
+export function usePendingApplicationCount(): number {
+  return useManagedGroupApplications().data?.length ?? 0;
+}
+
 /** One Group of the Cereri de aderare list (#922). */
 export type ApplicationGroup = {
   id: number;

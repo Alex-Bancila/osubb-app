@@ -15,7 +15,7 @@ vi.mock('../../queries/task-feedback', () => ({
 }));
 import { TaskFeedbackControl } from './TaskFeedbackControl';
 const props = { taskId: 17, status: 'in_review' as const, kind: 'task' };
-const noteLabel = 'Notă pentru Executor (obligatoriu)';
+const noteLabel = 'Notă pentru Executor';
 beforeEach(() => {
   state.capability = true;
   state.mutation.mutateAsync.mockReset().mockResolvedValue({});

@@ -101,6 +101,17 @@ describe('EventRsvpControls', () => {
     expect(receipt()).toBeEmptyDOMElement();
   });
 
+  it('asks through the group of two answers on one row, with no heading above', async () => {
+    renderControls();
+    await loaded();
+
+    const group = screen.getByRole('group', { name: 'Alege răspunsul' });
+    expect(group).toContainElement(answer('Particip'));
+    expect(group).toContainElement(answer('Nu particip'));
+    expect(group.parentElement).toHaveClass('event-rsvp-row');
+    expect(screen.queryByText('Participi?')).not.toBeInTheDocument();
+  });
+
   it('fills a chosen "Nu particip" in ink, apart from the red "Particip"', async () => {
     stored = row('declined');
     renderControls();

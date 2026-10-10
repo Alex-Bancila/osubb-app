@@ -108,37 +108,72 @@ beforeEach(() => {
   answer();
 });
 
-it('shows the Nickname, full name, Role, join date, first Department + n and the Groups', async () => {
+/** The one line under the name: Role chip, full name, "Membru din". */
+function meta(dialog: HTMLElement) {
+  return dialog.querySelector('[data-slot="member-card-meta"]') as HTMLElement;
+}
+
+it('shows the Nickname, then one line of Role, full name and a short join date, then the Groups', async () => {
   const dialog = await openCard();
   expect(hook).toHaveBeenCalledWith('m-1');
-  expect(within(dialog).getByText('Ana Pop')).toBeVisible();
-  expect(dialog).toHaveTextContent(
-    'Voluntar Activ · Membru din 12 martie 2024',
+  expect(within(meta(dialog)).getByText('Ana Pop')).toBeVisible();
+  expect(within(meta(dialog)).getByText('Voluntar Activ')).toHaveClass(
+    'role-badge',
   );
-  expect(within(dialog).getByText('+2')).toHaveAccessibleName(
-    'și încă 2 grupuri',
+  expect(meta(dialog)).toHaveTextContent('Membru din 12 mar. 2024');
+  expect(dialog).not.toHaveTextContent('martie');
+  // The line describes the sheet, whose title is the Member.
+  expect(dialog).toHaveAccessibleDescription(
+    'Voluntar Activ Ana Pop Membru din 12 mar. 2024',
   );
+  // Every Group is listed below, so no "first Group + n" chip repeats one.
+  expect(within(dialog).queryByText(/^\+\d/)).toBeNull();
+  expect(within(dialog).getAllByText('Educațional')).toHaveLength(1);
   const groups = within(dialog).getByRole('region', { name: 'Grupuri' });
   expect(within(groups).getAllByRole('listitem')).toHaveLength(3);
   expect(groups).toHaveTextContent('Mentorat · Educațional');
   expect(groups).toHaveTextContent('Coordonator');
   expect(groups).toHaveTextContent('Responsabil logistică');
+  // Small headings in sentence case: no uppercase micro-label.
+  const heading = within(groups).getByRole('heading', { name: 'Grupuri' });
+  expect(heading).toHaveAttribute('data-variant', 'label');
+  expect(heading).not.toHaveClass('uppercase');
   expect((await axe.run(dialog)).violations).toEqual([]);
+});
+
+it('is a sheet: from the bottom on a phone, a right-hand panel from sm, closed from its header', async () => {
+  const dialog = await openCard();
+  expect(dialog).toHaveAttribute('data-slot', 'member-card');
+  expect(dialog).toHaveAttribute('data-side', 'bottom');
+  expect(dialog).toHaveClass('sm:max-w-md', 'rounded-t-2xl');
+  await userEvent.click(
+    within(dialog).getByRole('button', { name: 'Închide' }),
+  );
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(
+    screen.getByRole('button', { name: 'Profilul membrului Ani' }),
+  ).toHaveFocus();
 });
 
 it('names a board member by their Board Title, with the Role beside it (#963)', async () => {
   answer({ roleLabel: 'Președinte', rankLabel: 'BC' });
   const dialog = await openCard();
-  expect(dialog).toHaveTextContent(
-    'Președinte · BC · Membru din 12 martie 2024',
+  expect(within(meta(dialog)).getByText('Președinte')).toHaveClass(
+    'role-badge',
+  );
+  expect(within(meta(dialog)).getByText('BC')).not.toHaveClass('role-badge');
+  expect(dialog).toHaveAccessibleDescription(
+    'Președinte BC Ana Pop Membru din 12 mar. 2024',
   );
 });
 
 it('says the Role once when there is no Board Title (#963)', async () => {
   answer({ roleLabel: 'BC', rankLabel: 'BC' });
   const dialog = await openCard();
-  expect(dialog).toHaveTextContent('BC · Membru din 12 martie 2024');
-  expect(dialog).not.toHaveTextContent('BC · BC');
+  expect(within(meta(dialog)).getAllByText('BC')).toHaveLength(1);
+  expect(dialog).toHaveAccessibleDescription(
+    'BC Ana Pop Membru din 12 mar. 2024',
+  );
 });
 
 it('marks a Private Group in the Groups list, and no public one (#757)', async () => {
@@ -148,16 +183,17 @@ it('marks a Private Group in the Groups list, and no public one (#757)', async (
   expect(within(items[2] as HTMLElement).getByText('Privat')).toBeVisible();
   expect(within(items[0] as HTMLElement).queryByText('Privat')).toBeNull();
   expect(within(items[1] as HTMLElement).queryByText('Privat')).toBeNull();
-  // The public primary chip carries no lock either.
+  // Nothing else in the card carries a lock.
   expect(within(dialog).getAllByText('Privat')).toHaveLength(1);
   expect((await axe.run(dialog)).violations).toEqual([]);
 });
 
-it('omits the join line when the date was never recorded, and the chip without a Group', async () => {
+it('omits the join line when the date was never recorded, and draws no Group summary chip', async () => {
   answer({ joinedAt: null, primaryGroup: null, otherMemberships: 0 });
   const dialog = await openCard();
   expect(dialog).not.toHaveTextContent('Membru din');
   expect(within(dialog).queryByText(/^\+\d/)).toBeNull();
+  expect(meta(dialog)).toHaveTextContent(/^Voluntar Activ Ana Pop$/);
 });
 
 it('shows contact only when member_contacts returned a row', async () => {
@@ -172,12 +208,15 @@ it('shows contact only when member_contacts returned a row', async () => {
   );
   const withContact = await screen.findByRole('dialog', { name: 'Ani' });
   const contact = within(withContact).getByRole('region', { name: 'Contact' });
-  expect(
-    within(contact).getByRole('link', { name: 'ana@osubb.ro' }),
-  ).toHaveAttribute('href', 'mailto:ana@osubb.ro');
-  expect(
-    within(contact).getByRole('link', { name: '+40700000000' }),
-  ).toHaveAttribute('href', 'tel:+40700000000');
+  const email = within(contact).getByRole('link', { name: 'ana@osubb.ro' });
+  expect(email).toHaveAttribute('href', 'mailto:ana@osubb.ro');
+  const phone = within(contact).getByRole('link', { name: '+40700000000' });
+  expect(phone).toHaveAttribute('href', 'tel:+40700000000');
+  // Facts as icon + value rows in the text colour, each a 44 px target.
+  for (const fact of [email, phone]) {
+    expect(fact).toHaveClass('text-foreground', 'min-h-11');
+    expect(fact.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+  }
 });
 
 it('offers no links without the capabilities', async () => {
@@ -188,9 +227,15 @@ it('offers no links without the capabilities', async () => {
 it('links to the tracker for leadership viewers and to Administrare for manageRoles', async () => {
   capabilities.seeLeadership = true;
   let dialog = await openCard();
-  expect(
-    within(dialog).getByRole('link', { name: 'Vezi trackerul' }),
-  ).toHaveAttribute('href', '/tracker/membru/m-1');
+  const tracker = within(dialog).getByRole('link', { name: 'Vezi trackerul' });
+  expect(tracker).toHaveAttribute('href', '/tracker/membru/m-1');
+  // The one link offered is the filled one, pinned at the sheet's foot.
+  expect(tracker).toHaveClass('bg-primary');
+  expect(tracker.closest('[data-slot="sheet-footer"]')).toHaveAttribute(
+    'data-pinned',
+    'true',
+  );
+  expect(tracker.querySelector('svg')).not.toBeNull();
   expect(within(dialog).queryByRole('link', { name: 'Editează' })).toBeNull();
 
   await closeCard();
@@ -200,12 +245,28 @@ it('links to the tracker for leadership viewers and to Administrare for manageRo
     screen.getByRole('button', { name: 'Profilul membrului Ani' }),
   );
   dialog = await screen.findByRole('dialog', { name: 'Ani' });
-  expect(
-    within(dialog).getByRole('link', { name: 'Editează' }),
-  ).toHaveAttribute('href', '/administrare/membri/m-1');
+  const edit = within(dialog).getByRole('link', { name: 'Editează' });
+  expect(edit).toHaveAttribute('href', '/administrare/membri/m-1');
+  expect(edit).toHaveClass('bg-primary');
   expect(
     within(dialog).queryByRole('link', { name: 'Vezi trackerul' }),
   ).toBeNull();
+});
+
+it('fills one button only: the tracker is the primary, the member page outline before it', async () => {
+  capabilities.seeLeadership = true;
+  capabilities.manageRoles = true;
+  const dialog = await openCard();
+  const links = within(
+    within(dialog).getByRole('navigation', { name: 'Acțiuni pentru membru' }),
+  ).getAllByRole('link');
+  expect(links.map((link) => link.textContent)).toEqual([
+    'Editează',
+    'Vezi trackerul',
+  ]);
+  expect(links[0]).not.toHaveClass('bg-primary');
+  expect(links[1]).toHaveClass('bg-primary');
+  expect((await axe.run(dialog)).violations).toEqual([]);
 });
 
 it('never renders points or rank', async () => {
@@ -336,7 +397,7 @@ it('hands the page it opens a way back here (D10)', async () => {
   });
 });
 
-it('keeps a long Group Role inside the card: one shrinkable column, a truncated chip (N3)', async () => {
+it('shows a long Group name and Group Role whole: they wrap, nothing is cut (N3)', async () => {
   answer({
     groups: [
       {
@@ -350,16 +411,19 @@ it('keeps a long Group Role inside the card: one shrinkable column, a truncated 
     ],
   });
   const dialog = await openCard();
-  expect(dialog).toHaveClass('grid-cols-[minmax(0,1fr)]');
+  const name = within(dialog).getByText(
+    'Balul Bobocilor · Evenimente și proiecte culturale',
+  );
   const role = within(dialog).getByText(
     'Responsabil logistică, sponsorizări și voluntari',
   );
-  expect(role).toHaveClass('truncate');
-  expect(role.parentElement).toHaveClass('min-w-0', 'max-w-1/2');
-  expect(role.parentElement).toHaveAttribute(
-    'title',
-    'Responsabil logistică, sponsorizări și voluntari',
-  );
+  expect(name).toHaveClass('wrap-anywhere');
+  expect(name).not.toHaveClass('truncate');
+  expect(role).toHaveClass('whitespace-normal', 'max-w-full');
+  expect(role).not.toHaveClass('truncate');
+  expect(dialog.querySelector('.truncate')).toBeNull();
+  // The role drops under the name where the two do not fit on one row.
+  expect(role.closest('li')).toHaveClass('flex-wrap', 'min-w-0');
 });
 
 it('does not link to the page already open, so its back link never points at itself', async () => {

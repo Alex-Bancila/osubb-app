@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { describe, expect, it, vi } from 'vitest';
@@ -32,7 +32,9 @@ vi.mock('./ManagedTaskForm', () => ({
         <button onClick={() => onDraft({ parentTaskId, title: 'Copil nou' })}>
           Trimite subtask pentru #{parentTaskId}
         </button>
-        {onCancel && <button onClick={onCancel}>{cancelLabel}</button>}
+        {onCancel && (
+          <button onClick={onCancel}>{cancelLabel ?? 'Renunță'}</button>
+        )}
       </>
     );
   },
@@ -163,8 +165,13 @@ describe('Umbrella progress and actions', () => {
     const user = userEvent.setup();
     render(<UmbrellaTaskSection {...common} subtasks={[]} />);
     await user.click(screen.getByRole('button', { name: 'Adaugă subtask' }));
+    // The form opens in a form sheet over the details, not inside them.
+    const sheet = await screen.findByRole('dialog', { name: 'Subtask nou' });
+    expect(sheet).toHaveAttribute('data-slot', 'form-sheet');
     await user.click(
-      screen.getByRole('button', { name: 'Trimite subtask pentru #10' }),
+      within(sheet).getByRole('button', {
+        name: 'Trimite subtask pentru #10',
+      }),
     );
     expect(create).toHaveBeenCalledWith({
       parentTaskId: 10,
@@ -177,9 +184,8 @@ describe('Umbrella progress and actions', () => {
     render(<UmbrellaTaskSection {...common} subtasks={[]} />);
     await user.click(screen.getByRole('button', { name: 'Adaugă subtask' }));
     const oldSubmission = form.onDraft;
-    await user.click(
-      screen.getByRole('button', { name: 'Închide formularul' }),
-    );
+    await user.click(screen.getByRole('button', { name: 'Renunță' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await user.click(screen.getByRole('button', { name: 'Adaugă subtask' }));
     await act(async () => oldSubmission({ parentTaskId: 10 }));
     expect(create).not.toHaveBeenCalled();

@@ -33,6 +33,7 @@ export function EventDeleteDialog({
   return (
     <DeleteForGoodDialog
       title="Ștergi definitiv evenimentul?"
+      compact
       className="event-manage-delete"
     >
       {(controls) => (

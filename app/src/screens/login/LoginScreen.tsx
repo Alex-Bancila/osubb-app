@@ -12,6 +12,7 @@ import { rememberSignInRequest } from '../../lib/sign-in-request';
 import { supabase } from '../../lib/supabase';
 import { Button } from '../../components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '../../components/ui/field';
+import { Input } from '../../components/ui/input';
 import { SessionScreen } from '../../components/shell/SessionScreen';
 
 /* The Privacy Notice (#771) is readable before anyone signs in. A plain link,
@@ -25,11 +26,13 @@ const privacyFooter = (
   </a>
 );
 
+/* The shared field, at 16 px as this screen always had it: below that iOS
+   zooms the page when the field takes focus, and this is the first screen a
+   member sees on a phone. */
+const inputClassName = 'text-base';
+
 type Status = 'idle' | 'sending' | 'sent' | 'error';
 type CodeStatus = 'idle' | 'verifying' | 'error';
-
-const inputClassName =
-  'min-h-11 rounded-lg border border-input bg-background px-3 text-base outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 /* There is no password field on this screen, and that is the product working as
    designed: accounts exist only by BC invitation and sign-in is passwordless
@@ -204,7 +207,7 @@ export default function LoginScreen({
 
           <Field data-invalid={codeStatus === 'error'}>
             <FieldLabel htmlFor="code">Cod de 6 cifre</FieldLabel>
-            <input
+            <Input
               id="code"
               className={inputClassName}
               type="text"
@@ -291,7 +294,7 @@ export default function LoginScreen({
 
         <Field data-invalid={status === 'error'}>
           <FieldLabel htmlFor="email">Email</FieldLabel>
-          <input
+          <Input
             ref={emailRef}
             id="email"
             className={inputClassName}

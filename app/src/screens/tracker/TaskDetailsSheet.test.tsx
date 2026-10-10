@@ -40,8 +40,15 @@ const candidateHooks = vi.hoisted(() => ({
     isPending: false,
   },
 }));
+const review = vi.hoisted(() => ({ canEvaluate: false }));
 vi.mock('../../queries/task-review', () => ({
-  useTaskEvaluationCapability: () => ({ data: false }),
+  useTaskEvaluationCapability: () => ({ data: review.canEvaluate }),
+  useEvaluateTask: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
+vi.mock('../../components/tasks/EvaluationFields', () => ({
+  EvaluationFields: ({ outcome }: { outcome: string }) => (
+    <p>Formular de evaluare: {outcome}</p>
+  ),
 }));
 vi.mock('../../queries/task-details', () => ({ useTaskDetails }));
 const deleteTask = vi.hoisted(() =>
@@ -94,7 +101,15 @@ vi.mock('../../queries/task-history', () => ({ useTaskHistory: taskHistory }));
 vi.mock('./TaskHistory', () => ({
   TaskHistory: () => <p>Istoric autorizat</p>,
 }));
+import { pickDate } from '../../test/date-picker';
+import { bucharestWallTimeToIso } from '../../lib/calendar-time';
 import { TaskDetailsSheet } from './TaskDetailsSheet';
+// A deadline next month: always in the future, and one page away in the
+// date picker.
+const nextMonth = new Date();
+nextMonth.setUTCDate(1);
+nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+const DEADLINE = `${nextMonth.toISOString().slice(0, 7)}-15T12:30`;
 import { taskRow } from '../../test/task-fixtures';
 vi.mock(
   '../../queries/member-card',
@@ -103,6 +118,9 @@ vi.mock(
 vi.mock('../../lib/capabilities', () => ({
   useCapability: () => ({ data: false }),
 }));
+
+/** The fixture Task's title, which names the sheet. */
+const TITLE = 'Pregătește materialele';
 
 describe('Task details sheet', () => {
   it('shows authorized fields, hides unknown Executor identity and closes with Escape', async () => {
@@ -118,9 +136,37 @@ describe('Task details sheet', () => {
     const { container } = render(
       <TaskDetailsSheet taskId={1} onClose={onClose} />,
     );
+    // The sheet is titled by the Task, its Group and status under the title.
+    const sheet = await screen.findByRole('dialog', { name: TITLE });
+    expect(sheet).toBeVisible();
+    expect(screen.queryByText('Detalii task')).toBeNull();
+    const header = sheet.querySelector('[data-slot="sheet-header"]');
     expect(
-      await screen.findByRole('dialog', { name: 'Detalii task' }),
+      within(header as HTMLElement).getByRole('heading', { name: TITLE }),
     ).toBeVisible();
+    const chips = within(
+      header?.querySelector('[data-slot="task-sheet-chips"]') as HTMLElement,
+    );
+    expect(chips.getByText('Departament · Educațional')).toBeVisible();
+    expect(chips.getByText('De făcut')).toBeVisible();
+    // No card inside the sheet: the Task is not shown a second time in a
+    // border of its own, and the facts are plain label/value rows.
+    expect(sheet.querySelector('[data-slot="card"]')).toBeNull();
+    expect(within(sheet).queryByRole('article')).toBeNull();
+    expect(screen.getAllByText(TITLE)).toHaveLength(1);
+    const facts = sheet.querySelector('[data-slot="task-facts"]');
+    const deadline = within(facts as HTMLElement)
+      .getByText('Termen')
+      .closest('div') as HTMLElement;
+    expect(deadline.querySelector('dt svg')).not.toBeNull();
+    expect(
+      within(deadline).getByText(/16 sept\.( 2026)? · 13:00/),
+    ).toBeVisible();
+    expect(
+      within(facts as HTMLElement)
+        .getByText('Atribuire')
+        .closest('div'),
+    ).toHaveTextContent('AtribuireDirectă');
     // A direct Task is local only (R26): no Audiență row.
     expect(screen.queryByText('Audiență')).toBeNull();
     expect(screen.queryByText('În cadrul originii')).toBeNull();
@@ -154,7 +200,7 @@ describe('Task details sheet', () => {
       data: { task: taskRow(), executorName: null, subtasks: [] },
     });
     view.rerender(<TaskDetailsSheet taskId={7} onClose={vi.fn()} />);
-    await screen.findByRole('dialog', { name: 'Detalii task' });
+    await screen.findByRole('dialog', { name: TITLE });
     expect(readNotificationsAbout).toHaveBeenLastCalledWith(['task:7']);
   });
 
@@ -167,10 +213,10 @@ describe('Task details sheet', () => {
       },
     });
     render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
-    await screen.findByRole('dialog', { name: 'Detalii task' });
+    await screen.findByRole('dialog', { name: TITLE });
     const row = screen.getByText('Audiență').closest('div') as HTMLElement;
     expect(within(row).getByText('Toți membrii OSUBB')).toBeVisible();
-    // Once: the card copy in the sheet drops its OSUBB chip (B20).
+    // Once: the sheet has no OSUBB chip beside the row (B20).
     expect(screen.queryByText('OSUBB')).toBeNull();
   });
   it('shows the review round only to a manager, and only from round 1 (B20)', async () => {
@@ -188,7 +234,7 @@ describe('Task details sheet', () => {
         onClose={vi.fn()}
       />,
     );
-    await screen.findByRole('dialog', { name: 'Detalii task' });
+    await screen.findByRole('dialog', { name: TITLE });
     expect(screen.queryByText('Rundă de verificare')).toBeNull();
     unmount();
 
@@ -211,7 +257,7 @@ describe('Task details sheet', () => {
     ) as HTMLElement;
     expect(within(row).getByText('2')).toBeVisible();
   });
-  it('shows Dificultate and Nota once, on the card, after an Evaluation', async () => {
+  it('shows Dificultate and Nota once, on the Evaluare row, after an Evaluation', async () => {
     useTaskDetails.mockReturnValue({
       data: {
         task: taskRow({
@@ -227,11 +273,12 @@ describe('Task details sheet', () => {
       },
     });
     render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
-    await screen.findByRole('dialog', { name: 'Detalii task' });
+    await screen.findByRole('dialog', { name: TITLE });
     expect(
       screen.getAllByRole('img', { name: 'Dificultate 3 din 5' }),
     ).toHaveLength(1);
-    expect(screen.getByText(/9 puncte/)).toHaveTextContent('Nota 4');
+    const evaluation = screen.getByText('Evaluare').closest('div');
+    expect(evaluation).toHaveTextContent(/9 puncte\s*Nota 4/);
     // A finished Task never reads "Neatribuit" (Audit D-1).
     expect(screen.queryByText('Neatribuit')).toBeNull();
   });
@@ -256,8 +303,8 @@ describe('Task details sheet', () => {
       },
     });
     render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
-    await screen.findByRole('dialog', { name: 'Detalii task' });
-    const executor = screen.getByText('Executor:').closest('p') as HTMLElement;
+    await screen.findByRole('dialog', { name: TITLE });
+    const executor = screen.getByText('Executor').closest('div') as HTMLElement;
     expect(
       within(executor).getByRole('button', {
         name: 'Profilul membrului Ioana Pop',
@@ -284,8 +331,8 @@ describe('Task details sheet', () => {
       },
     });
     render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
-    await screen.findByRole('dialog', { name: 'Detalii task' });
-    expect(screen.queryByText('Executor:')).toBeNull();
+    await screen.findByRole('dialog', { name: TITLE });
+    expect(screen.queryByText('Executor')).toBeNull();
     expect(screen.queryByText('Neatribuit')).toBeNull();
   });
   it('names the Executor as a button that opens their Member Card', async () => {
@@ -305,10 +352,10 @@ describe('Task details sheet', () => {
       },
     });
     render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
-    await screen.findByRole('dialog', { name: 'Detalii task' });
-    // One Executor line: the card's (B20).
+    await screen.findByRole('dialog', { name: TITLE });
+    // One Executor row (B20).
     expect(screen.getAllByText(/^Executor/)).toHaveLength(1);
-    const executor = screen.getByText('Executor:').closest('p') as HTMLElement;
+    const executor = screen.getByText('Executor').closest('div') as HTMLElement;
     await user.click(
       within(executor).getByRole('button', {
         name: 'Profilul membrului Ioana Pop',
@@ -467,7 +514,7 @@ describe('Task details sheet', () => {
           onClose={vi.fn()}
         />,
       );
-      await screen.findByRole('dialog', { name: 'Detalii task' });
+      await screen.findByRole('dialog', { name: TITLE });
       expect(screen.queryByText('Coada taskului')).not.toBeInTheDocument();
       expect(screen.queryByText('Alege din coadă')).not.toBeInTheDocument();
     },
@@ -493,14 +540,15 @@ describe('Task details sheet', () => {
       />,
     );
     await user.click(await screen.findByRole('button', { name: 'Duplică' }));
-    await user.type(
-      screen.getByLabelText('Termen nou (ora României)'),
-      '2030-10-20T12:30',
+    await pickDate(
+      user,
+      screen.getByLabelText('Termen nou — ora României'),
+      DEADLINE,
     );
     await user.click(screen.getByRole('button', { name: 'Creează copia' }));
     expect(duplicate).toHaveBeenCalledWith({
       taskId: 1,
-      deadline: '2030-10-20T09:30:00.000Z',
+      deadline: bucharestWallTimeToIso(DEADLINE),
     });
     expect(await screen.findByText('Copia nouă')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Duplicat din #1' }));
@@ -556,7 +604,9 @@ describe('Task details sheet', () => {
     expect(await screen.findByText('Subtask deschis')).toBeVisible();
     expect(screen.queryByRole('button', { name: /Înapoi la/ })).toBeNull();
     // Focus returns to the sheet title, so the reader starts at the top.
-    expect(screen.getByRole('heading', { name: 'Detalii task' })).toHaveFocus();
+    expect(
+      screen.getByRole('heading', { name: 'Subtask deschis' }),
+    ).toHaveFocus();
   });
   it('states no Atribuire for an Umbrella, which has no Assignment (F-28)', async () => {
     useTaskDetails.mockReturnValue({
@@ -692,19 +742,19 @@ describe('Task details sheet', () => {
       },
     });
     render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
-    await screen.findByRole('dialog', { name: 'Detalii task' });
+    await screen.findByRole('dialog', { name: TITLE });
     // Once, on the sheet itself: the card copy inside it does not repeat it.
     const notes = screen.getAllByRole('region', { name: 'Notă la trimitere' });
     expect(notes).toHaveLength(1);
     expect(notes[0]).toHaveTextContent('Am pus prezentarea în folder.');
-    expect(notes[0]).toHaveTextContent('15 septembrie 2026, 12:30');
+    expect(notes[0]).toHaveTextContent(/15 sept\.( 2026)? · 12:30/);
     expect(
       within(notes[0] as HTMLElement).getByRole('link', {
         // R46: a details view says what the button does.
         name: 'Deschide: Prezentare (se deschide într-o filă nouă)',
       }),
     ).toHaveAttribute('target', '_blank');
-    // The sheet's card is not the deep-link anchor.
+    // The sheet is not the deep-link anchor.
     expect(document.getElementById('task-1')).toBeNull();
   });
   it('shows the Task’s Attached Links as "Deschide: <etichetă>" (R46)', async () => {
@@ -721,7 +771,7 @@ describe('Task details sheet', () => {
       },
     });
     render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
-    await screen.findByRole('dialog', { name: 'Detalii task' });
+    await screen.findByRole('dialog', { name: TITLE });
     const list = screen.getByRole('list', { name: 'Linkuri atașate' });
     expect(
       within(list)
@@ -738,7 +788,7 @@ describe('Task details sheet', () => {
       },
     });
     render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
-    await screen.findByRole('dialog', { name: 'Detalii task' });
+    await screen.findByRole('dialog', { name: TITLE });
     expect(
       screen.queryByRole('region', { name: 'Notă la trimitere' }),
     ).not.toBeInTheDocument();
@@ -764,9 +814,13 @@ describe('Task details sheet', () => {
         onDeleted={onDeleted}
       />,
     );
-    await screen.findByRole('dialog', { name: 'Detalii task' });
+    await screen.findByRole('dialog', { name: TITLE });
     expect(
       screen.queryByRole('button', { name: 'Șterge definitiv' }),
+    ).toBeNull();
+    // Nothing to put behind it: no "⋯" for a Member who manages nothing.
+    expect(
+      screen.queryByRole('button', { name: 'Mai multe acțiuni' }),
     ).toBeNull();
 
     rerender(
@@ -781,11 +835,20 @@ describe('Task details sheet', () => {
     expect(
       screen.queryByRole('button', { name: 'Anulează taskul' }),
     ).toBeNull();
+    // Behind the "⋯" menu, not a button in the row; destructive, last.
     const actions = document.querySelector('[data-slot="task-actions"]');
-    const trigger = within(actions as HTMLElement).getByRole('button', {
-      name: 'Șterge definitiv',
+    expect(
+      within(actions as HTMLElement).queryByRole('button', {
+        name: 'Șterge definitiv',
+      }),
+    ).toBeNull();
+    const more = within(actions as HTMLElement).getByRole('button', {
+      name: 'Mai multe acțiuni',
     });
-    await user.click(trigger);
+    await user.click(more);
+    const items = await screen.findAllByRole('menuitem');
+    expect(items.map((item) => item.textContent)).toEqual(['Șterge definitiv']);
+    await user.click(items[0] as HTMLElement);
     const confirm = await screen.findByRole('dialog', {
       name: 'Ștergi definitiv taskul?',
     });
@@ -797,5 +860,146 @@ describe('Task details sheet', () => {
       expect(onDeleted).toHaveBeenCalledWith('Taskul a fost șters definitiv.'),
     );
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  /* The commands have a hierarchy: steps as buttons, Duplică as an icon
+     button, and the rest behind one "⋯" menu, destructive last. */
+  it('keeps Duplică as an icon button and puts Anulează and Șterge definitiv behind the "⋯" menu', async () => {
+    const user = userEvent.setup();
+    useTaskDetails.mockReturnValue({
+      data: { task: taskRow(), executorName: null, subtasks: [] },
+    });
+    render(
+      <TaskDetailsSheet
+        taskId={1}
+        managedTaskIds={new Set([1])}
+        onClose={vi.fn()}
+      />,
+    );
+    await screen.findByRole('dialog', { name: TITLE });
+    const actions = within(
+      document.querySelector('[data-slot="task-actions"]') as HTMLElement,
+    );
+    const copy = actions.getByRole('button', { name: 'Duplică' });
+    expect(copy.querySelector('svg')).not.toBeNull();
+    expect(within(copy).getByText('Duplică')).toHaveClass('sr-only');
+    // Neither is a button in the row any more.
+    expect(
+      actions.queryByRole('button', { name: 'Anulează taskul' }),
+    ).toBeNull();
+    expect(
+      actions.queryByRole('button', { name: 'Șterge definitiv' }),
+    ).toBeNull();
+    const more = actions.getByRole('button', { name: 'Mai multe acțiuni' });
+    await user.click(more);
+    expect(
+      (await screen.findAllByRole('menuitem')).map((item) => item.textContent),
+    ).toEqual(['Anulează taskul', 'Șterge definitiv']);
+
+    // The item opens the same pop-up, with its required reason…
+    await user.click(screen.getByRole('menuitem', { name: 'Anulează taskul' }));
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Anulează taskul',
+    });
+    expect(within(dialog).getByLabelText('Motiv')).toBeVisible();
+    // …and closing it hands focus back to the menu's button.
+    await user.click(within(dialog).getByRole('button', { name: 'Renunță' }));
+    await vi.waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Anulează taskul' }),
+      ).toBeNull(),
+    );
+    await vi.waitFor(() => expect(more).toHaveFocus());
+  });
+
+  it('offers Marchează nerealizat in the menu, under the control’s own rule, and opens its form', async () => {
+    const user = userEvent.setup();
+    const overdue = {
+      task: taskRow({
+        status: 'in_progress',
+        deadline: '2020-01-01T10:00:00Z',
+        assignments: [{ id: 1, member_id: 'ioana', ended_at: null }],
+        visibleExecutor: { memberId: 'ioana', fullName: 'Ioana Pop' },
+      }),
+      executorName: 'Ioana Pop',
+      subtasks: [],
+    };
+    useTaskDetails.mockReturnValue({ data: overdue });
+    review.canEvaluate = true;
+    try {
+      const view = render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+      await screen.findByRole('dialog', { name: TITLE });
+      // Not a button in the row: the menu's one item for this evaluator.
+      expect(
+        screen.queryByRole('button', { name: 'Marchează nerealizat' }),
+      ).toBeNull();
+      await user.click(
+        screen.getByRole('button', { name: 'Mai multe acțiuni' }),
+      );
+      const items = await screen.findAllByRole('menuitem');
+      expect(items.map((item) => item.textContent)).toEqual([
+        'Marchează nerealizat',
+      ]);
+      await user.click(items[0] as HTMLElement);
+      expect(
+        await screen.findByText('Formular de evaluare: unfulfilled'),
+      ).toBeVisible();
+      view.unmount();
+
+      // Not overdue: nothing to mark, so no item — and here no menu at all.
+      useTaskDetails.mockReturnValue({
+        data: {
+          ...overdue,
+          task: { ...overdue.task, deadline: '2999-01-01T10:00:00Z' },
+        },
+      });
+      render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+      await screen.findByRole('dialog', { name: TITLE });
+      expect(
+        screen.queryByRole('button', { name: 'Mai multe acțiuni' }),
+      ).toBeNull();
+    } finally {
+      review.canEvaluate = false;
+    }
+  });
+
+  it('keeps the Executor’s own steps in the sheet, without a card around them', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({ status: 'in_progress' }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    const sheet = await screen.findByRole('dialog', { name: TITLE });
+    expect(
+      within(sheet).getByRole('button', { name: 'Trimite la verificare' }),
+    ).toBeVisible();
+    expect(
+      within(sheet).getByRole('button', { name: 'Renunță la task' }),
+    ).toBeVisible();
+    expect(sheet.querySelector('[data-slot="card-footer"]')).toBeNull();
+  });
+
+  it('shows the description and the history as a disclosure with its icon', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({ description: 'Tipărește 40 de exemplare.' }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    const sheet = await screen.findByRole('dialog', { name: TITLE });
+    expect(within(sheet).getByText('Tipărește 40 de exemplare.')).toBeVisible();
+    // The shared disclosure: a row whose chevron turns, with the icon.
+    const history = within(sheet).getByText('Istoricul taskului');
+    expect(history.closest('summary')).not.toBeNull();
+    expect(history.closest('details')).toHaveAttribute(
+      'data-slot',
+      'disclosure',
+    );
+    expect(history.querySelector('svg')).not.toBeNull();
   });
 });

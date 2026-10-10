@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import * as axe from 'axe-core';
 import { beforeEach, expect, it, vi } from 'vitest';
+import { FabActions } from '../../components/layout';
 
 const api = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock('../../lib/supabase', () => ({
@@ -59,6 +60,14 @@ it('imports a CSV and shows created rows and the exact downloadable template', a
   const { client } = show();
   const invalidate = vi.spyOn(client, 'invalidateQueries');
   const dialog = await open(user);
+  // The two formats are explained behind the field's "i", not above it.
+  expect(dialog).not.toHaveAccessibleDescription();
+  expect(screen.getByLabelText('Fișier CSV')).toHaveAccessibleDescription(
+    /Baza de voluntari.*name,email,dept,team: fiecare primește o invitație/,
+  );
+  expect(
+    screen.getByRole('button', { name: 'Despre fișierul CSV' }),
+  ).toBeVisible();
   expect(screen.getByRole('link', { name: 'Descarcă șablon' })).toHaveAttribute(
     'download',
     'model-import-membri.csv',
@@ -181,8 +190,7 @@ it('opens from its button, keeps the report until closed, then starts afresh', a
     error: null,
   });
   show();
-  const trigger = screen.getByRole('button', { name: 'Import CSV' });
-  expect(trigger).toHaveClass('w-full');
+  expect(screen.getByRole('button', { name: 'Import CSV' })).toBeVisible();
   expect(screen.queryByLabelText('Fișier CSV')).toBeNull();
   const dialog = await open(user);
   await uploadAndImport(user);
@@ -226,4 +234,20 @@ it('locks the selected file while its report is pending', async () => {
   await waitFor(() =>
     expect(screen.getByLabelText('Fișier CSV')).toBeEnabled(),
   );
+});
+
+/* On the Membri page the trigger is the page's plus button. */
+it('opens from the page’s plus button inside `FabActions`', async () => {
+  const user = userEvent.setup();
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <FabActions>
+        <CsvImportDialog />
+      </FabActions>
+    </QueryClientProvider>,
+  );
+  const plus = screen.getByRole('button', { name: 'Import CSV' });
+  expect(plus).toHaveAttribute('data-slot', 'fab');
+  await user.click(plus);
+  expect(await screen.findByRole('dialog')).toBeVisible();
 });

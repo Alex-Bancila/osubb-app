@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { UserMinus } from 'lucide-react';
 import { Link } from 'react-router';
 import {
   ListRow,
@@ -13,6 +14,8 @@ import {
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { MemberAvatar } from '../../components/ui/combobox';
+import { Empty, EmptyHeader, EmptyTitle } from '../../components/ui/empty';
+import { ActionMenu } from '../../components/ui/menu';
 import {
   Dialog,
   DialogContent,
@@ -29,6 +32,7 @@ import type {
   RosterEntry,
 } from '../../queries/groups-admin';
 import { statusLabel } from '../volunteers/directory-filters';
+import { useMinWidth } from '../volunteers/use-min-width';
 import { MemberPicker } from './MemberPicker';
 import { groupRoleLabel, rosterBackState } from './group-tree';
 
@@ -122,21 +126,34 @@ function AddMemberDialog({
   );
 }
 
+/**
+ * Taking a Member off the roster asks first. In the table the row has room
+ * for the "Scoate" button; in the list (`menu`) it waits behind the row's
+ * "⋯", and focus goes back to that button when the pop-up closes.
+ */
 function RemoveMemberDialog({
   entry,
   group,
   busy,
   error,
+  menu = false,
   onRemove,
 }: {
   entry: RosterEntry;
   group: AdminGroup;
   busy: boolean;
   error: string | null;
+  /** Open from a "⋯" menu rather than from a button of its own. */
+  menu?: boolean;
   onRemove: () => Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
   const [attempted, setAttempted] = useState(false);
+  const holder = useRef<HTMLSpanElement>(null);
+  const ask = () => {
+    setAttempted(false);
+    setOpen(true);
+  };
   return (
     <Dialog
       open={open}
@@ -146,20 +163,41 @@ function RemoveMemberDialog({
         if (next) setAttempted(false);
       }}
     >
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={busy}
-        aria-label={`Scoate pe ${entry.name} din grup`}
-        onClick={() => {
-          setAttempted(false);
-          setOpen(true);
-        }}
+      {menu ? (
+        <span ref={holder} className="inline-flex">
+          <ActionMenu
+            label={`Acțiuni pentru ${entry.name}`}
+            items={[
+              {
+                label: 'Scoate din grup',
+                icon: UserMinus,
+                destructive: true,
+                disabled: busy,
+                onSelect: ask,
+              },
+            ]}
+          />
+        </span>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          aria-label={`Scoate pe ${entry.name} din grup`}
+          onClick={ask}
+        >
+          Scoate
+        </Button>
+      )}
+      <DialogContent
+        // The menu that opened it is gone by now: hand focus to its button.
+        finalFocus={
+          menu
+            ? () => holder.current?.querySelector<HTMLElement>('button') ?? true
+            : undefined
+        }
       >
-        Scoate
-      </Button>
-      <DialogContent>
         <DialogHeader>
           <DialogTitle>Scoate pe {entry.name}</DialogTitle>
           <DialogDescription>
@@ -198,19 +236,121 @@ function RemoveMemberDialog({
   );
 }
 
-function rosterColumns({
-  group,
-  authority,
-  busy,
-  error,
-  onRun,
-}: {
+/** How a Member in the Group by Automatic Membership is marked (#929). */
+const AUTOMATIC_LABEL = 'Automat';
+
+/**
+ * The viewport from which the roster is a table (Tailwind's `xl`): Nume,
+ * Funcție în grup, Rol OSUBB, Statut and Acțiuni need about 880 px side by
+ * side, and beside the sidebar the panel only has that from 1280 px. Under it
+ * each Member is a list row, so the roster never scrolls sideways.
+ */
+const TABLE_FROM = '80rem';
+
+/** A Member's name: the way to their page, in the text colour. */
+const nameLinkClass =
+  'flex min-h-11 min-w-0 items-center font-semibold text-foreground no-underline underline-offset-4 hover:underline';
+
+type RowContext = {
   group: AdminGroup;
   authority: GroupAuthority;
   busy: boolean;
   error: string | null;
   onRun: (command: GroupCommand) => Promise<boolean>;
-}): DataTableColumn<RosterEntry>[] {
+};
+
+function MemberLink({
+  entry,
+  group,
+}: {
+  entry: RosterEntry;
+  group: AdminGroup;
+}) {
+  return (
+    <Link
+      className={nameLinkClass}
+      to={`/administrare/membri/${entry.memberId}`}
+      // The member page's back link returns here, to the Group's Membri tab
+      // (navigation D4), not to a Membri tab the viewer may not open.
+      state={rosterBackState(group.id)}
+    >
+      <span className="truncate">{entry.name}</span>
+    </Link>
+  );
+}
+
+/** The Member's function in the Group, as a chip. */
+function FunctionBadge({
+  entry,
+  group,
+}: {
+  entry: RosterEntry;
+  group: AdminGroup;
+}) {
+  // Automatic Membership (#929): in the Group by Role, never by hand.
+  if (entry.source === 'automatic')
+    return <Badge variant="secondary">{AUTOMATIC_LABEL}</Badge>;
+  return (
+    <Badge variant={entry.groupRole === 'member' ? 'outline' : 'default'}>
+      {groupRoleLabel(
+        entry.groupRole,
+        group.manager_title,
+        entry.positionTitle,
+        group.responsible_title,
+      )}
+    </Badge>
+  );
+}
+
+/**
+ * What the viewer may do about a row: remove an ordinary Member, or read why
+ * not. A position is ended by the authority that granted it, never by a
+ * roster removal — so a Manager or Responsible is demoted first, and the hint
+ * shows only to whoever may withdraw that position (relevance B50): a
+ * Manager's by the level above, a Responsible's by the Group's Managers.
+ */
+function rowAction(
+  entry: RosterEntry,
+  { authority }: Pick<RowContext, 'authority'>,
+): 'remove' | 'withdraw-first' | null {
+  if (!authority.manageWork) return null;
+  // An automatic member follows their Role: nothing to remove (#929).
+  if (entry.source !== 'roster') return null;
+  if (entry.groupRole === 'member') return 'remove';
+  return canWithdraw(entry.groupRole, authority) ? 'withdraw-first' : null;
+}
+
+const WITHDRAW_FIRST = 'Retrage întâi funcția';
+
+function RemoveControl({
+  entry,
+  context: { group, busy, error, onRun },
+  menu,
+}: {
+  entry: RosterEntry;
+  context: RowContext;
+  menu?: boolean;
+}) {
+  return (
+    <RemoveMemberDialog
+      entry={entry}
+      group={group}
+      busy={busy}
+      error={error}
+      menu={menu}
+      onRemove={() =>
+        onRun({
+          kind: 'removeMember',
+          groupId: group.id,
+          memberId: entry.memberId,
+        })
+      }
+    />
+  );
+}
+
+function rosterColumns(context: RowContext): DataTableColumn<RosterEntry>[] {
+  const { group, authority } = context;
   const columns: DataTableColumn<RosterEntry>[] = [
     {
       id: 'name',
@@ -222,15 +362,7 @@ function rosterColumns({
             name={row.original.name}
             avatarColor={row.original.avatarColor}
           />
-          <Link
-            className="inline-flex min-h-11 min-w-0 items-center truncate font-medium underline underline-offset-4"
-            to={`/administrare/membri/${row.original.memberId}`}
-            // The member page's back link returns here, to the Roster
-            // (navigation D4), not to a Membri tab the viewer may not open.
-            state={rosterBackState(group.id)}
-          >
-            {row.original.name}
-          </Link>
+          <MemberLink entry={row.original} group={group} />
         </span>
       ),
       sortFn: (left, right) =>
@@ -246,24 +378,7 @@ function rosterColumns({
           group.responsible_title,
         ),
       header: 'Funcție în grup',
-      cell: ({ row }) =>
-        // Automatic Membership (#929): in the Group by Role, never by hand.
-        row.original.source === 'automatic' ? (
-          <Badge variant="secondary">{AUTOMATIC_LABEL}</Badge>
-        ) : (
-          <Badge
-            variant={
-              row.original.groupRole === 'member' ? 'outline' : 'default'
-            }
-          >
-            {groupRoleLabel(
-              row.original.groupRole,
-              group.manager_title,
-              row.original.positionTitle,
-              group.responsible_title,
-            )}
-          </Badge>
-        ),
+      cell: ({ row }) => <FunctionBadge entry={row.original} group={group} />,
     },
     { id: 'role', accessorFn: (row) => row.roleLabel, header: 'Rol OSUBB' },
     {
@@ -279,42 +394,81 @@ function rosterColumns({
       id: 'actions',
       header: 'Acțiuni',
       enableSorting: false,
-      cell: ({ row }) => rosterAction(row.original),
+      cell: ({ row }) => {
+        const action = rowAction(row.original, context);
+        return action === 'remove' ? (
+          <RemoveControl entry={row.original} context={context} />
+        ) : action === 'withdraw-first' ? (
+          <span className="text-sm text-muted-foreground">
+            {WITHDRAW_FIRST}
+          </span>
+        ) : null;
+      },
     },
   ];
-
-  function rosterAction(entry: RosterEntry) {
-    // An automatic member follows their Role: nothing to remove (#929).
-    if (entry.source !== 'roster') return null;
-    // A position is ended by the authority that granted it, never by a
-    // roster removal — so a Manager or Responsible is demoted first, and
-    // the hint shows only to whoever may withdraw that position
-    // (relevance B50): a Manager's by the level above, a Responsible's
-    // by the Group's Managers.
-    return entry.groupRole === 'member' ? (
-      <RemoveMemberDialog
-        entry={entry}
-        group={group}
-        busy={busy}
-        error={error}
-        onRemove={() =>
-          onRun({
-            kind: 'removeMember',
-            groupId: group.id,
-            memberId: entry.memberId,
-          })
-        }
-      />
-    ) : canWithdraw(entry.groupRole, authority) ? (
-      <span className="text-sm text-muted-foreground">
-        Retrage întâi funcția
-      </span>
-    ) : null;
-  }
 }
 
-/** How a Member in the Group by Automatic Membership is marked (#929). */
-const AUTOMATIC_LABEL = 'Automat';
+/**
+ * The roster under `TABLE_FROM`: one row a Member — avatar and name, the
+ * function in the Group as a chip beside it, the OSUBB Role and the
+ * Membership Status on a muted line under them, and the removal behind "⋯".
+ * In name order, as the table opens.
+ */
+function RosterList({
+  entries,
+  context,
+  emptyTitle,
+}: {
+  entries: RosterEntry[];
+  context: RowContext;
+  emptyTitle: string;
+}) {
+  const { group } = context;
+  const sorted = useMemo(
+    () =>
+      [...entries].sort((left, right) =>
+        left.name.localeCompare(right.name, 'ro'),
+      ),
+    [entries],
+  );
+  if (sorted.length === 0)
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>{emptyTitle}</EmptyTitle>
+        </EmptyHeader>
+      </Empty>
+    );
+  return (
+    <ul className={rowListClass}>
+      {sorted.map((entry) => {
+        const action = rowAction(entry, context);
+        return (
+          <ListRow
+            key={entry.memberId}
+            leading={
+              <MemberAvatar name={entry.name} avatarColor={entry.avatarColor} />
+            }
+            action={
+              action === 'remove' && (
+                <RemoveControl entry={entry} context={context} menu />
+              )
+            }
+          >
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2">
+              <MemberLink entry={entry} group={group} />
+              <FunctionBadge entry={entry} group={group} />
+            </div>
+            <p className="m-0 text-sm text-muted-foreground">
+              {entry.roleLabel} · {statusLabel(entry.status)}
+              {action === 'withdraw-first' && ` · ${WITHDRAW_FIRST}`}
+            </p>
+          </ListRow>
+        );
+      })}
+    </ul>
+  );
+}
 
 /**
  * The membri de drept (#929, ruling R32): every active BC member and the
@@ -336,7 +490,7 @@ function BoardMembers({
       className="flex flex-col gap-1 border-t border-(--border-soft) pt-4"
     >
       {/* The page header already counts them among the members. */}
-      <SubHeading id="membri-de-drept" className="px-3">
+      <SubHeading id="membri-de-drept" variant="label" className="px-3">
         Biroul de Conducere · membri de drept
       </SubHeading>
       <p className="m-0 px-3 text-sm text-muted-foreground">
@@ -352,13 +506,7 @@ function BoardMembers({
             }
             value={<Badge variant="outline">{entry.roleLabel}</Badge>}
           >
-            <Link
-              className="inline-flex min-h-11 max-w-full items-center truncate text-sm font-medium underline underline-offset-4"
-              to={`/administrare/membri/${entry.memberId}`}
-              state={rosterBackState(group.id)}
-            >
-              {entry.name}
-            </Link>
+            <MemberLink entry={entry} group={group} />
           </ListRow>
         ))}
       </ul>
@@ -377,9 +525,11 @@ function canWithdraw(
 }
 
 /**
- * The Group's roster: who is in it, under what position, and what their
- * Membership Status is (ruling R22). Deactivating a Member never edits a
- * roster, so an inactive Member stays visible here until a Manager decides.
+ * The Group's **Membri** tab — its roster: who is in it, under what position,
+ * and what their Membership Status is (ruling R22). Deactivating a Member
+ * never edits a roster, so an inactive Member stays visible here until a
+ * Manager decides. A table from `TABLE_FROM`, where its columns fit and sort;
+ * a list of rows under it — it never scrolls sideways.
  */
 export function GroupRosterTab({
   group,
@@ -424,13 +574,18 @@ export function GroupRosterTab({
     [members, inGroup],
   );
 
-  const columns = rosterColumns({ group, authority, busy, error, onRun });
+  const context: RowContext = { group, authority, busy, error, onRun };
+  const table = useMinWidth(TABLE_FROM);
+  const emptyTitle = group.automatic_membership
+    ? 'Membrii acestui grup se adaugă automat, după nivel.'
+    : 'Grupul nu are încă membri adăugați.';
 
   // The count is the page header's (relevance B51); this panel carries only
   // the action.
   return (
     <Panel
-      aria-label="Roster"
+      // Not "Membri": the tab's own region around this panel has that name.
+      aria-label="Membrii grupului"
       stack={4}
       control={
         authority.manageWork &&
@@ -447,19 +602,23 @@ export function GroupRosterTab({
         )
       }
     >
-      <DataTable
-        columns={columns}
-        data={listed}
-        initialSorting={[{ id: 'name', desc: false }]}
-        // Under 640 px the name, the function and the action fit; the
-        // OSUBB Role waits for the member page.
-        columnClassName={{ role: 'max-sm:hidden' }}
-        emptyTitle={
-          group.automatic_membership
-            ? 'Membrii acestui grup se adaugă automat, după nivel.'
-            : 'Grupul nu are încă membri adăugați.'
-        }
-      />
+      {table ? (
+        <DataTable
+          columns={rosterColumns(context)}
+          data={listed}
+          initialSorting={[{ id: 'name', desc: false }]}
+          // The name takes the room the other columns leave and shortens
+          // with "…" rather than push the table past its box.
+          columnClassName={{ name: 'w-full max-w-0' }}
+          emptyTitle={emptyTitle}
+        />
+      ) : (
+        <RosterList
+          entries={listed}
+          context={context}
+          emptyTitle={emptyTitle}
+        />
+      )}
       {board.length > 0 && <BoardMembers group={group} entries={board} />}
     </Panel>
   );

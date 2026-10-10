@@ -1,5 +1,5 @@
 import { Link, useLocation, useParams } from 'react-router';
-import { CalendarDays, Users } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { cn } from 'cn';
 import {
   BackLink,
@@ -17,6 +17,7 @@ import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { Badge } from '../../components/ui/badge';
 import { buttonVariants } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
+import { formatBucharestShort } from '../../lib/calendar-time';
 import { useCapabilities } from '../../lib/capabilities';
 import { parsePositiveInt } from '../../lib/ids';
 import { MemberName } from '../../components/member/MemberName';
@@ -75,7 +76,6 @@ export default function MemberGroupScreen() {
       <Page>
         {back}
         <PageHeader
-          eyebrow="Grupuri"
           title="Grup indisponibil"
           description="Grupul a fost arhivat sau nu mai ai acces la el."
         />
@@ -134,8 +134,13 @@ export default function MemberGroupScreen() {
   return (
     <Page>
       {back}
+      {/* The back link, the colour dot and the name are the header: no
+          eyebrow repeats where the back link already leads. The Category and
+          the viewer's own position are chips beside the name. */}
       <PageHeader
-        eyebrow="Grupuri"
+        // With the gear alone, it stays on the name's row and the chips wrap
+        // under the name; an application's controls may take a row.
+        className={apply ? undefined : 'flex-nowrap items-start *:first:flex-1'}
         title={
           <span className="inline-flex items-center gap-3">
             <span
@@ -148,6 +153,15 @@ export default function MemberGroupScreen() {
         }
         badge={
           <>
+            <Badge variant="outline" data-slot="group-category">
+              {categoryLabel(group.category)}
+            </Badge>
+            {roleTitle && (
+              <Badge variant="secondary" data-slot="own-group-role">
+                <span className="sr-only">Rolul tău: </span>
+                {roleTitle}
+              </Badge>
+            )}
             <PrivateGroupBadge isPrivate={group.is_private} />
             {/* As on the Administrare Group page (F-18). */}
             {group.status !== 'active' && (
@@ -157,28 +171,22 @@ export default function MemberGroupScreen() {
             )}
           </>
         }
-        description={
-          <>
-            {categoryLabel(group.category)}
-            {roleTitle && (
-              <span className="mt-1 block text-foreground">
-                Rolul tău: <strong>{roleTitle}</strong>
-              </span>
-            )}
-          </>
-        }
         actions={
           (apply || authority.manageWork) && (
             <>
               {apply}
               {authority.manageWork && (
                 <Link
-                  className={cn(buttonVariants({ variant: 'outline' }))}
+                  className={cn(
+                    buttonVariants({ variant: 'outline', size: 'icon' }),
+                  )}
                   to={`/administrare/grupuri/${id}`}
                   // Its back link returns here, not to Administrare (D10).
                   state={backLinkState(location, `Înapoi la ${group.name}`)}
+                  aria-label="Administrare"
+                  title="Administrare"
                 >
-                  Administrare
+                  <Settings aria-hidden="true" />
                 </Link>
               )}
             </>
@@ -187,7 +195,7 @@ export default function MemberGroupScreen() {
       />
       <PageGrid columns={showCoordination ? 2 : 1} alignHeaders>
         {showCoordination && (
-          <Panel eyebrow="Grup" icon={Users} title="Coordonare" flush>
+          <Panel title="Coordonare" flush>
             {roster.isPending ? (
               <Loading />
             ) : roster.isError ? (
@@ -222,12 +230,7 @@ export default function MemberGroupScreen() {
             )}
           </Panel>
         )}
-        <Panel
-          eyebrow="Calendar"
-          icon={CalendarDays}
-          title="Evenimente viitoare"
-          flush={Boolean(events.data?.length)}
-        >
+        <Panel title="Evenimente viitoare" flush={Boolean(events.data?.length)}>
           {events.isPending ? (
             <Loading />
           ) : events.isError ? (
@@ -249,12 +252,7 @@ export default function MemberGroupScreen() {
                     {event.title}
                   </Link>
                   <p className="m-0 text-sm text-muted-foreground">
-                    {event.starts_at &&
-                      new Date(event.starts_at).toLocaleString('ro-RO', {
-                        timeZone: 'Europe/Bucharest',
-                        dateStyle: 'medium',
-                        timeStyle: 'short',
-                      })}
+                    {event.starts_at && formatBucharestShort(event.starts_at)}
                     {event.location && ` · ${event.location}`}
                   </p>
                 </ListRow>

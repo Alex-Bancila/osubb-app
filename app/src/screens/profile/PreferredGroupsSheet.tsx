@@ -4,16 +4,8 @@ import { cn } from 'cn';
 import { FilterSearch } from '../../components/work-filter/FilterToolbar';
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
-import {
-  Sheet,
-  SheetBackdrop,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetPopup,
-  SheetPortal,
-  SheetTitle,
-} from '../../components/ui/sheet';
+import { FormSheet, FormSheetFooter } from '../../components/ui/form-sheet';
+import { InfoHint } from '../../components/ui/info-hint';
 import { commandErrorMessage } from '../../lib/command-reasons';
 import { safeHexColor } from '../../lib/color';
 import {
@@ -149,7 +141,7 @@ function SheetBody({
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-x-3">
+      <div className="flex flex-wrap items-center gap-x-3">
         <p
           role="status"
           className="m-0 text-sm text-muted-foreground tabular-nums"
@@ -159,8 +151,14 @@ function SheetBody({
           </span>{' '}
           din {summary.total} selectate
         </p>
+        {/* What unticking does, said once: behind the "i", not over the list. */}
+        <InfoHint label="Despre grupurile preferate" className="-ml-2">
+          Grupurile debifate nu îți mai trimit notificări și nu apar când
+          deschizi Taskuri, Calendar, Anunțuri sau Clasament. Debifând un grup,
+          debifezi și subgrupurile lui.
+        </InfoHint>
         {/* The two bulk choices travel together, so they never split a line. */}
-        <div className="-mr-2.5 flex shrink-0">
+        <div className="-mr-2.5 ml-auto flex shrink-0">
           <Button
             type="button"
             variant="ghost"
@@ -217,7 +215,7 @@ function SheetBody({
           )}
         </p>
       )}
-      <SheetFooter>
+      <FormSheetFooter>
         <Button
           type="button"
           variant="outline"
@@ -240,7 +238,7 @@ function SheetBody({
         >
           {busy ? 'Se salvează…' : 'Salvează'}
         </Button>
-      </SheetFooter>
+      </FormSheetFooter>
     </>
   );
 }
@@ -252,6 +250,7 @@ function SheetBody({
  * Biroul de Conducere and every Group where the member holds a position stay
  * ticked, with a lock and one line saying why. Nothing is written until
  * **Salvează**, in one request; **Renunță** leaves everything as it was.
+ * A form sheet: both stay pinned under the tree, however long it is.
  */
 export function PreferredGroupsSheet({
   open,
@@ -267,28 +266,19 @@ export function PreferredGroupsSheet({
   onSaved: () => void;
 }) {
   return (
-    <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
-      <SheetPortal>
-        <SheetBackdrop />
-        <SheetPopup side="right" className="max-w-md gap-4 p-4 sm:p-6">
-          <SheetHeader>
-            <SheetTitle>Grupuri preferate</SheetTitle>
-            <SheetDescription>
-              Grupurile debifate nu îți mai trimit notificări și nu apar când
-              deschizi Taskuri, Calendar, Anunțuri sau Clasament. Debifând un
-              grup, debifezi și subgrupurile lui.
-            </SheetDescription>
-          </SheetHeader>
-          {open && (
-            <SheetBody
-              nodes={nodes}
-              initial={initial}
-              onClose={onClose}
-              onSaved={onSaved}
-            />
-          )}
-        </SheetPopup>
-      </SheetPortal>
-    </Sheet>
+    <FormSheet
+      open={open}
+      onOpenChange={(next) => !next && onClose()}
+      title="Grupuri preferate"
+    >
+      {open && (
+        <SheetBody
+          nodes={nodes}
+          initial={initial}
+          onClose={onClose}
+          onSaved={onSaved}
+        />
+      )}
+    </FormSheet>
   );
 }

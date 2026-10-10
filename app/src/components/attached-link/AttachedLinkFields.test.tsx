@@ -124,6 +124,9 @@ describe('AttachedLinkFields', () => {
 
   it('shows the https hint under the address field', () => {
     render(<Harness />);
+    // Both fields are the shared field surface.
+    for (const field of screen.getAllByRole('textbox'))
+      expect(field).toHaveAttribute('data-slot', 'input');
     expect(
       screen.getByText('Adresa începe cu http:// sau https://'),
     ).toBeInTheDocument();

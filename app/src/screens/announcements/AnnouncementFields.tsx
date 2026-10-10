@@ -1,19 +1,23 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { AttachedLinksFields } from '../../components/attached-link/AttachedLinksFields';
+import { DateTimePicker } from '../../components/ui/date-picker';
 import { FieldError } from '../../components/ui/field';
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from '../../components/ui/native-select';
+import { Input, Textarea } from '../../components/ui/input';
+import { Select } from '../../components/ui/select';
+import { SegmentedRadio } from '../../components/ui/segmented-radio';
 import type { MinimumLevelOption } from '../../lib/minimum-level';
 import type { useFormValidation } from '../../lib/use-form-validation';
 import type { AnnouncementDraft } from './announcement-draft';
 import type { AnnouncementPriority } from './announcements-presentation';
 
-export const announcementInputClass =
-  'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-ring';
-export const announcementFieldClass =
-  'block space-y-1.5 text-sm font-medium text-foreground';
+const PRIORITIES: ReadonlyArray<{
+  value: AnnouncementPriority;
+  label: string;
+}> = [
+  { value: 'normal', label: 'Normală' },
+  { value: 'important', label: 'Importantă' },
+  { value: 'critical', label: 'Critică' },
+];
 
 type Bound = Pick<
   ReturnType<typeof useFormValidation>,
@@ -25,7 +29,8 @@ type Bound = Pick<
  * "Editează anunțul" (#930) so the two can never drift: Titlu, Mesaj, Termen,
  * then the Origin (`origin`: a picker when composing, read-only when editing),
  * Cine îl vede, Prioritate, anything the caller adds (`extra`), and the
- * Attached Links (up to five, ruling R46).
+ * Attached Links (up to five, ruling R46). They are the children of the
+ * form's own column: its gap is what separates them.
  */
 export function AnnouncementFields({
   draft,
@@ -42,90 +47,87 @@ export function AnnouncementFields({
   origin: ReactNode;
   extra?: ReactNode;
 }) {
+  const id = useId();
   return (
     <>
-      <div className="space-y-1.5">
-        <label className={announcementFieldClass}>
+      <div className="grid gap-1.5">
+        <label htmlFor={`${id}-title`} className="text-sm font-medium">
           Titlu
-          <input
-            className={announcementInputClass}
-            name="title"
-            required
-            value={draft.title}
-            onChange={(event) => onChange({ title: event.target.value })}
-            {...form.field('title')}
-          />
         </label>
+        <Input
+          id={`${id}-title`}
+          name="title"
+          required
+          value={draft.title}
+          onChange={(event) => onChange({ title: event.target.value })}
+          {...form.field('title')}
+        />
         <FieldError {...form.errorProps('title')} />
       </div>
-      <div className="space-y-1.5">
-        <label className={announcementFieldClass}>
+      <div className="grid gap-1.5">
+        <label htmlFor={`${id}-body`} className="text-sm font-medium">
           Mesaj
-          <textarea
-            className={`${announcementInputClass} min-h-24 resize-y`}
-            name="body"
-            required
-            value={draft.body}
-            onChange={(event) => onChange({ body: event.target.value })}
-            {...form.field('body')}
-          />
         </label>
+        <Textarea
+          id={`${id}-body`}
+          name="body"
+          required
+          rows={4}
+          value={draft.body}
+          onChange={(event) => onChange({ body: event.target.value })}
+          {...form.field('body')}
+        />
         <FieldError {...form.errorProps('body')} />
       </div>
-      <div className="space-y-1.5">
-        <label className={announcementFieldClass}>
+      <div className="grid gap-1.5">
+        <label htmlFor={`${id}-deadline`} className="text-sm font-medium">
           Termen (opțional) — ora României
-          <input
-            className={announcementInputClass}
-            name="deadline"
-            type="datetime-local"
-            value={draft.deadline}
-            onChange={(event) => onChange({ deadline: event.target.value })}
-            {...form.field('deadline')}
-          />
         </label>
+        <DateTimePicker
+          id={`${id}-deadline`}
+          name="deadline"
+          defaultTime="23:59"
+          value={draft.deadline}
+          onChange={(deadline) => onChange({ deadline })}
+          {...form.field('deadline')}
+        />
         <FieldError {...form.errorProps('deadline')} />
       </div>
       {origin}
-      <label className={announcementFieldClass}>
-        Cine îl vede
-        <NativeSelect
+      <div className="grid gap-1.5">
+        <label htmlFor={`${id}-min-level`} className="text-sm font-medium">
+          Cine îl vede
+        </label>
+        <Select
+          id={`${id}-min-level`}
           name="min_level"
-          value={draft.minLevel}
-          onChange={(event) =>
-            onChange({ minLevel: Number(event.target.value) })
-          }
-        >
-          {levelChoices.map((choice) => (
-            <NativeSelectOption key={choice.level} value={choice.level}>
-              {choice.label}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
-      </label>
-      <label className={announcementFieldClass}>
-        Prioritate
-        <NativeSelect
-          name="priority"
-          value={draft.priority}
-          onChange={(event) =>
-            onChange({ priority: event.target.value as AnnouncementPriority })
-          }
-        >
-          <NativeSelectOption value="normal">Normală</NativeSelectOption>
-          <NativeSelectOption value="important">Importantă</NativeSelectOption>
-          <NativeSelectOption value="critical">Critică</NativeSelectOption>
-        </NativeSelect>
-      </label>
-      {extra}
-      <div className="rounded-md border p-4">
-        <AttachedLinksFields
-          value={draft.links}
-          onChange={(links) => onChange({ links })}
-          form={form}
-          name="links"
+          value={String(draft.minLevel)}
+          options={levelChoices.map((choice) => ({
+            value: String(choice.level),
+            label: choice.label,
+          }))}
+          onValueChange={(minLevel) => onChange({ minLevel: Number(minLevel) })}
         />
       </div>
+      <div className="grid gap-1.5">
+        <span id={`${id}-priority`} className="text-sm font-medium">
+          Prioritate
+        </span>
+        <SegmentedRadio
+          aria-labelledby={`${id}-priority`}
+          name="priority"
+          options={PRIORITIES}
+          value={draft.priority}
+          onValueChange={(priority) => onChange({ priority })}
+        />
+      </div>
+      {extra}
+      <AttachedLinksFields
+        value={draft.links}
+        onChange={(links) => onChange({ links })}
+        form={form}
+        name="links"
+      />
     </>
   );
 }

@@ -1,3 +1,5 @@
+import { parseLocalDate } from '@/lib/format';
+
 /** What the caller already knows about a Member, shown before any read answers. */
 export type MemberIdentity = {
   memberId: string;
@@ -25,4 +27,19 @@ export function memberRoleLabel(
   boardTitle: string | null | undefined,
 ): string {
   return boardTitle?.trim() || roleName?.trim() || '—';
+}
+
+const joinedFormatter = new Intl.DateTimeFormat('ro-RO', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
+/**
+ * `Membru din 12 mar. 2024` — the join date in the short form a meta line
+ * carries, or nothing when the date was never recorded.
+ */
+export function memberSinceLabel(joinedAt: string | null): string | null {
+  const date = parseLocalDate(joinedAt);
+  return date ? `Membru din ${joinedFormatter.format(date)}` : null;
 }

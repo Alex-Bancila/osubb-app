@@ -6,9 +6,11 @@ import {
   type ComponentProps,
   type ReactNode,
 } from 'react';
-import { ListFilter, Search, XIcon } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ChevronRight, ListFilter, Search, XIcon } from 'lucide-react';
 import { cn } from 'cn';
 import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 import {
   Sheet,
   SheetBackdrop,
@@ -29,7 +31,7 @@ export type FilterChip = {
   /** The kind, drawn muted ("Grup", "De la"). */
   label: string;
   text: string;
-  /** Part of a path (Grup principal › Subgrup › Campanie), joined by `›`. */
+  /** Part of a path (Grup principal › Subgrup › Campanie), joined by a chevron. */
   cascade?: boolean;
   onRemove: () => void;
 };
@@ -43,27 +45,48 @@ function activeFiltersText(count: number) {
  * The one **Filtrează** button (#903): the list icon, the word, and — when
  * filters are set — their number in a brand-red count. The same 44 px outline
  * button on every page, always the first control of the filter toolbar.
+ * `compact` (the button on a page header's row) leaves the icon and the
+ * count under 640 px; the word stays its name.
  */
 export function FilterButton({
   count,
+  compact = false,
+  iconOnly = false,
   className,
   ...props
-}: ComponentProps<typeof Button> & { count: number }) {
+}: ComponentProps<typeof Button> & {
+  count: number;
+  compact?: boolean;
+  /** Beside a search field: the icon and the count at every width. */
+  iconOnly?: boolean;
+}) {
+  const wordClass = iconOnly
+    ? 'sr-only'
+    : compact
+      ? 'max-sm:sr-only'
+      : undefined;
   return (
     <Button
       variant="outline"
       data-slot="filter-button"
       aria-label={count ? `Filtrează, ${activeFiltersText(count)}` : undefined}
-      className={cn('shrink-0', className)}
+      className={cn(
+        'relative shrink-0',
+        iconOnly ? 'px-3' : compact && 'max-sm:px-3',
+        className,
+      )}
       {...props}
     >
       <ListFilter aria-hidden="true" />
-      Filtrează
+      {wordClass ? <span className={wordClass}>Filtrează</span> : 'Filtrează'}
       {count > 0 && (
         <span
           aria-hidden="true"
           data-slot="filter-count"
-          className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-xs leading-none font-bold text-primary-foreground tabular-nums"
+          className={cn(
+            'grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-xs leading-none font-bold text-primary-foreground tabular-nums',
+            iconOnly && 'absolute -top-1.5 -right-1.5',
+          )}
         >
           {count}
         </span>
@@ -83,18 +106,14 @@ export function FilterSearch({
 }: Omit<ComponentProps<'input'>, 'type'> & { label: string }) {
   return (
     <label
-      className={cn('relative min-w-44 flex-1 basis-56 sm:max-w-sm', className)}
+      className={cn('relative min-w-40 flex-1 basis-56 sm:max-w-sm', className)}
     >
       <span className="sr-only">{label}</span>
       <Search
         aria-hidden="true"
         className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
       />
-      <input
-        type="search"
-        className="h-11 w-full min-w-0 rounded-lg border border-border bg-background pr-3 pl-[2.5rem] text-sm text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none dark:border-input dark:bg-input/30"
-        {...props}
-      />
+      <Input type="search" className="pr-3 pl-[2.5rem]" {...props} />
     </label>
   );
 }
@@ -103,11 +122,17 @@ export function FilterSearch({
  * The filter toolbar (#903), the first row under a page's header (or under
  * its tab strip): **Filtrează** at the start, the page's search after it, the
  * active filters as chips after that, wrapping under it, and a page's own
- * view switch (`trailing`) at the end. The button opens one surface at every
- * width — a sheet from the right with the page's controls, **Șterge
- * filtrele** and **Vezi rezultatele** — and closing it returns focus to the
- * button. `hidden` drops the button when the filter offers the viewer
- * nothing; with no search and no chips either, nothing is drawn.
+ * view switch (`trailing`) at the end. The button opens one surface with the
+ * page's controls and, pinned under them, **Șterge filtrele** and **Vezi
+ * rezultatele** — a sheet
+ * from the right, or on a phone a panel rising from the bottom as tall as
+ * its controls — and closing it returns focus to the button. `hidden` drops
+ * the button when the filter offers the viewer nothing; with no search and
+ * no chips either, nothing is drawn.
+ *
+ * A page that keeps its controls on the header's row passes `buttonSlot`, an
+ * element in its `PageHeader` actions: the button is drawn there, compact,
+ * and this row holds only what is left (the chips), or nothing.
  */
 export function FilterToolbar({
   label,
@@ -121,6 +146,7 @@ export function FilterToolbar({
   search,
   notice,
   trailing,
+  buttonSlot,
   children,
   className,
 }: {
@@ -146,6 +172,8 @@ export function FilterToolbar({
    */
   notice?: ReactNode;
   trailing?: ReactNode;
+  /** Where the button is drawn instead of this row; `null` until it mounts. */
+  buttonSlot?: HTMLElement | null;
   /** The surface's controls, given a unique id prefix. */
   children: (id: string) => ReactNode;
   className?: string;
@@ -194,6 +222,44 @@ export function FilterToolbar({
 
   if (hidden && !search && !notice && !chips.length && !trailing) return null;
 
+  const moved = buttonSlot !== undefined;
+  const sheet = !hidden && (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger
+        ref={button}
+        disabled={pending}
+        render={
+          <FilterButton
+            count={count}
+            compact={moved}
+            iconOnly={!moved && Boolean(search)}
+          />
+        }
+      />
+      <SheetPortal>
+        <SheetBackdrop />
+        <SheetPopup side="bottom" className="gap-4 p-4 sm:max-w-md sm:p-6">
+          <SheetHeader>
+            <SheetTitle>{title}</SheetTitle>
+            {description && <SheetDescription>{description}</SheetDescription>}
+          </SheetHeader>
+          {children(id)}
+          <SheetFooter pinned>
+            {count > 0 && (
+              <Button variant="outline" onClick={() => clearAll(true)}>
+                Șterge filtrele
+              </Button>
+            )}
+            <SheetClose render={<Button />}>Vezi rezultatele</SheetClose>
+          </SheetFooter>
+        </SheetPopup>
+      </SheetPortal>
+    </Sheet>
+  );
+  // With the button on the header's row, a row with nothing left takes no
+  // space (the live region below is out of the flow).
+  const empty = moved && !search && !chips.length && !trailing;
+
   return (
     <div
       role="group"
@@ -201,44 +267,43 @@ export function FilterToolbar({
       data-slot="filter-toolbar"
       // Only a view switch is left at the end: the filter controls wrap
       // before it, and it drops under them on a phone.
-      className={cn('flex min-w-0 flex-wrap items-center gap-2', className)}
+      className={cn(
+        empty ? 'contents' : 'flex min-w-0 flex-wrap items-center gap-2',
+        className,
+      )}
     >
-      {!hidden && (
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetTrigger
-            ref={button}
-            disabled={pending}
-            render={<FilterButton count={count} />}
-          />
-          <SheetPortal>
-            <SheetBackdrop />
-            <SheetPopup side="right" className="max-w-md gap-4 p-4 sm:p-6">
-              <SheetHeader>
-                <SheetTitle>{title}</SheetTitle>
-                {description && (
-                  <SheetDescription>{description}</SheetDescription>
-                )}
-              </SheetHeader>
-              {children(id)}
-              <SheetFooter>
-                {count > 0 && (
-                  <Button variant="outline" onClick={() => clearAll(true)}>
-                    Șterge filtrele
-                  </Button>
-                )}
-                <SheetClose render={<Button />}>Vezi rezultatele</SheetClose>
-              </SheetFooter>
-            </SheetPopup>
-          </SheetPortal>
-        </Sheet>
+      {/* With a search, the search leads and fills the row; Filtrează is the
+          icon button at its end. */}
+      {search && !moved && search}
+      {/* The page's standing note (the Grupuri preferate star) sits beside
+          Filtrează, wherever that is. */}
+      {moved ? (
+        buttonSlot &&
+        createPortal(
+          <>
+            {notice}
+            {sheet}
+          </>,
+          buttonSlot,
+        )
+      ) : (
+        <>
+          {notice}
+          {sheet}
+        </>
       )}
       {pending && (
-        <p role="status" className="m-0 text-sm text-muted-foreground">
+        <p
+          role="status"
+          className={cn(
+            'm-0 text-sm text-muted-foreground',
+            moved && 'sr-only',
+          )}
+        >
           Se încarcă filtrele…
         </p>
       )}
-      {search}
-      {notice}
+      {moved && search}
       {chips.length > 0 && (
         <div
           ref={chipRow}
@@ -252,9 +317,10 @@ export function FilterToolbar({
               className="inline-flex max-w-full min-w-0 items-center gap-2"
             >
               {index > 0 && chip.cascade && chips[index - 1]?.cascade && (
-                <span aria-hidden="true" className="text-muted-foreground">
-                  ›
-                </span>
+                <ChevronRight
+                  aria-hidden="true"
+                  className="size-4 shrink-0 text-muted-foreground"
+                />
               )}
               <Button
                 variant="secondary"

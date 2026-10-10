@@ -65,7 +65,7 @@ exports[`keeps the Evaluation dialog layout (snapshot) 1`] = `
         class="text-sm font-medium"
         id="_r_bm_-label"
       >
-        Dificultate (obligatoriu)
+        Dificultate
       </p>
       <div
         aria-describedby="_r_bm_-hint"
@@ -412,7 +412,7 @@ exports[`keeps the Evaluation dialog layout (snapshot) 1`] = `
         class="text-sm font-medium"
         id="_r_cm_-label"
       >
-        Nota (obligatoriu)
+        Nota
       </p>
       <div
         class="inline-flex items-center rounded-lg border bg-background border-input"
@@ -518,10 +518,12 @@ exports[`keeps the Evaluation dialog layout (snapshot) 1`] = `
       class="block text-sm font-medium"
       for="_r_bi_-note"
     >
-      Observații (obligatoriu)
+      Observații
     </label>
     <textarea
-      class="min-h-24 w-full rounded-md border border-input bg-background p-3"
+      aria-required="true"
+      class="w-full min-w-0 rounded-lg border border-border bg-background px-4 font-sans text-sm text-foreground transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:border-input dark:bg-input/30 min-h-24 resize-y py-2.5"
+      data-slot="textarea"
       id="_r_bi_-note"
       required=""
       rows="3"

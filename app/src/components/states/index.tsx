@@ -1,5 +1,4 @@
 import { queryErrorMessage } from '../../lib/query-error';
-import { LoaderCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { EmptyState, stateBoxClass } from '../layout/EmptyState';
 
@@ -7,18 +6,32 @@ import { EmptyState, stateBoxClass } from '../layout/EmptyState';
  * The three states every query renders (mini-spec §5). They live together
  * because they are one decision — "what does this screen show when there is no
  * data yet, no data at all, or no answer" — and screens should make it the same
- * way every time. All three share `EmptyState`'s `py-8` rhythm (ruling R27), so
- * a panel's box never jumps height as its query settles.
+ * way every time. `Empty` and `ErrorState` share `EmptyState`'s `py-8` rhythm
+ * (ruling R27); `Loading` holds the place of the rows that are coming.
  */
 
+/**
+ * Loading is the shape of what is coming, not a sentence about it: three
+ * placeholder rows that pulse where the list will be, so the page does not
+ * jump when the data lands. The label is still said to a screen reader.
+ */
 export function Loading({ label = 'Se încarcă…' }: { label?: string }) {
   return (
-    <div className={stateBoxClass} role="status" data-slot="loading-state">
-      <LoaderCircle
-        className="size-5 animate-spin text-muted-foreground motion-reduce:animate-none"
-        aria-hidden="true"
-      />
-      <p className="m-0 text-sm text-muted-foreground">{label}</p>
+    <div
+      className="flex w-full flex-col gap-3"
+      role="status"
+      data-slot="loading-state"
+    >
+      <span className="sr-only">{label}</span>
+      {[1, 0.7, 0.4].map((opacity) => (
+        <span
+          key={opacity}
+          aria-hidden="true"
+          data-slot="skeleton"
+          className="block h-16 animate-pulse rounded-md bg-muted motion-reduce:animate-none"
+          style={{ opacity }}
+        />
+      ))}
     </div>
   );
 }

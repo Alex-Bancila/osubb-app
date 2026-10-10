@@ -1,9 +1,7 @@
-import { ChevronRight } from 'lucide-react';
 import { AttachedLinksList } from '../../components/attached-link/AttachedLinksList';
-import { MemberName } from '../../components/member/MemberName';
-import { Button } from '../../components/ui/button';
-import { Card, CardContent, CardFooter } from '../../components/ui/card';
+import { Card, CardContent } from '../../components/ui/card';
 import { cn } from '../../lib/utils';
+import { AnnouncementByline, cardOpenButtonClass } from './AnnouncementByline';
 import { AnnouncementMeta } from './AnnouncementMeta';
 import { AnnouncementTermen } from './AnnouncementTermen';
 import type { AnnouncementPresentation } from './announcements-presentation';
@@ -15,9 +13,10 @@ type AnnouncementCardProps = {
 
 /**
  * One Announcement in the feed (layout N1, N2): the meta line, 12 px, the
- * title with its date under it, the Termen on its own row when there is one
- * (#909), 8 px, the body, 16 px, and a one-row footer — the author on the
- * left, "Citește" on the right.
+ * title, the author and the date on one muted line under it, the Termen on
+ * its own line when there is one (#909), 8 px, the body, then the links. The
+ * whole card opens the Announcement — the title is the button, its hit area
+ * the card — while the author and the links stay their own targets above it.
  */
 export default function AnnouncementCard({
   announcement,
@@ -31,6 +30,7 @@ export default function AnnouncementCard({
       role="article"
       aria-labelledby={titleId}
       className={cn(
+        'relative transition-shadow hover:ring-foreground/25 motion-reduce:transition-none',
         isCritical &&
           'border-destructive/60 bg-destructive/5 dark:bg-destructive/10',
       )}
@@ -51,18 +51,23 @@ export default function AnnouncementCard({
           }
         />
 
-        <h3
-          id={titleId}
-          className="m-0 mt-3 font-heading text-base leading-snug font-semibold tracking-tight text-foreground sm:text-lg"
-        >
-          {announcement.title}
+        <h3 className="m-0 mt-3 font-heading text-base leading-snug font-semibold tracking-tight text-foreground sm:text-lg">
+          <button
+            type="button"
+            data-slot="card-open"
+            onClick={() => onOpen(announcement)}
+            aria-label={`Citește anunțul ${announcement.title}`}
+            className={cardOpenButtonClass}
+          >
+            <span id={titleId}>{announcement.title}</span>
+          </button>
         </h3>
-        <time
-          dateTime={announcement.publishedAt}
-          className="mt-0.5 block text-xs text-muted-foreground"
-        >
-          {announcement.publishedLabel}
-        </time>
+        <AnnouncementByline
+          author={announcement.authorMember}
+          publishedAt={announcement.publishedAt}
+          publishedLabel={announcement.publishedLabel}
+          className="mt-1"
+        />
 
         <AnnouncementTermen deadline={announcement.deadline} className="mt-2" />
 
@@ -74,31 +79,9 @@ export default function AnnouncementCard({
           links={announcement.links}
           variant="card"
           className="mt-3"
-          buttonClassName="max-w-full text-left wrap-anywhere"
+          buttonClassName="relative z-1 max-w-full text-left wrap-anywhere"
         />
       </CardContent>
-
-      <CardFooter className="justify-between gap-3 py-3 text-xs text-muted-foreground">
-        <div className="flex min-w-0 items-center pointer-coarse:-my-1.5">
-          {announcement.authorMember && (
-            <MemberName
-              {...announcement.authorMember}
-              size="sm"
-              className="text-xs text-foreground"
-            />
-          )}
-        </div>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onOpen(announcement)}
-          className="-my-1.5 -mr-2 min-h-11 shrink-0 gap-1 text-xs text-primary"
-        >
-          <span>Citește</span>
-          <ChevronRight className="size-3.5" aria-hidden="true" />
-        </Button>
-      </CardFooter>
     </Card>
   );
 }

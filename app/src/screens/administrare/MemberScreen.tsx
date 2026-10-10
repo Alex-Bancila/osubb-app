@@ -6,9 +6,18 @@ import {
   type FormEvent,
   type ReactNode,
 } from 'react';
-import { cn } from 'cn';
-import { GraduationCap, History, Pencil } from 'lucide-react';
-import { Link, useLocation, useParams } from 'react-router';
+import { Tabs } from '@base-ui/react/tabs';
+import {
+  Calendar,
+  ChevronRight,
+  GraduationCap,
+  History,
+  Mail,
+  Pencil,
+  UserRound,
+  Users,
+} from 'lucide-react';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import {
   BackLink,
   backLinkState,
@@ -16,19 +25,27 @@ import {
   Page,
   PageHeader,
   Panel,
-  panelBoxClass,
   rowListClass,
+  tabClass,
+  tabListClass,
+  tabThumbClass,
+  useActiveTabInView,
 } from '../../components/layout';
 import { memberDisplayName } from '../../components/member/member-identity';
 import type { MemberCardGroup } from '../../queries/member-card';
 import { Empty, ErrorState, Loading } from '../../components/states';
+import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
-import { MemberAvatar } from '../../components/ui/combobox';
+import { DatePicker } from '../../components/ui/date-picker';
 import { FieldError } from '../../components/ui/field';
+import { FormSheet, FormSheetFooter } from '../../components/ui/form-sheet';
+import { InfoHint } from '../../components/ui/info-hint';
+import { Input } from '../../components/ui/input';
 import { useAuth } from '../../lib/auth';
 import { useCapabilities, type Capabilities } from '../../lib/capabilities';
+import { safeHexColor } from '../../lib/color';
 import { memberEditRights } from '../../lib/member-edit-rights';
-import { formatDayMonthYear, formatPoints } from '../../lib/format';
+import { formatDayMonthYear, formatPoints, initials } from '../../lib/format';
 import { isUuid } from '../../lib/ids';
 import { bucharestDayKey } from '../../lib/calendar-time';
 import {
@@ -57,24 +74,71 @@ import { ReinvitePanel } from './ReinvitePanel';
 import { MemberRoleTimeline } from '../profile/RoleTimeline';
 import { RolePanel } from './RolePanel';
 
-const control =
-  'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2';
+const labelClass = 'text-sm font-medium';
 const SAVE_FAILED =
   'Nu am putut salva numele. Verifică permisiunile și reîncearcă.';
 const JOINED_SAVE_FAILED =
   'Nu am putut salva data intrării. Verifică permisiunile și reîncearcă.';
+const IDENTITY_FORM_ID = 'member-identity-form';
+
+/** The page's tabs, by their `?tab=` value — as Profil's. */
+const MEMBER_TABS = ['cont', 'grupuri', 'roluri', 'puncte'] as const;
+type MemberTab = (typeof MEMBER_TABS)[number];
+const TAB_KEY = 'tab';
+
+/** The ring round the whole row, drawn by the link's stretched `::after`. */
+const focusRingAfterClass =
+  'outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-[-2px] focus-visible:after:outline-solid focus-visible:after:outline-ring';
 
 /**
- * The Nickname and the full name, for BC and the Moderator only (ruling R5).
- * The page mounts it behind `memberEditRights(...).profile` (#944); the
- * database refuses anyone else whatever the browser sends.
+ * One fact, as on Profil: its name on the left, its value on the right. A
+ * value too long for the row (an email address at 375 px) drops under the
+ * name rather than squeezing it.
  */
-function IdentityEditor({ member }: { member: AdminMember }) {
+function FactRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <li
+      data-slot="setting-row"
+      className="flex min-h-11 flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 py-2.5"
+    >
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span
+        data-slot="setting-value"
+        className="min-w-0 text-right text-sm font-medium text-foreground"
+      >
+        {children}
+      </span>
+    </li>
+  );
+}
+
+/** A value nobody has filled in yet, said quietly. */
+function Unset({ children }: { children: ReactNode }) {
+  return <span className="text-muted-foreground italic">{children}</span>;
+}
+
+/**
+ * The Nickname and the full name, for BC and the Moderator only (ruling R5):
+ * the form of the **Nume și poreclă** sheet, submitted by the sheet's
+ * pinned button. The page mounts it behind `memberEditRights(...).profile`
+ * (#944); the database refuses anyone else whatever the browser sends.
+ */
+function IdentityForm({
+  member,
+  pending,
+  onSave,
+}: {
+  member: AdminMember;
+  pending: boolean;
+  /** Sends the names; a refusal comes back as the thrown failure. */
+  onSave: (values: {
+    nickname: string | null;
+    fullName: string;
+  }) => Promise<void>;
+}) {
+  const id = useId();
   const [nickname, setNickname] = useState(member.nickname ?? '');
   const [fullName, setFullName] = useState(member.fullName);
-  const [message, setMessage] = useState<string | null>(null);
-  const turn = useReceiptTurn();
-  const change = useUpdateMemberIdentity();
   const form = useFormValidation(
     memberIdentitySchema,
     { nickname, fullName },
@@ -83,71 +147,57 @@ function IdentityEditor({ member }: { member: AdminMember }) {
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (change.isPending) return;
-    setMessage(null);
+    if (pending) return;
     const values = form.validate();
     if (!values) return;
     try {
-      await change.mutateAsync({ memberId: member.memberId, ...values });
-      // Show what was stored (trimmed, blank Nickname as none); the refetch
-      // that follows keeps this editor mounted, so the message stays.
-      setNickname(values.nickname ?? '');
-      setFullName(values.fullName);
-      setMessage('Numele a fost actualizat.');
-      turn.claim();
+      await onSave(values);
     } catch (failure) {
       form.fail(failure, SAVE_FAILED);
     }
   }
 
   return (
-    <Panel eyebrow="Cont" icon={Pencil} title="Nume și pseudonim">
-      <form noValidate onSubmit={save} className="grid gap-3">
-        <div className="grid gap-1.5">
-          <label className="grid gap-1">
-            Pseudonim
-            <input
-              className={control}
-              value={nickname}
-              disabled={change.isPending}
-              onChange={(event) => setNickname(event.target.value)}
-              {...form.field('nickname', 'member-nickname-hint')}
-            />
+    <form
+      id={IDENTITY_FORM_ID}
+      noValidate
+      onSubmit={save}
+      className="grid gap-4"
+    >
+      <div className="grid gap-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor={`${id}-nickname`} className={labelClass}>
+            Poreclă (opțional)
           </label>
-          <p
-            id="member-nickname-hint"
-            className="text-sm text-muted-foreground"
-          >
-            Dacă îl lași gol, se afișează numele complet.
-          </p>
-          <FieldError {...form.errorProps('nickname')} />
+          <InfoHint label="Despre poreclă" id="member-nickname-hint">
+            Dacă o lași goală, se afișează numele complet.
+          </InfoHint>
         </div>
-        <div className="grid gap-1.5">
-          <label className="grid gap-1">
-            Nume complet
-            <input
-              className={control}
-              value={fullName}
-              required
-              disabled={change.isPending}
-              onChange={(event) => setFullName(event.target.value)}
-              {...form.field('fullName')}
-            />
-          </label>
-          <FieldError {...form.errorProps('fullName')} />
-        </div>
-        <Button
-          type="submit"
-          block
-          className="sm:justify-self-start"
-          disabled={change.isPending}
-        >
-          {change.isPending ? 'Se salvează…' : 'Salvează numele'}
-        </Button>
-        <FieldError>{form.formError}</FieldError>
-        {message && turn.current && <p role="status">{message}</p>}
-      </form>
-    </Panel>
+        <Input
+          id={`${id}-nickname`}
+          value={nickname}
+          disabled={pending}
+          onChange={(event) => setNickname(event.target.value)}
+          {...form.field('nickname', 'member-nickname-hint')}
+        />
+        <FieldError {...form.errorProps('nickname')} />
+      </div>
+      <div className="grid gap-1.5">
+        <label htmlFor={`${id}-full-name`} className={labelClass}>
+          Nume complet
+        </label>
+        <Input
+          id={`${id}-full-name`}
+          value={fullName}
+          required
+          disabled={pending}
+          onChange={(event) => setFullName(event.target.value)}
+          {...form.field('fullName')}
+        />
+        <FieldError {...form.errorProps('fullName')} />
+      </div>
+      <FieldError>{form.formError}</FieldError>
+    </form>
   );
 }
 
@@ -173,8 +223,9 @@ function LedgerSource({ row }: { row: LedgerRow }) {
 /**
  * Where the back link goes when the link that opened this page did not say
  * (`state.from` wins, navigation D4): the Membri tab for whoever may open it,
- * else the Grupuri tab — a Group Manager or Responsible arrives from a Roster
- * and must never be bounced to Acasă by a tab they cannot open.
+ * else the Grupuri tab — a Group Manager or Responsible arrives from a
+ * Group's Membri tab and must never be bounced to Acasă by a tab they cannot
+ * open.
  */
 function memberBackTarget(capabilities: Capabilities | undefined) {
   return capabilities?.manageRoles === true ||
@@ -196,47 +247,23 @@ function BackToAdministrare({
   );
 }
 
-const EYEBROW = 'Administrare';
-
 /** A Manager or Responsible row, not a plain membership. */
 function hasGroupRole(group: MemberCardGroup) {
   return group.groupRole === 'manager' || group.groupRole === 'responsible';
 }
 
 /**
- * One identity fact: a 13 px muted label over a 16 px value (layout AD2), so
- * the label never reads as another value.
- */
-function Fact({
-  label,
-  className,
-  children,
-}: {
-  label: string;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="grid min-w-0 gap-0.5">
-      <dt className="text-[length:var(--fs-sm)] text-muted-foreground">
-        {label}
-      </dt>
-      <dd className={cn('m-0 text-[length:var(--fs-md)]', className)}>
-        {children}
-      </dd>
-    </div>
-  );
-}
-
-/**
  * "Data intrării" for BC and the Moderator (#932): the date tenure counts
- * from, with Editează → a date → Salvează / Renunță in place. The write is
+ * from, as a row whose pencil opens a date (the app's `DatePicker`) with
+ * Salvează / Renunță in place. The picker has no upper bound, so a day in the
+ * future can be chosen: the schema refuses it under the field before anything
+ * is sent. The write is
  * `profiles_update_self` plus the #160 column grant; the privileged-column
  * guard refuses anyone below level 6 whatever the browser sends. Mounted
  * behind `memberEditRights(...).profile`, so a BC gets it on a BC's or the
  * Moderator's page too (#944).
  */
-function JoinDateFact({ member }: { member: AdminMember }) {
+function JoinDateRow({ member }: { member: AdminMember }) {
   const hintId = useId();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(member.joinedAt ?? '');
@@ -252,6 +279,9 @@ function JoinDateFact({ member }: { member: AdminMember }) {
   const editButton = useRef<HTMLButtonElement>(null);
   const wasEditing = useRef(false);
   const joined = formatDayMonthYear(member.joinedAt);
+  // Checked when the member leaves the field; the picker itself does not
+  // count opening its calendar as leaving.
+  const joinedField = form.field('joinedAt', hintId);
 
   // Back from the editor, focus returns to the button that opened it.
   useEffect(() => {
@@ -278,95 +308,224 @@ function JoinDateFact({ member }: { member: AdminMember }) {
   }
 
   return (
-    <div
+    <li
       data-slot="joined-at"
-      className={cn('grid min-w-0 gap-0.5', editing && 'sm:col-span-2')}
+      className="flex min-h-11 flex-wrap items-center justify-between gap-x-4 gap-y-1 py-1.5"
     >
-      <dt className="text-[length:var(--fs-sm)] text-muted-foreground">
-        Data intrării
-      </dt>
-      <dd className="m-0 grid gap-2 text-[length:var(--fs-md)]">
-        {editing ? (
-          <form noValidate onSubmit={save} className="grid max-w-md gap-3">
-            <input
-              type="date"
+      <span className="text-sm text-muted-foreground">Data intrării</span>
+      {editing ? (
+        <form noValidate onSubmit={save} className="grid w-full max-w-md gap-3">
+          <div className="flex items-center gap-1">
+            <DatePicker
               aria-label="Data intrării"
-              className={control}
               value={draft}
+              required
               max={today || undefined}
               disabled={change.isPending}
               autoFocus
-              onChange={(event) => {
-                setDraft(event.target.value);
+              onChange={(next) => {
+                setDraft(next);
                 // A refusal was about the old date.
                 form.reset();
               }}
-              {...form.field('joinedAt', hintId)}
+              {...joinedField}
             />
-            <p id={hintId} className="m-0 text-sm text-muted-foreground">
+            <InfoHint label="Despre data intrării" id={hintId}>
               Vechimea pentru promovări se numără de la această dată.
-            </p>
-            <FieldError {...form.errorProps('joinedAt')} />
-            <FieldError>{form.formError}</FieldError>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="submit"
-                className="flex-1 sm:flex-none"
-                disabled={change.isPending || draft === (member.joinedAt ?? '')}
-              >
-                {change.isPending ? 'Se salvează…' : 'Salvează'}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1 sm:flex-none"
-                disabled={change.isPending}
-                onClick={() => {
-                  setDraft(member.joinedAt ?? '');
-                  setEditing(false);
-                }}
-              >
-                Renunță
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-            {joined ? (
-              <span>{joined}</span>
-            ) : (
-              <span className="inline-flex min-h-7 w-fit items-center rounded-full border border-dashed border-border px-3 text-sm font-semibold text-muted-foreground">
-                Nesetată
-              </span>
-            )}
+            </InfoHint>
+          </div>
+          <FieldError {...form.errorProps('joinedAt')} />
+          <FieldError>{form.formError}</FieldError>
+          {/* Neither is filled: a page keeps one filled button. */}
+          <div className="flex flex-wrap gap-2">
             <Button
-              ref={editButton}
+              type="submit"
               variant="outline"
-              size="sm"
-              aria-label="Editează data intrării"
+              className="flex-1 sm:flex-none"
+              disabled={change.isPending || draft === (member.joinedAt ?? '')}
+            >
+              {change.isPending ? 'Se salvează…' : 'Salvează'}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="flex-1 sm:flex-none"
+              disabled={change.isPending}
               onClick={() => {
-                setMessage(null);
                 setDraft(member.joinedAt ?? '');
-                setEditing(true);
+                setEditing(false);
               }}
             >
-              Editează
+              Renunță
             </Button>
           </div>
+        </form>
+      ) : (
+        <span
+          data-slot="setting-value"
+          className="flex min-w-0 items-center gap-2 text-sm font-medium"
+        >
+          {joined ?? <Unset>Nesetată</Unset>}
+          <Button
+            ref={editButton}
+            variant="outline"
+            size="icon"
+            aria-label="Editează data intrării"
+            title="Editează data intrării"
+            onClick={() => {
+              setMessage(null);
+              setDraft(member.joinedAt ?? '');
+              setEditing(true);
+            }}
+          >
+            <Pencil aria-hidden="true" />
+          </Button>
+        </span>
+      )}
+      {/* Unset, the promotion job counts no tenure (#51). */}
+      {!editing && !joined && (
+        <p className="m-0 basis-full text-sm text-muted-foreground">
+          Fără ea, membrul nu acumulează vechime pentru promovări.
+        </p>
+      )}
+      {message && !editing && turn.current && (
+        <p role="status" className="m-0 basis-full text-sm font-medium">
+          {message}
+        </p>
+      )}
+    </li>
+  );
+}
+
+/**
+ * The Cont tab's facts: the names, the join date, the contact details the
+ * server answered and, for BC and the Moderator, the Privacy Acknowledgement.
+ * Its header's pencil opens **Nume și poreclă** for whoever may edit them;
+ * the receipt lands on the page the sheet closes onto.
+ */
+function AccountPanel({
+  member,
+  canEdit,
+  leads,
+}: {
+  member: AdminMember;
+  /** `memberEditRights(...).profile`: the names and the join date. */
+  canEdit: boolean;
+  /** BC and the Moderator: the Privacy Acknowledgement is theirs to see. */
+  leads: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const editButton = useRef<HTMLButtonElement>(null);
+  const turn = useReceiptTurn();
+  const change = useUpdateMemberIdentity();
+  // #771: BC and the Moderator see the Member's Privacy Acknowledgement.
+  const privacy = useMemberAcknowledgement(member.memberId, leads);
+
+  return (
+    <Panel
+      title="Date de cont"
+      control={
+        canEdit && (
+          <Button
+            ref={editButton}
+            variant="outline"
+            size="icon"
+            aria-label="Editează numele și porecla"
+            title="Editează numele și porecla"
+            onClick={() => {
+              setMessage(null);
+              setEditing(true);
+            }}
+          >
+            <Pencil aria-hidden="true" />
+          </Button>
+        )
+      }
+      stack={2}
+    >
+      <ul className={rowListClass}>
+        <FactRow label="Nume complet">
+          <span className="wrap-anywhere">{member.fullName}</span>
+        </FactRow>
+        <FactRow label="Poreclă">
+          {member.nickname?.trim() ? (
+            <span className="wrap-anywhere">{member.nickname}</span>
+          ) : (
+            <Unset>Necompletată</Unset>
+          )}
+        </FactRow>
+        {/* BC and the Moderator set the date tenure counts from (#932); for
+            anyone else it is the header's "Membru din", when there is one. */}
+        {canEdit && <JoinDateRow member={member} />}
+        {member.contact?.email && (
+          <FactRow label="E-mail">
+            <span className="break-all">{member.contact.email}</span>
+          </FactRow>
         )}
-        {/* Unset, the promotion job counts no tenure (#51). */}
-        {!editing && !joined && (
-          <p className="m-0 text-sm text-muted-foreground">
-            Fără ea, membrul nu acumulează vechime pentru promovări.
-          </p>
+        {member.contact?.phone && (
+          <FactRow label="Telefon">{member.contact.phone}</FactRow>
         )}
-        {message && !editing && turn.current && (
-          <p role="status" className="m-0 text-sm font-medium">
-            {message}
-          </p>
+        {leads && (
+          <FactRow label="Politica de confidențialitate">
+            {privacy.isPending
+              ? 'Se încarcă…'
+              : privacy.isError
+                ? '—'
+                : acknowledgementLabel(privacy.data)}
+          </FactRow>
         )}
-      </dd>
-    </div>
+      </ul>
+      {message && turn.current && (
+        <p role="status" className="m-0 text-sm font-medium">
+          {message}
+        </p>
+      )}
+      {canEdit && (
+        <FormSheet
+          open={editing}
+          onOpenChange={setEditing}
+          title="Nume și poreclă"
+          busy={change.isPending}
+          finalFocus={editButton}
+        >
+          {editing && (
+            <>
+              <IdentityForm
+                member={member}
+                pending={change.isPending}
+                onSave={async (values) => {
+                  await change.mutateAsync({
+                    memberId: member.memberId,
+                    ...values,
+                  });
+                  setEditing(false);
+                  setMessage('Numele a fost actualizat.');
+                  turn.claim();
+                }}
+              />
+              <FormSheetFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={change.isPending}
+                  onClick={() => setEditing(false)}
+                >
+                  Renunță
+                </Button>
+                <Button
+                  type="submit"
+                  form={IDENTITY_FORM_ID}
+                  disabled={change.isPending}
+                >
+                  {change.isPending ? 'Se salvează…' : 'Salvează numele'}
+                </Button>
+              </FormSheetFooter>
+            </>
+          )}
+        </FormSheet>
+      )}
+    </Panel>
   );
 }
 
@@ -378,19 +537,14 @@ function MemberUnavailable({
   return (
     <Page>
       <BackToAdministrare capabilities={capabilities} />
-      <PageHeader eyebrow={EYEBROW} title="Membru indisponibil" />
+      <PageHeader title="Membru indisponibil" />
     </Page>
   );
 }
 
 function PointsPanel({ points }: { points: readonly LedgerRow[] }) {
   return (
-    <Panel
-      eyebrow="Puncte"
-      icon={History}
-      title="Istoric puncte"
-      flush={points.length > 0}
-    >
+    <Panel title="Istoric puncte" flush={points.length > 0}>
       {!points.length ? (
         <Empty text="Nu există înregistrări pe care le poți vedea." />
       ) : (
@@ -416,11 +570,89 @@ function PointsPanel({ points }: { points: readonly LedgerRow[] }) {
 }
 
 /**
- * One Member's page in Administrare (#103; ADR-0009 §Management surface).
+ * The Member's Groups the viewer may see, each row a link to the Group's page
+ * in Administrare; a Group Role is a chip, a plain membership says nothing
+ * the list does not (B60).
+ */
+function GroupsPanel({
+  groups,
+  from,
+}: {
+  groups: readonly MemberCardGroup[];
+  /** Sends the Group page's back link here (navigation D4, A63). */
+  from: ReturnType<typeof backLinkState>;
+}) {
+  return (
+    // Named, not titled: the tab already says "Grupuri".
+    <Panel aria-label="Grupuri" flush={groups.length > 0}>
+      {!groups.length ? (
+        <Empty text="Nu există grupuri în aria ta de administrare." />
+      ) : (
+        <ul className={rowListClass}>
+          {groups.map((group) => (
+            <ListRow
+              key={group.id}
+              className="relative has-[a:hover]:bg-muted"
+              value={
+                hasGroupRole(group) ? (
+                  <Badge variant="outline">{group.roleLabel}</Badge>
+                ) : undefined
+              }
+              action={
+                <ChevronRight
+                  aria-hidden="true"
+                  className="size-4 shrink-0 text-muted-foreground"
+                />
+              }
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                <span
+                  aria-hidden="true"
+                  className="size-3 shrink-0 rounded-full"
+                  style={{
+                    backgroundColor: safeHexColor(
+                      group.color,
+                      'var(--ink-400)',
+                    ),
+                  }}
+                />
+                {/* The whole row opens the Group, in the text colour. */}
+                <Link
+                  className={`min-w-0 text-sm font-semibold wrap-anywhere text-foreground underline-offset-4 after:absolute after:inset-0 hover:underline ${focusRingAfterClass}`}
+                  to={`/administrare/grupuri/${group.id}`}
+                  state={from}
+                >
+                  {group.label}
+                </Link>
+              </span>
+            </ListRow>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+/**
+ * One Member's page in Administrare (#103; ADR-0009 §Management surface),
+ * drawn as Profil is: the identity as the page's header — avatar, the name,
+ * then one line of role, status, "Membru din …" and email — and under it the
+ * same tabs, their choice in the URL (`?tab=`):
+ *
+ * - **Cont**: the names, the join date, contact details and the Privacy
+ *   Acknowledgement, with the invitation to resend while it is pending.
+ * - **Grupuri**: the Member's Groups in the viewer's area.
+ * - **Roluri**: the Role and status editor and Istoric roluri — a tab only
+ *   for whoever may see one of them.
+ * - **Puncte**: the ledger rows the viewer may read.
+ *
+ * Every tab stays mounted, so a draft or a receipt survives a look at
+ * another one and the page still shows one receipt at a time.
+ *
  * Everything on it is what the server returned for this viewer: the Member
  * Card's Groups (Private Groups already filtered), contact details only when
  * `member_contacts()` answers, and only the ledger rows RLS lets them read.
- * A sub-page of the Membri tab: back link, no tab bar (#825).
+ * A sub-page of the Membri tab: back link, no tab bar of Administrare (#825).
  */
 export default function MemberScreen() {
   const { memberId: raw } = useParams();
@@ -432,11 +664,10 @@ export default function MemberScreen() {
   const groups = useAdminGroups();
   const mine = useMyGroupRoles();
   const location = useLocation();
-  // #771: BC and the Moderator see the Member's Privacy Acknowledgement.
-  const privacy = useMemberAcknowledgement(
-    memberId,
-    capabilities.data?.manageRoles === true,
-  );
+  const [params, setParams] = useSearchParams();
+  const tabStrip = useRef<HTMLDivElement>(null);
+  const asked = params.get(TAB_KEY);
+  useActiveTabInView(tabStrip, asked ?? 'cont');
   if (!memberId) return <MemberUnavailable capabilities={capabilities.data} />;
   if (
     member.isPending ||
@@ -481,6 +712,13 @@ export default function MemberScreen() {
   // A label, not the name: names render only through MemberName.
   const fromHere = backLinkState(location, 'Înapoi la membru');
   const joined = formatDayMonthYear(data.joinedAt);
+  // role_history_read answers another Member's rows to level 6 only.
+  const showTimeline = leads && Boolean(data.role);
+  // Roluri is a tab only for whoever has something on it.
+  const tabs = MEMBER_TABS.filter(
+    (value) => value !== 'roluri' || rights.rankAndStatus || showTimeline,
+  );
+  const tab: MemberTab = tabs.find((value) => value === asked) ?? 'cont';
 
   // One receipt at a time on the page: a new command's replaces the last
   // (F-11, the D-16 rule of the Task sheet).
@@ -489,97 +727,130 @@ export default function MemberScreen() {
     <ReceiptTurnScope key={data.memberId}>
       <Page>
         <BackToAdministrare capabilities={capabilities.data} />
-        <PageHeader
-          eyebrow={EYEBROW}
-          title={
-            <span className="inline-flex max-w-full min-w-0 items-center gap-3">
-              <MemberAvatar
-                name={data.fullName}
-                avatarColor={data.avatarColor}
-                className="size-10 text-sm"
-              />
-              <span className="min-w-0">{name}</span>
-            </span>
-          }
-          description={name !== data.fullName ? data.fullName : undefined}
-        />
-        <dl className={`${panelBoxClass} grid gap-x-6 gap-y-4 sm:grid-cols-2`}>
-          <Fact label="Rol organizațional">
-            <span className="font-semibold">{data.roleLabel ?? '—'}</span>
+        {/* The identity is the page's header, as on Profil: the avatar and
+            the one `PageHeader` whose title is the Member's name, then one
+            line of what they are. */}
+        <div data-slot="member-identity" className="grid min-w-0 gap-2">
+          <div className="flex min-w-0 items-center gap-3">
+            <div
+              className="grid size-12 shrink-0 place-items-center rounded-full text-lg font-bold text-white md:size-14 md:text-xl"
+              style={{ backgroundColor: safeHexColor(data.avatarColor) }}
+              aria-hidden="true"
+            >
+              {initials(data.fullName)}
+            </div>
+            <PageHeader className="min-w-0 flex-1" title={name} />
+          </div>
+          <div
+            data-slot="member-meta"
+            className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-muted-foreground"
+          >
+            {data.roleLabel && (
+              <span data-slot="member-role" className="role-badge">
+                <span className="role-dot" aria-hidden="true" />
+                {data.roleLabel}
+              </span>
+            )}
             {/* A Board Title names the Role (#963); the rank follows it. */}
             {data.rankLabel && data.rankLabel !== data.roleLabel && (
-              <span className="text-muted-foreground"> · {data.rankLabel}</span>
+              <span data-slot="member-rank">{data.rankLabel}</span>
             )}
-          </Fact>
-          <Fact label="Status">
-            {data.status ? statusLabel(data.status) : '—'}
-          </Fact>
-          {/* BC and the Moderator set the date tenure counts from (#932);
-              for anyone else an imported Member who never signed in has no
-              date yet (F-28). */}
-          {rights.profile ? (
-            <JoinDateFact member={data} />
-          ) : (
-            joined && <Fact label="Membru din">{joined}</Fact>
+            {data.status && (
+              <span data-slot="member-status">{statusLabel(data.status)}</span>
+            )}
+            {/* An imported Member who never signed in has no date yet (F-28). */}
+            {joined && (
+              <span className="flex items-center gap-1.5">
+                <Calendar className="size-3.5 shrink-0" aria-hidden="true" />
+                <span>Membru din {joined}</span>
+              </span>
+            )}
+            {data.contact?.email && (
+              <span className="flex min-w-0 items-center gap-1.5">
+                <Mail className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="break-all">{data.contact.email}</span>
+              </span>
+            )}
+          </div>
+        </div>
+
+        <Tabs.Root
+          // The tab strip has no margin of its own: this stack spaces it.
+          className="flex flex-col gap-6"
+          value={tab}
+          onValueChange={(value) => {
+            // A tab is not a history entry; the Group pages' way back
+            // (`state.from`) is kept.
+            setParams(
+              { [TAB_KEY]: String(value) },
+              { replace: true, state: location.state },
+            );
+          }}
+        >
+          <Tabs.List
+            ref={tabStrip}
+            aria-label="Secțiunile membrului"
+            className={tabListClass}
+          >
+            <Tabs.Indicator className={tabThumbClass} />
+            <Tabs.Tab value="cont" className={tabClass}>
+              <UserRound aria-hidden="true" />
+              Cont
+            </Tabs.Tab>
+            <Tabs.Tab value="grupuri" className={tabClass}>
+              <Users aria-hidden="true" />
+              Grupuri
+            </Tabs.Tab>
+            {tabs.includes('roluri') && (
+              <Tabs.Tab value="roluri" className={tabClass}>
+                <GraduationCap aria-hidden="true" />
+                Roluri
+              </Tabs.Tab>
+            )}
+            <Tabs.Tab value="puncte" className={tabClass}>
+              <History aria-hidden="true" />
+              Puncte
+            </Tabs.Tab>
+          </Tabs.List>
+
+          <Tabs.Panel value="cont" keepMounted className="outline-none">
+            <div className="grid min-w-0 gap-4 md:grid-cols-2 md:items-start md:gap-6">
+              <AccountPanel
+                member={data}
+                canEdit={rights.profile}
+                leads={leads}
+              />
+              {rights.profile && <ReinvitePanel memberId={data.memberId} />}
+            </div>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="grupuri" keepMounted className="outline-none">
+            <GroupsPanel groups={visibleGroups} from={fromHere} />
+          </Tabs.Panel>
+
+          {tabs.includes('roluri') && (
+            <Tabs.Panel value="roluri" keepMounted className="outline-none">
+              <div className="flex min-w-0 flex-col gap-4 md:gap-6">
+                {rights.rankAndStatus && (
+                  <RolePanel selectedMemberId={data.memberId} />
+                )}
+                {showTimeline && data.role && (
+                  <Panel title="Istoric roluri">
+                    <MemberRoleTimeline
+                      memberId={data.memberId}
+                      joinedAt={data.joinedAt}
+                      role={data.role}
+                    />
+                  </Panel>
+                )}
+              </div>
+            </Tabs.Panel>
           )}
-          {data.contact?.email && (
-            <Fact label="Email" className="break-all">
-              {data.contact.email}
-            </Fact>
-          )}
-          {data.contact?.phone && (
-            <Fact label="Telefon">{data.contact.phone}</Fact>
-          )}
-          {leads && (
-            <Fact label="Politica de confidențialitate">
-              {privacy.isPending
-                ? 'Se încarcă…'
-                : privacy.isError
-                  ? '—'
-                  : acknowledgementLabel(privacy.data)}
-            </Fact>
-          )}
-        </dl>
-        {rights.profile && <IdentityEditor member={data} />}
-        {rights.profile && <ReinvitePanel memberId={data.memberId} />}
-        {/* No eyebrow: it would only repeat the title (ruling 2, F-24). */}
-        <Panel title="Grupuri" flush={visibleGroups.length > 0}>
-          {!visibleGroups.length ? (
-            <Empty text="Nu există grupuri în aria ta de administrare." />
-          ) : (
-            <ul className={rowListClass}>
-              {visibleGroups.map((group) => (
-                <ListRow key={group.id}>
-                  <Link
-                    className="font-semibold underline-offset-4 hover:underline"
-                    to={`/administrare/grupuri/${group.id}`}
-                    state={fromHere}
-                  >
-                    {group.label}
-                  </Link>
-                  {/* A plain membership says nothing the list does not (B60). */}
-                  {hasGroupRole(group) && (
-                    <p className="m-0 text-sm text-muted-foreground">
-                      Rol în grup: {group.roleLabel}
-                    </p>
-                  )}
-                </ListRow>
-              ))}
-            </ul>
-          )}
-        </Panel>
-        {rights.rankAndStatus && <RolePanel selectedMemberId={data.memberId} />}
-        {/* role_history_read answers another Member's rows to level 6 only. */}
-        {leads && data.role && (
-          <Panel eyebrow="Parcurs" icon={GraduationCap} title="Istoric roluri">
-            <MemberRoleTimeline
-              memberId={data.memberId}
-              joinedAt={data.joinedAt}
-              role={data.role}
-            />
-          </Panel>
-        )}
-        <PointsPanel points={data.points} />
+
+          <Tabs.Panel value="puncte" keepMounted className="outline-none">
+            <PointsPanel points={data.points} />
+          </Tabs.Panel>
+        </Tabs.Root>
       </Page>
     </ReceiptTurnScope>
   );

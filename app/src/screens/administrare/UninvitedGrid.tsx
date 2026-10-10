@@ -1,4 +1,5 @@
 import {
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -18,14 +19,15 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog';
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from '../../components/ui/native-select';
+import { InfoHint } from '../../components/ui/info-hint';
+import { SegmentedRadio } from '../../components/ui/segmented-radio';
+import { Select } from '../../components/ui/select';
 import { ChoiceRow } from '../../components/ui/radio-group';
+import { FilterSearch } from '../../components/work-filter/FilterToolbar';
 import { describeFailure, reasonCopy } from '../../lib/command-reasons';
 import type { Database } from '../../lib/database.types';
 import { bucharestDayKey } from '../../lib/calendar-time';
@@ -62,6 +64,8 @@ export const IMPORT_RUNBOOK_URL =
   'https://github.com/Alex-Bancila/osubb-app/blob/main/docs/ops/volunteer-import-2026-10.md';
 
 const SAVE_FAILED = 'Nu am putut salva schimbarea. Reîncearcă.';
+/** "Niciunul" in the principal Department's drop-down: no Department. */
+const NO_PRINCIPAL = 'none';
 
 function memberPagePath(memberId: string) {
   return `/administrare/membri/${encodeURIComponent(memberId)}`;
@@ -280,19 +284,28 @@ function RankCell({
     );
   return (
     <EditorLayer>
-      <NativeSelect
+      <Select
         // oxlint-disable-next-line jsx-a11y/no-autofocus
         autoFocus
         aria-label={`Rangul pentru ${who}`}
-        className="h-8 rounded-sm pl-1.5"
+        className="h-8 rounded-sm px-1.5"
         value={member.role ?? ''}
+        placeholder="—"
+        options={roles.map((role) => ({ value: role.id, label: role.name }))}
         disabled={saving}
-        onBlur={() => setEditing(false)}
+        // Leaving the field closes the editor; opening its own list is not
+        // leaving it.
+        onBlur={(event) => {
+          const next: unknown = event.relatedTarget;
+          if (next instanceof Element && next.closest('[role="listbox"]'))
+            return;
+          setEditing(false);
+        }}
         onKeyDown={(event) => {
           if (event.key === 'Escape') setEditing(false);
         }}
-        onChange={(event) => {
-          const role = event.target.value as MemberRole;
+        onValueChange={(next) => {
+          const role = next as MemberRole;
           setSaving(true);
           onSave(role)
             .then(() => setError(null))
@@ -304,16 +317,7 @@ function RankCell({
               setEditing(false);
             });
         }}
-      >
-        {member.role === null && (
-          <NativeSelectOption value="">—</NativeSelectOption>
-        )}
-        {roles.map((role) => (
-          <NativeSelectOption key={role.id} value={role.id}>
-            {role.name}
-          </NativeSelectOption>
-        ))}
-      </NativeSelect>
+      />
     </EditorLayer>
   );
 }
@@ -384,19 +388,38 @@ function DepartmentsEditor({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Departamente</DialogTitle>
-          <DialogDescription>
-            {who}. Departamentul principal apare pe cardul membrului.
-          </DialogDescription>
+          {/* Whose Departments these are; the rest waits behind the "i". */}
+          <DialogDescription>{who}</DialogDescription>
         </DialogHeader>
-        <label className="grid gap-1.5 text-sm font-medium">
-          Departament principal
-          <NativeSelect
-            value={principal === null ? '' : String(principal)}
+        <div className="grid gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <label
+              htmlFor="uninvited-principal"
+              className="text-sm font-medium"
+            >
+              Departament principal
+            </label>
+            <InfoHint
+              label="Despre departamentul principal"
+              id="uninvited-principal-hint"
+            >
+              Departamentul principal apare pe cardul membrului.
+            </InfoHint>
+          </div>
+          <Select
+            id="uninvited-principal"
+            aria-describedby="uninvited-principal-hint"
+            value={principal === null ? NO_PRINCIPAL : String(principal)}
+            options={[
+              { value: NO_PRINCIPAL, label: 'Niciunul' },
+              ...departments.map((group) => ({
+                value: String(group.id),
+                label: group.name,
+              })),
+            ]}
             disabled={saving}
-            onChange={(event) => {
-              const next = event.target.value
-                ? Number(event.target.value)
-                : null;
+            onValueChange={(value) => {
+              const next = value === NO_PRINCIPAL ? null : Number(value);
               setPrincipal(next);
               setOthers((set) => {
                 const copy = new Set(set);
@@ -404,18 +427,14 @@ function DepartmentsEditor({
                 return copy;
               });
             }}
-          >
-            <NativeSelectOption value="">Niciunul</NativeSelectOption>
-            {departments.map((group) => (
-              <NativeSelectOption key={group.id} value={group.id}>
-                {group.name}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </label>
-        <fieldset className="grid" disabled={principal === null || saving}>
-          <legend className="mb-1 text-sm font-medium">
-            Alte departamente
+          />
+        </div>
+        <fieldset
+          className="m-0 grid min-w-0 border-0 p-0"
+          disabled={principal === null || saving}
+        >
+          <legend className="mb-1 p-0 text-sm font-medium">
+            Alte departamente (opțional)
           </legend>
           {departments
             .filter((group) => group.id !== principal)
@@ -442,7 +461,7 @@ function DepartmentsEditor({
             {error}
           </p>
         )}
-        <div className="flex flex-wrap justify-end gap-2">
+        <DialogFooter>
           <Button
             type="button"
             variant="outline"
@@ -454,7 +473,7 @@ function DepartmentsEditor({
           <Button type="button" disabled={saving} onClick={() => void save()}>
             {saving ? 'Se salvează…' : 'Salvează'}
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -571,6 +590,7 @@ function SenderBar({
   onStart: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
+  const batchSizeId = useId();
   const target = selectedCount > 0 ? selectedCount : count;
   const busy = sender.status === 'sending';
   const stopped =
@@ -599,23 +619,21 @@ function SenderBar({
         </a>
       </p>
       <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 text-sm">
-          Mărimea lotului
-          <NativeSelect
-            wrapperClassName="w-24"
+        <div className="flex items-center gap-2 text-sm">
+          <span id={batchSizeId}>Mărimea lotului</span>
+          {/* Three sizes: one segmented choice. */}
+          <SegmentedRadio
+            aria-labelledby={batchSizeId}
+            className="w-auto"
             value={String(sender.batchSize)}
+            options={BATCH_SIZES.map((size) => ({
+              value: String(size),
+              label: String(size),
+            }))}
             disabled={busy}
-            onChange={(event) =>
-              sender.setBatchSize(Number(event.target.value))
-            }
-          >
-            {BATCH_SIZES.map((size) => (
-              <NativeSelectOption key={size} value={size}>
-                {size}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </label>
+            onValueChange={(next) => sender.setBatchSize(Number(next))}
+          />
+        </div>
         {busy ? (
           <Button
             type="button"
@@ -855,15 +873,14 @@ export function UninvitedGrid() {
       />
 
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <label className="grid w-full gap-1 text-sm sm:max-w-sm">
-          Caută după nume sau email
-          <input
-            type="search"
-            className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
+        {/* The same search as "Toți", one tab over. */}
+        <FilterSearch
+          label="Caută după nume sau email"
+          placeholder="Caută după nume sau email"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          className="w-full flex-none basis-auto"
+        />
         {withProblems > 0 && (
           <SegmentedToggle
             label="Rânduri afișate"

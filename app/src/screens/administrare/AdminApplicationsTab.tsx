@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Inbox } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { cn } from 'cn';
 import {
   EmptyState,
@@ -10,6 +10,7 @@ import {
   focusRingInsetClass,
   rowListClass,
 } from '../../components/layout';
+import { GroupFilterCombobox } from '../../components/group/GroupFilterCombobox';
 import { MemberName } from '../../components/member/MemberName';
 import { ErrorState, Loading } from '../../components/states';
 import { useCapabilities } from '../../lib/capabilities';
@@ -205,10 +206,31 @@ function CountPill({ count }: { count: number }) {
   );
 }
 
+/** One choice of the phone's Group picker; id 0 is "Toate grupurile". */
+type GroupChoice = {
+  id: number;
+  name: string;
+  /** The picker's own shape; the parent is named by `parentName` here. */
+  path: readonly number[];
+  parentName: string | null;
+  pending: number;
+};
+
+const NO_GROUPS: ReadonlyMap<number, { name: string }> = new Map();
+
+/** "Echipa IT · Diverse (1)": what the picker shows chosen, and searches. */
+function choiceLabel(choice: GroupChoice): string {
+  const name = choice.parentName
+    ? `${choice.name} · ${choice.parentName}`
+    : choice.name;
+  return `${name} (${choice.pending})`;
+}
+
 /**
- * The viewer's Groups: a column beside the requests from `md`; on a phone a
- * row of cards that scrolls sideways inside itself (the page never does).
- * Each card links to `?grup=<id>`; "Toate" clears it.
+ * The viewer's Groups: a column of links beside the requests from `md`; under
+ * it the app's searchable Group picker (the one the Task form and the filters
+ * use), each Group with its pending count. Either way a choice is
+ * `?grup=<id>`, and "Toate" / "Toate grupurile" clears it.
  */
 function GroupList({
   title,
@@ -221,24 +243,79 @@ function GroupList({
   selectedId: number | null;
   total: number;
 }) {
+  const navigate = useNavigate();
+  const pickerLabelId = useId();
+  // Stable objects: the picker finds its value among its items by identity.
+  const choices = useMemo<GroupChoice[]>(
+    () => [
+      {
+        id: 0,
+        name: 'Toate grupurile',
+        path: [0],
+        parentName: null,
+        pending: total,
+      },
+      ...groups.map((group) => ({
+        id: group.id,
+        name: group.name,
+        path: [group.id],
+        parentName: group.parentName,
+        pending: group.pending,
+      })),
+    ],
+    [groups, total],
+  );
   const itemClass = cn(
-    'flex min-h-11 min-w-0 items-center gap-3 rounded-md border border-border bg-card px-3 py-2 text-foreground no-underline',
-    'md:w-full md:rounded-none md:border-0 md:bg-transparent md:px-4 md:py-3',
-    'hover:bg-accent aria-[current=page]:border-primary aria-[current=page]:bg-primary/10',
-    'md:aria-[current=page]:shadow-[inset_3px_0_0_var(--primary)]',
+    'flex min-h-11 w-full min-w-0 items-center gap-3 px-4 py-3 text-foreground no-underline',
+    'hover:bg-accent aria-[current=page]:bg-primary/10',
+    'aria-[current=page]:shadow-[inset_3px_0_0_var(--primary)]',
     focusRingInsetClass,
   );
   return (
     <nav aria-label={title} className="min-w-0">
-      <SectionHeader title={title} />
+      <SectionHeader title={title} className="max-md:sr-only" />
+      {/* Under `md` the Groups are one searchable picker, not a strip of
+          cards that scrolls sideways: the list below is the side column. */}
+      <div data-slot="group-picker" className="md:hidden">
+        <span id={pickerLabelId} className="sr-only">
+          {title}
+        </span>
+        <GroupFilterCombobox
+          ariaLabelledBy={pickerLabelId}
+          groups={choices}
+          groupsById={NO_GROUPS}
+          value={
+            choices.find((choice) => choice.id === (selectedId ?? 0)) ?? null
+          }
+          onValueChange={(choice) =>
+            navigate(choice?.id ? `?grup=${choice.id}` : '?')
+          }
+          placeholder="Toate grupurile"
+          itemToStringLabel={choiceLabel}
+          renderItem={(choice) => (
+            <>
+              <span className="flex min-w-0 flex-1 items-baseline gap-1">
+                <span className="truncate">{choice.name}</span>
+                {choice.parentName && (
+                  <span className="truncate text-xs text-muted-foreground">
+                    <span aria-hidden="true">· </span>
+                    {choice.parentName}
+                  </span>
+                )}
+              </span>
+              <CountPill count={choice.pending} />
+            </>
+          )}
+        />
+      </div>
       <ul
         className={cn(
-          'm-0 flex list-none gap-2 overflow-x-auto p-0 pb-1',
-          'md:flex-col md:gap-0 md:overflow-hidden md:rounded-md md:border md:border-border md:bg-card md:pb-0 md:shadow-(--sh-sm)',
+          'm-0 hidden list-none p-0',
+          'md:flex md:flex-col md:overflow-hidden md:rounded-md md:border md:border-border md:bg-card md:shadow-(--sh-sm)',
           'md:divide-y md:divide-(--border-soft)',
         )}
       >
-        <li className="flex shrink-0 md:shrink">
+        <li className="flex">
           <Link
             to="?"
             aria-current={selectedId === null ? 'page' : undefined}
@@ -249,10 +326,7 @@ function GroupList({
           </Link>
         </li>
         {groups.map((group) => (
-          <li
-            key={group.id}
-            className="flex w-[13.5rem] min-w-0 shrink-0 md:w-auto md:shrink"
-          >
+          <li key={group.id} className="flex min-w-0">
             <Link
               to={`?grup=${group.id}`}
               aria-current={selectedId === group.id ? 'page' : undefined}

@@ -5,9 +5,10 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
 } from 'react';
 import { Link } from 'react-router';
-import { Gauge, History, Play, TriangleAlert, UserCheck } from 'lucide-react';
+import { Pencil, UserCheck, UserX } from 'lucide-react';
 import { cn } from 'cn';
 import {
   DataTable,
@@ -18,7 +19,6 @@ import {
   ListRow,
   PageGrid,
   Panel,
-  SegmentedToggle,
   SubHeading,
   rowListClass,
 } from '../../components/layout';
@@ -34,7 +34,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog';
+import { DatePicker } from '../../components/ui/date-picker';
 import { FieldError } from '../../components/ui/field';
+import { InfoHint } from '../../components/ui/info-hint';
+import { Input, Textarea } from '../../components/ui/input';
+import { SegmentedRadio } from '../../components/ui/segmented-radio';
+import { Badge } from '../../components/ui/badge';
 import { SwitchRow } from '../../components/ui/switch';
 import { bucharestDayKey } from '../../lib/calendar-time';
 import { describeFailure } from '../../lib/command-reasons';
@@ -42,7 +47,6 @@ import {
   formatMonthCount,
   formatPointCount,
   formatPoints,
-  pointWord,
 } from '../../lib/format';
 import {
   percentFieldForReason,
@@ -85,6 +89,7 @@ import {
   type RunResult,
   type ThresholdChange,
 } from '../../queries/role-evaluations';
+import { useMinWidth } from '../volunteers/use-min-width';
 import { ROLE_PANEL_MEMBER_PARAM } from './RolePanel';
 import { useReceiptTurn } from '../tracker/receipt-turn';
 import { ReceiptTurnScope } from '../tracker/ReceiptTurnScope';
@@ -98,13 +103,18 @@ import {
   runResultText,
 } from './role-evaluation-text';
 
-const control =
-  'min-h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm';
-
 const KINDS: readonly RoleEvaluationKind[] = [
   'voluntar_activ',
   'adunarea_generala',
 ];
+
+/**
+ * What the page's Tip switch offers: the two Role Evaluation kinds, and the
+ * promotion no evaluation runs — Recrut → Voluntar, by tenure alone.
+ */
+const TENURE_VIEW = 'vechime';
+type View = RoleEvaluationKind | typeof TENURE_VIEW;
+const TENURE_VIEW_LABEL = 'Vechime';
 
 /** The kind as the tab names it. */
 const KIND_LABEL: Record<string, string> = {
@@ -169,11 +179,14 @@ function shownName(memberId: string, identities: Identities) {
 /* ------------------------------------------------------------------------ */
 
 function RunPanel({
+  kind,
   evaluations,
   thresholds,
   disabled,
   onRun,
 }: {
+  /** The page's Tip: the kind this run is of. */
+  kind: RoleEvaluationKind;
   evaluations: readonly RoleEvaluation[];
   thresholds: readonly PromotionThreshold[];
   disabled: boolean;
@@ -189,10 +202,9 @@ function RunPanel({
   const percents = useEvaluationPercents();
   // "De la" starts the day after the kind's last range, never after today;
   // "Până la" is today.
-  const defaultFrom = (kind: RoleEvaluationKind) =>
-    defaultRangeStart(latestRun(evaluations, kind)?.period_to, today);
-  const [kind, setKind] = useState<RoleEvaluationKind>('voluntar_activ');
-  const [from, setFrom] = useState(() => defaultFrom('voluntar_activ'));
+  const defaultFrom = (of: RoleEvaluationKind) =>
+    defaultRangeStart(latestRun(evaluations, of)?.period_to, today);
+  const [from, setFrom] = useState(() => defaultFrom(kind));
   const [to, setTo] = useState(today);
   const [name, setName] = useState('');
   const [confirming, setConfirming] = useState(false);
@@ -208,12 +220,19 @@ function RunPanel({
   const threshold =
     thresholds.find((row) => row.kind === kind)?.threshold ?? null;
   const parsed = schema.safeParse({ kind, from, to, name });
+  // Each date is checked when the member leaves its field (the picker does
+  // not count opening its calendar as leaving) and ends today.
+  const fromField = form.field('from');
+  const toField = form.field('to');
   const x = percentText(percents.data, 'voluntar_activ');
   const y = percentText(percents.data, 'adunarea_generala');
 
-  function choose(next: RoleEvaluationKind) {
-    setKind(next);
-    setFrom(defaultFrom(next));
+  // Another kind on the page's switch: its own "De la", and nothing said
+  // about the kind before it. The name and "Până la" stay as typed.
+  const [shownKind, setShownKind] = useState(kind);
+  if (shownKind !== kind) {
+    setShownKind(kind);
+    setFrom(defaultFrom(kind));
     setMessage(null);
     form.reset();
   }
@@ -256,43 +275,28 @@ function RunPanel({
 
   return (
     <Panel
-      eyebrow="Evaluări de rol"
-      icon={Play}
       title="Rulează o evaluare de rol"
-      description="Clasează punctele de task dintr-un interval ales acum. Nu schimbă niciun rol."
+      control={
+        <InfoHint label="Despre evaluarea de rol">
+          Clasează punctele de task dintr-un interval ales acum. Nu schimbă
+          niciun rol.
+        </InfoHint>
+      }
     >
       <form onSubmit={review} noValidate className="grid gap-4">
-        <div className="grid gap-1.5" {...form.slot('kind')}>
-          <span className="text-sm font-medium" aria-hidden="true">
-            Tip
-          </span>
-          <SegmentedToggle
-            label="Tip"
-            options={KINDS.map((value) => ({
-              value,
-              label: KIND_LABEL[value],
-            }))}
-            value={kind}
-            onChange={choose}
-            // Under 640 px a long label wraps inside its pill, never past it (F-22).
-            className="w-full *:flex-1 max-sm:*:px-2.5 max-sm:*:text-center max-sm:*:leading-tight max-sm:*:whitespace-normal sm:w-auto sm:justify-self-start"
-          />
-          <FieldError {...form.errorProps('kind')} />
-        </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="grid min-w-0 content-start gap-1.5">
             <label htmlFor={fromId} className="text-sm font-medium">
               De la
             </label>
-            <input
+            <DatePicker
               id={fromId}
-              type="date"
-              className={control}
               value={from}
+              required
               max={today}
               disabled={disabled}
-              onChange={(event) => setFrom(event.target.value)}
-              {...form.field('from')}
+              onChange={setFrom}
+              {...fromField}
             />
             <FieldError {...form.errorProps('from')} />
           </div>
@@ -300,15 +304,14 @@ function RunPanel({
             <label htmlFor={toId} className="text-sm font-medium">
               Până la
             </label>
-            <input
+            <DatePicker
               id={toId}
-              type="date"
-              className={control}
               value={to}
+              required
               max={today}
               disabled={disabled}
-              onChange={(event) => setTo(event.target.value)}
-              {...form.field('to')}
+              onChange={setTo}
+              {...toField}
             />
             <FieldError {...form.errorProps('to')} />
           </div>
@@ -317,10 +320,10 @@ function RunPanel({
           <label htmlFor={nameId} className="text-sm font-medium">
             Nume
           </label>
-          <input
+          <Input
             id={nameId}
-            className={control}
             value={name}
+            required
             placeholder="Semestrul I 2026–2027"
             disabled={disabled}
             onChange={(event) => setName(event.target.value)}
@@ -399,12 +402,122 @@ function RunPanel({
 /* Praguri                                                                   */
 /* ------------------------------------------------------------------------ */
 
+/** The Role Evaluation kind a Promotion Rule feeds; `null` for none. */
+function ruleEvaluationKind(
+  rule: Pick<PromotionRule, 'kind'>,
+): RoleEvaluationKind | null {
+  // `time` is the daily job's (Recrut → Voluntar): no evaluation reads it.
+  // `top_percent` is the tenure `run_role_evaluation` asks of a Voluntar
+  // Activ candidate.
+  return rule.kind === 'time' ? null : 'voluntar_activ';
+}
+
 /**
- * A kind's top share (#866, ruling R30): `Procent: x %` under the threshold,
- * edited in place as the threshold is — a whole 1–100 with the percent sign
- * fixed inside the field, so BC types only the number.
+ * Where focus goes around an in-place editor: to its field when it opens,
+ * back to the pencil that opened it when it closes (#923).
  */
-function PercentEditor({
+function useEditorFocus(editing: boolean, fieldId: string) {
+  const editButton = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(false);
+  useEffect(() => {
+    if (editing) document.getElementById(fieldId)?.focus();
+    else if (wasEditing.current) editButton.current?.focus();
+    wasEditing.current = editing;
+  }, [editing, fieldId]);
+  return editButton;
+}
+
+/**
+ * One setting of the tab, as a row: its name (with an "i" for what it needs
+ * said once), the value in force at the right in tabular figures, and its
+ * controls — a pencil, and a switch for a rule. What belongs under the row
+ * (where the value came from, the editor, the receipt) follows as children.
+ */
+function SettingRow({
+  labelId,
+  label,
+  hint,
+  value,
+  controls,
+  editing,
+  children,
+  ...attributes
+}: {
+  labelId: string;
+  label: string;
+  hint?: ReactNode;
+  value: ReactNode;
+  controls?: ReactNode;
+  editing: boolean;
+  children?: ReactNode;
+  'data-rule'?: string;
+  'aria-labelledby'?: string;
+}) {
+  return (
+    <li
+      data-slot="setting-row"
+      data-editing={editing || undefined}
+      className={cn(
+        'grid min-w-0 gap-2 py-2 first:pt-0 last:pb-0',
+        editing &&
+          '-mx-3 rounded-lg bg-muted/40 px-3 py-3 first:pt-3 last:pb-3',
+      )}
+      {...attributes}
+    >
+      <div className="flex min-h-11 min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center">
+          <SubHeading variant="label" id={labelId}>
+            {label}
+          </SubHeading>
+          {hint}
+        </div>
+        <p
+          data-slot="setting-value"
+          className="m-0 shrink-0 text-right text-sm font-semibold tabular-nums"
+        >
+          {value}
+        </p>
+        {controls}
+      </div>
+      {children}
+    </li>
+  );
+}
+
+/** Salvează and Renunță of an in-place editor: the page's one filled button
+ *  is the run form's, so neither is filled. */
+function EditorActions({
+  disabled,
+  canSave = true,
+  onCancel,
+}: {
+  disabled: boolean;
+  canSave?: boolean;
+  onCancel: () => void;
+}) {
+  return (
+    <>
+      <Button type="submit" variant="outline" disabled={disabled || !canSave}>
+        Salvează
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        disabled={disabled}
+        onClick={onCancel}
+      >
+        Renunță
+      </Button>
+    </>
+  );
+}
+
+/**
+ * A kind's top share (#866, ruling R30): the row under the threshold, edited
+ * in place as the threshold is — a whole 1–100 with the percent sign fixed
+ * inside the field, so BC types only the number.
+ */
+function PercentRow({
   kind,
   percent,
   identities,
@@ -417,6 +530,7 @@ function PercentEditor({
   disabled: boolean;
   onRun: Run;
 }) {
+  const labelId = useId();
   const inputId = useId();
   const hintId = useId();
   const label = `Procentul ${THRESHOLD_NAME[kind]}`;
@@ -424,6 +538,7 @@ function PercentEditor({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  const editButton = useEditorFocus(editing, inputId);
   // One receipt at a time across the tab (F-11).
   const turn = useReceiptTurn();
   const form = useFormValidation(
@@ -461,51 +576,55 @@ function PercentEditor({
   }
 
   return (
-    <div className="grid gap-2">
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <p className="m-0 flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm">
-          <span className="text-muted-foreground">Procent:</span>
-          <span className="font-semibold tabular-nums">
-            {current === null ? '—' : `${current} %`}
-          </span>
-          {percent?.changedBy && (
-            <>
-              <span aria-hidden="true" className="text-muted-foreground">
-                ·
-              </span>
-              <span className="text-muted-foreground">schimbat de</span>
-              <Name memberId={percent.changedBy} identities={identities} />
-            </>
-          )}
-        </p>
-        {!editing && (
+    <SettingRow
+      labelId={labelId}
+      label={label}
+      editing={editing}
+      hint={
+        !editing && (
+          <InfoHint label="Despre procent">
+            {`Pragul calculat este punctajul ultimului din primii ${current ?? 'x'} % ai ${COHORT_NAME[kind]}.`}
+          </InfoHint>
+        )
+      }
+      value={current === null ? '—' : `${current} %`}
+      controls={
+        !editing && (
           <Button
+            ref={editButton}
             type="button"
-            variant="ghost"
-            size="sm"
+            variant="outline"
+            size="icon"
             disabled={disabled}
             onClick={open}
-            aria-label={`Editează: ${label}`}
+            aria-label={`Editează procentul ${THRESHOLD_NAME[kind]}`}
+            title="Editează procentul"
           >
-            Editează procentul
+            <Pencil aria-hidden="true" />
           </Button>
-        )}
-      </div>
+        )
+      }
+    >
+      {percent?.changedBy && !editing && (
+        <p className="m-0 flex flex-wrap items-center gap-x-1 text-sm text-muted-foreground">
+          schimbat de
+          <Name memberId={percent.changedBy} identities={identities} />
+        </p>
+      )}
       {editing && (
+        // The row's name, right above, is the field's label.
         <form onSubmit={save} noValidate className="grid gap-1.5">
-          <label htmlFor={inputId} className="text-sm font-medium">
-            {label}
-          </label>
           <div className="flex min-w-0 flex-wrap gap-2">
             <div className="relative w-28 flex-none">
-              <input
+              <Input
                 id={inputId}
+                aria-labelledby={labelId}
                 type="number"
                 inputMode="numeric"
                 min={1}
                 max={100}
                 step={1}
-                className={cn(control, 'pr-9')}
+                className="pr-9"
                 value={draft}
                 disabled={disabled}
                 onChange={(event) => setDraft(event.target.value)}
@@ -518,17 +637,10 @@ function PercentEditor({
                 %
               </span>
             </div>
-            <Button type="submit" disabled={disabled}>
-              Salvează
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
+            <EditorActions
               disabled={disabled}
-              onClick={() => setEditing(false)}
-            >
-              Renunță
-            </Button>
+              onCancel={() => setEditing(false)}
+            />
           </div>
           <p id={hintId} className="m-0 text-sm text-muted-foreground">
             {`Un număr întreg de la 1 la 100. Pragul calculat este punctajul ultimului din primii ${shown} % ai ${COHORT_NAME[kind]}. Se aplică de la următoarea evaluare; evaluările rulate nu se recalculează.`}
@@ -538,11 +650,11 @@ function PercentEditor({
         </form>
       )}
       {message && turn.current && (
-        <p role="status" className="m-0 text-sm">
+        <p role="status" className="m-0 text-sm font-medium">
           {message}
         </p>
       )}
-    </div>
+    </SettingRow>
   );
 }
 
@@ -550,7 +662,6 @@ function ThresholdRow({
   kind,
   row,
   source,
-  percent,
   runName,
   identities,
   disabled,
@@ -560,13 +671,12 @@ function ThresholdRow({
   row: PromotionThreshold | undefined;
   /** The kind's latest threshold change: where the value in force came from. */
   source: ThresholdChange | undefined;
-  /** The kind's top share in force, x or y (#866). */
-  percent: EvaluationPercent | undefined;
   runName: (id: number | null) => string;
   identities: Identities;
   disabled: boolean;
   onRun: Run;
 }) {
+  const labelId = useId();
   const inputId = useId();
   const hintId = useId();
   const label = `Pragul ${THRESHOLD_NAME[kind]}`;
@@ -574,6 +684,7 @@ function ThresholdRow({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  const editButton = useEditorFocus(editing, inputId);
   // One receipt at a time across the tab (F-11).
   const turn = useReceiptTurn();
   const form = useFormValidation(
@@ -608,78 +719,75 @@ function ThresholdRow({
   }
 
   return (
-    <li className="grid gap-2 py-3 first:pt-0">
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <div className="min-w-0">
-          <SubHeading variant="label">{label}</SubHeading>
-          <p className="m-0 text-2xl leading-tight font-bold tabular-nums">
-            {current === null ? (
-              <span className="text-muted-foreground">Nesetat</span>
-            ) : (
-              <>
-                {formatPoints(current)}{' '}
-                <span className="text-sm font-medium text-muted-foreground">
-                  {pointWord(current)}
-                </span>
-              </>
-            )}
-          </p>
-          {current !== null && source && (
-            <p className="m-0 flex flex-wrap items-center gap-x-1 text-sm text-muted-foreground">
-              {source.source === 'manual' && source.changed_by ? (
-                <>
-                  introdus de
-                  <Name memberId={source.changed_by} identities={identities} />
-                </>
-              ) : (
-                <>
-                  calculat de evaluarea „{runName(source.role_evaluation_id)}”
-                </>
-              )}
-            </p>
-          )}
-        </div>
-        {!editing && (
+    <SettingRow
+      labelId={labelId}
+      label={label}
+      editing={editing}
+      hint={
+        !editing && (
+          <InfoHint label="Despre prag">
+            Puncte de task. Următoarea evaluare de acest tip folosește pragul în
+            vigoare și calculează unul nou.
+          </InfoHint>
+        )
+      }
+      value={
+        current === null ? (
+          <span className="text-muted-foreground">Nesetat</span>
+        ) : (
+          formatPointCount(current)
+        )
+      }
+      controls={
+        !editing && (
           <Button
+            ref={editButton}
             type="button"
             variant="outline"
+            size="icon"
             disabled={disabled}
             onClick={open}
-            aria-label={`Editează: ${label}`}
+            aria-label={`Editează pragul ${THRESHOLD_NAME[kind]}`}
+            title="Editează pragul"
           >
-            Editează
+            <Pencil aria-hidden="true" />
           </Button>
-        )}
-      </div>
+        )
+      }
+    >
+      {current !== null && source && !editing && (
+        <p className="m-0 flex flex-wrap items-center gap-x-1 text-sm text-muted-foreground">
+          {source.source === 'manual' && source.changed_by ? (
+            <>
+              introdus de
+              <Name memberId={source.changed_by} identities={identities} />
+            </>
+          ) : (
+            <>calculat de evaluarea „{runName(source.role_evaluation_id)}”</>
+          )}
+        </p>
+      )}
       {editing && (
+        // The row's name, right above, is the field's label.
         <form onSubmit={save} noValidate className="grid gap-1.5">
-          <label htmlFor={inputId} className="text-sm font-medium">
-            {label}
-          </label>
           <div className="flex min-w-0 flex-wrap gap-2">
-            <input
+            <Input
               id={inputId}
+              aria-labelledby={labelId}
               type="number"
               inputMode="numeric"
               min={1}
               step={1}
-              className={cn(control, 'w-32 flex-none')}
+              className="w-32 flex-none"
               value={draft}
               disabled={disabled}
               onChange={(event) => setDraft(event.target.value)}
               {...form.field('threshold', hintId)}
             />
-            <Button type="submit" disabled={disabled}>
-              Salvează
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
+            <EditorActions
               disabled={disabled}
-              onClick={() => setEditing(false)}
-            >
-              Renunță
-            </Button>
+              onCancel={() => setEditing(false)}
+            />
           </div>
           <p id={hintId} className="m-0 text-sm text-muted-foreground">
             Puncte de task. Următoarea evaluare de acest tip folosește pragul în
@@ -690,18 +798,11 @@ function ThresholdRow({
         </form>
       )}
       {message && turn.current && (
-        <p role="status" className="m-0 text-sm">
+        <p role="status" className="m-0 text-sm font-medium">
           {message}
         </p>
       )}
-      <PercentEditor
-        kind={kind}
-        percent={percent}
-        identities={identities}
-        disabled={disabled}
-        onRun={onRun}
-      />
-    </li>
+    </SettingRow>
   );
 }
 
@@ -744,25 +845,15 @@ function ruleText(kind: string): RuleText {
   return kind === 'time' ? TIME_RULE_TEXT : TOP_PERCENT_RULE_TEXT;
 }
 
-/** A rule's on/off state: the word carries it, the dot only repeats it. */
-function RuleState({ enabled }: { enabled: boolean }) {
-  return enabled ? (
-    <span className="inline-flex min-h-7 items-center gap-1.5 rounded-full bg-muted px-3 text-sm font-semibold">
-      <span aria-hidden="true" className="size-2 rounded-full bg-primary" />
-      Pornită
-    </span>
-  ) : (
-    <span className="inline-flex min-h-7 items-center rounded-full border border-dashed border-border px-3 text-sm font-semibold text-muted-foreground">
-      Oprită
-    </span>
-  );
-}
+const RULE_SAVE_FAILED = 'Nu am putut salva regula. Reîncearcă.';
 
 /**
- * One Promotion Rule with #923's edit pattern: the value in force, Editează,
- * then the tenure and the on/off switch with Salvează (only once something
- * changed) and Renunță; focus goes back to Editează and the receipt is
- * announced.
+ * One Promotion Rule as a row: its tenure is the value, a chip says whether
+ * it is on, and what it does when on sits behind the "i". While it is off,
+ * what that stops stays on the row. Nothing changes from the row itself: the
+ * pencil opens #923's editor — the tenure and the on/off switch with Salvează
+ * (only once something changed) and Renunță; focus goes back to the pencil
+ * and the receipt is announced.
  */
 function RuleRow({
   rule,
@@ -788,20 +879,13 @@ function RuleRow({
   const [months, setMonths] = useState('');
   const [enabled, setEnabled] = useState(rule.enabled);
   const [pending, setPending] = useState(false);
-  const editButton = useRef<HTMLButtonElement>(null);
-  const wasEditing = useRef(false);
+  // Opening focuses the tenure; closing returns focus to the pencil (#923).
+  const editButton = useEditorFocus(editing, monthsId);
   const form = useFormValidation(
     promotionRuleSchema,
     { months, enabled },
     promotionRuleFieldForReason,
   );
-
-  // Opening focuses the tenure; closing returns focus to Editează (#923).
-  useEffect(() => {
-    if (editing) document.getElementById(monthsId)?.focus();
-    else if (wasEditing.current) editButton.current?.focus();
-    wasEditing.current = editing;
-  }, [editing, monthsId]);
 
   const changed =
     months.trim() !== String(rule.tenureMonths) || enabled !== rule.enabled;
@@ -829,7 +913,7 @@ function RuleRow({
       setSaved(true);
       setEditing(false);
     } catch (failure) {
-      form.fail(failure, 'Nu am putut salva regula. Reîncearcă.');
+      form.fail(failure, RULE_SAVE_FAILED);
     } finally {
       setPending(false);
     }
@@ -837,55 +921,64 @@ function RuleRow({
 
   const busy = disabled || pending;
   return (
-    <li
-      data-slot="rule-row"
+    <SettingRow
       data-rule={rule.kind}
       aria-labelledby={labelId}
-      className={cn(
-        'grid gap-2 py-3 first:pt-0',
-        editing && '-mx-3 rounded-lg bg-muted/40 px-3 first:pt-3',
-      )}
+      labelId={labelId}
+      label={label}
+      editing={editing}
+      hint={
+        !editing && (
+          <InfoHint label={`Despre regula ${label}`}>{text.on}</InfoHint>
+        )
+      }
+      value={
+        <>
+          <span className="sr-only">Vechime cerută: </span>
+          {formatMonthCount(rule.tenureMonths)}
+        </>
+      }
+      controls={
+        !editing && (
+          <>
+            <Button
+              ref={editButton}
+              type="button"
+              variant="outline"
+              size="icon"
+              disabled={busy}
+              onClick={open}
+              aria-label={`Editează regula ${label}`}
+              title="Editează regula"
+            >
+              <Pencil aria-hidden="true" />
+            </Button>
+            {/* The state, not a control: a rule turns on or off only in
+                its editor, with Salvează. */}
+            <Badge
+              variant={rule.enabled ? 'outline' : 'secondary'}
+              data-slot="rule-state"
+            >
+              {rule.enabled ? 'Pornită' : 'Oprită'}
+            </Badge>
+          </>
+        )
+      }
     >
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3">
-        <div className="grid min-w-0 gap-1">
-          <SubHeading as="h4" variant="label" id={labelId}>
-            {label}
-          </SubHeading>
-          <p className="m-0 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="sr-only">Vechime cerută: </span>
-            <span className="text-2xl leading-tight font-bold tabular-nums">
-              {formatMonthCount(rule.tenureMonths)}
-            </span>
-            <span className="sr-only">. Stare: </span>
-            <RuleState enabled={rule.enabled} />
-          </p>
-          <p className="m-0 text-sm text-muted-foreground">
-            {rule.enabled ? text.on : text.off}
-          </p>
-          {lastChange?.changed_by && (
-            <p className="m-0 flex flex-wrap items-center gap-x-1 text-sm text-muted-foreground">
-              schimbată de
-              <Name memberId={lastChange.changed_by} identities={identities} />
-            </p>
-          )}
-          {/* Always mounted, so the receipt is announced when it appears. */}
-          <p role="status" className="m-0 text-sm font-medium empty:hidden">
-            {saved && !editing ? 'Regula a fost salvată.' : null}
-          </p>
-        </div>
-        {!editing && (
-          <Button
-            ref={editButton}
-            type="button"
-            variant="outline"
-            disabled={disabled}
-            onClick={open}
-            aria-label={`Editează regula ${label}`}
-          >
-            Editează
-          </Button>
-        )}
-      </div>
+      {/* What an off rule stops is read before anything else is decided. */}
+      {!rule.enabled && !editing && (
+        <p className="m-0 text-sm text-muted-foreground">{text.off}</p>
+      )}
+      {lastChange?.changed_by && !editing && (
+        <p className="m-0 flex flex-wrap items-center gap-x-1 text-sm text-muted-foreground">
+          schimbată de
+          <Name memberId={lastChange.changed_by} identities={identities} />
+        </p>
+      )}
+      {/* Always mounted, so the receipt is announced when it appears. */}
+      <p role="status" className="m-0 text-sm font-medium empty:hidden">
+        {saved && !editing ? 'Regula a fost salvată.' : null}
+      </p>
       {editing && (
         <form
           onSubmit={save}
@@ -898,14 +991,14 @@ function RuleRow({
               Vechime cerută
             </label>
             <div className="relative w-32">
-              <input
+              <Input
                 id={monthsId}
                 type="number"
                 inputMode="numeric"
                 min={0}
                 max={120}
                 step={1}
-                className={cn(control, 'pr-12')}
+                className="pr-12"
                 value={months}
                 disabled={busy}
                 onChange={(event) => setMonths(event.target.value)}
@@ -936,50 +1029,157 @@ function RuleRow({
           </div>
           <FieldError>{form.formError}</FieldError>
           <div className="flex flex-wrap gap-2">
-            <Button
-              type="submit"
-              className="flex-1 sm:flex-none"
-              disabled={!changed || busy}
-            >
-              Salvează
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1 sm:flex-none"
+            <EditorActions
               disabled={busy}
-              onClick={() => setEditing(false)}
-            >
-              Renunță
-            </Button>
+              canSave={changed}
+              onCancel={() => setEditing(false)}
+            />
           </div>
         </form>
       )}
-    </li>
+    </SettingRow>
   );
 }
 
-function RulesSection({
+/** The Promotion Rules of one place on the tab, each a `RuleRow`. */
+function RuleRows({
+  rules,
   changes,
   identities,
   disabled,
   onRun,
 }: {
+  rules: readonly PromotionRule[];
   changes: readonly ThresholdChange[] | undefined;
   identities: Identities;
   disabled: boolean;
   onRun: Run;
 }) {
-  const titleId = useId();
+  return rules.map((rule) => (
+    <RuleRow
+      key={rule.id}
+      rule={rule}
+      lastChange={changes?.find(
+        (change) => change.promotion_rule_id === rule.id,
+      )}
+      identities={identities}
+      disabled={disabled}
+      onRun={onRun}
+    />
+  ));
+}
+
+/** Whoever changed a threshold, a share or a rule, for the names beside them. */
+function useChangeAuthors(changes: readonly ThresholdChange[] | undefined) {
+  const memberIds = useMemo(
+    () =>
+      (changes ?? []).flatMap((change) =>
+        change.changed_by ? [change.changed_by] : [],
+      ),
+    [changes],
+  );
+  return useMemberIdentities(memberIds).data;
+}
+
+/**
+ * The chosen kind's numbers, and only its: the Promotion Threshold in force,
+ * the share the next one is computed from and, for Voluntar Activ, the
+ * Promotion Rule its candidates must meet. The other kind's are one tap away
+ * on the page's Tip switch, never beside these.
+ */
+function ThresholdsPanel({
+  kind,
+  thresholds,
+  evaluations,
+  disabled,
+  onRun,
+}: {
+  kind: RoleEvaluationKind;
+  thresholds: readonly PromotionThreshold[];
+  evaluations: readonly RoleEvaluation[];
+  disabled: boolean;
+  onRun: Run;
+}) {
+  const changes = useThresholdChanges();
+  const percents = useEvaluationPercents();
   const rules = usePromotionRules();
+  const identities = useChangeAuthors(changes.data);
+  const runName = (id: number | null) =>
+    evaluations.find((run) => run.id === id)?.name ?? '…';
+  const kindRules = (rules.data ?? []).filter(
+    (rule) => ruleEvaluationKind(rule) === kind,
+  );
+
   return (
-    <section
-      aria-labelledby={titleId}
-      className="grid gap-2 border-t border-(--border-soft) pt-3"
+    <Panel
+      title="Praguri"
+      control={
+        <InfoHint label="Despre praguri">
+          Punctele de task cu care evaluarea compară membrii, procentul din
+          clasament din care calculează pragul următor și vechimea cerută unui
+          candidat la promovare.
+        </InfoHint>
+      }
     >
-      <SubHeading id={titleId} variant="label">
-        Reguli de promovare
-      </SubHeading>
+      {/* Keyed by kind: an editor left open does not follow the switch. */}
+      <ul key={kind} className={rowListClass}>
+        <ThresholdRow
+          kind={kind}
+          row={thresholds.find((row) => row.kind === kind)}
+          source={changes.data?.find(
+            (change) => change.kind === kind && change.field === 'threshold',
+          )}
+          runName={runName}
+          identities={identities}
+          disabled={disabled}
+          onRun={onRun}
+        />
+        <PercentRow
+          kind={kind}
+          percent={percents.data?.find((row) => row.kind === kind)}
+          identities={identities}
+          disabled={disabled}
+          onRun={onRun}
+        />
+        <RuleRows
+          rules={kindRules}
+          changes={changes.data}
+          identities={identities}
+          disabled={disabled}
+          onRun={onRun}
+        />
+      </ul>
+      {/* Only Voluntar Activ has a rule to wait for or to miss. */}
+      {kind === 'voluntar_activ' &&
+        (rules.isPending ? (
+          <Loading label="Se încarcă regulile de promovare…" />
+        ) : rules.isError ? (
+          <ErrorState
+            text="Nu am putut încărca regulile de promovare."
+            onRetry={() => void rules.refetch()}
+          />
+        ) : null)}
+    </Panel>
+  );
+}
+
+/**
+ * The Promotion Rules no Role Evaluation reads — Recrut → Voluntar, which the
+ * daily job applies by tenure alone — the page's content under Vechime, the
+ * Tip switch's third choice.
+ */
+function TenureRulesPanel({
+  disabled,
+  onRun,
+}: {
+  disabled: boolean;
+  onRun: Run;
+}) {
+  const rules = usePromotionRules();
+  const changes = useThresholdChanges();
+  const identities = useChangeAuthors(changes.data);
+  return (
+    <Panel title="Promovare după vechime">
       {rules.isPending ? (
         <Loading label="Se încarcă regulile de promovare…" />
       ) : rules.isError ? (
@@ -988,24 +1188,25 @@ function RulesSection({
           onRetry={() => void rules.refetch()}
         />
       ) : (
-        <ul className={rowListClass} aria-labelledby={titleId}>
-          {rules.data.map((rule) => (
-            <RuleRow
-              key={rule.id}
-              rule={rule}
-              lastChange={changes?.find(
-                (change) => change.promotion_rule_id === rule.id,
-              )}
-              identities={identities}
-              disabled={disabled}
-              onRun={onRun}
-            />
-          ))}
+        <ul className={rowListClass}>
+          <RuleRows
+            rules={rules.data.filter(
+              (rule) => ruleEvaluationKind(rule) === null,
+            )}
+            changes={changes.data}
+            identities={identities}
+            disabled={disabled}
+            onRun={onRun}
+          />
         </ul>
       )}
-    </section>
+    </Panel>
   );
 }
+
+/* ------------------------------------------------------------------------ */
+/* Istoricul modificărilor                                                   */
+/* ------------------------------------------------------------------------ */
 
 /** The log's subject: a kind (threshold, share) or a rule (tenure, on/off). */
 function changeSubject(
@@ -1019,6 +1220,19 @@ function changeSubject(
   }
   const kind = change.kind ?? '';
   return `${KIND_LABEL[kind] ?? kind}${change.field === 'percent' ? ' · procent' : ''}`;
+}
+
+/** The log's rows: all of them, or only those of the given Promotion Rules. */
+function tenureChanges(
+  changes: readonly ThresholdChange[],
+  ruleIds: ReadonlySet<number> | undefined,
+): readonly ThresholdChange[] {
+  if (!ruleIds) return changes;
+  return changes.filter(
+    (change) =>
+      change.promotion_rule_id !== null &&
+      ruleIds.has(change.promotion_rule_id),
+  );
 }
 
 /** The log's before → after, in each value's own unit. */
@@ -1040,109 +1254,67 @@ function changeValues(change: ThresholdChange): string {
   }
 }
 
-function ThresholdsPanel({
-  thresholds,
+/**
+ * Every change of a threshold, a share or a rule, newest first — a record of
+ * both kinds, each row naming its own. Under Vechime (`ruleIds`) it keeps to
+ * the changes of those Promotion Rules. The page mounts it with the first
+ * change it would show (B58).
+ */
+function ChangeLogPanel({
   evaluations,
-  disabled,
-  onRun,
+  ruleIds,
 }: {
-  thresholds: readonly PromotionThreshold[];
   evaluations: readonly RoleEvaluation[];
-  disabled: boolean;
-  onRun: Run;
+  /** Only the changes of these Promotion Rules. */
+  ruleIds?: ReadonlySet<number>;
 }) {
   const changes = useThresholdChanges();
-  const percents = useEvaluationPercents();
-  // Shared with RulesSection through the query cache: the log names each rule.
+  // Shared through the query cache: the log names each rule.
   const rules = usePromotionRules();
-  const memberIds = useMemo(
-    () =>
-      (changes.data ?? []).flatMap((change) =>
-        change.changed_by ? [change.changed_by] : [],
-      ),
-    [changes.data],
-  );
-  const identities = useMemberIdentities(memberIds);
+  const identities = useChangeAuthors(changes.data);
   const runName = (id: number | null) =>
     evaluations.find((run) => run.id === id)?.name ?? '…';
-
   return (
-    <Panel
-      eyebrow="Evaluări de rol"
-      icon={Gauge}
-      title="Praguri"
-      description="Punctele de task cu care fiecare tip de evaluare compară membrii, procentul din clasament din care calculează pragul următor și vechimea cerută de fiecare regulă de promovare."
-      boxClassName="grid content-start gap-3"
-    >
-      <ul className={rowListClass}>
-        {KINDS.map((kind) => (
-          <ThresholdRow
-            key={kind}
-            kind={kind}
-            row={thresholds.find((row) => row.kind === kind)}
-            source={changes.data?.find(
-              (change) => change.kind === kind && change.field === 'threshold',
-            )}
-            percent={percents.data?.find((row) => row.kind === kind)}
-            runName={runName}
-            identities={identities.data}
-            disabled={disabled}
-            onRun={onRun}
-          />
-        ))}
-      </ul>
-      <RulesSection
-        changes={changes.data}
-        identities={identities.data}
-        disabled={disabled}
-        onRun={onRun}
-      />
-      {/* The log appears with its first change (B58): an empty "Nicio
-          schimbare încă" block tells BC nothing before anything happened. */}
-      {!(changes.isSuccess && changes.data.length === 0) && (
-        <div className="grid gap-2 border-t border-(--border-soft) pt-3">
-          <SubHeading variant="label">Istoricul modificărilor</SubHeading>
-          {changes.isPending ? (
-            <Loading label="Se încarcă istoricul modificărilor…" />
-          ) : changes.isError ? (
-            <ErrorState
-              text="Nu am putut încărca istoricul modificărilor."
-              onRetry={() => void changes.refetch()}
-            />
-          ) : (
-            <ul
-              className={cn(rowListClass, 'max-h-80 overflow-y-auto text-sm')}
-              aria-label="Istoricul modificărilor"
+    <Panel title="Istoricul modificărilor">
+      {changes.isPending ? (
+        <Loading label="Se încarcă istoricul modificărilor…" />
+      ) : changes.isError ? (
+        <ErrorState
+          text="Nu am putut încărca istoricul modificărilor."
+          onRetry={() => void changes.refetch()}
+        />
+      ) : (
+        <ul
+          className={cn(rowListClass, 'max-h-80 overflow-y-auto text-sm')}
+          aria-label="Istoricul modificărilor"
+        >
+          {tenureChanges(changes.data, ruleIds).map((change) => (
+            <li
+              key={change.id}
+              className="grid min-w-0 gap-0.5 py-2 first:pt-0 last:pb-0"
             >
-              {changes.data.map((change) => (
-                <li key={change.id} className="grid min-w-0 gap-0.5 py-2">
-                  <span className="text-muted-foreground tabular-nums">
-                    {formatInstantDay(change.changed_at)} ·{' '}
-                    {changeSubject(change, rules.data)}
+              <span className="text-muted-foreground tabular-nums">
+                {formatInstantDay(change.changed_at)} ·{' '}
+                {changeSubject(change, rules.data)}
+              </span>
+              <span className="flex min-w-0 flex-wrap items-center gap-x-1.5">
+                <span className="font-semibold tabular-nums">
+                  {changeValues(change)}
+                </span>
+                <span aria-hidden="true" className="text-muted-foreground">
+                  ·
+                </span>
+                {change.source === 'manual' && change.changed_by ? (
+                  <Name memberId={change.changed_by} identities={identities} />
+                ) : (
+                  <span className="text-muted-foreground">
+                    evaluarea „{runName(change.role_evaluation_id)}”
                   </span>
-                  <span className="flex min-w-0 flex-wrap items-center gap-x-1.5">
-                    <span className="font-semibold tabular-nums">
-                      {changeValues(change)}
-                    </span>
-                    <span aria-hidden="true" className="text-muted-foreground">
-                      ·
-                    </span>
-                    {change.source === 'manual' && change.changed_by ? (
-                      <Name
-                        memberId={change.changed_by}
-                        identities={identities.data}
-                      />
-                    ) : (
-                      <span className="text-muted-foreground">
-                        evaluarea „{runName(change.role_evaluation_id)}”
-                      </span>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </Panel>
   );
@@ -1216,12 +1388,14 @@ function RejectDialog({
     <Dialog open={open} onOpenChange={(next) => !disabled && reset(next)}>
       <Button
         type="button"
-        variant="outline"
+        variant="ghost"
+        size="icon"
         disabled={disabled}
         onClick={() => reset(true)}
         aria-label={`Respinge: ${name}`}
+        title="Respinge"
       >
-        Respinge
+        <UserX aria-hidden="true" />
       </Button>
       <DialogContent>
         <form onSubmit={submit} noValidate className="grid gap-4">
@@ -1244,10 +1418,9 @@ function RejectDialog({
             <label htmlFor={reasonId} className="text-sm font-medium">
               Motivul respingerii
             </label>
-            <textarea
+            <Textarea
               id={reasonId}
               rows={3}
-              className={control}
               value={reason}
               required
               disabled={disabled}
@@ -1297,10 +1470,14 @@ function CandidatesPanel({
   const [notice, setNotice] = useState<string | null>(null);
   return (
     <Panel
-      eyebrow="Roluri"
-      icon={UserCheck}
       title="Candidați la promovare"
-      description="Voluntari cu vechimea cerută și cel puțin pragul Voluntar Activ: de îndată ce ajung la prag, și la fiecare evaluare Voluntar Activ. Nimeni nu este promovat automat: BC decide în panoul de roluri."
+      control={
+        <InfoHint label="Despre candidații la promovare">
+          Voluntari cu vechimea cerută și cel puțin pragul Voluntar Activ: de
+          îndată ce ajung la prag, și la fiecare evaluare Voluntar Activ. Nimeni
+          nu este promovat automat: BC decide în panoul de roluri.
+        </InfoHint>
+      }
     >
       {notice && (
         <p role="alert" className="m-0 mb-2 text-sm">
@@ -1329,7 +1506,8 @@ function CandidatesPanel({
                     <Link
                       to={promoteHref(candidate)}
                       aria-label={`Promovează: ${name}`}
-                      className={cn(buttonVariants())}
+                      // The page's one filled button is the run form's.
+                      className={cn(buttonVariants({ variant: 'outline' }))}
                     >
                       Promovează
                     </Link>
@@ -1371,14 +1549,17 @@ function CandidatesPanel({
 /* Semnale de retenție                                                       */
 /* ------------------------------------------------------------------------ */
 
-function SignalsSection({
+/**
+ * The Retention Signals of the chosen kind's latest run: its holders under
+ * the threshold that run used. The other kind's are behind the Tip switch.
+ */
+function SignalsPanel({
   kind,
   run,
 }: {
   kind: RoleEvaluationKind;
   run: RoleEvaluation | undefined;
 }) {
-  const titleId = useId();
   const ranking = useRoleEvaluationRanking(run);
   const signals = useMemo(
     () => (run && ranking.data ? retentionSignals(run, ranking.data) : []),
@@ -1388,18 +1569,22 @@ function SignalsSection({
     signals.map((signal) => signal.memberId),
   );
   return (
-    <section aria-labelledby={titleId} className="grid min-w-0 content-start">
-      <div className="grid min-w-0 gap-0.5 border-b border-(--border-soft) pb-2">
-        <SubHeading id={titleId} variant="label">
-          {KIND_LABEL[kind]}
-        </SubHeading>
-        {run && (
-          <p className="m-0 text-sm text-muted-foreground">
-            {run.name} · {rangeText(run)} · pragul{' '}
-            {formatPoints(run.threshold_used)}
-          </p>
-        )}
-      </div>
+    <Panel
+      title="Semnale de retenție"
+      control={
+        <InfoHint label="Despre semnalele de retenție">
+          Deținătorii rolului sub pragul folosit la ultima evaluare de acest
+          tip. Retragerea unui rol este decizia BC, din panoul de roluri.
+        </InfoHint>
+      }
+      stack={2}
+    >
+      {run && (
+        <p className="m-0 text-sm text-muted-foreground tabular-nums">
+          {run.name} · {rangeText(run)} · pragul{' '}
+          {formatPoints(run.threshold_used)}
+        </p>
+      )}
       {!run ? (
         <EmptyState>Nicio evaluare de acest tip încă.</EmptyState>
       ) : ranking.isPending ? (
@@ -1443,30 +1628,6 @@ function SignalsSection({
           })}
         </ul>
       )}
-    </section>
-  );
-}
-
-function SignalsPanel({
-  evaluations,
-}: {
-  evaluations: readonly RoleEvaluation[];
-}) {
-  return (
-    <Panel
-      eyebrow="Roluri"
-      icon={TriangleAlert}
-      title="Semnale de retenție"
-      description="Deținătorii rolului sub pragul folosit la ultima evaluare de fiecare tip. Retragerea unui rol este decizia BC, din panoul de roluri."
-      boxClassName="grid gap-6 lg:grid-cols-2"
-    >
-      {KINDS.map((kind) => (
-        <SignalsSection
-          key={kind}
-          kind={kind}
-          run={latestRun(evaluations, kind)}
-        />
-      ))}
     </Panel>
   );
 }
@@ -1535,6 +1696,13 @@ function historyColumns(
   ];
 }
 
+/**
+ * The viewport from which the history is a table (Tailwind's `xl`): its seven
+ * columns need about 900 px, which the page has beside the sidebar only from
+ * 1280 px. Under it each run is a list row, so nothing scrolls sideways.
+ */
+const HISTORY_TABLE_FROM = '80rem';
+
 function HistoryPanel({
   evaluations,
 }: {
@@ -1546,21 +1714,45 @@ function HistoryPanel({
     [identities.data],
   );
   const rows = useMemo(() => [...evaluations], [evaluations]);
+  const table = useMinWidth(HISTORY_TABLE_FROM);
   return (
-    <Panel
-      eyebrow="Evaluări de rol"
-      icon={History}
-      title="Istoricul evaluărilor"
-      description="Fiecare evaluare rulată, cea mai recentă prima."
-    >
+    <Panel title="Istoricul evaluărilor">
       {/* Mounted only once a run exists (B58). */}
-      <DataTable
-        columns={columns}
-        data={rows}
-        emptyTitle="Nicio evaluare de rol încă."
-        // A name keeps at least a word at 375 px (F-22).
-        columnClassName={{ run_by: 'min-w-36' }}
-      />
+      {table ? (
+        <DataTable
+          columns={columns}
+          data={rows}
+          emptyTitle="Nicio evaluare de rol încă."
+          // A name keeps at least a word at 375 px (F-22).
+          columnClassName={{ run_by: 'min-w-36' }}
+        />
+      ) : (
+        <ul className={rowListClass} aria-label="Istoricul evaluărilor">
+          {rows.map((run) => (
+            <li
+              key={run.id}
+              className="grid min-w-0 gap-0.5 py-2 text-sm first:pt-0 last:pb-0"
+            >
+              <span className="font-semibold wrap-anywhere">{run.name}</span>
+              <span className="text-muted-foreground tabular-nums">
+                {KIND_LABEL[run.kind] ?? run.kind} · {rangeText(run)}
+              </span>
+              <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-muted-foreground">
+                <span>Rulată de</span>
+                <Name memberId={run.run_by} identities={identities.data} />
+                <span aria-hidden="true">·</span>
+                <span className="tabular-nums">
+                  {formatInstantDay(run.run_at)}
+                </span>
+              </span>
+              <span className="text-muted-foreground tabular-nums">
+                Prag folosit {formatPoints(run.threshold_used)} · prag calculat{' '}
+                {computedThresholdText(run.threshold_computed)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </Panel>
   );
 }
@@ -1568,16 +1760,41 @@ function HistoryPanel({
 /**
  * Administrare → **Evaluări de rol** (#827; ruling R28, over #826): BC or the
  * Moderator runs a Role Evaluation of one kind over an Evaluation Period,
- * edits the two Promotion Thresholds and reads their log, decides the
- * Promotion Candidates (promotion itself stays in the Role panel), reads each
- * kind's Retention Signals and the history of runs. Mounted behind
+ * edits that kind's Promotion Threshold and share, decides the Promotion
+ * Candidates (promotion itself stays in the Role panel), reads the kind's
+ * Retention Signals, and the history of runs and of changes.
+ *
+ * One **Tip** switch at the top drives the page: the run form, the numbers in
+ * Praguri and the results below are the chosen kind's, never both kinds' side
+ * by side. Promotion Candidates exist for Voluntar Activ only. Its third
+ * choice, **Vechime**, is the promotion no evaluation runs: the Recrut →
+ * Voluntar rule and that rule's changes, with nothing of either kind beside
+ * them. The two histories stay put under either kind. Mounted behind
  * `manageRoles`; every command decides again on the server (level 6).
  */
 export default function RoleEvaluationsScreen() {
   const evaluations = useRoleEvaluations();
   const thresholds = usePromotionThresholds();
+  // Read here too, so the page decides whether the log has a panel (B58).
+  const changes = useThresholdChanges();
+  // Shared through the query cache: which changes are the tenure rules'.
+  const rules = usePromotionRules();
   const command = useRoleEvaluationCommand();
   const run: Run = (next) => command.mutateAsync(next);
+  const [view, setView] = useState<View>('voluntar_activ');
+  // The kind last looked at: its panels stay mounted, hidden, under Vechime,
+  // so a run's receipt or a half-written form is there on the way back.
+  const [kind, setKind] = useState<RoleEvaluationKind>('voluntar_activ');
+  const tenure = view === TENURE_VIEW;
+  const tenureRuleIds = useMemo(
+    () =>
+      new Set(
+        (rules.data ?? [])
+          .filter((rule) => ruleEvaluationKind(rule) === null)
+          .map((rule) => rule.id),
+      ),
+    [rules.data],
+  );
 
   if (evaluations.isPending || thresholds.isPending)
     return <Loading label="Se încarcă evaluările de rol…" />;
@@ -1591,32 +1808,107 @@ export default function RoleEvaluationsScreen() {
         }}
       />
     );
-  // Until the first run only Run and Praguri have anything to say (B58): the
-  // candidates, signals and history panels appear with their first row.
-  const hasRun = evaluations.data.length > 0;
+  const hasLog = changes.isError || (changes.data?.length ?? 0) > 0;
+  const hasTenureLog =
+    changes.isError ||
+    tenureChanges(changes.data ?? [], tenureRuleIds).length > 0;
   return (
     <ReceiptTurnScope>
-      <PageGrid columns={2} alignHeaders>
-        <RunPanel
-          evaluations={evaluations.data}
-          thresholds={thresholds.data}
-          disabled={command.isPending}
-          onRun={run}
-        />
-        <ThresholdsPanel
-          thresholds={thresholds.data}
-          evaluations={evaluations.data}
-          disabled={command.isPending}
-          onRun={run}
-        />
-      </PageGrid>
-      {hasRun && (
+      {/* A choice of three, drawn as segments; a long label wraps inside its
+          segment, never past it (F-22). */}
+      <SegmentedRadio<View>
+        aria-label="Tip"
+        className="sm:max-w-xl"
+        options={[
+          ...KINDS.map((value) => ({ value, label: KIND_LABEL[value] })),
+          { value: TENURE_VIEW, label: TENURE_VIEW_LABEL },
+        ]}
+        value={view}
+        onValueChange={(next) => {
+          setView(next);
+          if (next !== TENURE_VIEW) setKind(next);
+        }}
+        disabled={command.isPending}
+      />
+      {tenure && (
         <PageGrid columns={1}>
-          <CandidatesPanel disabled={command.isPending} onRun={run} />
-          <SignalsPanel evaluations={evaluations.data} />
-          <HistoryPanel evaluations={evaluations.data} />
+          <TenureRulesPanel disabled={command.isPending} onRun={run} />
+          {hasTenureLog && (
+            <ChangeLogPanel
+              evaluations={evaluations.data}
+              ruleIds={tenureRuleIds}
+            />
+          )}
         </PageGrid>
       )}
+      {/* `contents`: the kind's grids stay the page's own blocks. */}
+      <div hidden={tenure} className={tenure ? undefined : 'contents'}>
+        <KindView
+          kind={kind}
+          evaluations={evaluations.data}
+          thresholds={thresholds.data}
+          hasLog={hasLog}
+          disabled={command.isPending}
+          onRun={run}
+        />
+      </div>
     </ReceiptTurnScope>
+  );
+}
+
+/** What the page shows under one Role Evaluation kind. */
+function KindView({
+  kind,
+  evaluations,
+  thresholds,
+  hasLog,
+  disabled,
+  onRun,
+}: {
+  kind: RoleEvaluationKind;
+  evaluations: readonly RoleEvaluation[];
+  thresholds: readonly PromotionThreshold[];
+  hasLog: boolean;
+  disabled: boolean;
+  onRun: Run;
+}) {
+  // Until the first run only Run and Praguri have anything to say (B58): the
+  // candidates, signals and history panels appear with their first row, the
+  // log with its first change.
+  const hasRun = evaluations.length > 0;
+  return (
+    <>
+      <PageGrid columns={2} alignHeaders>
+        <RunPanel
+          kind={kind}
+          evaluations={evaluations}
+          thresholds={thresholds}
+          disabled={disabled}
+          onRun={onRun}
+        />
+        <ThresholdsPanel
+          kind={kind}
+          thresholds={thresholds}
+          evaluations={evaluations}
+          disabled={disabled}
+          onRun={onRun}
+        />
+      </PageGrid>
+      <PageGrid columns={1}>
+        {/* Under both kinds: a promotion waits for a decision whichever
+            evaluation the viewer is looking at. */}
+        {hasRun && <CandidatesPanel disabled={disabled} onRun={onRun} />}
+        {hasRun && (
+          <SignalsPanel
+            // Keyed by kind: one kind's rows never linger under the other.
+            key={kind}
+            kind={kind}
+            run={latestRun(evaluations, kind)}
+          />
+        )}
+        {hasRun && <HistoryPanel evaluations={evaluations} />}
+        {hasLog && <ChangeLogPanel evaluations={evaluations} />}
+      </PageGrid>
+    </>
   );
 }

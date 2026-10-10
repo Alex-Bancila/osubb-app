@@ -45,7 +45,7 @@ const sampleProfile: MyProfile = {
 };
 
 const NICKNAME_RULE =
-  '2–24 de caractere: litere, cifre, spații, punct, cratimă sau underscore. Fără pseudonim, se afișează numele complet.';
+  '2–24 de caractere: litere, cifre, spații, punct, cratimă sau underscore. Fără poreclă, se afișează numele complet.';
 
 function wrapper(queryClient = new QueryClient()) {
   return function QueryWrapper({ children }: { children: ReactNode }) {
@@ -65,7 +65,7 @@ function renderSheet(
   );
 }
 
-const nicknameInput = () => screen.getByLabelText('Pseudonim');
+const nicknameInput = () => screen.getByLabelText('Poreclă (opțional)');
 const phoneInput = () => screen.getByLabelText(/număr de telefon/i);
 const save = () =>
   userEvent.click(
@@ -85,11 +85,43 @@ describe('EditProfileSheet', () => {
     expect(nicknameInput()).toHaveValue('Ani');
     expect(nicknameInput()).toHaveAccessibleDescription(NICKNAME_RULE);
     expect(phoneInput()).toHaveValue('0711223344');
+    // The sentences a field needs once sit behind the "i" beside its label,
+    // and still describe the field; no helper paragraph is drawn.
+    expect(phoneInput()).toHaveAccessibleDescription(
+      'Numărul de telefon este vizibil doar pentru tine, BCE și BC.',
+    );
+    for (const name of [
+      'Despre poreclă',
+      'Despre numele complet',
+      'Despre numărul de telefon',
+      'Despre schimbarea adresei',
+    ])
+      expect(screen.getByRole('button', { name })).toHaveAttribute(
+        'data-slot',
+        'info-hint',
+      );
     expect(
-      screen.getByText(
-        /numărul de telefon este vizibil doar pentru tine, BCE și BC./i,
-      ),
-    ).toBeInTheDocument();
+      document.querySelector('[data-slot="field-description"]'),
+    ).toBeNull();
+    expect(
+      screen.getByText(/numărul de telefon este vizibil doar/i),
+    ).not.toBeVisible();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Despre numărul de telefon' }),
+    );
+    expect(
+      await screen.findByRole('dialog', { name: 'Despre numărul de telefon' }),
+    ).toHaveTextContent(
+      'Numărul de telefon este vizibil doar pentru tine, BCE și BC.',
+    );
+    await userEvent.keyboard('{Escape}');
+    // Every field is the shared one.
+    for (const field of [nicknameInput(), phoneInput()])
+      expect(field).toHaveAttribute('data-slot', 'input');
+    expect(screen.getByLabelText('Adresa nouă')).toHaveAttribute(
+      'data-slot',
+      'input',
+    );
     expect(
       screen.getByRole('group', { name: 'Alege culoarea avatarului' }),
     ).toBeInTheDocument();
@@ -100,6 +132,20 @@ describe('EditProfileSheet', () => {
     expect((await axe.run(screen.getByRole('dialog'))).violations).toEqual([]);
   });
 
+  it('offers any colour under Personalizată and saves it', async () => {
+    const user = userEvent.setup();
+    renderSheet();
+
+    await user.click(screen.getByRole('radio', { name: 'Personalizată' }));
+    const code = screen.getByLabelText('Codul culorii');
+    await user.clear(code);
+    await user.type(code, '#1A5FD0');
+    expect(code).toHaveValue('#1A5FD0');
+    expect(
+      screen.queryByRole('group', { name: 'Alege culoarea avatarului' }),
+    ).toBeNull();
+  });
+
   it('lays the swatches out as one row of seven 44 px targets; selecting one never resizes it (P4)', async () => {
     const user = userEvent.setup();
     renderSheet();
@@ -107,7 +153,8 @@ describe('EditProfileSheet', () => {
     const group = screen.getByRole('group', {
       name: 'Alege culoarea avatarului',
     });
-    expect(group).toHaveClass('grid-cols-7');
+    // Seven equal columns, so the row never wraps.
+    expect(group.style.gridTemplateColumns).toBe('repeat(7, minmax(0, 1fr))');
     const swatches = within(group).getAllByRole('button');
     expect(swatches).toHaveLength(7);
     for (const swatch of swatches)
@@ -186,7 +233,7 @@ describe('EditProfileSheet', () => {
       await user.tab();
       expect(nicknameInput()).toHaveAttribute('aria-invalid', 'true');
       expect(nicknameInput()).toHaveAccessibleDescription(
-        `${NICKNAME_RULE} Pseudonimul are cel puțin 2 caractere.`,
+        `${NICKNAME_RULE} Porecla are cel puțin 2 caractere.`,
       );
 
       await save();
@@ -204,7 +251,7 @@ describe('EditProfileSheet', () => {
 
       expect(updateProfileMock).not.toHaveBeenCalled();
       expect(nicknameInput()).toHaveAccessibleDescription(
-        /Pseudonimul are cel mult 24 de caractere\./,
+        /Porecla are cel mult 24 de caractere\./,
       );
     });
 
@@ -217,7 +264,7 @@ describe('EditProfileSheet', () => {
       await user.tab();
 
       expect(nicknameInput()).toHaveAccessibleDescription(
-        /Pseudonimul poate avea doar litere latine, cifre, spații, punct, cratimă sau underscore\./,
+        /Porecla poate avea doar litere latine, cifre, spații, punct, cratimă sau underscore\./,
       );
       await save();
       expect(updateProfileMock).not.toHaveBeenCalled();
@@ -250,7 +297,7 @@ describe('EditProfileSheet', () => {
 
       expect(updateProfileMock).toHaveBeenCalled();
       expect(nicknameInput()).toHaveAccessibleDescription(
-        /Pseudonimul este deja folosit de alt membru\. Alege altul\./,
+        /Porecla este deja folosită de alt membru\. Alege alta\./,
       );
       expect(nicknameInput()).toHaveFocus();
       // Under the field, not in the form-level slot.
@@ -361,15 +408,30 @@ describe('EditProfileSheet', () => {
         name: 'Schimbă adresa de email',
       });
       expect(section).toHaveTextContent('Adresa actuală: ana@osubb.ro');
-      const saveButton = screen.getByRole('button', {
+      const saveButton = screen.getByRole<HTMLButtonElement>('button', {
         name: /salvează modificările/i,
       });
       // Below the profile form, and not inside it: two forms, two submits.
+      const profileForm = saveButton.form as HTMLFormElement;
       expect(
-        saveButton.compareDocumentPosition(section) &
+        profileForm.compareDocumentPosition(section) &
           Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
-      expect(saveButton.closest('form')).not.toContainElement(section);
+      expect(profileForm).not.toContainElement(section);
+      // The profile form's actions are the sheet's pinned footer, under both
+      // sections: Renunță first, the one filled button last.
+      const footer = saveButton.closest('[data-slot="sheet-footer"]');
+      expect(footer).toHaveAttribute('data-pinned', 'true');
+      expect(saveButton.closest('[data-slot="form-sheet"]')).not.toBeNull();
+      expect(
+        within(footer as HTMLElement)
+          .getAllByRole('button')
+          .map((button) => button.textContent),
+      ).toEqual(['Renunță', 'Salvează modificările']);
+      expect(
+        section.compareDocumentPosition(footer as HTMLElement) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
     });
 
     it('submits Schimbă adresa from the sheet without saving the profile', async () => {

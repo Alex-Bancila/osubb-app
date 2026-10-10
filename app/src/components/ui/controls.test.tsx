@@ -1,11 +1,8 @@
 import * as axe from 'axe-core';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState } from 'react';
 import { describe, expect, it } from 'vitest';
 import { Checkbox } from './checkbox';
-import { ComboboxTrigger, Combobox } from './combobox';
-import { NativeSelect, NativeSelectOption } from './native-select';
 import { ChoiceRow, RadioGroup, RadioGroupItem } from './radio-group';
 import {
   Sheet,
@@ -139,75 +136,6 @@ describe('RadioGroupItem and Checkbox (#842)', () => {
     expect(box.className).toContain('focus-visible:outline-solid');
     expect(box.className).toContain('size-5');
     expect((await axe.run(container, axeOptions)).violations).toEqual([]);
-  });
-});
-
-describe('NativeSelect (#842)', () => {
-  it('draws the same field as the Combobox trigger', () => {
-    render(
-      <>
-        <label>
-          Campanie
-          <NativeSelect defaultValue="">
-            <NativeSelectOption value="">Fără campanie</NativeSelectOption>
-            <NativeSelectOption value="1">Bal</NativeSelectOption>
-          </NativeSelect>
-        </label>
-        <Combobox items={[]}>
-          <ComboboxTrigger aria-label="Grup">Alege grupul</ComboboxTrigger>
-        </Combobox>
-      </>,
-    );
-    const select = screen.getByRole('combobox', { name: 'Campanie' });
-    const trigger = screen.getByRole('combobox', { name: 'Grup' });
-
-    for (const shared of [
-      'h-11',
-      'rounded-lg',
-      'border-border',
-      'bg-background',
-    ]) {
-      expect(select.className).toContain(shared);
-      expect(trigger.className).toContain(shared);
-    }
-    expect(select.className).toContain('appearance-none');
-    expect(select.className).toContain('focus-visible:outline-solid');
-
-    // The same chevron, on the right, in both.
-    const icon = select.parentElement?.querySelector(
-      '[data-slot="native-select-icon"]',
-    );
-    expect(icon?.getAttribute('class')).toContain('lucide-chevrons-up-down');
-    expect(icon?.getAttribute('class')).toContain('right-4');
-    expect(trigger.querySelector('svg')?.getAttribute('class')).toContain(
-      'lucide-chevrons-up-down',
-    );
-  });
-
-  it('changes value like a native select', async () => {
-    const user = userEvent.setup();
-    function Picker() {
-      const [value, setValue] = useState('recent');
-      return (
-        <>
-          <NativeSelect
-            aria-label="Ordonează"
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-          >
-            <NativeSelectOption value="recent">Cele mai noi</NativeSelectOption>
-            <NativeSelectOption value="termen">După termen</NativeSelectOption>
-          </NativeSelect>
-          <output>{value}</output>
-        </>
-      );
-    }
-    render(<Picker />);
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Ordonează' }),
-      'termen',
-    );
-    expect(screen.getByRole('status')).toHaveTextContent('termen');
   });
 });
 

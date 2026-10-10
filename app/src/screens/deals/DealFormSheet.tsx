@@ -1,17 +1,12 @@
-import { useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { Plus } from 'lucide-react';
+import { FabAction } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
-import {
-  Sheet,
-  SheetBackdrop,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetPopup,
-  SheetPortal,
-  SheetTitle,
-} from '../../components/ui/sheet';
+import { DateTimePicker } from '../../components/ui/date-picker';
+import { FormSheet, FormSheetFooter } from '../../components/ui/form-sheet';
+import { InfoHint } from '../../components/ui/info-hint';
+import { Input, Textarea } from '../../components/ui/input';
 import { bucharestWallTimeToIso } from '../../lib/calendar-time';
 import { useCapability } from '../../lib/capabilities';
 import {
@@ -23,10 +18,6 @@ import { useFormValidation } from '../../lib/use-form-validation';
 import { isAnnouncementRefusal } from '../../queries/announcements';
 import { useCreateDeal, useUpdateDeal } from '../../queries/deals';
 import { useGroups } from '../../queries/reference';
-import {
-  announcementFieldClass,
-  announcementInputClass,
-} from '../announcements/AnnouncementFields';
 import { AttachedLinksFields } from '../../components/attached-link/AttachedLinksFields';
 import {
   dealChanges,
@@ -61,34 +52,20 @@ export default function DealFormSheet({
   const editing = deal !== undefined;
 
   return (
-    <Sheet
+    <FormSheet
       open={open}
-      onOpenChange={(next) => {
-        if (pending) return;
-        onOpenChange(next);
-      }}
+      onOpenChange={onOpenChange}
+      title={editing ? 'Editează deal-ul' : 'Deal nou'}
+      busy={pending}
     >
-      <SheetPortal>
-        <SheetBackdrop />
-        <SheetPopup side="right" className="max-w-xl gap-5 p-4 sm:p-6">
-          <SheetHeader showCloseButton={!pending}>
-            <SheetTitle>{editing ? 'Editează deal-ul' : 'Deal nou'}</SheetTitle>
-            <SheetDescription>
-              {editing
-                ? 'Modificările nu trimit o notificare nouă.'
-                : 'Pentru toți membrii OSUBB. Fiecare primește o notificare.'}
-            </SheetDescription>
-          </SheetHeader>
-          <DealForm
-            deal={deal}
-            create={create}
-            update={update}
-            onCancel={() => onOpenChange(false)}
-            onDone={onDone}
-          />
-        </SheetPopup>
-      </SheetPortal>
-    </Sheet>
+      <DealForm
+        deal={deal}
+        create={create}
+        update={update}
+        onCancel={() => onOpenChange(false)}
+        onDone={onDone}
+      />
+    </FormSheet>
   );
 }
 
@@ -106,6 +83,7 @@ function DealForm({
   onDone: () => void;
 }) {
   const groups = useGroups();
+  const id = useId();
   const [initial] = useState(() =>
     deal ? draftFromDeal(deal) : EMPTY_DEAL_DRAFT,
   );
@@ -184,82 +162,92 @@ function DealForm({
     <form
       onSubmit={(event) => void submit(event)}
       noValidate
-      className="flex flex-1 flex-col gap-4"
+      className="flex flex-1 flex-col gap-5"
     >
-      <div className="space-y-1.5">
-        <label className={announcementFieldClass}>
+      <div className="grid gap-1.5">
+        <label htmlFor={`${id}-title`} className="text-sm font-medium">
           Titlu
-          <input
-            className={announcementInputClass}
-            name="title"
-            required
-            value={draft.title}
-            onChange={(event) => patch({ title: event.target.value })}
-            {...form.field('title')}
-          />
         </label>
+        <Input
+          id={`${id}-title`}
+          name="title"
+          required
+          value={draft.title}
+          onChange={(event) => patch({ title: event.target.value })}
+          {...form.field('title')}
+        />
         <FieldError {...form.errorProps('title')} />
       </div>
-      <div className="space-y-1.5">
-        <label className={announcementFieldClass}>
+      <div className="grid gap-1.5">
+        <label htmlFor={`${id}-body`} className="text-sm font-medium">
           Descriere
-          <textarea
-            className={`${announcementInputClass} min-h-24 resize-y`}
-            name="body"
-            required
-            value={draft.body}
-            onChange={(event) => patch({ body: event.target.value })}
-            {...form.field('body')}
-          />
         </label>
+        <Textarea
+          id={`${id}-body`}
+          name="body"
+          required
+          rows={4}
+          value={draft.body}
+          onChange={(event) => patch({ body: event.target.value })}
+          {...form.field('body')}
+        />
         <FieldError {...form.errorProps('body')} />
       </div>
-      <div className="space-y-1.5">
-        <label className={announcementFieldClass}>
-          Termen (opțional) — ora României
-          <input
-            className={announcementInputClass}
-            name="deadline"
-            type="datetime-local"
-            value={draft.deadline}
-            onChange={(event) => patch({ deadline: event.target.value })}
-            {...form.field('deadline')}
-          />
-        </label>
-        <p className="m-0 text-xs text-muted-foreground">
-          După termen, deal-ul dispare pentru membri și rămâne la echipă.
-        </p>
+      <div className="grid gap-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor={`${id}-deadline`} className="text-sm font-medium">
+            Termen (opțional) — ora României
+          </label>
+          <InfoHint label="Despre termen" id={`${id}-deadline-hint`}>
+            După termen, deal-ul dispare pentru membri și rămâne la echipă.
+          </InfoHint>
+        </div>
+        <DateTimePicker
+          id={`${id}-deadline`}
+          name="deadline"
+          defaultTime="23:59"
+          value={draft.deadline}
+          onChange={(deadline) => patch({ deadline })}
+          {...form.field('deadline', `${id}-deadline-hint`)}
+        />
         <FieldError {...form.errorProps('deadline')} />
       </div>
-      <div className="space-y-1.5">
-        <label className={announcementFieldClass}>
-          Cod (opțional)
-          <input
-            className={`${announcementInputClass} font-mono tracking-wider`}
-            name="code"
-            autoComplete="off"
-            spellCheck={false}
-            maxLength={DEAL_CODE_MAX * 2}
-            value={draft.code}
-            onChange={(event) => patch({ code: event.target.value })}
-            {...form.field('code')}
-          />
-        </label>
-        <p className="m-0 text-xs text-muted-foreground">
-          Membrii îl văd ascuns și îl deschid cu o atingere.
-        </p>
+      <div className="grid gap-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor={`${id}-code`} className="text-sm font-medium">
+            Cod (opțional)
+          </label>
+          <InfoHint label="Despre cod" id={`${id}-code-hint`}>
+            Membrii îl văd ascuns și îl deschid cu o atingere.
+          </InfoHint>
+        </div>
+        <Input
+          id={`${id}-code`}
+          className="font-mono tracking-wider"
+          name="code"
+          autoComplete="off"
+          spellCheck={false}
+          maxLength={DEAL_CODE_MAX * 2}
+          value={draft.code}
+          onChange={(event) => patch({ code: event.target.value })}
+          {...form.field('code', `${id}-code-hint`)}
+        />
         <FieldError {...form.errorProps('code')} />
       </div>
-      <div className="rounded-md border p-4">
-        <AttachedLinksFields
-          value={draft.links}
-          onChange={(links) => patch({ links })}
-          form={form}
-          name="links"
-        />
-      </div>
+      <AttachedLinksFields
+        value={draft.links}
+        onChange={(links) => patch({ links })}
+        form={form}
+        name="links"
+      />
+      {!deal && (
+        // What publishing sets off: read before pressing it.
+        <p className="m-0 text-sm text-muted-foreground">
+          Pentru toți membrii OSUBB. Fiecare primește o notificare.
+        </p>
+      )}
       <FieldError>{form.formError}</FieldError>
-      <SheetFooter>
+      <FormSheetFooter>
         <Button
           type="button"
           variant="outline"
@@ -277,7 +265,7 @@ function DealForm({
               ? 'Se publică…'
               : 'Publică deal-ul'}
         </Button>
-      </SheetFooter>
+      </FormSheetFooter>
     </form>
   );
 }
@@ -294,18 +282,17 @@ export function NewDealControl() {
   const [published, setPublished] = useState(false);
   if (!manageDeals) return null;
   return (
-    <div className="space-y-1">
-      <Button
-        type="button"
-        className="min-h-11 gap-2"
-        onClick={() => {
+    <div className="space-y-1 empty:hidden">
+      <FabAction
+        label="Deal nou"
+        icon={Plus}
+        className="gap-2"
+        onSelect={() => {
           setPublished(false);
           setOpenings((count) => count + 1);
           setOpen(true);
         }}
-      >
-        <Plus className="size-4" aria-hidden="true" /> Deal nou
-      </Button>
+      />
       {published && (
         <p
           role="status"

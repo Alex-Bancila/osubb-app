@@ -5,14 +5,8 @@ import {
   CompletedTaskForm,
   type FixedVolunteer,
 } from '../../components/tasks/CompletedTaskForm';
-import { Button } from '../../components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '../../components/ui/dialog';
+import { FabAction } from '../../components/layout';
+import { FormSheet } from '../../components/ui/form-sheet';
 import {
   useCompletedTaskGroups,
   useCompletedTaskOptions,
@@ -26,7 +20,8 @@ type Added = (task: { id: number; title: string }) => void;
 /**
  * "Adaugă task finalizat" (#915) in Taskuri › De gestionat, beside "Task
  * nou": for a viewer who may create Tasks (`can_manage_tasks()`, the same
- * read "Task nou" uses). They choose the Group, then the volunteer.
+ * read "Task nou" uses). They choose the Group, then the volunteer. The form
+ * opens in a form sheet.
  */
 export function AddCompletedTaskControl({ onAdded }: { onAdded: Added }) {
   const management = useTaskManagement();
@@ -43,7 +38,6 @@ function ManagedGroupsDialog({ onAdded }: { onAdded: Added }) {
       onOpenChange={setOpen}
       options={options}
       volunteer={null}
-      description="Înregistrează munca pe care un membru al unui grup gestionat de tine a făcut-o deja și acordă-i punctele."
       onAdded={onAdded}
     />
   );
@@ -70,7 +64,6 @@ export function AddCompletedTaskForMember({
       onOpenChange={setOpen}
       options={groups}
       volunteer={volunteer}
-      description="Înregistrează munca pe care acest membru a făcut-o deja într-un grup pe care îl gestionezi și acordă-i punctele."
       onAdded={onAdded}
     />
   );
@@ -81,7 +74,6 @@ function AddCompletedTaskDialog({
   onOpenChange,
   options,
   volunteer,
-  description,
   onAdded,
 }: {
   open: boolean;
@@ -94,7 +86,6 @@ function AddCompletedTaskDialog({
     refetch: () => unknown;
   };
   volunteer: FixedVolunteer | null;
-  description: string;
   onAdded: Added;
 }) {
   const create = useCreateCompletedTask();
@@ -103,34 +94,25 @@ function AddCompletedTaskDialog({
   // After a Task is added, focus belongs to its receipt, not this button.
   const added = useRef(false);
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next && create.isPending) return;
-        onOpenChange(next);
-      }}
-    >
-      <Button
+    <>
+      <FabAction
+        label="Adaugă task finalizat"
+        icon={ClipboardCheck}
         variant="outline"
-        className="min-h-11"
-        onClick={() => {
+        onSelect={() => {
           added.current = false;
           setAttempt((current) => current + 1);
           onOpenChange(true);
         }}
-      >
-        <ClipboardCheck aria-hidden="true" />
-        Adaugă task finalizat
-      </Button>
-      <DialogContent
+      />
+      <FormSheet
+        open={open}
+        onOpenChange={onOpenChange}
+        title="Adaugă task finalizat"
+        busy={create.isPending}
         finalFocus={() => !added.current}
-        fullScreenOnPhone
         className="sm:max-w-2xl"
       >
-        <DialogHeader>
-          <DialogTitle>Adaugă task finalizat</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
         {options.isPending ? (
           <Loading label="Se încarcă grupurile…" />
         ) : options.isError || !options.data ? (
@@ -158,7 +140,7 @@ function AddCompletedTaskDialog({
             }}
           />
         )}
-      </DialogContent>
-    </Dialog>
+      </FormSheet>
+    </>
   );
 }

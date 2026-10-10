@@ -275,10 +275,6 @@
   .deal-code-revealed {
     animation: deal-code-unblur 320ms var(--easing-standard) both;
   }
-
-  .deal-code-stamp {
-    animation: deal-code-stamp 260ms var(--easing-standard) 180ms both;
-  }
 }
 
 @keyframes deal-code-unblur {
@@ -289,16 +285,5 @@
   to {
     filter: blur(0);
     opacity: 1;
-  }
-}
-
-@keyframes deal-code-stamp {
-  from {
-    opacity: 0;
-    transform: rotate(-8deg) scale(1.4);
-  }
-  to {
-    opacity: 1;
-    transform: rotate(-8deg) scale(1);
   }
 }

@@ -38,7 +38,7 @@ function SheetBackdrop({
   );
 }
 
-// Both sides fill the area a phone keyboard leaves visible (#1013), from
+// The left and right sides fill the area a phone keyboard leaves visible (#1013), from
 // where iOS panned it to down to the keyboard: the sheet's own
 // scroll then reaches every field, and its footer pins above the keyboard.
 const sheetSides = {
@@ -49,6 +49,12 @@ const sheetSides = {
   // padding at the call site.
   right:
     'top-(--visible-top) bottom-(--keyboard-inset) right-0 w-full overflow-y-auto data-ending-style:translate-x-full data-starting-style:translate-x-full',
+  // A few controls (a filter): on a phone a panel as tall as its content,
+  // rising from the bottom edge with the page still visible above it; from
+  // `sm` the same right-hand panel as `right`. Set the width cap from `sm`
+  // (`sm:max-w-md`) and the padding at the call site.
+  bottom:
+    'inset-x-0 bottom-(--keyboard-inset) max-h-[calc(100dvh-var(--keyboard-inset)-var(--keyboard-offset-top)-3rem)] overflow-y-auto rounded-t-2xl data-ending-style:translate-y-full data-starting-style:translate-y-full sm:inset-x-auto sm:top-(--visible-top) sm:right-0 sm:max-h-none sm:w-full sm:rounded-none sm:data-ending-style:translate-x-full sm:data-ending-style:translate-y-0 sm:data-starting-style:translate-x-full sm:data-starting-style:translate-y-0',
 } as const;
 
 function SheetPopup({
@@ -64,7 +70,10 @@ function SheetPopup({
       data-slot="sheet-content"
       data-side={side}
       className={cn(
-        'fixed z-70 flex flex-col bg-card shadow-xl outline-none transition-transform motion-reduce:transition-none',
+        // A thin scrollbar whose gutter is always reserved: a form that
+        // grows past the sheet (a choice showing more fields) does not
+        // shift sideways as the scrollbar appears.
+        'fixed z-70 flex flex-col bg-card shadow-xl outline-none transition-transform [scrollbar-color:var(--border)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin] motion-reduce:transition-none',
         sheetSides[side],
         className,
       )}
@@ -147,13 +156,28 @@ function SheetDescription({
 // a right-aligned row from `sm`, a full-width stack with the primary on top
 // under `sm`. `mt-auto` keeps it at the bottom of a short sheet. While a
 // phone keyboard is open it sticks just above the keyboard (#1013).
-function SheetFooter({ className, ...props }: ComponentProps<'div'>) {
+//
+// `pinned` is a form's footer (DESIGN.md, "One field, one form"): it stays in
+// view at the sheet's bottom edge while the fields scroll under it, on one
+// row at every width — the secondary a third, the primary two thirds — so
+// the member always sees how the form ends. It cancels the popup's own
+// padding (`p-4 sm:p-6`) to reach the edges.
+function SheetFooter({
+  className,
+  pinned = false,
+  ...props
+}: ComponentProps<'div'> & { pinned?: boolean }) {
   return (
     <div
       data-slot="sheet-footer"
-      data-keyboard-pin=""
+      // A pinned footer already holds the sheet's bottom edge, which ends at
+      // the keyboard; the keyboard rule is for the footers that scroll.
+      data-keyboard-pin={pinned ? undefined : ''}
+      data-pinned={pinned || undefined}
       className={cn(
-        'mt-auto flex flex-col-reverse gap-2 pt-4 sm:flex-row sm:justify-end',
+        pinned
+          ? 'sticky -bottom-4 z-1 -mx-4 mt-auto -mb-4 flex gap-2 border-t border-border bg-card px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6 [&>*]:flex-1 [&>*:last-child]:flex-[2]'
+          : 'mt-auto flex flex-col-reverse gap-2 pt-4 sm:flex-row sm:justify-end',
         className,
       )}
       {...props}

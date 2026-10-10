@@ -1,6 +1,7 @@
 import { TaskActionSuccess } from './TaskActionSuccess';
 import { useReceiptTurn } from './receipt-turn';
 import { useState } from 'react';
+import { Undo2 } from 'lucide-react';
 import { useTaskEvaluationCapability } from '../../queries/task-review';
 import { useReturnTaskToProgress } from '../../queries/task-feedback';
 import type { TaskStatus } from './task-presentation';
@@ -54,10 +55,11 @@ function FeedbackDialog({
   return (
     <TaskReasonDialog
       triggerLabel="Trimite înapoi în lucru"
+      triggerIcon={Undo2}
       title="Trimite înapoi în lucru"
       description="Taskul revine în lucru cu feedback de aplicat. Nota rămâne în istoric și ajunge la Executor."
       field="note"
-      fieldLabel="Notă pentru Executor (obligatoriu)"
+      fieldLabel="Notă pentru Executor"
       confirmLabel="Confirmă feedbackul"
       failureMessage="Nu am putut trimite feedbackul."
       isPending={mutation.isPending}

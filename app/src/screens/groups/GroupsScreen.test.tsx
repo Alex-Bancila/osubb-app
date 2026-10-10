@@ -122,6 +122,10 @@ function list() {
     </MemoryRouter>,
   );
 }
+/** The viewer's own position, the chip beside the Group's name. */
+function ownRole() {
+  return document.querySelector('[data-slot="own-group-role"]');
+}
 function detail(id = 2) {
   return render(
     <MemoryRouter initialEntries={[`/grupuri/${id}`]}>
@@ -255,6 +259,7 @@ it('checks the optional note against its 1000-character limit before applying', 
   const user = userEvent.setup();
   await user.click(screen.getByRole('button', { name: 'Aplică' }));
   const note = screen.getByLabelText('Mesaj (opțional)');
+  expect(note).toHaveAttribute('data-slot', 'textarea');
   await user.click(note);
   await user.paste('n'.repeat(1001));
   await user.click(screen.getByRole('button', { name: 'Confirmă' }));
@@ -333,12 +338,34 @@ it('Manager sees the Administrare link and their own effective Role', () => {
     'href',
     '/administrare/grupuri/2',
   );
-  expect(
-    screen.getByText('Coordonator', { selector: 'strong' }),
-  ).toBeInTheDocument();
+  expect(ownRole()).toHaveTextContent('Rolul tău: Coordonator');
   expect(
     screen.queryByRole('button', { name: 'Aplică' }),
   ).not.toBeInTheDocument();
+});
+it('the Group page header is the back link, the dot and the name, with the Category and the own position as chips', () => {
+  api.mine.mockReturnValue(
+    ready([{ id: 2, group_role: 'manager', explicit: true, automatic: false }]),
+  );
+  detail();
+  const header = document.querySelector('[data-slot="page-header"]');
+  // No "GRUPURI" eyebrow over the name, and no description lines under it.
+  expect(header?.querySelector('[data-slot="page-eyebrow"]')).toBeNull();
+  expect(header?.querySelector('[data-slot="page-description"]')).toBeNull();
+  const title = screen.getByRole('heading', { level: 1 });
+  const category = header?.querySelector('[data-slot="group-category"]');
+  expect(category).toHaveTextContent('Echipă');
+  expect(category).toHaveAttribute('data-slot', 'group-category');
+  // Both chips sit on the title's line, not in a paragraph below it.
+  expect(title.parentElement).toContainElement(category as HTMLElement);
+  expect(title.parentElement).toContainElement(ownRole() as HTMLElement);
+  // The sections keep their headings and lose their eyebrows.
+  expect(screen.getByRole('heading', { name: 'Coordonare' })).toBeVisible();
+  expect(document.querySelector('[data-slot="section-eyebrow"]')).toBeNull();
+});
+it('a plain member of the Group gets no position chip', () => {
+  detail();
+  expect(ownRole()).toBeNull();
 });
 it('has no automated accessibility violations', async () => {
   const { container } = list();
@@ -568,7 +595,7 @@ it('shows no position for one inherited from above, even on the roster (F-17)', 
   const rows = within(own).getAllByRole('listitem');
   expect(rows.map((row) => row.textContent)).toEqual([
     'Echipa ITEchipă',
-    'EducaționalEchipă · Coordonator',
+    'EducaționalEchipăCoordonator',
   ]);
 });
 it("names the member's own Coordonator position by their function name, else the Group's (#967)", () => {
@@ -605,24 +632,62 @@ it("names the member's own Coordonator position by their function name, else the
   const own = screen.getByRole('region', { name: 'Grupurile tale' });
   const rows = within(own).getAllByRole('listitem');
   expect(rows.map((row) => row.textContent)).toEqual([
-    'CulturalEchipă · Vicepreședinte',
-    'EducaționalEchipă · Vicepreședinte Educațional',
+    'CulturalEchipăVicepreședinte',
+    'EducaționalEchipăVicepreședinte Educațional',
   ]);
+});
+it("each of the member's Groups is a row that says it opens: a chevron, the position as a chip, the Category under the name", () => {
+  api.groups.mockReturnValue(
+    ready([
+      group(8, 'Educațional', { accepts_applications: false }),
+      group(9, 'Cultural', { accepts_applications: false }),
+    ]),
+  );
+  api.mine.mockReturnValue(
+    ready([
+      myGroup(8, 'Educațional', { group_role: 'manager' }),
+      myGroup(9, 'Cultural'),
+    ]),
+  );
+  api.rosterRows.mockReturnValue({
+    ...ready([]),
+    membershipRows: [
+      { group_id: 8, group_role: 'manager', position_title: null },
+      { group_id: 9, group_role: 'member', position_title: null },
+    ],
+  });
+  list();
+  const own = screen.getByRole('region', { name: 'Grupurile tale' });
+  const [plain, managed] = within(own).getAllByRole('listitem') as [
+    HTMLElement,
+    HTMLElement,
+  ];
+  for (const row of [plain, managed])
+    expect(row.querySelector('[data-slot="row-chevron"]')).not.toBeNull();
+  // The position is a chip in the value column, not text on the meta line.
+  const chip = within(managed).getByText('Coordonator');
+  expect(chip.closest('[data-slot="badge"]')).not.toBeNull();
+  expect(chip.closest('[data-slot="list-row-value"]')).not.toBeNull();
+  const meta = within(managed).getByText('Echipă');
+  expect(meta).toHaveClass('text-muted-foreground');
+  expect(meta).not.toHaveTextContent('Coordonator');
+  expect(plain.querySelector('[data-slot="badge"]')).toBeNull();
 });
 it('marks an archived Group as Arhivat on its page (F-18)', () => {
   // The fixture Group is named "Arhivat": its name, then the badge.
   detail(4);
   expect(screen.getAllByText('Arhivat')).toHaveLength(2);
 });
-it('says no Group accepts Applications, with no search box and no "căutare" (B28, D-18)', () => {
+it('draws no "Poți aplica la" at all when no Group accepts Applications (B28, D-18)', () => {
   api.groups.mockReturnValue(
     ready([group(8, 'Educațional', { accepts_applications: false })]),
   );
   api.mine.mockReturnValue(ready([myGroup(8, 'Educațional')]));
   list();
-  expect(
-    screen.getByText('Niciun grup nu primește acum cereri de înscriere.'),
-  ).toBeInTheDocument();
+  expect(screen.queryByRole('region', { name: 'Poți aplica la' })).toBeNull();
+  expect(screen.queryByRole('heading', { name: 'Poți aplica la' })).toBeNull();
+  expect(screen.queryByText(/Niciun grup nu primește/)).toBeNull();
+  expect(document.querySelector('[data-slot="empty-state"]')).toBeNull();
   expect(screen.queryByRole('searchbox')).toBeNull();
   expect(screen.queryByText(/pentru această căutare/)).toBeNull();
   expect(screen.getByRole('link', { name: 'Educațional' })).toHaveAttribute(
@@ -642,9 +707,10 @@ it('a Group page Event title opens the Calendar on that Event (D5)', () => {
     ]),
   );
   detail();
-  expect(
-    screen.getByRole('link', { name: 'Ședință de echipă' }),
-  ).toHaveAttribute('href', '/calendar?event=41');
+  const link = screen.getByRole('link', { name: 'Ședință de echipă' });
+  expect(link).toHaveAttribute('href', '/calendar?event=41');
+  // The short date every card uses: weekday, day, month, time — no year.
+  expect(link.closest('li')).toHaveTextContent('lun., 5 oct. · 18:00 · Sala 2');
 });
 it('hides Coordonare when nobody holds a position (B29)', () => {
   api.roster.mockReturnValue(
@@ -702,9 +768,7 @@ it("names an untitled Responsible in Coordonare, and the viewer's own position, 
   expect(
     within(titled as HTMLElement).getByText('Responsabil Foto'),
   ).toBeVisible();
-  expect(
-    screen.getByText('Coordonator', { selector: 'strong' }),
-  ).toBeInTheDocument();
+  expect(ownRole()).toHaveTextContent('Rolul tău: Coordonator');
 });
 
 it("names each Coordonator in Coordonare, and the viewer's own position, by their function name, else the Group's (#967)", () => {
@@ -739,9 +803,7 @@ it("names each Coordonator in Coordonare, and the viewer's own position, by thei
   expect(
     within(untitled as HTMLElement).getByText('Vicepreședinte'),
   ).toBeVisible();
-  expect(
-    screen.getByText('Vicepreședinte Educațional', { selector: 'strong' }),
-  ).toBeInTheDocument();
+  expect(ownRole()).toHaveTextContent('Rolul tău: Vicepreședinte Educațional');
 });
 it("names the viewer's own untitled Coordonator position by the Group's name for it (#967)", () => {
   api.groups.mockReturnValue(
@@ -763,9 +825,7 @@ it("names the viewer's own untitled Coordonator position by the Group's name for
     ]),
   );
   detail();
-  expect(
-    screen.getByText('Vicepreședinte', { selector: 'strong' }),
-  ).toBeInTheDocument();
+  expect(ownRole()).toHaveTextContent(/^Rolul tău: Vicepreședinte$/);
 });
 it('the back link falls back to Grupuri, and prefers state.from (A33)', () => {
   const view = detail();
@@ -804,13 +864,16 @@ it('an unavailable Group says why and leads back to Grupuri (D23)', () => {
     screen.getByRole('link', { name: 'Înapoi la Grupuri' }),
   ).toHaveAttribute('href', '/grupuri');
 });
-it('Administrare is an outline button in the header, not a text link (G1)', () => {
+it('Administrare is an outline gear button in the header, not a text link (G1)', () => {
   api.mine.mockReturnValue(
     ready([{ id: 2, group_role: 'manager', explicit: true, automatic: false }]),
   );
   detail();
   const link = screen.getByRole('link', { name: 'Administrare' });
   expect(link.closest('[data-slot=page-actions]')).not.toBeNull();
-  expect(link).toHaveClass('border-border', 'min-h-11');
+  expect(link).toHaveClass('border-border', 'min-h-11', 'size-11');
   expect(link).not.toHaveClass('underline');
+  // The gear carries it; the word is its accessible name only.
+  expect(link).toHaveTextContent('');
+  expect(link.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
 });

@@ -1,12 +1,9 @@
 import { useId, useMemo, useState } from 'react';
 import { AlertCircle, MailCheck } from 'lucide-react';
 import { Button } from '../../components/ui/button';
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-} from '../../components/ui/field';
+import { Field, FieldError, FieldLabel } from '../../components/ui/field';
+import { InfoHint } from '../../components/ui/info-hint';
+import { Input } from '../../components/ui/input';
 import { useAuth } from '../../lib/auth';
 import { authCallbackUrl } from '../../lib/auth-destination';
 import {
@@ -18,9 +15,6 @@ import { emailChangeSchema, fieldForReason } from '../../lib/schemas/profile';
 import { supabase } from '../../lib/supabase';
 import { useFormValidation } from '../../lib/use-form-validation';
 import type { MyProfile } from '../../queries/profile';
-
-const INPUT_CLASS =
-  'flex min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:focus-visible:border-destructive';
 
 /**
  * "Schimbă adresa de email" (#632, ruling R7): the address the Member signs in
@@ -113,9 +107,6 @@ export default function ChangeEmailSection({
           <span className="text-muted-foreground italic">Indisponibil</span>
         )}
       </p>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        Autentificarea se face prin link sau cod trimis la această adresă.
-      </p>
 
       {pendingEmail && (
         <div
@@ -151,8 +142,16 @@ export default function ChangeEmailSection({
         className="mt-4 flex flex-col gap-4"
       >
         <Field>
-          <FieldLabel htmlFor="change-email-input">Adresa nouă</FieldLabel>
-          <input
+          <div className="flex items-center justify-between gap-2">
+            <FieldLabel htmlFor="change-email-input">Adresa nouă</FieldLabel>
+            <InfoHint label="Despre schimbarea adresei" id="change-email-hint">
+              Autentificarea se face prin link sau cod trimis la adresa de
+              email. Primești câte un email de confirmare pe adresa actuală și
+              pe cea nouă. Schimbarea se aplică doar după ce le confirmi pe
+              amândouă.
+            </InfoHint>
+          </div>
+          <Input
             id="change-email-input"
             type="email"
             inputMode="email"
@@ -161,14 +160,9 @@ export default function ChangeEmailSection({
             onChange={(event) => setEmail(event.target.value)}
             placeholder="ex: ana@gmail.com"
             disabled={sending}
-            className={INPUT_CLASS}
             {...form.field('email', 'change-email-hint')}
           />
           <FieldError {...form.errorProps('email')} />
-          <FieldDescription id="change-email-hint">
-            Primești câte un email de confirmare pe adresa actuală și pe cea
-            nouă. Schimbarea se aplică doar după ce le confirmi pe amândouă.
-          </FieldDescription>
         </Field>
 
         <Button

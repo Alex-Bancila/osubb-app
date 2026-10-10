@@ -9,7 +9,9 @@ import type {
   WorkFilterLevels,
   WorkItem,
 } from '../../lib/work-filter';
+import { clearDate, pickDate } from '../../test/date-picker';
 import { closeFilters, filterButton, openFilters } from '../../test/filters';
+import { FilterSearch } from './FilterToolbar';
 import { WorkFilter } from './WorkFilter';
 
 const groups: WorkFilterGroup[] = [
@@ -173,8 +175,17 @@ describe('WorkFilter', () => {
     expect(
       screen.getByRole('combobox', { name: 'Campanie' }),
     ).toHaveTextContent('Mentorat de toamnă');
-    expect(screen.getByLabelText('De la')).toHaveValue('2026-09-01');
-    expect(screen.getByLabelText('Până la')).toHaveValue('2026-09-30');
+    // The app's date picker, not the browser's field: the value reads as
+    // the cards write a day.
+    const from = screen.getByLabelText('De la');
+    expect(from).toHaveAttribute('data-slot', 'date-picker');
+    expect(from).toHaveAttribute('data-value', '2026-09-01');
+    expect(from).toHaveTextContent('1 sept. 2026');
+    expect(screen.getByLabelText('Până la')).toHaveAttribute(
+      'data-value',
+      '2026-09-30',
+    );
+    expect(document.querySelector('input[type="date"]')).toBeNull();
 
     await user.click(screen.getByRole('combobox', { name: 'Grup principal' }));
     await user.click(await screen.findByRole('option', { name: 'Comunicare' }));
@@ -225,7 +236,7 @@ describe('WorkFilter', () => {
     renderFilter('?de_la=2026-09-15');
     await openFilters(user);
     const to = screen.getByLabelText('Până la');
-    await user.type(to, '2026-09-14');
+    await pickDate(user, to, '2026-09-14');
     expect(search()).toBe('?de_la=2026-09-15&pana_la=2026-09-14');
     const error = screen.getByRole('alert');
     expect(error).toHaveTextContent(
@@ -236,9 +247,14 @@ describe('WorkFilter', () => {
       'Data de sfârșit nu poate fi înaintea celei de început.',
     );
 
-    await user.clear(to);
-    await user.type(to, '2026-09-15');
+    await pickDate(user, to, '2026-09-15');
+    expect(search()).toBe('?de_la=2026-09-15&pana_la=2026-09-15');
     expect(screen.queryByRole('alert')).toBeNull();
+    expect(to).not.toHaveAttribute('aria-invalid');
+
+    // Both dates are optional: Șterge takes the level out of the URL.
+    await clearDate(user, to);
+    expect(search()).toBe('?de_la=2026-09-15');
   });
 
   it('hides the levels a page does not filter by', async () => {
@@ -383,7 +399,10 @@ describe('WorkFilter', () => {
       expect(
         within(sheet).getByRole('combobox', { name: 'Grup principal' }),
       ).toHaveTextContent('Educațional');
-      expect(within(sheet).getByLabelText('De la')).toHaveValue('2026-09-01');
+      expect(within(sheet).getByLabelText('De la')).toHaveAttribute(
+        'data-value',
+        '2026-09-01',
+      );
       await closeFilters(user);
       expect(screen.queryByRole('dialog')).toBeNull();
       expect(open).toHaveFocus();
@@ -399,6 +418,17 @@ describe('WorkFilter', () => {
       const user = userEvent.setup();
       renderFilter('?grup=1');
       const sheet = await openFilters(user);
+      // The sheet's actions stay in view under the controls: secondary
+      // first, the one filled button last.
+      const footer = within(sheet)
+        .getByRole('button', { name: 'Vezi rezultatele' })
+        .closest('[data-slot="sheet-footer"]') as HTMLElement;
+      expect(footer).toHaveAttribute('data-pinned', 'true');
+      expect(
+        within(footer)
+          .getAllByRole('button')
+          .map((button) => button.textContent),
+      ).toEqual(['Șterge filtrele', 'Vezi rezultatele']);
       await user.click(
         within(sheet).getByRole('button', { name: 'Șterge filtrele' }),
       );
@@ -474,5 +504,14 @@ describe('WorkFilter', () => {
       screen.getByRole('button', { name: 'Reîncarcă filtrele' }),
     );
     expect(onRetry).toHaveBeenCalled();
+  });
+});
+
+describe('FilterSearch', () => {
+  it('is the shared field, named by its label, with room for the icon', () => {
+    render(<FilterSearch label="Caută un grup" placeholder="Caută un grup" />);
+    const field = screen.getByRole('searchbox', { name: 'Caută un grup' });
+    expect(field).toHaveAttribute('data-slot', 'input');
+    expect(field).toHaveClass('h-11', 'pl-[2.5rem]');
   });
 });

@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog';
 import { FieldError } from '../../components/ui/field';
+import { Textarea } from '../../components/ui/input';
 import { CommandError } from '../../lib/command-reasons';
 import {
   fieldForReason as noteFields,
@@ -102,10 +103,10 @@ export function ApplicationAction({
           <form onSubmit={submit} className="grid gap-4">
             {command.kind !== 'withdraw' && (
               <div className="grid gap-2">
-                <label className="grid gap-2">
+                <label className="grid gap-2 text-sm font-medium">
                   Mesaj (opțional)
-                  <textarea
-                    className="min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  <Textarea
+                    className="font-normal"
                     value={note}
                     onChange={(event) => setNote(event.target.value)}
                     disabled={mutation.isPending}

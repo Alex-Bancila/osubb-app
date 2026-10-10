@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { createPortal } from 'react-dom';
 import { PageGrid, SectionHeader } from '../../components/layout';
 import { Empty, ErrorState, Loading } from '../../components/states';
 import { useAuth } from '../../lib/auth';
-import { useAdministrareActionSlot } from '../administrare/administrare-tabs';
 import DealCard from './DealCard';
 import DealDetailsSheet, {
   DealManageActions,
@@ -28,7 +26,6 @@ import { useOpenDeal } from './use-open-deal';
 export default function DealsAdminTab() {
   const memberId = useAuth().session?.user.id;
   const viewer = useDealsViewer();
-  const actionSlot = useAdministrareActionSlot();
   const { query, deals } = useDealList();
   const sheet = useOpenDeal(
     deals,
@@ -40,9 +37,8 @@ export default function DealsAdminTab() {
 
   return (
     <>
-      {actionSlot &&
-        viewer.manageDeals &&
-        createPortal(<NewDealControl />, actionSlot)}
+      {/* Deal nou: the page's plus button in Administrare. */}
+      {viewer.manageDeals && <NewDealControl />}
       <DealsTeamPanel />
 
       <section aria-labelledby="deals-admin-list" className="space-y-4">

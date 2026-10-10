@@ -49,7 +49,7 @@ export function groupDeleteItems(preview: GroupDeletePreview): string[] {
     );
   if (preview.members > 0)
     items.push(
-      `${formatMemberCount(preview.members)} din roster (conturile lor rămân)`,
+      `${formatMemberCount(preview.members)} din grup (conturile lor rămân)`,
     );
   return items;
 }

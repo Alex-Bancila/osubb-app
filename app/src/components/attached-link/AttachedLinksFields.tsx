@@ -5,10 +5,9 @@ import type { useFormValidation } from '../../lib/use-form-validation';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/button';
 import { FieldError } from '../ui/field';
+import { Input } from '../ui/input';
 import type { AttachedLinkValue } from './AttachedLinkFields';
 
-const inputClass =
-  'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60';
 const fieldClass = 'block space-y-1.5 text-sm font-medium text-foreground';
 
 /** The slice of `useFormValidation` the list needs. */
@@ -28,7 +27,11 @@ type AttachedLinksFieldsProps = {
    */
   name?: string;
   disabled?: boolean;
-  /** The wrapper's classes: each form frames the list its own way. */
+  /**
+   * The wrapper's classes, for the space (or hairline) a form puts above the
+   * list. The list draws no box of its own, so it reads the same in every
+   * form.
+   */
   className?: string;
 };
 
@@ -138,8 +141,7 @@ export function AttachedLinksFields({
                     <div className="min-w-0 space-y-1.5">
                       <label className={fieldClass}>
                         Etichetă
-                        <input
-                          className={inputClass}
+                        <Input
                           disabled={disabled}
                           value={link.label}
                           aria-label={`Etichetă link ${n}`}
@@ -158,8 +160,7 @@ export function AttachedLinksFields({
                     <div className="min-w-0 space-y-1.5">
                       <label className={fieldClass}>
                         Adresă
-                        <input
-                          className={inputClass}
+                        <Input
                           disabled={disabled}
                           type="url"
                           inputMode="url"

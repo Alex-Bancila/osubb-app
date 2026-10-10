@@ -333,9 +333,4 @@ export const keys = {
     preferences: (memberId: string | undefined) =>
       ['push', 'preferences', { memberId }] as const,
   },
-  /* The member's Email Digest switch (#775). */
-  emailDigest: {
-    preference: (memberId: string | undefined) =>
-      ['email-digest', 'preference', { memberId }] as const,
-  },
 } as const;

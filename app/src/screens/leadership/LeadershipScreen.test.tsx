@@ -142,15 +142,22 @@ it('opens on the members’ Clasament at full width, reading only that board', (
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
     'Clasament',
   );
-  expect(
-    screen.getByText('Punctele taskurilor, pe membri și pe departamente.'),
-  ).toBeInTheDocument();
   expect(choose('Clasament')).toHaveAttribute('aria-pressed', 'true');
   expect(choose('Cupa Departamentelor')).toHaveAttribute(
     'aria-pressed',
     'false',
   );
   expect(membersPanel()).toBeInTheDocument();
+  // The page's title names the board: no "Conducere" above it, and the
+  // region — still named — starts with its count, not a second heading.
+  expect(document.querySelector('[data-slot="page-eyebrow"]')).toBeNull();
+  expect(screen.getAllByRole('heading')).toHaveLength(1);
+  expect(
+    membersPanel()?.querySelector('[data-slot="section-eyebrow"]'),
+  ).toBeNull();
+  expect(
+    membersPanel()?.querySelector('[data-slot="section-header"]'),
+  ).toHaveTextContent(/^1 membru$/);
   // One board at a time: the Cup is not beside it.
   expect(cupPanel()).toBeNull();
   expect(state.board).toHaveBeenLastCalledWith({});
@@ -691,13 +698,16 @@ it('draws rows on the shared list row: rank, avatar, Nickname, first Group chip 
     row.querySelector('[data-slot="list-row"]');
   for (const row of rows) expect(listRow(row)).not.toBeNull();
   expect(first).toHaveTextContent('Locul 1');
-  // The top three are ranked in red; the rest in muted ink.
-  expect(within(first).getByText('Locul').parentElement).toHaveClass(
-    'text-primary',
-  );
-  expect(within(third).getByText('Locul').parentElement).toHaveClass(
-    'text-muted-foreground',
-  );
+  // The top three are medals — gold here, with a shade for each theme; a
+  // rank below the podium stays in muted ink.
+  const rankOf = (row: HTMLElement) =>
+    within(row).getByText('Locul').parentElement as HTMLElement;
+  expect(rankOf(first)).toHaveAttribute('data-medal', '1');
+  expect(rankOf(first)).toHaveClass('text-amber-700', 'dark:text-amber-300');
+  expect(rankOf(first)).not.toHaveClass('text-primary');
+  expect(third).toHaveTextContent('Locul 4');
+  expect(rankOf(third)).not.toHaveAttribute('data-medal');
+  expect(rankOf(third)).toHaveClass('text-muted-foreground');
   expect(first.querySelector('[data-slot="list-row-value"]')).toHaveTextContent(
     '30 pct.',
   );
@@ -839,14 +849,16 @@ describe('Grupuri preferate (R43)', () => {
     renderPage();
     expect(state.board).toHaveBeenLastCalledWith({ p_preferred: true });
     expect(
-      screen.getByRole('link', { name: 'Doar grupurile preferate' }),
-    ).toHaveAttribute('href', '/profil#grupuri-preferate');
+      screen.getByRole('button', { name: 'Doar grupurile preferate' }),
+    ).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('reads every Group’s points after Arată tot', async () => {
     const user = userEvent.setup();
     renderPage();
-    await user.click(screen.getByRole('button', { name: 'Arată tot' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Doar grupurile preferate' }),
+    );
     expect(state.board).toHaveBeenLastCalledWith({});
   });
 
@@ -854,7 +866,7 @@ describe('Grupuri preferate (R43)', () => {
     renderPage('?grup=7&subgrup=9');
     expect(state.board).toHaveBeenLastCalledWith({ p_group_id: 9 });
     expect(
-      screen.queryByRole('link', { name: 'Doar grupurile preferate' }),
+      screen.queryByRole('button', { name: 'Doar grupurile preferate' }),
     ).toBeNull();
   });
 
@@ -862,7 +874,7 @@ describe('Grupuri preferate (R43)', () => {
     renderPage('?vedere=cupa');
     expect(state.cup).toHaveBeenLastCalledWith({});
     expect(
-      screen.queryByRole('link', { name: 'Doar grupurile preferate' }),
+      screen.queryByRole('button', { name: 'Doar grupurile preferate' }),
     ).toBeNull();
   });
 });

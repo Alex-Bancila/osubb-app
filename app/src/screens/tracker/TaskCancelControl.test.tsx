@@ -16,7 +16,7 @@ const props = {
   kind: 'task',
   canManage: true,
 };
-const reasonLabel = 'Motiv (obligatoriu)';
+const reasonLabel = 'Motiv';
 beforeEach(() => {
   state.mutation.mutateAsync.mockReset().mockResolvedValue({});
 });
@@ -50,6 +50,12 @@ it('requires a trimmed reason, cancels and announces success accessibly', async 
   );
   expect(state.mutation.mutateAsync).not.toHaveBeenCalled();
   expect(within(dialog).getByRole('alert')).toHaveTextContent('Scrie motivul.');
+  // Required, which the label does not repeat; the shared text area.
+  expect(within(dialog).getByLabelText(reasonLabel)).toBeRequired();
+  expect(within(dialog).getByLabelText(reasonLabel)).toHaveAttribute(
+    'data-slot',
+    'textarea',
+  );
   await user.type(
     within(dialog).getByLabelText(reasonLabel),
     '  Evenimentul s-a amânat  ',

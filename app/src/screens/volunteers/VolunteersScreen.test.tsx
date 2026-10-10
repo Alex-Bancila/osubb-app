@@ -244,12 +244,19 @@ describe('Member directory', () => {
   it('adds Group, role and status filters in a Dialog and shows them as removable chips', async () => {
     const user = userEvent.setup();
     render(<VolunteersScreen />);
-    // Filtrează leads the toolbar, the search after it (#903).
+    // The search leads the toolbar and fills its row; Filtrează is the icon
+    // button after it (#903), and nothing else shares the row.
     const toolbar = screen.getByRole('group', { name: 'Filtre membri' });
-    expect(toolbar.firstElementChild).toHaveAccessibleName('Filtrează');
+    const search = within(toolbar).getByRole('searchbox', {
+      name: 'Caută un membru',
+    });
+    expect(search).toBeVisible();
+    expect(toolbar.firstElementChild).toContainElement(search);
+    const filter = within(toolbar).getByRole('button', { name: 'Filtrează' });
+    expect(toolbar.firstElementChild?.nextElementSibling).toBe(filter);
     expect(
-      within(toolbar).getByRole('searchbox', { name: 'Caută un membru' }),
-    ).toBeVisible();
+      within(toolbar).queryByRole('group', { name: 'Afișare' }),
+    ).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Filtrează' }));
     const dialog = await screen.findByRole('dialog', { name: 'Filtre' });
 
@@ -463,6 +470,27 @@ describe('Member directory', () => {
     ).toBeVisible();
   });
 
+  it('keeps the header to one row: no eyebrow, no tagline, the count and the view switch beside the title', () => {
+    render(<VolunteersScreen />);
+    const header = screen
+      .getByRole('heading', { level: 1, name: 'Voluntari' })
+      .closest('[data-slot="page-header"]') as HTMLElement;
+    expect(header.querySelector('[data-slot="page-eyebrow"]')).toBeNull();
+    expect(header.querySelector('[data-slot="page-description"]')).toBeNull();
+    expect(screen.queryByText(/Caută un membru și vezi/)).toBeNull();
+    expect(within(header).getByRole('status')).toHaveTextContent('3 membri');
+    const actions = header.querySelector(
+      '[data-slot="page-actions"]',
+    ) as HTMLElement;
+    const views = within(actions).getByRole('group', { name: 'Afișare' });
+    // Compact: under 640 px each view is its icon, still named by its word.
+    for (const name of ['Listă', 'Carduri']) {
+      const option = within(views).getByRole('button', { name });
+      expect(option.querySelector('svg')).not.toBeNull();
+      expect(within(option).getByText(name)).toHaveClass('max-sm:sr-only');
+    }
+  });
+
   it('shows no points for BC and the Moderator and sorts them last both ways (ruling 1)', async () => {
     const user = userEvent.setup();
     mock.useMemberDirectory.mockReturnValue(
@@ -495,7 +523,8 @@ describe('Member directory', () => {
     const maria = screen
       .getByRole('button', { name: 'Profilul membrului Maria Dobre' })
       .closest('li') as HTMLElement;
-    expect(maria).toHaveTextContent('40puncte');
+    // One line: "40 pct" to the eye, the whole noun to a screen reader.
+    expect(maria).toHaveTextContent('40 pctde puncte');
   });
 
   it('shows Statut only when a member is not active, and a phone only where there is one (B69)', () => {
@@ -558,10 +587,14 @@ describe('Member directory', () => {
       expect(rows).toHaveLength(3);
       expect(rows[0]).toHaveTextContent(/Ana Ionescu.*BC · Inactiv$/);
       expect(rows[1]).toHaveTextContent(
-        /Maria Dobre.*Membru cu Drept de Vot · Activ40puncte$/,
+        /Maria Dobre.*Membru cu Drept de Vot · Activ40 pctde puncte$/,
       );
       expect(rows[2]).toHaveTextContent(
-        /Ștefan Pop.*Voluntar · Activ−2puncte$/,
+        /Ștefan Pop.*Voluntar · Activ−2 pctpuncte$/,
+      );
+      // The Role starts where the name does: past the avatar and its gap.
+      expect(rows[1]?.querySelector('[data-slot="member-role"]')).toHaveClass(
+        'pl-[2.25rem]',
       );
     } finally {
       vi.unstubAllGlobals();

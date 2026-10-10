@@ -214,6 +214,7 @@ export function CalendarMonth({
           <Button
             type="button"
             variant="outline"
+            size="sm"
             className="calendar-managed-toggle"
             aria-pressed={showManaged ? 'true' : 'false'}
             onClick={() => setShowManaged(!showManaged)}

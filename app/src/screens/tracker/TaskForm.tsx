@@ -1,12 +1,18 @@
-import { useId, useMemo, useState, type FormEvent } from 'react';
+import {
+  useId,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { AttachedLinksFields } from '../../components/attached-link/AttachedLinksFields';
 import { Button } from '../../components/ui/button';
-import { DialogFooter } from '../../components/ui/dialog';
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from '../../components/ui/native-select';
+import { DateTimePicker } from '../../components/ui/date-picker';
+import { FormSheetFooter } from '../../components/ui/form-sheet';
+import { Input, Textarea } from '../../components/ui/input';
+import { Select } from '../../components/ui/select';
 import { FieldError } from '../../components/ui/field';
+import { InfoHint } from '../../components/ui/info-hint';
 import {
   Combobox,
   ComboboxContent,
@@ -17,23 +23,17 @@ import {
   ComboboxTrigger,
   ComboboxValue,
 } from '../../components/ui/combobox';
-import {
-  RadioCard,
-  RadioGroup,
-  RadioGroupItem,
-} from '../../components/ui/radio-group';
+import { SegmentedRadio } from '../../components/ui/segmented-radio';
+import { AssignmentModeField, AudienceField } from './TaskModeFields';
 import { fieldForReason, taskDraftSchema } from '../../lib/schemas/task';
 import { useFormValidation } from '../../lib/use-form-validation';
 import { DirectExecutorSelector } from './DirectExecutorSelector';
 import { TaskGroupCascade } from './TaskGroupCascade';
 import {
-  AUDIENCE_HINT,
-  AUDIENCE_LABELS,
   campaignsFor,
   groupLookup,
   isPrivateGroup,
   originFor,
-  PRIVATE_GROUP_AUDIENCE_HINT,
   rootGroups,
   taskDraftInput,
   umbrellasFor,
@@ -45,32 +45,30 @@ import {
 
 type Umbrella = TaskFormOptions['umbrellas'][number];
 
-const KINDS: {
-  value: TaskFormValues['kind'];
-  label: string;
-  hint: string;
-}[] = [
-  {
-    value: 'task',
-    label: 'Task',
-    hint: 'O sarcină cu un singur executor.',
-  },
-  {
-    value: 'umbrella',
-    label: 'Task-umbrelă',
-    hint: 'Un task părinte care grupează subtaskuri. Nu are executor propriu; se încheie când toate subtaskurile sunt gata.',
-  },
-  {
-    value: 'subtask',
-    label: 'Subtask',
-    hint: 'O parte dintr-un task-umbrelă existent, în același grup.',
-  },
+/** The kinds, by name alone; `KINDS_INFO` explains them behind the "i". */
+const KINDS: { value: TaskFormValues['kind']; label: string }[] = [
+  { value: 'task', label: 'Task' },
+  { value: 'umbrella', label: 'Task-umbrelă' },
+  { value: 'subtask', label: 'Subtask' },
 ];
+
+const KINDS_INFO =
+  'Un task este o sarcină cu un singur executor. Un task-umbrelă este un task părinte care grupează subtaskuri: nu are executor propriu și se încheie când toate subtaskurile sunt gata. Un subtask este o parte dintr-un task-umbrelă existent, în același grup.';
+
+const CAMPAIGN_INFO =
+  'O etichetă pentru raportare: campania arată punctele obținute și cine a lucrat. Nu schimbă cine poate lucra la task.';
 
 /**
  * Draft-only form; its caller owns the eventual atomic create command. When
  * that command refuses, `onDraft` rejects and the reason lands under the
  * field it belongs to (ruling R8).
+ *
+ * Only an optional field says so in its label; a required one is marked for
+ * assistive technology (`required`, `aria-required`) and by validation.
+ *
+ * It is a form sheet's content: it grows to the sheet's height and ends with
+ * the pinned footer (Renunță, then the submit button). `status` is a line the
+ * caller needs just above that footer while it works.
  */
 export function TaskForm({
   options,
@@ -81,6 +79,7 @@ export function TaskForm({
   submitLabel = 'Continuă',
   onCancel,
   cancelLabel = 'Renunță',
+  status,
 }: {
   options: TaskFormOptions;
   onDraft: (draft: TaskDraft) => void | Promise<void>;
@@ -93,6 +92,7 @@ export function TaskForm({
   /** Adds the secondary action to the footer, left of the submit button. */
   onCancel?: () => void;
   cancelLabel?: string;
+  status?: ReactNode;
 }) {
   const id = useId();
   const [values, setValues] = useState<TaskFormValues>(() => {
@@ -129,8 +129,6 @@ export function TaskForm({
   const umbrella = values.kind === 'umbrella';
   const subtask = values.kind === 'subtask';
   const lockedToParent = parentTaskId !== null;
-  const control =
-    'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
   function update(patch: Partial<TaskFormValues>) {
     setValues((current) => ({ ...current, ...patch }));
   }
@@ -170,12 +168,15 @@ export function TaskForm({
     return <p>Nu ai grupuri în care poți pregăti taskuri.</p>;
   const parentGroupName = (item: Umbrella) =>
     groupsById.get(item.group_id)?.name;
+  const kinds = KINDS.filter(
+    (kind) => kind.value !== 'subtask' || allowSubtask || lockedToParent,
+  );
   return (
     <form
       aria-label={heading ?? 'Pregătește un task'}
       onSubmit={submit}
       noValidate
-      className="space-y-5"
+      className="flex flex-1 flex-col gap-5"
     >
       {heading && (
         <h2 className="m-0 text-(length:--fs-lg) leading-snug font-bold">
@@ -183,14 +184,21 @@ export function TaskForm({
         </h2>
       )}
       <div className="grid gap-2" {...form.slot('kind')}>
-        <span id={`${id}-kind`} className="text-sm font-medium">
-          Ce fel de task?
-        </span>
-        <RadioGroup
+        <div className="flex items-center justify-between gap-2">
+          <span id={`${id}-kind`} className="text-sm font-medium">
+            Ce fel de task?
+          </span>
+          <InfoHint label="Despre felurile de task" id={`${id}-kind-info`}>
+            {KINDS_INFO}
+          </InfoHint>
+        </div>
+        <SegmentedRadio
           aria-labelledby={`${id}-kind`}
+          aria-describedby={`${id}-kind-info`}
+          options={kinds}
           value={values.kind}
           disabled={lockedToParent}
-          onValueChange={(kind: TaskFormValues['kind']) =>
+          onValueChange={(kind) =>
             update({
               kind,
               parentTaskId: null,
@@ -198,35 +206,7 @@ export function TaskForm({
               executorId: null,
             })
           }
-        >
-          {KINDS.filter(
-            (kind) =>
-              kind.value !== 'subtask' || allowSubtask || lockedToParent,
-          ).map((kind) => (
-            <RadioCard key={kind.value} className="items-start">
-              <RadioGroupItem
-                value={kind.value}
-                aria-labelledby={`${id}-kind-${kind.value}-label`}
-                aria-describedby={`${id}-kind-${kind.value}`}
-                className="mt-0.5"
-              />
-              <span className="grid gap-0.5">
-                <span
-                  id={`${id}-kind-${kind.value}-label`}
-                  className="text-sm font-medium"
-                >
-                  {kind.label}
-                </span>
-                <span
-                  id={`${id}-kind-${kind.value}`}
-                  className="text-sm text-muted-foreground"
-                >
-                  {kind.hint}
-                </span>
-              </span>
-            </RadioCard>
-          ))}
-        </RadioGroup>
+        />
         <FieldError {...form.errorProps('kind')} />
       </div>
       <div className="grid gap-1.5" {...form.slot('groupId')}>
@@ -251,7 +231,7 @@ export function TaskForm({
       {subtask && (
         <div className="grid gap-1.5" {...form.slot('parentTaskId')}>
           <span id={`${id}-parent`} className="text-sm font-medium">
-            Task-umbrelă (obligatoriu)
+            Task-umbrelă
           </span>
           <Combobox<Umbrella>
             items={parents}
@@ -261,7 +241,10 @@ export function TaskForm({
             isItemEqualToValue={(a, b) => a.id === b.id}
             disabled={lockedToParent || !parents.length}
           >
-            <ComboboxTrigger aria-labelledby={`${id}-parent`}>
+            <ComboboxTrigger
+              aria-labelledby={`${id}-parent`}
+              aria-required="true"
+            >
               <ComboboxValue placeholder="Alege taskul-umbrelă">
                 {(item: Umbrella | null) =>
                   item ? item.title : 'Alege taskul-umbrelă'
@@ -303,12 +286,12 @@ export function TaskForm({
       )}
       <div className="grid gap-1.5">
         <label htmlFor={`${id}-title`} className="text-sm font-medium">
-          Titlu (obligatoriu)
+          Titlu
         </label>
-        <input
+        <Input
           id={`${id}-title`}
-          className={control}
           required
+          aria-required="true"
           value={values.title}
           onChange={(event) => update({ title: event.target.value })}
           {...form.field('title')}
@@ -317,11 +300,10 @@ export function TaskForm({
       </div>
       <div className="grid gap-1.5">
         <label htmlFor={`${id}-description`} className="text-sm font-medium">
-          Descriere
+          Descriere (opțional)
         </label>
-        <textarea
+        <Textarea
           id={`${id}-description`}
-          className={`${control} min-h-24`}
           rows={4}
           value={values.description}
           onChange={(event) => update({ description: event.target.value })}
@@ -331,76 +313,39 @@ export function TaskForm({
       </div>
       <div className="grid gap-1.5">
         <label htmlFor={`${id}-deadline`} className="text-sm font-medium">
-          Termen{umbrella ? ' (opțional)' : ' (obligatoriu)'} — ora României
+          {/* The one place the time zone is said: where a time is typed. */}
+          Termen{umbrella ? ' (opțional)' : ''} — ora României
         </label>
-        <input
+        <DateTimePicker
           id={`${id}-deadline`}
-          className={control}
-          type="datetime-local"
           required={!umbrella}
+          defaultTime="23:59"
           value={values.deadline}
-          onChange={(event) => update({ deadline: event.target.value })}
+          onChange={(deadline) => update({ deadline })}
           {...form.field('deadline')}
         />
         <FieldError {...form.errorProps('deadline')} />
       </div>
       {!umbrella && (
         <>
-          <div className="grid gap-1.5">
-            <label htmlFor={`${id}-mode`} className="text-sm font-medium">
-              Mod de atribuire
-            </label>
-            <NativeSelect
-              id={`${id}-mode`}
-              value={values.assignmentMode}
-              onChange={(event) =>
-                update({
-                  assignmentMode:
-                    event.target.value === 'public' ? 'public' : 'direct',
-                  executorId: null,
-                })
-              }
-              {...form.field('assignmentMode')}
-            >
-              <NativeSelectOption value="direct">Direct</NativeSelectOption>
-              <NativeSelectOption value="public">
-                Public — înscriere prin lista de candidați
-              </NativeSelectOption>
-            </NativeSelect>
-            <FieldError {...form.errorProps('assignmentMode')} />
-          </div>
+          <AssignmentModeField
+            id={id}
+            value={values.assignmentMode}
+            onChange={(assignmentMode) =>
+              update({ assignmentMode, executorId: null })
+            }
+            form={form}
+          />
           {/* A direct Task is local only (R26); `values.audience` keeps the
               choice for when the mode goes back to Public. */}
           {values.assignmentMode === 'public' && (
-            <div className="grid gap-1.5">
-              <label htmlFor={`${id}-audience`} className="text-sm font-medium">
-                Audiență
-              </label>
-              <NativeSelect
-                id={`${id}-audience`}
-                value={localOnly ? 'local' : values.audience}
-                onChange={(event) =>
-                  update({
-                    audience: event.target.value === 'org' ? 'org' : 'local',
-                  })
-                }
-                {...form.field('audience', `${id}-audience-hint`)}
-              >
-                <NativeSelectOption value="local">
-                  {AUDIENCE_LABELS.local}
-                </NativeSelectOption>
-                <NativeSelectOption value="org" disabled={localOnly}>
-                  {AUDIENCE_LABELS.org}
-                </NativeSelectOption>
-              </NativeSelect>
-              <FieldError {...form.errorProps('audience')} />
-              <p
-                id={`${id}-audience-hint`}
-                className="text-sm text-muted-foreground"
-              >
-                {localOnly ? PRIVATE_GROUP_AUDIENCE_HINT : AUDIENCE_HINT}
-              </p>
-            </div>
+            <AudienceField
+              id={id}
+              value={values.audience}
+              localOnly={localOnly}
+              onChange={(audience) => update({ audience })}
+              form={form}
+            />
           )}
           {values.assignmentMode === 'direct' && origin && (
             <div className="grid gap-1.5" {...form.slot('executorId')}>
@@ -410,48 +355,53 @@ export function TaskForm({
                 onChange={(executorId) => update({ executorId })}
               />
               <FieldError {...form.errorProps('executorId')} />
-              <p className="text-sm text-muted-foreground">
-                Executorul poate fi ales acum sau mai târziu.
-              </p>
             </div>
           )}
-          <div className="grid gap-1.5 border-t border-border pt-4">
-            <label htmlFor={`${id}-campaign`} className="text-sm font-medium">
-              Campanie (opțional)
-            </label>
-            <NativeSelect
+          <div className="grid gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor={`${id}-campaign`} className="text-sm font-medium">
+                Campanie (opțional)
+              </label>
+              <InfoHint label="Despre campanie" id={`${id}-campaign-hint`}>
+                {CAMPAIGN_INFO}
+              </InfoHint>
+            </div>
+            <Select
               id={`${id}-campaign`}
               value={
                 campaigns.some((campaign) => campaign.id === values.campaignId)
-                  ? (values.campaignId ?? '')
+                  ? String(values.campaignId ?? '')
                   : ''
               }
               disabled={!origin || !campaigns.length}
-              onChange={(event) =>
-                update({
-                  campaignId: event.target.value
-                    ? Number(event.target.value)
-                    : null,
-                })
+              options={[
+                { value: '', label: 'Fără campanie' },
+                ...campaigns.map((campaign) => ({
+                  value: String(campaign.id),
+                  label: campaign.name,
+                })),
+              ]}
+              onValueChange={(campaignId) =>
+                update({ campaignId: campaignId ? Number(campaignId) : null })
               }
-              {...form.field('campaignId', `${id}-campaign-hint`)}
-            >
-              <NativeSelectOption value="">Fără campanie</NativeSelectOption>
-              {campaigns.map((campaign) => (
-                <NativeSelectOption key={campaign.id} value={campaign.id}>
-                  {campaign.name}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+              {...form.field(
+                'campaignId',
+                origin && !campaigns.length
+                  ? `${id}-campaign-empty`
+                  : `${id}-campaign-hint`,
+              )}
+            />
             <FieldError {...form.errorProps('campaignId')} />
-            <p
-              id={`${id}-campaign-hint`}
-              className="text-sm text-muted-foreground"
-            >
-              {origin && !campaigns.length
-                ? 'Grupul ales nu are campanii active.'
-                : 'O etichetă pentru raportare: campania arată punctele obținute și cine a lucrat. Nu schimbă cine poate lucra la task.'}
-            </p>
+            {/* A state the manager must see stays visible; the explanation
+                waits behind the "i". */}
+            {origin && !campaigns.length && (
+              <p
+                id={`${id}-campaign-empty`}
+                className="text-sm text-muted-foreground"
+              >
+                Grupul ales nu are campanii active.
+              </p>
+            )}
           </div>
         </>
       )}
@@ -460,17 +410,17 @@ export function TaskForm({
         onChange={(links) => update({ links })}
         form={form}
         name="links"
-        className="border-t border-border pt-4"
       />
       <FieldError>{form.formError}</FieldError>
-      <DialogFooter>
+      {status}
+      <FormSheetFooter>
         {onCancel && (
           <Button type="button" variant="outline" onClick={onCancel}>
             {cancelLabel}
           </Button>
         )}
         <Button type="submit">{submitLabel}</Button>
-      </DialogFooter>
+      </FormSheetFooter>
     </form>
   );
 }

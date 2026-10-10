@@ -1,44 +1,22 @@
 import { useState } from 'react';
-import { AlertCircle, Check } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { Button } from '../../components/ui/button';
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-} from '../../components/ui/field';
-import {
-  Sheet,
-  SheetBackdrop,
-  SheetFooter,
-  SheetHeader,
-  SheetPopup,
-  SheetPortal,
-  SheetTitle,
-} from '../../components/ui/sheet';
+import { Field, FieldError, FieldLabel } from '../../components/ui/field';
+import { FormSheet, FormSheetFooter } from '../../components/ui/form-sheet';
+import { InfoHint } from '../../components/ui/info-hint';
+import { Input } from '../../components/ui/input';
 import { normalizePhone } from '../../lib/normalize';
 import { fieldForReason, profileSchema } from '../../lib/schemas/profile';
 import { useFormValidation } from '../../lib/use-form-validation';
-import { cn } from '../../lib/utils';
 import { type MyProfile, useUpdateMyProfile } from '../../queries/profile';
+import { ColorPicker } from '../../components/ui/color-picker';
 import ChangeEmailSection from './ChangeEmailSection';
 import { PHONE_HINT } from './profile-copy';
 
-const AVATAR_PALETTE = [
-  { name: 'Roșu OSUBB', color: '#ED2025' },
-  { name: 'Educațional', color: '#284C93' },
-  { name: 'Financiar', color: '#007F33' },
-  { name: 'Resurse Umane', color: '#F2A700' },
-  { name: 'Imagine & PR', color: '#7500A0' },
-  { name: 'Tineret', color: '#FF3B3B' },
-  { name: 'Negru', color: '#0B0B0C' },
-];
+const FORM_ID = 'edit-profile-form';
 
-const INPUT_CLASS =
-  'flex min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:focus-visible:border-destructive';
-
-const LOCKED_INPUT_CLASS =
-  'flex min-h-11 w-full cursor-not-allowed rounded-lg border border-input bg-muted px-3 py-2 text-sm text-muted-foreground opacity-75 outline-none';
+/** A field's label with its `InfoHint` at the end of the row. */
+const LABEL_ROW_CLASS = 'flex items-center justify-between gap-2';
 
 export type EditProfileSheetProps = {
   open: boolean;
@@ -94,57 +72,78 @@ function EditProfileForm({
   return (
     <>
       {form.formError && (
-        <FieldError className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3">
+        <FieldError className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3">
           <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
           <span>{form.formError}</span>
         </FieldError>
       )}
 
-      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
+      <form
+        id={FORM_ID}
+        onSubmit={handleSubmit}
+        noValidate
+        className="flex flex-col gap-5"
+      >
         <Field>
-          <FieldLabel htmlFor="edit-profile-nickname">Pseudonim</FieldLabel>
-          <input
+          <div className={LABEL_ROW_CLASS}>
+            <FieldLabel htmlFor="edit-profile-nickname">
+              Poreclă (opțional)
+            </FieldLabel>
+            <InfoHint label="Despre poreclă" id="edit-profile-nickname-hint">
+              2–24 de caractere: litere, cifre, spații, punct, cratimă sau
+              underscore. Fără poreclă, se afișează numele complet.
+            </InfoHint>
+          </div>
+          <Input
             id="edit-profile-nickname"
             type="text"
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
             autoComplete="nickname"
-            className={INPUT_CLASS}
             {...form.field('nickname', 'edit-profile-nickname-hint')}
           />
           <FieldError {...form.errorProps('nickname')} />
-          <FieldDescription id="edit-profile-nickname-hint">
-            2–24 de caractere: litere, cifre, spații, punct, cratimă sau
-            underscore. Fără pseudonim, se afișează numele complet.
-          </FieldDescription>
         </Field>
 
         <Field>
-          <FieldLabel htmlFor="edit-profile-name">Nume complet</FieldLabel>
-          <input
+          <div className={LABEL_ROW_CLASS}>
+            <FieldLabel htmlFor="edit-profile-name">Nume complet</FieldLabel>
+            <InfoHint label="Despre numele complet" id="edit-profile-name-hint">
+              Numele complet se schimbă doar de BC sau Moderator.
+            </InfoHint>
+          </div>
+          {/* Read-only, not disabled: it stays in the tab order and is read
+              out, drawn as the shared field's disabled surface. */}
+          <Input
             id="edit-profile-name"
             type="text"
             value={profile.full_name}
             readOnly
             aria-readonly="true"
             aria-describedby="edit-profile-name-hint"
-            className={LOCKED_INPUT_CLASS}
+            className="cursor-not-allowed bg-muted text-muted-foreground"
           />
-          <FieldDescription id="edit-profile-name-hint">
-            Numele complet se schimbă doar de BC sau Moderator.
-          </FieldDescription>
         </Field>
 
         <Field>
-          <FieldLabel htmlFor="edit-profile-phone">Număr de telefon</FieldLabel>
-          <input
+          <div className={LABEL_ROW_CLASS}>
+            <FieldLabel htmlFor="edit-profile-phone">
+              Număr de telefon (opțional)
+            </FieldLabel>
+            <InfoHint
+              label="Despre numărul de telefon"
+              id="edit-profile-phone-hint"
+            >
+              {PHONE_HINT}
+            </InfoHint>
+          </div>
+          <Input
             id="edit-profile-phone"
             type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="ex: 0712345678"
             autoComplete="tel"
-            className={INPUT_CLASS}
             {...phoneField}
             onBlur={() => {
               phoneField.onBlur();
@@ -154,73 +153,53 @@ function EditProfileForm({
             }}
           />
           <FieldError {...form.errorProps('phone')} />
-          <FieldDescription id="edit-profile-phone-hint">
-            {PHONE_HINT}
-          </FieldDescription>
         </Field>
 
         <Field {...form.slot('avatarColor')}>
           <FieldLabel>Culoare avatar</FieldLabel>
-          {/* One row of seven at every width (P4): 40 px discs in 44 px
-              targets, the selection a ring — never a size change. Under
-              about 364 px the seven cells share the row and shrink together
-              rather than overflow the sheet. */}
-          <div
-            className="grid w-full max-w-[20.75rem] grid-cols-7 gap-1 pt-1"
-            role="group"
-            aria-label="Alege culoarea avatarului"
-          >
-            {AVATAR_PALETTE.map((swatch) => {
-              const isSelected =
-                avatarColor.toLowerCase() === swatch.color.toLowerCase();
-              return (
-                <button
-                  key={swatch.color}
-                  type="button"
-                  onClick={() => setAvatarColor(swatch.color)}
-                  aria-label={swatch.name}
-                  aria-pressed={isSelected}
-                  className="group grid aspect-square w-full max-w-11 min-w-0 place-items-center rounded-full outline-none"
-                >
-                  <span
-                    aria-hidden="true"
-                    style={{ backgroundColor: swatch.color }}
-                    className={cn(
-                      'grid aspect-square w-[calc(100%-4px)] max-w-10 place-items-center rounded-full text-white ring-offset-2 ring-offset-card transition-shadow motion-reduce:transition-none group-focus-visible:ring-3 group-focus-visible:ring-ring',
-                      isSelected
-                        ? 'ring-2 ring-foreground'
-                        : 'group-hover:ring-2 group-hover:ring-border',
-                    )}
-                  >
-                    {isSelected && <Check className="size-4 stroke-[3]" />}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <ColorPicker
+            label="Alege culoarea avatarului"
+            value={avatarColor}
+            onChange={setAvatarColor}
+          />
           <FieldError {...form.errorProps('avatarColor')} />
         </Field>
-
-        <SheetFooter className="mt-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onClose}
-            disabled={updateMutation.isPending}
-          >
-            Anulează
-          </Button>
-          <Button type="submit" disabled={updateMutation.isPending}>
-            {updateMutation.isPending
-              ? 'Se salvează…'
-              : 'Salvează modificările'}
-          </Button>
-        </SheetFooter>
       </form>
+
+      {/* #824: the sign-in address changes here too, as its own form below
+          the profile form, so the page itself has no email card. */}
+      <div className="border-t border-border pt-5">
+        <ChangeEmailSection profile={profile} />
+      </div>
+
+      {/* The profile form's actions, pinned under both sections: the buttons
+          sit outside the form and submit it by its id. */}
+      <FormSheetFooter>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onClose}
+          disabled={updateMutation.isPending}
+        >
+          Renunță
+        </Button>
+        <Button
+          type="submit"
+          form={FORM_ID}
+          disabled={updateMutation.isPending}
+        >
+          {updateMutation.isPending ? 'Se salvează…' : 'Salvează modificările'}
+        </Button>
+      </FormSheetFooter>
     </>
   );
 }
 
+/**
+ * **Editează profilul**: the Member's own Nickname, phone and avatar colour,
+ * and under them the request to change the sign-in address — one form sheet,
+ * whose pinned **Salvează modificările** saves the profile form.
+ */
 export default function EditProfileSheet({
   open,
   onClose,
@@ -228,39 +207,20 @@ export default function EditProfileSheet({
   onSaved,
 }: EditProfileSheetProps) {
   return (
-    <Sheet
+    <FormSheet
       open={open}
       onOpenChange={(isOpen) => {
         if (!isOpen) onClose();
       }}
+      title="Editează profilul"
     >
-      <SheetPortal>
-        <SheetBackdrop />
-        <SheetPopup
-          side="right"
-          className="max-w-md p-4 sm:p-6"
-          aria-describedby={undefined}
-        >
-          <SheetHeader className="mb-5">
-            <SheetTitle>Editează profilul</SheetTitle>
-          </SheetHeader>
-
-          {open && (
-            <>
-              <EditProfileForm
-                profile={profile}
-                onClose={onClose}
-                onSaved={onSaved}
-              />
-              {/* #824: the sign-in address changes here too, as its own form
-                  below the profile form, so the page itself has no email card. */}
-              <div className="mt-6 border-t border-border pt-6">
-                <ChangeEmailSection profile={profile} />
-              </div>
-            </>
-          )}
-        </SheetPopup>
-      </SheetPortal>
-    </Sheet>
+      {open && (
+        <EditProfileForm
+          profile={profile}
+          onClose={onClose}
+          onSaved={onSaved}
+        />
+      )}
+    </FormSheet>
   );
 }

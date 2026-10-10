@@ -28,6 +28,7 @@ export type GroupFilterOption = {
  */
 export function GroupFilterCombobox<G extends GroupFilterOption>({
   ariaLabelledBy,
+  ariaDescribedBy,
   groups,
   groupsById,
   value,
@@ -38,6 +39,8 @@ export function GroupFilterCombobox<G extends GroupFilterOption>({
   disabled,
 }: {
   ariaLabelledBy: string;
+  /** The id of the field's hint (an `InfoHint`'s hidden copy) or error. */
+  ariaDescribedBy?: string;
   groups: G[];
   groupsById: ReadonlyMap<number, Pick<G, 'name'>>;
   value: G | null;
@@ -65,7 +68,10 @@ export function GroupFilterCombobox<G extends GroupFilterOption>({
       itemToStringLabel={stringLabel}
       disabled={disabled}
     >
-      <ComboboxTrigger aria-labelledby={ariaLabelledBy}>
+      <ComboboxTrigger
+        aria-labelledby={ariaLabelledBy}
+        aria-describedby={ariaDescribedBy}
+      >
         <ComboboxValue placeholder={placeholder} />
       </ComboboxTrigger>
       <ComboboxContent>

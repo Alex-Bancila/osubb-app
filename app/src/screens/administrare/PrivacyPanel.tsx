@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router';
 import { ListRow, Panel, rowListClass } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
@@ -49,8 +48,6 @@ export function PrivacyPanel() {
 
   return (
     <Panel
-      eyebrow="Membri"
-      icon={ShieldCheck}
       title="Confidențialitate"
       description={
         <>

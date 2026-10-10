@@ -1,11 +1,23 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import {
+  Network,
+  Settings,
+  ShieldCheck,
+  Tag,
+  UserPlus,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
+import { cn } from 'cn';
+import {
+  FabActions,
   BackLink,
   Page,
   PageHeader,
   Panel,
   tabClass,
+  tabLabelsFrom,
   tabListClass,
   useActiveTabInView,
 } from '../../components/layout';
@@ -46,6 +58,7 @@ import {
   groupPathNames,
   groupStatusLabel,
   groupTabs,
+  type GroupTabId,
 } from './group-tree';
 
 /** The query key that holds the open tab (navigation D6). */
@@ -103,13 +116,25 @@ function BackToGroups() {
  * the Cereri queue or a reload opens the tab the link names. Each link
  * replaces the history entry — switching tabs is not a page to go back to —
  * and carries the page's `state`, so a back link set by the member page
- * survives a tab change. One row at 375 px (#841's strip).
+ * survives a tab change. One pill track, never a scrolling strip: up to six
+ * tabs, so under 768 px only the current one spells its name.
  */
+const GROUP_TAB_ICONS: Record<GroupTabId, LucideIcon> = {
+  setari: Settings,
+  roster: Users,
+  roluri: ShieldCheck,
+  copii: Network,
+  campanii: Tag,
+  cereri: UserPlus,
+};
+
+const labels = tabLabelsFrom.md;
+
 function GroupTabs({
   tabs,
   active,
 }: {
-  tabs: readonly { id: string; label: string }[];
+  tabs: readonly { id: GroupTabId; label: string }[];
   active: string;
 }) {
   const nav = useRef<HTMLElement>(null);
@@ -118,6 +143,7 @@ function GroupTabs({
   return (
     <nav ref={nav} aria-label="Secțiunile grupului" className={tabListClass}>
       {tabs.map((item) => {
+        const Icon = GROUP_TAB_ICONS[item.id];
         const params = new URLSearchParams(location.search);
         params.set(TAB_KEY, item.id);
         return (
@@ -127,17 +153,16 @@ function GroupTabs({
             replace
             state={location.state}
             aria-current={item.id === active ? 'page' : undefined}
-            className={tabClass}
+            className={cn(tabClass, labels.tab)}
           >
-            {item.label}
+            <Icon aria-hidden="true" />
+            <span className={labels.label}>{item.label}</span>
           </Link>
         );
       })}
     </nav>
   );
 }
-
-const EYEBROW = 'Administrare';
 
 /**
  * An archived Group is read-only for everyone (Audit D-10): the server refuses
@@ -286,13 +311,13 @@ export default function GroupScreen() {
     return (
       <Page>
         <BackToGroups />
-        <PageHeader eyebrow={EYEBROW} title="Grup" />
+        <PageHeader title="Grup" />
         <p role="alert">Nu ai acces la acest grup sau grupul nu există.</p>
       </Page>
     );
 
   const busy = command.isPending;
-  // Every member (#929, ruling R32) for the Roster tab; the explicit rows alone
+  // Every member (#929, ruling R32) for the Membri tab; the explicit rows alone
   // for Roluri and Setări, which act only on roster rows.
   const everyMember = rosterQuery.data ?? [];
   const roster = explicitRoster(everyMember);
@@ -300,168 +325,170 @@ export default function GroupScreen() {
 
   return (
     <Page>
-      <div className="-mb-3 flex flex-wrap items-center gap-x-4 gap-y-1">
-        <BackToGroups />
-        <Breadcrumb group={group} byId={byId} />
-      </div>
-      <PageHeader
-        eyebrow={EYEBROW}
-        title={
-          <span className="inline-flex max-w-full min-w-0 items-center gap-3">
-            <span
-              aria-hidden="true"
-              className="size-4 shrink-0 rounded-full"
-              style={{ backgroundColor: group.color ?? 'var(--brand-red)' }}
-            />
-            <span className="min-w-0">{group.name}</span>
-          </span>
-        }
-        badge={
-          <>
-            <Badge variant="outline">{categoryLabel(group.category)}</Badge>
-            <PrivateGroupBadge isPrivate={group.is_private} />
-            {group.status !== 'active' && (
-              <Badge variant="secondary">
-                {groupStatusLabel(group.status)}
-              </Badge>
-            )}
-          </>
-        }
-        description={
-          <>
-            Nivel minim: {minimumLevelText(group.min_level)}
-            {` · ${formatMemberCount(group.memberCount)}`}
-            {group.automatic_membership && ', adăugați automat'}
-          </>
-        }
-      />
+      {/* Subgrup nou and Campanie nouă are the page's plus button. */}
+      <FabActions>
+        <div className="-mb-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <BackToGroups />
+          <Breadcrumb group={group} byId={byId} />
+        </div>
+        <PageHeader
+          title={
+            <span className="inline-flex max-w-full min-w-0 items-center gap-3">
+              <span
+                aria-hidden="true"
+                className="size-4 shrink-0 rounded-full"
+                style={{ backgroundColor: group.color ?? 'var(--brand-red)' }}
+              />
+              <span className="min-w-0">{group.name}</span>
+            </span>
+          }
+          badge={
+            <>
+              <Badge variant="outline">{categoryLabel(group.category)}</Badge>
+              <PrivateGroupBadge isPrivate={group.is_private} />
+              {group.status !== 'active' && (
+                <Badge variant="secondary">
+                  {groupStatusLabel(group.status)}
+                </Badge>
+              )}
+            </>
+          }
+          description={
+            <>
+              Nivel minim: {minimumLevelText(group.min_level)}
+              {` · ${formatMemberCount(group.memberCount)}`}
+              {group.automatic_membership && ', adăugați automat'}
+            </>
+          }
+        />
 
-      {/* The one refusal line (relevance B49): a viewer who can change
+        {/* The one refusal line (relevance B49): a viewer who can change
           nothing here is told once, not once per tab. */}
-      {archived ? (
-        <p className="m-0 -mt-3 text-sm text-muted-foreground">
-          Grupul este arhivat; nu se mai poate modifica.
-        </p>
-      ) : (
-        !authority.manageWork &&
-        !authority.manageGroup &&
-        !authority.appointManager && (
+        {archived ? (
           <p className="m-0 -mt-3 text-sm text-muted-foreground">
-            Vezi grupul, dar schimbările îi revin coordonatorului lui.
+            Grupul este arhivat; nu se mai poate modifica.
           </p>
-        )
-      )}
-
-      {message && <p role="status">{message}</p>}
-      {error && (
-        <p role="alert" className="text-destructive">
-          {error}
-        </p>
-      )}
-
-      <GroupTabs tabs={tabs} active={tab} />
-
-      <div role="region" aria-label={activeLabel} className="min-w-0">
-        {tab === 'setari' && (
-          <GroupSettingsTab
-            // A new Group is a new draft: every field starts from its row.
-            key={group.id}
-            group={group}
-            parent={parent}
-            subtree={subtree}
-            roster={roster}
-            authority={authority}
-            levels={levels}
-            actorLevel={actorLevel}
-            busy={busy}
-            error={error}
-            lastReason={lastReason}
-            onRun={run}
-            canDelete={canDelete}
-          />
-        )}
-        {tab === 'roster' &&
-          (rosterQuery.isPending ? (
-            <Panel aria-label="Roster">
-              <Loading label="Se încarcă membrii…" />
-            </Panel>
-          ) : (
-            <GroupRosterTab
-              group={group}
-              roster={everyMember}
-              members={membersQuery.data ?? []}
-              authority={authority}
-              busy={busy}
-              error={error}
-              onRun={run}
-            />
-          ))}
-        {tab === 'roluri' &&
-          (rosterQuery.isPending ? (
-            <Panel aria-label="Roluri">
-              <Loading label="Se încarcă funcțiile…" />
-            </Panel>
-          ) : (
-            <GroupRolesTab
-              group={group}
-              roster={roster}
-              members={membersQuery.data ?? []}
-              authority={authority}
-              busy={busy}
-              error={error}
-              onRun={run}
-            />
-          ))}
-        {tab === 'copii' && (
-          <GroupChildrenTab
-            group={group}
-            childGroups={children}
-            members={membersQuery.data ?? []}
-            levels={levels}
-            actorLevel={actorLevel}
-            authority={authority}
-            authorityFor={(child) =>
-              archived
-                ? READ_ONLY
-                : groupAuthority(child, myGroupsQuery.data, createTopLevel)
-            }
-            busy={busy}
-            error={error}
-            onRun={run}
-          />
-        )}
-        {tab === 'campanii' && (
-          <div className="flex flex-col gap-4">
-            <p className="m-0 text-sm text-muted-foreground">
-              Raportul unei campanii arată punctele obținute și cine a lucrat.
+        ) : (
+          !authority.manageWork &&
+          !authority.manageGroup &&
+          !authority.appointManager && (
+            <p className="m-0 -mt-3 text-sm text-muted-foreground">
+              Vezi grupul, dar schimbările îi revin coordonatorului lui.
             </p>
-            <CampaignsPanel
+          )
+        )}
+
+        {message && <p role="status">{message}</p>}
+        {error && (
+          <p role="alert" className="text-destructive">
+            {error}
+          </p>
+        )}
+
+        <GroupTabs tabs={tabs} active={tab} />
+
+        <div role="region" aria-label={activeLabel} className="min-w-0">
+          {tab === 'setari' && (
+            <GroupSettingsTab
+              // A new Group is a new draft: every field starts from its row.
+              key={group.id}
               group={group}
-              label={group.name}
-              groups={groups}
-              readOnly={archived}
+              parent={parent}
+              subtree={subtree}
+              roster={roster}
+              authority={authority}
+              levels={levels}
+              actorLevel={actorLevel}
+              busy={busy}
+              error={error}
+              lastReason={lastReason}
+              onRun={run}
+              canDelete={canDelete}
             />
-          </div>
-        )}
-        {tab === 'cereri' && (
-          <Panel
-            aria-label="Cereri"
-            // #698 (ruling R18): with a form link, applicants go to the form
-            // and join by Appointment. Applications filed before the link was
-            // set still list below, to be decided.
-            description={
-              group.application_form_url
-                ? 'Grupul primește înscrieri prin formular; adaugă membrii din Roster.'
-                : undefined
-            }
-          >
-            <GroupApplicationsTab
-              groupId={id}
-              canDecide={authority.manageWork}
+          )}
+          {tab === 'roster' &&
+            (rosterQuery.isPending ? (
+              <Panel aria-label="Membrii grupului">
+                <Loading label="Se încarcă membrii…" />
+              </Panel>
+            ) : (
+              <GroupRosterTab
+                group={group}
+                roster={everyMember}
+                members={membersQuery.data ?? []}
+                authority={authority}
+                busy={busy}
+                error={error}
+                onRun={run}
+              />
+            ))}
+          {tab === 'roluri' &&
+            (rosterQuery.isPending ? (
+              <Panel aria-label="Roluri">
+                <Loading label="Se încarcă funcțiile…" />
+              </Panel>
+            ) : (
+              <GroupRolesTab
+                group={group}
+                roster={roster}
+                members={membersQuery.data ?? []}
+                authority={authority}
+                busy={busy}
+                error={error}
+                onRun={run}
+              />
+            ))}
+          {tab === 'copii' && (
+            <GroupChildrenTab
+              group={group}
+              childGroups={children}
+              members={membersQuery.data ?? []}
+              levels={levels}
+              actorLevel={actorLevel}
+              authority={authority}
+              authorityFor={(child) =>
+                archived
+                  ? READ_ONLY
+                  : groupAuthority(child, myGroupsQuery.data, createTopLevel)
+              }
+              busy={busy}
+              error={error}
+              onRun={run}
             />
-          </Panel>
-        )}
-      </div>
+          )}
+          {tab === 'campanii' && (
+            <div className="flex flex-col gap-4">
+              <p className="m-0 text-sm text-muted-foreground">
+                Raportul unei campanii arată punctele obținute și cine a lucrat.
+              </p>
+              <CampaignsPanel
+                group={group}
+                label={group.name}
+                groups={groups}
+                readOnly={archived}
+              />
+            </div>
+          )}
+          {tab === 'cereri' && (
+            <Panel
+              aria-label="Cereri"
+              // #698 (ruling R18): with a form link, applicants go to the form
+              // and join by Appointment. Applications filed before the link was
+              // set still list below, to be decided.
+              description={
+                group.application_form_url
+                  ? 'Grupul primește înscrieri prin formular; adaugă membrii din fila Membri.'
+                  : undefined
+              }
+            >
+              <GroupApplicationsTab
+                groupId={id}
+                canDecide={authority.manageWork}
+              />
+            </Panel>
+          )}
+        </div>
+      </FabActions>
     </Page>
   );
 }

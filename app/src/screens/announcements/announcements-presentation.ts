@@ -1,6 +1,9 @@
-import { ro } from 'date-fns/locale';
-import { formatInTimeZone } from 'date-fns-tz';
-import { BUCHAREST_TIME_ZONE, bucharestDayKey } from '../../lib/calendar-time';
+import {
+  BUCHAREST_TIME_ZONE,
+  bucharestDayKey,
+  formatBucharestShort,
+  formatBucharestTime,
+} from '../../lib/calendar-time';
 import type { Database } from '../../lib/database.types';
 import { minimumLevelText } from '../../lib/minimum-level';
 import {
@@ -96,13 +99,37 @@ function localAudienceLabel(
   return `Doar ${origin.name}`;
 }
 
-export function formatAnnouncementDate(instant: string): string {
+const SHORT_DATE = new Intl.DateTimeFormat('ro-RO', {
+  timeZone: BUCHAREST_TIME_ZONE,
+  calendar: 'gregory',
+  day: 'numeric',
+  month: 'short',
+});
+
+const SHORT_DATE_WITH_YEAR = new Intl.DateTimeFormat('ro-RO', {
+  timeZone: BUCHAREST_TIME_ZONE,
+  calendar: 'gregory',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
+/**
+ * `9 oct. · 22:03` — when something was published or read, in Romania's time:
+ * the day short, the hour always kept. The year is said only when it is not
+ * this one (`9 oct. 2025 · 22:03`).
+ */
+export function formatAnnouncementDate(
+  instant: string,
+  now: Date = new Date(),
+): string {
   const date = new Date(instant);
   if (Number.isNaN(date.getTime())) return '—';
 
-  return formatInTimeZone(date, BUCHAREST_TIME_ZONE, 'd MMMM yyyy, HH:mm', {
-    locale: ro,
-  });
+  const sameYear =
+    bucharestDayKey(date)?.slice(0, 4) === bucharestDayKey(now)?.slice(0, 4);
+  const day = (sameYear ? SHORT_DATE : SHORT_DATE_WITH_YEAR).format(date);
+  return `${day} · ${formatBucharestTime(date)}`;
 }
 
 /** "Nivel minim: BCE" — shown only above Recrut, by the Role's name (R29b). */
@@ -116,7 +143,7 @@ export type TermenPresentation = {
   state: TermenState;
   /** "Termen" while it runs, "Termen expirat" once it has passed. */
   label: string;
-  /** "vineri, 2 octombrie, 23:59"; "azi, 23:59" / "mâine, 18:40" when close. */
+  /** "vin., 2 oct. · 23:59"; "azi · 23:59" / "mâine · 18:40" when close. */
   when: string;
 };
 
@@ -144,7 +171,6 @@ export function describeTermen(
         ? 'soon'
         : 'upcoming';
 
-  const time = formatInTimeZone(at, BUCHAREST_TIME_ZONE, 'HH:mm');
   const day = bucharestDayKey(at);
   const relative =
     state === 'expired'
@@ -154,20 +180,13 @@ export function describeTermen(
         : day === bucharestDayKey(new Date(now.getTime() + DAY_MS))
           ? 'mâine'
           : null;
-  const sameYear =
-    formatInTimeZone(at, BUCHAREST_TIME_ZONE, 'yyyy') ===
-    formatInTimeZone(now, BUCHAREST_TIME_ZONE, 'yyyy');
-  const date = formatInTimeZone(
-    at,
-    BUCHAREST_TIME_ZONE,
-    sameYear ? 'EEEE, d MMMM' : 'EEEE, d MMMM yyyy',
-    { locale: ro },
-  );
 
   return {
     state,
     label: state === 'expired' ? 'Termen expirat' : 'Termen',
-    when: `${relative ?? date}, ${time}`,
+    when: relative
+      ? `${relative} · ${formatBucharestTime(at)}`
+      : formatBucharestShort(at, now),
   };
 }
 

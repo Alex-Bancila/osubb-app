@@ -1,11 +1,5 @@
 import * as axe from 'axe-core';
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({ query: vi.fn(), refetch: vi.fn() }));
@@ -19,10 +13,15 @@ vi.mock('./DirectExecutorSelector', () => ({
   DirectExecutorSelector: () => null,
 }));
 import { ManagedTaskForm } from './ManagedTaskForm';
+import { pickDate } from '../../test/date-picker';
+// A deadline next month: always in the future, and one page away in the
+// date picker.
+const nextMonth = new Date();
+nextMonth.setUTCDate(1);
+nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+const DEADLINE = `${nextMonth.toISOString().slice(0, 7)}-15T12:30`;
 async function pickOrigin(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(
-    screen.getByRole('combobox', { name: 'Grup principal (obligatoriu)' }),
-  );
+  await user.click(screen.getByRole('combobox', { name: 'Grup principal' }));
   await user.click(await screen.findByRole('option', { name: 'Origin' }));
   await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
 }
@@ -62,21 +61,14 @@ it('rechecks current origins before releasing a draft and preserves entered cont
   const onDraft = vi.fn();
   render(<ManagedTaskForm onDraft={onDraft} />);
   const user = userEvent.setup();
-  await user.type(
-    screen.getByLabelText('Titlu (obligatoriu)'),
-    'Draft păstrat',
-  );
-  fireEvent.change(screen.getByLabelText(/Termen/), {
-    target: { value: '2030-10-01T12:30' },
-  });
-  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
+  await user.type(screen.getByLabelText('Titlu'), 'Draft păstrat');
+  await pickDate(user, screen.getByLabelText(/Termen/), DEADLINE);
+  await user.click(screen.getByRole('radio', { name: 'Public' }));
   await pickOrigin(user);
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
   expect(onDraft).not.toHaveBeenCalled();
   expect(screen.getByRole('alert')).toHaveTextContent('Nu mai poți pregăti');
-  expect(screen.getByLabelText('Titlu (obligatoriu)')).toHaveValue(
-    'Draft păstrat',
-  );
+  expect(screen.getByLabelText('Titlu')).toHaveValue('Draft păstrat');
 });
 it('maps authoritative submission errors and prevents duplicate commands while rechecking', async () => {
   const options = {
@@ -100,11 +92,9 @@ it('maps authoritative submission errors and prevents duplicate commands while r
   });
   const { container } = render(<ManagedTaskForm onDraft={onDraft} />);
   const user = userEvent.setup();
-  await user.type(screen.getByLabelText('Titlu (obligatoriu)'), 'Task');
-  fireEvent.change(screen.getByLabelText(/Termen/), {
-    target: { value: '2030-10-01T12:30' },
-  });
-  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
+  await user.type(screen.getByLabelText('Titlu'), 'Task');
+  await pickDate(user, screen.getByLabelText(/Termen/), DEADLINE);
+  await user.click(screen.getByRole('radio', { name: 'Public' }));
   await pickOrigin(user);
   await user.dblClick(screen.getByRole('button', { name: 'Continuă' }));
   expect(state.refetch).toHaveBeenCalledOnce();
@@ -114,7 +104,7 @@ it('maps authoritative submission errors and prevents duplicate commands while r
   expect(screen.getByRole('alert')).toHaveTextContent('Nu mai ai permisiunea');
   expect(screen.queryByText('private authority SQL')).not.toBeInTheDocument();
   expect((await axe.run(container)).violations).toEqual([]);
-  expect(screen.getByLabelText('Titlu (obligatoriu)')).toHaveValue('Task');
+  expect(screen.getByLabelText('Titlu')).toHaveValue('Task');
 });
 it('retains a draft while a background options read reports an error', async () => {
   const options = {
@@ -126,18 +116,13 @@ it('retains a draft while a background options read reports an error', async () 
   };
   state.query.mockReturnValue({ data: options, refetch: state.refetch });
   const view = render(<ManagedTaskForm onDraft={vi.fn()} />);
-  await userEvent.type(
-    screen.getByLabelText('Titlu (obligatoriu)'),
-    'Nu pierde textul',
-  );
+  await userEvent.type(screen.getByLabelText('Titlu'), 'Nu pierde textul');
   state.query.mockReturnValue({
     data: options,
     isError: true,
     refetch: state.refetch,
   });
   view.rerender(<ManagedTaskForm onDraft={vi.fn()} />);
-  expect(screen.getByLabelText('Titlu (obligatoriu)')).toHaveValue(
-    'Nu pierde textul',
-  );
+  expect(screen.getByLabelText('Titlu')).toHaveValue('Nu pierde textul');
   expect(screen.getByRole('alert')).toHaveTextContent('Nu am putut încărca');
 });

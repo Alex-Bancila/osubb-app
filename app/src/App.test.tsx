@@ -86,6 +86,8 @@ vi.mock('./screens/administrare/AdminApplicationsTab', () => ({
 // Whether Cereri de aderare can hold anything reads Groups; routing does not.
 vi.mock('./screens/administrare/applications-tab', () => ({
   useApplicationsTabShown: () => true,
+  usePendingApplicationCount: () => 0,
+  applicationCount: (count: number) => `${count} cereri`,
 }));
 vi.mock('./screens/administrare/PrivacyPanel', () => ({
   PrivacyPanel: () => <h2>Confidențialitate tab</h2>,

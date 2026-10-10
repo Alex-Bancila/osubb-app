@@ -265,9 +265,8 @@ describe('AnnouncementsScreen', () => {
     expect(
       screen.getByText('Nu sunt anunțuri disponibile în acest moment.'),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText('Toate anunțurile sunt citite'),
-    ).toBeInTheDocument();
+    // Nothing unread: the title carries no count.
+    expect(screen.queryByText(/necitit/)).toBeNull();
   });
 
   it('renders feed sorted pinned-first then newest, showing critical banner and unread counts', () => {
@@ -478,7 +477,8 @@ describe('AnnouncementsScreen', () => {
 
     renderAt('/anunturi');
 
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    // The filter button waits too, and says so to a screen reader.
+    expect(screen.getAllByRole('status').length).toBeGreaterThan(0);
     expect(screen.getByText('Se încarcă anunțurile…')).toBeInTheDocument();
   });
 
@@ -610,6 +610,80 @@ describe('AnnouncementsScreen', () => {
     });
   });
 
+  describe('Filtrează, by Group', () => {
+    const child: Group = {
+      ...mockGroup,
+      id: 11,
+      name: 'Echipa Web',
+      category: 'team',
+      path: [10, 11],
+      parent_id: 10,
+    };
+    const other: Group = {
+      ...mockGroup,
+      id: 20,
+      name: 'Educațional',
+      path: [20],
+    };
+    beforeEach(() => {
+      hooks.useGroups.mockReturnValue({
+        data: new Map([
+          [10, mockGroup],
+          [11, child],
+          [20, other],
+        ]),
+        isPending: false,
+      });
+      hooks.useAnnouncementsFeed.mockReturnValue({
+        isPending: false,
+        isError: false,
+        data: [
+          createRow({ id: 1, title: 'Din IT', group_id: 10 }),
+          createRow({ id: 2, title: 'Din Echipa Web', group_id: 11 }),
+          createRow({ id: 3, title: 'Din Educațional', group_id: 20 }),
+        ],
+      });
+    });
+
+    it('draws Filtrează on the title row and lists everything with no Group chosen', () => {
+      renderAt('/anunturi');
+
+      expect(
+        screen
+          .getByRole('button', { name: 'Filtrează' })
+          .closest('[data-slot="page-actions"]'),
+      ).not.toBeNull();
+      expect(screen.getByText('Din IT')).toBeInTheDocument();
+      expect(screen.getByText('Din Echipa Web')).toBeInTheDocument();
+      expect(screen.getByText('Din Educațional')).toBeInTheDocument();
+    });
+
+    it('keeps the chosen Group and the Groups below it, and still counts every unread', () => {
+      renderAt('/anunturi?grup=10');
+
+      expect(screen.getByText('Din IT')).toBeInTheDocument();
+      expect(screen.getByText('Din Echipa Web')).toBeInTheDocument();
+      expect(screen.queryByText('Din Educațional')).toBeNull();
+      expect(screen.getByText('3 anunțuri necitite')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', {
+          name: 'Elimină filtrul Grup principal: IT',
+        }),
+      ).toBeVisible();
+    });
+
+    it('says so when the chosen Group has no Announcement', () => {
+      hooks.useAnnouncementsFeed.mockReturnValue({
+        isPending: false,
+        isError: false,
+        data: [createRow({ id: 1, title: 'Din IT', group_id: 10 })],
+      });
+      renderAt('/anunturi?grup=20');
+
+      expect(screen.getByText('Niciun anunț în grupul ales.')).toBeVisible();
+    });
+  });
+
   describe('Grupuri preferate (R43)', () => {
     const second: Group = {
       ...mockGroup,
@@ -673,19 +747,22 @@ describe('AnnouncementsScreen', () => {
       ).toBeInTheDocument();
       expect(screen.getByText('Al meu din Educațional')).toBeInTheDocument();
       expect(
-        screen.getByRole('link', { name: 'Doar grupurile preferate' }),
-      ).toHaveAttribute('href', '/profil#grupuri-preferate');
+        screen.getByRole('button', { name: 'Doar grupurile preferate' }),
+      ).toHaveAttribute('aria-pressed', 'true');
     });
 
     it('shows everything for the visit after Arată tot, and goes back', async () => {
       const user = userEvent.setup();
       renderAt('/anunturi');
-      await user.click(screen.getByRole('button', { name: 'Arată tot' }));
-      expect(screen.getByText('Local din Educațional')).toBeInTheDocument();
-      expect(screen.getByText('Toate grupurile')).toBeInTheDocument();
       await user.click(
-        screen.getByRole('button', { name: 'Doar preferatele' }),
+        screen.getByRole('button', { name: 'Doar grupurile preferate' }),
       );
+      expect(screen.getByText('Local din Educațional')).toBeInTheDocument();
+      const star = screen.getByRole('button', {
+        name: 'Doar grupurile preferate',
+      });
+      expect(star).toHaveAttribute('aria-pressed', 'false');
+      await user.click(star);
       expect(
         screen.queryByText('Local din Educațional'),
       ).not.toBeInTheDocument();
@@ -696,10 +773,7 @@ describe('AnnouncementsScreen', () => {
       renderAt('/anunturi');
       expect(screen.getByText('Local din Educațional')).toBeInTheDocument();
       expect(
-        screen.queryByText('Doar grupurile preferate'),
-      ).not.toBeInTheDocument();
-      expect(
-        screen.queryByRole('button', { name: 'Arată tot' }),
+        screen.queryByRole('button', { name: 'Doar grupurile preferate' }),
       ).not.toBeInTheDocument();
     });
   });

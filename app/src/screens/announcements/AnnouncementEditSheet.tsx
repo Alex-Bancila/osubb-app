@@ -1,15 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
-import {
-  Sheet,
-  SheetBackdrop,
-  SheetFooter,
-  SheetHeader,
-  SheetPopup,
-  SheetPortal,
-  SheetTitle,
-} from '../../components/ui/sheet';
+import { FormSheet, FormSheetFooter } from '../../components/ui/form-sheet';
 import { useAuth } from '../../lib/auth';
 import { bucharestWallTimeToIso } from '../../lib/calendar-time';
 import {
@@ -57,32 +49,19 @@ export default function AnnouncementEditSheet({
   const update = useUpdateAnnouncement();
 
   return (
-    <Sheet
+    <FormSheet
       open={open}
-      onOpenChange={(next) => {
-        if (update.isPending) return;
-        onOpenChange(next);
-      }}
+      onOpenChange={onOpenChange}
+      title="Editează anunțul"
+      busy={update.isPending}
     >
-      <SheetPortal>
-        <SheetBackdrop />
-        <SheetPopup
-          side="right"
-          className="max-w-xl gap-5 p-4 sm:p-6"
-          aria-describedby={undefined}
-        >
-          <SheetHeader showCloseButton={!update.isPending}>
-            <SheetTitle>Editează anunțul</SheetTitle>
-          </SheetHeader>
-          <EditForm
-            announcement={announcement}
-            update={update}
-            onCancel={() => onOpenChange(false)}
-            onSaved={onSaved}
-          />
-        </SheetPopup>
-      </SheetPortal>
-    </Sheet>
+      <EditForm
+        announcement={announcement}
+        update={update}
+        onCancel={() => onOpenChange(false)}
+        onSaved={onSaved}
+      />
+    </FormSheet>
   );
 }
 
@@ -153,7 +132,7 @@ function EditForm({
     <form
       onSubmit={(event) => void submit(event)}
       noValidate
-      className="flex flex-1 flex-col gap-4"
+      className="flex flex-1 flex-col gap-5"
     >
       <AnnouncementFields
         draft={draft}
@@ -176,7 +155,7 @@ function EditForm({
         }
       />
       <FieldError>{form.formError}</FieldError>
-      <SheetFooter>
+      <FormSheetFooter>
         <Button
           type="button"
           variant="outline"
@@ -188,7 +167,7 @@ function EditForm({
         <Button type="submit" disabled={update.isPending}>
           {update.isPending ? 'Se salvează…' : 'Salvează modificările'}
         </Button>
-      </SheetFooter>
+      </FormSheetFooter>
     </form>
   );
 }

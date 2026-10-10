@@ -2,10 +2,9 @@ import { Button } from '../../components/ui/button';
 import { useTaskEvaluationCapability } from '../../queries/task-review';
 
 // Shared by the review actions: one query failure should produce one retry.
+// The check itself is silent: the actions simply appear once it allows them.
 export function TaskReviewCapabilityNotice({ taskId }: { taskId: number }) {
   const capability = useTaskEvaluationCapability(taskId);
-  if (capability.isPending)
-    return <p role="status">Se verifică permisiunile de evaluare…</p>;
   if (capability.isError)
     return (
       <div role="alert" className="space-y-2">

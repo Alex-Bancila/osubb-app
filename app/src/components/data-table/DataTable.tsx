@@ -15,6 +15,7 @@ import {
 } from '@tanstack/react-table';
 import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Empty,
   EmptyDescription,
@@ -58,6 +59,15 @@ type DataTableProps<TData extends RowData> = {
    * hides under `sm` (`max-sm:hidden`) or a minimum width (`min-w-40`).
    */
   columnClassName?: Partial<Record<string, string>>;
+  /**
+   * Under `sm`, take the header row off the screen: for a table that folds
+   * to one column of names there, where a header says nothing. The row stays
+   * in the page for a screen reader, which still hears each cell's column,
+   * and comes back while one of its sort buttons has keyboard focus — so
+   * sorting is never out of reach and never focused unseen. From `sm` it is
+   * the usual header.
+   */
+  hideHeaderUnderSm?: boolean;
   onRowClick?: (row: TData) => void;
   /**
    * A line between the filters and the table that follows them: given the
@@ -111,6 +121,7 @@ function DataTable<TData extends RowData>({
   prioritySort,
   rowClassName,
   columnClassName,
+  hideHeaderUnderSm = false,
   onRowClick,
   summary,
 }: DataTableProps<TData>) {
@@ -157,10 +168,9 @@ function DataTable<TData extends RowData>({
                 className="grid w-full gap-1 text-sm sm:max-w-sm"
               >
                 {label}
-                <input
+                <Input
                   id={`${filterId}-${columnId}`}
                   type="search"
-                  className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-foreground focus-visible:outline-2 focus-visible:outline-ring"
                   value={String(column.getFilterValue() ?? '')}
                   onChange={(event) =>
                     column.setFilterValue(event.target.value)
@@ -173,7 +183,11 @@ function DataTable<TData extends RowData>({
       )}
       {summary?.(table.getRowModel().rows.length, data.length)}
       <Table>
-        <TableHeader>
+        <TableHeader
+          className={
+            hideHeaderUnderSm ? 'max-sm:not-focus-within:sr-only' : undefined
+          }
+        >
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id}>
               {headerGroup.headers.map((header) => {

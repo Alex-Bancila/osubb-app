@@ -67,6 +67,12 @@ function show() {
   );
 }
 
+/** "Cerere nouă" opens the form in its sheet. */
+async function openForm(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Cerere nouă' }));
+  return screen.findByRole('dialog', { name: 'Cerere nouă' });
+}
+
 describe('RequestsView', () => {
   const mutateAsync = vi.fn();
 
@@ -170,6 +176,7 @@ describe('RequestsView', () => {
   it('offers a searchable Grup picker of exactly the supplied Groups, each with its parent', async () => {
     const user = userEvent.setup();
     show();
+    await openForm(user);
 
     const box = screen.getByRole('combobox', { name: 'Grup' });
     expect(box).toHaveAccessibleDescription(
@@ -192,11 +199,31 @@ describe('RequestsView', () => {
   it('submits the selected Group and trimmed description, then confirms success', async () => {
     const user = userEvent.setup();
     show();
+    // The form is not on the page: it opens in a form sheet.
+    expect(
+      screen.queryByRole('button', { name: 'Trimite cererea' }),
+    ).toBeNull();
+    const sheet = await openForm(user);
+    expect(sheet).toHaveAttribute('data-slot', 'form-sheet');
 
     const send = screen.getByRole('button', { name: 'Trimite cererea' });
     expect(send).toBeDisabled();
-    // The #842 form submit: full width on a phone, its own width from sm.
-    expect(send).toHaveClass('w-full', 'sm:w-auto');
+    // The pinned footer: Renunță first, the primary last.
+    const footer = send.closest<HTMLElement>(
+      '[data-slot="sheet-footer"][data-pinned]',
+    );
+    expect(
+      within(footer as HTMLElement)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Renunță', 'Trimite cererea']);
+    // Which Group to choose is behind the field's "i", still its description.
+    expect(
+      screen.getByRole('combobox', { name: 'Grup' }),
+    ).toHaveAccessibleDescription(/departamentul, echipa sau proiectul/);
+    expect(
+      screen.getByText(/departamentul, echipa sau proiectul/),
+    ).not.toBeVisible();
     await user.click(screen.getByRole('combobox', { name: 'Grup' }));
     await user.click(
       await screen.findByRole('option', { name: /^Echipa Media/ }),
@@ -215,12 +242,27 @@ describe('RequestsView', () => {
       origin: { id: 21, name: 'Echipa Media', path: [4, 21] },
       description: 'Am coordonat voluntarii.',
     });
-    expect(
-      await screen.findByText(/apare în Cererile mele/),
-    ).toBeInTheDocument();
+    // The sheet closes and the receipt takes focus.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    const receipt = await screen.findByText(/apare în Cererile mele/);
+    expect(receipt).toHaveAttribute('role', 'status');
+    await waitFor(() => expect(receipt).toHaveFocus());
   });
 
-  it('shows a safe message for PT400 description errors', () => {
+  it('returns focus to "Cerere nouă" when the sheet is cancelled, keeping the draft', async () => {
+    const user = userEvent.setup();
+    show();
+    await openForm(user);
+    await user.type(screen.getByLabelText('Descriere'), 'Ciornă');
+    await user.click(screen.getByRole('button', { name: 'Renunță' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByRole('button', { name: 'Cerere nouă' })).toHaveFocus();
+    expect(mutateAsync).not.toHaveBeenCalled();
+    await openForm(user);
+    expect(screen.getByLabelText('Descriere')).toHaveValue('Ciornă');
+  });
+
+  it('shows a safe message for PT400 description errors', async () => {
     hooks.useSubmitCompletedWork.mockReturnValue({
       mutateAsync,
       isPending: false,
@@ -228,6 +270,7 @@ describe('RequestsView', () => {
       error: { code: 'PT400', message: 'description_required' },
     });
     show();
+    await openForm(userEvent.setup());
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Descrierea este obligatorie.',
     );
@@ -236,13 +279,15 @@ describe('RequestsView', () => {
   it('has no page header of its own: Taskuri’s frames it (#973)', () => {
     show();
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+    // The new Request's form is the page's create action, not a panel.
     expect(
-      screen.getByRole('heading', { name: 'Activitatea ta' }),
-    ).toBeVisible();
+      screen.queryByRole('heading', { name: 'Activitatea ta' }),
+    ).toBeNull();
+    expect(screen.getByRole('button', { name: 'Cerere nouă' })).toBeVisible();
   });
 
   it.each([1, 4])(
-    'shows the submission form and Cererile mele at level %i (#631)',
+    'offers Cerere nouă and Cererile mele at level %i (#631)',
     (level) => {
       hooks.useAuth.mockReturnValue({
         claims: { member_role: 'voluntar', member_level: level },
@@ -250,10 +295,7 @@ describe('RequestsView', () => {
       show();
 
       expect(
-        screen.getByRole('combobox', { name: 'Grup' }),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByRole('button', { name: 'Trimite cererea' }),
+        screen.getByRole('button', { name: 'Cerere nouă' }),
       ).toBeInTheDocument();
       expect(
         screen.getByRole('heading', { name: 'Cererile mele' }),
@@ -267,7 +309,7 @@ describe('RequestsView', () => {
   );
 
   it.each([5, 6, 9])(
-    'hides the submission form and Cererile mele at level %i, keeping the decision queue (#631)',
+    'hides Cerere nouă and Cererile mele at level %i, keeping the decision queue (#631)',
     (level) => {
       hooks.useAuth.mockReturnValue({
         claims: { member_role: 'bc', member_level: level },
@@ -275,10 +317,7 @@ describe('RequestsView', () => {
       show();
 
       expect(
-        screen.queryByRole('combobox', { name: 'Grup' }),
-      ).not.toBeInTheDocument();
-      expect(
-        screen.queryByRole('button', { name: 'Trimite cererea' }),
+        screen.queryByRole('button', { name: 'Cerere nouă' }),
       ).not.toBeInTheDocument();
       expect(
         screen.queryByRole('heading', { name: 'Cererile mele' }),

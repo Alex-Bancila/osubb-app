@@ -1,0 +1,148 @@
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
+import { Link, useLocation } from 'react-router';
+import { cn } from '../../lib/utils';
+import { Badge } from '../ui/badge';
+import { isNavItemActive, type NavItem } from './navItems';
+
+type Badges = Partial<Record<string, { count: number; label: string }>>;
+
+/**
+ * The phone's navigation (2026-10-11): a capsule floating over the foot of
+ * the page with the member's five places. The current one opens to show its
+ * name on a light thumb that slides to it; the other four are their icons
+ * (each keeps its name for a screen reader). No tab is louder than the rest —
+ * the page's plus button is the one solid red thing in this corner.
+ *
+ * A name too long for the space it gets ("Administrare" on a 320 px phone)
+ * falls back to the item's `shortLabel`. While a phone keyboard is open the
+ * bar steps aside (#1013).
+ */
+export function TabBar({
+  tabs,
+  badges,
+}: {
+  tabs: readonly NavItem[];
+  badges: Badges;
+}) {
+  const { pathname } = useLocation();
+  const active = tabs.find((item) => isNavItemActive(item, pathname))?.path;
+  const bar = useRef<HTMLDivElement>(null);
+  // Where the current tab is, for the thumb; unmeasured (first paint, no
+  // current tab), the tab inks itself instead.
+  const [thumb, setThumb] = useState<{ left: number; width: number } | null>(
+    null,
+  );
+  // The tab whose name did not fit, which says its short one; a new tab or
+  // a new width starts from the full name again.
+  const [shortFor, setShortFor] = useState<string | null>(null);
+  const short = shortFor !== null && shortFor === active;
+
+  const measure = useCallback(() => {
+    const current = bar.current?.querySelector<HTMLElement>(
+      '[aria-current="page"]',
+    );
+    const next =
+      current && current.offsetWidth > 0
+        ? { left: current.offsetLeft, width: current.offsetWidth }
+        : null;
+    setThumb((previous) =>
+      previous?.left === next?.left && previous?.width === next?.width
+        ? previous
+        : next,
+    );
+    const label = current?.querySelector<HTMLElement>(
+      '[data-slot="tab-label"]',
+    );
+    if (label && label.scrollWidth > label.clientWidth + 1)
+      setShortFor(current?.dataset.path ?? null);
+  }, []);
+  // After every render: the route, a count or the label may have changed.
+  useLayoutEffect(measure);
+  useEffect(() => {
+    const root = bar.current;
+    if (!root || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      setShortFor(null);
+      measure();
+    });
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, [measure]);
+
+  return (
+    <nav
+      aria-label="Navigare rapidă"
+      data-slot="tab-bar"
+      className="relative z-10 px-3 pt-2 pb-[calc(.75rem+env(safe-area-inset-bottom))] [grid-area:tabbar] keyboard:hidden lg:hidden"
+    >
+      <div
+        ref={bar}
+        className="relative mx-auto flex max-w-md gap-1 rounded-full border border-border bg-card p-[5px] shadow-(--sh-md)"
+      >
+        {thumb && (
+          <span
+            aria-hidden="true"
+            data-slot="tab-thumb"
+            className="pointer-events-none absolute inset-y-[5px] left-0 rounded-full bg-(--text) transition-[translate,width] duration-300 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none"
+            style={{ width: thumb.width, translate: `${thumb.left}px 0` }}
+          />
+        )}
+        {tabs.map((item) => {
+          const Icon = item.icon;
+          const badge = badges[item.path];
+          const current = item.path === active;
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              data-path={item.path}
+              aria-current={current ? 'page' : undefined}
+              className={cn(
+                'relative z-1 flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-bold whitespace-nowrap no-underline transition-colors duration-200 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring motion-reduce:transition-none',
+                current
+                  ? 'min-w-0 flex-1 text-(--surface)'
+                  : 'text-muted-foreground hover:text-foreground',
+                // On a page that is none of the five (Profil, Notificări)
+                // nothing opens, so the five share the bar evenly.
+                !current && (active ? 'flex-none' : 'flex-1'),
+                current && !thumb && 'bg-(--text)',
+              )}
+            >
+              <Icon className="size-5 shrink-0" aria-hidden="true" />
+              <span
+                data-slot="tab-label"
+                className={cn(
+                  current ? 'min-w-0 overflow-hidden text-clip' : 'sr-only',
+                )}
+              >
+                {current && short && item.shortLabel
+                  ? item.shortLabel
+                  : item.label}
+              </span>
+              {badge && (
+                <>
+                  <Badge
+                    variant="destructive"
+                    className={cn(
+                      'h-4 min-w-4 justify-center rounded-full bg-destructive px-1 text-[10px] text-white dark:bg-destructive',
+                      !current && 'absolute top-0.5 right-0.5',
+                    )}
+                  >
+                    <span aria-hidden="true">{badge.count}</span>
+                  </Badge>
+                  <span className="sr-only">, {badge.label}</span>
+                </>
+              )}
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}

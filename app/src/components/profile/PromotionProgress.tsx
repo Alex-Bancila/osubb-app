@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { TrendingUp } from 'lucide-react';
 import { Panel } from '../layout';
 import { ErrorState, Loading } from '../states';
 import { formatPointCount, formatPoints, pointWord } from '../../lib/format';
@@ -66,7 +65,7 @@ export function PromotionPanel({
   const figureIsTotal = view !== null && view.kind !== 'tenure' && !view.since;
   const showTotal = totalPoints !== undefined && !figureIsTotal;
   return (
-    <Panel eyebrow="Parcurs" icon={TrendingUp} title={title}>
+    <Panel title={title}>
       <div data-testid="promotion-progress" className="flex flex-col gap-3">
         {showTotal && <PointsTotal points={totalPoints} />}
         <PromotionBody state={state} />

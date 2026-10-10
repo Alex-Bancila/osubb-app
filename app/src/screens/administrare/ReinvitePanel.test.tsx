@@ -64,6 +64,14 @@ it('asks the function whether the Member ever signed in', async () => {
   expect(api.invoke).toHaveBeenCalledWith('reinvite-member', {
     body: { member_id: MEMBER, action: 'status' },
   });
+  // Why the panel is here: behind the field's "i", and read with the field.
+  expect(screen.getByLabelText('Adresa de email')).toHaveAccessibleDescription(
+    'Membrul nu s-a autentificat încă. Dacă adresa e greșită, corecteaz-o înainte să retrimiți invitația.',
+  );
+  expect(screen.getByLabelText('Adresa de email')).toHaveAttribute(
+    'data-slot',
+    'input',
+  );
   expect(screen.getByLabelText('Adresa de email')).toHaveValue(
     'gresit@osubb.local',
   );

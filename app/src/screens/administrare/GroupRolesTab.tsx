@@ -9,6 +9,7 @@ import {
 } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
+import { Input } from '../../components/ui/input';
 import { reasonCopy } from '../../lib/command-reasons';
 import {
   appointmentSchema,
@@ -67,9 +68,6 @@ function useInheritedHolders(group: AdminGroup): {
     failed: results.some((result) => result.isError),
   };
 }
-
-const control =
-  'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
 
 /**
  * Appointing someone into a position, in a pop-up. A Group Responsible is
@@ -174,8 +172,7 @@ function AppointDialog({
                   ? 'Numele funcției (opțional)'
                   : 'Numele funcției'}
               </span>
-              <input
-                className={control}
+              <Input
                 value={positionTitle}
                 maxLength={80}
                 placeholder={titlePlaceholder}

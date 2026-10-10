@@ -21,9 +21,10 @@ import {
   ComboboxValue,
   MemberOption,
 } from '../ui/combobox';
-import { DialogFooter } from '../ui/dialog';
 import { FieldError } from '../ui/field';
-import { NativeSelect, NativeSelectOption } from '../ui/native-select';
+import { FormSheetFooter } from '../ui/form-sheet';
+import { Input, Textarea } from '../ui/input';
+import { Select } from '../ui/select';
 import {
   completedTaskFieldForReason,
   completedTaskSchema,
@@ -47,9 +48,6 @@ import {
 } from '../../screens/tracker/task-form-model';
 import { EvaluationInputs } from './EvaluationInputs';
 
-const control =
-  'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
-
 /** A volunteer already decided by where the form opened: the requester, or the tracked Member. */
 export type FixedVolunteer = {
   id: string;
@@ -72,6 +70,9 @@ export type FixedVolunteer = {
  * Evaluation (Dificultate as stars or a responsibility, Nota as a number,
  * R29a, #986), with the rating guide on the chosen Group's list. Only Groups and
  * volunteers the server would accept are offered; the command still decides.
+ *
+ * It is a form sheet's content, in both places: it grows to the sheet's
+ * height and ends with the pinned footer (Renunță, then the submit button).
  */
 export function CompletedTaskForm({
   options,
@@ -194,7 +195,7 @@ export function CompletedTaskForm({
       onSubmit={submit}
       noValidate
       aria-label="Task finalizat"
-      className="space-y-6"
+      className="flex flex-1 flex-col gap-6"
     >
       <fieldset
         disabled={isPending}
@@ -242,12 +243,12 @@ export function CompletedTaskForm({
         )}
         <div className="grid gap-1.5">
           <label htmlFor={`${id}-title`} className="text-sm font-medium">
-            Titlu (obligatoriu)
+            Titlu
           </label>
-          <input
+          <Input
             id={`${id}-title`}
-            className={control}
             required
+            aria-required="true"
             value={values.title}
             onChange={(event) => update({ title: event.target.value })}
             {...form.field('title')}
@@ -256,11 +257,10 @@ export function CompletedTaskForm({
         </div>
         <div className="grid gap-1.5">
           <label htmlFor={`${id}-description`} className="text-sm font-medium">
-            Detalii
+            Detalii (opțional)
           </label>
-          <textarea
+          <Textarea
             id={`${id}-description`}
-            className={`${control} min-h-24`}
             rows={3}
             value={values.description}
             onChange={(event) => update({ description: event.target.value })}
@@ -272,30 +272,26 @@ export function CompletedTaskForm({
           <label htmlFor={`${id}-campaign`} className="text-sm font-medium">
             Campanie (opțional)
           </label>
-          <NativeSelect
+          <Select
             id={`${id}-campaign`}
             value={
               campaigns.some((campaign) => campaign.id === values.campaignId)
-                ? (values.campaignId ?? '')
+                ? String(values.campaignId ?? '')
                 : ''
             }
             disabled={isPending || !origin || !campaigns.length}
-            onChange={(event) =>
-              update({
-                campaignId: event.target.value
-                  ? Number(event.target.value)
-                  : null,
-              })
+            options={[
+              { value: '', label: 'Fără campanie' },
+              ...campaigns.map((campaign) => ({
+                value: String(campaign.id),
+                label: campaign.name,
+              })),
+            ]}
+            onValueChange={(campaignId) =>
+              update({ campaignId: campaignId ? Number(campaignId) : null })
             }
             {...form.field('campaignId', `${id}-campaign-hint`)}
-          >
-            <NativeSelectOption value="">Fără campanie</NativeSelectOption>
-            {campaigns.map((campaign) => (
-              <NativeSelectOption key={campaign.id} value={campaign.id}>
-                {campaign.name}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+          />
           <FieldError {...form.errorProps('campaignId')} />
           {origin && !campaigns.length && (
             <p
@@ -365,24 +361,19 @@ export function CompletedTaskForm({
         />
       </div>
       <FieldError>{form.formError}</FieldError>
-      <DialogFooter>
+      <FormSheetFooter>
         <Button
           type="button"
           variant="outline"
-          className="min-h-11"
           disabled={isPending}
           onClick={onCancel}
         >
           Renunță
         </Button>
-        <Button
-          type="submit"
-          className="min-h-11"
-          disabled={isPending || !scale.data}
-        >
+        <Button type="submit" disabled={isPending || !scale.data}>
           {isPending ? 'Se salvează…' : submitLabel}
         </Button>
-      </DialogFooter>
+      </FormSheetFooter>
     </form>
   );
 }
@@ -418,7 +409,7 @@ function VolunteerPicker({
   return (
     <>
       <span id={`${id}-label`} className="text-sm font-medium">
-        Voluntar (obligatoriu)
+        Voluntar
       </span>
       {groupId === null ? (
         <p className="m-0 text-sm text-muted-foreground">
@@ -450,6 +441,7 @@ function VolunteerPicker({
         >
           <ComboboxTrigger
             aria-labelledby={`${id}-label`}
+            aria-required="true"
             aria-invalid={invalid || undefined}
             aria-describedby={invalid ? errorId : undefined}
           >

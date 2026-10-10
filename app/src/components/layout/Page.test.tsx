@@ -94,10 +94,13 @@ describe('PageHeader', () => {
     const actions = screen
       .getByRole('button', { name: 'Task nou' })
       .closest('[data-slot="page-actions"]');
-    // Full width and stacked under 640 px, on the right from 640 px.
-    expect(actions).toHaveClass('w-full', 'sm:w-auto');
+    // On the title's row at every width; under the text only when the two
+    // do not fit side by side.
+    expect(actions).toHaveClass('max-w-full', 'flex-wrap');
+    expect(actions?.className).not.toMatch(/(^| )w-full/);
     const header = heading.closest('header');
-    expect(header).toHaveClass('flex-col', 'sm:flex-row');
+    expect(header).toHaveClass('flex-wrap', 'justify-between');
+    expect(header?.className).not.toMatch(/flex-col/);
     // The Page's gap spaces it; a margin of its own would double it.
     expect(header?.className).not.toMatch(/(^| )mb-/);
   });

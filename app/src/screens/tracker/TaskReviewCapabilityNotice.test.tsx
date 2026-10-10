@@ -23,9 +23,9 @@ it('shows safe capability errors and retries the actual failed query', async () 
       <TaskReviewCapabilityNotice taskId={17} />
     </QueryClientProvider>,
   );
-  expect(screen.getByRole('status')).toHaveTextContent(
-    'Se verifică permisiunile',
-  );
+  // Silent while it runs: nothing to push the sheet's content down.
+  expect(screen.queryByRole('status')).toBeNull();
+  expect(screen.queryByText(/Se verifică permisiunile/)).toBeNull();
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Nu am putut verifica',
   );

@@ -96,7 +96,7 @@ describe('EmptyState', () => {
     ).toBeInTheDocument();
   });
 
-  it('shares its height with Loading and ErrorState', () => {
+  it('shares its height with ErrorState; Loading holds the rows’ place instead', () => {
     render(
       <>
         <Loading />
@@ -104,7 +104,8 @@ describe('EmptyState', () => {
         <Empty text="Nimic aici." />
       </>,
     );
-    expect(screen.getByRole('status')).toHaveClass('py-8');
+    // Loading is skeleton rows now, not a centred sentence.
+    expect(screen.getByRole('status')).not.toHaveClass('py-8');
     expect(screen.getByRole('alert')).toHaveClass('py-8');
     expect(
       screen.getByText('Nimic aici.').closest('[data-slot="empty-state"]'),

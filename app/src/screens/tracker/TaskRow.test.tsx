@@ -43,34 +43,40 @@ function renderRow(
 }
 
 describe('TaskRow (#846, layout T1)', () => {
-  it('is a ListRow: the title and the points on top, one meta line under both', () => {
+  it('is a ListRow: the title across the row, one meta line under it with the points at its end', () => {
     const { row } = renderRow();
     expect(row).toHaveAccessibleName('Logistică Tabăra de Toamnă');
     const listRow = row.querySelector('[data-slot="list-row"]');
     expect(listRow).not.toBeNull();
     const body = row.querySelector('[data-slot="list-row-body"]');
     expect(body).toHaveTextContent(/^Logistică Tabăra de Toamnă$/);
-    // The title wraps by word and keeps a readable width (never ≈ 30 px).
-    expect(body?.querySelector('h2')).toHaveClass(
-      'min-w-48',
-      'wrap-break-word',
+    // The title has the whole width: no value column beside it to squeeze it
+    // into three short lines, and no balanced wrapping.
+    expect(row.querySelector('[data-slot="list-row-value"]')).toBeNull();
+    expect(body?.querySelector('h2')).toHaveClass('wrap-break-word');
+    expect(body?.querySelector('h2')).not.toHaveClass(
+      'wrap-anywhere',
+      'text-balance',
     );
-    expect(body?.querySelector('h2')).not.toHaveClass('wrap-anywhere');
-    expect(row.querySelector('[data-slot="list-row-value"]')).toHaveTextContent(
-      '15puncte',
-    );
-    // One meta line, spanning the row: Group, status, deadline, Executor.
+    // One meta line, spanning the row: Group, status, deadline, Executor,
+    // and the points last, pushed to the line's end.
     const footer = row.querySelector('[data-slot="list-row-footer"]');
     const meta = within(footer as HTMLElement);
     expect(
       footer?.querySelectorAll('[data-slot="task-row-meta"]'),
     ).toHaveLength(1);
     expect(meta.getByText('Finalizat')).toBeVisible();
-    expect(meta.getByText(/8 septembrie 2026/)).toBeVisible();
-    expect(meta.getByText('Executor:')).toBeVisible();
+    // The short date; "Termen:" and "Executor:" are for a screen reader.
+    expect(meta.getByText('mar., 8 sept. · 23:59')).toBeVisible();
+    expect(meta.getByText('Termen:')).toHaveClass('sr-only');
+    expect(meta.getByText('Executor:')).toHaveClass('sr-only');
     expect(
       meta.getByRole('button', { name: 'Profilul membrului Maria Dobre' }),
     ).toBeVisible();
+    const points = footer?.querySelector('[data-slot="task-row-points"]');
+    expect(points).toHaveTextContent('15puncte');
+    expect(points).toHaveClass('ml-auto');
+    expect(points?.parentElement?.lastElementChild).toBe(points);
   });
 
   it('is one button for the Task, named by its title, stretched over the row', async () => {
@@ -112,9 +118,9 @@ describe('TaskRow (#846, layout T1)', () => {
     );
   });
 
-  it('has no value column when the Task has no points yet', () => {
+  it('shows no points when the Task has none yet', () => {
     const { row } = renderRow({ status: 'todo', evaluations: [] });
-    expect(row.querySelector('[data-slot="list-row-value"]')).toBeNull();
-    expect(within(row).getByText('Executor:')).toBeVisible();
+    expect(row.querySelector('[data-slot="task-row-points"]')).toBeNull();
+    expect(within(row).getByText('Executor:')).toBeInTheDocument();
   });
 });

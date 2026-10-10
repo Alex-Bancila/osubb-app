@@ -418,7 +418,7 @@ it('calls a column worth showing only when its values differ (B48)', () => {
   expect(varies([0, 1], (value) => value)).toBe(true);
 });
 
-it('sends the member page back to the Roster tab (D4)', () => {
+it("sends the member page back to the Group's Membri tab, still `?tab=roster` (D4)", () => {
   expect(rosterBackState(7)).toEqual({
     from: { to: '/administrare/grupuri/7?tab=roster', label: 'Înapoi la grup' },
   });

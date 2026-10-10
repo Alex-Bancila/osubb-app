@@ -87,21 +87,19 @@ function RemovableChip({
 }
 
 /**
- * The directory's filter toolbar (#903): **Filtrează**, whose sheet adds
- * Group, role and status filters, then the search, the active filters as
- * removable chips, and the view switch at the end.
+ * The directory's filter toolbar (#903), one row: the search, which fills it,
+ * then **Filtrează** as an icon button, whose sheet adds Group, role and
+ * status filters; the active filters follow as removable chips. The view
+ * switch is on the page header's row, not here.
  */
 export function DirectoryFilterBar({
   members,
   filters,
   onChange,
-  trailing,
 }: {
   members: DirectoryMember[];
   filters: DirectoryFilters;
   onChange: (filters: DirectoryFilters) => void;
-  /** Controls that sit at the end of the toolbar (the view switch). */
-  trailing?: ReactNode;
 }) {
   const groupsQuery = useGroups();
   const groupsById = groupsQuery.data ?? noGroups;
@@ -192,7 +190,6 @@ export function DirectoryFilterBar({
           }
         />
       }
-      trailing={trailing}
     >
       {(prefix) => (
         <div className="grid gap-6">

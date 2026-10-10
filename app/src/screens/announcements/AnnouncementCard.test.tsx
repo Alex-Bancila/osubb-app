@@ -27,7 +27,7 @@ function presentation(
     pinned: true,
     links: [],
     publishedAt: '2026-09-18T15:00:00.000Z',
-    publishedLabel: '18 septembrie 2026, 18:00',
+    publishedLabel: '18 sept. · 18:00',
     deadline: null,
     minLevel: 0,
     minLevelLabel: null,
@@ -44,7 +44,7 @@ describe('AnnouncementCard', () => {
     expect(
       screen.getByText(/Vineri la ora 18:00 în Aula Magna/),
     ).toBeInTheDocument();
-    expect(screen.getByText('18 septembrie 2026, 18:00')).toBeInTheDocument();
+    expect(screen.getByText('18 sept. · 18:00')).toBeInTheDocument();
   });
 
   it('renders pinned badge when pinned is true', () => {
@@ -163,7 +163,7 @@ describe('AnnouncementCard', () => {
     expect(screen.queryByText('Critic')).not.toBeInTheDocument();
   });
 
-  it('keeps one meta line before the title, the date under it and one footer row (N1)', () => {
+  it('keeps one meta line before the title, and the author with the date on one line under it (N1)', () => {
     render(
       <AnnouncementCard
         announcement={presentation({
@@ -176,27 +176,67 @@ describe('AnnouncementCard', () => {
       />,
     );
 
-    const card = screen.getByRole('article');
-    const title = screen.getByRole('heading', {
+    const card = screen.getByRole('article', {
       name: 'Ședință extraordinară BC',
     });
+    const title = screen.getByRole('heading', { level: 3 });
     const content = title.parentElement as HTMLElement;
-    // Only the meta line comes before the title, and the date follows it.
+    // Only the meta line comes before the title; the author and the date
+    // share the one line after it.
     expect(title.previousElementSibling).toHaveAttribute(
       'data-slot',
       'announcement-meta',
     );
     expect(title.previousElementSibling?.previousElementSibling).toBeNull();
-    expect(title.nextElementSibling?.tagName).toBe('TIME');
+    const byline = title.nextElementSibling as HTMLElement;
+    expect(byline).toHaveAttribute('data-slot', 'announcement-byline');
+    expect(byline).toHaveTextContent('Cristina Șerban·18 sept. · 18:00');
+    expect(byline.querySelector('time')).toHaveAttribute(
+      'datetime',
+      '2026-09-18T15:00:00.000Z',
+    );
     expect(
       content.querySelectorAll('[data-slot=announcement-meta]'),
     ).toHaveLength(1);
-    const footer = card.querySelector('[data-slot=card-footer]') as HTMLElement;
-    expect(footer).toHaveTextContent('Cristina Șerban');
-    expect(footer).toContainElement(
-      screen.getByRole('button', { name: /Citește/ }),
+    // No footer row, and no second "Citește": the title opens the card.
+    expect(card.querySelector('[data-slot=card-footer]')).toBeNull();
+    expect(screen.getByRole('button', { name: /Citește/ })).toBe(
+      title.querySelector('button'),
     );
-    expect(footer).not.toHaveTextContent('18 septembrie');
+  });
+
+  it('makes the whole card the tap target of its title, with the author and the links above it', () => {
+    render(
+      <AnnouncementCard
+        announcement={presentation({
+          authorMember: { memberId: 'm1', fullName: 'Ana Pop' },
+          links: [{ label: 'Formular', url: 'https://forms.gle/test' }],
+        })}
+        onOpen={vi.fn()}
+      />,
+    );
+
+    const card = screen.getByRole('article');
+    expect(card).toHaveClass('relative');
+    const open = screen.getByRole('button', {
+      name: 'Citește anunțul Ședință extraordinară BC',
+    });
+    expect(open).toHaveClass('after:absolute', 'after:inset-0');
+    // Nothing between the button and the card is positioned, so the hit
+    // area is the card's box.
+    for (
+      let parent = open.parentElement;
+      parent && parent !== card;
+      parent = parent.parentElement
+    )
+      expect(parent.className).not.toMatch(/\b(relative|absolute)\b/);
+    expect(
+      screen.getByRole('button', { name: 'Profilul membrului Ana Pop' }),
+    ).toHaveClass('relative', 'z-1');
+    expect(screen.getByRole('link', { name: /Formular/ })).toHaveClass(
+      'relative',
+      'z-1',
+    );
   });
 
   it('renders neutral fallback badge when department is unresolved and does not label it OSUBB', () => {
@@ -385,9 +425,12 @@ describe('the Termen on the card (#909)', () => {
       />,
     );
     expect(termen()).toHaveAttribute('data-state', 'upcoming');
-    expect(termen()).toHaveTextContent('Termen:vineri, 2 octombrie, 23:59');
+    expect(termen()).toHaveTextContent('Termen:vin., 2 oct. · 23:59');
     expect(termen()?.closest('[data-slot="announcement-meta"]')).toBeNull();
-    expect(termen()?.className).toMatch('border-l-');
+    // A plain icon line in the meta tone: no bar, no fill.
+    expect(termen()?.querySelector('svg')).not.toBeNull();
+    expect(termen()?.className).toMatch('text-muted-foreground');
+    expect(termen()?.className).not.toMatch(/border-l-|bg-/);
   });
 
   it('emphasises a Termen within 48 hours', () => {
@@ -399,8 +442,9 @@ describe('the Termen on the card (#909)', () => {
       />,
     );
     expect(termen()).toHaveAttribute('data-state', 'soon');
-    expect(termen()).toHaveTextContent('mâine, 18:40');
-    expect(termen()?.className).toMatch('bg-primary');
+    expect(termen()).toHaveTextContent('mâine · 18:40');
+    expect(termen()?.className).toMatch('text-destructive');
+    expect(termen()?.className).not.toMatch(/bg-/);
   });
 
   it('reads "Termen expirat" in a muted tone once it has passed', () => {

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import axe from 'axe-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { FabActions } from '../../components/layout';
 import { knownReasons, reasonCopy } from '../../lib/command-reasons';
 import type { AdminGroup } from '../../queries/groups-admin';
 
@@ -23,8 +24,10 @@ vi.mock('../../queries/groups-admin', async (original) => ({
   useAdminGroups: api.groups,
 }));
 import { INVITE_FAILED, INVITE_REASON } from '../../queries/member-invitation';
+import { chooseOption } from '../../test/select';
 import { InviteMemberDialog } from './InviteMemberDialog';
 import { inviteGroupOptions, inviteRankOptions } from './invite-options';
+import { optionNames } from './select-test-options';
 
 const ROLES = new Map([
   ['vot', { name: 'Voluntar cu Drept de Vot', level: 3 }],
@@ -112,7 +115,9 @@ async function choose(
   name: RegExp,
 ) {
   if (!screen.queryByRole('listbox'))
-    await user.click(within(dialog).getByRole('combobox', { name: 'Grupuri' }));
+    await user.click(
+      within(dialog).getByRole('combobox', { name: 'Grupuri (opțional)' }),
+    );
   await user.click(await screen.findByRole('option', { name }));
 }
 
@@ -194,12 +199,10 @@ describe('rank and Group options', () => {
     show();
     const dialog = await openAndFill(user, { email: '', name: '' });
     const rank = within(dialog).getByLabelText('Rol');
-    expect(rank).toHaveValue('recrut');
-    expect(
-      within(rank)
-        .getAllByRole('option')
-        .map((option) => option.textContent),
-    ).toEqual([
+    expect(rank).toHaveAttribute('data-slot', 'select');
+    expect(rank).toHaveAttribute('data-value', 'recrut');
+    expect(rank).toHaveTextContent('Recrut');
+    expect(await optionNames(user, rank)).toEqual([
       'Recrut',
       'Voluntar',
       'Voluntar Activ',
@@ -211,16 +214,38 @@ describe('rank and Group options', () => {
     expect(within(dialog).queryByText(/deschide Administrare/)).toBeNull();
     expect(within(dialog).getByLabelText('Adresa de email')).toBeRequired();
     expect(within(dialog).getByLabelText('Numele complet')).toBeRequired();
-    // #949: Rol and Grupuri are the optional part, under their own legend.
-    const optional = within(dialog).getByRole('group', { name: 'Opțional' });
-    expect(within(optional).getByLabelText('Rol')).toBe(rank);
+    // A form sheet with its two actions pinned, not a dialog.
+    expect(dialog).toHaveAttribute('data-slot', 'form-sheet');
     expect(
-      within(optional).getByRole('combobox', { name: 'Grupuri' }),
+      within(dialog)
+        .getByRole('button', { name: 'Trimite invitația' })
+        .closest('[data-slot="sheet-footer"]'),
+    ).toHaveAttribute('data-pinned');
+    // #949: only what is optional says so, in its own label; no boxed
+    // "Opțional" group, no intro paragraph.
+    expect(within(dialog).queryByRole('group')).toBeNull();
+    expect(dialog).not.toHaveAccessibleDescription();
+    expect(within(dialog).getByLabelText('Rol')).toBe(rank);
+    // What a field needs said once sits behind its "i", and is still read.
+    expect(
+      within(dialog).getByRole('combobox', { name: 'Grupuri (opțional)' }),
     ).toHaveAccessibleDescription(
       'Fără grup: membrul intră doar în OSUBB și își alege departamentul mai târziu.',
     );
-    expect(within(optional).queryByLabelText('Adresa de email')).toBeNull();
-    await user.selectOptions(rank, 'moderator');
+    expect(
+      within(dialog).getByRole('button', { name: 'Despre grupuri' }),
+    ).toBeVisible();
+    expect(
+      within(dialog).getByLabelText('Adresa de email'),
+    ).toHaveAccessibleDescription(
+      /^Primește pe email un link de autentificare\./,
+    );
+    for (const label of ['Adresa de email', 'Numele complet'])
+      expect(within(dialog).getByLabelText(label)).toHaveAttribute(
+        'data-slot',
+        'input',
+      );
+    await chooseOption(user, rank, 'Moderator');
     expect(rank).toHaveAccessibleDescription(
       'Rolul Moderator deschide Administrare: poate invita membri și schimba rolul oricui.',
     );
@@ -261,7 +286,7 @@ describe('the invitation', () => {
     api.invoke.mockResolvedValue(SENT);
     const onInvited = show();
     const dialog = await openAndFill(user);
-    await user.selectOptions(within(dialog).getByLabelText('Rol'), 'bc');
+    await chooseOption(user, within(dialog).getByLabelText('Rol'), 'BC');
     await send(user, dialog);
     await waitFor(() => expect(onInvited).toHaveBeenCalled());
     expect(api.invoke).toHaveBeenCalledWith('invite-member', {
@@ -279,15 +304,19 @@ describe('the invitation', () => {
     api.invoke.mockResolvedValue(SENT);
     const onInvited = show();
     const dialog = await openAndFill(user);
-    await user.selectOptions(within(dialog).getByLabelText('Rol'), 'moderator');
+    await chooseOption(user, within(dialog).getByLabelText('Rol'), 'Moderator');
     await choose(user, dialog, /Educație/);
     await choose(user, dialog, /Consiliu/);
     await choose(user, dialog, /Moderare/);
     await closePicker(user);
-    const picker = within(dialog).getByRole('combobox', { name: 'Grupuri' });
+    const picker = within(dialog).getByRole('combobox', {
+      name: 'Grupuri (opțional)',
+    });
     expect(picker).toHaveTextContent('3 grupuri alese');
-    // The OSUBB hint names the default; with Groups chosen it is gone.
-    expect(within(dialog).queryByText(/Fără grup/)).toBeNull();
+    // The OSUBB hint stays behind the "i", whatever is chosen.
+    expect(
+      within(dialog).getByRole('button', { name: 'Despre grupuri' }),
+    ).toBeVisible();
     const chips = within(dialog).getByRole('list', { name: 'Grupuri alese' });
     expect(
       within(chips)
@@ -323,7 +352,9 @@ describe('the invitation', () => {
     const onInvited = show();
     const dialog = await openAndFill(user);
     const rank = within(dialog).getByLabelText('Rol');
-    await user.click(within(dialog).getByRole('combobox', { name: 'Grupuri' }));
+    await user.click(
+      within(dialog).getByRole('combobox', { name: 'Grupuri (opțional)' }),
+    );
     expect(
       within(await screen.findByRole('listbox'))
         .getAllByRole('option')
@@ -331,11 +362,11 @@ describe('the invitation', () => {
     ).toEqual(['Educație']);
     await closePicker(user);
 
-    await user.selectOptions(rank, 'bce');
+    await chooseOption(user, rank, 'BCE');
     await choose(user, dialog, /Consiliu/);
     await choose(user, dialog, /Educație/);
     await closePicker(user);
-    await user.selectOptions(rank, 'recrut');
+    await chooseOption(user, rank, 'Recrut');
     // Consiliu wants level 5: it leaves the choice with the rank.
     expect(
       within(dialog).queryByRole('button', { name: 'Scoate grupul Consiliu' }),
@@ -399,7 +430,10 @@ describe('the invitation', () => {
     await waitFor(() =>
       expect(
         within(dialog).getByLabelText('Adresa de email'),
-      ).toHaveAccessibleDescription(reasonCopy('invite_email_taken')),
+      ).toHaveAccessibleDescription(
+        // After the field's own hint.
+        expect.stringContaining(reasonCopy('invite_email_taken') ?? '!'),
+      ),
     );
   });
 
@@ -414,8 +448,8 @@ describe('the invitation', () => {
     const message = copy('invite_group_refused');
     expect(await within(dialog).findByText(message)).toBeVisible();
     expect(
-      within(dialog).getByRole('combobox', { name: 'Grupuri' }),
-    ).toHaveAccessibleDescription(message);
+      within(dialog).getByRole('combobox', { name: 'Grupuri (opțional)' }),
+    ).toHaveAccessibleDescription(expect.stringContaining(message));
     await user.click(
       within(dialog).getByRole('button', { name: 'Scoate grupul Educație' }),
     );
@@ -481,4 +515,24 @@ describe('the invitation', () => {
     });
     expect(results.violations).toEqual([]);
   });
+});
+
+/* On the Membri page the trigger is the page's plus button, not a wide button
+   over the list. */
+it('opens from the page’s plus button inside `FabActions`, and hands focus back to it', async () => {
+  const user = userEvent.setup();
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <FabActions>
+        <InviteMemberDialog onInvited={vi.fn()} />
+      </FabActions>
+    </QueryClientProvider>,
+  );
+  const plus = screen.getByRole('button', { name: 'Invită membru' });
+  expect(plus).toHaveAttribute('data-slot', 'fab');
+  await user.click(plus);
+  const dialog = await screen.findByRole('dialog', { name: 'Invită membru' });
+  await user.click(within(dialog).getByRole('button', { name: 'Renunță' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  await waitFor(() => expect(plus).toHaveFocus());
 });

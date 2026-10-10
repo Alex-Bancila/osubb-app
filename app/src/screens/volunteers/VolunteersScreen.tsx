@@ -16,7 +16,7 @@ import {
   rowListClass,
 } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
-import { formatPoints } from '../../lib/format';
+import { formatPoints, pointWord } from '../../lib/format';
 import {
   useMemberDirectory,
   type DirectoryMember,
@@ -168,15 +168,19 @@ function roleLine(member: DirectoryMember, withStatus: boolean) {
     : member.role;
 }
 
-/** Points with their noun under them; nothing for BC and the Moderator. */
+/**
+ * Points on one line, "64 pct" — a screen reader hears the whole noun
+ * ("64 de puncte"); nothing for BC and the Moderator.
+ */
 function PointsFigure({ points }: { points: number | null }) {
   if (points === null) return null;
   return (
-    <p className="m-0 shrink-0 text-right">
-      <span className="block font-bold tabular-nums">
-        {formatPoints(points)}
+    <p className="m-0 shrink-0 text-right whitespace-nowrap">
+      <span className="font-bold tabular-nums">{formatPoints(points)}</span>{' '}
+      <span aria-hidden="true" className="text-xs text-muted-foreground">
+        pct
       </span>
-      <span className="text-xs text-muted-foreground">puncte</span>
+      <span className="sr-only">{pointWord(points)}</span>
     </p>
   );
 }
@@ -218,8 +222,9 @@ function DirectoryCard({
 
 /**
  * The list view under `md` (V1): one `ListRow` per member, name first and
- * whole, the Role under it and the points on the right — no table to scroll
- * sideways. Sorted by the shown name, as the table starts.
+ * whole, the Role as a muted line under it, starting where the name starts,
+ * and the points on the right — no table to scroll sideways. Sorted by the
+ * shown name, as the table starts.
  */
 function DirectoryRows({
   members,
@@ -241,8 +246,12 @@ function DirectoryRows({
           }
         >
           <DirectoryName member={member} />
-          {/* Under the name, past the 28 px avatar and its 8 px gap. */}
-          <p className="m-0 -mt-1 truncate pl-9 text-sm text-muted-foreground">
+          {/* Under the name, level with it: past the 28 px avatar and its
+              8 px gap (`pl-9` is 56 px in this app's spacing scale). */}
+          <p
+            data-slot="member-role"
+            className="m-0 -mt-1 truncate pl-[2.25rem] text-sm text-muted-foreground"
+          >
             {roleLine(member, withStatus)}
           </p>
         </ListRow>
@@ -272,9 +281,27 @@ export default function VolunteersScreen() {
   return (
     <Page>
       <PageHeader
-        eyebrow="Conducere"
         title="Voluntari"
-        description="Caută un membru și vezi rolul, grupurile și punctele sale din taskuri."
+        // The count rides beside the title: no row of its own.
+        badge={
+          query.data && (
+            <MemberCount shown={visible.length} total={members.length} />
+          )
+        }
+        actions={
+          query.data && (
+            <SegmentedToggle
+              label="Afișare"
+              value={view}
+              onChange={setView}
+              compact
+              options={[
+                { value: 'list', label: 'Listă', icon: List },
+                { value: 'grid', label: 'Carduri', icon: LayoutGrid },
+              ]}
+            />
+          )
+        }
       />
       {query.isPending ? (
         <Loading label="Se încarcă membrii…" />
@@ -290,19 +317,7 @@ export default function VolunteersScreen() {
             members={members}
             filters={filters}
             onChange={setFilters}
-            trailing={
-              <SegmentedToggle
-                label="Afișare"
-                value={view}
-                onChange={setView}
-                options={[
-                  { value: 'list', label: 'Listă', icon: List },
-                  { value: 'grid', label: 'Carduri', icon: LayoutGrid },
-                ]}
-              />
-            }
           />
-          <MemberCount shown={visible.length} total={members.length} />
           {view === 'list' && wide ? (
             <DataTable
               columns={columnsFor(optional, openProfile)}

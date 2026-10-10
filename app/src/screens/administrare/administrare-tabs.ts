@@ -1,4 +1,15 @@
-import { useOutletContext } from 'react-router';
+import {
+  ClipboardCheck,
+  Crown,
+  Lock,
+  Network,
+  Settings,
+  ShieldCheck,
+  Ticket,
+  UserPlus,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import type { Capabilities, Capability } from '../../lib/capabilities';
 
 /**
@@ -10,10 +21,10 @@ import type { Capabilities, Capability } from '../../lib/capabilities';
 export type AdministrareTab = {
   path: string;
   label: string;
+  /** The section's tile in the phone menu. */
+  icon: LucideIcon;
   /** Any one of these opens the tab (`my_capabilities()`). */
   capabilities: readonly Capability[];
-  /** Whether the tab puts an action in the page header for this viewer. */
-  hasHeaderAction?: (capabilities: Capabilities) => boolean;
 };
 
 export const ADMINISTRARE_PATH = '/administrare';
@@ -28,41 +39,47 @@ export const DEALS_TAB_PATH = '/administrare/deals';
 export const ADMINISTRARE_TABS = [
   {
     path: '/administrare/membri',
+    icon: Users,
     label: 'Membri',
     capabilities: ['manageRoles', 'provisionMembers'],
   },
   {
     path: '/administrare/grupuri',
+    icon: Network,
     label: 'Grupuri',
     // Not `administer`: that one also opens the area to the OSUBB Deals
     // team (R44), who hold no Group Role.
     capabilities: ['managesAnyGroup'],
-    hasHeaderAction: (capabilities) => capabilities.createTopLevelGroups,
   },
   {
     path: '/administrare/roluri',
+    icon: ShieldCheck,
     label: 'Roluri',
     capabilities: ['manageRoles'],
   },
   {
     // "de aderare": the nav's Cereri are Completed-work Requests (B55).
     path: APPLICATIONS_TAB_PATH,
+    icon: UserPlus,
     label: 'Cereri de aderare',
     capabilities: ['managesAnyGroup'],
   },
   {
     // Ruling R28: the Perioade tab is Evaluări de rol (#826, #827 rebuild it).
     path: '/administrare/evaluari',
+    icon: ClipboardCheck,
     label: 'Evaluări de rol',
     capabilities: ['manageRoles'],
   },
   {
     path: '/administrare/confidentialitate',
+    icon: Lock,
     label: 'Confidențialitate',
     capabilities: ['manageRoles'],
   },
   {
     path: '/administrare/setari',
+    icon: Settings,
     label: 'Setări',
     capabilities: ['manageRoles'],
   },
@@ -71,13 +88,14 @@ export const ADMINISTRARE_TABS = [
     // sees. BC and the Moderator see every Deal here too, to delete one the
     // dissolved team left behind.
     path: DEALS_TAB_PATH,
+    icon: Ticket,
     label: 'OSUBB Deals',
     capabilities: ['manageDeals', 'manageRoles'],
-    hasHeaderAction: (capabilities) => capabilities.manageDeals,
   },
   {
     // R44: the Moderator's Atribuții, never shown to BC.
     path: '/administrare/bc',
+    icon: Crown,
     label: 'Administrare BC',
     capabilities: ['administerBc'],
   },
@@ -103,20 +121,4 @@ export function allowedTabs(
   capabilities: Capabilities | undefined,
 ): AdministrareTab[] {
   return ADMINISTRARE_TABS.filter((tab) => tabAllowed(tab, capabilities));
-}
-
-/** What the layout hands its tab pages through the router outlet. */
-export type AdministrareOutletContext = {
-  /** The page header's action slot, when the current tab has one. */
-  actionSlot: HTMLElement | null;
-};
-
-/**
- * The header's action slot for the current tab: a tab page portals its
- * action (Grupuri's "Creează Grup") into it, so the action keeps the tab's
- * state while it sits in the shared header. Null outside the layout.
- */
-export function useAdministrareActionSlot(): HTMLElement | null {
-  const context = useOutletContext<AdministrareOutletContext | undefined>();
-  return context?.actionSlot ?? null;
 }

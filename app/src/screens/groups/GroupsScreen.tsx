@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { Link } from 'react-router';
 import {
   EmptyState,
@@ -10,6 +11,7 @@ import {
   Section,
   rowListClass,
 } from '../../components/layout';
+import { Input } from '../../components/ui/input';
 import { ErrorState, Loading } from '../../components/states';
 import { Badge } from '../../components/ui/badge';
 import { useAuth } from '../../lib/auth';
@@ -33,8 +35,9 @@ import { acceptsApplication, applicationForm } from './application-eligibility';
 /**
  * Grupuri (#852): the member's own Groups first, so every Group page's back
  * link lands on a list that contains it (navigation D8), then the Groups that
- * accept their Application. With nothing to apply to, the page says so and
- * offers no search box (relevance B28, Audit D D-18).
+ * accept their Application. With nothing to apply to, that section is not
+ * drawn at all: an empty box said only that nothing was there (relevance
+ * B28, Audit D D-18).
  */
 export default function GroupsScreen() {
   const groups = useAdminGroups();
@@ -44,12 +47,7 @@ export default function GroupsScreen() {
   const applications = useGroupApplications();
   const level = useAuth().claims?.member_level ?? 0;
   const [search, setSearch] = useState('');
-  const header = (
-    <PageHeader
-      title="Grupuri"
-      description="Grupurile din care faci parte și cele la care poți aplica."
-    />
-  );
+  const header = <PageHeader title="Grupuri" />;
   if (
     groups.isPending ||
     mine.isPending ||
@@ -124,55 +122,51 @@ export default function GroupsScreen() {
           )}
         </Panel>
       </Section>
-      <Section title="Poți aplica la">
-        {!available.length ? (
-          <EmptyState bare>
-            Niciun grup nu primește acum cereri de înscriere.
-          </EmptyState>
-        ) : (
-          <>
-            {/* One Group needs no search: there is nothing to narrow. */}
-            {available.length > 1 && (
-              <label className="grid max-w-lg gap-2">
-                Caută un grup
-                <input
-                  className="min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  type="search"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Numele grupului"
-                />
-              </label>
-            )}
-            {visible.length ? (
-              <PageGrid as="ul" columns="collection" equalHeights>
-                {visible.map((group) => (
-                  <li key={group.id}>
-                    <ApplyPanel
-                      group={group}
-                      groups={groups.data}
-                      pendingId={
-                        applications.data.find(
-                          (row) => row.group_id === group.id,
-                        )?.id
-                      }
-                    />
-                  </li>
-                ))}
-              </PageGrid>
-            ) : (
-              <EmptyState bare role="status">
-                Nu sunt grupuri disponibile pentru această căutare.
-              </EmptyState>
-            )}
-          </>
-        )}
-      </Section>
+      {available.length > 0 && (
+        <Section title="Poți aplica la">
+          {/* One Group needs no search: there is nothing to narrow. */}
+          {available.length > 1 && (
+            <label className="grid max-w-lg gap-2 text-sm font-medium">
+              Caută un grup
+              <Input
+                className="font-normal"
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Numele grupului"
+              />
+            </label>
+          )}
+          {visible.length ? (
+            <PageGrid as="ul" columns="collection" equalHeights>
+              {visible.map((group) => (
+                <li key={group.id}>
+                  <ApplyPanel
+                    group={group}
+                    groups={groups.data}
+                    pendingId={
+                      applications.data.find((row) => row.group_id === group.id)
+                        ?.id
+                    }
+                  />
+                </li>
+              ))}
+            </PageGrid>
+          ) : (
+            <EmptyState bare role="status">
+              Nu sunt grupuri disponibile pentru această căutare.
+            </EmptyState>
+          )}
+        </Section>
+      )}
     </Page>
   );
 }
 
-/** One of the member's Groups: its page, its Category, their Group Role. */
+/**
+ * One of the member's Groups: its name over its Category, their Group Role as
+ * a chip, and a chevron — the whole row opens the Group's page.
+ */
 function OwnGroupRow({
   row,
   group,
@@ -200,12 +194,32 @@ function OwnGroupRow({
       : null;
   return (
     <ListRow
-      className="relative"
+      className="relative has-[a:hover]:bg-muted"
       leading={
         <span
           aria-hidden="true"
           className="size-3 rounded-full"
           style={{ backgroundColor: group.color ?? '#5C5C61' }}
+        />
+      }
+      value={
+        // A chip at the right; a long title is cut there, never the name.
+        role && (
+          <Badge
+            variant="outline"
+            className="max-w-32 sm:max-w-56"
+            title={role}
+          >
+            <span className="truncate">{role}</span>
+          </Badge>
+        )
+      }
+      action={
+        // The row opens the Group, and says so.
+        <ChevronRight
+          aria-hidden="true"
+          data-slot="row-chevron"
+          className="size-4 shrink-0 text-muted-foreground"
         />
       }
     >
@@ -216,16 +230,8 @@ function OwnGroupRow({
       >
         {group.name}
       </Link>
-      {/* The position rides on the meta line, not in a value column: a
-          badge beside the name would squeeze it to one word at 375 px. */}
       <p className="m-0 text-sm text-muted-foreground">
         {categoryLabel(group.category)}
-        {role && (
-          <>
-            {' · '}
-            <span className="font-medium text-foreground">{role}</span>
-          </>
-        )}
       </p>
     </ListRow>
   );

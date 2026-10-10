@@ -414,7 +414,8 @@ export default function App() {
           <Route path="/profil" element={<ProfileScreen />} />
           {/* Administrare: routed tabs under one header (ruling R27, #825).
                 The layout lands /administrare on the first tab the viewer may
-                open; each tab is gated again on its own capability. */}
+                open — under 1024 px on a menu of them; each tab is gated
+                again on its own capability. */}
           <Route
             path="/administrare"
             element={

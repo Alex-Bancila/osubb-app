@@ -1,5 +1,4 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { UserCog } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router';
 import { Panel, SubHeading } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
@@ -13,10 +12,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog';
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from '../../components/ui/native-select';
+import { InfoHint } from '../../components/ui/info-hint';
+import { Textarea } from '../../components/ui/input';
+import { SegmentedRadio } from '../../components/ui/segmented-radio';
+import { Select } from '../../components/ui/select';
 import { useAuth } from '../../lib/auth';
 import { memberEditRights } from '../../lib/member-edit-rights';
 import { commandErrorMessage } from '../../lib/command-reasons';
@@ -38,8 +37,6 @@ import { useReceiptTurn } from '../tracker/receipt-turn';
 
 type MemberRole = Database['public']['Enums']['member_role'];
 type MemberStatus = Database['public']['Enums']['member_status'];
-const control =
-  'min-h-11 w-full rounded-lg border border-border bg-background px-4 py-2 text-sm dark:border-input dark:bg-input/30';
 /**
  * The leadership ranks. Since ruling R31 (#905, #917) every BC member grants
  * and removes them and changes a holder's Status, as the Moderator does. Their
@@ -66,8 +63,8 @@ const DEACTIVATION_WARNING =
   'Dezactivarea revocă sesiunile de reîmprospătare. Un token deja emis poate rămâne valabil cel mult o oră.';
 
 /**
- * "Dezactivează" asks first (F-11), like "Scoate" on a Roster: the dialog
- * repeats the warning and only its own button sends the change.
+ * "Dezactivează" asks first (F-11), like "Scoate" on a Group's Membri tab:
+ * the dialog repeats the warning and only its own button sends the change.
  */
 function DeactivateDialog({
   member,
@@ -498,10 +495,14 @@ export function RolePanel({
     // The wrapper is what `?membru=` scrolls to; the Panel has no ref.
     <div ref={panel} className="h-full min-w-0 scroll-mt-4">
       <Panel
-        eyebrow="Roluri"
-        icon={UserCog}
         title="Roluri și status"
-        description="Schimbările sunt înregistrate cu autorul lor. Rolul organizațional este separat de rolul într-un Grup."
+        // Said once, behind the header's "i".
+        control={
+          <InfoHint label="Despre roluri și status">
+            Schimbările sunt înregistrate cu autorul lor. Rolul organizațional
+            este separat de rolul într-un Grup.
+          </InfoHint>
+        }
         stack={4}
       >
         {members.isPending || roles.isPending ? (
@@ -571,26 +572,22 @@ export function RolePanel({
                   <SubHeading>
                     <label htmlFor={roleId}>Rol organizațional</label>
                   </SubHeading>
-                  <NativeSelect
+                  <Select
                     id={roleId}
                     value={nextRole}
+                    // A Role the viewer cannot grant is not among the
+                    // options: the field then asks for one.
+                    placeholder="Alege un rol"
+                    options={roleOptions.map(([id, role]) => ({
+                      value: id,
+                      label: role.name,
+                    }))}
                     disabled={change.isPending}
-                    onChange={(event) => {
-                      setRoleDraft(event.target.value);
+                    onValueChange={(next) => {
+                      setRoleDraft(next);
                       setReplacementId('');
                     }}
-                  >
-                    {!roleOptions.some(([id]) => id === nextRole) && (
-                      <NativeSelectOption value={nextRole}>
-                        Alege un rol
-                      </NativeSelectOption>
-                    )}
-                    {roleOptions.map(([id, role]) => (
-                      <NativeSelectOption key={id} value={id}>
-                        {role.name}
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
+                  />
                   {nextRole === 'vot' && nextRole !== member.roleId && (
                     <p className="m-0 text-sm">
                       Confirmi Drept de Vot pentru acest membru. Decizia va fi
@@ -639,21 +636,18 @@ export function RolePanel({
                     )}
                 </div>
                 <div className="flex min-w-0 flex-col gap-2">
-                  <SubHeading>
-                    <label htmlFor={statusId}>Status</label>
-                  </SubHeading>
-                  <NativeSelect
-                    id={statusId}
+                  <SubHeading id={statusId}>Status</SubHeading>
+                  {/* Three statuses: one segmented choice. */}
+                  <SegmentedRadio
+                    aria-labelledby={statusId}
                     value={nextStatus}
+                    options={statusOptions.map((status) => ({
+                      value: status,
+                      label: statusLabel(status),
+                    }))}
                     disabled={change.isPending}
-                    onChange={(event) => setStatusDraft(event.target.value)}
-                  >
-                    {statusOptions.map((status) => (
-                      <NativeSelectOption key={status} value={status}>
-                        {statusLabel(status)}
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
+                    onValueChange={setStatusDraft}
+                  />
                   {nextStatus === 'inactiv' && nextStatus !== member.status && (
                     <p className="m-0 text-sm">{DEACTIVATION_WARNING}</p>
                   )}
@@ -691,9 +685,9 @@ export function RolePanel({
                   <SubHeading as="p">
                     <label htmlFor={reasonId}>Motiv (opțional)</label>
                   </SubHeading>
-                  <textarea
+                  <Textarea
                     id={reasonId}
-                    className={control}
+                    className="min-h-0"
                     rows={2}
                     value={reason}
                     onChange={(event) => setReason(event.target.value)}

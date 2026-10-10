@@ -57,6 +57,55 @@ export function formatBucharestTime(value: Instant): string {
   return date ? wallValue(date).slice(11) : '—';
 }
 
+const shortDayFormatter = new Intl.DateTimeFormat('ro-RO', {
+  timeZone: BUCHAREST_TIME_ZONE,
+  calendar: 'gregory',
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+});
+
+const shortDayWithYearFormatter = new Intl.DateTimeFormat('ro-RO', {
+  timeZone: BUCHAREST_TIME_ZONE,
+  calendar: 'gregory',
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
+/**
+ * `mie., 14 oct.` — the day as a card shows it: scanned, not read. The year
+ * is said only when it is not this one (`mie., 14 oct. 2027`).
+ */
+export function formatBucharestShortDay(
+  value: Instant,
+  now: Instant = new Date(),
+): string {
+  const date = validDate(value);
+  if (!date) return '—';
+  const today = validDate(now);
+  const sameYear =
+    today !== null &&
+    wallValue(date).slice(0, 4) === wallValue(today).slice(0, 4);
+  return (sameYear ? shortDayFormatter : shortDayWithYearFormatter).format(
+    date,
+  );
+}
+
+/**
+ * `mie., 14 oct. · 23:59` — the one short form for a day and its time on
+ * every card. Always Romania's time; a form says so where a time is typed.
+ */
+export function formatBucharestShort(
+  value: Instant,
+  now: Instant = new Date(),
+): string {
+  const date = validDate(value);
+  if (!date) return '—';
+  return `${formatBucharestShortDay(date, now)} · ${formatBucharestTime(date)}`;
+}
+
 /**
  * Convert the value from an `<input type="datetime-local">` into a database
  * instant. The Bucharest round-trip rejects the missing hour during spring DST.

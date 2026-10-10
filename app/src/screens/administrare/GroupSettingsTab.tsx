@@ -1,15 +1,16 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { AttachedLinkFields } from '../../components/attached-link/AttachedLinkFields';
-import { Panel, SubHeading } from '../../components/layout';
+import { Panel } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
+import { ColorPicker } from '../../components/ui/color-picker';
 import { FieldError } from '../../components/ui/field';
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from '../../components/ui/native-select';
+import { InfoHint } from '../../components/ui/info-hint';
+import { Input } from '../../components/ui/input';
 import { ChoiceRow } from '../../components/ui/radio-group';
+import { SegmentedRadio } from '../../components/ui/segmented-radio';
+import { Select, type SelectOption } from '../../components/ui/select';
+import { SwitchRow } from '../../components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -24,7 +25,7 @@ import {
   groupSettingsSchema,
   groupStructureSchema,
 } from '../../lib/schemas/group';
-import { reasonCopy } from '../../lib/command-reasons';
+import { CommandError, reasonCopy } from '../../lib/command-reasons';
 import { isMinimumLevel, minimumLevelText } from '../../lib/minimum-level';
 import { useFormValidation } from '../../lib/use-form-validation';
 import type {
@@ -42,8 +43,6 @@ import {
 } from './group-tree';
 import { GroupDeleteDialog } from './GroupDeleteDialog';
 
-const control =
-  'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
 const SAVE_FAILED = 'Nu am putut salva schimbarea. Reîncearcă.';
 /* Yes/no rows sit together, 4 px apart: each is already a 44 px row, so the
    form's 16 px field gap would leave them floating apart. */
@@ -51,39 +50,83 @@ const choicesClass = 'flex flex-col gap-1';
 
 /**
  * A yes/no setting saved with its form (#842): the kit's checkbox in a 44 px
- * row whose words are its name, the hint under the label.
+ * row whose words are its name. What the setting means, said once, waits
+ * behind the "i" at the row's end (`info`); why it cannot change now stays
+ * in view under the label (`hint`).
  */
 function Check({
   label,
   hint,
+  info,
   checked,
   disabled,
   onChange,
 }: {
   label: string;
+  /** In view: the reason the box is locked. */
   hint?: ReactNode;
+  /** Behind the "i": what the setting does. */
+  info?: ReactNode;
   checked: boolean;
   disabled?: boolean;
   onChange?: (checked: boolean) => void;
 }) {
+  const id = useId();
+  const described =
+    [hint ? `${id}-hint` : null, info ? `${id}-info` : null]
+      .filter(Boolean)
+      .join(' ') || undefined;
   return (
-    <ChoiceRow className="items-start">
-      <Checkbox
-        className="mt-0.5"
-        checked={checked}
-        disabled={disabled}
-        onCheckedChange={(next) => onChange?.(next)}
-      />
-      <span className="grid gap-0.5">
-        <span className="text-sm font-medium text-foreground">{label}</span>
-        {hint && <span className="text-sm text-muted-foreground">{hint}</span>}
-      </span>
-    </ChoiceRow>
+    <div className="flex items-start justify-between gap-2">
+      <ChoiceRow className="min-w-0 flex-1 items-start">
+        <Checkbox
+          className="mt-0.5"
+          checked={checked}
+          disabled={disabled}
+          aria-describedby={described}
+          onCheckedChange={(next) => onChange?.(next)}
+        />
+        <span className="grid gap-0.5">
+          <span className="text-sm font-medium text-foreground">{label}</span>
+          {hint && (
+            <span id={`${id}-hint`} className="text-sm text-muted-foreground">
+              {hint}
+            </span>
+          )}
+        </span>
+      </ChoiceRow>
+      {info && (
+        // -my-3 is for a label's row; here the "i" is a row of its own height.
+        <InfoHint label={`Despre: ${label}`} id={`${id}-info`} className="my-0">
+          {info}
+        </InfoHint>
+      )}
+    </div>
   );
 }
 
-/** A labelled field: the words above the control, 6 px apart. */
-function Field({ label, children }: { label: string; children: ReactNode }) {
+/**
+ * A labelled field: the words above the control, 6 px apart. An input sits
+ * inside the label; a drop-down is named through `htmlFor`, its own `id`.
+ */
+function Field({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  htmlFor?: string;
+  children: ReactNode;
+}) {
+  if (htmlFor)
+    return (
+      <div className="grid gap-1.5">
+        <label htmlFor={htmlFor} className="text-sm font-medium">
+          {label}
+        </label>
+        {children}
+      </div>
+    );
   return (
     <label className="grid gap-1.5">
       <span className="text-sm font-medium">{label}</span>
@@ -94,31 +137,23 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 /** The Minimum Level options: the ladder the caller may choose, plus the
  *  stored value, which stays readable even off the ladder (R29b). */
-function MinLevelOptions({
-  current,
-  choices,
-}: {
-  current: number;
-  choices: readonly number[];
-}) {
-  return (
-    <>
-      {[...new Set([current, ...choices])]
-        .sort((left, right) => left - right)
-        .map((level) => (
-          <NativeSelectOption
-            key={level}
-            value={level}
-            // A stored off-ladder level (the Moderator's 9) stays readable as
-            // the current value, never a choice (R29b).
-            disabled={!isMinimumLevel(level)}
-          >
-            {minimumLevelText(level)}
-          </NativeSelectOption>
-        ))}
-    </>
-  );
+function minLevelOptions(
+  current: number,
+  choices: readonly number[],
+): SelectOption[] {
+  return [...new Set([current, ...choices])]
+    .sort((left, right) => left - right)
+    .map((level) => ({
+      value: String(level),
+      label: minimumLevelText(level),
+      // A stored off-ladder level (the Moderator's 9) stays readable as the
+      // current value, never a choice (R29b).
+      disabled: !isMinimumLevel(level),
+    }));
 }
+
+/** "Ca nivelul minim al grupului": no Application Level of its own. */
+const SAME_AS_MIN_LEVEL = 'same';
 
 /**
  * Who a raised Minimum Level takes out of the Group, named before anything is
@@ -313,6 +348,8 @@ export function GroupSettingsTab({
   canDelete?: boolean;
 }) {
   const root = group.parent_id === null;
+  const categoryId = useId();
+  const fieldId = useId();
   const [name, setName] = useState(group.name);
   const [managerTitle, setManagerTitle] = useState(group.manager_title ?? '');
   const [responsibleTitle, setResponsibleTitle] = useState(
@@ -327,6 +364,11 @@ export function GroupSettingsTab({
     label: group.application_form_label ?? '',
     url: group.application_form_url ?? '',
   });
+  // Optional as a whole: off is "no form" (the pair stored null), on asks for
+  // both halves.
+  const [hasForm, setHasForm] = useState(
+    Boolean(group.application_form_label || group.application_form_url),
+  );
   const [shared, setShared] = useState(group.shared_work_visibility);
   const [minLevel, setMinLevel] = useState(String(group.min_level));
   const [confirmed, setConfirmed] = useState(false);
@@ -420,14 +462,25 @@ export function GroupSettingsTab({
       return;
     }
     const { applicationForm: form, ...settings } = values;
+    // The switch is on with nothing written: update_group would store that
+    // as "no form", so ask for the pair instead of saving the opposite of
+    // what the switch says.
+    if (accepts && hasForm && form.label === null && form.url === null) {
+      settingsForm.fail(
+        new CommandError({ message: 'application_form_incomplete' }, ''),
+        SAVE_FAILED,
+      );
+      return;
+    }
     const saved = await onRun(
       {
         kind: 'settings',
         groupId: group.id,
         ...settings,
-        // Both or neither (the schema's pair rule): an emptied pair clears it.
-        // While Applications are off the pair is hidden, and the stored one
-        // is still sent, so turning them off never loses the link.
+        // Both or neither (the schema's pair rule): the switch turned off
+        // empties the pair, which clears it. While Applications are off the
+        // pair is hidden, and the stored one is still sent, so turning them
+        // off never loses the link.
         applicationFormLabel: form.label,
         applicationFormUrl: form.url,
         confirmRemovals: needsConfirmation,
@@ -484,8 +537,7 @@ export function GroupSettingsTab({
       >
         <div className="grid gap-1.5">
           <Field label="Numele grupului">
-            <input
-              className={control}
+            <Input
               value={name}
               required
               disabled={busy}
@@ -497,9 +549,8 @@ export function GroupSettingsTab({
         </div>
 
         <div className="grid gap-1.5">
-          <Field label="Cum se numește coordonatorul">
-            <input
-              className={control}
+          <Field label="Cum se numește coordonatorul (opțional)">
+            <Input
               value={managerTitle}
               maxLength={80}
               placeholder="BCE, Coordonator Principal…"
@@ -515,9 +566,8 @@ export function GroupSettingsTab({
             for a Department's BCE members. It names the Roluri panel and
             pre-fills each appointment's own title. */}
         <div className="grid gap-1.5">
-          <Field label="Cum se numesc responsabilii">
-            <input
-              className={control}
+          <Field label="Cum se numesc responsabilii (opțional)">
+            <Input
               value={responsibleTitle}
               maxLength={80}
               placeholder="Coordonator, Responsabil de Proiect…"
@@ -531,18 +581,18 @@ export function GroupSettingsTab({
 
         {!root && (
           <div className="grid gap-1.5">
-            <Field label="Nivel minim">
-              <NativeSelect
+            <Field label="Nivel minim" htmlFor={`${fieldId}-min-level`}>
+              <Select
+                id={`${fieldId}-min-level`}
                 value={minLevel}
+                options={minLevelOptions(group.min_level, choices)}
                 disabled={busy || !authority.editMinLevel}
-                onChange={(event) => {
-                  setMinLevel(event.target.value);
+                onValueChange={(next) => {
+                  setMinLevel(next);
                   setConfirmed(false);
                 }}
                 {...settingsForm.field('minLevel')}
-              >
-                <MinLevelOptions current={group.min_level} choices={choices} />
-              </NativeSelect>
+              />
             </Field>
             <FieldError {...settingsForm.errorProps('minLevel')} />
           </div>
@@ -560,9 +610,10 @@ export function GroupSettingsTab({
           />
           <Check
             label="Primește cereri de înscriere"
-            hint={
+            hint={group.is_private ? reasonCopy('group_private') : undefined}
+            info={
               group.is_private
-                ? reasonCopy('group_private')
+                ? undefined
                 : 'Membrii pot cere să intre în grup.'
             }
             checked={accepts}
@@ -576,59 +627,128 @@ export function GroupSettingsTab({
         {accepts && (
           <div className="flex flex-col gap-4 border-l-2 border-border pl-4">
             <div className="grid gap-1.5">
-              <Field label="Nivelul de la care se poate cere înscrierea">
-                <NativeSelect
-                  value={applicationLevel}
+              <Field
+                label="Nivelul de la care se poate cere înscrierea"
+                htmlFor={`${fieldId}-application-level`}
+              >
+                <Select
+                  id={`${fieldId}-application-level`}
+                  value={applicationLevel || SAME_AS_MIN_LEVEL}
+                  options={[
+                    {
+                      value: SAME_AS_MIN_LEVEL,
+                      label: 'Ca nivelul minim al grupului',
+                    },
+                    ...[...new Set(levels)]
+                      .filter(
+                        (level) =>
+                          isMinimumLevel(level) && level >= chosenMinLevel,
+                      )
+                      .sort((left, right) => left - right)
+                      .map((level) => ({
+                        value: String(level),
+                        label: minimumLevelText(level),
+                      })),
+                    // The stored off-ladder level (the Moderator's 9) stays
+                    // readable as the current value, never a choice (R29b).
+                    ...(group.application_level !== null &&
+                    !isMinimumLevel(group.application_level)
+                      ? [
+                          {
+                            value: String(group.application_level),
+                            label: minimumLevelText(group.application_level),
+                            disabled: true,
+                          },
+                        ]
+                      : []),
+                  ]}
                   disabled={busy}
-                  onChange={(event) => setApplicationLevel(event.target.value)}
+                  onValueChange={(next) =>
+                    setApplicationLevel(next === SAME_AS_MIN_LEVEL ? '' : next)
+                  }
                   {...settingsForm.field('applicationLevel')}
-                >
-                  <NativeSelectOption value="">
-                    Ca nivelul minim al grupului
-                  </NativeSelectOption>
-                  {[...new Set(levels)]
-                    .filter(
-                      (level) =>
-                        isMinimumLevel(level) && level >= chosenMinLevel,
-                    )
-                    .sort((left, right) => left - right)
-                    .map((level) => (
-                      <NativeSelectOption key={level} value={level}>
-                        {minimumLevelText(level)}
-                      </NativeSelectOption>
-                    ))}
-                  {group.application_level !== null &&
-                    !isMinimumLevel(group.application_level) && (
-                      // The stored off-ladder level (the Moderator's 9) stays
-                      // readable as the current value, never a choice (R29b).
-                      <NativeSelectOption
-                        value={group.application_level}
-                        disabled
-                      >
-                        {minimumLevelText(group.application_level)}
-                      </NativeSelectOption>
-                    )}
-                </NativeSelect>
+                />
               </Field>
               <FieldError {...settingsForm.errorProps('applicationLevel')} />
             </div>
 
-            <fieldset className="m-0 flex min-w-0 flex-col gap-3 border-0 p-0">
-              <legend className="mb-3 p-0">
-                <SubHeading as="p" variant="label">
-                  Formular de înscriere
-                </SubHeading>
-              </legend>
-              <AttachedLinkFields
-                value={applicationForm}
-                onChange={setApplicationForm}
-                form={settingsForm}
-                name="applicationForm"
-                labelText="Eticheta butonului"
-                urlText="Adresa formularului"
+            {/* Optional as a whole (the switch), never half: a form has both
+                a label and an address, so neither field says "(opțional)". */}
+            <div className="flex flex-col gap-3">
+              <SwitchRow
+                label="Formular de înscriere"
+                checked={hasForm}
                 disabled={busy}
+                onCheckedChange={(next) => {
+                  setHasForm(next);
+                  if (!next) setApplicationForm({ label: '', url: '' });
+                }}
               />
-            </fieldset>
+              {hasForm && (
+                <div
+                  role="group"
+                  aria-label="Formular de înscriere"
+                  className="flex flex-col gap-3"
+                >
+                  <div className="grid gap-1.5">
+                    <Field label="Eticheta butonului">
+                      <Input
+                        value={applicationForm.label}
+                        required
+                        disabled={busy}
+                        onChange={(event) =>
+                          setApplicationForm({
+                            ...applicationForm,
+                            label: event.target.value,
+                          })
+                        }
+                        {...settingsForm.field('applicationForm.label')}
+                      />
+                    </Field>
+                    <FieldError
+                      {...settingsForm.errorProps('applicationForm.label')}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <label
+                        htmlFor={`${fieldId}-form-url`}
+                        className="text-sm font-medium"
+                      >
+                        Adresa formularului
+                      </label>
+                      <InfoHint
+                        label="Despre adresa formularului"
+                        id={`${fieldId}-form-url-hint`}
+                      >
+                        Adresa începe cu http:// sau https://
+                      </InfoHint>
+                    </div>
+                    <Input
+                      id={`${fieldId}-form-url`}
+                      type="url"
+                      placeholder="https://"
+                      value={applicationForm.url}
+                      required
+                      disabled={busy}
+                      onChange={(event) =>
+                        setApplicationForm({
+                          ...applicationForm,
+                          url: event.target.value,
+                        })
+                      }
+                      {...settingsForm.field(
+                        'applicationForm.url',
+                        `${fieldId}-form-url-hint`,
+                      )}
+                    />
+                    <FieldError
+                      {...settingsForm.errorProps('applicationForm.url')}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -655,37 +775,48 @@ export function GroupSettingsTab({
         aria-label="Structura grupului"
         className="flex flex-col gap-4"
       >
-        <Field label="Categorie">
-          <NativeSelect
-            value={category}
-            disabled={busy}
-            onChange={(event) => setCategory(event.target.value)}
-          >
-            {[
-              ...GROUP_CATEGORIES,
-              ...(group.category === 'organization'
-                ? [{ value: 'organization', label: 'Organizație' }]
-                : []),
-            ].map((option) => (
-              <NativeSelectOption key={option.value} value={option.value}>
-                {option.label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </Field>
+        {group.category === 'organization' ? (
+          // Four options with the Organization's own: a select.
+          <Field label="Categorie" htmlFor={`${fieldId}-category`}>
+            <Select
+              id={`${fieldId}-category`}
+              value={category}
+              options={[
+                ...GROUP_CATEGORIES,
+                { value: 'organization', label: 'Organizație' },
+              ]}
+              disabled={busy}
+              onValueChange={setCategory}
+            />
+          </Field>
+        ) : (
+          // Three: one segmented choice, as when the Group was created.
+          <div className="grid gap-1.5">
+            <span id={categoryId} className="text-sm font-medium">
+              Categorie
+            </span>
+            <SegmentedRadio<string>
+              aria-labelledby={categoryId}
+              options={GROUP_CATEGORIES}
+              value={category}
+              onValueChange={setCategory}
+              disabled={busy}
+            />
+          </div>
+        )}
 
         {root && (
-          <Field label="Nivel minim">
-            <NativeSelect
+          <Field label="Nivel minim" htmlFor={`${fieldId}-structure-min-level`}>
+            <Select
+              id={`${fieldId}-structure-min-level`}
               value={structureMinLevel}
+              options={minLevelOptions(group.min_level, choices)}
               disabled={busy}
-              onChange={(event) => {
-                setStructureMinLevel(event.target.value);
+              onValueChange={(next) => {
+                setStructureMinLevel(next);
                 setStructureConfirmed(false);
               }}
-            >
-              <MinLevelOptions current={group.min_level} choices={choices} />
-            </NativeSelect>
+            />
           </Field>
         )}
         {structureRemovals && (
@@ -714,20 +845,22 @@ export function GroupSettingsTab({
           {isOrganization && (
             <Check
               label="Grupul organizației"
-              hint="Toți membrii activi fac parte din el."
+              info="Toți membrii activi fac parte din el."
               checked
               disabled
             />
           )}
           <Check
             label="Membrii se adaugă automat, după nivel"
-            hint="Lista de membri nu se mai completează manual."
+            info="Lista de membri nu se mai completează manual."
             checked={automatic}
             disabled={busy}
             onChange={setAutomatic}
           />
           <Check
             label="Grup privat"
+            // Why it is locked, or what unticking it leaves behind, is read
+            // before saving; what a Private Group is waits behind the "i".
             hint={
               isOrganization
                 ? reasonCopy('private_not_allowed_for_organization')
@@ -735,7 +868,10 @@ export function GroupSettingsTab({
                   ? reasonCopy('private_parent')
                   : group.is_private && !isPrivate && subtree.length > 0
                     ? 'Subgrupurile rămân private. Fiecare se face public din setările lui.'
-                    : PRIVATE_GROUP_HINT
+                    : undefined
+            }
+            info={
+              isOrganization || inheritsPrivate ? undefined : PRIVATE_GROUP_HINT
             }
             checked={privateValue}
             disabled={busy || inheritsPrivate || isOrganization}
@@ -751,9 +887,8 @@ export function GroupSettingsTab({
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="grid gap-1.5">
-            <Field label="Prescurtare">
-              <input
-                className={control}
+            <Field label="Prescurtare (opțional)">
+              <Input
                 value={short}
                 maxLength={16}
                 disabled={busy}
@@ -763,17 +898,18 @@ export function GroupSettingsTab({
             </Field>
             <FieldError {...structureForm.errorProps('short')} />
           </div>
-          <div className="grid gap-1.5">
-            <Field label="Culoare">
-              <input
-                className={control}
-                value={color}
-                placeholder="#C8102E"
-                disabled={busy}
-                onChange={(event) => setColor(event.target.value)}
-                {...structureForm.field('color')}
-              />
-            </Field>
+          <div
+            className="grid gap-1.5 sm:col-span-2"
+            {...structureForm.slot('color')}
+          >
+            <span className="text-sm font-medium">Culoare (opțional)</span>
+            <ColorPicker
+              label="Alege culoarea grupului"
+              noneLabel="Fără culoare"
+              value={color}
+              disabled={busy}
+              onChange={setColor}
+            />
             <FieldError {...structureForm.errorProps('color')} />
           </div>
         </div>

@@ -335,7 +335,7 @@ describe('CalendarScreen', () => {
       renderCalendar();
 
       expect(
-        screen.getByRole('heading', { level: 1, name: 'Ce urmează' }),
+        screen.getByRole('heading', { level: 1, name: 'Calendar' }),
       ).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Agendă' })).toHaveAttribute(
         'aria-pressed',
@@ -382,7 +382,7 @@ describe('CalendarScreen', () => {
         to: '2026-09-01T21:00:00.000Z',
       });
       expect(
-        screen.getByRole('heading', { level: 1, name: 'Agendă' }),
+        screen.getByRole('heading', { level: 1, name: 'Calendar' }),
       ).toBeInTheDocument();
       expect(
         screen.getByRole('article', { name: 'Ședință de septembrie' }),
@@ -445,8 +445,16 @@ describe('CalendarScreen', () => {
       expect(within(card).getByText('Educațional')).toBeInTheDocument();
       expect(within(card).getByText('10:00–12:00')).toBeInTheDocument();
       expect(within(card).getByText('Sala 305')).toBeInTheDocument();
-      // One label for one number (B5): "Locuri · 30".
-      expect(within(card).getByText('Locuri')).toBeInTheDocument();
+      // One label for one number (B5): the icon draws it, a screen reader
+      // hears "Locuri", and the three sit on one line of `dl.event-details`.
+      for (const label of ['Ora', 'Loc', 'Locuri']) {
+        const term = within(card).getByText(label);
+        expect(term).toHaveClass('sr-only');
+        expect(term.closest('dl')).toHaveClass('event-details');
+        expect(
+          term.nextElementSibling?.querySelector('svg[aria-hidden="true"]'),
+        ).not.toBeNull();
+      }
       expect(within(card).getByText('30')).toBeInTheDocument();
       expect(within(card).queryByText(/Capacitate/)).not.toBeInTheDocument();
       expect(within(card).queryByText(/persoane/)).not.toBeInTheDocument();
@@ -454,7 +462,8 @@ describe('CalendarScreen', () => {
         within(card).getByLabelText('Răspuns pentru Ședință Educațional'),
       ).toBeInTheDocument();
       // Under the Agendă's day heading the card repeats only the time.
-      expect(within(card).queryByText('Data')).not.toBeInTheDocument();
+      expect(within(card).queryByText(/Data/)).not.toBeInTheDocument();
+      expect(card.querySelectorAll('time')).toHaveLength(1);
     });
 
     // B25: nobody answers a deadline, past or future.
@@ -735,7 +744,7 @@ describe('CalendarScreen', () => {
           screen.queryByRole('article', { name: 'Festival deschis' }),
         ).toBeNull();
         expect(
-          screen.getByRole('link', { name: 'Doar grupurile preferate' }),
+          screen.getByRole('button', { name: 'Doar grupurile preferate' }),
         ).toBeInTheDocument();
       });
 
@@ -759,7 +768,9 @@ describe('CalendarScreen', () => {
             'Nimic în grupurile tale preferate în acest interval.',
           ),
         ).toBeInTheDocument();
-        await user.click(screen.getByRole('button', { name: 'Arată tot' }));
+        await user.click(
+          screen.getByRole('button', { name: 'Doar grupurile preferate' }),
+        );
         expect(
           screen.getByRole('article', { name: 'Festival deschis' }),
         ).toBeInTheDocument();
@@ -773,7 +784,7 @@ describe('CalendarScreen', () => {
           screen.getByRole('article', { name: 'Festival deschis' }),
         ).toBeInTheDocument();
         expect(
-          screen.queryByRole('link', { name: 'Doar grupurile preferate' }),
+          screen.queryByRole('button', { name: 'Doar grupurile preferate' }),
         ).toBeNull();
       });
     });
@@ -802,7 +813,7 @@ describe('CalendarScreen', () => {
         'true',
       );
       expect(
-        screen.getByRole('heading', { level: 1, name: 'Lună' }),
+        screen.getByRole('heading', { level: 1, name: 'Calendar' }),
       ).toBeInTheDocument();
     });
 
@@ -977,11 +988,10 @@ describe('CalendarScreen', () => {
         ],
       });
       renderCalendar();
-      // Filtrează opens the toolbar under the header (#903).
+      // Filtrează sits on the header's row, beside the view switch.
       expect(
-        screen.getByRole('group', { name: 'Filtre calendar' })
-          .firstElementChild,
-      ).toBe(filterButton());
+        filterButton().closest('[data-slot="page-actions"]'),
+      ).not.toBeNull();
       const sheet = await openFilters(user);
       await user.click(
         screen.getByRole('combobox', { name: 'Grup principal' }),

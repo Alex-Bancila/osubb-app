@@ -4,19 +4,22 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentProps,
   type FormEvent,
 } from 'react';
+import { Pencil } from 'lucide-react';
 import { AttachedLinksFields } from '../../components/attached-link/AttachedLinksFields';
 import {
   attachedLinksFrom,
   sameAttachedLinks,
 } from '../../lib/schemas/attached-link';
 import { Button } from '../../components/ui/button';
+import { DateTimePicker } from '../../components/ui/date-picker';
 import { FieldError } from '../../components/ui/field';
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from '../../components/ui/native-select';
+import { FormSheet, FormSheetFooter } from '../../components/ui/form-sheet';
+import { InfoHint } from '../../components/ui/info-hint';
+import { Input, Textarea } from '../../components/ui/input';
+import { Select } from '../../components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -45,27 +48,29 @@ import {
 import { useTaskFormOptions } from '../../queries/task-form-options';
 import type { TaskPresentationRow } from './task-presentation';
 import { TaskGroupCascade } from './TaskGroupCascade';
+import { AssignmentModeField, AudienceField } from './TaskModeFields';
 import {
-  AUDIENCE_HINT,
-  AUDIENCE_LABELS,
   campaignsFor,
   groupLookup,
   isPrivateGroup,
-  PRIVATE_GROUP_AUDIENCE_HINT,
   type ManagedWorkGroup,
   type TaskFormOptions,
 } from './task-form-model';
 import { useReceiptTurn } from './receipt-turn';
 
-const control =
-  'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2';
 const SAVE_FAILED = 'Nu am putut salva modificările. Reîncearcă.';
+const CAMPAIGN_INFO =
+  'O etichetă pentru raportare: punctele obținute și cine a lucrat.';
 
 /** ADR-0007 (amended 2026-09-21): every field is editable until review. */
 function isEditable(status: TaskPresentationRow['status']) {
   return status === 'todo' || status === 'in_progress';
 }
 
+/**
+ * "Editează": the Task's fields in a form sheet over its details. After a
+ * save the receipt takes focus; otherwise focus returns to the button.
+ */
 export function TaskEditControl({
   task,
   canManage,
@@ -75,9 +80,12 @@ export function TaskEditControl({
 }) {
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState(false);
+  // Each opening starts from the Task as it is now; 0 until the first one.
+  const [attempt, setAttempt] = useState(0);
   // Only the latest receipt in the sheet shows (Audit D-16).
   const turn = useReceiptTurn();
   const receipt = useRef<HTMLParagraphElement>(null);
+  const justSaved = useRef(false);
   useEffect(() => {
     if (saved) receipt.current?.focus();
   }, [saved]);
@@ -91,28 +99,37 @@ export function TaskEditControl({
           Modificările au fost salvate și înregistrate în istoricul taskului.
         </p>
       )}
-      {canEdit &&
-        (open ? (
-          <TaskEditForm
-            task={task}
-            onCancel={() => setOpen(false)}
-            onSaved={() => {
-              setOpen(false);
-              setSaved(true);
-              turn.claim();
-            }}
-          />
-        ) : (
-          <Button
-            variant="outline"
-            onClick={() => {
-              setOpen(true);
-              setSaved(false);
-            }}
-          >
-            Editează taskul
-          </Button>
-        ))}
+      {canEdit && (
+        // The sheet's one primary action; "taskul" stays in its name.
+        <Button
+          onClick={() => {
+            justSaved.current = false;
+            setAttempt((current) => current + 1);
+            setOpen(true);
+            setSaved(false);
+          }}
+        >
+          <Pencil aria-hidden="true" />
+          Editează <span className="sr-only">taskul</span>
+        </Button>
+      )}
+      {canEdit && attempt > 0 && (
+        <TaskEditForm
+          key={attempt}
+          task={task}
+          open={open}
+          finalFocus={() =>
+            justSaved.current ? (receipt.current ?? false) : true
+          }
+          onClose={() => setOpen(false)}
+          onSaved={() => {
+            justSaved.current = true;
+            setOpen(false);
+            setSaved(true);
+            turn.claim();
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -164,11 +181,15 @@ function campaignIdsFor(
 
 function TaskEditForm({
   task,
-  onCancel,
+  open,
+  finalFocus,
+  onClose,
   onSaved,
 }: {
   task: TaskPresentationRow;
-  onCancel: () => void;
+  open: boolean;
+  finalFocus: ComponentProps<typeof FormSheet>['finalFocus'];
+  onClose: () => void;
   onSaved: () => void;
 }) {
   const id = useId();
@@ -182,10 +203,10 @@ function TaskEditForm({
     : '';
   const [deadline, setDeadline] = useState(initialDeadline);
   const [campaignId, setCampaignId] = useState<number | null>(task.campaign_id);
-  const [assignmentMode, setAssignmentMode] = useState(
+  const [assignmentMode, setAssignmentMode] = useState<'direct' | 'public'>(
     task.assignment_mode === 'public' ? 'public' : 'direct',
   );
-  const [audience, setAudience] = useState(
+  const [audience, setAudience] = useState<'local' | 'org'>(
     task.audience === 'org' ? 'org' : 'local',
   );
   const [groupId, setGroupId] = useState(task.group_id);
@@ -228,16 +249,14 @@ function TaskEditForm({
     description,
     deadline: instantFor(deadline),
     campaignId: umbrella ? null : campaignId,
-    assignmentMode: umbrella
-      ? null
-      : (assignmentMode as TaskUpdateValues['assignmentMode']),
+    assignmentMode: umbrella ? null : assignmentMode,
     // A direct Task is local only (R26), like a Private Group's; `audience`
     // keeps the choice for when the mode goes back to Public.
     audience: umbrella
       ? null
       : assignmentMode === 'direct' || localOnly
         ? 'local'
-        : (audience as TaskUpdateValues['audience']),
+        : audience,
     links,
   };
   const form = useFormValidation(
@@ -358,204 +377,196 @@ function TaskEditForm({
   }
 
   return (
-    <form
-      onSubmit={submit}
-      className="space-y-3 rounded-md border border-border p-4"
-      aria-label="Editează taskul"
-      noValidate
+    <FormSheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      title="Editează taskul"
+      busy={pending}
+      finalFocus={finalFocus}
+      className="sm:max-w-2xl"
     >
-      <fieldset disabled={pending} className="min-w-0 space-y-3">
-        <legend className="sr-only">Câmpurile taskului</legend>
-        {options.data && (
-          <div className="space-y-1" {...form.slot('groupId')}>
-            <TaskGroupCascade
-              groups={options.data.groups}
-              groupsById={groupsById}
-              value={groupId}
-              onChange={chooseGroup}
-              disabled={locked !== null}
-              describedBy={
-                [
-                  locked ? `${id}-group-lock` : undefined,
-                  form.error('groupId') ? form.errorId('groupId') : undefined,
-                ]
-                  .filter(Boolean)
-                  .join(' ') || undefined
-              }
-              invalid={form.error('groupId') !== undefined}
-            />
-            <FieldError {...form.errorProps('groupId')} />
-            {locked ? (
-              <p
-                id={`${id}-group-lock`}
-                className="text-sm text-muted-foreground"
-              >
-                {locked}
-              </p>
-            ) : (
-              groupId !== task.group_id && (
-                <p className="text-sm text-muted-foreground">
-                  Înainte de salvare vezi ce se schimbă pentru executor,
-                  candidați și campanie.
+      <form
+        onSubmit={submit}
+        className="flex flex-1 flex-col gap-5"
+        aria-label="Editează taskul"
+        noValidate
+      >
+        <fieldset disabled={pending} className="grid min-w-0 gap-5">
+          <legend className="sr-only">Câmpurile taskului</legend>
+          {options.data && (
+            <div className="grid gap-1.5" {...form.slot('groupId')}>
+              <TaskGroupCascade
+                groups={options.data.groups}
+                groupsById={groupsById}
+                value={groupId}
+                onChange={chooseGroup}
+                disabled={locked !== null}
+                describedBy={
+                  [
+                    locked ? `${id}-group-lock` : undefined,
+                    form.error('groupId') ? form.errorId('groupId') : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(' ') || undefined
+                }
+                invalid={form.error('groupId') !== undefined}
+              />
+              <FieldError {...form.errorProps('groupId')} />
+              {locked ? (
+                <p
+                  id={`${id}-group-lock`}
+                  className="m-0 text-sm text-muted-foreground"
+                >
+                  {locked}
                 </p>
-              )
-            )}
-          </div>
-        )}
-        <div className="space-y-1">
-          <label className="block space-y-1">
-            <span>Titlu</span>
-            <input
-              className={control}
+              ) : (
+                groupId !== task.group_id && (
+                  <p className="m-0 text-sm text-muted-foreground">
+                    Înainte de salvare vezi ce se schimbă pentru executor,
+                    candidați și campanie.
+                  </p>
+                )
+              )}
+            </div>
+          )}
+          <div className="grid gap-1.5">
+            <label htmlFor={`${id}-title`} className="text-sm font-medium">
+              Titlu
+            </label>
+            <Input
+              id={`${id}-title`}
               required
+              aria-required="true"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               {...form.field('title')}
             />
-          </label>
-          <FieldError {...form.errorProps('title')} />
-        </div>
-        <div className="space-y-1">
-          <label className="block space-y-1">
-            <span>Descriere</span>
-            <textarea
-              className={control}
-              rows={3}
+            <FieldError {...form.errorProps('title')} />
+          </div>
+          <div className="grid gap-1.5">
+            <label
+              htmlFor={`${id}-description`}
+              className="text-sm font-medium"
+            >
+              Descriere (opțional)
+            </label>
+            <Textarea
+              id={`${id}-description`}
+              rows={4}
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               {...form.field('description')}
             />
-          </label>
-          <FieldError {...form.errorProps('description')} />
-        </div>
-        <div className="space-y-1">
-          <label className="block space-y-1">
-            <span>Termen{umbrella ? ' (opțional)' : ''} — ora României</span>
-            <input
-              className={control}
-              type="datetime-local"
+            <FieldError {...form.errorProps('description')} />
+          </div>
+          <div className="grid gap-1.5">
+            <label htmlFor={`${id}-deadline`} className="text-sm font-medium">
+              Termen{umbrella ? ' (opțional)' : ''} — ora României
+            </label>
+            <DateTimePicker
+              id={`${id}-deadline`}
               required={!umbrella}
+              defaultTime="23:59"
               value={deadline}
-              onChange={(event) => setDeadline(event.target.value)}
+              onChange={setDeadline}
               {...form.field('deadline')}
             />
-          </label>
-          <FieldError {...form.errorProps('deadline')} />
-        </div>
-        {!umbrella && (
-          <>
-            <div className="space-y-1">
-              <label htmlFor={`${id}-mode`} className="block">
-                Mod de atribuire
-              </label>
-              <NativeSelect
-                id={`${id}-mode`}
+            <FieldError {...form.errorProps('deadline')} />
+          </div>
+          {!umbrella && (
+            <>
+              <AssignmentModeField
+                id={id}
                 value={assignmentMode}
-                onChange={(event) => setAssignmentMode(event.target.value)}
-                {...form.field('assignmentMode')}
-              >
-                <NativeSelectOption value="direct">Direct</NativeSelectOption>
-                <NativeSelectOption value="public">
-                  Public — înscriere prin lista de candidați
-                </NativeSelectOption>
-              </NativeSelect>
-              <FieldError {...form.errorProps('assignmentMode')} />
-            </div>
-            {/* Hidden while Direct (R26): switching to Public is how a
-                direct Task is opened, starting from its stored Audience. */}
-            {assignmentMode === 'public' && (
-              <div className="space-y-1">
-                <label htmlFor={`${id}-audience`} className="block">
-                  Audiență
-                </label>
-                <NativeSelect
-                  id={`${id}-audience`}
-                  value={localOnly ? 'local' : audience}
-                  onChange={(event) => setAudience(event.target.value)}
-                  {...form.field('audience', `${id}-audience-hint`)}
-                >
-                  <NativeSelectOption value="local">
-                    {AUDIENCE_LABELS.local}
-                  </NativeSelectOption>
-                  <NativeSelectOption value="org" disabled={localOnly}>
-                    {AUDIENCE_LABELS.org}
-                  </NativeSelectOption>
-                </NativeSelect>
-                <FieldError {...form.errorProps('audience')} />
-                <p
-                  id={`${id}-audience-hint`}
-                  className="text-sm text-muted-foreground"
-                >
-                  {localOnly ? PRIVATE_GROUP_AUDIENCE_HINT : AUDIENCE_HINT}
-                </p>
+                onChange={setAssignmentMode}
+                form={form}
+              />
+              {/* Hidden while Direct (R26): switching to Public is how a
+                  direct Task is opened, starting from its stored Audience. */}
+              {assignmentMode === 'public' && (
+                <AudienceField
+                  id={id}
+                  value={audience}
+                  localOnly={localOnly}
+                  onChange={setAudience}
+                  form={form}
+                />
+              )}
+              <div className="grid gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label
+                    htmlFor={`${id}-campaign`}
+                    className="text-sm font-medium"
+                  >
+                    Campanie (opțional)
+                  </label>
+                  <InfoHint label="Despre campanie" id={`${id}-campaign-hint`}>
+                    {CAMPAIGN_INFO}
+                  </InfoHint>
+                </div>
+                <Select
+                  id={`${id}-campaign`}
+                  value={String(campaignId ?? '')}
+                  options={[
+                    { value: '', label: 'Fără campanie' },
+                    ...(task.campaign_id !== null &&
+                    !campaigns.some((row) => row.id === task.campaign_id)
+                      ? [
+                          {
+                            value: String(task.campaign_id),
+                            label: `${task.campaign?.name ?? 'Campania existentă'} (actuală)`,
+                          },
+                        ]
+                      : []),
+                    ...campaigns.map((row) => ({
+                      value: String(row.id),
+                      label: row.name,
+                    })),
+                  ]}
+                  onValueChange={(next) =>
+                    setCampaignId(next ? Number(next) : null)
+                  }
+                  {...form.field('campaignId', `${id}-campaign-hint`)}
+                />
+                <FieldError {...form.errorProps('campaignId')} />
               </div>
-            )}
-            <div className="space-y-1">
-              <label htmlFor={`${id}-campaign`}>Campanie (opțional)</label>
-              <NativeSelect
-                id={`${id}-campaign`}
-                value={campaignId ?? ''}
-                onChange={(event) =>
-                  setCampaignId(
-                    event.target.value ? Number(event.target.value) : null,
-                  )
-                }
-                {...form.field('campaignId', `${id}-campaign-hint`)}
-              >
-                <NativeSelectOption value="">Fără campanie</NativeSelectOption>
-                {task.campaign_id !== null &&
-                  !campaigns.some((row) => row.id === task.campaign_id) && (
-                    <NativeSelectOption value={task.campaign_id}>
-                      {task.campaign?.name ?? 'Campania existentă'} (actuală)
-                    </NativeSelectOption>
-                  )}
-                {campaigns.map((row) => (
-                  <NativeSelectOption key={row.id} value={row.id}>
-                    {row.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-              <FieldError {...form.errorProps('campaignId')} />
-              <p
-                id={`${id}-campaign-hint`}
-                className="text-sm text-muted-foreground"
-              >
-                O etichetă pentru raportare: punctele obținute și cine a lucrat.
-              </p>
-            </div>
-          </>
+            </>
+          )}
+          <AttachedLinksFields
+            value={links}
+            onChange={setLinks}
+            form={form}
+            name="links"
+          />
+        </fieldset>
+        {options.isPending && (
+          <p role="status">Se verifică grupul și campaniile…</p>
         )}
-        <AttachedLinksFields
-          value={links}
-          onChange={setLinks}
-          form={form}
-          name="links"
-          className="border-t border-border pt-3"
-        />
-      </fieldset>
-      {options.isPending && (
-        <p role="status">Se verifică grupul și campaniile…</p>
-      )}
-      {options.isError && (
-        <div role="alert">
-          Nu am putut încărca opțiunile.{' '}
-          <Button variant="outline" onClick={() => void options.refetch()}>
-            Reîncearcă
+        {options.isError && (
+          <div role="alert">
+            Nu am putut încărca opțiunile.{' '}
+            <Button variant="outline" onClick={() => void options.refetch()}>
+              Reîncearcă
+            </Button>
+          </div>
+        )}
+        <FieldError>{form.formError}</FieldError>
+        <FormSheetFooter>
+          <Button variant="outline" disabled={pending} onClick={onClose}>
+            Renunță
           </Button>
-        </div>
-      )}
-      <FieldError>{form.formError}</FieldError>
-      <DialogFooter>
-        <Button variant="outline" disabled={pending} onClick={onCancel}>
-          Înapoi
-        </Button>
-        <Button
-          type="submit"
-          disabled={!changed || pending || options.isPending || options.isError}
-        >
-          Salvează modificările
-        </Button>
-      </DialogFooter>
+          <Button
+            type="submit"
+            disabled={
+              !changed || pending || options.isPending || options.isError
+            }
+          >
+            Salvează modificările
+          </Button>
+        </FormSheetFooter>
+      </form>
       <Dialog
         open={confirming !== null && confirming.consequences.length > 0}
         onOpenChange={(next) => {
@@ -595,6 +606,6 @@ function TaskEditForm({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </form>
+    </FormSheet>
   );
 }

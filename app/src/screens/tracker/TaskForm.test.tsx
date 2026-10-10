@@ -7,9 +7,18 @@ import {
   within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { chooseOption } from '../../test/select';
 import * as axe from 'axe-core';
 import { expect, it, vi } from 'vitest';
+import { pickDate } from '../../test/date-picker';
+import { bucharestWallTimeToIso } from '../../lib/calendar-time';
 import { TaskForm } from './TaskForm';
+// A deadline next month: always in the future, and one page away in the
+// date picker.
+const nextMonth = new Date();
+nextMonth.setUTCDate(1);
+nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+const DEADLINE = `${nextMonth.toISOString().slice(0, 7)}-15T12:30`;
 // Each case walks several dropdowns end to end; on a loaded machine that can
 // pass the 5 s default without anything being wrong.
 vi.setConfig({ testTimeout: 15_000 });
@@ -61,12 +70,10 @@ const options: TaskFormOptions = {
   groupNames: [{ id: 1, name: 'Educațional' }],
 };
 type User = ReturnType<typeof userEvent.setup>;
-const groupBox = () =>
-  screen.getByRole('combobox', { name: 'Grup principal (obligatoriu)' });
+const groupBox = () => screen.getByRole('combobox', { name: 'Grup principal' });
 const subgroupBox = () =>
   screen.getByRole('combobox', { name: 'Subgrup (opțional)' });
-const parentBox = () =>
-  screen.getByRole('combobox', { name: 'Task-umbrelă (obligatoriu)' });
+const parentBox = () => screen.getByRole('combobox', { name: 'Task-umbrelă' });
 const optionTexts = () =>
   within(screen.getByRole('listbox'))
     .getAllByRole('option')
@@ -81,15 +88,17 @@ async function chooseOrigin(user: User, root: string, below?: RegExp) {
   await pick(user, groupBox(), new RegExp(`^${root}`));
   if (below) await pick(user, subgroupBox(), below);
 }
+const modeGroup = () =>
+  screen.getByRole('radiogroup', { name: 'Mod de atribuire' });
+const audienceGroup = () =>
+  screen.getByRole('radiogroup', { name: 'Audiență' });
+/** A segment of Mod de atribuire or Audiență, by its label. */
+const choose = (user: User, group: HTMLElement, name: string) =>
+  user.click(within(group).getByRole('radio', { name }));
 async function content() {
   const user = userEvent.setup();
-  await user.type(
-    screen.getByLabelText('Titlu (obligatoriu)'),
-    '  Pregătește afișele  ',
-  );
-  fireEvent.change(screen.getByLabelText(/Termen/), {
-    target: { value: '2030-10-01T12:30' },
-  });
+  await user.type(screen.getByLabelText('Titlu'), '  Pregătește afișele  ');
+  await pickDate(user, screen.getByLabelText(/Termen/), DEADLINE);
   return user;
 }
 it('picks the Origin as a root Group, then a Group below it, and emits a trimmed direct draft', async () => {
@@ -128,13 +137,12 @@ it('picks the Origin as a root Group, then a Group below it, and emits a trimmed
   expect(groupBox()).toHaveTextContent('Conferință');
   const campaign = screen.getByLabelText('Campanie (opțional)');
   expect(campaign).toHaveAccessibleDescription(/etichetă pentru raportare/i);
+  // Only the Campaigns that can tag the chosen Group are offered.
+  await user.click(campaign);
   expect(
-    screen.getByRole('option', { name: 'Campanie părinte' }),
-  ).toBeInTheDocument();
-  expect(
-    screen.queryByRole('option', { name: 'Altă origine' }),
-  ).not.toBeInTheDocument();
-  await user.selectOptions(campaign, '10');
+    (await screen.findAllByRole('option')).map((option) => option.textContent),
+  ).toEqual(['Fără campanie', 'Campanie părinte', 'Campanie proprie']);
+  await user.click(screen.getByRole('option', { name: 'Campanie părinte' }));
   await pick(
     user,
     screen.getByRole('combobox', { name: 'Executor' }),
@@ -146,7 +154,7 @@ it('picks the Origin as a root Group, then a Group below it, and emits a trimmed
   expect(onDraft).toHaveBeenCalledWith({
     title: 'Pregătește afișele',
     description: null,
-    deadline: '2030-10-01T09:30:00.000Z',
+    deadline: bucharestWallTimeToIso(DEADLINE),
     groupId: 3,
     kind: 'task',
     parentTaskId: null,
@@ -174,19 +182,18 @@ it("disables the organization-wide Audience for a Private Group's Task, with the
   const user = await content();
   // A public Origin first, with the organization-wide Audience chosen.
   await chooseOrigin(user, 'Conferință');
-  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
-  const audience = screen.getByLabelText('Audiență');
-  expect(
-    within(audience).getByRole('option', { name: 'Toți membrii OSUBB' }),
-  ).toBeEnabled();
-  await user.selectOptions(audience, 'org');
+  await choose(user, modeGroup(), 'Public');
+  const org = () =>
+    within(audienceGroup()).getByRole('radio', { name: 'Toți membrii OSUBB' });
+  expect(org()).not.toHaveAttribute('aria-disabled', 'true');
+  await user.click(org());
+  expect(org()).toBeChecked();
 
   await chooseOrigin(user, 'Tineret');
-  const org = within(audience).getByRole('option', {
-    name: 'Toți membrii OSUBB',
-  });
-  expect(org).toBeDisabled();
-  expect(audience).toHaveValue('local');
+  expect(org()).toHaveAttribute('aria-disabled', 'true');
+  expect(
+    within(audienceGroup()).getByRole('radio', { name: 'Membrii grupului' }),
+  ).toBeChecked();
   expect(
     screen.getByText(
       'Grupul este privat: taskurile lui sunt doar pentru membrii grupului.',
@@ -205,27 +212,38 @@ it('shows Audiență only on a public Task, sends local while Direct and restore
   );
   const user = await content();
   await chooseOrigin(user, 'Conferință');
-  const mode = screen.getByLabelText('Mod de atribuire');
-  // Direct is the default: a direct Task has no Audience.
-  expect(mode).toHaveValue('direct');
-  expect(screen.queryByLabelText('Audiență')).not.toBeInTheDocument();
+  // Two options: a segmented choice, not a select. Direct is the default,
+  // and a direct Task has no Audience.
+  expect(modeGroup()).toHaveAttribute('data-slot', 'segmented-radio');
+  expect(
+    within(modeGroup())
+      .getAllByRole('radio')
+      .map((option) => option.textContent),
+  ).toEqual(['Direct', 'Public']);
+  expect(
+    within(modeGroup()).getByRole('radio', { name: 'Direct' }),
+  ).toBeChecked();
+  // What each mode means is behind the "i", still the group's description.
+  expect(modeGroup()).toHaveAccessibleDescription(/lista de candidați/);
+  expect(screen.getByText(/lista de candidați/)).not.toBeVisible();
+  expect(screen.queryByRole('radiogroup', { name: 'Audiență' })).toBeNull();
 
-  await user.selectOptions(mode, 'public');
-  const audience = screen.getByLabelText('Audiență');
-  expect(audience).toHaveAccessibleDescription(
+  await choose(user, modeGroup(), 'Public');
+  expect(audienceGroup()).toHaveAttribute('data-slot', 'segmented-radio');
+  expect(audienceGroup()).toHaveAccessibleDescription(
     'Cine vede taskul și se poate înscrie.',
   );
   expect(
-    within(audience)
-      .getAllByRole('option')
+    within(audienceGroup())
+      .getAllByRole('radio')
       .map((option) => option.textContent),
   ).toEqual(['Membrii grupului', 'Toți membrii OSUBB']);
-  await user.selectOptions(audience, 'org');
+  await choose(user, audienceGroup(), 'Toți membrii OSUBB');
   expect((await axe.run(container)).violations).toEqual([]);
 
   // Back to Direct: the field goes and the draft is local.
-  await user.selectOptions(mode, 'direct');
-  expect(screen.queryByLabelText('Audiență')).not.toBeInTheDocument();
+  await choose(user, modeGroup(), 'Direct');
+  expect(screen.queryByRole('radiogroup', { name: 'Audiență' })).toBeNull();
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
   await waitFor(() =>
     expect(onDraft).toHaveBeenLastCalledWith(
@@ -234,8 +252,10 @@ it('shows Audiență only on a public Task, sends local while Direct and restore
   );
 
   // Public again: the earlier choice is back, and sent.
-  await user.selectOptions(mode, 'public');
-  expect(screen.getByLabelText('Audiență')).toHaveValue('org');
+  await choose(user, modeGroup(), 'Public');
+  expect(
+    within(audienceGroup()).getByRole('radio', { name: 'Toți membrii OSUBB' }),
+  ).toBeChecked();
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
   await waitFor(() =>
     expect(onDraft).toHaveBeenLastCalledWith(
@@ -252,10 +272,12 @@ it('puts a direct_task_local_only refusal on Mod de atribuire (R26)', async () =
   const user = await content();
   await chooseOrigin(user, 'Tineret');
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
-  const mode = screen.getByLabelText('Mod de atribuire');
+  const mode = modeGroup();
   await waitFor(() =>
     expect(mode).toHaveAccessibleDescription(
-      'Un task atribuit direct este doar pentru grupul lui. Alege modul public ca să-l deschizi întregului OSUBB.',
+      expect.stringContaining(
+        'Un task atribuit direct este doar pentru grupul lui. Alege modul public ca să-l deschizi întregului OSUBB.',
+      ),
     ),
   );
   expect(mode).toHaveAttribute('aria-invalid', 'true');
@@ -266,7 +288,7 @@ it('sends only the root when no Group below is chosen, and starts on the one roo
   const user = await content();
   await chooseOrigin(user, 'Conferință', /^Echipa afișe/);
   await pick(user, subgroupBox(), 'Doar grupul principal');
-  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
+  await choose(user, modeGroup(), 'Public');
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
   expect(onDraft).toHaveBeenLastCalledWith(
     expect.objectContaining({ groupId: 2 }),
@@ -290,18 +312,17 @@ it('keeps a Campaign that can still tag the new Group and clears one that cannot
   const user = await content();
   await chooseOrigin(user, 'Conferință', /^Echipa afișe/);
   const campaign = () => screen.getByLabelText('Campanie (opțional)');
+  await user.click(campaign());
   expect(
-    within(campaign())
-      .getAllByRole('option')
-      .map((option) => option.textContent),
+    (await screen.findAllByRole('option')).map((option) => option.textContent),
   ).toEqual(['Fără campanie', 'Campanie părinte', 'Campanie proprie']);
-  await user.selectOptions(campaign(), '10');
+  await user.click(screen.getByRole('option', { name: 'Campanie părinte' }));
   await pick(user, subgroupBox(), 'Doar grupul principal');
-  expect(campaign()).toHaveValue('10');
+  expect(campaign()).toHaveAttribute('data-value', '10');
   await pick(user, subgroupBox(), /^Echipa afișe/);
-  await user.selectOptions(campaign(), '11');
+  await chooseOption(user, campaign(), 'Campanie proprie');
   await pick(user, subgroupBox(), 'Doar grupul principal');
-  expect(campaign()).toHaveValue('');
+  expect(campaign()).toHaveAttribute('data-value', '');
 });
 it('sends the Attached Links, checks each as a pair on blur and submit, and puts the server’s reason on the list (R46)', async () => {
   const onDraft = vi
@@ -313,7 +334,7 @@ it('sends the Attached Links, checks each as a pair on blur and submit, and puts
   );
   const user = await content();
   await chooseOrigin(user, 'Tineret');
-  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
+  await choose(user, modeGroup(), 'Public');
   await user.click(screen.getByRole('button', { name: 'Adaugă link' }));
   const label = screen.getByLabelText('Etichetă link 1');
   const url = screen.getByLabelText('Adresă link 1');
@@ -367,18 +388,25 @@ it('clears the Executor on public mode and clears incompatible Campaigns after O
   render(<TaskForm options={options} onDraft={onDraft} />);
   const user = await content();
   await chooseOrigin(user, 'Conferință', /^Echipa afișe/);
-  await user.selectOptions(screen.getByLabelText('Campanie (opțional)'), '10');
+  await chooseOption(
+    user,
+    screen.getByLabelText('Campanie (opțional)'),
+    'Campanie părinte',
+  );
   await pick(
     user,
     screen.getByRole('combobox', { name: 'Executor' }),
     'Ana Pop',
   );
-  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
+  await choose(user, modeGroup(), 'Public');
   expect(
     screen.queryByRole('combobox', { name: 'Executor' }),
   ).not.toBeInTheDocument();
   await pick(user, groupBox(), 'Tineret');
-  expect(screen.getByLabelText('Campanie (opțional)')).toHaveValue('');
+  expect(screen.getByLabelText('Campanie (opțional)')).toHaveAttribute(
+    'data-value',
+    '',
+  );
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
   expect(onDraft).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -394,16 +422,65 @@ it('tells a Task-umbrelă (a parent of Subtasks) apart from a Campaign (a report
   const user = userEvent.setup();
   const kind = screen.getByRole('radiogroup', { name: 'Ce fel de task?' });
   expect(kind).toBeInTheDocument();
+  // A segmented choice of names alone: no hint line under each option…
+  expect(kind).toHaveAttribute('data-slot', 'segmented-radio');
   expect(
-    screen.getByRole('radio', { name: 'Task-umbrelă' }),
-  ).toHaveAccessibleDescription(/task părinte care grupează subtaskuri/i);
+    within(kind)
+      .getAllByRole('radio')
+      .map((option) => option.textContent),
+  ).toEqual(['Task', 'Task-umbrelă', 'Subtask']);
+  expect(screen.queryByText('Grupează subtaskuri.')).toBeNull();
+  // …the explanation waits behind the "i": hidden, yet still the group's
+  // description for a screen reader.
+  expect(kind).toHaveAccessibleDescription(
+    /task părinte care grupează subtaskuri/i,
+  );
   expect(
-    screen.getByRole('radio', { name: 'Subtask' }),
-  ).toHaveAccessibleDescription(/parte dintr-un task-umbrelă/i);
+    screen.getByText(/task părinte care grupează subtaskuri/i),
+  ).not.toBeVisible();
+  // The "i" opens it in a pop-over.
+  await user.click(
+    screen.getByRole('button', { name: 'Despre felurile de task' }),
+  );
+  expect(
+    await screen.findByRole('dialog', { name: 'Despre felurile de task' }),
+  ).toHaveTextContent(/task părinte care grupează subtaskuri/i);
+  await user.keyboard('{Escape}');
   await user.click(screen.getByRole('radio', { name: 'Task-umbrelă' }));
   expect(
     screen.queryByLabelText('Campanie (opțional)'),
   ).not.toBeInTheDocument();
+});
+it('marks only the optional fields; a required one says so to assistive technology', async () => {
+  render(<TaskForm options={options} onDraft={vi.fn()} />);
+  const user = userEvent.setup();
+  const form = screen.getByRole('form');
+  expect(form).not.toHaveTextContent('(obligatoriu)');
+  expect(screen.getByLabelText('Titlu')).toBeRequired();
+  expect(groupBox()).toHaveAttribute('aria-required', 'true');
+  expect(screen.getByLabelText('Descriere (opțional)')).not.toBeRequired();
+  // The time field is the one place that names Romania's time.
+  // The deadline is the date picker, never the browser's own field.
+  const deadline = screen.getByLabelText('Termen — ora României');
+  expect(deadline).toHaveAttribute('data-slot', 'date-picker');
+  expect(deadline).toHaveAttribute('data-required', 'true');
+  expect(document.querySelector('input[type="datetime-local"]')).toBeNull();
+  // The Campaign's explanation is behind its "i", still its description.
+  const campaign = screen.getByLabelText('Campanie (opțional)');
+  expect(campaign).toHaveAccessibleDescription(/etichetă pentru raportare/i);
+  expect(screen.getByText(/etichetă pentru raportare/i)).not.toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Despre campanie' }));
+  expect(
+    await screen.findByRole('dialog', { name: 'Despre campanie' }),
+  ).toHaveTextContent(/etichetă pentru raportare/i);
+  await user.keyboard('{Escape}');
+  // An Umbrella may have no deadline: the label says the field is optional.
+  await user.click(screen.getByRole('radio', { name: 'Task-umbrelă' }));
+  expect(
+    screen.getByLabelText('Termen (opțional) — ora României'),
+  ).not.toHaveAttribute('data-required');
+  await user.click(screen.getByRole('radio', { name: 'Subtask' }));
+  expect(parentBox()).toHaveAttribute('aria-required', 'true');
 });
 it('offers only the chosen Group’s Umbrellas as Subtask parents, and a parent sets the Group', async () => {
   const onDraft = vi.fn();
@@ -460,7 +537,7 @@ it('strips assignment and Campaign fields for an Umbrella and allows no deadline
   const onDraft = vi.fn();
   render(<TaskForm options={options} onDraft={onDraft} />);
   const user = userEvent.setup();
-  await user.type(screen.getByLabelText('Titlu (obligatoriu)'), 'Eveniment');
+  await user.type(screen.getByLabelText('Titlu'), 'Eveniment');
   await chooseOrigin(user, 'Conferință', /^Echipa afișe/);
   await user.click(screen.getByRole('radio', { name: 'Task-umbrelă' }));
   expect(screen.queryByLabelText('Mod de atribuire')).not.toBeInTheDocument();
@@ -483,12 +560,12 @@ it('blocks invalid deadlines and a parent removed by a refreshed read', async ()
   );
   const user = await content();
   const deadline = screen.getByLabelText(/Termen/);
-  fireEvent.change(deadline, { target: { value: '2027-03-28T03:30' } });
+  await pickDate(user, deadline, '2027-03-28T03:30');
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
   expect(deadline).toHaveAccessibleDescription(
     'Alege un termen valid, în ora României.',
   );
-  fireEvent.change(deadline, { target: { value: '2030-10-01T12:30' } });
+  await pickDate(user, deadline, DEADLINE);
   view.rerender(
     <TaskForm
       options={{ ...options, umbrellas: [] }}
@@ -508,7 +585,7 @@ it('checks a field when it loses focus, without disabling anything first', async
   const onDraft = vi.fn();
   render(<TaskForm options={options} onDraft={onDraft} />);
   const user = userEvent.setup();
-  const title = screen.getByLabelText('Titlu (obligatoriu)');
+  const title = screen.getByLabelText('Titlu');
   // Nothing is judged, and nothing disabled, before the member tries.
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Continuă' })).toBeEnabled();
@@ -531,7 +608,7 @@ it('checks the whole draft on submit, focuses the first broken field and never s
     <TaskForm options={options} onDraft={onDraft} />,
   );
   const user = userEvent.setup();
-  const title = screen.getByLabelText('Titlu (obligatoriu)');
+  const title = screen.getByLabelText('Titlu');
   fireEvent.change(title, { target: { value: 't'.repeat(121) } });
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
   expect(onDraft).not.toHaveBeenCalled();
@@ -553,11 +630,9 @@ it('checks the whole draft on submit, focuses the first broken field and never s
   expect((await axe.run(container)).violations).toEqual([]);
 
   fireEvent.change(title, { target: { value: '  Titlu  ' } });
-  fireEvent.change(screen.getByLabelText(/Termen/), {
-    target: { value: '2030-10-01T12:30' },
-  });
+  await pickDate(user, screen.getByLabelText(/Termen/), DEADLINE);
   await pick(user, groupBox(), 'Tineret');
-  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
+  await choose(user, modeGroup(), 'Public');
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
   expect(onDraft).toHaveBeenCalledWith(
     expect.objectContaining({ title: 'Titlu', groupId: 4 }),
@@ -575,9 +650,9 @@ it('puts a server refusal under the field it names, and the rest above the butto
   render(<TaskForm options={options} onDraft={onDraft} />);
   const user = await content();
   await pick(user, groupBox(), 'Tineret');
-  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
+  await choose(user, modeGroup(), 'Public');
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
-  const title = screen.getByLabelText('Titlu (obligatoriu)');
+  const title = screen.getByLabelText('Titlu');
   await waitFor(() =>
     expect(title).toHaveAccessibleDescription(
       'Titlul are cel mult 120 de caractere.',
@@ -614,7 +689,11 @@ it('drops a Campaign that a refreshed read no longer offers, instead of refusing
   const view = render(<TaskForm options={options} onDraft={onDraft} />);
   const user = await content();
   await chooseOrigin(user, 'Conferință', /^Echipa afișe/);
-  await user.selectOptions(screen.getByLabelText('Campanie (opțional)'), '11');
+  await chooseOption(
+    user,
+    screen.getByLabelText('Campanie (opțional)'),
+    'Campanie proprie',
+  );
   view.rerender(
     <TaskForm
       options={{
@@ -624,7 +703,10 @@ it('drops a Campaign that a refreshed read no longer offers, instead of refusing
       onDraft={onDraft}
     />,
   );
-  expect(screen.getByLabelText('Campanie (opțional)')).toHaveValue('');
+  expect(screen.getByLabelText('Campanie (opțional)')).toHaveAttribute(
+    'data-value',
+    '',
+  );
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
   expect(onDraft).toHaveBeenCalledWith(
     expect.objectContaining({ groupId: 3, campaignId: null }),
@@ -638,7 +720,7 @@ it('marks both cascade steps invalid when the server refuses the chosen Group', 
   render(<TaskForm options={options} onDraft={onDraft} />);
   const user = await content();
   await chooseOrigin(user, 'Conferință', /^Echipa afișe/);
-  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
+  await choose(user, modeGroup(), 'Public');
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
   const refusal =
     'Nu mai poți pregăti taskuri pentru grupul ales. Alege un grup disponibil.';

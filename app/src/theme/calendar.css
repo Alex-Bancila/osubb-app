@@ -527,32 +527,30 @@
   text-wrap: balance;
 }
 
+/* When, where and how many, on one wrapping line: each an icon in the
+   Event's colour and its value. The labels are for a screen reader only. */
 .event-details {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s-2) var(--s-5);
-  margin: var(--s-4) 0 0;
+  gap: var(--s-1) var(--s-4);
+  margin: var(--s-2) 0 0;
   color: var(--text-muted);
   font-size: var(--fs-sm);
 }
 
-.event-details > div {
+.event-details dd {
   display: inline-flex;
   align-items: center;
-  gap: var(--s-2);
-}
-
-.event-details dt,
-.event-details dd {
+  gap: 6px;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
-.event-details dt {
+.event-detail-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
   color: var(--event-accent);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-extrabold);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .event-details time,
@@ -561,20 +559,16 @@
   font-weight: var(--fw-semibold);
 }
 
-.event-day::first-letter {
-  text-transform: uppercase;
-}
-
 .event-description {
   max-width: 62ch;
-  margin: var(--s-4) 0 0;
+  margin: var(--s-3) 0 0;
   color: var(--text-muted);
   line-height: 1.55;
 }
 
 .event-past {
-  margin: var(--s-5) 0 0;
-  padding-top: var(--s-4);
+  margin: var(--s-4) 0 0;
+  padding-top: var(--s-3);
   border-top: 1px solid var(--border-soft);
   color: var(--text-faint);
   font-size: var(--fs-xs);
@@ -640,8 +634,8 @@
 
 /* The managers' strip: below the member's own answer, same thin rule. */
 .event-manage {
-  margin-top: var(--s-4);
-  padding-top: var(--s-4);
+  margin-top: var(--s-3);
+  padding-top: var(--s-3);
   border-top: 1px solid var(--border-soft);
 }
 
@@ -668,21 +662,21 @@
   margin-top: 0;
 }
 
-/* Cine participă (#934): the managers' read of every answer. The tally is the
-   sentence; the bar under it only draws the same split — Particip in the
-   Event's colour, Nu particip in ink, as the pressed "Nu particip" button. */
+/* Cine participă (#934): the managers' read of every answer, as one row — the
+   label (a disclosure), a thin bar of the split, the tally. The tally is the
+   sentence; the bar only draws it — Particip in the Event's colour, Nu
+   particip in ink, as the pressed "Nu particip" button. */
 .event-attendance {
-  margin-top: var(--s-4);
-  padding-top: var(--s-4);
+  margin-top: var(--s-3);
+  padding-top: var(--s-2);
   border-top: 1px solid var(--border-soft);
 }
 
 .event-attendance-head {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: var(--s-1) var(--s-3);
+  min-height: 44px;
 }
 
 .event-attendance-label,
@@ -699,21 +693,30 @@
 }
 
 .event-attendance-tally {
+  margin-left: auto;
   color: var(--text-muted);
   font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .event-attendance-bar {
+  flex: 1 1 2rem;
+  min-width: 1.5rem;
+  max-width: 7rem;
   height: 4px;
-  margin-top: var(--s-2);
+  margin-left: auto;
   border-radius: var(--r-pill);
   background: linear-gradient(
     90deg,
     var(--event-accent) var(--going-share),
     color-mix(in srgb, var(--text) 70%, transparent) var(--going-share)
   );
+}
+
+.event-attendance-bar + .event-attendance-tally {
+  margin-left: 0;
 }
 
 .event-attendance-groups {
@@ -769,39 +772,23 @@
   margin-top: 0;
 }
 
-/* RSVP is a response strip, not a second card. Keeping it inside the event
-   boundary makes the choice unambiguous while the thin rule preserves the
-   agenda's visual hierarchy. */
+/* RSVP is a response strip, not a second card: one row inside the event
+   boundary — the two answers, the chosen one filled — under a thin rule that
+   preserves the agenda's visual hierarchy. */
 .event-rsvp {
-  margin-top: var(--s-5);
-  padding-top: var(--s-4);
+  margin-top: var(--s-4);
+  padding-top: var(--s-3);
   border-top: 1px solid var(--border-soft);
 }
 
-.event-rsvp-head {
+.event-rsvp-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s-1) var(--s-3);
-  margin-bottom: var(--s-3);
-}
-
-.event-rsvp-prompt,
-.event-rsvp-state {
-  margin: 0;
-}
-
-.event-rsvp-prompt {
-  color: var(--text);
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-extrabold);
-}
-
-.event-rsvp-state {
-  display: inline-flex;
   align-items: center;
-  gap: var(--s-1);
+  gap: var(--s-2) var(--s-3);
+}
+
+.event-rsvp-state {
   color: var(--text-faint);
   font-size: var(--fs-xs);
   font-weight: var(--fw-medium);
@@ -809,7 +796,6 @@
 
 .event-rsvp-actions {
   display: flex;
-  flex-wrap: wrap;
   gap: var(--s-2);
 }
 
@@ -953,20 +939,15 @@
 }
 
 @media (max-width: 420px) {
-  .event-details {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--s-2);
-  }
-
-  .event-rsvp-actions > * {
-    flex: 1 1 8rem;
-  }
-
   /* Each manage button as wide as its words, then sharing the row; one that
      does not fit takes its own row rather than clipping its label. */
   .event-manage-actions > * {
     flex: 1 1 auto;
+  }
+
+  /* The bin alone (its words are its name): it keeps its own width. */
+  .event-manage-actions > .event-manage-delete {
+    flex: 0 0 auto;
   }
 
   .calendar-task-row {
@@ -990,7 +971,7 @@
   border-color: var(--surface-2);
 }
 
-:root[data-theme='dark'] .event-details dt {
+:root[data-theme='dark'] .event-detail-icon {
   color: color-mix(in srgb, var(--event-accent) 55%, white);
 }
 

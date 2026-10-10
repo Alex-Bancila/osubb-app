@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from 'react';
-import { MailPlus } from 'lucide-react';
+import { useId, useState, type FormEvent } from 'react';
 import { Panel } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
+import { InfoHint } from '../../components/ui/info-hint';
+import { Input } from '../../components/ui/input';
 import {
   invitationFieldForReason,
   memberInvitationSchema,
@@ -17,9 +18,6 @@ import {
   type InvitationStatus,
 } from '../../queries/member-invitation';
 
-const control =
-  'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2';
-
 function ReinviteForm({
   memberId,
   status,
@@ -27,6 +25,8 @@ function ReinviteForm({
   memberId: string;
   status: InvitationStatus;
 }) {
+  const id = useId();
+  const hintId = `${id}-hint`;
   const [email, setEmail] = useState(status.email);
   const [message, setMessage] = useState<string | null>(null);
   const turn = useReceiptTurn();
@@ -54,27 +54,29 @@ function ReinviteForm({
   }
 
   // On the layout kit like the page's other panels (header above the box).
+  // Why the panel is here is said once, behind the field's "i".
   return (
-    <Panel
-      eyebrow="Cont"
-      icon={MailPlus}
-      title="Invitație"
-      description="Membrul nu s-a autentificat încă. Dacă adresa e greșită, corecteaz-o înainte să retrimiți invitația."
-    >
+    <Panel title="Invitație">
       <form noValidate onSubmit={send} className="grid gap-3">
         <div className="grid gap-1.5">
-          <label className="grid gap-1">
-            Adresa de email
-            <input
-              className={control}
-              type="email"
-              autoComplete="off"
-              value={email}
-              disabled={reinvite.isPending}
-              onChange={(event) => setEmail(event.target.value)}
-              {...form.field('email')}
-            />
-          </label>
+          <div className="flex items-center justify-between gap-2">
+            <label htmlFor={`${id}-email`} className="text-sm font-medium">
+              Adresa de email
+            </label>
+            <InfoHint label="Despre invitație" id={hintId}>
+              Membrul nu s-a autentificat încă. Dacă adresa e greșită,
+              corecteaz-o înainte să retrimiți invitația.
+            </InfoHint>
+          </div>
+          <Input
+            id={`${id}-email`}
+            type="email"
+            autoComplete="off"
+            value={email}
+            disabled={reinvite.isPending}
+            onChange={(event) => setEmail(event.target.value)}
+            {...form.field('email', hintId)}
+          />
           <FieldError {...form.errorProps('email')} />
         </div>
         <Button
