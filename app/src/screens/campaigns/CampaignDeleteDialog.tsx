@@ -18,18 +18,35 @@ const FAILED = 'Nu am putut șterge campania. Încearcă din nou.';
  * **Șterge definitiv** on a Campanii row (#1017), beside Redenumește and
  * Activează, for the same managers. A Campaign is a reporting label
  * (ADR-0007): its Tasks and Events stay, without the label.
+ *
+ * In a row's menu pass `open`, `onOpenChange` and `returnFocus`: the pop-up
+ * draws no trigger of its own and hands focus back to the menu's button.
  */
 export function CampaignDeleteDialog({
   campaign,
   disabled,
   onDeleted,
+  open,
+  onOpenChange,
+  returnFocus,
 }: {
   campaign: Pick<Campaign, 'id' | 'name'>;
   disabled: boolean;
   onDeleted: (receipt: string) => void;
+  /** Controlled, from a menu item: no trigger is drawn. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Controlled: what takes focus back when it closes without a delete. */
+  returnFocus?: () => HTMLElement | null;
 }) {
   return (
-    <DeleteForGoodDialog title="Ștergi definitiv campania?" disabled={disabled}>
+    <DeleteForGoodDialog
+      title="Ștergi definitiv campania?"
+      disabled={disabled}
+      open={open}
+      onOpenChange={onOpenChange}
+      returnFocus={returnFocus}
+    >
       {(controls) => (
         <CampaignDeleteBody
           campaign={campaign}

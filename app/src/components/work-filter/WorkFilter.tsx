@@ -13,6 +13,7 @@ import {
   ComboboxTrigger,
   ComboboxValue,
 } from '../ui/combobox';
+import { DatePicker } from '../ui/date-picker';
 import { FieldError } from '../ui/field';
 import { formatDayMonthYear } from '../../lib/format';
 import { useWorkFilter, type WorkFilterState } from '../../lib/use-work-filter';
@@ -28,7 +29,7 @@ import {
   type WorkFilterRoots,
   type WorkItem,
 } from '../../lib/work-filter';
-import { workFilterCellClass, workFilterFieldClass } from './field-class';
+import { workFilterCellClass } from './field-class';
 import { FilterToolbar, type FilterChip } from './FilterToolbar';
 
 /** A page's loading or failed option read, said in the toolbar. */
@@ -169,31 +170,31 @@ function WorkFilterFields({
       )}
       {showDates && (
         <>
-          <label className={workFilterCellClass}>
-            <span className="text-sm font-medium">De la</span>
-            <input
-              type="date"
-              className={workFilterFieldClass}
-              value={value.from ?? ''}
-              max={value.to}
-              onChange={(event) => set('from', event.target.value || undefined)}
-            />
-          </label>
           <div className={workFilterCellClass}>
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium">Până la</span>
-              <input
-                type="date"
-                className={workFilterFieldClass}
-                value={value.to ?? ''}
-                min={value.from}
-                aria-invalid={filter.rangeError ? true : undefined}
-                aria-describedby={
-                  filter.rangeError ? `${id}-range-error` : undefined
-                }
-                onChange={(event) => set('to', event.target.value || undefined)}
-              />
+            <label htmlFor={`${id}-from`} className="text-sm font-medium">
+              De la
             </label>
+            <DatePicker
+              id={`${id}-from`}
+              value={value.from ?? ''}
+              onChange={(next) => set('from', next || undefined)}
+            />
+          </div>
+          <div className={workFilterCellClass}>
+            <label htmlFor={`${id}-to`} className="text-sm font-medium">
+              Până la
+            </label>
+            {/* No `min`: a day before De la can still be chosen, and the
+                range error under the field says so. */}
+            <DatePicker
+              id={`${id}-to`}
+              value={value.to ?? ''}
+              aria-invalid={filter.rangeError ? true : undefined}
+              aria-describedby={
+                filter.rangeError ? `${id}-range-error` : undefined
+              }
+              onChange={(next) => set('to', next || undefined)}
+            />
             <FieldError id={`${id}-range-error`}>
               {filter.rangeError}
             </FieldError>
@@ -238,7 +239,9 @@ export function WorkFilter({
   fields,
   extraChips = [],
   search,
+  preferredNotice = true,
   trailing,
+  buttonSlot,
 }: {
   groups: readonly WorkFilterGroup[];
   campaigns: readonly WorkFilterCampaign[];
@@ -271,8 +274,15 @@ export function WorkFilter({
   extraChips?: readonly FilterChip[];
   /** The page's search, visible in the toolbar after the button. */
   search?: ReactNode;
+  /**
+   * Whether the Grupuri preferate star is drawn (R43). `false` for a list the
+   * preference never narrows (Taskurile mele).
+   */
+  preferredNotice?: boolean;
   /** A page's view switch, at the end of the toolbar. */
   trailing?: ReactNode;
+  /** An element on the page header's row to draw **Filtrează** in. */
+  buttonSlot?: HTMLElement | null;
 }) {
   const showGroup = levels.group ?? true;
   const showCampaign = levels.campaign ?? true;
@@ -282,7 +292,9 @@ export function WorkFilter({
   // sits in the toolbar -- only where the Group levels apply.
   const preferred = usePreferredGroups();
   const notice =
-    showGroup && preferred.available ? <PreferredGroupsChip /> : undefined;
+    preferredNotice && showGroup && preferred.available ? (
+      <PreferredGroupsChip />
+    ) : undefined;
   const filter = state ?? own;
   const { value, set, clear } = filter;
 
@@ -404,6 +416,7 @@ export function WorkFilter({
       search={search}
       notice={notice}
       trailing={trailing}
+      buttonSlot={buttonSlot}
     >
       {(id) => (
         <WorkFilterFields

@@ -32,6 +32,11 @@ vi.mock('../../queries/reference', () => ({
   }),
 }));
 
+import {
+  bucharestDayKey,
+  bucharestWallTimeToIso,
+} from '../../lib/calendar-time';
+import { pickDate } from '../../test/date-picker';
 import DealFormSheet, { NewDealControl } from './DealFormSheet';
 import type { DealPresentation } from './deals-presentation';
 
@@ -42,6 +47,18 @@ function renderWith(ui: ReactElement) {
   return render(
     <QueryClientProvider client={client}>{ui}</QueryClientProvider>,
   );
+}
+
+/**
+ * The 15th of a month near today, as a picker value: one press of "Luna
+ * următoare" / "Luna anterioară" away, where a fixed far date is dozens.
+ */
+function nearDate(months: number, time: string) {
+  const [year = 1970, month = 1] = (bucharestDayKey(new Date()) ?? '')
+    .split('-')
+    .map(Number);
+  const day = new Date(Date.UTC(year, month - 1 + months, 15));
+  return `${day.toISOString().slice(0, 10)}T${time}`;
 }
 
 beforeEach(() => {
@@ -81,6 +98,75 @@ describe('Deal nou (R45)', () => {
       /Fixează/,
     ])
       expect(within(sheet).queryByText(absent)).toBeNull();
+  });
+
+  it('is a form sheet: the shared fields, hints behind their labels, a pinned footer and no intro', async () => {
+    const user = userEvent.setup();
+    renderWith(<NewDealControl />);
+    const sheet = await openCompose(user);
+    expect(sheet).toHaveAttribute('data-slot', 'form-sheet');
+    expect(sheet).not.toHaveAttribute('aria-describedby');
+    expect(within(sheet).getByLabelText('Titlu')).toHaveAttribute(
+      'data-slot',
+      'input',
+    );
+    expect(within(sheet).getByLabelText('Descriere')).toHaveAttribute(
+      'data-slot',
+      'textarea',
+    );
+    const termen = within(sheet).getByLabelText(
+      'Termen (opțional) — ora României',
+    );
+    expect(termen).toHaveAttribute('data-slot', 'date-picker');
+    expect(termen).toHaveAccessibleDescription(
+      'După termen, deal-ul dispare pentru membri și rămâne la echipă.',
+    );
+    expect(
+      within(sheet).getByLabelText('Cod (opțional)'),
+    ).toHaveAccessibleDescription(
+      'Membrii îl văd ascuns și îl deschid cu o atingere.',
+    );
+    // Each sentence waits behind its hint.
+    expect(within(sheet).getByText(/dispare pentru membri/)).not.toBeVisible();
+    for (const name of ['Despre termen', 'Despre cod'])
+      expect(within(sheet).getByRole('button', { name })).toBeInTheDocument();
+
+    const publish = within(sheet).getByRole('button', {
+      name: 'Publică deal-ul',
+    });
+    expect(publish.parentElement).toHaveAttribute('data-pinned', 'true');
+    expect(publish.previousElementSibling).toHaveTextContent('Renunță');
+    expect(
+      within(sheet).getByRole('group', { name: /Linkuri atașate/ })
+        .parentElement?.tagName,
+    ).toBe('FORM');
+    // Who is notified is read before publishing.
+    expect(
+      within(sheet).getByText(/Fiecare primește o notificare/),
+    ).toBeVisible();
+  });
+
+  it('sends a Termen chosen in the picker, read in Romania', async () => {
+    const user = userEvent.setup();
+    renderWith(<NewDealControl />);
+    const sheet = await openCompose(user);
+    await user.type(within(sheet).getByLabelText('Titlu'), 'Acces gratuit');
+    await user.type(within(sheet).getByLabelText('Descriere'), 'Detalii.');
+    const termen = within(sheet).getByLabelText(
+      'Termen (opțional) — ora României',
+    );
+    // A deadline opens on the last minute of its day.
+    await user.click(termen);
+    expect(await screen.findByLabelText('Ora')).toHaveValue('23:59');
+    await user.keyboard('{Escape}');
+    const value = nearDate(1, '23:59');
+    await pickDate(user, termen, value);
+    await user.click(
+      within(sheet).getByRole('button', { name: 'Publică deal-ul' }),
+    );
+    expect(supabaseMock.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ deadline: bucharestWallTimeToIso(value) }),
+    );
   });
 
   it('publishes a Deal of the Organization for everyone, with its link and code', async () => {

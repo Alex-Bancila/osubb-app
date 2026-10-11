@@ -1,20 +1,16 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
+import { Tabs } from '@base-ui/react/tabs';
 import {
-  BellRing,
+  Bell,
   Calendar,
-  Contact,
-  GraduationCap,
-  Landmark,
-  Mail,
+  ChevronRight,
   Moon,
   Pencil,
-  ShieldCheck,
+  SlidersHorizontal,
   Sun,
-  TrendingUp,
   UserRound,
-  Users,
 } from 'lucide-react';
-import { Link } from 'react-router';
+import { Link, useLocation, useSearchParams } from 'react-router';
 import {
   ListRow,
   Page,
@@ -22,8 +18,13 @@ import {
   PageHeader,
   Panel,
   rowListClass,
+  tabClass,
+  tabListClass,
+  tabThumbClass,
+  useActiveTabInView,
 } from '../../components/layout';
 import { memberDisplayName } from '../../components/member/member-identity';
+import { PREFERRED_GROUPS_ANCHOR } from '../../components/preferred-groups/preferred-groups';
 import {
   PointsTotal,
   PromotionPanel,
@@ -32,9 +33,10 @@ import { usePromotionProgressState } from '../../components/profile/promotion-st
 import { Empty, ErrorState, Loading } from '../../components/states';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
+import { InfoHint } from '../../components/ui/info-hint';
 import { useAuth } from '../../lib/auth';
 import { safeHexColor } from '../../lib/color';
-import { formatLongDate, initials } from '../../lib/format';
+import { formatDayMonthYear, initials } from '../../lib/format';
 import { useTheme } from '../../lib/theme';
 import { useMyRoleLabel } from '../../queries/my-role-label';
 import { useOrgSettings } from '../../queries/org-settings';
@@ -48,7 +50,6 @@ import {
   type MemberGroup,
 } from '../../queries/reference';
 import EditProfileSheet from './EditProfileSheet';
-import { EmailDigestCard } from './EmailDigestCard';
 import { JoiningSection } from './JoiningSection';
 import { PHONE_HINT } from './profile-copy';
 import { PushDeviceCard } from './PushDeviceCard';
@@ -63,28 +64,45 @@ import { useRoleTimelineShown } from './role-timeline-shown';
  */
 const BOARD_LEVEL = 5;
 
-/*
- * Rows of unrelated panels (#859, on #876's content-sized `PageGrid`): each
- * panel keeps its own height, and small panels stack in one column beside a
- * tall one. The stack is one grid cell; the panels in it keep the grid's gap
- * between them.
- */
+/** A column of panels that keep their own heights, the grid's gap between. */
 const stackClass = 'flex min-w-0 flex-col gap-4 md:gap-6';
 
+/** Profil's tabs, by their `?tab=` value. */
+const PROFILE_TABS = ['cont', 'notificari', 'preferinte'] as const;
+type ProfileTab = (typeof PROFILE_TABS)[number];
+const TAB_KEY = 'tab';
+
+function isProfileTab(value: unknown): value is ProfileTab {
+  return PROFILE_TABS.includes(value as ProfileTab);
+}
+
 /**
- * Profilul meu (#824, ruling R27; #859): three rows of two columns from
- * `md`, on the layout system. Every panel is as tall as its content (Alex,
- * 2026-09-28: symmetry is aligned edges, never equal boxes more than half
- * empty): beside a tall panel, the small ones stack in one column.
+ * The tab an anchor lives on: `/profil#grupuri-preferate` is older than the
+ * tabs and still opens the tab its card is on.
+ */
+const TAB_OF_ANCHOR: Record<string, ProfileTab> = {
+  [`#${PREFERRED_GROUPS_ANCHOR}`]: 'preferinte',
+};
+
+/**
+ * Profilul meu (#824, ruling R27; #859): who the Member is as the page's
+ * header, then three tabs, so no setting is a long scroll away.
  *
- * - Row 1: Identitate · Date de contact — a like pair, one height.
- * - Row 2: Grupurile mele beside one column holding the points panel — the
- *   Punctaj și promovare panel, which carries the total, or Punctaj personal
- *   when there is no promotion to show (B38) — over Parcursul organizațional.
- *   From level 5: Funcția în OSUBB beside Parcursul organizațional. The
- *   timeline appears only from its second Role row (B39).
- * - Row 3: Notificări pe acest dispozitiv beside Email zilnic over
- *   Confidențialitate.
+ * - The header is the identity: avatar, name (the Nickname, with the full
+ *   name under it when they differ), the Role chip, the Adunarea Generală
+ *   badge and "Membru din …", with two icon buttons — the pencil that opens
+ *   Editează profilul, and the theme.
+ * - **Cont**: Date de contact; the points panel — Punctaj și promovare, which
+ *   carries the total, or Punctaj personal when there is no promotion to show
+ *   (B38) — or, from level 5, Funcția în OSUBB (BC and BCE have no points,
+ *   B45); Grupurile mele; and Parcursul organizațional from its second Role
+ *   row (B39).
+ * - **Notificări**: push on this device with what arrives as push.
+ * - **Preferințe**: Grupuri preferate (R43, BCE and above), Confidențialitate
+ *   and, last, the one way out (R41).
+ *
+ * The tab is in the URL (`?tab=`), so a link or a reload keeps it; the
+ * older anchor opens the tab its card is on. Only the open tab is mounted.
  *
  * Every edit of yourself — the profile form and the sign-in address — lives
  * in the Editează profilul sheet; the page shows the address read-only.
@@ -116,7 +134,7 @@ export default function ProfileScreen() {
   const pointsQuery = useMyPoints({ enabled: isPointsEligible });
   // D1: the board title's Group is named by an organization setting.
   const settingsQuery = useOrgSettings({ enabled: onBoard && !isModerator });
-  // #963: the Identitate chip names the Role by the Board Title when set.
+  // #963: the header's chip names the Role by the Board Title when set.
   const myRoleLabel = useMyRoleLabel();
   const promotion = usePromotionProgressState();
   const timelineShown = useRoleTimelineShown(profileQuery.data);
@@ -125,6 +143,15 @@ export default function ProfileScreen() {
   const [editOpen, setEditOpen] = useState(false);
   // F-19 (#893): a saved profile says so on the page the sheet closes onto.
   const [saved, setSaved] = useState(false);
+
+  const [params, setParams] = useSearchParams();
+  const { hash } = useLocation();
+  const asked = params.get(TAB_KEY);
+  const tab: ProfileTab = isProfileTab(asked)
+    ? asked
+    : (TAB_OF_ANCHOR[hash] ?? 'cont');
+  const tabStrip = useRef<HTMLDivElement>(null);
+  useActiveTabInView(tabStrip, tab);
 
   const isPending =
     profileQuery.isPending ||
@@ -188,138 +215,180 @@ export default function ProfileScreen() {
   const displayName = memberDisplayName(profile.nickname, profile.full_name);
   const showFullName = displayName !== profile.full_name;
 
-  const memberSinceLabel = profile.joined_at
-    ? `Membru din ${formatLongDate(new Date(profile.joined_at))}`
-    : 'Membru OSUBB';
+  // A milestone, so the day, the month and the year — no weekday.
+  const joined = formatDayMonthYear(profile.joined_at);
+  const memberSinceLabel = joined ? `Membru din ${joined}` : 'Membru OSUBB';
 
   const openEdit = () => {
     setSaved(false);
     setEditOpen(true);
   };
 
+  const groupsPanel = (
+    <Panel title="Grupurile mele">
+      <div data-testid="groups-card">
+        <MyGroupsList groups={groupsQuery.data ?? []} />
+        {/* The joining parts are for whoever joins by Application (#824). */}
+        {!onBoard && <JoiningSection />}
+      </div>
+    </Panel>
+  );
+
   return (
     <Page className="pb-12">
-      <PageHeader
-        title="Profilul meu"
-        description={
-          // BC and BCE have no Punctaj on their Profil (B45).
-          onBoard
-            ? 'Informații personale și setări de cont'
-            : 'Informații personale, punctaj și setări de cont'
-        }
-        actions={
-          <Button
-            variant="outline"
-            onClick={toggleTheme}
-            className="w-full gap-2 sm:w-auto"
-            aria-label={theme === 'dark' ? 'Temă luminoasă' : 'Temă întunecată'}
+      {/* The identity is the page's header, in two rows: the avatar, the
+          one `PageHeader` whose title is the Member's name and the two icon
+          buttons; then one line of what they are (role, Adunarea Generală,
+          since when). */}
+      <div data-slot="profile-identity" className="grid min-w-0 gap-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <div
+            className="grid size-12 shrink-0 place-items-center rounded-full text-lg font-bold text-white md:size-14 md:text-xl"
+            style={{ backgroundColor: safeHexColor(profile.avatar_color) }}
+            aria-hidden="true"
           >
-            {theme === 'dark' ? (
-              <>
-                <Sun className="size-4" aria-hidden="true" />
-                <span>Temă luminoasă</span>
-              </>
-            ) : (
-              <>
-                <Moon className="size-4" aria-hidden="true" />
-                <span>Temă întunecată</span>
-              </>
-            )}
-          </Button>
-        }
-      />
-
-      {/* PageGrid is m-0, which cancels the Page's space-y between rows;
-          the rows keep the grid's own gap between them instead. */}
-      <div className="flex flex-col gap-4 md:gap-6">
-        {/* Always mounted, so the receipt is announced when it appears
-            (as the joining card's); empty, it takes no room. */}
-        <p
-          role="status"
-          className="m-0 text-sm text-muted-foreground empty:hidden"
+            {initials(profile.full_name)}
+          </div>
+          <PageHeader className="min-w-0 flex-1" title={displayName} />
+          {/* Beside the header, not in its `actions`: those drop under a long
+              name on a phone, and these two stay on the name's row. */}
+          <div
+            data-slot="profile-actions"
+            className="flex shrink-0 items-center gap-2"
+          >
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={openEdit}
+              aria-label="Editează profilul"
+              title="Editează profilul"
+            >
+              <Pencil aria-hidden="true" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={toggleTheme}
+              aria-label={
+                theme === 'dark' ? 'Temă luminoasă' : 'Temă întunecată'
+              }
+              title={theme === 'dark' ? 'Temă luminoasă' : 'Temă întunecată'}
+            >
+              {theme === 'dark' ? (
+                <Sun aria-hidden="true" />
+              ) : (
+                <Moon aria-hidden="true" />
+              )}
+            </Button>
+          </div>
+        </div>
+        <div
+          data-slot="profile-meta"
+          className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-muted-foreground"
         >
-          {saved && 'Profilul a fost actualizat.'}
-        </p>
-        {/* A like pair, each ending in its Editează button: one height. */}
-        <PageGrid columns={2} equalHeights>
-          <Panel eyebrow="Cont" icon={UserRound} title="Identitate">
-            <div className="flex h-full flex-col gap-4">
-              <div className="flex min-w-0 items-start gap-4">
-                <div
-                  className="grid size-16 shrink-0 place-items-center rounded-full text-xl font-bold text-white"
-                  style={{
-                    backgroundColor: safeHexColor(profile.avatar_color),
-                  }}
-                  aria-hidden="true"
-                >
-                  {initials(profile.full_name)}
-                </div>
-                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                  <div className="min-w-0">
-                    <h3 className="m-0 text-lg font-bold wrap-anywhere text-foreground">
-                      {displayName}
-                    </h3>
-                    {showFullName && (
-                      <p
-                        className="text-sm wrap-anywhere text-muted-foreground"
-                        data-testid="profile-full-name"
-                      >
-                        {profile.full_name}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="role-badge">
-                      <span className="role-dot" aria-hidden="true" />
-                      {myRoleLabel}
-                    </span>
-                    {/* Here, not on the Groups panel, so BC/BCE keep it. */}
-                    {hasAdunareaGenerala && (
-                      <Badge
-                        variant="outline"
-                        className="border-primary/40 bg-primary/5 font-semibold text-primary"
-                      >
-                        Adunarea Generală
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Calendar className="size-3.5" aria-hidden="true" />
-                    <span>{memberSinceLabel}</span>
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="outline"
-                className="mt-auto w-full gap-2"
-                onClick={openEdit}
-              >
-                <Pencil className="size-4" aria-hidden="true" />
-                <span>Editează profilul</span>
-              </Button>
-            </div>
-          </Panel>
+          <span className="role-badge">
+            <span className="role-dot" aria-hidden="true" />
+            {myRoleLabel}
+          </span>
+          {/* Here, not on the Groups panel, so BC/BCE keep it. */}
+          {hasAdunareaGenerala && (
+            <Badge
+              variant="outline"
+              className="border-primary/40 bg-primary/5 font-semibold text-primary"
+            >
+              Adunarea Generală
+            </Badge>
+          )}
+          {showFullName && (
+            <span className="wrap-anywhere" data-testid="profile-full-name">
+              {profile.full_name}
+            </span>
+          )}
+          <span className="flex items-center gap-1.5">
+            <Calendar className="size-3.5 shrink-0" aria-hidden="true" />
+            <span>{memberSinceLabel}</span>
+          </span>
+        </div>
+      </div>
 
-          <Panel eyebrow="Cont" icon={Contact} title="Date de contact">
-            <div className="flex h-full flex-col gap-2">
-              <ul className={rowListClass}>
-                <ListRow className="px-0">
-                  <p className="text-xs font-semibold text-muted-foreground">
-                    E-mail
-                  </p>
-                  <p className="text-sm font-medium break-all text-foreground">
-                    {profile.email ?? (
+      {/* Always mounted, so the receipt is announced when it appears
+          (as the joining card's); empty, it takes no room. */}
+      <p
+        role="status"
+        className="m-0 text-sm text-muted-foreground empty:hidden"
+      >
+        {saved && 'Profilul a fost actualizat.'}
+      </p>
+
+      <Tabs.Root
+        // The tab strip has no margin of its own: this stack spaces it.
+        className="flex flex-col gap-6"
+        value={tab}
+        onValueChange={(value) => {
+          if (!isProfileTab(value)) return;
+          // Always named, Cont too: an anchor still in the URL would
+          // otherwise choose the tab again. A tab is not a history entry.
+          setParams({ [TAB_KEY]: value }, { replace: true });
+        }}
+      >
+        <Tabs.List
+          ref={tabStrip}
+          aria-label="Secțiunile profilului"
+          className={tabListClass}
+        >
+          <Tabs.Indicator className={tabThumbClass} />
+          <Tabs.Tab value="cont" className={tabClass}>
+            <UserRound aria-hidden="true" />
+            Cont
+          </Tabs.Tab>
+          <Tabs.Tab value="notificari" className={tabClass}>
+            <Bell aria-hidden="true" />
+            Notificări
+          </Tabs.Tab>
+          <Tabs.Tab value="preferinte" className={tabClass}>
+            <SlidersHorizontal aria-hidden="true" />
+            Preferințe
+          </Tabs.Tab>
+        </Tabs.List>
+
+        <Tabs.Panel value="cont" className="outline-none">
+          <PageGrid columns={2}>
+            <div className={stackClass}>
+              <Panel
+                title="Date de contact"
+                control={
+                  // A pencil fits beside the title at every width; the
+                  // labelled button it replaces took a row of the box.
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={openEdit}
+                    aria-label="Editează datele de contact"
+                    title="Editează datele de contact"
+                  >
+                    <Pencil aria-hidden="true" />
+                  </Button>
+                }
+                stack={2}
+              >
+                <ul className={rowListClass}>
+                  <SettingRow label="E-mail">
+                    {profile.email ? (
+                      <span className="break-all">{profile.email}</span>
+                    ) : (
                       <span className="text-muted-foreground italic">
                         Indisponibil
                       </span>
                     )}
-                  </p>
-                </ListRow>
-                <ListRow className="px-0">
-                  <p className="text-xs font-semibold text-muted-foreground">
-                    Telefon
-                  </p>
-                  <p className="text-sm font-medium text-foreground">
+                  </SettingRow>
+                  <SettingRow
+                    label="Telefon"
+                    hint={
+                      <InfoHint label="Despre numărul de telefon">
+                        {PHONE_HINT}
+                      </InfoHint>
+                    }
+                  >
                     {profile.phone ? (
                       profile.phone
                     ) : (
@@ -327,149 +396,94 @@ export default function ProfileScreen() {
                         Necompletat
                       </span>
                     )}
-                  </p>
-                </ListRow>
-              </ul>
-              <p className="text-xs text-muted-foreground">{PHONE_HINT}</p>
-              {/* In the box, not the header: a header control would wrap under
-              the title in a third of the row and push this box down. */}
-              <Button
-                variant="outline"
-                className="mt-auto w-full gap-2"
-                onClick={openEdit}
-                aria-label="Editează datele de contact"
-              >
-                <Pencil className="size-4" aria-hidden="true" />
-                <span>Editează</span>
-              </Button>
+                  </SettingRow>
+                </ul>
+              </Panel>
+              {(bceGroups || !onBoard) && groupsPanel}
             </div>
-          </Panel>
-        </PageGrid>
-
-        <PageGrid columns={2}>
-          {onBoard ? (
-            <BoardColumn
-              withGroups={bceGroups}
-              stacked={timelineShown}
-              groups={
-                <Panel eyebrow="Grupuri" icon={Users} title="Grupurile mele">
-                  <div data-testid="groups-card">
-                    <MyGroupsList groups={groupsQuery.data ?? []} />
+            <div className={stackClass}>
+              {onBoard ? (
+                <Panel title="Funcția în OSUBB">
+                  {isModerator ? (
+                    <p
+                      data-testid="board-title"
+                      className="text-[length:var(--fs-xl)] leading-tight font-extrabold wrap-anywhere text-foreground"
+                    >
+                      {roleLabel}
+                    </p>
+                  ) : (
+                    <BoardTitle
+                      roleLabel={roleLabel}
+                      board={
+                        profile.role === 'bce'
+                          ? 'Biroul de Conducere Extins'
+                          : 'Biroul de Conducere'
+                      }
+                      settings={settingsQuery}
+                      membershipRows={groupsQuery.membershipRows}
+                    />
+                  )}
+                </Panel>
+              ) : promotion.kind === 'hidden' ? (
+                <Panel title="Punctaj personal">
+                  <div data-testid="personal-points-card">
+                    <PointsTotal points={pointsQuery.data ?? 0} />
                   </div>
                 </Panel>
-              }
-            >
-              <Panel
-                eyebrow={
-                  // No area for the Moderator (ruling 2: no eyebrow then).
-                  isModerator
-                    ? undefined
-                    : profile.role === 'bce'
-                      ? 'Biroul de Conducere Extins'
-                      : 'Biroul de Conducere'
-                }
-                icon={Landmark}
-                title="Funcția în OSUBB"
-                // Alone in its row it takes the row: a half-width box with
-                // nothing beside it reads as a missing neighbour.
-                className={
-                  timelineShown || bceGroups ? undefined : 'md:col-span-2'
-                }
-              >
-                {isModerator ? (
-                  <p
-                    data-testid="board-title"
-                    className="text-[length:var(--fs-xl)] leading-tight font-extrabold wrap-anywhere text-foreground"
-                  >
-                    {roleLabel}
-                  </p>
-                ) : (
-                  <BoardTitle
-                    roleLabel={roleLabel}
-                    settings={settingsQuery}
-                    membershipRows={groupsQuery.membershipRows}
-                  />
-                )}
-              </Panel>
-            </BoardColumn>
-          ) : (
-            <Panel eyebrow="Grupuri" icon={Users} title="Grupurile mele">
-              <div data-testid="groups-card">
-                <MyGroupsList groups={groupsQuery.data ?? []} />
-                <JoiningSection />
-              </div>
-            </Panel>
-          )}
-          {(!onBoard || timelineShown) && (
-            <div className={stackClass}>
-              {!onBoard &&
-                (promotion.kind === 'hidden' ? (
-                  <Panel
-                    eyebrow="Parcurs"
-                    icon={TrendingUp}
-                    title="Punctaj personal"
-                  >
-                    <div data-testid="personal-points-card">
-                      <PointsTotal points={pointsQuery.data ?? 0} />
-                    </div>
-                  </Panel>
-                ) : (
-                  <PromotionPanel
-                    state={promotion}
-                    totalPoints={pointsQuery.data}
-                  />
-                ))}
+              ) : (
+                <PromotionPanel
+                  state={promotion}
+                  totalPoints={pointsQuery.data}
+                />
+              )}
               {timelineShown && (
-                <Panel
-                  eyebrow="Parcurs"
-                  icon={GraduationCap}
-                  title="Parcursul organizațional"
-                >
+                <Panel title="Parcursul organizațional">
                   <RoleTimeline profile={profile} />
                 </Panel>
               )}
             </div>
-          )}
-        </PageGrid>
+          </PageGrid>
+        </Tabs.Panel>
 
-        <PageGrid columns={2}>
+        <Tabs.Panel value="notificari" className="outline-none">
+          <Panel title="Notificări pe acest dispozitiv">
+            <PushDeviceCard />
+          </Panel>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="preferinte" className="outline-none">
           <div className={stackClass}>
-            <Panel
-              eyebrow="Setări"
-              icon={BellRing}
-              title="Notificări pe acest dispozitiv"
-            >
-              <PushDeviceCard />
-            </Panel>
             {/* R43: BCE, BC and the Moderator only -- nothing for anyone else. */}
             <PreferredGroupsCard />
-          </div>
-          <div className={stackClass}>
-            <Panel eyebrow="Setări" icon={Mail} title="Email zilnic">
-              <EmailDigestCard />
-            </Panel>
             {/* The Privacy Notice (#771): always one tap away. */}
-            <Panel
-              eyebrow="Setări"
-              icon={ShieldCheck}
-              title="Confidențialitate"
-            >
-              <p className="text-sm text-muted-foreground">
-                Ce date folosește aplicația, cine le vede și ce drepturi ai.
-              </p>
-              <Link
-                to="/confidentialitate"
-                className="mt-1 inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4"
-              >
-                Politica de confidențialitate
-              </Link>
+            <Panel title="Confidențialitate" flush>
+              <ul className={rowListClass}>
+                <ListRow
+                  className="relative has-[a:hover]:bg-muted"
+                  action={
+                    <ChevronRight
+                      aria-hidden="true"
+                      className="size-4 shrink-0 text-muted-foreground"
+                    />
+                  }
+                >
+                  <Link
+                    to="/confidentialitate"
+                    className={`block text-sm font-semibold text-foreground underline-offset-4 after:absolute after:inset-0 hover:underline ${focusRingAfterClass}`}
+                  >
+                    Politica de confidențialitate
+                  </Link>
+                  <p className="m-0 text-sm text-muted-foreground">
+                    Ce date folosește aplicația, cine le vede și ce drepturi ai.
+                  </p>
+                </ListRow>
+              </ul>
             </Panel>
+            {/* R41: the one way out, last and quiet, after everything else. */}
+            <SignOutDeviceLink />
           </div>
-        </PageGrid>
-
-        {/* R41: the one way out, last and quiet, after everything else. */}
-        <SignOutDeviceLink />
-      </div>
+        </Tabs.Panel>
+      </Tabs.Root>
 
       <EditProfileSheet
         open={editOpen}
@@ -482,15 +496,52 @@ export default function ProfileScreen() {
 }
 
 /**
+ * One setting: its name on the left, its value on the right. A value too
+ * long for the row (an email address at 375 px) drops under the name rather
+ * than squeezing it.
+ */
+function SettingRow({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  /** An `InfoHint` beside the name: the sentence the value needs once. */
+  hint?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <li
+      data-slot="setting-row"
+      className="flex min-h-11 flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 py-2.5"
+    >
+      <span className="inline-flex items-center text-sm text-muted-foreground">
+        {label}
+        {hint}
+      </span>
+      <span
+        data-slot="setting-value"
+        className="min-w-0 text-right text-sm font-medium text-foreground"
+      >
+        {children}
+      </span>
+    </li>
+  );
+}
+
+/**
  * Funcția în OSUBB (#824, decision D1): the viewer's own title in the board
  * Group, else the Role label and a line saying none is set.
  */
 function BoardTitle({
   roleLabel,
+  board,
   settings,
   membershipRows,
 }: {
   roleLabel: string;
+  /** The board the position is on, said under the title. */
+  board: string;
   settings: ReturnType<typeof useOrgSettings>;
   membershipRows: GroupMemberRow[] | undefined;
 }) {
@@ -513,46 +564,15 @@ function BoardTitle({
       <p className="text-[length:var(--fs-xl)] leading-tight font-extrabold wrap-anywhere text-foreground">
         {title ?? roleLabel}
       </p>
-      {/* The title is the information; the Role is in the eyebrow
-          already (B46). */}
+      {/* The title is the information; the board is named once, under
+          it (B46). */}
+      <p className="mt-1 text-sm text-muted-foreground">{board}</p>
       {!title && (
         <p className="mt-1 text-sm text-muted-foreground">
           Funcția nu este setată încă.
         </p>
       )}
     </div>
-  );
-}
-
-/**
- * The board's first grid cell: the position alone, or — for BCE (#929) — the
- * position with Grupurile mele. Beside the timeline the two stack in one
- * column; with no timeline they share the row as two cells.
- */
-function BoardColumn({
-  withGroups,
-  stacked,
-  groups,
-  children,
-}: {
-  withGroups: boolean;
-  stacked: boolean;
-  groups: ReactNode;
-  children: ReactNode;
-}) {
-  if (!withGroups) return children;
-  if (stacked)
-    return (
-      <div className={stackClass}>
-        {children}
-        {groups}
-      </div>
-    );
-  return (
-    <>
-      {children}
-      {groups}
-    </>
   );
 }
 

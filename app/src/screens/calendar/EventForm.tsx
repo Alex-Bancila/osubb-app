@@ -4,10 +4,7 @@ import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
 import { ChoiceRow } from '../../components/ui/radio-group';
 import { FieldError } from '../../components/ui/field';
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from '../../components/ui/native-select';
+import { Select } from '../../components/ui/select';
 import {
   Combobox,
   ComboboxContent,
@@ -20,7 +17,10 @@ import {
   GroupOption,
   groupOptionLabel,
 } from '../../components/ui/combobox';
-import { DialogFooter } from '../../components/ui/dialog';
+import { DateTimePicker } from '../../components/ui/date-picker';
+import { FormSheetFooter } from '../../components/ui/form-sheet';
+import { InfoHint } from '../../components/ui/info-hint';
+import { Input, Textarea } from '../../components/ui/input';
 import { eventSchema, fieldForReason } from '../../lib/schemas/event';
 import { useFormValidation } from '../../lib/use-form-validation';
 import {
@@ -35,10 +35,17 @@ import {
   type EventFormValues,
 } from './event-form-model';
 
-// The text fields wear the #842 select's field (border, fill, radius, inset),
-// so Titlu, Tip, Grup and the dates read as one form (X12).
-const control =
-  'min-h-11 w-full min-w-0 rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:border-input dark:bg-input/30';
+/** Most of the organization's meetings are in the evening. */
+const DEFAULT_START_TIME = '18:00';
+const DEFAULT_END_TIME = '20:00';
+
+/** Two hours after the start, the same day: where "Se încheie" opens. */
+function defaultEndTime(startsAt: string): string {
+  const match = /T(\d{2}):(\d{2})$/.exec(startsAt);
+  if (!match) return DEFAULT_END_TIME;
+  const hour = Number(match[1]) + 2;
+  return hour > 23 ? '23:59' : `${String(hour).padStart(2, '0')}:${match[2]}`;
+}
 
 const COPY = {
   create: {
@@ -52,6 +59,8 @@ const COPY = {
     submit: 'Salvează modificările',
     pending: 'Se salvează…',
     failed: 'Nu am putut salva modificările. Reîncearcă.',
+    // What a save sets off: read before pressing it, so it stays on the form.
+    note: 'O schimbare de oră, loc, grup sau vizibilitate îi anunță pe membrii grupului și pe cei care au răspuns „Particip”.',
   },
 } as const;
 
@@ -59,7 +68,8 @@ const COPY = {
  * One form for **Eveniment nou** and **Editează evenimentul** (#849): the same
  * fields, rules and refusal placement; editing starts from the Event's values
  * and does not refuse a start that has already passed (`update_event` takes
- * one). A refusal keeps every value in place.
+ * one). A refusal keeps every value in place. It is a `FormSheet`'s content:
+ * the fields scroll, the actions stay pinned at the sheet's bottom edge.
  */
 export function EventForm({
   mode = 'create',
@@ -79,6 +89,7 @@ export function EventForm({
   onSubmit: (draft: EventDraft, values: EventFormValues) => Promise<void>;
 }) {
   const copy = COPY[mode];
+  const note = mode === 'edit' ? COPY.edit.note : null;
   const id = useId();
   const [values, setValues] = useState<EventFormValues>(initialValues);
   const schema = useMemo(
@@ -140,14 +151,22 @@ export function EventForm({
     groupOptionLabel(group, groupsById);
 
   return (
-    <form aria-label={copy.label} onSubmit={submit} noValidate>
-      <fieldset disabled={pending} className="grid gap-5 disabled:opacity-70">
+    <form
+      aria-label={copy.label}
+      onSubmit={submit}
+      noValidate
+      className="flex flex-1 flex-col"
+    >
+      <fieldset
+        disabled={pending}
+        className="flex min-w-0 flex-1 flex-col gap-5 disabled:opacity-70"
+      >
         <div className="grid gap-1.5">
           <label className="grid gap-1.5" htmlFor={`${id}-title`}>
             <span className="text-sm font-medium">Titlu</span>
-            <input
+            <Input
               id={`${id}-title`}
-              className={control}
+              required
               value={values.title}
               autoComplete="off"
               onChange={(event) => update({ title: event.target.value })}
@@ -202,22 +221,13 @@ export function EventForm({
             <label htmlFor={`${id}-type`} className="text-sm font-medium">
               Tip
             </label>
-            <NativeSelect
+            <Select
               id={`${id}-type`}
               value={values.type}
-              onChange={(event) =>
-                update({
-                  type: event.target.value as EventFormValues['type'],
-                })
-              }
+              options={EVENT_TYPE_CHOICES}
+              onValueChange={(type) => update({ type })}
               {...form.field('type')}
-            >
-              {EVENT_TYPE_CHOICES.map((choice) => (
-                <NativeSelectOption key={choice.value} value={choice.value}>
-                  {choice.label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+            />
             <FieldError {...form.errorProps('type')} />
           </div>
 
@@ -225,90 +235,86 @@ export function EventForm({
             <label htmlFor={`${id}-min-level`} className="text-sm font-medium">
               Cine îl vede
             </label>
-            <NativeSelect
+            <Select
               id={`${id}-min-level`}
-              value={values.minLevel}
-              onChange={(event) =>
-                update({ minLevel: Number(event.target.value) })
+              value={String(values.minLevel)}
+              options={levelChoices.map((choice) => ({
+                value: String(choice.value),
+                label: choice.label,
+              }))}
+              onValueChange={(minLevel) =>
+                update({ minLevel: Number(minLevel) })
               }
               {...form.field('minLevel')}
-            >
-              {levelChoices.map((choice) => (
-                <NativeSelectOption key={choice.value} value={choice.value}>
-                  {choice.label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+            />
             <FieldError {...form.errorProps('minLevel')} />
           </div>
         </div>
 
         <div className="grid gap-1.5">
-          <label htmlFor={`${id}-campaign`} className="text-sm font-medium">
-            Campanie (opțional)
-          </label>
-          <NativeSelect
+          <div className="flex items-center justify-between gap-2">
+            <label htmlFor={`${id}-campaign`} className="text-sm font-medium">
+              Campanie (opțional)
+            </label>
+            <InfoHint label="Despre campanie" id={`${id}-campaign-hint`}>
+              {!selectedGroup
+                ? 'Alege întâi grupul: campaniile vin din grupul evenimentului și din cele de deasupra lui.'
+                : !campaigns.length
+                  ? 'Grupul ales nu are campanii active.'
+                  : 'O etichetă pentru filtre și rapoarte. Nu schimbă cine vede evenimentul.'}
+            </InfoHint>
+          </div>
+          <Select
             id={`${id}-campaign`}
-            value={values.campaignId ?? ''}
+            value={String(values.campaignId ?? '')}
             disabled={!selectedGroup || !campaigns.length}
-            onChange={(event) =>
-              update({
-                campaignId: event.target.value
-                  ? Number(event.target.value)
-                  : null,
-              })
+            options={[
+              { value: '', label: 'Fără campanie' },
+              ...campaigns.map((campaign) => ({
+                value: String(campaign.id),
+                label: campaign.name,
+              })),
+            ]}
+            onValueChange={(campaignId) =>
+              update({ campaignId: campaignId ? Number(campaignId) : null })
             }
             {...form.field('campaignId', `${id}-campaign-hint`)}
-          >
-            <NativeSelectOption value="">Fără campanie</NativeSelectOption>
-            {campaigns.map((campaign) => (
-              <NativeSelectOption key={campaign.id} value={campaign.id}>
-                {campaign.name}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+          />
           <FieldError {...form.errorProps('campaignId')} />
-          <p
-            id={`${id}-campaign-hint`}
-            className="text-sm text-muted-foreground"
-          >
-            {!selectedGroup
-              ? 'Alege întâi grupul: campaniile vin din grupul evenimentului și din cele de deasupra lui.'
-              : !campaigns.length
-                ? 'Grupul ales nu are campanii active.'
-                : 'O etichetă pentru filtre și rapoarte. Nu schimbă cine vede evenimentul.'}
-          </p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="grid gap-1.5">
-            <label className="grid gap-1.5" htmlFor={`${id}-starts-at`}>
-              <span className="text-sm font-medium">Începe — ora României</span>
-              <input
-                id={`${id}-starts-at`}
-                type="datetime-local"
-                className={control}
-                value={values.startsAt}
-                onChange={(event) => update({ startsAt: event.target.value })}
-                {...form.field('startsAt')}
-              />
+            <label htmlFor={`${id}-starts-at`} className="text-sm font-medium">
+              Începe — ora României
             </label>
+            <DateTimePicker
+              id={`${id}-starts-at`}
+              required
+              disabled={pending}
+              defaultTime={DEFAULT_START_TIME}
+              value={values.startsAt}
+              onChange={(startsAt) => update({ startsAt })}
+              {...form.field('startsAt')}
+            />
             <FieldError {...form.errorProps('startsAt')} />
           </div>
           <div className="grid gap-1.5">
-            <label className="grid gap-1.5" htmlFor={`${id}-ends-at`}>
-              <span className="text-sm font-medium">
-                Se încheie (opțional) — ora României
-              </span>
-              <input
-                id={`${id}-ends-at`}
-                type="datetime-local"
-                className={control}
-                value={values.endsAt}
-                onChange={(event) => update({ endsAt: event.target.value })}
-                {...form.field('endsAt')}
-              />
+            <label htmlFor={`${id}-ends-at`} className="text-sm font-medium">
+              Se încheie (opțional) — ora României
             </label>
+            <DateTimePicker
+              id={`${id}-ends-at`}
+              disabled={pending}
+              defaultTime={defaultEndTime(values.startsAt)}
+              // It ends after it starts: no day before the start's.
+              min={values.startsAt.slice(0, 10) || undefined}
+              // …and an empty end opens on the start's month, not today's.
+              openOn={values.startsAt.slice(0, 10) || undefined}
+              value={values.endsAt}
+              onChange={(endsAt) => update({ endsAt })}
+              {...form.field('endsAt')}
+            />
             <FieldError {...form.errorProps('endsAt')} />
           </div>
         </div>
@@ -317,9 +323,8 @@ export function EventForm({
           <div className="grid gap-1.5">
             <label className="grid gap-1.5" htmlFor={`${id}-location`}>
               <span className="text-sm font-medium">Loc (opțional)</span>
-              <input
+              <Input
                 id={`${id}-location`}
-                className={control}
                 value={values.location}
                 onChange={(event) => update({ location: event.target.value })}
                 {...form.field('location')}
@@ -330,13 +335,12 @@ export function EventForm({
           <div className="grid gap-1.5">
             <label className="grid gap-1.5" htmlFor={`${id}-capacity`}>
               <span className="text-sm font-medium">Capacitate (opțional)</span>
-              <input
+              <Input
                 id={`${id}-capacity`}
                 type="number"
                 min="1"
                 step="1"
                 inputMode="numeric"
-                className={control}
                 value={values.capacity}
                 onChange={(event) => update({ capacity: event.target.value })}
                 {...form.field('capacity')}
@@ -349,9 +353,8 @@ export function EventForm({
         <div className="grid gap-1.5">
           <label className="grid gap-1.5" htmlFor={`${id}-description`}>
             <span className="text-sm font-medium">Descriere (opțional)</span>
-            <textarea
+            <Textarea
               id={`${id}-description`}
-              className={`${control} min-h-24 resize-y`}
               rows={4}
               value={values.description}
               onChange={(event) => update({ description: event.target.value })}
@@ -362,7 +365,7 @@ export function EventForm({
         </div>
 
         {offersAnnouncement && (
-          <div className="grid gap-0.5">
+          <div className="flex items-center justify-between gap-2">
             <ChoiceRow className="font-medium">
               <Checkbox
                 checked={values.announce}
@@ -371,19 +374,21 @@ export function EventForm({
               />
               Creează și un anunț
             </ChoiceRow>
-            <p
+            <InfoHint
+              label="Despre anunțul evenimentului"
               id={`${id}-announce-hint`}
-              className="pl-8 text-sm text-muted-foreground"
             >
               Publică în Anunțuri titlul, data, locul și descrierea, pentru cine
               vede evenimentul, cu termen la începutul lui.
-            </p>
+            </InfoHint>
           </div>
         )}
 
+        {note && <p className="m-0 text-sm text-muted-foreground">{note}</p>}
+
         <FieldError>{form.formError}</FieldError>
 
-        <DialogFooter>
+        <FormSheetFooter>
           <Button
             type="button"
             variant="outline"
@@ -395,7 +400,7 @@ export function EventForm({
           <Button type="submit" disabled={pending}>
             {pending ? copy.pending : copy.submit}
           </Button>
-        </DialogFooter>
+        </FormSheetFooter>
       </fieldset>
     </form>
   );

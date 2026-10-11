@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { KeyRound, Pencil, Trash2 } from 'lucide-react';
 import { EmptyState } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
-import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { cn } from '../../lib/utils';
 import {
@@ -33,7 +32,6 @@ import { DealCodeStub } from './DealCodeStub';
 import DealFormSheet from './DealFormSheet';
 import { AttachedLinksList } from '../../components/attached-link/AttachedLinksList';
 import {
-  isDealActive,
   mayDeleteDeal,
   mayEditDeal,
   revealCountLabel,
@@ -100,17 +98,12 @@ function DealDetails({
   onDeleted: () => void;
 }) {
   const viewer = useDealsViewer();
-  const expired = !isDealActive(deal);
   return (
     <>
       <SheetHeader>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold tracking-[0.14em] text-accent-foreground uppercase">
-            OSUBB Deals
-          </span>
-          {expired && <Badge variant="outline">Expirat</Badge>}
-        </div>
-        <SheetTitle className="mt-1.5">{deal.title}</SheetTitle>
+        {/* As on the card: no eyebrow, and the Termen row is the one
+            "expired" mark. */}
+        <SheetTitle>{deal.title}</SheetTitle>
         <SheetDescription className="-mt-1 text-xs">
           <time dateTime={deal.publishedAt}>{deal.publishedLabel}</time>
         </SheetDescription>

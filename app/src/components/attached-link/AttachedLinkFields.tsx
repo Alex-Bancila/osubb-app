@@ -1,8 +1,7 @@
 import type { useFormValidation } from '../../lib/use-form-validation';
 import { FieldError } from '../ui/field';
+import { Input } from '../ui/input';
 
-const inputClass =
-  'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-ring';
 const fieldClass = 'block space-y-1.5 text-sm font-medium text-foreground';
 
 export type AttachedLinkValue = { label: string; url: string };
@@ -53,8 +52,7 @@ export function AttachedLinkFields({
       <div className="space-y-1.5">
         <label className={fieldClass}>
           {labelText}
-          <input
-            className={inputClass}
+          <Input
             disabled={disabled}
             value={value.label}
             onChange={(event) =>
@@ -68,8 +66,7 @@ export function AttachedLinkFields({
       <div className="space-y-1.5">
         <label className={fieldClass}>
           {urlText}
-          <input
-            className={inputClass}
+          <Input
             disabled={disabled}
             type="url"
             placeholder="https://"

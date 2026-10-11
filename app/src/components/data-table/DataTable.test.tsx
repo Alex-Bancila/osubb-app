@@ -120,6 +120,37 @@ describe('DataTable', () => {
   });
 });
 
+describe('DataTable header under sm', () => {
+  const rows = [{ member: 'Mara', points: 18 }];
+  it('keeps the header row on screen unless asked', () => {
+    render(<DataTable columns={columns} data={rows} emptyTitle="Nimic" />);
+    expect(
+      screen.getByRole('columnheader', { name: 'Membru' }).closest('thead'),
+    ).not.toHaveClass('max-sm:not-focus-within:sr-only');
+  });
+
+  it('takes the whole row off screen under sm, still read and still sortable', () => {
+    render(
+      <DataTable
+        columns={columns}
+        data={rows}
+        emptyTitle="Nimic"
+        hideHeaderUnderSm
+      />,
+    );
+    // Off screen, not removed: the column names and the sort stay reachable,
+    // and the row shows again while a sort button has focus.
+    const head = screen
+      .getByRole('columnheader', { name: 'Membru' })
+      .closest('thead');
+    expect(head).toHaveClass('max-sm:not-focus-within:sr-only');
+    expect(head).not.toHaveClass('hidden');
+    expect(
+      screen.getByRole('button', { name: 'Sortează Puncte crescător' }),
+    ).toBeInTheDocument();
+  });
+});
+
 describe('DataTable filters', () => {
   it('filters supplied rows and composes filtering with keyboard sorting', async () => {
     const user = userEvent.setup();
@@ -135,6 +166,10 @@ describe('DataTable filters', () => {
         filters={[{ columnId: 'member', label: 'Caută membru' }]}
       />,
     );
+    // The app's one field surface, not a look of its own.
+    expect(
+      screen.getByRole('searchbox', { name: 'Caută membru' }),
+    ).toHaveAttribute('data-slot', 'input');
     await user.type(
       screen.getByRole('searchbox', { name: 'Caută membru' }),
       'Mar',

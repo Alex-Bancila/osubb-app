@@ -1,8 +1,5 @@
 import type { Database } from '../../lib/database.types';
-import {
-  formatBucharestDay,
-  formatBucharestTime,
-} from '../../lib/calendar-time';
+import { formatBucharestShort } from '../../lib/calendar-time';
 import {
   attachedLinksFrom,
   type AttachedLink,
@@ -109,6 +106,10 @@ export type TaskPresentation = {
     position: number | null;
   } | null;
   deadline: string | null;
+  /**
+   * The deadline as a card or a row shows it: `mie., 14 oct. · 23:59`, the
+   * year only when it is not this one. Always Romania's time.
+   */
   deadlineLabel: string;
   overdue: boolean;
   feedbackPending: boolean;
@@ -288,7 +289,7 @@ export function toTaskPresentation(
     candidature: kind === 'task' ? candidature : null,
     deadline,
     deadlineLabel: deadline
-      ? `${formatBucharestDay(deadline)}, ${formatBucharestTime(deadline)}`
+      ? formatBucharestShort(deadline, now)
       : 'Fără termen',
     overdue:
       !isTerminalTask(row.status) &&

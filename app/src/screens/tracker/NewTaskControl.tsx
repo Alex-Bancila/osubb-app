@@ -1,13 +1,7 @@
 import { useRef, useState } from 'react';
 import { PlusIcon } from 'lucide-react';
-import { Button } from '../../components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '../../components/ui/dialog';
+import { FabAction } from '../../components/layout';
+import { FormSheet } from '../../components/ui/form-sheet';
 import { useTaskManagement } from '../../queries/task-tabs';
 import { useCreateTask } from '../../queries/task-umbrella';
 import { ManagedTaskForm } from './ManagedTaskForm';
@@ -16,7 +10,7 @@ import { ManagedTaskForm } from './ManagedTaskForm';
  * "Task nou": a top-level Task or Umbrella, for a member who manages work in
  * some Group (the same `can_manage_tasks()` read the Campanii entry uses).
  * Hidden while that read loads or fails; `create_task` stays authoritative.
- * On narrow screens the Dialog fills the screen like a sheet.
+ * The form opens in a form sheet.
  */
 export function NewTaskControl({
   onCreated,
@@ -36,36 +30,24 @@ function NewTaskDialog({ onCreated }: { onCreated: (taskId: number) => void }) {
   // After a Task opens, focus belongs to its details, not this button.
   const created = useRef(false);
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next && create.isPending) return;
-        setOpen(next);
-      }}
-    >
-      <Button
-        className="min-h-11"
-        onClick={() => {
+    <>
+      <FabAction
+        label="Task nou"
+        icon={PlusIcon}
+        onSelect={() => {
           created.current = false;
           setAttempt((current) => current + 1);
           setOpen(true);
         }}
-      >
-        <PlusIcon aria-hidden="true" />
-        Task nou
-      </Button>
-      <DialogContent
+      />
+      <FormSheet
+        open={open}
+        onOpenChange={setOpen}
+        title="Task nou"
+        busy={create.isPending}
         finalFocus={() => !created.current}
-        fullScreenOnPhone
         className="sm:max-w-2xl"
       >
-        <DialogHeader>
-          <DialogTitle>Task nou</DialogTitle>
-          <DialogDescription>
-            Creează un task sau un task-umbrelă într-un grup pe care îl
-            gestionezi. Subtaskurile se adaugă din taskul-umbrelă.
-          </DialogDescription>
-        </DialogHeader>
         <ManagedTaskForm
           key={attempt}
           allowSubtask={false}
@@ -82,7 +64,7 @@ function NewTaskDialog({ onCreated }: { onCreated: (taskId: number) => void }) {
             onCreated(task.id);
           }}
         />
-      </DialogContent>
-    </Dialog>
+      </FormSheet>
+    </>
   );
 }

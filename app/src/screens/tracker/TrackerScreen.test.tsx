@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { Link, MemoryRouter, useLocation, useNavigate } from 'react-router';
 import userEvent from '@testing-library/user-event';
@@ -39,7 +39,7 @@ vi.mock('../../queries/request-decisions', () => ({
   usePendingDecisions: hooks.usePendingDecisions,
 }));
 // The Requests have their own suite (RequestsView.test.tsx); here the view is
-// only told apart from the Tracker's.
+// only told apart from the Task lists.
 vi.mock('../requests/RequestsView', () => ({
   RequestsView: () => <h2>Cereri view</h2>,
 }));
@@ -392,7 +392,7 @@ describe('My tasks screen', () => {
     ['De gestionat', 'useManagedTasks', 'useTaskManagement'],
     ['Toate', 'useAllTasks', 'useTaskLeadership'],
   ] as const)(
-    'shows %s as dense rows under the Work Filter — no table, no Stare or search under six Tasks',
+    'shows %s as dense rows under the toolbar — no table, no Stare under six Tasks',
     async (tab, list, capability) => {
       const user = userEvent.setup();
       query();
@@ -426,14 +426,19 @@ describe('My tasks screen', () => {
       // Overdue pinned first.
       expect(rows[0]).toHaveAccessibleName('Întârziat');
       expect(screen.queryByRole('table')).toBeNull();
-      // Two Tasks fit on one screen: Stare, Caută and Ordonează wait for six.
+      // Two Tasks fit on one screen: Stare and Ordonează wait for six.
       expect(screen.queryByLabelText('Stare')).toBeNull();
-      expect(
-        screen.queryByRole('searchbox', { name: 'Caută după titlu' }),
-      ).toBeNull();
-      // The filter toolbar sits under the tab strip, Filtrează first (#903).
+      // The toolbar sits under the nav: the search first, saying how many
+      // Tasks the list shows, then Filtrează (#903).
       const toolbar = screen.getByRole('group', { name: 'Filtre taskuri' });
-      expect(toolbar.firstElementChild).toHaveAccessibleName('Filtrează');
+      const searchbox = within(toolbar).getByRole('searchbox', {
+        name: 'Caută după titlu',
+      });
+      expect(searchbox).toHaveAttribute('placeholder', 'Caută în 2 taskuri');
+      expect(toolbar.firstElementChild).toBe(searchbox.closest('label'));
+      expect(
+        within(toolbar).getByRole('button', { name: 'Filtrează' }),
+      ).toBeVisible();
       await user.click(screen.getByRole('button', { name: 'Viitor' }));
       expect(
         screen.getByRole('dialog', { name: 'Detalii task' }),
@@ -514,7 +519,7 @@ describe('My tasks screen', () => {
     expect(hooks.useAllTasks).toHaveBeenCalledWith(false);
   });
 
-  it('shows leadership capability loading and retry states', async () => {
+  it('checks the leadership capability silently, and offers a retry when it fails', async () => {
     const user = userEvent.setup();
     query();
     const refetch = vi.fn();
@@ -525,9 +530,9 @@ describe('My tasks screen', () => {
       refetch,
     });
     const { rerender } = render(<TrackerScreen />, { wrapper: Router });
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Se verifică accesul la toate taskurile',
-    );
+    // Pending says nothing: no line that pushes the lists down as it leaves.
+    expect(screen.queryByText(/Se verifică accesul/)).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
     hooks.useTaskLeadership.mockReturnValue({
       data: undefined,
       isPending: false,
@@ -889,13 +894,15 @@ describe('My tasks screen', () => {
           'Afișe pentru atelier',
         ]);
         expect(
-          screen.getByRole('link', { name: 'Doar grupurile preferate' }),
-        ).toHaveAttribute('href', '/profil#grupuri-preferate');
+          screen.getByRole('button', { name: 'Doar grupurile preferate' }),
+        ).toHaveAttribute('aria-pressed', 'true');
       });
 
       it('shows every Opportunity after Arată tot', async () => {
         const { user } = await openAvailable();
-        await user.click(screen.getByRole('button', { name: 'Arată tot' }));
+        await user.click(
+          screen.getByRole('button', { name: 'Doar grupurile preferate' }),
+        );
         expect(titles(band())).toEqual([
           'Voluntari la Balul Bobocilor',
           'Sondaj pentru membri',
@@ -911,7 +918,7 @@ describe('My tasks screen', () => {
           'Arhivă de interviuri',
         ]);
         expect(
-          screen.queryByRole('link', { name: 'Doar grupurile preferate' }),
+          screen.queryByRole('button', { name: 'Doar grupurile preferate' }),
         ).not.toBeInTheDocument();
       });
     });
@@ -1357,7 +1364,378 @@ describe('My tasks screen', () => {
     );
   });
 
-  describe('the Cereri view (#973)', () => {
+  describe('the one navigation (Taskuri and Cereri)', () => {
+    const tabNames = () =>
+      within(screen.getByRole('tablist', { name: 'Taskuri și cereri' }))
+        .getAllByRole('tab')
+        .map((tab) => tab.textContent);
+
+    it('lists the Task lists the viewer has, then Cereri, as one tablist', () => {
+      query();
+      hooks.level = 5;
+      hooks.useTaskManagement.mockReturnValue({
+        data: true,
+        isPending: false,
+        isError: false,
+      });
+      hooks.useTaskLeadership.mockReturnValue({
+        data: true,
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(),
+      });
+      renderAt('/tracker');
+      expect(tabNames()).toEqual([
+        'Taskurile mele',
+        'Disponibile',
+        'De gestionat',
+        'Toate',
+        'Cereri',
+      ]);
+      // The header is the title and the create actions: no second switch.
+      expect(screen.queryByRole('group', { name: 'Secțiune' })).toBeNull();
+      expect(screen.getAllByRole('tablist')).toHaveLength(1);
+    });
+
+    it('draws the pill switch: a track, 36 px segments with a 44 px hit area, the chosen one inked', () => {
+      query();
+      renderAt('/tracker');
+      const list = screen.getByRole('tablist');
+      expect(list).toHaveClass(
+        'w-full',
+        'rounded-lg',
+        'border',
+        'bg-(--surface-3)',
+        'p-[3px]',
+      );
+      // Nothing scrolls sideways: the strip's scroller and fade are gone.
+      expect(list).not.toHaveClass('overflow-x-auto');
+      const mine = screen.getByRole('tab', { name: 'Taskurile mele' });
+      for (const tab of screen.getAllByRole('tab'))
+        expect(tab).toHaveClass(
+          'min-h-[36px]',
+          'min-w-11',
+          'after:-inset-y-1',
+          // Inked by itself where the thumb has not measured (jsdom).
+          'aria-selected:bg-(--text)',
+          'aria-selected:text-(--surface)',
+        );
+      expect(mine).toHaveAttribute('aria-selected', 'true');
+      // On a phone only the chosen tab spells its name; the others keep
+      // theirs for a screen reader.
+      expect(within(mine).getByText('Taskurile mele')).toHaveClass(
+        'max-sm:in-[[aria-selected=false]]:sr-only',
+        'truncate',
+      );
+      expect(mine).toHaveClass('max-sm:aria-selected:flex-1');
+      expect(screen.getByRole('tab', { name: 'Cereri' })).toHaveClass(
+        'max-sm:flex-none',
+      );
+      // The thumb slides, and stands still for reduced motion.
+      expect(list.querySelector('[data-slot="tracker-nav-thumb"]')).toHaveClass(
+        'transition-[translate,width]',
+        'motion-reduce:transition-none',
+      );
+    });
+
+    it('moves between the tabs with the arrow keys, Cereri included', async () => {
+      const user = userEvent.setup();
+      query();
+      renderAt('/tracker');
+      screen.getByRole('tab', { name: 'Taskurile mele' }).focus();
+      await user.keyboard('{ArrowRight}{ArrowRight}');
+      expect(screen.getByRole('tab', { name: 'Cereri' })).toHaveFocus();
+      await user.keyboard('{Enter}');
+      expect(
+        screen.getByRole('heading', { name: 'Cereri view' }),
+      ).toBeVisible();
+    });
+  });
+
+  describe('the toolbar on every Task list', () => {
+    const toolbar = () =>
+      screen.queryByRole('group', { name: 'Filtre taskuri' });
+    const searchbox = () =>
+      screen.getByRole('searchbox', { name: 'Caută după titlu' });
+    const cardTitles = () =>
+      screen
+        .queryAllByRole('article')
+        .map(
+          (card) =>
+            document.getElementById(card.getAttribute('aria-labelledby') ?? '')
+              ?.textContent,
+        );
+    const everyTab = () => {
+      hooks.level = 5;
+      hooks.useTaskManagement.mockReturnValue({
+        data: true,
+        isPending: false,
+        isError: false,
+      });
+      hooks.useTaskLeadership.mockReturnValue({
+        data: true,
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(),
+      });
+    };
+    const publicTask = (id: number, title: string) =>
+      taskRow({ id, title, assignment_mode: 'public', assignments: [] });
+    beforeEach(() => {
+      hooks.useTaskQueue.mockReturnValue({
+        data: { status: null, position: null },
+        isPending: false,
+        isError: false,
+      });
+    });
+
+    it('is the same row on all four lists — search, then Filtrează — and absent on Cereri', async () => {
+      const user = userEvent.setup();
+      query();
+      everyTab();
+      renderAt('/tracker');
+      for (const name of [
+        'Taskurile mele',
+        'Disponibile',
+        'De gestionat',
+        'Toate',
+      ]) {
+        await user.click(screen.getByRole('tab', { name }));
+        const row = toolbar() as HTMLElement;
+        // Directly under the nav: the first thing in the tab's panel.
+        expect(screen.getByRole('tabpanel').firstElementChild).toContainElement(
+          row,
+        );
+        expect(
+          [...row.children]
+            .filter((child) => !child.matches('.sr-only'))
+            .map((child) => child.getAttribute('data-slot') ?? child.tagName),
+        ).toEqual(['LABEL', 'filter-button']);
+        expect(row.firstElementChild).toBe(searchbox().closest('label'));
+        expect(searchbox()).toBeEnabled();
+      }
+      await user.click(screen.getByRole('tab', { name: 'Cereri' }));
+      expect(toolbar()).toBeNull();
+      expect(screen.queryByRole('searchbox')).toBeNull();
+    });
+
+    it('keeps its row, the search disabled, while a list loads and when it failed', () => {
+      query({ isPending: true, data: undefined });
+      const { rerender } = renderAt('/tracker');
+      expect(searchbox()).toBeDisabled();
+      // Above the Personal Score and the placeholder rows.
+      expect(
+        screen.getByRole('tabpanel').firstElementChild?.firstElementChild,
+      ).toBe(toolbar());
+      expect(
+        screen.getByRole('region', { name: 'Punctajul meu' }),
+      ).toBeVisible();
+      query({ isError: true, error: new Error('boom') });
+      rerender(tree('/tracker'));
+      expect(searchbox()).toBeDisabled();
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Nu am putut încărca taskurile.',
+      );
+    });
+
+    it('puts the toolbar above the Personal Score on Taskurile mele', () => {
+      query({ data: [taskRow()] });
+      renderAt('/tracker');
+      expect(
+        (toolbar() as HTMLElement).compareDocumentPosition(
+          screen.getByRole('region', { name: 'Punctajul meu' }),
+        ) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(searchbox()).toHaveAttribute('placeholder', 'Caută în 1 task');
+    });
+
+    it('narrows Taskurile mele by the title search, without case or diacritics, with a way out', async () => {
+      const user = userEvent.setup();
+      query({
+        data: [
+          taskRow({ id: 1, title: 'Ședință de mentorat' }),
+          taskRow({ id: 2, title: 'Afișe pentru gală' }),
+        ],
+      });
+      renderAt('/tracker');
+      await user.type(searchbox(), 'SEDINTA');
+      await waitFor(() =>
+        expect(cardTitles()).toEqual(['Ședință de mentorat']),
+      );
+      await user.clear(searchbox());
+      await user.type(searchbox(), 'zzz');
+      expect(
+        await screen.findByText('Niciun task nu corespunde căutării.'),
+      ).toBeVisible();
+      // Not the text of a member with no Task at all.
+      expect(screen.queryByText('Nu ai niciun task atribuit încă.')).toBeNull();
+      await user.click(screen.getByRole('button', { name: 'Șterge căutarea' }));
+      expect(searchbox()).toHaveValue('');
+      expect(cardTitles()).toHaveLength(2);
+    });
+
+    it('narrows Taskurile mele by the Work Filter in the URL (Rule W over the member’s own Tasks)', () => {
+      const inGroup = (id: number, title: string, groupId: number) =>
+        taskRow({
+          id,
+          title,
+          group_id: groupId,
+          group: {
+            name: title,
+            short: null,
+            color: '#1f6feb',
+            category: 'department',
+            path: [groupId],
+            is_organization: false,
+          },
+        });
+      query({
+        data: [inGroup(1, 'Al Educaționalului', 10), inGroup(2, 'Al RU', 20)],
+      });
+      const { unmount } = renderAt('/tracker?grup=20');
+      expect(cardTitles()).toEqual(['Al RU']);
+      unmount();
+      renderAt('/tracker?de_la=2030-01-01&pana_la=2030-01-02');
+      expect(
+        screen.getByText('Niciun task nu corespunde filtrelor.'),
+      ).toBeVisible();
+    });
+
+    it('narrows Disponibile by the title search, telling it from an empty band', async () => {
+      const user = userEvent.setup();
+      query();
+      hooks.useTaskOpportunities.mockReturnValue({
+        data: orderOpportunities(
+          [publicTask(11, 'Afișe pentru atelier'), publicTask(12, 'Sondaj')],
+          new Set([1]),
+        ),
+        isPending: false,
+        isError: false,
+      });
+      renderAt('/tracker?lista=disponibile');
+      expect(searchbox()).toHaveAttribute('placeholder', 'Caută în 2 taskuri');
+      await user.type(searchbox(), 'afise');
+      await waitFor(() =>
+        expect(cardTitles()).toEqual(['Afișe pentru atelier']),
+      );
+      await user.type(searchbox(), 'zzz');
+      expect(
+        await screen.findByText('Nicio oportunitate nu corespunde căutării.'),
+      ).toBeVisible();
+      await user.click(screen.getByRole('button', { name: 'Șterge căutarea' }));
+      expect(cardTitles()).toHaveLength(2);
+    });
+
+    it('keeps what was typed when the tab changes, and narrows the next list by it', async () => {
+      const user = userEvent.setup();
+      query({
+        data: [
+          taskRow({ id: 1, title: 'Afișe pentru gală' }),
+          taskRow({ id: 2, title: 'Buget' }),
+        ],
+      });
+      everyTab();
+      hooks.useManagedTasks.mockReturnValue({
+        data: [
+          taskRow({ id: 7, title: 'Afișe de recrutare' }),
+          taskRow({ id: 8, title: 'Interviuri' }),
+        ],
+        isPending: false,
+        isError: false,
+      });
+      renderAt('/tracker');
+      await user.type(searchbox(), 'afise');
+      await waitFor(() => expect(cardTitles()).toEqual(['Afișe pentru gală']));
+
+      await user.click(screen.getByRole('tab', { name: 'De gestionat' }));
+      expect(searchbox()).toHaveValue('afise');
+      expect(cardTitles()).toEqual(['Afișe de recrutare']);
+
+      // Through Cereri, which has no search, and back.
+      await user.click(screen.getByRole('tab', { name: 'Cereri' }));
+      await user.click(screen.getByRole('tab', { name: 'Taskurile mele' }));
+      expect(searchbox()).toHaveValue('afise');
+      expect(cardTitles()).toEqual(['Afișe pentru gală']);
+    });
+
+    describe('Grupuri preferate (R43)', () => {
+      beforeEach(() => {
+        preferences.muted = new Set([20, 21]);
+      });
+      afterEach(() => {
+        preferences.muted = new Set();
+      });
+
+      it('draws no star on Taskurile mele, whose Tasks the preference never hides', async () => {
+        const user = userEvent.setup();
+        query({
+          data: [
+            taskRow({ id: 1, title: 'Al Educaționalului', group_id: 10 }),
+            taskRow({ id: 2, title: 'Al RU', group_id: 20 }),
+          ],
+        });
+        renderAt('/tracker');
+        expect(
+          screen.queryByRole('button', { name: 'Doar grupurile preferate' }),
+        ).toBeNull();
+        expect(cardTitles()).toEqual(['Al Educaționalului', 'Al RU']);
+        // The other lists keep it, between the search and Filtrează.
+        await user.click(screen.getByRole('tab', { name: 'Disponibile' }));
+        const star = screen.getByRole('button', {
+          name: 'Doar grupurile preferate',
+        });
+        expect(star).toHaveAttribute('aria-pressed', 'true');
+        expect(
+          [...(toolbar() as HTMLElement).children]
+            .filter((child) => !child.matches('.sr-only'))
+            .map((child) => child.getAttribute('data-slot') ?? child.tagName),
+        ).toEqual(['LABEL', 'preferred-groups-chip', 'filter-button']);
+      });
+    });
+
+    describe('with a ?task= link', () => {
+      const scrollIntoView = vi.fn();
+      beforeEach(() => {
+        scrollIntoView.mockReset();
+        Element.prototype.scrollIntoView = scrollIntoView;
+        query({
+          data: [taskRow(), taskRow({ id: 2, title: 'Al doilea task' })],
+        });
+      });
+
+      it('lands on the linked card whatever was typed in the search before', async () => {
+        const user = userEvent.setup();
+        renderAt('/tracker');
+        await user.type(searchbox(), 'materialele');
+        await waitFor(() =>
+          expect(cardTitles()).toEqual(['Pregătește materialele']),
+        );
+
+        await user.click(
+          screen.getByRole('link', { name: 'Deschide taskul 2' }),
+        );
+
+        // The link wins: its card is listed beside what the search matches.
+        const card = screen.getByRole('article', { name: 'Al doilea task' });
+        expect(card).toHaveAttribute('data-highlighted');
+        expect(scrollIntoView).toHaveBeenCalledOnce();
+        expect(scrollIntoView.mock.contexts[0]).toBe(card);
+        expect(searchbox()).toHaveValue('materialele');
+        expect(cardTitles()).toEqual([
+          'Pregătește materialele',
+          'Al doilea task',
+        ]);
+      });
+
+      it('lands on the linked card whatever the Work Filter says', () => {
+        renderAt('/tracker?task=2&de_la=2030-01-01&pana_la=2030-01-02');
+        expect(cardTitles()).toEqual(['Al doilea task']);
+        expect(scrollIntoView).toHaveBeenCalledOnce();
+      });
+    });
+  });
+
+  describe('the Cereri tab (#973)', () => {
     const decision = (id: number) => ({
       id,
       description: `Activitatea ${id}`,
@@ -1367,16 +1745,11 @@ describe('My tasks screen', () => {
       group_name: 'Educațional',
       created_at: '2026-09-30T10:00:00Z',
     });
-    const toggle = () => screen.queryByRole('group', { name: 'Secțiune' });
-    const segment = (name: string) =>
-      within(screen.getByRole('group', { name: 'Secțiune' })).getByRole(
-        'button',
-        { name },
-      );
+    const tab = (name: string) => screen.getByRole('tab', { name });
     const requestsView = () =>
       screen.queryByRole('heading', { name: 'Cereri view' });
-    const taskLists = () =>
-      screen.queryByRole('tablist', { name: 'Liste de taskuri' });
+    const taskToolbar = () =>
+      screen.queryByRole('group', { name: 'Filtre taskuri' });
 
     /** The router's address and its Back button, beside the page. */
     function Probe() {
@@ -1404,20 +1777,20 @@ describe('My tasks screen', () => {
     const address = () =>
       screen.getByRole('status', { name: 'Adresa' }).textContent;
 
-    it('offers a Member who files Requests the Taskuri · Cereri toggle, first among the actions', () => {
+    it('offers a Member who files Requests Cereri as the last tab, beside the Task lists', () => {
       query();
       renderAt('/tracker');
 
-      expect(toggle()).toBeVisible();
-      expect(toggle()?.parentElement?.firstElementChild).toBe(toggle());
-      expect(segment('Taskuri')).toHaveAttribute('aria-pressed', 'true');
-      expect(segment('Cereri')).toHaveAttribute('aria-pressed', 'false');
+      const tabs = screen.getAllByRole('tab');
+      expect(tabs[tabs.length - 1]).toBe(tab('Cereri'));
+      expect(tab('Taskurile mele')).toHaveAttribute('aria-selected', 'true');
+      expect(tab('Cereri')).toHaveAttribute('aria-selected', 'false');
       expect(screen.getByRole('button', { name: 'Task nou' })).toBeVisible();
       expect(requestsView()).toBeNull();
-      expect(taskLists()).toBeVisible();
+      expect(taskToolbar()).toBeVisible();
     });
 
-    it('shows the Requests under the Taskuri title at ?vedere=cereri, without the Task actions', () => {
+    it('shows the Requests in the Cereri tab’s panel at ?vedere=cereri, without the Task actions', () => {
       query();
       renderAt('/tracker?vedere=cereri');
 
@@ -1425,12 +1798,12 @@ describe('My tasks screen', () => {
         screen.getByRole('heading', { level: 1, name: 'Taskuri' }),
       ).toBeVisible();
       expect(requestsView()).toBeVisible();
-      expect(segment('Cereri')).toHaveAttribute('aria-pressed', 'true');
-      expect(
-        screen.getByText(
-          'Descrie contribuția, iar coordonatorii grupului o vor evalua.',
-        ),
-      ).toBeVisible();
+      expect(tab('Cereri')).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('tabpanel', { name: 'Cereri' })).toContainElement(
+        requestsView(),
+      );
+      // The Task lists stay one tap away.
+      expect(tab('Taskurile mele')).toHaveAttribute('aria-selected', 'false');
       expect(
         screen.queryByText('Lucrul tău și oportunitățile din OSUBB.'),
       ).toBeNull();
@@ -1438,7 +1811,7 @@ describe('My tasks screen', () => {
       expect(
         screen.queryByRole('button', { name: 'Adaugă task finalizat' }),
       ).toBeNull();
-      expect(taskLists()).toBeNull();
+      expect(taskToolbar()).toBeNull();
     });
 
     it('sets and clears ?vedere, keeping the other parameters', async () => {
@@ -1446,45 +1819,52 @@ describe('My tasks screen', () => {
       query();
       renderWithProbe('/tracker?lista=disponibile');
 
-      await user.click(segment('Cereri'));
+      await user.click(tab('Cereri'));
       expect(address()).toBe('/tracker?lista=disponibile&vedere=cereri');
       expect(requestsView()).toBeVisible();
 
-      await user.click(segment('Taskuri'));
+      await user.click(tab('Taskurile mele'));
       expect(address()).toBe('/tracker?lista=disponibile');
       expect(requestsView()).toBeNull();
-      expect(taskLists()).toBeVisible();
+      expect(tab('Taskurile mele')).toHaveAttribute('aria-selected', 'true');
+      expect(taskToolbar()).toBeVisible();
     });
 
-    it('returns to the Tracker on Back', async () => {
+    it('leaves the address alone when one Task list follows another', async () => {
       const user = userEvent.setup();
       query();
       renderWithProbe('/tracker');
 
-      await user.click(segment('Cereri'));
+      await user.click(tab('Disponibile'));
+      expect(address()).toBe('/tracker');
+      expect(tab('Disponibile')).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('returns to the Task list it left on Back', async () => {
+      const user = userEvent.setup();
+      query();
+      renderWithProbe('/tracker');
+
+      await user.click(tab('Disponibile'));
+      await user.click(tab('Cereri'));
       expect(address()).toBe('/tracker?vedere=cereri');
       await user.click(screen.getByRole('button', { name: 'Înapoi' }));
       expect(address()).toBe('/tracker');
       expect(requestsView()).toBeNull();
-      expect(segment('Taskuri')).toHaveAttribute('aria-pressed', 'true');
+      expect(tab('Disponibile')).toHaveAttribute('aria-selected', 'true');
     });
 
-    it('offers a BC member with nothing to decide the toggle too, and honours ?vedere=cereri (#979)', () => {
+    it('offers a BC member with nothing to decide the tab too, and honours ?vedere=cereri (#979)', () => {
       query();
       hooks.level = 6;
       renderAt('/tracker?vedere=cereri');
 
-      expect(segment('Cereri')).toHaveAttribute('aria-pressed', 'true');
+      expect(tab('Cereri')).toHaveAttribute('aria-selected', 'true');
       expect(requestsView()).toBeVisible();
-      expect(
-        screen.getByText(
-          'Cererile de activitate realizată pe care le poți aproba sau respinge.',
-        ),
-      ).toBeVisible();
-      expect(taskLists()).toBeNull();
+      expect(taskToolbar()).toBeNull();
     });
 
-    it('counts the Requests a BC member has to decide on the Cereri segment', async () => {
+    it('counts the Requests a BC member has to decide on the Cereri tab', async () => {
       const user = userEvent.setup();
       query();
       hooks.level = 6;
@@ -1494,19 +1874,13 @@ describe('My tasks screen', () => {
       });
       renderAt('/tracker');
 
-      const cereri = segment('Cereri, 2 cereri de decis');
+      const cereri = tab('Cereri, 2 cereri de decis');
       expect(within(cereri).getByText('2')).toHaveAttribute(
         'aria-hidden',
         'true',
       );
       await user.click(cereri);
       expect(requestsView()).toBeVisible();
-      expect(
-        screen.getByText(
-          'Cererile de activitate realizată pe care le poți aproba sau respinge.',
-        ),
-      ).toBeVisible();
-      expect(screen.queryByText(/Descrie contribuția/)).toBeNull();
     });
 
     it.each([
@@ -1519,20 +1893,20 @@ describe('My tasks screen', () => {
         isError: false,
       });
       renderAt('/tracker');
-      expect(segment(name)).toBeVisible();
+      expect(tab(name)).toBeVisible();
     });
 
-    it('keeps the toggle when the queue cannot be read, so its retry is reachable', () => {
+    it('keeps the tab when the queue cannot be read, so its retry is reachable', () => {
       query();
       hooks.level = 6;
       hooks.usePendingDecisions.mockReturnValue({ isError: true });
       renderAt('/tracker?vedere=cereri');
 
-      expect(segment('Cereri')).toHaveAttribute('aria-pressed', 'true');
+      expect(tab('Cereri')).toHaveAttribute('aria-selected', 'true');
       expect(requestsView()).toBeVisible();
     });
 
-    it('stays on the Cereri view when the last decision empties the queue', () => {
+    it('stays on the Cereri tab when the last decision empties the queue', () => {
       query();
       hooks.level = 6;
       hooks.usePendingDecisions.mockReturnValue({
@@ -1545,7 +1919,7 @@ describe('My tasks screen', () => {
       hooks.usePendingDecisions.mockReturnValue({ data: [], isError: false });
       view.rerender(tree('/tracker?vedere=cereri'));
       expect(requestsView()).toBeVisible();
-      expect(segment('Cereri')).toHaveAttribute('aria-pressed', 'true');
+      expect(tab('Cereri')).toHaveAttribute('aria-selected', 'true');
     });
 
     it('shows Cereri at once while the queue loads, and keeps it when the queue comes back empty (#979)', () => {
@@ -1557,7 +1931,7 @@ describe('My tasks screen', () => {
       });
       const view = renderAt('/tracker?vedere=cereri');
       expect(requestsView()).toBeVisible();
-      expect(segment('Cereri')).toHaveAttribute('aria-pressed', 'true');
+      expect(tab('Cereri')).toHaveAttribute('aria-selected', 'true');
 
       hooks.usePendingDecisions.mockReturnValue({
         data: [],
@@ -1566,7 +1940,7 @@ describe('My tasks screen', () => {
       });
       view.rerender(tree('/tracker?vedere=cereri'));
       expect(requestsView()).toBeVisible();
-      expect(taskLists()).toBeNull();
+      expect(taskToolbar()).toBeNull();
     });
   });
 });

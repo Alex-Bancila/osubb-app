@@ -1,4 +1,4 @@
-import { CheckCheck } from 'lucide-react';
+import { BellDot, CheckCheck } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Empty, ErrorState, Loading } from '../../components/states';
@@ -25,9 +25,17 @@ import {
 import {
   markedAllReceipt,
   toNotificationPresentation,
+  unreadBadgeLabel,
   type NotificationPresentation,
 } from './notifications-presentation';
 
+/**
+ * One notification, said once each way: the icon is its category (named for
+ * a screen reader), one dot at the row's left edge is "unread" (with the word
+ * for a screen reader), and a critical one has its icon in the alert colour.
+ * The title's line ends in the age; the body keeps to two lines — the page
+ * the row opens has the rest.
+ */
 function NotificationListItem({
   notification,
   onOpen,
@@ -39,17 +47,30 @@ function NotificationListItem({
 
   return (
     <ListRow
-      className={cn(
-        'relative has-[button:hover]:bg-muted',
-        !notification.isRead && 'bg-accent/40',
-      )}
+      className="relative items-start py-3 has-[button:hover]:bg-muted"
       leading={
-        <span
-          className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
-          aria-hidden="true"
-        >
-          <Icon className="size-5" />
-        </span>
+        <>
+          {!notification.isRead && (
+            <span
+              data-slot="unread-dot"
+              className="absolute top-1/2 left-1 size-2 -translate-y-1/2 rounded-full bg-primary"
+              aria-hidden="true"
+            />
+          )}
+          <span
+            data-slot="notification-icon"
+            data-critical={notification.critical || undefined}
+            className={cn(
+              'grid size-9 shrink-0 place-items-center rounded-lg',
+              notification.critical
+                ? 'bg-destructive/10 text-destructive dark:bg-destructive/20'
+                : 'bg-muted text-muted-foreground',
+            )}
+            aria-hidden="true"
+          >
+            <Icon className="size-5" />
+          </span>
+        </>
       }
     >
       {/* The whole row opens the notification: the button's ::after covers
@@ -60,42 +81,32 @@ function NotificationListItem({
         onClick={() => onOpen(notification)}
         className="block w-full text-left outline-none after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:outline-offset-[-2px] focus-visible:after:outline-solid focus-visible:after:outline-ring"
       >
-        <span className="flex flex-wrap items-center gap-2">
-          <Badge variant={notification.critical ? 'destructive' : 'outline'}>
-            {notification.kindLabel}
-          </Badge>
-          {!notification.isRead && (
-            <>
-              {/* The dot is the marker people see; the word is the one a
-                  screen reader gets, so both audiences learn the same fact. */}
-              <span
-                className="size-2 rounded-full bg-primary"
-                aria-hidden="true"
-              />
-              <span className="sr-only">Necitită</span>
-            </>
-          )}
-        </span>
-        <span
-          className={cn(
-            'mt-1 block text-sm',
-            notification.isRead ? 'font-medium' : 'font-bold',
-          )}
-        >
-          {notification.title}
+        {/* What the icon and the dot show, in words. */}
+        <span className="sr-only">{notification.kindLabel}</span>
+        {!notification.isRead && <span className="sr-only">Necitită</span>}
+        <span className="flex items-baseline justify-between gap-3">
+          <span
+            className={cn(
+              'min-w-0 text-sm wrap-anywhere',
+              notification.isRead ? 'font-medium' : 'font-bold',
+            )}
+          >
+            {notification.title}
+          </span>
+          <time
+            className="shrink-0 text-xs whitespace-nowrap text-muted-foreground"
+            dateTime={notification.createdAt}
+            title={notification.momentLabel}
+          >
+            <span aria-hidden="true">{notification.shortAgeLabel}</span>
+            <span className="sr-only">{notification.ageLabel}</span>
+          </time>
         </span>
         {notification.body && (
-          <span className="mt-1 block text-sm text-muted-foreground">
+          <span className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">
             {notification.body}
           </span>
         )}
-        <time
-          className="mt-2 block text-xs text-muted-foreground"
-          dateTime={notification.createdAt}
-          title={notification.momentLabel}
-        >
-          {notification.ageLabel}
-        </time>
       </button>
     </ListRow>
   );
@@ -148,25 +159,29 @@ export default function NotificationsScreen() {
           about; only level 5 and above get "Marchează toate ca citite". */}
       <PageHeader
         title="Notificări"
-        description={
-          unreadCount === undefined
-            ? undefined
-            : unreadCount > 0
-              ? `Necitite: ${unreadCount}`
-              : // A zero only counts when no row on screen contradicts it.
-                hasUnread
-                ? undefined
-                : 'Toate notificările sunt citite'
+        badge={
+          unreadCount !== undefined &&
+          unreadCount > 0 && (
+            <Badge variant="destructive" className="h-6 gap-1.5 px-2.5 text-sm">
+              <BellDot aria-hidden="true" />
+              <span aria-hidden="true">{unreadCount}</span>
+              <span className="sr-only">{unreadBadgeLabel(unreadCount)}</span>
+            </Badge>
+          )
         }
         actions={
           canMarkAll && (
+            // An icon on the title's row: a wide button on a row of its own
+            // pushed the list down for something done once a visit.
             <Button
               variant="outline"
+              size="icon"
+              aria-label="Marchează toate ca citite"
+              title="Marchează toate ca citite"
               disabled={markAll.isPending || !hasUnread}
               onClick={markAllRead}
             >
               <CheckCheck aria-hidden="true" />
-              Marchează toate ca citite
             </Button>
           )
         }
@@ -195,8 +210,8 @@ export default function NotificationsScreen() {
         <Empty bare text="Nu ai nicio notificare deocamdată." />
       ) : (
         <>
-          {/* O1: a flush box — the rows carry the padding, so the unread tint
-              runs to the frame; the box clips it to its rounded corners. */}
+          {/* O1: a flush box — the rows carry the padding, so a row's hover
+              tint runs to the frame; the box clips it to its rounded corners. */}
           <Panel
             flush
             aria-label="Notificările tale"

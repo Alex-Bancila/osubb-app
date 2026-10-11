@@ -16,7 +16,7 @@ const capabilities = vi.hoisted(() => ({
     isPending: false,
     isError: false,
   } as {
-    data?: { seeLeadership: boolean; manageTasks: boolean };
+    data?: Record<string, boolean>;
     isPending: boolean;
     isError: boolean;
     error?: unknown;
@@ -32,6 +32,9 @@ const hooks = vi.hoisted(() => ({
   useMyGroupRoles: vi.fn(),
   useAwaitingMyReview: vi.fn(),
   useMyPoints: vi.fn(),
+  usePendingDecisions: vi.fn(),
+  useUnreadAnnouncementsCount: vi.fn(),
+  useUnreadNotificationCount: vi.fn(),
   profile: { full_name: 'Ioana Popescu', nickname: null, role: 'voluntar' } as {
     full_name: string;
     nickname: string | null;
@@ -68,6 +71,16 @@ vi.mock('../../queries/org-settings', () => ({
   useOrgSettings: () => ({ data: undefined }),
 }));
 vi.mock('../../queries/points', () => ({ useMyPoints: hooks.useMyPoints }));
+// The shell's badge reads, which the tiles share.
+vi.mock('../../queries/request-decisions', () => ({
+  usePendingDecisions: hooks.usePendingDecisions,
+}));
+vi.mock('../../queries/announcements', () => ({
+  useUnreadAnnouncementsCount: hooks.useUnreadAnnouncementsCount,
+}));
+vi.mock('../../queries/notifications', () => ({
+  useUnreadNotificationCount: hooks.useUnreadNotificationCount,
+}));
 vi.mock('../../queries/task-review', async (importActual) => ({
   ...(await importActual<typeof import('../../queries/task-review')>()),
   useAwaitingMyReview: hooks.useAwaitingMyReview,
@@ -194,8 +207,31 @@ function event(overrides: Partial<EventPresentation>): EventPresentation {
   };
 }
 
-function slot(name: string) {
-  return screen.getByRole('region', { name });
+/** The one list of the page. */
+function upNext() {
+  return screen.getByRole('region', { name: 'Urmează' });
+}
+
+/** The rows of Urmează, as their links, in order. */
+function rows() {
+  return within(upNext()).queryAllByRole('link');
+}
+
+/** The tiles' labels, in order. */
+function tiles(): string[] {
+  return Array.from(
+    document.querySelectorAll('[data-slot="count-tile"]'),
+    (link) =>
+      link.querySelector('[data-slot="count-label"]')?.textContent ?? '',
+  );
+}
+
+/** A tile, by the count it says in words. */
+function tile(name: string | RegExp) {
+  return within(screen.getByRole('list', { name: 'Ce te așteaptă' })).getByRole(
+    'link',
+    { name },
+  );
 }
 
 beforeEach(() => {
@@ -217,6 +253,9 @@ beforeEach(() => {
   hooks.useMyTasks.mockReturnValue(query([]));
   hooks.useEventsInRange.mockReturnValue(query([]));
   hooks.useMyGroupRoles.mockReturnValue(query(teamMember));
+  hooks.usePendingDecisions.mockReturnValue(query([]));
+  hooks.useUnreadAnnouncementsCount.mockReturnValue(query(0));
+  hooks.useUnreadNotificationCount.mockReturnValue(query(0));
 });
 
 afterEach(() => {
@@ -224,27 +263,8 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function viewer(data: { seeLeadership: boolean; manageTasks: boolean }) {
+function viewer(data: Record<string, boolean>) {
   capabilities.result = { data, isPending: false, isError: false };
-}
-
-/** The panels' titles, in the grid's order. */
-function panels(): string[] {
-  const grid = document.querySelector('[data-slot="page-grid"]');
-  if (!grid) return [];
-  // The accessible name: De evaluat's title also carries its count badge.
-  return Array.from(grid.children).map(
-    (panel) =>
-      panel.getAttribute('aria-label') ??
-      panel.querySelector('h2')?.textContent ??
-      '',
-  );
-}
-
-function gridColumns() {
-  return document
-    .querySelector('[data-slot="page-grid"]')
-    ?.getAttribute('data-columns');
 }
 
 /** Nothing of the leadership boards or the rank is left on Acasă. */
@@ -281,31 +301,39 @@ describe('Pornește notificările (2026-10-06)', () => {
     ['a Responsabil', false, true],
     ['a BC member', true, true],
   ])(
-    '%s gets the card between the greeting and the panels',
+    '%s gets the card between the greeting and the tiles',
     (_, leader, reviewer) => {
       viewer({ seeLeadership: leader, manageTasks: reviewer });
       renderDashboard();
       const card = screen.getByTestId('push-prompt-slot');
       const heading = screen.getByRole('heading', { level: 1 });
-      const firstPanel = document.querySelector('[data-slot="panel"]');
+      const list = screen.getByRole('list', { name: 'Ce te așteaptă' });
       expect(
         heading.compareDocumentPosition(card) &
           Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
       expect(
-        firstPanel &&
-          card.compareDocumentPosition(firstPanel) &
-            Node.DOCUMENT_POSITION_FOLLOWING,
+        card.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
     },
   );
 });
 
-describe('the panels each viewer sees', () => {
-  it('a Voluntar: the points as a header stat, then Următorul task and Următorul eveniment in two columns', () => {
+describe('what each viewer sees', () => {
+  it('a Voluntar: the points as a header stat, three tiles, then Urmează', () => {
     renderDashboard();
-    expect(panels()).toEqual(['Următorul task', 'Următorul eveniment']);
-    expect(gridColumns()).toBe('2');
+    expect(tiles()).toEqual([
+      'Taskuri în lucru',
+      'Anunțuri necitite',
+      'Notificări necitite',
+    ]);
+    expect(upNext()).toBeInTheDocument();
+    // The tiles come before the list.
+    expect(
+      screen
+        .getByRole('list', { name: 'Ce te așteaptă' })
+        .compareDocumentPosition(upNext()) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     // #859: no Punctaj panel — a compact stat on the greeting line, to Profil.
     expect(screen.queryByRole('region', { name: /punctaj/i })).toBeNull();
     const stat = screen.getByRole('link', { name: /12\s*puncte/ });
@@ -315,30 +343,45 @@ describe('the panels each viewer sees', () => {
       /^12$/,
     );
     expect(stat).toHaveTextContent('voluntar');
-    expect(hooks.useAwaitingMyReview).not.toHaveBeenCalled();
+    // A Voluntar's pages are all on the bar or in the top bar: no Conducere.
+    expect(screen.queryByRole('region', { name: 'Mai mult' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Clasament' })).toBeNull();
+    // Nothing a Voluntar can never have is read or drawn.
+    expect(hooks.useAwaitingMyReview).not.toHaveBeenCalledWith(true);
+    expect(hooks.usePendingDecisions).not.toHaveBeenCalled();
     expectNoBoards();
   });
 
-  it('a Responsabil below BCE: the stat, De evaluat in its own row, then Următorul task beside Următorul eveniment', () => {
+  it('a Responsabil below BCE: the stat, their own Tasks and what they decide', () => {
     auth.useAuth.mockReturnValue(claims(2));
     viewer({ seeLeadership: false, manageTasks: true });
     renderDashboard();
-    expect(slot('De evaluat').closest('[data-slot="page-grid"]')).toBeNull();
-    expect(panels()).toEqual(['Următorul task', 'Următorul eveniment']);
-    expect(gridColumns()).toBe('2');
+    expect(tiles()).toEqual([
+      'Taskuri în lucru',
+      'De evaluat',
+      'Cereri de decis',
+      'Anunțuri necitite',
+      'Notificări necitite',
+    ]);
     expect(screen.getByRole('link', { name: /12\s*puncte/ })).toHaveAttribute(
       'href',
       '/profil',
     );
+    expect(hooks.useMyTasks).toHaveBeenCalled();
+    expect(hooks.useAwaitingMyReview).toHaveBeenCalledWith(true);
     expectNoBoards();
   });
 
-  it('a BC member: De evaluat and Următorul eveniment only, no score', () => {
+  it('a BC member: De evaluat and Cereri in place of their own Tasks, no score', () => {
     auth.useAuth.mockReturnValue(claims(6));
     viewer({ seeLeadership: true, manageTasks: true });
     renderDashboard();
-    expect(panels()).toEqual(['De evaluat', 'Următorul eveniment']);
-    expect(gridColumns()).toBe('2');
+    expect(tiles()).toEqual([
+      'De evaluat',
+      'Cereri de decis',
+      'Anunțuri necitite',
+      'Notificări necitite',
+    ]);
     expect(screen.queryByText('Punctajul meu')).toBeNull();
     // No stat for BC/BCE: they do not work by points.
     expect(screen.queryByRole('link', { name: /puncte/ })).toBeNull();
@@ -347,17 +390,76 @@ describe('the panels each viewer sees', () => {
     expectNoBoards();
   });
 
-  it('leadership without manageTasks keeps Următorul task in the work slot', () => {
+  it('leadership without manageTasks keeps its own Tasks', () => {
     auth.useAuth.mockReturnValue(claims(5));
     viewer({ seeLeadership: true, manageTasks: false });
     renderDashboard();
-    expect(panels()).toEqual(['Următorul task', 'Următorul eveniment']);
+    expect(tiles()).toEqual([
+      'Taskuri în lucru',
+      'Anunțuri necitite',
+      'Notificări necitite',
+    ]);
+    expect(hooks.useMyTasks).toHaveBeenCalled();
   });
 
-  it('renders no panel until the capability row decides, then retries its error', () => {
+  it('Mai mult: the pages off the tab bar and the top bar, as tiles between the counts and Urmează', () => {
+    auth.useAuth.mockReturnValue(claims(6));
+    viewer({
+      seeLeadership: true,
+      seeDirectory: true,
+      manageTasks: true,
+      administer: true,
+    });
+    renderDashboard();
+    const block = screen.getByRole('region', { name: 'Mai mult' });
+    expect(
+      within(block)
+        .getAllByRole('link')
+        .map((link) => [link.textContent, link.getAttribute('href')]),
+    ).toEqual([
+      ['Clasament', '/clasament'],
+      ['Voluntari', '/voluntari'],
+      // Administrare is on the bar for this viewer, so Grupuri is here.
+      ['Grupuri', '/grupuri'],
+      ['Campanii', '/administrare/campanii'],
+    ]);
+    // Each tile is a 44 px-plus target with its lucide icon, no emoji.
+    for (const link of within(block).getAllByRole('link')) {
+      expect(link.className).toContain('min-h-24');
+      expect(link.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    }
+    // Two columns, and only below lg: the desktop sidebar lists these pages.
+    expect(within(block).getByRole('list').className).toContain('grid-cols-2');
+    expect(block.className).toContain('lg:hidden');
+    // Under the count tiles, above Urmează: in view without hunting.
+    const counts = screen.getByRole('list', { name: 'Ce te așteaptă' });
+    expect(
+      counts.compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      block.compareDocumentPosition(upNext()) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('Mai mult holds only what the viewer may open', () => {
+    // A Responsabil below BCE: Grupuri and Campanii (Administrare is on
+    // their bar), no Clasament.
+    auth.useAuth.mockReturnValue(claims(2));
+    viewer({ seeLeadership: false, manageTasks: true, administer: true });
+    renderDashboard();
+    expect(
+      within(screen.getByRole('region', { name: 'Mai mult' }))
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['Grupuri', 'Campanii']);
+  });
+
+  it('renders nothing until the capability row decides, then retries its error', () => {
     capabilities.result = { isPending: true, isError: false };
     const { unmount } = renderDashboard();
-    expect(panels()).toEqual([]);
+    expect(tiles()).toEqual([]);
+    expect(screen.queryByRole('region', { name: 'Urmează' })).toBeNull();
     expect(screen.getByRole('status')).toBeInTheDocument();
     unmount();
 
@@ -369,114 +471,146 @@ describe('the panels each viewer sees', () => {
       refetch,
     };
     renderDashboard();
-    expect(panels()).toEqual([]);
+    expect(tiles()).toEqual([]);
     within(screen.getByRole('alert')).getByRole('button').click();
     expect(refetch).toHaveBeenCalledOnce();
   });
 });
 
-describe('De evaluat', () => {
+describe('the count tiles', () => {
   beforeEach(() => {
-    auth.useAuth.mockReturnValue(claims(6));
-    viewer({ seeLeadership: true, manageTasks: true });
+    auth.useAuth.mockReturnValue(claims(2));
+    viewer({ seeLeadership: false, manageTasks: true });
   });
 
-  it('shows the oldest Task awaiting my Evaluation, the count and Evaluează', () => {
-    hooks.useAwaitingMyReview.mockReturnValue(
-      query({
-        task: taskRow({
-          id: 31,
-          title: 'Raport cheltuieli',
-          status: 'in_review',
-          assignments: [{ id: 5, member_id: 'other', ended_at: null }],
+  it('each says its count and opens what is waiting', () => {
+    hooks.useMyTasks.mockReturnValue(
+      query([
+        mine({ id: 1, status: 'in_progress' }),
+        mine({ id: 2, deadline: null }),
+        // Not in work: finished, in review, or no longer mine.
+        mine({ id: 3, status: 'completed' }),
+        mine({ id: 4, status: 'in_review' }),
+        taskRow({
+          id: 5,
+          assignments: [{ id: 2, member_id: ME, ended_at: '2026-01-09' }],
         }),
-        count: 3,
-      }),
+      ]),
     );
-    renderDashboard();
-    const review = slot('De evaluat');
-    expect(
-      within(review).getByText('3 taskuri așteaptă evaluarea ta'),
-    ).toBeInTheDocument();
-    expect(
-      within(review).getByRole('heading', {
-        level: 3,
-        name: 'Raport cheltuieli',
-      }),
-    ).toBeInTheDocument();
-    expect(
-      within(review).getByRole('link', { name: 'Evaluează' }),
-    ).toHaveAttribute('href', '/tracker?task=31');
-    expect(hooks.useAwaitingMyReview).toHaveBeenCalledWith(true);
-  });
-
-  // F-10 (#893): the count was a description line under the title, so the
-  // title sat ~22 px above Următorul eveniment's and the actions on
-  // different lines. It is a badge on the title now; neither header in the
-  // row has a second line, and the row keeps its equal heights (F-1).
-  it('puts the count on the title, so its header has the same one line as its neighbour', () => {
     hooks.useAwaitingMyReview.mockReturnValue(
       query({ task: taskRow({ id: 31, status: 'in_review' }), count: 3 }),
     );
+    hooks.usePendingDecisions.mockReturnValue(query([{ id: 1 }]));
+    hooks.useUnreadAnnouncementsCount.mockReturnValue(query(4));
+    hooks.useUnreadNotificationCount.mockReturnValue(query(7));
     renderDashboard();
 
-    const review = slot('De evaluat');
-    const badge = within(review).getByTestId('awaiting-review-count');
-    expect(within(review).getByRole('heading', { level: 2 })).toContainElement(
-      badge,
-    );
-    expect(badge).toHaveTextContent('3');
-
-    const grid = document.querySelector('[data-slot="page-grid"]');
-    expect(grid).toHaveAttribute('data-equal-heights');
-    const headers = Array.from(
-      grid?.querySelectorAll('[data-slot="section-header"]') ?? [],
-    );
-    expect(headers).toHaveLength(2);
-    // No description line (a `p` that is not the eyebrow) in either header.
-    for (const header of headers) {
-      expect(header.querySelectorAll('p:not([data-slot])')).toHaveLength(0);
+    const expected: [string, string, string][] = [
+      ['2 taskuri în lucru', '2', '/tracker'],
+      ['3 taskuri așteaptă evaluarea ta', '3', '/tracker?lista=gestionat'],
+      ['1 cerere de decis', '1', '/tracker?vedere=cereri'],
+      ['4 anunțuri necitite', '4', '/anunturi'],
+      ['7 notificări necitite', '7', '/notificari'],
+    ];
+    for (const [name, figure, href] of expected) {
+      const link = tile(name);
+      expect(link).toHaveAttribute('href', href);
+      expect(link).toHaveAttribute('data-waiting', 'true');
+      expect(link.querySelector('[data-slot="count-value"]')).toHaveTextContent(
+        new RegExp(`^${figure}$`),
+      );
+      // A lucide icon, never an emoji.
+      expect(link.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+      // A 44 px target.
+      expect(link).toHaveClass('min-h-11');
     }
   });
 
-  it('says one Task in the singular', () => {
+  it('says one Task awaiting Evaluation in the singular', () => {
     hooks.useAwaitingMyReview.mockReturnValue(
       query({ task: taskRow({ id: 31, status: 'in_review' }), count: 1 }),
     );
     renderDashboard();
-    expect(
-      within(slot('De evaluat')).getByText('1 task așteaptă evaluarea ta'),
-    ).toBeInTheDocument();
+    expect(tile('1 task așteaptă evaluarea ta')).toBeInTheDocument();
   });
 
-  it('says so when nothing awaits, with no link', () => {
+  it('mutes a zero instead of hiding it, and Taskuri în lucru then invites to Disponibile', () => {
     renderDashboard();
-    const review = slot('De evaluat');
-    expect(
-      within(review).getByText('Niciun task nu așteaptă evaluarea ta.'),
-    ).toBeInTheDocument();
-    expect(within(review).queryByRole('link')).toBeNull();
+
+    expect(tiles()).toHaveLength(5);
+    for (const link of document.querySelectorAll('[data-slot="count-tile"]')) {
+      expect(link).not.toHaveAttribute('data-waiting');
+      const figure = link.querySelector('[data-slot="count-value"]');
+      expect(figure).toHaveTextContent(/^0$/);
+      expect(figure).toHaveClass('text-muted-foreground');
+    }
+    expect(tile('0 taskuri în lucru')).toHaveAttribute(
+      'href',
+      '/tracker?lista=disponibile',
+    );
   });
 
-  it('keeps its own loading and error states', () => {
-    hooks.useAwaitingMyReview.mockReturnValue(
+  it('shows a dash, not a zero, while a count is unknown, and still opens its page', () => {
+    hooks.useUnreadNotificationCount.mockReturnValue(
       query(undefined, { isPending: true }),
     );
-    const { unmount } = renderDashboard();
-    expect(within(slot('De evaluat')).getByRole('status')).toBeInTheDocument();
-    unmount();
-
     hooks.useAwaitingMyReview.mockReturnValue(
       query(undefined, { isError: true, error: new Error('boom') }),
     );
     renderDashboard();
-    expect(within(slot('De evaluat')).getByRole('alert')).toBeInTheDocument();
-    expect(within(slot('Următorul eveniment')).queryByRole('alert')).toBeNull();
+
+    const notifications = tile('Notificări necitite');
+    expect(notifications).toHaveAttribute('href', '/notificari');
+    expect(
+      notifications.querySelector('[data-slot="count-value"]'),
+    ).toHaveTextContent('—');
+    expect(
+      tile('De evaluat').querySelector('[data-slot="count-value"]'),
+    ).toHaveTextContent('—');
+    // A failed count holds back none of the others.
+    expect(tile('0 anunțuri necitite')).toBeInTheDocument();
+  });
+
+  it('is two columns on a phone and one full row from md', () => {
+    renderDashboard();
+    const list = screen.getByRole('list', { name: 'Ce te așteaptă' });
+    expect(list).toHaveClass('grid-cols-2', 'md:grid-cols-5');
   });
 });
 
-describe('Următorul task', () => {
-  it('picks the soonest deadline in work that I still execute, overdue first', () => {
+describe('Urmează', () => {
+  const unrelated = event({
+    id: 11,
+    title: 'Festival',
+    groupId: 20,
+    group: festivalGroup,
+    startsAt: '2026-01-16T16:00:00.000Z',
+  });
+  const parents = event({
+    id: 12,
+    title: 'Ședință Educațional',
+    groupId: 7,
+    group: eduGroup,
+    startsAt: '2026-01-17T16:00:00.000Z',
+    location: 'Sala 2',
+  });
+  const organization = event({
+    id: 13,
+    title: 'Adunare OSUBB',
+    type: 'eveniment',
+    groupId: 5,
+    group: orgGroup,
+    startsAt: '2026-01-19T16:00:00.000Z',
+  });
+  const started = event({
+    id: 14,
+    title: 'Ședință de azi',
+    groupId: 5,
+    group: orgGroup,
+    startsAt: '2026-01-15T08:00:00.000Z',
+  });
+
+  it('mixes my next deadlines and Relevant Events by date, each row linking to its full card', () => {
     hooks.useMyTasks.mockReturnValue(
       query([
         // Terminal: finished work is not next, however early its deadline.
@@ -496,6 +630,11 @@ describe('Următorul task', () => {
             { id: 2, member_id: ME, ended_at: '2026-01-09T10:00:00Z' },
           ],
         }),
+        mine({
+          id: 6,
+          title: 'Prezentare finală',
+          deadline: '2026-01-18T10:00:00Z',
+        }),
         // Overdue and still mine: the soonest.
         mine({
           id: 3,
@@ -503,79 +642,187 @@ describe('Următorul task', () => {
           status: 'in_progress',
           deadline: '2026-01-10T10:00:00Z',
         }),
+        // În verificare waits on the reviewer, not on me (B1).
         mine({
           id: 4,
           title: 'Prezentare',
           status: 'in_review',
-          deadline: '2026-01-18T10:00:00Z',
+          deadline: '2026-01-16T10:00:00Z',
         }),
         mine({ id: 5, title: 'Fără termen', deadline: null }),
       ]),
     );
+    hooks.useEventsInRange.mockReturnValue(
+      query([started, unrelated, organization, parents]),
+    );
     renderDashboard();
 
-    const next = slot('Următorul task');
-    const card = within(next).getByRole('article');
-    expect(
-      within(card).getByRole('heading', { level: 3, name: 'Buget întârziat' }),
-    ).toBeInTheDocument();
-    expect(within(card).getByText('Termen depășit')).toBeInTheDocument();
-    for (const skipped of ['Raport predat', 'Afiș cedat', 'Prezentare'])
-      expect(within(next).queryByText(skipped)).toBeNull();
-    // The card reads; acting happens in Taskuri, where the link opens it.
-    expect(within(card).queryByRole('button', { name: /începe/i })).toBeNull();
-    expect(
-      within(next).getByRole('link', { name: 'Vezi în Taskuri' }),
-    ).toHaveAttribute('href', '/tracker?task=3');
+    expect(rows().map((link) => link.textContent)).toEqual([
+      'Buget întârziat',
+      'Ședință Educațional',
+      'Prezentare finală',
+      'Adunare OSUBB',
+    ]);
+    expect(rows().map((link) => link.getAttribute('href'))).toEqual([
+      '/tracker?task=3',
+      '/calendar?event=12',
+      '/tracker?task=6',
+      '/calendar?event=13',
+    ]);
+    // Today's Bucharest midnight, open-ended: the Agendă's own window.
+    expect(hooks.useEventsInRange).toHaveBeenCalledWith({
+      from: '2026-01-14T22:00:00.000Z',
+    });
   });
 
-  it('never shows a Task În verificare: it waits on the reviewer (B1)', () => {
+  it('draws compact rows: a date block, the title, one meta line and a chevron — no full card', () => {
     hooks.useMyTasks.mockReturnValue(
       query([
         mine({
-          id: 7,
-          title: 'Trimis la verificare',
-          status: 'in_review',
-          deadline: '2026-01-16T10:00:00Z',
+          id: 3,
+          title: 'Buget întârziat',
+          status: 'in_progress',
+          deadline: '2026-01-10T10:00:00Z',
         }),
         mine({
-          id: 8,
-          title: 'Returnat pentru modificări',
-          status: 'in_progress',
-          review_round: 1,
-          deadline: '2026-01-20T10:00:00Z',
+          id: 6,
+          title: 'Prezentare finală',
+          deadline: '2026-01-18T10:00:00Z',
         }),
+      ]),
+    );
+    hooks.useEventsInRange.mockReturnValue(query([parents]));
+    renderDashboard();
+
+    const [overdue, meeting, upcoming] = within(upNext()).getAllByRole(
+      'listitem',
+    ) as [HTMLElement, HTMLElement, HTMLElement];
+    for (const row of [overdue, meeting, upcoming]) {
+      expect(row).toHaveAttribute('data-slot', 'list-row');
+      expect(row.querySelector('[data-slot="date-block"]')).toHaveAttribute(
+        'aria-hidden',
+        'true',
+      );
+      expect(
+        row.querySelector('[data-slot="list-row-action"] svg'),
+      ).not.toBeNull();
+      expect(row.querySelectorAll('p')).toHaveLength(1);
+    }
+    expect(within(upNext()).queryByRole('article')).toBeNull();
+    // The day is the block's: "17" over "IAN", in Romania's day.
+    expect(meeting.querySelector('[data-slot="date-block"]')).toHaveTextContent(
+      /^17ian$/i,
+    );
+    // The meta line: what it is, when, where, whose — the day said for a
+    // screen reader, who does not get the block.
+    expect(meeting.querySelector('p')).toHaveTextContent(
+      'Ședință · sâm., 17 ian., 18:00 · Sala 2 · Educațional',
+    );
+    expect(upcoming.querySelector('p')).toHaveTextContent(
+      'Termen · dum., 18 ian., 12:00 · Educațional',
+    );
+    expect(within(overdue).getByText('Termen depășit')).toHaveClass(
+      'text-destructive',
+    );
+    // The rows read; acting happens in Taskuri.
+    expect(within(upNext()).queryByRole('button')).toBeNull();
+  });
+
+  it('leads with the Task awaiting my Evaluation', () => {
+    auth.useAuth.mockReturnValue(claims(6));
+    viewer({ seeLeadership: true, manageTasks: true });
+    hooks.useAwaitingMyReview.mockReturnValue(
+      query({
+        task: taskRow({
+          id: 31,
+          title: 'Raport cheltuieli',
+          status: 'in_review',
+          assignments: [{ id: 5, member_id: 'other', ended_at: null }],
+        }),
+        count: 3,
+      }),
+    );
+    hooks.useEventsInRange.mockReturnValue(query([parents]));
+    renderDashboard();
+
+    expect(rows().map((link) => link.textContent)).toEqual([
+      'Raport cheltuieli',
+      'Ședință Educațional',
+    ]);
+    expect(rows()[0]).toHaveAttribute('href', '/tracker?task=31');
+    const row = rows()[0]?.closest('li') as HTMLElement;
+    expect(row.querySelector('p')).toHaveTextContent(
+      'De evaluat · Educațional',
+    );
+    // No day of its own: an icon holds the block.
+    expect(row.querySelector('[data-slot="date-block"] svg')).not.toBeNull();
+    expect(hooks.useAwaitingMyReview).toHaveBeenCalledWith(true);
+  });
+
+  it('keeps to three deadlines and three Events', () => {
+    hooks.useMyTasks.mockReturnValue(
+      query(
+        [1, 2, 3, 4, 5].map((id) =>
+          mine({
+            id,
+            title: `Task ${id}`,
+            deadline: `2026-02-0${id}T10:00:00Z`,
+          }),
+        ),
+      ),
+    );
+    hooks.useEventsInRange.mockReturnValue(
+      query(
+        [1, 2, 3, 4, 5].map((id) =>
+          event({
+            id: 100 + id,
+            title: `Eveniment ${id}`,
+            groupId: 5,
+            group: orgGroup,
+            startsAt: `2026-03-0${id}T16:00:00.000Z`,
+          }),
+        ),
+      ),
+    );
+    renderDashboard();
+
+    expect(rows().map((link) => link.textContent)).toEqual([
+      'Task 1',
+      'Task 2',
+      'Task 3',
+      'Eveniment 1',
+      'Eveniment 2',
+      'Eveniment 3',
+    ]);
+  });
+
+  // #849: a cancelled Event is not the next thing to go to.
+  it('skips a cancelled Event, and one that is not Relevant', () => {
+    hooks.useEventsInRange.mockReturnValue(
+      query([
+        { ...parents, cancelledAt: '2026-01-14T10:00:00.000Z' },
+        unrelated,
+        organization,
       ]),
     );
     renderDashboard();
 
-    const next = slot('Următorul task');
-    expect(within(next).queryByText('Trimis la verificare')).toBeNull();
-    expect(
-      within(next).getByRole('heading', {
-        level: 3,
-        name: 'Returnat pentru modificări',
-      }),
-    ).toBeInTheDocument();
+    expect(rows().map((link) => link.textContent)).toEqual(['Adunare OSUBB']);
   });
 
-  it('skips an undated Task but says no dated one is in work, and opens Taskuri', () => {
-    hooks.useMyTasks.mockReturnValue(
-      query([mine({ id: 5, title: 'Fără termen', deadline: null })]),
+  it("shows an Organization Group Event whatever the member's Groups", () => {
+    hooks.useMyGroupRoles.mockReturnValue(query([]));
+    hooks.useEventsInRange.mockReturnValue(
+      query([unrelated, parents, organization]),
     );
     renderDashboard();
 
-    const next = slot('Următorul task');
-    expect(
-      within(next).getByText('Niciun task cu termen în lucru.'),
-    ).toBeInTheDocument();
-    expect(within(next).queryByRole('article')).toBeNull();
-    expect(
-      within(next).getByRole('link', { name: 'Vezi taskurile tale' }),
-    ).toHaveAttribute('href', '/tracker');
+    expect(rows().map((link) => link.getAttribute('href'))).toEqual([
+      '/calendar?event=13',
+    ]);
   });
 
-  it('with nothing in work it invites to Disponibile', () => {
+  it('with nothing in work and nothing ahead it invites to Disponibile', () => {
     hooks.useMyTasks.mockReturnValue(
       query([
         mine({ id: 6, title: 'Anulat', status: 'cancelled' }),
@@ -587,167 +834,96 @@ describe('Următorul task', () => {
         }),
       ]),
     );
-    renderDashboard();
-
-    const next = slot('Următorul task');
-    expect(within(next).getByText('Niciun task în lucru.')).toBeInTheDocument();
-    expect(within(next).queryByRole('article')).toBeNull();
-    expect(
-      within(next).getByRole('link', { name: 'Vezi oportunitățile' }),
-    ).toHaveAttribute('href', '/tracker?lista=disponibile');
-    expect(
-      within(next).queryByRole('link', { name: /Vezi în Taskuri/ }),
-    ).toBeNull();
-  });
-
-  it('has no eyebrow repeating its title (B7)', () => {
-    renderDashboard();
-    expect(
-      slot('Următorul task').querySelector('[data-slot="section-eyebrow"]'),
-    ).toBeNull();
-  });
-
-  it('keeps its own loading and error states', () => {
-    hooks.useMyTasks.mockReturnValue(query(undefined, { isPending: true }));
-    const { unmount } = renderDashboard();
-    expect(
-      within(slot('Următorul task')).getByRole('status'),
-    ).toBeInTheDocument();
-    unmount();
-
-    hooks.useMyTasks.mockReturnValue(
-      query(undefined, { isError: true, error: new Error('boom') }),
-    );
-    renderDashboard();
-    expect(
-      within(slot('Următorul task')).getByRole('alert'),
-    ).toBeInTheDocument();
-    // A failed Task read does not blank the Event next to it.
-    expect(within(slot('Următorul eveniment')).queryByRole('alert')).toBeNull();
-  });
-});
-
-describe('Următorul eveniment', () => {
-  const unrelated = event({
-    id: 11,
-    title: 'Festival',
-    groupId: 20,
-    group: festivalGroup,
-    startsAt: '2026-01-16T16:00:00.000Z',
-  });
-  const parents = event({
-    id: 12,
-    title: 'Ședință Educațional',
-    groupId: 7,
-    group: eduGroup,
-    startsAt: '2026-01-17T16:00:00.000Z',
-    dayLabel: 'sâmbătă, 17 ianuarie 2026',
-  });
-  const organization = event({
-    id: 13,
-    title: 'Adunare OSUBB',
-    type: 'eveniment',
-    groupId: 5,
-    group: orgGroup,
-    startsAt: '2026-01-19T16:00:00.000Z',
-    dayLabel: 'luni, 19 ianuarie 2026',
-  });
-  const started = event({
-    id: 14,
-    title: 'Ședință de azi',
-    groupId: 5,
-    group: orgGroup,
-    startsAt: '2026-01-15T08:00:00.000Z',
-  });
-
-  it("picks a parent Group's Event for a Child Group member, skipping unrelated and started ones", () => {
-    hooks.useEventsInRange.mockReturnValue(
-      query([started, unrelated, parents, organization]),
-    );
-    renderDashboard();
-
-    const next = slot('Următorul eveniment');
-    const card = within(next).getByRole('article', {
-      name: 'Ședință Educațional',
-    });
-    // The day is inside the card (X9/A2), so the box starts level with its
-    // row neighbour: nothing sits between the header and the card.
-    expect(
-      within(card).getByText('sâmbătă, 17 ianuarie 2026'),
-    ).toBeInTheDocument();
-    const body = card.parentElement;
-    expect(body).toHaveAttribute('data-slot', 'panel-body');
-    // The card fills the box, so it ends level with Următorul task's card in
-    // their equal-height row.
-    expect(body).toHaveClass('*:flex-1');
-    // No "Calendar" eyebrow above "Următorul eveniment" (B7).
-    expect(next.querySelector('[data-slot="section-eyebrow"]')).toBeNull();
-    for (const skipped of ['Festival', 'Ședință de azi', 'Adunare OSUBB'])
-      expect(within(next).queryByText(skipped)).toBeNull();
-    expect(
-      within(next).getByRole('link', { name: 'Vezi în Calendar' }),
-    ).toHaveAttribute('href', '/calendar?event=12');
-    // Today's Bucharest midnight, open-ended: the Agendă's own window.
-    expect(hooks.useEventsInRange).toHaveBeenCalledWith({
-      from: '2026-01-14T22:00:00.000Z',
-    });
-  });
-
-  // #849: a cancelled Event is not the next thing to go to.
-  it('skips a cancelled Event', () => {
-    hooks.useEventsInRange.mockReturnValue(
-      query([
-        { ...parents, cancelledAt: '2026-01-14T10:00:00.000Z' },
-        organization,
-      ]),
-    );
-    renderDashboard();
-
-    const next = slot('Următorul eveniment');
-    expect(
-      within(next).getByRole('article', { name: 'Adunare OSUBB' }),
-    ).toBeInTheDocument();
-    expect(within(next).queryByText('Ședință Educațional')).toBeNull();
-    // Acasă previews the Event; managing it is the Calendar's.
-    expect(within(next).queryByRole('button', { name: 'Editează' })).toBeNull();
-  });
-
-  it("picks an Organization Group Event whatever the member's Groups", () => {
-    hooks.useMyGroupRoles.mockReturnValue(query([]));
-    hooks.useEventsInRange.mockReturnValue(
-      query([unrelated, parents, organization]),
-    );
-    renderDashboard();
-
-    const next = slot('Următorul eveniment');
-    expect(
-      within(next).getByRole('article', { name: 'Adunare OSUBB' }),
-    ).toBeInTheDocument();
-    expect(
-      within(next).getByRole('link', { name: 'Vezi în Calendar' }),
-    ).toHaveAttribute('href', '/calendar?event=13');
-  });
-
-  it('says so when no future Event is Relevant', () => {
     hooks.useEventsInRange.mockReturnValue(query([unrelated, started]));
     renderDashboard();
 
-    const next = slot('Următorul eveniment');
     expect(
-      within(next).getByText('Niciun eveniment viitor pentru tine.'),
+      within(upNext()).getByText(
+        'Niciun task cu termen și niciun eveniment viitor pentru tine.',
+      ),
     ).toBeInTheDocument();
-    expect(within(next).queryByRole('article')).toBeNull();
-    expect(within(next).queryByRole('link')).toBeNull();
+    expect(within(upNext()).queryByRole('listitem')).toBeNull();
+    expect(
+      within(upNext()).getByRole('link', { name: 'Vezi oportunitățile' }),
+    ).toHaveAttribute('href', '/tracker?lista=disponibile');
   });
 
-  it('keeps its own error state when the Groups read fails', () => {
+  it('with only undated work it opens Taskuri instead', () => {
+    hooks.useMyTasks.mockReturnValue(
+      query([mine({ id: 5, title: 'Fără termen', deadline: null })]),
+    );
+    renderDashboard();
+
+    expect(within(upNext()).queryByText('Fără termen')).toBeNull();
+    expect(
+      within(upNext()).getByRole('link', { name: 'Vezi taskurile tale' }),
+    ).toHaveAttribute('href', '/tracker');
+  });
+
+  it('a viewer who executes no Tasks is told only about Events, with no invitation', () => {
+    auth.useAuth.mockReturnValue(claims(6));
+    viewer({ seeLeadership: true, manageTasks: true });
+    renderDashboard();
+
+    expect(
+      within(upNext()).getByText('Niciun eveniment viitor pentru tine.'),
+    ).toBeInTheDocument();
+    expect(within(upNext()).queryByRole('link')).toBeNull();
+  });
+
+  it('waits for every read, then keeps the rows that arrived beside a failed one', () => {
+    hooks.useMyTasks.mockReturnValue(query(undefined, { isPending: true }));
+    hooks.useEventsInRange.mockReturnValue(query([parents]));
+    const { unmount } = renderDashboard();
+    expect(within(upNext()).getByRole('status')).toBeInTheDocument();
+    expect(rows()).toHaveLength(0);
+    unmount();
+
+    const refetch = vi.fn().mockResolvedValue({});
+    hooks.useMyTasks.mockReturnValue(
+      query(undefined, { isError: true, error: new Error('boom'), refetch }),
+    );
+    renderDashboard();
+    // A failed Task read does not blank the Event next to it.
+    expect(rows().map((link) => link.textContent)).toEqual([
+      'Ședință Educațional',
+    ]);
+    const alert = within(upNext()).getByRole('alert');
+    expect(alert).toHaveTextContent('Nu am putut încărca taskurile tale.');
+    within(alert).getByRole('button').click();
+    expect(refetch).toHaveBeenCalledOnce();
+  });
+
+  it('says the Events could not be read when the Groups read fails, and keeps the deadlines', () => {
+    hooks.useMyTasks.mockReturnValue(
+      query([
+        mine({ id: 3, title: 'Buget', deadline: '2026-01-20T10:00:00Z' }),
+      ]),
+    );
     hooks.useEventsInRange.mockReturnValue(query([parents]));
     hooks.useMyGroupRoles.mockReturnValue(
       query(undefined, { isError: true, error: new Error('boom') }),
     );
     renderDashboard();
-    const next = slot('Următorul eveniment');
-    expect(within(next).getByRole('alert')).toBeInTheDocument();
-    expect(within(next).queryByRole('article')).toBeNull();
+
+    expect(rows().map((link) => link.textContent)).toEqual(['Buget']);
+    expect(within(upNext()).getByRole('alert')).toHaveTextContent(
+      'Nu am putut încărca evenimentele.',
+    );
+  });
+
+  it('keeps the failed Evaluation read apart from the rest', () => {
+    auth.useAuth.mockReturnValue(claims(6));
+    viewer({ seeLeadership: true, manageTasks: true });
+    hooks.useAwaitingMyReview.mockReturnValue(
+      query(undefined, { isError: true, error: new Error('boom') }),
+    );
+    hooks.useEventsInRange.mockReturnValue(query([parents]));
+    renderDashboard();
+
+    expect(rows()).toHaveLength(1);
+    expect(within(upNext()).getByRole('alert')).toHaveTextContent(
+      'Nu am putut încărca taskurile de evaluat.',
+    );
   });
 });

@@ -63,10 +63,12 @@ describe('TaskPresentation', () => {
   });
 
   it.each([
-    ['2026-01-15T22:30:00Z', 'vineri, 16 ianuarie 2026, 00:30'],
-    ['2026-07-15T22:30:00Z', 'joi, 16 iulie 2026, 01:30'],
+    ['2026-01-15T22:30:00Z', 'vin., 16 ian. · 00:30'],
+    ['2026-07-15T22:30:00Z', 'joi, 16 iul. · 01:30'],
+    // Another year than the clock's is said.
+    ['2027-07-15T22:30:00Z', 'vin., 16 iul. 2027 · 01:30'],
   ])(
-    'formats %s in Bucharest, including winter and summer offsets',
+    'formats %s short, in Bucharest, including winter and summer offsets',
     (deadline, deadlineLabel) => {
       expect(toTaskPresentation(taskRow({ deadline }), now).deadlineLabel).toBe(
         deadlineLabel,

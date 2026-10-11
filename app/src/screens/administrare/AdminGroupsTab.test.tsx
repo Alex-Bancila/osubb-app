@@ -44,9 +44,15 @@ vi.mock('../../queries/groups-admin', async (original) => ({
   useGroupCommand: () => ({ mutateAsync: api.mutate, isPending: false }),
 }));
 // The Cereri de aderare tab's rule has its own suite (applications-tab).
-vi.mock('./applications-tab', () => ({ useApplicationsTabShown: () => true }));
+vi.mock('./applications-tab', () => ({
+  useApplicationsTabShown: () => true,
+  usePendingApplicationCount: () => 0,
+  applicationCount: (count: number) => `${count} cereri`,
+}));
+import { chooseOption } from '../../test/select';
 import AdminGroupsTab from './AdminGroupsTab';
 import AdministrareLayout from './AdministrareLayout';
+import { optionNames } from './select-test-options';
 
 vi.setConfig({ testTimeout: 15_000 });
 
@@ -192,6 +198,24 @@ it('puts the whole tree in the Structura grupurilor panel for BC', () => {
     screen.getByRole('region', { name: 'Structura grupurilor' }),
   ).toBeVisible();
   expect(screen.getByRole('status')).toHaveTextContent('3 grupuri');
+  // The page already says Grupuri: the list has a name, not a heading.
+  expect(screen.getAllByRole('heading').map((h) => h.textContent)).toEqual([
+    'Administrare',
+  ]);
+  expect(document.querySelector('[data-slot="section-eyebrow"]')).toBeNull();
+  // Extinde tot is an icon on the controls' row, beside the count.
+  const expand = screen.getByRole('button', { name: 'Extinde tot' });
+  expect(expand).toHaveTextContent('');
+  expect(expand.closest('[data-slot="groups-toolbar"]')).toContainElement(
+    screen.getByRole('status'),
+  );
+  // No header row over one column of names on a phone: the whole row goes
+  // off screen, not cell by cell.
+  const header = screen.getByRole('columnheader', { name: 'Grup' });
+  expect(header.closest('thead')).toHaveClass(
+    'max-sm:not-focus-within:sr-only',
+  );
+  expect(header.className).not.toContain('is(th)');
 });
 
 it('shows BC the whole tree, collapsed, and expands one Group at a time', async () => {
@@ -279,7 +303,6 @@ it('shows a Group Manager their own Groups instead, with the inherited role mark
   show();
 
   expect(screen.getByRole('region', { name: 'Grupurile mele' })).toBeVisible();
-  expect(screen.getByText('Grupurile în care ai o funcție.')).toBeVisible();
   expect(screen.queryByRole('link', { name: 'OSUBB' })).toBeNull();
   expect(
     screen.getByRole('link', { name: 'Logistică, subgrup al Educațional' }),
@@ -339,18 +362,34 @@ it('offers "Creează Grup" only with the capability, and creates through the com
   const user = userEvent.setup();
   capabilities({ createTopLevelGroups: true });
   show();
-  // The action sits in the page header, beside the title.
+  // The action is the page's plus button, not a button in the header.
   const header = screen
     .getByRole('heading', { level: 1, name: 'Administrare' })
     .closest('header') as HTMLElement;
-  await user.click(
-    within(header).getByRole('button', { name: 'Creează Grup' }),
-  );
+  expect(within(header).queryByRole('button')).toBeNull();
+  const plus = screen.getByRole('button', { name: 'Creează Grup' });
+  expect(plus).toHaveAttribute('data-slot', 'fab');
+  await user.click(plus);
   const dialog = await screen.findByRole('dialog', { name: 'Grup nou' });
   await user.type(within(dialog).getByLabelText('Numele grupului'), 'Interne');
-  await user.selectOptions(
-    within(dialog).getByLabelText('Categorie'),
-    'department',
+  // A form sheet; three categories are one segmented choice, not a select.
+  expect(dialog).toHaveAttribute('data-slot', 'form-sheet');
+  expect(dialog).not.toHaveAccessibleDescription();
+  const category = within(dialog).getByRole('radiogroup', {
+    name: 'Categorie',
+  });
+  expect(
+    within(category)
+      .getAllByRole('radio')
+      .map((radio) => radio.textContent),
+  ).toEqual(['Departament', 'Echipă', 'Proiect']);
+  expect(
+    within(category).getByRole('radio', { name: 'Departament' }),
+  ).toBeChecked();
+  expect(
+    within(dialog).getByRole('combobox', { name: 'Grup părinte (opțional)' }),
+  ).toHaveAccessibleDescription(
+    'Grupul părinte nu se mai poate schimba după creare.',
   );
   expect(
     (
@@ -419,12 +458,16 @@ it('names no direct Manager by default, and never offers the Moderator (#951)', 
   const dialog = await screen.findByRole('dialog', { name: 'Grup nou' });
   // The category titles the position: Vicepreședinte for a Department (#957).
   const picker = within(dialog).getByRole('combobox', {
-    name: 'Manager direct (Vicepreședinte)',
+    name: 'Manager direct — Vicepreședinte (opțional)',
   });
   expect(picker).toHaveTextContent('Fără manager direct');
-  expect(dialog).toHaveTextContent(
-    'Opțional. Fără el, grupul este condus de BC și Moderator.',
+  // Said once, behind the "i" beside the label.
+  expect(picker).toHaveAccessibleDescription(
+    'Fără el, grupul este condus de BC și Moderator.',
   );
+  expect(
+    within(dialog).getByRole('button', { name: 'Despre managerul direct' }),
+  ).toBeVisible();
 
   await user.click(picker);
   const options = within(await screen.findByRole('listbox'))
@@ -455,12 +498,9 @@ it('appoints the chosen direct Manager with the Group and says so (#951)', async
   await user.click(screen.getByRole('button', { name: 'Creează Grup' }));
   const dialog = await screen.findByRole('dialog', { name: 'Grup nou' });
   await user.type(within(dialog).getByLabelText('Numele grupului'), 'Gala');
-  await user.selectOptions(
-    within(dialog).getByLabelText('Categorie'),
-    'project',
-  );
+  await user.click(within(dialog).getByRole('radio', { name: 'Proiect' }));
   const picker = within(dialog).getByRole('combobox', {
-    name: 'Manager direct (Coordonator Principal)',
+    name: 'Manager direct — Coordonator Principal (opțional)',
   });
   await user.click(picker);
   await user.click(await screen.findByRole('option', { name: /Ana Pop/ }));
@@ -503,13 +543,14 @@ it('keeps a direct Manager dropped by the Minimum Level dropped when it is lower
   const dialog = await screen.findByRole('dialog', { name: 'Grup nou' });
   await user.type(within(dialog).getByLabelText('Numele grupului'), 'Audit');
   const picker = within(dialog).getByRole('combobox', {
-    name: 'Manager direct (Vicepreședinte)',
+    name: 'Manager direct — Vicepreședinte (opțional)',
   });
   await user.click(picker);
   await user.click(await screen.findByRole('option', { name: /Radu Recrut/ }));
   const level = within(dialog).getByLabelText('Nivel minim');
-  await user.selectOptions(level, '5');
-  await user.selectOptions(level, '');
+  await chooseOption(user, level, 'BCE');
+  // Back to the first option, the default: no Minimum Level of its own.
+  await chooseOption(user, level, 'Recrut');
   expect(picker).toHaveTextContent('Fără manager direct');
 
   await user.click(within(dialog).getByRole('button', { name: 'Creează' }));
@@ -527,11 +568,11 @@ it('drops a direct Manager the raised Minimum Level rules out (#951)', async () 
   const dialog = await screen.findByRole('dialog', { name: 'Grup nou' });
   await user.type(within(dialog).getByLabelText('Numele grupului'), 'Audit');
   const picker = within(dialog).getByRole('combobox', {
-    name: 'Manager direct (Vicepreședinte)',
+    name: 'Manager direct — Vicepreședinte (opțional)',
   });
   await user.click(picker);
   await user.click(await screen.findByRole('option', { name: /Radu Recrut/ }));
-  await user.selectOptions(within(dialog).getByLabelText('Nivel minim'), '5');
+  await chooseOption(user, within(dialog).getByLabelText('Nivel minim'), 'BCE');
   expect(picker).toHaveTextContent('Fără manager direct');
 
   await user.click(within(dialog).getByRole('button', { name: 'Creează' }));
@@ -587,6 +628,10 @@ it('marks a Private Group in the tree with the Privat badge, and no public one (
     .getByRole('link', { name: 'Educațional' })
     .closest('tr') as HTMLElement;
   expect(within(privateRow).getByText('Privat')).toBeVisible();
+  // A Group's state sits at the end of its row, after the name.
+  expect(
+    within(privateRow).getByText('Privat').closest('[data-slot="group-state"]'),
+  ).toHaveClass('ms-auto');
   expect(within(publicRow).queryByText('Privat')).toBeNull();
   expect(screen.getAllByText('Privat')).toHaveLength(1);
   expect(
@@ -664,11 +709,10 @@ it('offers the Minimum Level of a new Group by Role name, the six rungs only (R2
   await user.click(screen.getByRole('button', { name: 'Creează Grup' }));
   const dialog = await screen.findByRole('dialog', { name: 'Grup nou' });
   const field = within(dialog).getByLabelText('Nivel minim');
-  expect(
-    within(field)
-      .getAllByRole('option')
-      .map((option) => option.textContent),
-  ).toEqual([
+  // The app's own drop-down, opening on the default.
+  expect(field).toHaveAttribute('data-slot', 'select');
+  expect(field).toHaveTextContent('Recrut');
+  expect(await optionNames(user, field)).toEqual([
     'Recrut',
     'Voluntar',
     'Voluntar Activ',
@@ -793,6 +837,14 @@ it('draws a subgroup as a subgroup: rail, ring, regular weight and its parent na
   expect(
     parentRow.querySelectorAll('[data-slot=tree-guide] > span'),
   ).toHaveLength(1);
+  // The fold control keeps to a chevron's width (a 28 px gutter with the
+  // node), on parents only; a 48 px row.
+  const fold = within(parentRow).getByRole('button', {
+    name: 'Restrânge subgrupurile Educațional',
+  });
+  expect(fold).toHaveClass('w-4', 'h-11');
+  expect(childRow.querySelector('[data-slot=tree-fold]')).toBeNull();
+  expect(parent.closest('td')).toHaveClass('[&:is(td)]:py-0.5');
   // The child's details step back with it.
   expect(childRow).toHaveClass('text-muted-foreground');
   expect(parentRow).not.toHaveClass('text-muted-foreground');

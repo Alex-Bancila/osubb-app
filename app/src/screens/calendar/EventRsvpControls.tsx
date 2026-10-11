@@ -98,54 +98,55 @@ export default function EventRsvpControls({
 
   return (
     <section className="event-rsvp" aria-label={`Răspuns pentru ${eventTitle}`}>
-      <div className="event-rsvp-head">
-        <p className="event-rsvp-prompt">Participi?</p>
+      {/* One row: the two answers, then what is known of the stored one. The
+          group's name asks the question, so no heading sits above it. */}
+      <div className="event-rsvp-row">
+        <div
+          className="event-rsvp-actions"
+          role="group"
+          aria-label="Alege răspunsul"
+          aria-busy={busy ? 'true' : 'false'}
+        >
+          {(['going', 'declined'] as const).map((status) => {
+            const chosen = answer === status;
+            return (
+              <Button
+                key={status}
+                type="button"
+                // Particip chosen is the primary button; Nu particip chosen
+                // keeps the outline's shape, filled in ink.
+                variant={chosen && status === 'going' ? 'default' : 'outline'}
+                size="sm"
+                className={cn('event-rsvp-button', chosen && CHOSEN[status])}
+                disabled={controlsDisabled}
+                // Focus stays on the tapped button while its answer saves.
+                focusableWhenDisabled
+                aria-pressed={chosen ? 'true' : 'false'}
+                onClick={() => void save(status)}
+              >
+                {saving === status ? (
+                  <LoaderCircle
+                    data-icon="inline-start"
+                    className="animate-spin motion-reduce:animate-none"
+                    aria-hidden="true"
+                  />
+                ) : chosen ? (
+                  <Check
+                    data-icon="inline-start"
+                    strokeWidth={3}
+                    aria-hidden="true"
+                  />
+                ) : null}
+                {LABELS[status]}
+              </Button>
+            );
+          })}
+        </div>
         {(rsvp.isPending || rsvp.isError) && (
           <span className="event-rsvp-state">
             {rsvp.isPending ? 'Se încarcă răspunsul…' : 'Răspuns indisponibil'}
           </span>
         )}
-      </div>
-
-      <div
-        className="event-rsvp-actions"
-        role="group"
-        aria-label="Alege răspunsul"
-        aria-busy={busy ? 'true' : 'false'}
-      >
-        {(['going', 'declined'] as const).map((status) => {
-          const chosen = answer === status;
-          return (
-            <Button
-              key={status}
-              type="button"
-              // Particip chosen is the primary button; Nu particip chosen
-              // keeps the outline's shape, filled in ink.
-              variant={chosen && status === 'going' ? 'default' : 'outline'}
-              className={cn('event-rsvp-button', chosen && CHOSEN[status])}
-              disabled={controlsDisabled}
-              // Focus stays on the tapped button while its answer saves.
-              focusableWhenDisabled
-              aria-pressed={chosen ? 'true' : 'false'}
-              onClick={() => void save(status)}
-            >
-              {saving === status ? (
-                <LoaderCircle
-                  data-icon="inline-start"
-                  className="animate-spin motion-reduce:animate-none"
-                  aria-hidden="true"
-                />
-              ) : chosen ? (
-                <Check
-                  data-icon="inline-start"
-                  strokeWidth={3}
-                  aria-hidden="true"
-                />
-              ) : null}
-              {LABELS[status]}
-            </Button>
-          );
-        })}
       </div>
 
       {/* Seen and announced: the live region stays mounted so each new

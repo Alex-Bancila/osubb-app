@@ -150,6 +150,12 @@ it('opens on the Group list, with one Setează per experience column', async () 
   const list = within(dialog).getByRole('region', {
     name: 'Taskuri în Educațional',
   });
+  // How to choose the level is the shared disclosure, closed until asked.
+  const rules = within(dialog)
+    .getByText(/^Cum aleg nivelul/)
+    .closest('details');
+  expect(rules).toHaveAttribute('data-slot', 'disclosure');
+  expect(rules).not.toHaveAttribute('open');
   // A merged cell is one Setează for every level; split cells one each.
   expect(
     within(list).getByRole('button', {
@@ -218,6 +224,8 @@ it('searches the Proiecte list, by Domeniu, ignoring diacritics', async () => {
   const search = within(dialog).getByRole('searchbox', {
     name: 'Caută în taskurile din Proiecte',
   });
+  // The shared field surface, not a restyled input.
+  expect(search).toHaveAttribute('data-slot', 'input');
   expect(within(dialog).getByText('87 de taskuri')).toBeVisible();
   expect(
     within(dialog).getByRole('region', { name: 'LOGISTICĂ' }),

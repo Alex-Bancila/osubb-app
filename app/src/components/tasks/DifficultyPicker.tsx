@@ -7,7 +7,7 @@ import { cn } from '../../lib/utils';
 import { useDifficultyLevels } from '../../queries/difficulty-levels';
 
 type DifficultyPickerProps = {
-  /** The visible name of the control, e.g. "Dificultate (obligatoriu)". */
+  /** The visible name of the control, e.g. "Dificultate". */
   label: string;
   value: number | null;
   onChange: (value: number) => void;

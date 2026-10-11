@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { useEffect, useState, type ReactNode } from 'react';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, useLocation } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MemberClaims } from '../../lib/auth';
 import type { Database } from '../../lib/database.types';
@@ -305,16 +305,31 @@ const pendingApplication: GroupApplication = {
   member: { memberId: 'p1', fullName: 'Maria Enache' },
 };
 
-function wrapper(queryClient = new QueryClient()) {
+/** `entry` is the URL Profil opens at: `?tab=` chooses the tab. */
+function wrapper(queryClient = new QueryClient(), entry = '/profil') {
   return function QueryWrapper({ children }: { children: ReactNode }) {
     return (
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[entry]}>
         <QueryClientProvider client={queryClient}>
           {children}
         </QueryClientProvider>
       </MemoryRouter>
     );
   };
+}
+
+/** Profil opened on one of its tabs. */
+function onTab(tab: 'cont' | 'notificari' | 'preferinte') {
+  return wrapper(undefined, `/profil?tab=${tab}`);
+}
+
+/** The page's header: avatar, name, Role chip, "Membru din …", the buttons. */
+function identity() {
+  const block = document.querySelector<HTMLElement>(
+    '[data-slot="profile-identity"]',
+  );
+  if (!block) throw new Error('no identity header');
+  return block;
 }
 
 describe('ProfileScreen', () => {
@@ -371,7 +386,7 @@ describe('ProfileScreen', () => {
     orgSettingsMock.enabled = [];
   });
 
-  it('A Voluntar sees header, contact, edit, Groups, points total, and the theme toggle', () => {
+  it('A Voluntar sees header, contact, edit, Groups, points total, and the theme toggle', async () => {
     render(<ProfileScreen />, { wrapper: wrapper() });
 
     // Header
@@ -395,11 +410,21 @@ describe('ProfileScreen', () => {
       screen.queryByRole('button', { name: 'Schimbă adresa' }),
     ).not.toBeInTheDocument();
     expect(screen.getByText('0722334455')).toBeInTheDocument();
+    // Who sees the phone is said once, behind the "i" beside Telefon.
     expect(
-      screen.getByText(
+      screen.queryByText(/numărul de telefon este vizibil doar/i),
+    ).toBeNull();
+    await userEvent.click(
+      within(contact).getByRole('button', {
+        name: 'Despre numărul de telefon',
+      }),
+    );
+    expect(
+      await screen.findByText(
         /numărul de telefon este vizibil doar pentru tine, BCE și BC./i,
       ),
-    ).toBeInTheDocument();
+    ).toBeVisible();
+    await userEvent.keyboard('{Escape}');
 
     // Edit button
     expect(
@@ -427,11 +452,23 @@ describe('ProfileScreen', () => {
     expect(
       screen.getByRole('button', { name: /temă întunecată/i }),
     ).toBeInTheDocument();
+  });
 
-    // The Privacy Notice, always one tap away (#771)
+  it('keeps the Privacy Notice one tap away, on Preferințe (#771)', () => {
+    render(<ProfileScreen />, { wrapper: onTab('preferinte') });
+
+    const link = screen.getByRole('link', {
+      name: 'Politica de confidențialitate',
+    });
+    expect(link).toHaveAttribute('href', '/confidentialitate');
+    // A row that opens: the words, what they lead to, and a chevron.
+    const row = link.closest('[data-slot="list-row"]');
+    expect(row).toHaveTextContent(
+      'Ce date folosește aplicația, cine le vede și ce drepturi ai.',
+    );
     expect(
-      screen.getByRole('link', { name: 'Politica de confidențialitate' }),
-    ).toHaveAttribute('href', '/confidentialitate');
+      row?.querySelector('[data-slot="list-row-action"] svg'),
+    ).not.toBeNull();
   });
 
   it('A Member in a Department, a Team of it, and a Project sees three groups under three headings with the right Group Role labels', () => {
@@ -590,7 +627,7 @@ describe('ProfileScreen', () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Nume complet')).toHaveAttribute('readonly');
 
-    await user.type(screen.getByLabelText('Pseudonim'), 'Mara');
+    await user.type(screen.getByLabelText('Poreclă (opțional)'), 'Mara');
     await user.click(screen.getByRole('button', { name: /salvează/i }));
 
     expect(updateProfileMock.mutateAsync).toHaveBeenCalledWith({
@@ -606,16 +643,16 @@ describe('ProfileScreen', () => {
 
     // Without a Nickname the full name is the heading, and is not repeated.
     expect(
-      screen.getByRole('heading', { level: 3, name: 'Maria Enache' }),
+      screen.getByRole('heading', { level: 1, name: 'Maria Enache' }),
     ).toBeInTheDocument();
     expect(screen.queryByTestId('profile-full-name')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Editează profilul' }));
-    await user.type(screen.getByLabelText('Pseudonim'), 'Mara');
+    await user.type(screen.getByLabelText('Poreclă (opțional)'), 'Mara');
     await user.click(screen.getByRole('button', { name: /salvează/i }));
 
     expect(
-      await screen.findByRole('heading', { level: 3, name: 'Mara' }),
+      await screen.findByRole('heading', { level: 1, name: 'Mara' }),
     ).toBeInTheDocument();
     expect(screen.getByTestId('profile-full-name')).toHaveTextContent(
       'Maria Enache',
@@ -632,7 +669,7 @@ describe('ProfileScreen', () => {
     ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Editează profilul' }));
-    await user.type(screen.getByLabelText('Pseudonim'), 'Mara');
+    await user.type(screen.getByLabelText('Poreclă (opțional)'), 'Mara');
     await user.click(screen.getByRole('button', { name: /salvează/i }));
 
     const receipt = await screen.findByText('Profilul a fost actualizat.');
@@ -654,7 +691,7 @@ describe('ProfileScreen', () => {
     render(<ProfileScreen />, { wrapper: wrapper() });
 
     await user.click(screen.getByRole('button', { name: 'Editează profilul' }));
-    await user.type(screen.getByLabelText('Pseudonim'), 'Mara');
+    await user.type(screen.getByLabelText('Poreclă (opțional)'), 'Mara');
     await user.click(screen.getByRole('button', { name: /salvează/i }));
 
     expect(
@@ -669,7 +706,7 @@ describe('ProfileScreen', () => {
     setTestProfile({ ...mockProfile, nickname: 'Mara' });
     render(<ProfileScreen />, { wrapper: wrapper() });
 
-    const heading = screen.getByRole('heading', { level: 3, name: 'Mara' });
+    const heading = screen.getByRole('heading', { level: 1, name: 'Mara' });
     const fullName = screen.getByTestId('profile-full-name');
     expect(fullName).toHaveTextContent('Maria Enache');
     // The full name follows the Nickname in the identity block.
@@ -687,7 +724,7 @@ describe('ProfileScreen', () => {
     render(<ProfileScreen />, { wrapper: wrapper() });
 
     expect(
-      screen.getByRole('heading', { level: 3, name: 'Maria Enache' }),
+      screen.getByRole('heading', { level: 1, name: 'Maria Enache' }),
     ).toBeInTheDocument();
     expect(screen.queryByTestId('profile-full-name')).not.toBeInTheDocument();
   });
@@ -1031,21 +1068,17 @@ describe('ProfileScreen', () => {
         grid.getAttribute('data-columns'),
       );
 
-    it('below BCE: Identitate · Contact; Grupuri beside the points panel; Notificări beside Email over Confidențialitate', () => {
+    it('below BCE, Cont holds Date de contact over Grupurile mele beside the points panel', () => {
       promotionMock.state = { kind: 'loading' };
       render(<ProfileScreen />, { wrapper: wrapper() });
 
       expect(panelNames()).toEqual([
-        'Identitate',
         'Date de contact',
         'Grupurile mele',
         'Punctaj și promovare',
-        'Notificări pe acest dispozitiv',
-        'Email zilnic',
-        'Confidențialitate',
       ]);
-      // Two columns from md at every row (P2): no 1-column page at 768.
-      expect(gridColumns()).toEqual(['2', '2', '2']);
+      // Two columns from md (P2): no 1-column page at 768.
+      expect(gridColumns()).toEqual(['2']);
       // B38: one points panel — the promotion panel carries the total.
       expect(screen.queryByText('Punctaj personal')).not.toBeInTheDocument();
       expect(screen.getByTestId('promotion-progress-slot')).toHaveAttribute(
@@ -1057,7 +1090,44 @@ describe('ProfileScreen', () => {
       expect(orgSettingsMock.enabled.every((enabled) => !enabled)).toBe(true);
     });
 
-    it('stacks the small panels in one cell beside Grupurile mele and beside Notificări (P1)', () => {
+    it('Notificări holds push on this device, and no daily email', () => {
+      render(<ProfileScreen />, { wrapper: onTab('notificari') });
+
+      expect(panelNames()).toEqual(['Notificări pe acest dispozitiv']);
+      expect(screen.queryByText(/email zilnic|rezumat zilnic/i)).toBeNull();
+      // What arrives as push sits with the device's switch.
+      expect(
+        within(
+          screen.getByRole('region', {
+            name: 'Notificări pe acest dispozitiv',
+          }),
+        ).getByRole('group', { name: 'Ce primești ca notificare push' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('switch', { name: 'Rezumat zilnic pe email' }),
+      ).toBeNull();
+    });
+
+    it('Preferințe holds Confidențialitate, then the way out', () => {
+      render(<ProfileScreen />, { wrapper: onTab('preferinte') });
+
+      expect(panelNames()).toEqual(['Confidențialitate']);
+    });
+
+    it('no panel carries an eyebrow over its title', () => {
+      for (const tab of ['cont', 'notificari', 'preferinte'] as const) {
+        const { unmount } = render(<ProfileScreen />, { wrapper: onTab(tab) });
+        expect(
+          document.querySelectorAll('[data-slot="panel"]'),
+        ).not.toHaveLength(0);
+        expect(
+          document.querySelector('[data-slot="section-eyebrow"]'),
+        ).toBeNull();
+        unmount();
+      }
+    });
+
+    it('stacks the small panels in one column beside the other (P1)', () => {
       promotionMock.state = { kind: 'loading' };
       roleHistoryMock.data = [
         {
@@ -1071,27 +1141,28 @@ describe('ProfileScreen', () => {
       roleHistoryMock.isPending = false;
       render(<ProfileScreen />, { wrapper: wrapper() });
 
-      const [, rowTwo, rowThree] = document.querySelectorAll(
-        '[data-slot="page-grid"]',
-      );
-      expect(rowTwo?.children).toHaveLength(2);
-      const stack = rowTwo?.children[1];
+      const [grid] = document.querySelectorAll('[data-slot="page-grid"]');
+      expect(grid?.children).toHaveLength(2);
+      const [left, right] = Array.from(grid?.children ?? []) as [
+        HTMLElement,
+        HTMLElement,
+      ];
       expect(
-        within(stack as HTMLElement).getByTestId('promotion-progress-slot'),
+        within(left).getByRole('region', { name: 'Date de contact' }),
       ).toBeInTheDocument();
       expect(
-        within(stack as HTMLElement).getByRole('region', {
+        within(left).getByRole('region', { name: 'Grupurile mele' }),
+      ).toBeInTheDocument();
+      expect(
+        within(right).getByTestId('promotion-progress-slot'),
+      ).toBeInTheDocument();
+      expect(
+        within(right).getByRole('region', {
           name: 'Parcursul organizațional',
         }),
       ).toBeInTheDocument();
-      expect(rowThree?.children).toHaveLength(2);
-      expect(
-        within(rowThree?.children[1] as HTMLElement).getByRole('region', {
-          name: 'Confidențialitate',
-        }),
-      ).toBeInTheDocument();
       // #876: unrelated panels keep their own height.
-      expect(rowTwo).not.toHaveAttribute('data-equal-heights');
+      expect(grid).not.toHaveAttribute('data-equal-heights');
     });
 
     it('without a Promovare to show, Punctaj personal carries the total', () => {
@@ -1104,25 +1175,22 @@ describe('ProfileScreen', () => {
       );
     });
 
-    it('at level >= 5: Funcția în OSUBB in row 2, no points, and a description without "punctaj" (B45)', () => {
+    it('at level >= 5: Funcția în OSUBB on Cont, and no points on any tab (B45)', () => {
       authMock.claims = { member_role: 'bc', member_level: 6, group_ids: [] };
       setTestProfile({ ...mockProfile, role: 'bc' });
-      render(<ProfileScreen />, { wrapper: wrapper() });
+      const { unmount } = render(<ProfileScreen />, { wrapper: wrapper() });
 
-      expect(panelNames()).toEqual([
-        'Identitate',
-        'Date de contact',
-        'Funcția în OSUBB',
-        'Notificări pe acest dispozitiv',
-        'Email zilnic',
-        'Confidențialitate',
-      ]);
-      expect(gridColumns()).toEqual(['2', '2', '2']);
+      expect(panelNames()).toEqual(['Date de contact', 'Funcția în OSUBB']);
+      expect(gridColumns()).toEqual(['2']);
       expect(screen.getByText('Biroul de Conducere')).toBeInTheDocument();
-      expect(
-        screen.getByText('Informații personale și setări de cont'),
-      ).toBeInTheDocument();
       expect(screen.queryByText(/punctaj/i)).not.toBeInTheDocument();
+      unmount();
+
+      for (const tab of ['notificari', 'preferinte'] as const) {
+        const view = render(<ProfileScreen />, { wrapper: onTab(tab) });
+        expect(screen.queryByText(/punctaj/i)).not.toBeInTheDocument();
+        view.unmount();
+      }
     });
 
     it('Funcția în OSUBB shows the title from the board Group, then the Role', () => {
@@ -1145,9 +1213,10 @@ describe('ProfileScreen', () => {
       render(<ProfileScreen />, { wrapper: wrapper() });
 
       const panel = screen.getByRole('region', { name: 'Funcția în OSUBB' });
+      // The board is named once, under the title — not as an eyebrow.
       expect(
         within(panel).getByText('Biroul de Conducere Extins'),
-      ).toBeInTheDocument();
+      ).not.toHaveAttribute('data-slot', 'section-eyebrow');
       expect(within(panel).getByText('Coordonator IT')).toBeInTheDocument();
       // B46: the title is the information; no "BCE · OSUBB" line under it.
       expect(within(panel).queryByText(/· OSUBB/)).not.toBeInTheDocument();
@@ -1155,10 +1224,11 @@ describe('ProfileScreen', () => {
         within(panel).queryByText('Funcția nu este setată încă.'),
       ).not.toBeInTheDocument();
       expect(orgSettingsMock.enabled).toContain(true);
-      // #963: the Identitate chip names the Role by the Board Title too.
-      const identity = screen.getByRole('region', { name: 'Identitate' });
-      expect(within(identity).getByText('Coordonator IT')).toBeInTheDocument();
-      expect(within(identity).queryByText('BCE')).not.toBeInTheDocument();
+      // #963: the header's chip names the Role by the Board Title too.
+      expect(
+        within(identity()).getByText('Coordonator IT'),
+      ).toBeInTheDocument();
+      expect(within(identity()).queryByText('BCE')).not.toBeInTheDocument();
     });
 
     it('Funcția în OSUBB falls back to the Role when no title is set', () => {
@@ -1183,9 +1253,8 @@ describe('ProfileScreen', () => {
       expect(
         within(panel).queryByText(/Coordonator|Casier/),
       ).not.toBeInTheDocument();
-      // No title: the Identitate chip keeps the Role (#963).
-      const identity = screen.getByRole('region', { name: 'Identitate' });
-      expect(within(identity).getByText('BC')).toBeInTheDocument();
+      // No title: the header's chip keeps the Role (#963).
+      expect(within(identity()).getByText('BC')).toBeInTheDocument();
     });
 
     // F-7 (#893, Alex 2026-09-29): the Moderator is not a board position.
@@ -1232,24 +1301,28 @@ describe('ProfileScreen', () => {
       expect(screen.queryByText('Președinte')).not.toBeInTheDocument();
     });
 
-    it('the Adunarea Generală badge sits in Identitate, for BC too', () => {
+    it('the Adunarea Generală badge sits in the header, for BC too', () => {
       authMock.claims = { member_role: 'bc', member_level: 6, group_ids: [] };
       setTestProfile({ ...mockProfile, role: 'bc' });
       render(<ProfileScreen />, { wrapper: wrapper() });
 
-      const identity = screen.getByRole('region', { name: 'Identitate' });
       expect(
-        within(identity).getByText('Adunarea Generală'),
+        within(identity()).getByText('Adunarea Generală'),
       ).toBeInTheDocument();
     });
 
-    it('Editează on Date de contact opens the sheet with the email change inside', async () => {
+    it('the pencil on Date de contact opens the sheet with the email change inside', async () => {
       const user = userEvent.setup();
       render(<ProfileScreen />, { wrapper: wrapper() });
 
-      await user.click(
-        screen.getByRole('button', { name: 'Editează datele de contact' }),
-      );
+      const pencil = screen.getByRole('button', {
+        name: 'Editează datele de contact',
+      });
+      // An icon button in the block's header, not a full-width one in its box.
+      expect(pencil).toHaveTextContent('');
+      expect(pencil).toHaveClass('size-11');
+      expect(pencil.closest('[data-slot="section-header"]')).not.toBeNull();
+      await user.click(pencil);
       const sheet = screen.getByRole('dialog');
       expect(
         within(sheet).getByRole('heading', {
@@ -1259,6 +1332,182 @@ describe('ProfileScreen', () => {
       expect(
         within(sheet).getByRole('button', { name: 'Schimbă adresa' }),
       ).toBeInTheDocument();
+    });
+  });
+
+  describe('the identity header', () => {
+    it('is the page header: the name as the h1, the Role chip, "Membru din" and two icon buttons', () => {
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      const header = identity();
+      expect(
+        within(header).getByRole('heading', { level: 1, name: 'Maria Enache' }),
+      ).toBeInTheDocument();
+      // No "Profilul meu" title and no Identitate panel any more.
+      expect(screen.queryByText('Profilul meu')).not.toBeInTheDocument();
+      expect(screen.queryByText('Identitate')).not.toBeInTheDocument();
+      expect(within(header).getByText('Voluntar')).toHaveClass('role-badge');
+      // The day, the month and the year: no weekday on a milestone.
+      expect(
+        within(header).getByText('Membru din 1 octombrie 2024'),
+      ).toBeInTheDocument();
+
+      for (const name of ['Editează profilul', 'Temă întunecată']) {
+        const button = within(header).getByRole('button', { name });
+        // An icon alone; the words are its accessible name.
+        expect(button).toHaveTextContent('');
+        expect(button.querySelector('svg')).toHaveAttribute(
+          'aria-hidden',
+          'true',
+        );
+        expect(button).toHaveClass('size-11');
+      }
+    });
+
+    it('names the theme button by the theme it switches to', async () => {
+      const user = userEvent.setup();
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      await user.click(screen.getByRole('button', { name: 'Temă întunecată' }));
+      expect(
+        screen.getByRole('button', { name: 'Temă luminoasă' }),
+      ).toBeInTheDocument();
+    });
+
+    it('stays above every tab', () => {
+      for (const tab of ['cont', 'notificari', 'preferinte'] as const) {
+        const { unmount } = render(<ProfileScreen />, { wrapper: onTab(tab) });
+        expect(
+          within(identity()).getByRole('heading', { level: 1 }),
+        ).toHaveTextContent('Maria Enache');
+        unmount();
+      }
+    });
+  });
+
+  describe('tabs (Cont · Notificări · Preferințe)', () => {
+    const selected = () =>
+      screen.getByRole('tab', { selected: true }).textContent;
+
+    it('are a tablist of three, opening on Cont', () => {
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      const tabs = within(
+        screen.getByRole('tablist', { name: 'Secțiunile profilului' }),
+      ).getAllByRole('tab');
+      expect(tabs.map((tab) => tab.textContent)).toEqual([
+        'Cont',
+        'Notificări',
+        'Preferințe',
+      ]);
+      // The pill track's segments: 36 px drawn, 44 px to tap.
+      for (const tab of tabs)
+        expect(tab).toHaveClass('min-h-[36px]', 'after:-inset-y-1');
+      expect(selected()).toBe('Cont');
+      // Only the open tab's panel is on the page.
+      expect(screen.getAllByRole('tabpanel')).toHaveLength(1);
+      expect(
+        within(screen.getByRole('tabpanel')).getByRole('region', {
+          name: 'Date de contact',
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('region', {
+          name: 'Notificări pe acest dispozitiv',
+        }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('opens the tab the URL names, so a link or a reload keeps it', () => {
+      render(<ProfileScreen />, { wrapper: onTab('notificari') });
+
+      expect(selected()).toBe('Notificări');
+      expect(
+        screen.getByRole('region', { name: 'Notificări pe acest dispozitiv' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('region', { name: 'Date de contact' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('falls back to Cont for a tab that does not exist', () => {
+      render(<ProfileScreen />, {
+        wrapper: wrapper(undefined, '/profil?tab=altceva'),
+      });
+
+      expect(selected()).toBe('Cont');
+    });
+
+    it('writes the chosen tab to the URL', async () => {
+      const user = userEvent.setup();
+      // The URL's query, printed where the test can read it.
+      function Search() {
+        return <output data-testid="search">{useLocation().search}</output>;
+      }
+      const search = () => screen.getByTestId('search').textContent;
+      render(
+        <>
+          <ProfileScreen />
+          <Search />
+        </>,
+        { wrapper: wrapper() },
+      );
+
+      await user.click(screen.getByRole('tab', { name: 'Preferințe' }));
+      expect(search()).toBe('?tab=preferinte');
+      expect(selected()).toBe('Preferințe');
+      expect(
+        screen.getByRole('region', { name: 'Confidențialitate' }),
+      ).toBeInTheDocument();
+
+      await user.click(screen.getByRole('tab', { name: 'Cont' }));
+      expect(search()).toBe('?tab=cont');
+      expect(
+        screen.getByRole('region', { name: 'Date de contact' }),
+      ).toBeInTheDocument();
+    });
+
+    it.each([['#grupuri-preferate', 'Preferințe']])(
+      'the older anchor %s opens %s, where its card now is',
+      (hash, tab) => {
+        render(<ProfileScreen />, {
+          wrapper: wrapper(undefined, `/profil${hash}`),
+        });
+
+        expect(selected()).toBe(tab);
+      },
+    );
+
+    it('shows contact data as rows: the name on the left, the value on the right', () => {
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      const contact = screen.getByRole('region', { name: 'Date de contact' });
+      const rows = contact.querySelectorAll('[data-slot="setting-row"]');
+      expect(Array.from(rows, (row) => row.textContent)).toEqual([
+        'E-mailmaria@osubb.ro',
+        'Telefon0722334455',
+      ]);
+      for (const row of rows) {
+        expect(row).toHaveClass('justify-between', 'min-h-11');
+        expect(row.querySelector('[data-slot="setting-value"]')).toHaveClass(
+          'text-right',
+        );
+      }
+    });
+
+    it('the saved receipt shows on whichever tab is open', async () => {
+      const user = userEvent.setup();
+      render(<ProfileScreen />, { wrapper: onTab('notificari') });
+
+      await user.click(
+        screen.getByRole('button', { name: 'Editează profilul' }),
+      );
+      await user.type(screen.getByLabelText('Poreclă (opțional)'), 'Mara');
+      await user.click(screen.getByRole('button', { name: /salvează/i }));
+
+      expect(
+        await screen.findByText('Profilul a fost actualizat.'),
+      ).toHaveAttribute('role', 'status');
     });
   });
 
@@ -1274,19 +1523,14 @@ describe('ProfileScreen', () => {
     });
 
     it('keeps the header free of sign-out and puts one link after everything else', () => {
-      render(<ProfileScreen />, { wrapper: wrapper() });
+      render(<ProfileScreen />, { wrapper: onTab('preferinte') });
 
-      // The header keeps the theme switch only.
-      const header = screen
-        .getByRole('heading', { level: 1, name: 'Profilul meu' })
-        .closest<HTMLElement>('[data-slot="page-header"]');
-      if (!header) throw new Error('no page header');
+      // The header keeps the pencil and the theme switch only.
       expect(
-        within(header).getByRole('button', { name: 'Temă întunecată' }),
-      ).toBeInTheDocument();
-      expect(
-        within(header).queryByRole('button', { name: /deconect/i }),
-      ).toBeNull();
+        within(identity())
+          .getAllByRole('button')
+          .map((button) => button.getAttribute('aria-label')),
+      ).toEqual(['Editează profilul', 'Temă întunecată']);
 
       const signOuts = screen.getAllByRole('button', { name: /deconect/i });
       expect(signOuts).toHaveLength(1);
@@ -1303,9 +1547,17 @@ describe('ProfileScreen', () => {
       expect(lastPanel).not.toContainElement(link);
     });
 
+    it('is on Preferințe only: the other tabs offer no way out', () => {
+      for (const tab of ['cont', 'notificari'] as const) {
+        const { unmount } = render(<ProfileScreen />, { wrapper: onTab(tab) });
+        expect(screen.queryByRole('button', { name: /deconect/i })).toBeNull();
+        unmount();
+      }
+    });
+
     it('asks first, then signs out', async () => {
       const user = userEvent.setup();
-      render(<ProfileScreen />, { wrapper: wrapper() });
+      render(<ProfileScreen />, { wrapper: onTab('preferinte') });
 
       await user.click(screen.getByRole('button', { name: LINK }));
 
@@ -1327,7 +1579,7 @@ describe('ProfileScreen', () => {
       const user = userEvent.setup();
       profileQueryMock.isError = true;
       profileQueryMock.error = new Error('Database disconnected');
-      render(<ProfileScreen />, { wrapper: wrapper() });
+      render(<ProfileScreen />, { wrapper: onTab('preferinte') });
 
       expect(
         screen.getByText(/nu am putut încărca profilul/i),
@@ -1343,7 +1595,7 @@ describe('ProfileScreen', () => {
 
     it('does nothing on Renunță', async () => {
       const user = userEvent.setup();
-      render(<ProfileScreen />, { wrapper: wrapper() });
+      render(<ProfileScreen />, { wrapper: onTab('preferinte') });
 
       await user.click(screen.getByRole('button', { name: LINK }));
       await user.click(screen.getByRole('button', { name: 'Renunță' }));
@@ -1355,7 +1607,7 @@ describe('ProfileScreen', () => {
     it('keeps a failed sign-out in the dialog and unlocks a retry', async () => {
       const user = userEvent.setup();
       authMock.signOut.mockRejectedValueOnce(new Error('offline'));
-      render(<ProfileScreen />, { wrapper: wrapper() });
+      render(<ProfileScreen />, { wrapper: onTab('preferinte') });
 
       await user.click(screen.getByRole('button', { name: LINK }));
       const dialog = screen.getByRole('dialog');
@@ -1376,7 +1628,7 @@ describe('ProfileScreen', () => {
     it('forgets an earlier failure when the dialog opens again', async () => {
       const user = userEvent.setup();
       authMock.signOut.mockRejectedValueOnce(new Error('offline'));
-      render(<ProfileScreen />, { wrapper: wrapper() });
+      render(<ProfileScreen />, { wrapper: onTab('preferinte') });
 
       await user.click(screen.getByRole('button', { name: LINK }));
       await user.click(screen.getByRole('button', { name: CONFIRM }));

@@ -1,9 +1,9 @@
 import { isTerminalTask, type TaskPresentation } from './task-presentation';
 
 /**
- * Whether a Task card (and so the details sheet, which shows the card) has an
- * "Executor:" line. The one place this is decided; the line says a fact only
- * when it is true and concerns the reader:
+ * Whether a Task card names the Executor on its meta row, and the details
+ * sheet has an Executor fact. The one place this is decided; the line says a
+ * fact only when it is true and concerns the reader:
  *
  * - never on an Umbrella, which has no Executor of its own;
  * - never on the viewer's own Task (relevance B2): Începe / Trimite already

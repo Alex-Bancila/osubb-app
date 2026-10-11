@@ -61,4 +61,43 @@ describe('SegmentedToggle', () => {
     await user.click(screen.getByRole('button', { name: 'Agendă' }));
     expect(onChange).toHaveBeenCalledWith('agenda');
   });
+
+  it('leaves the chosen segment chosen when it is pressed again', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <SegmentedToggle
+        label="Vizualizare"
+        options={options}
+        value="agenda"
+        onChange={onChange}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Agendă' }));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Agendă' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('compact keeps each label as the name and a count beside it', () => {
+    render(
+      <SegmentedToggle
+        label="Vizualizare"
+        options={[
+          options[0],
+          { ...options[1], badge: <span data-testid="count">2</span> },
+        ]}
+        value="month"
+        onChange={() => {}}
+        compact
+      />,
+    );
+    const agenda = screen.getByRole('button', { name: /Agendă/ });
+    // Under 640 px the word is for screen readers; the count stays drawn.
+    expect(screen.getByText('Agendă')).toHaveClass('max-sm:sr-only');
+    expect(screen.getByTestId('count')).not.toHaveClass('max-sm:sr-only');
+    expect(agenda).toContainElement(screen.getByTestId('count'));
+  });
 });

@@ -1,6 +1,6 @@
 import * as axe from 'axe-core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -30,7 +30,14 @@ vi.mock('./DirectExecutorSelector', () => ({
     </button>
   ),
 }));
+import { pickDate } from '../../test/date-picker';
 import { NewTaskControl } from './NewTaskControl';
+// A deadline next month: always in the future, and one page away in the
+// date picker.
+const nextMonth = new Date();
+nextMonth.setUTCDate(1);
+nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+const DEADLINE = `${nextMonth.toISOString().slice(0, 7)}-15T12:30`;
 
 const options = {
   groups: [
@@ -63,9 +70,7 @@ async function openDialog(user: ReturnType<typeof userEvent.setup>) {
 }
 
 async function pickOrigin(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(
-    screen.getByRole('combobox', { name: 'Grup principal (obligatoriu)' }),
-  );
+  await user.click(screen.getByRole('combobox', { name: 'Grup principal' }));
   await user.click(await screen.findByRole('option', { name: /^Origin/ }));
   await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
 }
@@ -73,13 +78,10 @@ async function pickOrigin(user: ReturnType<typeof userEvent.setup>) {
 async function fillContent(
   user: ReturnType<typeof userEvent.setup>,
   title: string,
-  deadline: string | null = '2030-10-01T12:30',
+  deadline: string | null = DEADLINE,
 ) {
-  await user.type(screen.getByLabelText('Titlu (obligatoriu)'), title);
-  if (deadline)
-    fireEvent.change(screen.getByLabelText(/Termen/), {
-      target: { value: deadline },
-    });
+  await user.type(screen.getByLabelText('Titlu'), title);
+  if (deadline) await pickDate(user, screen.getByLabelText(/Termen/), deadline);
 }
 
 describe('Task nou', () => {
@@ -102,9 +104,23 @@ describe('Task nou', () => {
     expect(screen.queryByRole('button', { name: 'Task nou' })).toBeNull();
   });
 
-  it('offers a Task or an Umbrella, never a Subtask, in an accessible Dialog', async () => {
+  it('offers a Task or an Umbrella, never a Subtask, in an accessible form sheet', async () => {
     const { user } = renderControl();
     const dialog = await openDialog(user);
+    // A form sheet titled by what it makes, with no intro paragraph…
+    expect(dialog).toHaveAttribute('data-slot', 'form-sheet');
+    expect(dialog).not.toHaveTextContent(/Creează un task sau/);
+    expect(dialog).not.toHaveAccessibleDescription();
+    // …and its actions pinned: Renunță first, the primary last.
+    const footer = dialog.querySelector<HTMLElement>(
+      '[data-slot="sheet-footer"][data-pinned]',
+    );
+    expect(footer).not.toBeNull();
+    expect(
+      within(footer as HTMLElement)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Renunță', 'Creează taskul']);
     expect(screen.getByRole('radio', { name: 'Task' })).toBeInTheDocument();
     expect(
       screen.getByRole('radio', { name: 'Task-umbrelă' }),
@@ -116,7 +132,7 @@ describe('Task nou', () => {
     expect(results.violations).toEqual([]);
   });
 
-  it('returns focus to "Task nou" when the Dialog is cancelled', async () => {
+  it('returns focus to "Task nou" when the sheet is cancelled', async () => {
     const { user } = renderControl();
     await openDialog(user);
     await user.keyboard('{Escape}');
@@ -132,13 +148,16 @@ describe('Task nou', () => {
     await pickOrigin(user);
     await fillContent(user, 'Afișe pentru târg');
     await user.click(screen.getByRole('button', { name: 'Alege Executorul' }));
-    await user.selectOptions(
-      screen.getByLabelText('Campanie (opțional)'),
-      'Campania de toamnă',
-    );
+    // Another Group's Campaign is not in the list.
+    await user.click(screen.getByLabelText('Campanie (opțional)'));
     expect(
-      screen.queryByRole('option', { name: 'Campanie străină' }),
-    ).toBeNull();
+      (await screen.findAllByRole('option')).map(
+        (option) => option.textContent,
+      ),
+    ).toEqual(['Fără campanie', 'Campania de toamnă']);
+    await user.click(
+      screen.getByRole('option', { name: 'Campania de toamnă' }),
+    );
     await user.click(screen.getByRole('button', { name: 'Creează taskul' }));
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith(41));
     expect(state.rpc).toHaveBeenCalledTimes(1);
@@ -165,11 +184,8 @@ describe('Task nou', () => {
     await openDialog(user);
     await pickOrigin(user);
     await fillContent(user, 'Voluntari la stand');
-    await user.selectOptions(
-      screen.getByLabelText('Mod de atribuire'),
-      'public',
-    );
-    await user.selectOptions(screen.getByLabelText('Audiență'), 'org');
+    await user.click(screen.getByRole('radio', { name: 'Public' }));
+    await user.click(screen.getByRole('radio', { name: 'Toți membrii OSUBB' }));
     await user.click(screen.getByRole('button', { name: 'Creează taskul' }));
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith(42));
     expect(state.rpc).toHaveBeenCalledTimes(1);
@@ -208,7 +224,7 @@ describe('Task nou', () => {
     });
   });
 
-  it('keeps the Dialog open with the draft intact when the server refuses', async () => {
+  it('keeps the sheet open with the draft intact when the server refuses', async () => {
     state.rpc.mockResolvedValue({
       data: null,
       error: {
@@ -229,9 +245,7 @@ describe('Task nou', () => {
     expect(screen.queryByText('private SQL detail')).toBeNull();
     expect(onCreated).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog', { name: 'Task nou' })).toBeVisible();
-    expect(screen.getByLabelText('Titlu (obligatoriu)')).toHaveValue(
-      'Draft păstrat',
-    );
+    expect(screen.getByLabelText('Titlu')).toHaveValue('Draft păstrat');
     expect(
       screen.getByRole('button', { name: 'Executor ales: executor-1' }),
     ).toBeInTheDocument();

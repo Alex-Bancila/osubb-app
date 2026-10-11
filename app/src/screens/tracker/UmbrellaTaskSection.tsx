@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
+import { FormSheet } from '../../components/ui/form-sheet';
 import { commandErrorMessage } from '../../lib/command-reasons';
 import {
   useCompleteUmbrella,
@@ -39,6 +40,13 @@ function UmbrellaActions({
   const formAttempt = useRef(0);
   const currentStatus = useRef(status);
   const [attempt, setAttempt] = useState(0);
+  // After a Subtask opens, focus belongs to its details, not this button.
+  const created = useRef(false);
+  function closeForm() {
+    if (create.isPending) return;
+    formAttempt.current += 1;
+    setAdding(false);
+  }
   useEffect(() => {
     currentStatus.current = status;
   }, [status]);
@@ -67,6 +75,7 @@ function UmbrellaActions({
               disabled={pending || adding}
               onClick={() => {
                 formAttempt.current += 1;
+                created.current = false;
                 setAttempt(formAttempt.current);
                 setAdding(true);
               }}
@@ -111,34 +120,39 @@ function UmbrellaActions({
               {explanation}
             </p>
           )}
-          {adding && (
-            <div className="flex flex-col gap-3 rounded-md border border-border p-4">
-              <SubHeading as="h4" variant="label">
-                Subtask nou
-              </SubHeading>
-              <ManagedTaskForm
-                parentTaskId={taskId}
-                heading={null}
-                cancelLabel="Închide formularul"
-                onCancel={() => {
-                  if (create.isPending) return;
-                  formAttempt.current += 1;
+          <FormSheet
+            open={adding}
+            onOpenChange={(next) => {
+              if (!next) closeForm();
+            }}
+            title="Subtask nou"
+            busy={create.isPending}
+            finalFocus={() => !created.current}
+            className="sm:max-w-2xl"
+          >
+            <ManagedTaskForm
+              key={attempt}
+              parentTaskId={taskId}
+              heading={null}
+              submitLabel="Creează subtaskul"
+              pendingLabel="Se creează subtaskul…"
+              onCancel={closeForm}
+              onDraft={async (draft) => {
+                if (
+                  !mounted.current ||
+                  attempt !== formAttempt.current ||
+                  isTerminalTask(currentStatus.current)
+                )
+                  return;
+                const task = await create.mutateAsync(draft);
+                if (mounted.current && attempt === formAttempt.current) {
+                  created.current = true;
                   setAdding(false);
-                }}
-                onDraft={async (draft) => {
-                  if (
-                    !mounted.current ||
-                    attempt !== formAttempt.current ||
-                    isTerminalTask(currentStatus.current)
-                  )
-                    return;
-                  const task = await create.mutateAsync(draft);
-                  if (mounted.current && attempt === formAttempt.current)
-                    onNavigate(task.id);
-                }}
-              />
-            </div>
-          )}
+                  onNavigate(task.id);
+                }
+              }}
+            />
+          </FormSheet>
         </>
       )}
     </div>

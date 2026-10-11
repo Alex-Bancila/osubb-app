@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 import axe from 'axe-core';
+import { pickDate } from '../../test/date-picker';
 import { closeFilters, openFilters } from '../../test/filters';
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 const api = vi.hoisted(() => ({
@@ -88,6 +89,16 @@ const listed = () =>
   within(screen.getByRole('list', { name: 'Campanii active' }))
     .getAllByRole('listitem')
     .map((item) => item.querySelector('.font-medium')?.textContent);
+/** The row of a Campaign: activating it opens the report. */
+const reportButton = (name: string) =>
+  screen.getByRole('button', { name: new RegExp(`^${name}.*raport$`) });
+/** Chooses one entry of a row's "⋯". */
+async function choose(name: string, item: string) {
+  await userEvent.click(
+    screen.getByRole('button', { name: `Acțiuni pentru ${name}` }),
+  );
+  await userEvent.click(await screen.findByRole('menuitem', { name: item }));
+}
 const optionTexts = async () =>
   (await screen.findAllByRole('option')).map((option) => option.textContent);
 it('creates and renames in small pop-ups, and toggles, using the owning Group and command IDs', async () => {
@@ -107,7 +118,7 @@ it('creates and renames in small pop-ups, and toggles, using the owning Group an
     name: 'Iarnă',
   });
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-  await user.click(screen.getByRole('button', { name: 'Redenumește' }));
+  await choose('Toamnă', 'Redenumește');
   const rename = await screen.findByRole('dialog', {
     name: 'Redenumește campania',
   });
@@ -125,7 +136,7 @@ it('creates and renames in small pop-ups, and toggles, using the owning Group an
     name: 'Toamnă nouă',
   });
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-  await user.click(screen.getByRole('button', { name: 'Dezactivează' }));
+  await choose('Toamnă', 'Dezactivează');
   expect(api.mutate).toHaveBeenCalledWith({
     kind: 'active',
     id: 10,
@@ -145,11 +156,6 @@ it('creates and renames in small pop-ups, and toggles, using the owning Group an
 it('lists every readable Campaign with no filter: no default Group, no create (#908)', () => {
   show('/administrare/campanii');
   expect(where()).toBe('/administrare/campanii');
-  expect(
-    screen.getByText(
-      'Toate campaniile, cu raportul celor din grupurile pe care le gestionezi.',
-    ),
-  ).toBeVisible();
   // Every fixture Campaign, by owner: the unmanaged Educațional's too.
   expect(listed()).toEqual(['Toamnă', 'Gala', 'Vară']);
   expect(screen.getByText('Grup: Educațional')).toBeVisible();
@@ -161,9 +167,22 @@ it('lists every readable Campaign with no filter: no default Group, no create (#
     screen.queryByRole('button', { name: 'Campanie nouă' }),
   ).not.toBeInTheDocument();
   // Only the managed Groups' rows change or report.
-  expect(screen.getAllByRole('button', { name: 'Vezi raportul' })).toHaveLength(
-    2,
-  );
+  expect(screen.getAllByRole('button', { name: /raport$/ })).toHaveLength(2);
+  expect(
+    screen.getAllByRole('button', { name: /^Acțiuni pentru/ }),
+  ).toHaveLength(2);
+  // The header's row holds the page's controls; nothing repeats its title.
+  const header = first([
+    ...document.querySelectorAll<HTMLElement>('[data-slot="page-header"]'),
+  ]);
+  expect(document.querySelector('[data-slot="page-eyebrow"]')).toBeNull();
+  expect(screen.getAllByRole('heading').map((h) => h.textContent)).toEqual([
+    'Campanii',
+  ]);
+  expect(
+    within(header).getByRole('button', { name: /^Filtrează/ }),
+  ).toBeVisible();
+  expect(within(header).getByRole('group', { name: 'Stare' })).toBeVisible();
   // No Campaign level: the rows are the Campaigns.
   expect(
     screen.queryByRole('combobox', { name: 'Campanie' }),
@@ -204,7 +223,7 @@ it('cascades root → Group below over managed Groups only, carrying the Group i
   expect(where()).toBe('/administrare/grupuri/3/campanii?stare=inactive');
   await closeFilters(user);
   expect(
-    await screen.findByRole('heading', { name: 'Subechipa · Echipa' }),
+    await screen.findByRole('region', { name: 'Subechipa · Echipa' }),
   ).toBeVisible();
 });
 it('routes to a Subgrup chosen before any root, and shows its root (#919)', async () => {
@@ -228,7 +247,10 @@ it('restores the cascade and the dates from the URL, and clearing the root leave
   expect(screen.getByRole('combobox', { name: 'Subgrup' })).toHaveTextContent(
     'Subechipa',
   );
-  expect(screen.getByLabelText('De la')).toHaveValue('2026-09-01');
+  expect(screen.getByLabelText('De la')).toHaveAttribute(
+    'data-value',
+    '2026-09-01',
+  );
   await closeFilters(user);
   await user.click(
     screen.getByRole('button', {
@@ -241,15 +263,13 @@ it('restores the cascade and the dates from the URL, and clearing the root leave
 it('dates the report with the range, and reads nothing while it is inverted', async () => {
   const user = userEvent.setup();
   show('/administrare/grupuri/2/campanii?de_la=2026-09-01&pana_la=2026-09-30');
-  await user.click(screen.getByRole('button', { name: 'Vezi raportul' }));
+  await user.click(reportButton('Toamnă'));
   expect(api.report).toHaveBeenLastCalledWith(10, {
     p_from: '2026-08-31T21:00:00.000Z',
     p_to: '2026-09-30T21:00:00.000Z',
   });
   await openFilters(user);
-  const from = screen.getByLabelText('De la');
-  await user.clear(from);
-  await user.type(from, '2026-10-05');
+  await pickDate(user, screen.getByLabelText('De la'), '2026-10-05');
   await closeFilters(user);
   expect(api.report).toHaveBeenLastCalledWith(10, null);
   expect(screen.getByText(/Corectează perioada/)).toBeVisible();
@@ -265,7 +285,7 @@ it('denies a typed URL outside live managed Groups and offers no mutation', () =
 it('offers activation for inactive Campaigns', async () => {
   api.campaigns.mockReturnValue({ data: [{ ...campaign, is_active: false }] });
   show('/administrare/grupuri/2/campanii?stare=inactive');
-  await userEvent.click(screen.getByRole('button', { name: 'Activează' }));
+  await choose('Toamnă', 'Activează');
   expect(api.mutate).toHaveBeenCalledWith({
     kind: 'active',
     id: 10,
@@ -307,7 +327,7 @@ it('names each contributor in the report as a button that opens their Member Car
     },
   });
   show();
-  await user.click(screen.getByRole('button', { name: 'Vezi raportul' }));
+  await user.click(reportButton('Toamnă'));
   const list = screen.getByRole('list', { name: 'Voluntari cu puncte' });
   await user.click(
     within(list).getByRole('button', { name: 'Profilul membrului Ani' }),
@@ -335,7 +355,5 @@ it('never opens the one topmost managed Group by default (#908, was D22)', () =>
   });
   show('/administrare/campanii?stare=inactive');
   expect(where()).toBe('/administrare/campanii?stare=inactive');
-  expect(
-    screen.getByRole('heading', { name: 'Toate grupurile' }),
-  ).toBeVisible();
+  expect(screen.getByRole('region', { name: 'Toate grupurile' })).toBeVisible();
 });

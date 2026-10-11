@@ -4,6 +4,7 @@ import type { NotificationRow } from '../../queries/notifications';
 import {
   formatNotificationAge,
   formatNotificationMoment,
+  formatNotificationShortAge,
   inAppLink,
   isGroupNotification,
   markedAllReceipt,
@@ -79,6 +80,21 @@ describe('notification presentation', () => {
     expect(formatNotificationAge('not-a-date', now)).toBe('—');
   });
 
+  it('says the age in a few characters for the end of the title line', () => {
+    const now = new Date('2026-09-20T12:00:00.000Z');
+    const age = (instant: string) => formatNotificationShortAge(instant, now);
+
+    expect(age('2026-09-20T11:59:30.000Z')).toBe('acum');
+    expect(age('2026-09-20T11:45:00.000Z')).toBe('15 min');
+    expect(age('2026-09-20T09:00:00.000Z')).toBe('3 h');
+    expect(age('2026-09-19T12:00:00.000Z')).toBe('1 zi');
+    expect(age('2026-09-17T12:00:00.000Z')).toBe('3 zile');
+    // From a week on, the day itself; the year once it is a year back.
+    expect(age('2026-09-01T12:00:00.000Z')).toBe('1 sept.');
+    expect(age('2025-03-01T12:00:00.000Z')).toBe('1 mar. 2025');
+    expect(age('not-a-date')).toBe('—');
+  });
+
   it('keeps every link the app writes today, and refuses to leave the app', () => {
     expect(inAppLink('/tracker/12')).toBe('/tracker/12');
     expect(inAppLink('/grupuri/3')).toBe('/grupuri/3');
@@ -118,6 +134,7 @@ describe('notification presentation', () => {
       link: '/tracker/12',
       createdAt: '2026-09-20T09:00:00.000Z',
       ageLabel: 'circa 3 ore în urmă',
+      shortAgeLabel: '3 h',
       momentLabel: '20 septembrie 2026, 12:00',
     });
   });

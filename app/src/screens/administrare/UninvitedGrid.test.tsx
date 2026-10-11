@@ -73,7 +73,9 @@ vi.mock('../../queries/reference', async (original) => {
   };
 });
 import { CommandError } from '../../lib/command-reasons';
+import { chooseOption } from '../../test/select';
 import { UninvitedGrid } from './UninvitedGrid';
+import { optionNames } from './select-test-options';
 
 // Fake people only.
 function person(
@@ -200,6 +202,12 @@ describe('the grid', () => {
       }),
     ]);
     show();
+    // The same search field as the "Toți" list.
+    expect(
+      screen
+        .getByLabelText('Caută după nume sau email')
+        .closest('[data-slot="filter-search"], label'),
+    ).toHaveClass('relative');
     await user.type(screen.getByLabelText('Caută după nume sau email'), 'v1@');
     expect(within(grid()).getByText('Exemplu 01')).toBeVisible();
     expect(within(grid()).queryByText('Exemplu 02')).toBeNull();
@@ -436,10 +444,17 @@ describe('inline edits', () => {
     const select = screen.getByRole('combobox', {
       name: 'Rangul pentru Exemplu 01',
     });
-    expect(
-      within(select).queryByRole('option', { name: 'Moderator' }),
-    ).toBeNull();
-    await user.selectOptions(select, 'vot');
+    // The app's own drop-down, in the cell: opening its list keeps the
+    // editor open.
+    expect(select).toHaveAttribute('data-slot', 'select');
+    const offered = await optionNames(user, select);
+    expect(offered).not.toContain('Moderator');
+    expect(offered).toContain('Voluntar cu Drept de Vot');
+    await chooseOption(
+      user,
+      screen.getByRole('combobox', { name: 'Rangul pentru Exemplu 01' }),
+      'Voluntar cu Drept de Vot',
+    );
     expect(api.changeMember).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'role', memberId: 'm1', role: 'vot' }),
     );
@@ -455,6 +470,18 @@ describe('inline edits', () => {
       }),
     );
     const dialog = await screen.findByRole('dialog', { name: 'Departamente' });
+    // The dialog says whose they are; the one explanation waits behind "i".
+    expect(dialog).toHaveAccessibleDescription('Exemplu 01');
+    expect(
+      within(dialog).getByLabelText('Departament principal'),
+    ).toHaveAccessibleDescription(
+      'Departamentul principal apare pe cardul membrului.',
+    );
+    expect(
+      within(dialog)
+        .getByRole('button', { name: 'Salvează' })
+        .closest('[data-slot="dialog-footer"]'),
+    ).not.toBeNull();
     await user.click(within(dialog).getByRole('checkbox', { name: 'Tineret' }));
     await user.click(within(dialog).getByRole('button', { name: 'Salvează' }));
     await waitFor(() =>
@@ -626,7 +653,11 @@ describe('Trimite invitațiile', () => {
       )
       .mockImplementationOnce((ids: string[]) => Promise.resolve(sentAll(ids)));
     show();
-    await user.selectOptions(screen.getByLabelText('Mărimea lotului'), '25');
+    await user.click(
+      within(
+        screen.getByRole('radiogroup', { name: 'Mărimea lotului' }),
+      ).getByRole('radio', { name: '25' }),
+    );
     await user.click(
       screen.getByRole('button', { name: 'Trimite invitațiile (30)' }),
     );
@@ -658,7 +689,11 @@ describe('Trimite invitațiile', () => {
       )
       .mockImplementation((ids: string[]) => Promise.resolve(sentAll(ids)));
     show();
-    await user.selectOptions(screen.getByLabelText('Mărimea lotului'), '25');
+    await user.click(
+      within(
+        screen.getByRole('radiogroup', { name: 'Mărimea lotului' }),
+      ).getByRole('radio', { name: '25' }),
+    );
     await user.click(
       screen.getByRole('button', { name: 'Trimite invitațiile (30)' }),
     );

@@ -6,15 +6,24 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react';
-import { createPortal } from 'react-dom';
-import { ChevronDown, ChevronRight, Network } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
+} from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { cn } from 'cn';
 import {
   DataTable,
   type DataTableColumn,
 } from '../../components/data-table/DataTable';
-import { Panel, SegmentedToggle } from '../../components/layout';
+import {
+  focusRingClass,
+  Panel,
+  panelBoxClass,
+  SegmentedToggle,
+} from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
 import { TaskActionSuccess as Receipt } from '../../components/tasks/TaskActionSuccess';
 import { Badge } from '../../components/ui/badge';
@@ -35,7 +44,6 @@ import {
 import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { GroupCreateDialog, GroupCreatedReceipt } from './GroupCreateDialog';
 import type { GroupsListState } from './group-delete-summary';
-import { useAdministrareActionSlot } from './administrare-tabs';
 import {
   buildTree,
   categoryLabel,
@@ -94,14 +102,14 @@ function GroupNode({ color, depth }: { color: string | null; depth: number }) {
 }
 
 /* The tree guide's geometry, from the cell's padding edge: the cell's 8 px
-   padding, the 48 px chevron gutter when the tree folds, 20 px per level, and
-   the node's 5 px to its centre line. Vertically the node sits on the name's
-   first line — 8 px of padding plus half the 44 px line, 30 px down — so a
-   name that wraps (or a Privat badge that drops below it at 375 px) never
-   moves the node off its elbow. */
+   padding, the 17 px fold gutter when the tree folds (a 16 px chevron and a
+   1 px gap — with the 11 px node, 28 px before a top-level name), 20 px per
+   level, and the node's 5 px to its centre line. Vertically the node sits on
+   the name's first line — 2 px of padding plus half the 44 px line, 24 px
+   down — so a name that wraps never moves the node off its elbow. */
 const INDENT_REM = 1.25;
 function railLeft(level: number, gutter: boolean) {
-  return `calc(${(gutter ? 3.5 : 0.5) + level * INDENT_REM}rem + 5px)`;
+  return `calc(${0.5 + level * INDENT_REM}rem + ${gutter ? 22 : 5}px)`;
 }
 
 const railClass = 'pointer-events-none absolute w-px bg-(--ink-300)';
@@ -141,7 +149,7 @@ function TreeGuide({
     lines.push({
       key: 'stem',
       style: { left: railLeft(row.depth, gutter) },
-      className: 'top-[38px] -bottom-px',
+      className: 'top-[32px] -bottom-px',
     });
   return (
     <span aria-hidden="true" data-slot="tree-guide">
@@ -155,7 +163,7 @@ function TreeGuide({
       {row.depth > 0 && (
         <span
           data-slot="tree-elbow"
-          className="pointer-events-none absolute top-0 h-[30.5px] w-3 rounded-bl-[6px] border-b border-l border-(--ink-300)"
+          className="pointer-events-none absolute top-0 h-[24.5px] w-3 rounded-bl-[6px] border-b border-l border-(--ink-300)"
           style={{ left: railLeft(row.depth - 1, gutter) }}
         />
       )}
@@ -164,9 +172,11 @@ function TreeGuide({
 }
 
 /**
- * The name cell: the fold control in a gutter of its own (aligned on every
- * parent, whatever its depth), the rail, the node and the name. A subgroup's
- * name tells a screen reader whose subgroup it is.
+ * The name cell: the fold control in a narrow gutter of its own (aligned on
+ * every parent, whatever its depth, and no wider than its chevron — its
+ * target reaches 44 px over the empty space around it), the rail, the node,
+ * the name, and the Group's state (Privat, Arhivat) at the cell's end. A
+ * subgroup's name tells a screen reader whose subgroup it is.
  */
 function TreeName({
   row,
@@ -191,11 +201,13 @@ function TreeName({
       <TreeGuide row={row} gutter={gutter} stem={stem} />
       {gutter &&
         (row.hasChildren && toggle ? (
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="me-1 shrink-0"
+            data-slot="tree-fold"
+            className={cn(
+              'relative me-px inline-flex h-11 w-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground after:absolute after:inset-y-0 after:-right-5 after:-left-2 hover:text-foreground [&_svg]:size-4',
+              focusRingClass,
+            )}
             aria-expanded={toggle.expanded}
             aria-label={
               toggle.expanded
@@ -205,9 +217,12 @@ function TreeName({
             onClick={toggle.onToggle}
           >
             <Icon aria-hidden="true" />
-          </Button>
+          </button>
         ) : (
-          <span aria-hidden="true" className="me-1 inline-block size-11" />
+          <span
+            aria-hidden="true"
+            className="me-px inline-block h-11 w-4 shrink-0"
+          />
         ))}
       <span
         aria-hidden="true"
@@ -217,7 +232,7 @@ function TreeName({
       <span className="flex h-11 shrink-0 items-center">
         <GroupNode color={row.group.color} depth={row.depth} />
       </span>
-      <span className="ms-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="ms-2 flex min-w-0 flex-1 items-center gap-x-2">
         {link ? (
           <Link
             to={groupPath(row.group.id)}
@@ -238,8 +253,13 @@ function TreeName({
             {subgroupOf}
           </span>
         )}
-        <PrivateGroupBadge isPrivate={row.group.is_private} />
-        <StatusBadge status={row.group.status} />
+        <span
+          data-slot="group-state"
+          className="ms-auto flex shrink-0 items-center gap-1.5 empty:hidden"
+        >
+          <PrivateGroupBadge isPrivate={row.group.is_private} />
+          <StatusBadge status={row.group.status} />
+        </span>
       </span>
     </span>
   );
@@ -390,11 +410,13 @@ function ledColumns(rows: readonly LedRow[]): DataTableColumn<LedRow>[] {
   ];
 }
 
-/* Under 640 px the tree is the names: a long one wraps, and the detail
-   columns wait for the Group page. The name cell anchors the rail and keeps
-   its first line at the top, where the rail's elbow meets it. */
+/* Under 640 px the tree is the names: a long one wraps, the detail columns
+   wait for the Group page, and a header over one column of names says
+   nothing, so it goes too (`hideHeaderUnderSm`). The name cell anchors the rail and keeps its first
+   line at the top, where the rail's elbow meets it; 2 px of padding around
+   the 44 px name makes a 48 px row. */
 const treeColumnClass = {
-  name: 'relative whitespace-normal [&:is(td)]:align-top',
+  name: 'relative whitespace-normal [&:is(td)]:py-0.5 [&:is(td)]:align-top',
   category: 'max-sm:hidden',
   min_level: 'max-sm:hidden',
   members: 'max-sm:hidden',
@@ -416,7 +438,7 @@ function ViewToggle({
       ]}
       value={view}
       onChange={onChange}
-      className="max-sm:w-full max-sm:*:flex-auto max-sm:*:px-3"
+      className="max-sm:min-w-0 max-sm:flex-1 max-sm:*:flex-auto max-sm:*:px-3"
     />
   );
 }
@@ -425,11 +447,60 @@ function countText(count: number) {
   return count === 1 ? '1 grup' : `${count} grupuri`;
 }
 
+/**
+ * How many Groups the list holds. Beside the view switch on a phone there is
+ * no room for it, so it is only spoken there.
+ */
+function GroupCount({ count, quiet }: { count: number; quiet: boolean }) {
+  return (
+    <p
+      role="status"
+      className={cn(
+        'm-0 ms-auto text-sm text-muted-foreground',
+        quiet && 'max-sm:sr-only',
+      )}
+    >
+      {countText(count)}
+    </p>
+  );
+}
+
+/**
+ * The list's frame: one row of controls — the view switch at the start, the
+ * count and Extinde tot at the end — over the box. No heading: the page
+ * already says Grupuri, so the list is named by `label` alone.
+ */
+function GroupsList({
+  label,
+  toolbar,
+  children,
+}: {
+  label: string;
+  toolbar?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <Panel aria-label={label} bare stack={3}>
+      {toolbar && (
+        <div
+          data-slot="groups-toolbar"
+          className="flex min-h-11 min-w-0 items-center gap-2 empty:hidden"
+        >
+          {toolbar}
+        </div>
+      )}
+      <div className={panelBoxClass}>{children}</div>
+    </Panel>
+  );
+}
+
 function GroupTree({
   groups,
+  label,
   viewToggle,
 }: {
   groups: AdminGroup[];
+  label: string;
   viewToggle?: ReactNode;
 }) {
   const rows = useMemo(() => buildTree(groups), [groups]);
@@ -449,27 +520,28 @@ function GroupTree({
   const navigate = useNavigate();
 
   return (
-    <Panel
-      eyebrow="Grupuri"
-      icon={Network}
-      title="Structura grupurilor"
-      control={
+    <GroupsList
+      label={label}
+      toolbar={
         <>
           {viewToggle}
-          <p role="status" className="m-0 text-sm text-muted-foreground">
-            {countText(groups.length)}
-          </p>
+          <GroupCount count={groups.length} quiet={Boolean(viewToggle)} />
           {expandable.length > 0 && (
             <Button
               type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-11"
+              variant="ghost"
+              size="icon"
+              aria-label={allOpen ? 'Restrânge tot' : 'Extinde tot'}
+              title={allOpen ? 'Restrânge tot' : 'Extinde tot'}
               onClick={() =>
                 setExpanded(allOpen ? new Set<number>() : new Set(expandable))
               }
             >
-              {allOpen ? 'Restrânge tot' : 'Extinde tot'}
+              {allOpen ? (
+                <ChevronsDownUp aria-hidden="true" />
+              ) : (
+                <ChevronsUpDown aria-hidden="true" />
+              )}
             </Button>
           )}
         </>
@@ -480,37 +552,34 @@ function GroupTree({
         data={shown}
         emptyTitle="Niciun grup."
         columnClassName={treeColumnClass}
+        hideHeaderUnderSm
         rowClassName={(row) => cn(rowLinkClass, rowTone(row))}
         onRowClick={(row) => void navigate(groupPath(row.group.id))}
       />
-    </Panel>
+    </GroupsList>
   );
 }
 
 function LedGroups({
   rows,
-  title,
+  label,
   viewToggle,
 }: {
   rows: LedRow[];
-  title: string;
+  label: string;
   viewToggle?: ReactNode;
 }) {
   const columns = useMemo(() => ledColumns(rows), [rows]);
   const navigate = useNavigate();
   const count = rows.filter((row) => row.lead !== null).length;
   return (
-    <Panel
-      eyebrow="Grupuri"
-      icon={Network}
-      title={title}
-      control={
+    <GroupsList
+      label={label}
+      toolbar={
         <>
           {viewToggle}
           {count > 0 && (
-            <p role="status" className="m-0 text-sm text-muted-foreground">
-              {countText(count)}
-            </p>
+            <GroupCount count={count} quiet={Boolean(viewToggle)} />
           )}
         </>
       }
@@ -519,6 +588,7 @@ function LedGroups({
         columns={columns}
         data={rows}
         columnClassName={treeColumnClass}
+        hideHeaderUnderSm
         emptyTitle="Nu ai nicio funcție într-un grup."
         emptyDescription="Grupurile în care ai o funcție apar aici."
         rowClassName={(row) =>
@@ -528,14 +598,14 @@ function LedGroups({
           if (row.lead) void navigate(groupPath(row.group.id));
         }}
       />
-    </Panel>
+    </GroupsList>
   );
 }
 
 /**
  * Administrare → Grupuri, scoped by authority (ADR-0009 §Management surface;
  * #825). BC and Moderator see the whole Group tree and create a top-level
- * Group from the page header; when they also hold a Group Role, a **Toate |
+ * Group with the page's plus button; when they also hold a Group Role, a **Toate |
  * Conduse de mine** switch (`?vedere=conduse`, #921) narrows it to the Groups
  * they lead. A Group Manager or Responsible sees exactly those — including
  * the Child Groups they reach only through an ancestor (ruling R14) — and
@@ -643,8 +713,8 @@ export default function AdminGroupsTab() {
   const failed = createTopLevel
     ? groupsQuery.isError
     : myGroupsQuery.isError || rosterQuery.isError;
-  const actionSlot = useAdministrareActionSlot();
-  const title =
+  // The list's accessible name; nothing on the page repeats "Grupuri".
+  const label =
     createTopLevel && view === 'all'
       ? 'Structura grupurilor'
       : 'Grupurile mele';
@@ -658,24 +728,21 @@ export default function AdminGroupsTab() {
 
   return (
     <>
-      {createTopLevel &&
-        actionSlot &&
-        createPortal(
-          <GroupCreateDialog
-            trigger="Creează Grup"
-            title="Grup nou"
-            parent={null}
-            groups={activeGroups}
-            groupsById={groupsById}
-            levels={levels}
-            actorLevel={actorLevel}
-            members={membersQuery.data ?? []}
-            disabled={command.isPending}
-            choosePrivate={createTopLevel}
-            onCreate={run}
-          />,
-          actionSlot,
-        )}
+      {createTopLevel && (
+        <GroupCreateDialog
+          trigger="Creează Grup"
+          title="Grup nou"
+          parent={null}
+          groups={activeGroups}
+          groupsById={groupsById}
+          levels={levels}
+          actorLevel={actorLevel}
+          members={membersQuery.data ?? []}
+          disabled={command.isPending}
+          choosePrivate={createTopLevel}
+          onCreate={run}
+        />
+      )}
 
       {deleted && message === null && <Receipt>{deleted}</Receipt>}
       {message && <p role="status">{message}</p>}
@@ -686,17 +753,17 @@ export default function AdminGroupsTab() {
       )}
 
       {pending ? (
-        <Panel eyebrow="Grupuri" icon={Network} title={title}>
+        <GroupsList label={label}>
           <Loading label="Se încarcă grupurile…" />
-        </Panel>
+        </GroupsList>
       ) : failed ? (
-        <Panel eyebrow="Grupuri" icon={Network} title={title}>
+        <GroupsList label={label}>
           <ErrorState text="Nu am putut încărca grupurile." onRetry={retry} />
-        </Panel>
+        </GroupsList>
       ) : createTopLevel && view === 'all' ? (
-        <GroupTree groups={groups} viewToggle={viewToggle} />
+        <GroupTree groups={groups} label={label} viewToggle={viewToggle} />
       ) : (
-        <LedGroups rows={led} title={title} viewToggle={viewToggle} />
+        <LedGroups rows={led} label={label} viewToggle={viewToggle} />
       )}
     </>
   );

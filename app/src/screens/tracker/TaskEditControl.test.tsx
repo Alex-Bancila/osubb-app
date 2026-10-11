@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import axe from 'axe-core';
 import { taskRow } from '../../test/task-fixtures';
+import { chooseOption } from '../../test/select';
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 const state = vi.hoisted(() => ({
   options: vi.fn(),
@@ -42,8 +43,20 @@ const moving = {
   ],
   campaigns: [...data.campaigns, { id: 13, name: 'Vară', group_id: 4 }],
 };
-const rootBox = () =>
-  screen.getByRole('combobox', { name: 'Grup principal (obligatoriu)' });
+/** What a `Select` offers: its list is opened, read and closed again. */
+async function optionNames(
+  user: ReturnType<typeof userEvent.setup>,
+  field: HTMLElement,
+) {
+  await user.click(field);
+  const names = (await screen.findAllByRole('option')).map(
+    (option) => option.textContent,
+  );
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+  return names;
+}
+const rootBox = () => screen.getByRole('combobox', { name: 'Grup principal' });
 async function pick(
   user: ReturnType<typeof userEvent.setup>,
   box: HTMLElement,
@@ -68,8 +81,15 @@ beforeEach(() => {
 });
 async function openEditor(user = userEvent.setup()) {
   await user.click(screen.getByRole('button', { name: 'Editează taskul' }));
+  await screen.findByRole('dialog', { name: 'Editează taskul' });
   return user;
 }
+const modeGroup = () =>
+  screen.getByRole('radiogroup', { name: 'Mod de atribuire' });
+const audienceGroup = () =>
+  screen.getByRole('radiogroup', { name: 'Audiență' });
+const segment = (group: HTMLElement, name: string) =>
+  within(group).getByRole('radio', { name });
 it('hides editing for non-managers, in review and every terminal status', () => {
   const view = render(<TaskEditControl task={task} canManage={false} />);
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
@@ -83,6 +103,14 @@ it('hides editing for non-managers, in review and every terminal status', () => 
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   }
 });
+it('is the sheet’s primary action: a filled button with a pencil, named "Editează taskul"', () => {
+  render(<TaskEditControl task={task} canManage />);
+  const edit = screen.getByRole('button', { name: 'Editează taskul' });
+  expect(edit.querySelector('svg.lucide-pencil')).not.toBeNull();
+  // Filled, not outlined; "taskul" is kept for a screen reader only.
+  expect(edit).toHaveClass('bg-primary');
+  expect(within(edit).getByText('taskul')).toHaveClass('sr-only');
+});
 it('stays editable while in progress, Feedback pending included', () => {
   render(
     <TaskEditControl
@@ -93,14 +121,35 @@ it('stays editable while in progress, Feedback pending included', () => {
   expect(screen.getByRole('button', { name: 'Editează taskul' })).toBeVisible();
 });
 it('edits every field through update_task after a preview with no consequences', async () => {
-  const { container } = render(<TaskEditControl task={task} canManage />);
+  render(<TaskEditControl task={task} canManage />);
   const user = await openEditor();
+  // The form is a form sheet over the details: no box inside them, the
+  // actions pinned with Renunță first.
+  const sheet = screen.getByRole('dialog', { name: 'Editează taskul' });
+  expect(sheet).toHaveAttribute('data-slot', 'form-sheet');
+  const footer = sheet.querySelector<HTMLElement>(
+    '[data-slot="sheet-footer"][data-pinned]',
+  );
   expect(
-    screen.queryByRole('option', { name: 'Alt grup' }),
-  ).not.toBeInTheDocument();
-  expect(screen.getByRole('option', { name: 'Părinte' })).toBeInTheDocument();
+    within(footer as HTMLElement)
+      .getAllByRole('button')
+      .map((button) => button.textContent),
+  ).toEqual(['Renunță', 'Salvează modificările']);
+  expect(screen.getByLabelText('Termen — ora României')).toHaveAttribute(
+    'data-slot',
+    'date-picker',
+  );
   const campaign = screen.getByLabelText('Campanie (opțional)');
-  expect(campaign).toHaveValue('9');
+  // The Task's own Campaign, no longer offered, stays in the list as the
+  // current one; another Group's Campaign is not there.
+  expect(campaign).toHaveAttribute('data-value', '9');
+  expect(campaign).toHaveTextContent('Istoric (actuală)');
+  expect(await optionNames(user, campaign)).toEqual([
+    'Fără campanie',
+    'Istoric (actuală)',
+    'Părinte',
+    'Copil',
+  ]);
   expect(campaign).toHaveAccessibleDescription(/etichetă pentru raportare/i);
   expect(screen.queryByLabelText('Dificultate')).not.toBeInTheDocument();
   expect(
@@ -108,12 +157,12 @@ it('edits every field through update_task after a preview with no consequences',
   ).toBeDisabled();
   await user.clear(screen.getByLabelText('Titlu'));
   await user.type(screen.getByLabelText('Titlu'), 'Titlu nou');
-  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'public');
-  await user.selectOptions(screen.getByLabelText('Audiență'), 'org');
-  await user.selectOptions(campaign, '11');
+  await user.click(segment(modeGroup(), 'Public'));
+  await user.click(segment(audienceGroup(), 'Toți membrii OSUBB'));
+  await chooseOption(user, campaign, 'Copil');
   expect(
     (
-      await axe.run(container, {
+      await axe.run(sheet, {
         rules: { 'color-contrast': { enabled: false } },
       })
     ).violations,
@@ -143,31 +192,41 @@ it('edits every field through update_task after a preview with no consequences',
     'istoricul taskului',
   );
   expect(screen.getByRole('status')).toHaveFocus();
+}, 20_000);
+it('returns focus to "Editează" when the sheet is cancelled, and reopens from the Task as it is', async () => {
+  render(<TaskEditControl task={task} canManage />);
+  const user = await openEditor();
+  await user.type(screen.getByLabelText('Titlu'), ' schimbat');
+  await user.click(screen.getByRole('button', { name: 'Renunță' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(screen.getByRole('button', { name: 'Editează taskul' })).toHaveFocus();
+  expect(state.mutate).not.toHaveBeenCalled();
+  await openEditor(user);
+  expect(screen.getByLabelText('Titlu')).toHaveValue(task.title);
 });
 it('hides Audiență while Direct and opens it from the stored Audience on switching to Public (R26)', async () => {
   render(<TaskEditControl task={task} canManage />);
   const user = await openEditor();
-  const mode = screen.getByLabelText('Mod de atribuire');
-  expect(mode).toHaveValue('direct');
-  expect(screen.queryByLabelText('Audiență')).not.toBeInTheDocument();
+  expect(modeGroup()).toHaveAttribute('data-slot', 'segmented-radio');
+  expect(segment(modeGroup(), 'Direct')).toBeChecked();
+  expect(screen.queryByRole('radiogroup', { name: 'Audiență' })).toBeNull();
 
   // The convert-to-public path starts from the Task's stored Audience.
-  await user.selectOptions(mode, 'public');
-  const audience = screen.getByLabelText('Audiență');
-  expect(audience).toHaveValue('local');
-  expect(audience).toHaveAccessibleDescription(
+  await user.click(segment(modeGroup(), 'Public'));
+  expect(segment(audienceGroup(), 'Membrii grupului')).toBeChecked();
+  expect(audienceGroup()).toHaveAccessibleDescription(
     'Cine vede taskul și se poate înscrie.',
   );
   expect(
-    within(audience)
-      .getAllByRole('option')
+    within(audienceGroup())
+      .getAllByRole('radio')
       .map((option) => option.textContent),
   ).toEqual(['Membrii grupului', 'Toți membrii OSUBB']);
-  await user.selectOptions(audience, 'org');
-  await user.selectOptions(mode, 'direct');
-  expect(screen.queryByLabelText('Audiență')).not.toBeInTheDocument();
-  await user.selectOptions(mode, 'public');
-  expect(screen.getByLabelText('Audiență')).toHaveValue('org');
+  await user.click(segment(audienceGroup(), 'Toți membrii OSUBB'));
+  await user.click(segment(modeGroup(), 'Direct'));
+  expect(screen.queryByRole('radiogroup', { name: 'Audiență' })).toBeNull();
+  await user.click(segment(modeGroup(), 'Public'));
+  expect(segment(audienceGroup(), 'Toți membrii OSUBB')).toBeChecked();
 });
 it('sends local when a public org Task goes Direct (R26)', async () => {
   render(
@@ -177,7 +236,7 @@ it('sends local when a public org Task goes Direct (R26)', async () => {
     />,
   );
   const user = await openEditor();
-  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'direct');
+  await user.click(segment(modeGroup(), 'Direct'));
   await user.click(
     screen.getByRole('button', { name: 'Salvează modificările' }),
   );
@@ -197,10 +256,12 @@ it('puts a direct_task_local_only refusal on Mod de atribuire (R26)', async () =
   await user.click(
     screen.getByRole('button', { name: 'Salvează modificările' }),
   );
-  const mode = screen.getByLabelText('Mod de atribuire');
+  const mode = modeGroup();
   await waitFor(() =>
     expect(mode).toHaveAccessibleDescription(
-      'Un task atribuit direct este doar pentru grupul lui. Alege modul public ca să-l deschizi întregului OSUBB.',
+      expect.stringContaining(
+        'Un task atribuit direct este doar pentru grupul lui. Alege modul public ca să-l deschizi întregului OSUBB.',
+      ),
     ),
   );
   expect(state.mutate).not.toHaveBeenCalled();
@@ -214,7 +275,7 @@ it('names every affected member and saves with their consequences accepted only 
     <TaskEditControl task={{ ...task, assignment_mode: 'public' }} canManage />,
   );
   const user = await openEditor();
-  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'direct');
+  await user.click(segment(modeGroup(), 'Direct'));
   await user.click(
     screen.getByRole('button', { name: 'Salvează modificările' }),
   );
@@ -226,9 +287,13 @@ it('names every affected member and saves with their consequences accepted only 
   expect(state.mutate).not.toHaveBeenCalled();
 
   await user.click(within(dialog).getByRole('button', { name: 'Renunță' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Confirmă modificarea' }),
+    ).toBeNull(),
+  );
   expect(state.mutate).not.toHaveBeenCalled();
-  expect(screen.getByLabelText('Mod de atribuire')).toHaveValue('direct');
+  expect(segment(modeGroup(), 'Direct')).toBeChecked();
 
   await user.click(
     screen.getByRole('button', { name: 'Salvează modificările' }),
@@ -255,7 +320,7 @@ it('describes a removed Executor and promotes nobody (#682)', async () => {
     />,
   );
   const user = await openEditor();
-  await user.selectOptions(screen.getByLabelText('Audiență'), 'local');
+  await user.click(segment(audienceGroup(), 'Membrii grupului'));
   await user.click(
     screen.getByRole('button', { name: 'Salvează modificările' }),
   );
@@ -292,11 +357,13 @@ it('moves the Task to another Group only after listing every consequence by name
     screen.queryByRole('combobox', { name: 'Subgrup (opțional)' }),
   ).not.toBeInTheDocument();
   // The Task's own Campaign stays chosen; the server says if it must go.
-  expect(screen.getByLabelText('Campanie (opțional)')).toHaveValue('9');
-  expect(screen.getByRole('option', { name: 'Vară' })).toBeInTheDocument();
+  expect(screen.getByLabelText('Campanie (opțional)')).toHaveAttribute(
+    'data-value',
+    '9',
+  );
   expect(
-    screen.queryByRole('option', { name: 'Copil' }),
-  ).not.toBeInTheDocument();
+    await optionNames(user, screen.getByLabelText('Campanie (opțional)')),
+  ).toEqual(['Fără campanie', 'Istoric (actuală)', 'Vară']);
   await user.click(
     screen.getByRole('button', { name: 'Salvează modificările' }),
   );
@@ -346,16 +413,26 @@ it('moves to a Group below, clearing a Campaign picked here that cannot follow',
     />,
   );
   const user = await openEditor();
-  await user.selectOptions(screen.getByLabelText('Campanie (opțional)'), '11');
+  await chooseOption(
+    user,
+    screen.getByLabelText('Campanie (opțional)'),
+    'Copil',
+  );
   await pick(
     user,
     screen.getByRole('combobox', { name: 'Subgrup (opțional)' }),
     /^Afișe/,
   );
   // Copil (owned by Echipa) still tags Afișe, below it.
-  expect(screen.getByLabelText('Campanie (opțional)')).toHaveValue('11');
+  expect(screen.getByLabelText('Campanie (opțional)')).toHaveAttribute(
+    'data-value',
+    '11',
+  );
   await pick(user, rootBox(), 'Tineret');
-  expect(screen.getByLabelText('Campanie (opțional)')).toHaveValue('');
+  expect(screen.getByLabelText('Campanie (opțional)')).toHaveAttribute(
+    'data-value',
+    '',
+  );
   await user.click(
     screen.getByRole('button', { name: 'Salvează modificările' }),
   );
@@ -515,7 +592,7 @@ it('shows the new consequences when the Task changed after the preview', async (
     <TaskEditControl task={{ ...task, assignment_mode: 'public' }} canManage />,
   );
   const user = await openEditor();
-  await user.selectOptions(screen.getByLabelText('Mod de atribuire'), 'direct');
+  await user.click(segment(modeGroup(), 'Direct'));
   await user.click(
     screen.getByRole('button', { name: 'Salvează modificările' }),
   );
@@ -557,7 +634,7 @@ it('prevents duplicate updates and retains confirmation when refetch completes t
   );
   const view = render(<TaskEditControl task={task} canManage />);
   const user = await openEditor();
-  await user.type(screen.getByLabelText('Descriere'), 'Detalii');
+  await user.type(screen.getByLabelText('Descriere (opțional)'), 'Detalii');
   await user.dblClick(
     screen.getByRole('button', { name: 'Salvează modificările' }),
   );
@@ -585,7 +662,7 @@ it('edits an Umbrella without deadline, Campaign, mode or audience', async () =>
   const user = await openEditor();
   expect(screen.queryByLabelText(/Campanie/)).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Mod de atribuire')).not.toBeInTheDocument();
-  await user.type(screen.getByLabelText('Descriere'), 'Plan');
+  await user.type(screen.getByLabelText('Descriere (opțional)'), 'Plan');
   await user.click(
     screen.getByRole('button', { name: 'Salvează modificările' }),
   );

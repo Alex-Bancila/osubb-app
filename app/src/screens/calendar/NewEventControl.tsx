@@ -1,14 +1,8 @@
 import { useMemo, useState } from 'react';
 import { PlusIcon } from 'lucide-react';
 
-import { Button } from '../../components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '../../components/ui/dialog';
+import { FabAction } from '../../components/layout';
+import { FormSheet } from '../../components/ui/form-sheet';
 import { useAuth } from '../../lib/auth';
 import {
   useCreateEvent,
@@ -61,32 +55,23 @@ function NewEventDialog({
   const [attempt, setAttempt] = useState(0);
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next && create.isPending) return;
-        setOpen(next);
-      }}
-    >
-      <Button
-        type="button"
-        className="min-h-11 shrink-0"
-        onClick={() => {
+    <>
+      <FabAction
+        label="Eveniment nou"
+        icon={PlusIcon}
+        className="shrink-0"
+        onSelect={() => {
           setAttempt((current) => current + 1);
           setOpen(true);
         }}
+      />
+      <FormSheet
+        open={open}
+        onOpenChange={setOpen}
+        title="Eveniment nou"
+        busy={create.isPending}
+        className="sm:max-w-2xl"
       >
-        <PlusIcon aria-hidden="true" />
-        Eveniment nou
-      </Button>
-      <DialogContent fullScreenOnPhone className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Eveniment nou</DialogTitle>
-          <DialogDescription>
-            Publică o întâlnire, activitate sau dată importantă într-un grup pe
-            care îl gestionezi. Orele sunt interpretate în fusul României.
-          </DialogDescription>
-        </DialogHeader>
         <EventForm
           key={attempt}
           options={options}
@@ -107,7 +92,7 @@ function NewEventDialog({
             onCreated?.(created.id);
           }}
         />
-      </DialogContent>
-    </Dialog>
+      </FormSheet>
+    </>
   );
 }

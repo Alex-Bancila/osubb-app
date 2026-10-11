@@ -6,7 +6,7 @@ const MIN = 1;
 const MAX = 5;
 
 type RatingPickerProps = {
-  /** The visible name of the control, e.g. "Nota (obligatoriu)". */
+  /** The visible name of the control, e.g. "Nota". */
   label: string;
   value: number | null;
   onChange: (value: number) => void;

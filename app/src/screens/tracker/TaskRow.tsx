@@ -1,5 +1,5 @@
 import { useId, type CSSProperties } from 'react';
-import { CalendarClock } from 'lucide-react';
+import { Clock, UserRound } from 'lucide-react';
 import { ListRow } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
 import { formatPoints } from '../../lib/format';
@@ -8,11 +8,11 @@ import { TaskGroupChip, TaskStatusBadges } from './TaskCard';
 
 /**
  * One Task in De gestionat and Toate (ruling R10, #687), on `ListRow`
- * (#846, layout T1/X14): the Group stripe, the title with the points as the
- * row's value, and one meta line under both (the row's footer, so it has the
- * full width at 375 px) — Group chip · status, then deadline · Executor, each
- * pair wrapping as a unit. The title wraps by word and never
- * narrows below 12 rem, so every row of a list has the same shape.
+ * (#846, layout T1/X14): the Group stripe, the title across the row's whole
+ * width — so it wraps where its words do, never into three short lines beside
+ * a value column — and one meta line under it (the row's footer): Group chip
+ * · status, then the short deadline · the Executor by avatar and name, and
+ * the points at the line's end. Each unit wraps whole.
  *
  * The whole row opens the details sheet: the title is the button, and its
  * hit area is stretched over the row. The Executor's name stays its own
@@ -47,17 +47,21 @@ export function TaskRow({
             data-slot="task-row-meta"
             className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-sm"
           >
-            {/* Two units — where the Task stands, then when and who — so a
-                  row breaks between them, never inside one. */}
+            {/* Three units — where the Task stands, when and who, its
+                points — so a row breaks between them, never inside one. */}
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <TaskGroupChip task={task} />
               <TaskStatusBadges task={task} />
             </div>
             <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
               <p className="m-0 flex min-w-0 items-center gap-1.5">
-                <CalendarClock
+                <Clock
                   aria-hidden="true"
-                  className="size-4 shrink-0 text-muted-foreground"
+                  className={
+                    task.overdue
+                      ? 'size-4 shrink-0 text-destructive'
+                      : 'size-4 shrink-0 text-muted-foreground'
+                  }
                 />
                 <span className="sr-only">Termen: </span>
                 {task.deadline ? (
@@ -65,8 +69,8 @@ export function TaskRow({
                     dateTime={task.deadline}
                     className={
                       task.overdue
-                        ? 'font-semibold text-destructive'
-                        : undefined
+                        ? 'font-semibold text-destructive tabular-nums'
+                        : 'tabular-nums'
                     }
                   >
                     {task.deadlineLabel}
@@ -82,7 +86,7 @@ export function TaskRow({
               {task.kind === 'task' &&
                 !(isTerminalTask(task.status) && task.executor === null) && (
                   <p className="m-0 flex min-w-0 items-center gap-1.5">
-                    <span className="text-muted-foreground">Executor:</span>
+                    <span className="sr-only">Executor:</span>
                     {task.executor?.name ? (
                       <MemberName
                         size="sm"
@@ -92,34 +96,38 @@ export function TaskRow({
                         fullName={task.executor.name}
                       />
                     ) : (
-                      <span className="min-w-0">
-                        {task.executor ? 'Nume indisponibil' : 'Neatribuit'}
-                      </span>
+                      <>
+                        <UserRound
+                          aria-hidden="true"
+                          className="size-4 shrink-0 text-muted-foreground"
+                        />
+                        <span className="min-w-0 text-muted-foreground">
+                          {task.executor ? 'Nume indisponibil' : 'Neatribuit'}
+                        </span>
+                      </>
                     )}
                   </p>
                 )}
             </div>
+            {task.points !== null && (
+              <p
+                data-slot="task-row-points"
+                className="m-0 ml-auto flex shrink-0 items-baseline gap-1 tabular-nums"
+              >
+                <span className="text-base font-bold">
+                  {formatPoints(task.points)}
+                </span>
+                <span className="text-xs text-muted-foreground">puncte</span>
+              </p>
+            )}
           </div>
         }
         className="items-start gap-x-4 gap-y-2 py-3 pr-4 pl-5"
-        value={
-          task.points !== null ? (
-            <p
-              data-slot="task-row-points"
-              className="m-0 flex items-baseline justify-end gap-1"
-            >
-              <span className="text-base font-bold">
-                {formatPoints(task.points)}
-              </span>
-              <span className="text-xs text-muted-foreground">puncte</span>
-            </p>
-          ) : undefined
-        }
       >
         <h2
           id={titleId}
           data-slot="task-row-title"
-          className="m-0 min-w-48 text-base leading-snug font-semibold text-balance wrap-break-word"
+          className="m-0 text-base leading-snug font-semibold wrap-break-word"
         >
           {onOpenTask ? (
             <button

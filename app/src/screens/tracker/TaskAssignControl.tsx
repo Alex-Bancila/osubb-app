@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { UserPlus } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import {
   Dialog,
@@ -98,7 +99,12 @@ export function TaskAssignControl({
               }
             }}
           >
-            <Button type="button" onClick={() => setOpen(true)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(true)}
+            >
+              <UserPlus aria-hidden="true" />
               Atribuie
             </Button>
             {/* After a save, focus lands on the confirmation: the Atribuie

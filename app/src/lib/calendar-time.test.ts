@@ -58,3 +58,26 @@ describe('Bucharest calendar time', () => {
     expect(formatBucharestTime('not-a-date')).toBe('—');
   });
 });
+
+describe('formatBucharestShort', () => {
+  it('prints the short day and the time in Romania, without the year in the same year', async () => {
+    const { formatBucharestShort, formatBucharestShortDay } =
+      await import('./calendar-time');
+    const now = '2026-10-10T09:00:00Z';
+    // 20:59 UTC is 23:59 in Bucharest (EEST).
+    expect(formatBucharestShort('2026-10-14T20:59:00Z', now)).toBe(
+      'mie., 14 oct. · 23:59',
+    );
+    expect(formatBucharestShortDay('2026-10-14T20:59:00Z', now)).toBe(
+      'mie., 14 oct.',
+    );
+  });
+
+  it('says the year when it is not this one, and a dash for no date', async () => {
+    const { formatBucharestShort } = await import('./calendar-time');
+    expect(
+      formatBucharestShort('2027-01-05T10:00:00Z', '2026-10-10T09:00:00Z'),
+    ).toBe('mar., 5 ian. 2027 · 12:00');
+    expect(formatBucharestShort('nu e o dată')).toBe('—');
+  });
+});

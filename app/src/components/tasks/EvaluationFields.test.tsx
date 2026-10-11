@@ -57,13 +57,12 @@ function renderForm(groupId: number | null = null) {
   );
 }
 
-const nota = () =>
-  screen.getByRole('spinbutton', { name: 'Nota (obligatoriu)' });
+const nota = () => screen.getByRole('spinbutton', { name: 'Nota' });
 
 it('offers Difficulty as ten named levels and Nota as one number (R29a, #986)', () => {
   renderForm();
   const difficulty = screen.getByRole('radiogroup', {
-    name: 'Dificultate (obligatoriu)',
+    name: 'Dificultate',
   });
   // Five stars, three medals, two roles — each named with the guide's words.
   expect(
@@ -96,7 +95,7 @@ it('sets the stars with the arrow keys and the number keys', async () => {
   const user = userEvent.setup();
   renderForm();
   const difficulty = screen.getByRole('radiogroup', {
-    name: 'Dificultate (obligatoriu)',
+    name: 'Dificultate',
   });
   await user.click(screen.getByRole('radio', { name: /^2 stele — / }));
   expect(difficulty).toHaveAccessibleDescription(`2 din 5 — ${hint(2)}`);
@@ -147,10 +146,7 @@ it('keeps the points preview and sends the same integers to the command', async 
   await user.keyboard('5');
   // Difficulty × the Rating's multiplier from `rating_guide`: 4 × 3.
   expect(screen.getByRole('status')).toHaveTextContent('12 puncte');
-  await user.type(
-    screen.getByLabelText('Observații (obligatoriu)'),
-    'Foarte bine',
-  );
+  await user.type(screen.getByLabelText('Observații'), 'Foarte bine');
   await user.click(screen.getByRole('button', { name: 'Confirmă evaluarea' }));
   expect(onEvaluate).toHaveBeenCalledWith({
     difficulty: 4,
@@ -169,7 +165,7 @@ it.each([1, 2, 3, 4, 5])(
     await user.click(star);
     await user.click(nota());
     await user.keyboard(String(value));
-    await user.type(screen.getByLabelText('Observații (obligatoriu)'), 'ok');
+    await user.type(screen.getByLabelText('Observații'), 'ok');
     await user.click(
       screen.getByRole('button', { name: 'Confirmă evaluarea' }),
     );
@@ -189,7 +185,7 @@ it('refuses a missing choice under its control and focuses it', async () => {
   expect(screen.getByText('Alege Dificultatea.')).toBeInTheDocument();
   expect(screen.getByText('Alege Nota.')).toBeInTheDocument();
   expect(
-    screen.getByRole('radiogroup', { name: 'Dificultate (obligatoriu)' }),
+    screen.getByRole('radiogroup', { name: 'Dificultate' }),
   ).toHaveAttribute('aria-invalid', 'true');
   expect(nota()).toHaveAttribute('aria-invalid', 'true');
   expect(screen.getByRole('radio', { name: /^1 stea — / })).toHaveFocus();
@@ -220,7 +216,7 @@ it('chooses a medal or a role and previews its base points (#985, #986)', async 
   const user = userEvent.setup();
   renderForm();
   const difficulty = screen.getByRole('radiogroup', {
-    name: 'Dificultate (obligatoriu)',
+    name: 'Dificultate',
   });
   // Arrow keys walk past the fifth star into the responsibilities.
   await user.click(screen.getByRole('radio', { name: /^5 stele — / }));
@@ -236,7 +232,7 @@ it('chooses a medal or a role and previews its base points (#985, #986)', async 
   expect(screen.getByRole('status')).toHaveTextContent('60 puncte');
   await user.keyboard('1');
   expect(screen.getByRole('status')).toHaveTextContent('−20 puncte');
-  await user.type(screen.getByLabelText('Observații (obligatoriu)'), 'ok');
+  await user.type(screen.getByLabelText('Observații'), 'ok');
   await user.click(screen.getByRole('button', { name: 'Confirmă evaluarea' }));
   expect(onEvaluate).toHaveBeenCalledWith({
     difficulty: 10,

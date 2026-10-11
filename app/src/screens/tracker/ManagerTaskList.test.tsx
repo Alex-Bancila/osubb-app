@@ -1,8 +1,10 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import type { ComponentProps } from 'react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
+import { chooseOption } from '../../test/select';
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 // R43: Grupuri preferate, read by the page's scope.
 const preferences = vi.hoisted(() => ({
@@ -33,7 +35,8 @@ vi.mock('../../queries/work-filter-options', () => ({
 import { closeFilters, filterButton, openFilters } from '../../test/filters';
 import { taskRow } from '../../test/task-fixtures';
 import { PreferredGroupsScope } from '../../components/preferred-groups/PreferredGroupsScope';
-import { ManagerTaskList } from './ManagerTaskList';
+import { ManagerTaskList as SearchedManagerTaskList } from './ManagerTaskList';
+import { useTitleSearch } from './use-title-search';
 import { compareManagedTasks } from './manager-task-list';
 import { toTaskPresentation } from './task-presentation';
 
@@ -94,7 +97,7 @@ const rows = [
   }),
 ];
 
-/** Six Tasks: the list controls (Stare, Caută, Ordonează) appear. */
+/** Six Tasks: the list controls (Stare, Ordonează) appear. */
 const sixRows = [
   ...rows,
   taskRow({
@@ -106,6 +109,23 @@ const sixRows = [
     group: edu,
   }),
 ];
+
+/** The list with the search the page hands it, and De gestionat's empty text. */
+function ManagerTaskList(
+  props: Pick<
+    ComponentProps<typeof SearchedManagerTaskList>,
+    'rows' | 'now' | 'onOpenTask'
+  >,
+) {
+  const search = useTitleSearch();
+  return (
+    <SearchedManagerTaskList
+      {...props}
+      search={search}
+      empty="Nu ai taskuri de gestionat acum."
+    />
+  );
+}
 
 function renderList(search = '', onOpenTask = vi.fn(), list = rows) {
   const view = render(
@@ -143,7 +163,12 @@ describe('ManagerTaskList', () => {
     const user = userEvent.setup();
     renderList('', vi.fn(), sixRows);
     await openFilters(user);
-    await user.selectOptions(screen.getByLabelText('Ordonează după'), 'title');
+    // Two choices: a segmented control, not a list.
+    await user.click(
+      within(
+        screen.getByRole('radiogroup', { name: 'Ordonează după' }),
+      ).getByRole('radio', { name: 'Titlu' }),
+    );
     await closeFilters(user);
     // The order is no filter: nothing is counted.
     expect(filterButton()).toHaveAccessibleName('Filtrează');
@@ -162,10 +187,11 @@ describe('ManagerTaskList', () => {
     renderList('', vi.fn(), sixRows);
     await openFilters(user);
     const stare = screen.getByLabelText('Stare');
+    await user.click(stare);
     expect(
-      within(stare)
-        .getAllByRole('option')
-        .map((option) => option.textContent),
+      (await screen.findAllByRole('option')).map(
+        (option) => option.textContent,
+      ),
     ).toEqual([
       'Toate stările',
       'De făcut',
@@ -175,8 +201,8 @@ describe('ManagerTaskList', () => {
       'Modificări cerute',
       'Finalizat cu întârziere',
     ]);
-    await user.selectOptions(stare, 'feedback');
-    await user.selectOptions(stare, 'late');
+    await user.click(screen.getByRole('option', { name: 'Modificări cerute' }));
+    await chooseOption(user, stare, 'Finalizat cu întârziere');
     await closeFilters(user);
     expect(titles()).toEqual(['Bilanț vechi']);
     // The chosen Stare is a chip, counted on Filtrează.
@@ -187,7 +213,7 @@ describe('ManagerTaskList', () => {
       }),
     ).toBeVisible();
     await openFilters(user);
-    await user.selectOptions(screen.getByLabelText('Stare'), 'todo');
+    await chooseOption(user, screen.getByLabelText('Stare'), 'De făcut');
     await closeFilters(user);
     expect(titles()).toEqual([
       'Afișe pentru gală',
@@ -195,7 +221,14 @@ describe('ManagerTaskList', () => {
       'Cerere sală',
       'Viitor fără termen',
     ]);
-    expect(within(list()).getByRole('status')).toHaveTextContent('4 taskuri');
+    // The count takes no row of its own: the search's placeholder says it,
+    // and a screen reader hears it as a status.
+    const count = within(list()).getByRole('status');
+    expect(count).toHaveTextContent('4 taskuri');
+    expect(count).toHaveClass('sr-only');
+    expect(
+      screen.getByRole('searchbox', { name: 'Caută după titlu' }),
+    ).toHaveAttribute('placeholder', 'Caută în 4 taskuri');
   });
 
   it('searches titles without case or diacritics, after a short pause', async () => {
@@ -208,24 +241,25 @@ describe('ManagerTaskList', () => {
     await waitFor(() => expect(titles()).toEqual(['Ședință de mentorat']));
     // The search is visible in the toolbar, so Filtrează does not count it.
     expect(filterButton()).toHaveAccessibleName('Filtrează');
-    // Below six Tasks the search is gone and stops applying.
+    // Below six Tasks the search stays, and still applies.
     rerender(
       <MemoryRouter initialEntries={['/tracker']}>
         <ManagerTaskList rows={rows} now={now} />
       </MemoryRouter>,
     );
-    expect(screen.queryByRole('searchbox')).toBeNull();
-    expect(titles()).toHaveLength(rows.length);
+    expect(screen.getByRole('searchbox')).toHaveValue('SEDINTA');
+    expect(titles()).toEqual(['Ședință de mentorat']);
     rerender(
       <MemoryRouter initialEntries={['/tracker']}>
         <ManagerTaskList rows={sixRows} now={now} />
       </MemoryRouter>,
     );
     await openFilters(user);
-    await user.selectOptions(screen.getByLabelText('Stare'), 'completed');
+    await chooseOption(user, screen.getByLabelText('Stare'), 'Finalizat');
     await closeFilters(user);
+    // The search is the nearer way out, so the empty state names it.
     expect(
-      screen.getByText('Niciun task nu corespunde filtrelor.'),
+      screen.getByText('Niciun task nu corespunde căutării.'),
     ).toBeVisible();
     // Said once: no '0 taskuri' count line above the empty state (B19).
     expect(within(list()).queryByRole('status')).toBeNull();
@@ -246,27 +280,43 @@ describe('ManagerTaskList', () => {
     expect(titles()).toEqual(expected);
   });
 
-  it('puts Stare and the order in the filter sheet on the #842 select, the search in the toolbar', async () => {
+  it('puts Stare and the order in the filter sheet as the app’s own controls, the search in the toolbar', async () => {
     const user = userEvent.setup();
     renderList('', vi.fn(), sixRows);
     const toolbar = screen.getByRole('group', { name: 'Filtre taskuri' });
-    // Filtrează first, then the title search (#903).
-    expect(toolbar.firstElementChild).toBe(filterButton());
+    // The title search first, filling the row, then Filtrează as an icon
+    // button after it (#903).
+    const searchbox = within(toolbar).getByRole('searchbox', {
+      name: 'Caută după titlu',
+    });
+    expect(searchbox).toBeVisible();
+    expect(toolbar.firstElementChild).toBe(searchbox.closest('label'));
     expect(
-      within(toolbar).getByRole('searchbox', { name: 'Caută după titlu' }),
-    ).toBeVisible();
+      searchbox.compareDocumentPosition(filterButton()) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.queryByLabelText('Stare')).toBeNull();
     const sheet = await openFilters(user);
     expect(within(sheet).queryByLabelText('Origine')).toBeNull();
-    // The only native selects are Stare and the order.
-    const selects = sheet.querySelectorAll('select');
-    expect(selects).toHaveLength(2);
-    expect(within(sheet).getByLabelText('Stare')).toBe(selects[0]);
-    expect(within(sheet).getByLabelText('Ordonează după')).toBe(selects[1]);
-    expect(within(sheet).getByLabelText('Stare')).toHaveAttribute(
-      'data-slot',
-      'native-select',
-    );
+    // No browser drop-down: Stare is the app's select, the order — two
+    // choices — a segmented control after it.
+    expect(sheet.querySelectorAll('select')).toHaveLength(0);
+    const stare = within(sheet).getByLabelText('Stare');
+    expect(stare).toHaveAttribute('data-slot', 'select');
+    expect(sheet.querySelectorAll('[data-slot=select]')).toHaveLength(1);
+    const order = within(sheet).getByRole('radiogroup', {
+      name: 'Ordonează după',
+    });
+    expect(order).toHaveAttribute('data-slot', 'segmented-radio');
+    expect(
+      within(order)
+        .getAllByRole('radio')
+        .map((radio) => radio.textContent),
+    ).toEqual(['Termen', 'Titlu']);
+    expect(within(order).getByRole('radio', { name: 'Termen' })).toBeChecked();
+    expect(
+      stare.compareDocumentPosition(order) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(
       within(sheet).getByRole('combobox', { name: 'Grup principal' }),
     ).toBeVisible();
@@ -279,7 +329,7 @@ describe('ManagerTaskList', () => {
     const user = userEvent.setup();
     const { rerender } = renderList('', vi.fn(), sixRows);
     await openFilters(user);
-    await user.selectOptions(screen.getByLabelText('Stare'), 'completed');
+    await chooseOption(user, screen.getByLabelText('Stare'), 'Finalizat');
     await closeFilters(user);
     expect(titles()).toEqual(['Bilanț vechi']);
     const open = sixRows.filter((row) => row.status !== 'completed');
@@ -299,16 +349,52 @@ describe('ManagerTaskList', () => {
     );
     expect(titles()).toHaveLength(sixRows.length);
     await openFilters(user);
-    expect(screen.getByLabelText('Stare')).toHaveValue('');
+    expect(screen.getByLabelText('Stare')).toHaveAttribute('data-value', '');
+    expect(screen.getByLabelText('Stare')).toHaveTextContent('Toate stările');
   });
 
-  it('shows Stare, Caută and Ordonează only from six Tasks', async () => {
+  it('shows Stare and Ordonează only from six Tasks, the search always', async () => {
     const user = userEvent.setup();
     renderList();
+    expect(
+      screen.getByRole('searchbox', { name: 'Caută după titlu' }),
+    ).toHaveAttribute('placeholder', 'Caută în 5 taskuri');
     await openFilters(user);
     expect(screen.queryByLabelText('Stare')).toBeNull();
-    expect(screen.queryByRole('searchbox')).toBeNull();
     expect(screen.queryByLabelText('Ordonează după')).toBeNull();
+  });
+
+  it('tells a search that matches nothing from a list with no Task, with a way out', async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderList();
+    await user.type(screen.getByRole('searchbox'), 'zzz');
+    expect(
+      await screen.findByText('Niciun task nu corespunde căutării.'),
+    ).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Șterge căutarea' }));
+    expect(screen.getByRole('searchbox')).toHaveValue('');
+    expect(titles()).toHaveLength(rows.length);
+    rerender(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList rows={[]} now={now} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Nu ai taskuri de gestionat acum.')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Șterge căutarea' }),
+    ).toBeNull();
+    // The toolbar keeps its row over an empty list.
+    expect(screen.getByRole('searchbox')).toBeVisible();
+  });
+
+  it('says the filters match nothing when no search is typed', () => {
+    renderList('?de_la=2030-01-01&pana_la=2030-01-02');
+    expect(
+      screen.getByText('Niciun task nu corespunde filtrelor.'),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Șterge căutarea' }),
+    ).toBeNull();
   });
 
   it('offers only the Groups and Campaigns of the managed Tasks (Rule W)', async () => {
@@ -349,10 +435,12 @@ describe('ManagerTaskList', () => {
     );
     for (const row of within(list()).getAllByRole('article')) {
       expect(row).toHaveClass('min-w-0');
-      // The title wraps by word at a readable width (layout T1, #846); the
-      // meta line under it wraps as whole items.
+      // The title has the row's whole width and wraps by word (layout T1,
+      // #846); the meta line under it wraps as whole items.
       const heading = row.querySelector('h2');
-      expect(heading).toHaveClass('min-w-48', 'wrap-break-word');
+      expect(heading).toHaveClass('wrap-break-word');
+      expect(heading).not.toHaveClass('text-balance');
+      expect(row.querySelector('[data-slot="list-row-value"]')).toBeNull();
       const meta = row.querySelector('[data-slot="task-row-meta"]');
       expect(meta).toHaveClass('flex-wrap', 'min-w-0');
     }
@@ -464,7 +552,9 @@ describe('ManagerTaskList under Grupuri preferate (R43)', () => {
     preferences.muted = new Set([30, 2]);
     const user = userEvent.setup();
     renderPreferred();
-    await user.click(screen.getByRole('button', { name: 'Arată tot' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Doar grupurile preferate' }),
+    );
     expect(titles()).toHaveLength(4);
     preferences.muted = new Set();
   });

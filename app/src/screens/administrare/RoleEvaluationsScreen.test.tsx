@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import axe from 'axe-core';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { pickDate } from '../../test/date-picker';
 
 // #1012 (R37): opening a thing reads its Notifications. The hook is observed
 // here; its own behaviour is covered in queries/notifications-read.test.tsx.
@@ -402,17 +403,57 @@ const panel = async (name: string) =>
     'section',
   ) as HTMLElement;
 
+/** The page's one kind switch: it drives the form, Praguri and the results. */
+const chooseKind = (user: ReturnType<typeof userEvent.setup>, name: string) =>
+  user.click(
+    within(screen.getByRole('radiogroup', { name: 'Tip' })).getByRole('radio', {
+      name,
+    }),
+  );
+
+/** The threshold/rule log, a panel of its own under the page. */
+const changeLog = async () =>
+  within(await panel('Istoricul modificărilor')).findByRole('list', {
+    name: 'Istoricul modificărilor',
+  });
+
 it('runs a Voluntar Activ Role Evaluation after a confirmation that names its consequences', async () => {
   db.runs = [RUN_VA];
   const user = userEvent.setup();
   const { container } = show();
   const run = await panel('Rulează o evaluare de rol');
   // De la: the day after the kind's last range; Până la: today.
-  expect(within(run).getByLabelText('De la')).toHaveValue('2026-07-01');
-  expect(within(run).getByLabelText('Până la')).toHaveValue('2026-09-28');
+  // Both are the app's picker, reading short and Romanian; no browser field.
+  const from = within(run).getByLabelText('De la');
+  expect(from).toHaveAttribute('data-slot', 'date-picker');
+  expect(from).toHaveAttribute('data-value', '2026-07-01');
+  expect(from).toHaveTextContent('mie., 1 iul. 2026');
+  expect(within(run).getByLabelText('Până la')).toHaveAttribute(
+    'data-value',
+    '2026-09-28',
+  );
+  expect(run.querySelector('input[type="date"]')).toBeNull();
+  // Tip is one choice of three for the whole page — the two kinds and the
+  // promotion by tenure — a radio group above the panels, not a field of the
+  // form.
+  const kinds = screen.getByRole('radiogroup', { name: 'Tip' });
+  expect(within(run).queryByRole('radiogroup')).toBeNull();
+  expect(screen.getAllByRole('radiogroup')).toHaveLength(1);
   expect(
-    within(run).getByRole('button', { name: 'Voluntar Activ' }),
-  ).toHaveAttribute('aria-pressed', 'true');
+    within(kinds).getByRole('radio', { name: 'Voluntar Activ' }),
+  ).toBeChecked();
+  expect(
+    within(kinds).getByRole('radio', { name: 'Adunarea Generală' }),
+  ).not.toBeChecked();
+  expect(
+    within(kinds)
+      .getAllByRole('radio')
+      .map((radio) => radio.textContent),
+  ).toEqual(['Voluntar Activ', 'Adunarea Generală', 'Vechime']);
+  expect(within(run).getByLabelText('Nume')).toHaveAttribute(
+    'data-slot',
+    'input',
+  );
 
   await user.type(within(run).getByLabelText('Nume'), '  Semestrul II  ');
   await user.click(
@@ -447,8 +488,11 @@ it('runs a Voluntar Activ Role Evaluation after a confirmation that names its co
   ).toBeVisible();
   // The run ended today: the next range cannot start tomorrow and end
   // today, so De la waits for a date instead of an inverted default (F-21).
-  expect(within(run).getByLabelText('De la')).toHaveValue('');
-  expect(within(run).getByLabelText('Până la')).toHaveValue('2026-09-28');
+  expect(within(run).getByLabelText('De la')).toHaveAttribute('data-value', '');
+  expect(within(run).getByLabelText('Până la')).toHaveAttribute(
+    'data-value',
+    '2026-09-28',
+  );
   expect(
     (
       await axe.run(container, {
@@ -462,9 +506,7 @@ it('disables the run while the kind’s threshold is unset, then names the Aduna
   const user = userEvent.setup();
   show();
   const run = await panel('Rulează o evaluare de rol');
-  await user.click(
-    within(run).getByRole('button', { name: 'Adunarea Generală' }),
-  );
+  await chooseKind(user, 'Adunarea Generală');
   const button = within(run).getByRole('button', {
     name: 'Rulează evaluarea',
   });
@@ -476,9 +518,13 @@ it('disables the run while the kind’s threshold is unset, then names the Aduna
   const thresholds = await panel('Praguri');
   await user.click(
     within(thresholds).getByRole('button', {
-      name: 'Editează: Pragul Adunării Generale',
+      name: 'Editează pragul Adunării Generale',
     }),
   );
+  // The pencil hands focus to the field it opened.
+  expect(
+    within(thresholds).getByLabelText('Pragul Adunării Generale'),
+  ).toHaveFocus();
   await user.type(
     within(thresholds).getByLabelText('Pragul Adunării Generale'),
     '12',
@@ -488,7 +534,7 @@ it('disables the run while the kind’s threshold is unset, then names the Aduna
   );
   await waitFor(() => expect(button).toBeEnabled());
 
-  await user.type(within(run).getByLabelText('De la'), '2026-07-01');
+  await pickDate(user, within(run).getByLabelText('De la'), '2026-07-01');
   await user.type(within(run).getByLabelText('Nume'), 'AG toamnă');
   await user.click(button);
   const dialog = await screen.findByRole('dialog');
@@ -502,7 +548,7 @@ it('validates the run form before any confirmation, and places a server refusal 
   show();
   const run = await panel('Rulează o evaluare de rol');
   // No earlier run of this kind: De la starts empty.
-  expect(within(run).getByLabelText('De la')).toHaveValue('');
+  expect(within(run).getByLabelText('De la')).toHaveAttribute('data-value', '');
   await user.click(
     within(run).getByRole('button', { name: 'Rulează evaluarea' }),
   );
@@ -514,7 +560,7 @@ it('validates the run form before any confirmation, and places a server refusal 
     'Scrie numele evaluării.',
   );
 
-  await user.type(within(run).getByLabelText('De la'), '2026-09-01');
+  await pickDate(user, within(run).getByLabelText('De la'), '2026-09-01');
   await user.type(within(run).getByLabelText('Nume'), 'ab');
   await user.click(
     within(run).getByRole('button', { name: 'Rulează evaluarea' }),
@@ -574,9 +620,7 @@ it('edits a threshold and lists every change with its author or run', async () =
   const user = userEvent.setup();
   show();
   const thresholds = await panel('Praguri');
-  const log = await within(thresholds).findByRole('list', {
-    name: 'Istoricul modificărilor',
-  });
+  const log = await changeLog();
   expect(
     within(log)
       .getAllByRole('listitem')
@@ -585,15 +629,33 @@ it('edits a threshold and lists every change with its author or run', async () =
     '01.07.2026 · Voluntar Activ30 → 42·evaluarea „Semestrul I”',
     '01.06.2026 · Voluntar Activnesetat → 30·DIDănuț',
   ]);
+  // A row: the name, then the value in force at its end.
   expect(thresholds).toHaveTextContent('Pragul Voluntar Activ42 de puncte');
   expect(thresholds).toHaveTextContent('calculat de evaluarea „Semestrul I”');
+  // Only the chosen kind's numbers: the other kind's are behind the switch.
+  expect(thresholds).not.toHaveTextContent('Adunării Generale');
+  await chooseKind(user, 'Adunarea Generală');
   expect(thresholds).toHaveTextContent('Pragul Adunării GeneraleNesetat');
+  expect(thresholds).not.toHaveTextContent('Voluntar Activ');
+  expect(thresholds).not.toHaveTextContent('42 de puncte');
+  await chooseKind(user, 'Voluntar Activ');
 
-  await user.click(
-    within(thresholds).getByRole('button', {
-      name: 'Editează: Pragul Voluntar Activ',
-    }),
-  );
+  // One pencil per row, and no filled button but the run form's.
+  const edit = within(thresholds).getByRole('button', {
+    name: 'Editează pragul Voluntar Activ',
+  });
+  expect(edit.querySelector('svg')).not.toBeNull();
+  expect(edit).toHaveTextContent('');
+  await user.click(edit);
+  // The page's one filled button stays the run form's.
+  expect(
+    within(thresholds).getByRole('button', { name: 'Salvează' }),
+  ).not.toHaveClass('bg-primary');
+  expect(
+    [...document.querySelectorAll('button, a')].filter((control) =>
+      control.classList.contains('bg-primary'),
+    ),
+  ).toEqual([screen.getByRole('button', { name: 'Rulează evaluarea' })]);
   const input = within(thresholds).getByLabelText('Pragul Voluntar Activ');
   expect(input).toHaveValue(42);
   await user.clear(input);
@@ -621,20 +683,22 @@ it('edits a threshold and lists every change with its author or run', async () =
     await within(thresholds).findByText('Pragul Voluntar Activ a fost salvat.'),
   ).toBeVisible();
   await waitFor(() =>
-    expect(
-      within(
-        within(thresholds).getByRole('list', {
-          name: 'Istoricul modificărilor',
-        }),
-      ).getAllByRole('listitem')[0],
-    ).toHaveTextContent('28.09.2026 · Voluntar Activ42 → 35·BCBianca Coman'),
+    expect(within(log).getAllByRole('listitem')[0]).toHaveTextContent(
+      '28.09.2026 · Voluntar Activ42 → 35·BCBianca Coman',
+    ),
   );
   expect(thresholds).toHaveTextContent('introdus deBCBianca Coman');
+  // Back from the editor, focus returns to the pencil that opened it.
+  expect(
+    within(thresholds).getByRole('button', {
+      name: 'Editează pragul Voluntar Activ',
+    }),
+  ).toHaveFocus();
 
   // One receipt at a time (F-11): the share's replaces the threshold's.
   await user.click(
     within(thresholds).getByRole('button', {
-      name: 'Editează: Procentul Voluntar Activ',
+      name: 'Editează procentul Voluntar Activ',
     }),
   );
   const share = within(thresholds).getByLabelText('Procentul Voluntar Activ');
@@ -658,12 +722,19 @@ it('edits each kind’s share (#866): 1–100 in the browser, logged, and the ne
   const user = userEvent.setup();
   const { container } = show();
   const thresholds = await panel('Praguri');
-  await waitFor(() => expect(thresholds).toHaveTextContent('Procent:20 %'));
-  expect(thresholds).toHaveTextContent('Procent:25 %');
+  await waitFor(() =>
+    expect(thresholds).toHaveTextContent('Procentul Voluntar Activ20 %'),
+  );
+  // y is the other kind's: shown only once that kind is chosen.
+  expect(thresholds).not.toHaveTextContent('25 %');
+  await chooseKind(user, 'Adunarea Generală');
+  expect(thresholds).toHaveTextContent('Procentul Adunării Generale25 %');
+  expect(thresholds).not.toHaveTextContent('20 %');
+  await chooseKind(user, 'Voluntar Activ');
 
   await user.click(
     within(thresholds).getByRole('button', {
-      name: 'Editează: Procentul Voluntar Activ',
+      name: 'Editează procentul Voluntar Activ',
     }),
   );
   const input = within(thresholds).getByLabelText('Procentul Voluntar Activ');
@@ -706,12 +777,10 @@ it('edits each kind’s share (#866): 1–100 in the browser, logged, and the ne
   ).toBeVisible();
   await waitFor(() =>
     expect(thresholds).toHaveTextContent(
-      'Procent:35 %·schimbat deBCBianca Coman',
+      'Procentul Voluntar Activ35 %schimbat deBCBianca Coman',
     ),
   );
-  const log = within(thresholds).getByRole('list', {
-    name: 'Istoricul modificărilor',
-  });
+  const log = await changeLog();
   expect(within(log).getAllByRole('listitem')[0]).toHaveTextContent(
     '28.09.2026 · Voluntar Activ · procent20 % → 35 %·BCBianca Coman',
   );
@@ -737,9 +806,10 @@ it('places a server refusal of a share under its field', async () => {
   const user = userEvent.setup();
   show();
   const thresholds = await panel('Praguri');
+  await chooseKind(user, 'Adunarea Generală');
   await user.click(
     await within(thresholds).findByRole('button', {
-      name: 'Editează: Procentul Adunării Generale',
+      name: 'Editează procentul Adunării Generale',
     }),
   );
   const input = within(thresholds).getByLabelText(
@@ -758,63 +828,210 @@ it('places a server refusal of a share under its field', async () => {
   ).toBeVisible();
 });
 
-/** The Reguli de promovare section of Praguri (#935). */
-async function rulesSection() {
-  const thresholds = await panel('Praguri');
-  return (
-    await within(thresholds).findByRole('heading', {
-      name: 'Reguli de promovare',
-    })
-  ).closest('section') as HTMLElement;
-}
+/** A Promotion Rule's row, named by the Roles it joins (#935). */
+const ruleRow = (label: string) =>
+  screen.findByRole('listitem', { name: label });
 
-const ruleRow = (rules: HTMLElement, label: string) =>
-  within(rules)
-    .getByRole('heading', { name: label })
-    .closest('li') as HTMLElement;
+/** The page's blocks a member can see: its panels' titles, in order. */
+const shownPanels = () =>
+  screen
+    .getAllByRole('heading', { level: 2 })
+    .map((title) => title.textContent);
 
-it('shows each Promotion Rule, the ladder in order, with its tenure, state and effect (#935)', async () => {
+it('puts each Promotion Rule where it belongs: the candidates’ rule with Voluntar Activ, Recrut → Voluntar under Vechime (#935)', async () => {
   db.rules = db.rules.map((rule) =>
     rule.kind === 'top_percent'
       ? { ...rule, min_tenure_months: 24, enabled: false }
       : rule,
   );
+  const user = userEvent.setup();
   show();
-  const rules = await rulesSection();
-  await within(rules).findByRole('heading', { name: 'Recrut → Voluntar' });
-  expect(
-    within(rules)
-      .getAllByRole('heading', { level: 4 })
-      .map((heading) => heading.textContent),
-  ).toEqual(['Recrut → Voluntar', 'Voluntar → Voluntar Activ']);
-  const time = ruleRow(rules, 'Recrut → Voluntar');
-  expect(time).toHaveTextContent('6 luni');
-  expect(time).toHaveTextContent('Pornită');
-  expect(time).toHaveTextContent(
-    'Zilnic, fiecare Recrut care a împlinit vechimea devine automat Voluntar.',
-  );
-  const top = ruleRow(rules, 'Voluntar → Voluntar Activ');
+  const thresholds = await panel('Praguri');
+  const top = await ruleRow('Voluntar → Voluntar Activ');
+  // The rule a Voluntar Activ evaluation reads sits with that kind's numbers;
+  // the daily job's rule is no kind's, and no panel under a kind shows it.
+  expect(thresholds).toContainElement(top);
   expect(top).toHaveTextContent('24 de luni');
-  expect(top).toHaveTextContent(
-    'Oprită: nimeni nu mai devine candidat la promovare.',
+  // The row says the state; it is not a control (a rule changes on Salvează).
+  expect(within(top).queryByRole('switch')).toBeNull();
+  expect(top.querySelector('[data-slot="rule-state"]')).toHaveTextContent(
+    'Oprită',
   );
+  // What an off rule stops stays on the row.
+  expect(
+    within(top).getByText(
+      'Oprită: nimeni nu mai devine candidat la promovare.',
+    ),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole('listitem', { name: 'Recrut → Voluntar' }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole('heading', { name: 'Promovare după vechime' }),
+  ).toBeNull();
+
+  // Vechime is a page of its own: the rule, and nothing of either kind.
+  await chooseKind(user, 'Vechime');
+  const tenure = await panel('Promovare după vechime');
+  const time = await ruleRow('Recrut → Voluntar');
+  expect(tenure).toContainElement(time);
+  expect(shownPanels()).toEqual(['Promovare după vechime']);
+  expect(
+    screen.queryByRole('listitem', { name: 'Voluntar → Voluntar Activ' }),
+  ).toBeNull();
+
+  // The tenure is the value, a chip the state, and what the rule does is
+  // behind its "i".
+  expect(time).toHaveTextContent('Recrut → VoluntarVechime cerută: 6 luni');
+  expect(within(time).queryByRole('switch')).toBeNull();
+  expect(time.querySelector('[data-slot="rule-state"]')).toHaveTextContent(
+    'Pornită',
+  );
+  expect(time).not.toHaveTextContent('Zilnic');
+  await user.click(
+    within(time).getByRole('button', {
+      name: 'Despre regula Recrut → Voluntar',
+    }),
+  );
+  expect(
+    await screen.findByText(
+      'Zilnic, fiecare Recrut care a împlinit vechimea devine automat Voluntar.',
+    ),
+  ).toBeVisible();
+  await user.keyboard('{Escape}');
+
+  // Under Adunarea Generală neither rule shows: the candidates' is Voluntar
+  // Activ's, the tenure one Vechime's.
+  await chooseKind(user, 'Adunarea Generală');
+  expect(shownPanels()).toEqual(['Rulează o evaluare de rol', 'Praguri']);
+  expect(screen.queryByRole('listitem', { name: /→/ })).toBeNull();
+});
+
+it('keeps Vechime to the tenure rule’s own changes, and a kind’s log whole', async () => {
+  db.runs = [RUN_VA];
+  db.changes = [
+    {
+      id: 1,
+      kind: 'voluntar_activ',
+      from_value: null,
+      to_value: 30,
+      source: 'manual',
+      changed_by: 'bianca',
+      role_evaluation_id: null,
+      changed_at: '2026-06-01T08:00:00Z',
+    },
+    {
+      id: 2,
+      kind: null,
+      field: 'tenure',
+      promotion_rule_id: 1,
+      from_value: 6,
+      to_value: 3,
+      source: 'manual',
+      changed_by: 'bianca',
+      role_evaluation_id: null,
+      changed_at: '2026-06-02T08:00:00Z',
+    },
+    {
+      id: 3,
+      kind: null,
+      field: 'tenure',
+      promotion_rule_id: 2,
+      from_value: 6,
+      to_value: 12,
+      source: 'manual',
+      changed_by: 'bianca',
+      role_evaluation_id: null,
+      changed_at: '2026-06-03T08:00:00Z',
+    },
+  ];
+  const user = userEvent.setup();
+  show();
+  await waitFor(async () =>
+    expect(within(await changeLog()).getAllByRole('listitem')).toHaveLength(3),
+  );
+  await chooseKind(user, 'Vechime');
+  // The run form, Praguri, the candidates, the signals and the runs' history
+  // are the kinds'; the log keeps to Recrut → Voluntar.
+  expect(shownPanels()).toEqual([
+    'Promovare după vechime',
+    'Istoricul modificărilor',
+  ]);
+  expect(
+    within(await changeLog())
+      .getAllByRole('listitem')
+      .map((row) => row.textContent),
+  ).toEqual([
+    expect.stringContaining('Recrut → Voluntar · vechime6 luni → 3 luni'),
+  ]);
+
+  // Back on a kind, everything it showed is there again.
+  await chooseKind(user, 'Voluntar Activ');
+  expect(shownPanels()).not.toContain('Promovare după vechime');
+  expect(shownPanels()).toEqual(
+    expect.arrayContaining([
+      'Rulează o evaluare de rol',
+      'Praguri',
+      'Istoricul evaluărilor',
+      'Istoricul modificărilor',
+    ]),
+  );
+  expect(within(await changeLog()).getAllByRole('listitem')).toHaveLength(3);
+});
+
+it('changes a Promotion Rule only from its editor, on Salvează — never from the row', async () => {
+  const user = userEvent.setup();
+  show();
+  const top = await ruleRow('Voluntar → Voluntar Activ');
+  // The row offers no switch: nothing to mis-tap.
+  expect(within(top).queryByRole('switch')).toBeNull();
+  expect(db.rpc).not.toHaveBeenCalledWith(
+    'update_promotion_rule',
+    expect.anything(),
+  );
+
+  await user.click(
+    within(top).getByRole('button', {
+      name: 'Editează regula Voluntar → Voluntar Activ',
+    }),
+  );
+  const toggle = within(top).getByRole('switch', {
+    name: 'Regula este pornită',
+  });
+  const before = toggle.getAttribute('aria-checked');
+  await user.click(toggle);
+  // Flipping the switch in the editor sends nothing yet.
+  expect(db.rpc).not.toHaveBeenCalledWith(
+    'update_promotion_rule',
+    expect.anything(),
+  );
+  await user.click(within(top).getByRole('button', { name: 'Salvează' }));
+  expect(db.rpc).toHaveBeenCalledWith(
+    'update_promotion_rule',
+    expect.objectContaining({
+      p_rule_id: 2,
+      p_enabled: before !== 'true',
+    }),
+  );
+  expect(await within(top).findByText('Regula a fost salvată.')).toBeVisible();
 });
 
 it('edits a Promotion Rule’s tenure and on/off with the #923 row pattern, logged with its author (#935)', async () => {
   const user = userEvent.setup();
   show();
-  const rules = await rulesSection();
-  await within(rules).findByRole('heading', { name: 'Recrut → Voluntar' });
+  await panel('Praguri');
+  await chooseKind(user, 'Vechime');
+  const time = await ruleRow('Recrut → Voluntar');
   await user.click(
-    within(rules).getByRole('button', {
+    within(time).getByRole('button', {
       name: 'Editează regula Recrut → Voluntar',
     }),
   );
-  const input = within(rules).getByLabelText('Vechime cerută');
+  const input = within(time).getByLabelText('Vechime cerută');
   expect(input).toHaveValue(6);
   expect(input).toHaveFocus();
   // Nothing changed yet: nothing to save.
-  const save = within(rules).getByRole('button', { name: 'Salvează' });
+  const save = within(time).getByRole('button', { name: 'Salvează' });
   expect(save).toBeDisabled();
 
   await user.clear(input);
@@ -830,7 +1047,7 @@ it('edits a Promotion Rule’s tenure and on/off with the #923 row pattern, logg
 
   await user.clear(input);
   await user.type(input, '2');
-  const toggle = within(rules).getByRole('switch', {
+  const toggle = within(time).getByRole('switch', {
     name: 'Regula este pornită',
   });
   expect(toggle).toBeChecked();
@@ -843,25 +1060,19 @@ it('edits a Promotion Rule’s tenure and on/off with the #923 row pattern, logg
     p_enabled: false,
   });
 
-  expect(
-    await within(rules).findByText('Regula a fost salvată.'),
-  ).toBeVisible();
+  expect(await within(time).findByText('Regula a fost salvată.')).toBeVisible();
   await waitFor(() =>
     expect(
-      within(rules).getByRole('button', {
+      within(time).getByRole('button', {
         name: 'Editează regula Recrut → Voluntar',
       }),
     ).toHaveFocus(),
   );
-  const time = ruleRow(rules, 'Recrut → Voluntar');
   await waitFor(() => expect(time).toHaveTextContent('2 luni'));
   expect(time).toHaveTextContent('Oprită');
   expect(time).toHaveTextContent('schimbată deBCBianca Coman');
 
-  const thresholds = await panel('Praguri');
-  const log = await within(thresholds).findByRole('list', {
-    name: 'Istoricul modificărilor',
-  });
+  const log = await changeLog();
   await waitFor(() =>
     expect(
       within(log)
@@ -873,26 +1084,25 @@ it('edits a Promotion Rule’s tenure and on/off with the #923 row pattern, logg
     ]),
   );
   // A rule change is not a threshold change: the threshold keeps no author.
-  expect(thresholds).not.toHaveTextContent('introdus de');
+  await chooseKind(user, 'Voluntar Activ');
+  expect(await panel('Praguri')).not.toHaveTextContent('introdus de');
 });
 
 it('Renunță closes the rule editor without saving', async () => {
   const user = userEvent.setup();
   show();
-  const rules = await rulesSection();
+  const top = await ruleRow('Voluntar → Voluntar Activ');
   await user.click(
-    await within(rules).findByRole('button', {
+    within(top).getByRole('button', {
       name: 'Editează regula Voluntar → Voluntar Activ',
     }),
   );
-  const input = within(rules).getByLabelText('Vechime cerută');
+  const input = within(top).getByLabelText('Vechime cerută');
   await user.clear(input);
   await user.type(input, '3');
-  await user.click(within(rules).getByRole('button', { name: 'Renunță' }));
-  expect(within(rules).queryByLabelText('Vechime cerută')).toBeNull();
-  expect(ruleRow(rules, 'Voluntar → Voluntar Activ')).toHaveTextContent(
-    '6 luni',
-  );
+  await user.click(within(top).getByRole('button', { name: 'Renunță' }));
+  expect(within(top).queryByLabelText('Vechime cerută')).toBeNull();
+  expect(top).toHaveTextContent('6 luni');
   expect(db.rpc).not.toHaveBeenCalledWith(
     'update_promotion_rule',
     expect.anything(),
@@ -906,23 +1116,23 @@ it('shows a server refusal of a rule edit in the editor', async () => {
   });
   const user = userEvent.setup();
   show();
-  const rules = await rulesSection();
+  const top = await ruleRow('Voluntar → Voluntar Activ');
   await user.click(
-    await within(rules).findByRole('button', {
+    within(top).getByRole('button', {
       name: 'Editează regula Voluntar → Voluntar Activ',
     }),
   );
   await user.click(
-    within(rules).getByRole('switch', { name: 'Regula este pornită' }),
+    within(top).getByRole('switch', { name: 'Regula este pornită' }),
   );
-  await user.click(within(rules).getByRole('button', { name: 'Salvează' }));
+  await user.click(within(top).getByRole('button', { name: 'Salvează' }));
   expect(
-    await within(rules).findByText(
+    await within(top).findByText(
       'Doar BC și Moderatorul pot schimba regulile de promovare.',
     ),
   ).toBeVisible();
   // The editor stays open for another try.
-  expect(within(rules).getByLabelText('Vechime cerută')).toBeVisible();
+  expect(within(top).getByLabelText('Vechime cerută')).toBeVisible();
 });
 
 it('lists the open Promotion Candidates: Promovează opens Roluri preset, Respinge needs a reason', async () => {
@@ -952,9 +1162,14 @@ it('lists the open Promotion Candidates: Promovează opens Roluri preset, Respin
   const user = userEvent.setup();
   show();
   const candidates = await panel('Candidați la promovare');
+  // No eyebrow over the title, and no filled button in the list.
+  expect(document.querySelector('[data-slot="section-eyebrow"]')).toBeNull();
   const list = await within(candidates).findByRole('list', {
     name: 'Candidați la promovare',
   });
+  expect(
+    within(list).getByRole('link', { name: 'Promovează: Ana Pop' }),
+  ).not.toHaveClass('bg-primary');
   // #1012 (R37): the list shows every candidate, so all their Notifications
   // are read in one request.
   expect(readNotificationsAbout).toHaveBeenCalledWith(['promotion_candidate']);
@@ -1167,15 +1382,15 @@ it('shows each kind’s Retention Signals from its latest run', async () => {
     },
   ]);
   db.rankings.set('adunarea_generala:2026-07-01:2026-09-20', []);
+  const user = userEvent.setup();
   show();
   const signals = await panel('Semnale de retenție');
-  const va = within(signals)
-    .getByRole('heading', { name: 'Voluntar Activ' })
-    .closest('section') as HTMLElement;
-  expect(va).toHaveTextContent(
+  // The chosen kind's signals, and only its.
+  expect(signals).toHaveTextContent(
     'Semestrul I · 01.02.2026–30.06.2026 · pragul 30',
   );
-  const list = await within(va).findByRole('list', {
+  expect(signals).not.toHaveTextContent('AG toamnă');
+  const list = await within(signals).findByRole('list', {
     name: 'Semnale de retenție: Voluntar Activ',
   });
   const rows = within(list).getAllByRole('listitem');
@@ -1186,29 +1401,43 @@ it('shows each kind’s Retention Signals from its latest run', async () => {
       name: 'Editează rolul: Ana Pop',
     }),
   ).toHaveAttribute('href', '/administrare/roluri?membru=ana');
-  const ag = within(signals)
-    .getByRole('heading', { name: 'Adunarea Generală' })
-    .closest('section') as HTMLElement;
-  expect(
-    await within(ag).findByText('Niciun semnal la ultima evaluare.'),
-  ).toBeVisible();
   expect(db.rpc).toHaveBeenCalledWith('role_evaluation_ranking', {
     p_kind: 'voluntar_activ',
     p_from: '2026-02-01',
     p_to: '2026-06-30',
   });
+
+  await chooseKind(user, 'Adunarea Generală');
+  const ag = await panel('Semnale de retenție');
+  expect(ag).toHaveTextContent('AG toamnă · 01.07.2026–20.09.2026 · pragul 10');
+  expect(ag).not.toHaveTextContent('Semestrul I');
+  expect(
+    await within(ag).findByText('Niciun semnal la ultima evaluare.'),
+  ).toBeVisible();
+  // Promotion Candidates wait for a decision under either kind.
+  expect(
+    screen.getByRole('heading', { name: 'Candidați la promovare' }),
+  ).toBeVisible();
 });
 
-it('shows only Run and Praguri before the first run (B58)', async () => {
+it('shows only Run and Praguri under a kind, and only the tenure rule under Vechime, before the first run (B58)', async () => {
+  const user = userEvent.setup();
   const { container } = show();
   await panel('Rulează o evaluare de rol');
   await panel('Praguri');
-  // No empty candidates, signals, history or threshold-log blocks.
+  // No empty candidates, signals, history or threshold-log blocks — and no
+  // tenure rule under a kind.
   expect(
     [...container.querySelectorAll('[data-slot="panel"] h2')].map(
       (heading) => heading.textContent,
     ),
   ).toEqual(['Rulează o evaluare de rol', 'Praguri']);
+  await chooseKind(user, 'Vechime');
+  expect(shownPanels()).toEqual(['Promovare după vechime']);
+  await chooseKind(user, 'Voluntar Activ');
+  // Titles only: no eyebrow, no paragraph under a title.
+  expect(container.querySelector('[data-slot="section-eyebrow"]')).toBeNull();
+  expect(container).not.toHaveTextContent('Clasează punctele de task');
   // Once the (empty) log has loaded, it leaves no block behind.
   await waitFor(() =>
     expect(screen.queryByText('Istoricul modificărilor')).toBeNull(),
@@ -1228,15 +1457,17 @@ it('shows only Run and Praguri before the first run (B58)', async () => {
 it('says when a kind has never run, once another kind has', async () => {
   db.runs = [RUN_VA];
   db.rankings.set('voluntar_activ:2026-02-01:2026-06-30', []);
+  const user = userEvent.setup();
   show();
-  const signals = await panel('Semnale de retenție');
-  const ag = within(signals)
-    .getByRole('heading', { name: 'Adunarea Generală' })
-    .closest('section') as HTMLElement;
-  expect(
-    within(ag).getByText('Nicio evaluare de acest tip încă.'),
-  ).toBeVisible();
   expect(await panel('Candidați la promovare')).toBeVisible();
+  expect(await panel('Istoricul evaluărilor')).toBeVisible();
+  await chooseKind(user, 'Adunarea Generală');
+  expect(
+    within(await panel('Semnale de retenție')).getByText(
+      'Nicio evaluare de acest tip încă.',
+    ),
+  ).toBeVisible();
+  // The history is a record of both kinds: it stays.
   expect(await panel('Istoricul evaluărilor')).toBeVisible();
 });
 
@@ -1263,6 +1494,34 @@ it('lists the history of runs, newest first, with a dash for no computed thresho
     'AG toamnăAdunarea Generală01.07.2026–20.09.2026DIDănuț21.09.202610—',
     'Semestrul IVoluntar Activ01.02.2026–30.06.2026BCBianca Coman01.07.20263042',
   ]);
+});
+
+it('lists the runs as rows under the width the table’s seven columns fit, so nothing scrolls sideways', async () => {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+  try {
+    db.runs = [RUN_VA, RUN_AG];
+    show();
+    const history = await panel('Istoricul evaluărilor');
+    expect(window.matchMedia).toHaveBeenCalledWith('(min-width: 80rem)');
+    expect(within(history).queryByRole('table')).toBeNull();
+    const rows = within(
+      within(history).getByRole('list', { name: 'Istoricul evaluărilor' }),
+    ).getAllByRole('listitem');
+    expect(rows.map((row) => row.textContent)).toEqual([
+      'AG toamnăAdunarea Generală · 01.07.2026–20.09.2026Rulată deDIDănuț·21.09.2026Prag folosit 10 · prag calculat —',
+      'Semestrul IVoluntar Activ · 01.02.2026–30.06.2026Rulată deBCBianca Coman·01.07.2026Prag folosit 30 · prag calculat 42',
+    ]);
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
 
 it('calls none of the retired open/close commands (R28)', async () => {

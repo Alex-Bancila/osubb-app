@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { chooseOption } from '../../test/select';
 import type { MyGroup } from '../../queries/my-groups';
 import type { Group } from '../../queries/reference';
 
@@ -26,6 +27,11 @@ vi.mock('../../queries/announcements', () => ({
   useCreateAnnouncement: mock.create,
 }));
 
+import {
+  bucharestDayKey,
+  bucharestWallTimeToIso,
+} from '../../lib/calendar-time';
+import { pickDate } from '../../test/date-picker';
 import AnnouncementComposeSheet from './AnnouncementComposeSheet';
 import { announcementOrigins } from './announcement-origins';
 
@@ -78,6 +84,18 @@ const responsibleRoles = [
 // Typing a whole draft with user-event takes seconds on a loaded runner.
 vi.setConfig({ testTimeout: 15_000 });
 
+/**
+ * The 15th of a month near today, as a picker value: one press of "Luna
+ * următoare" / "Luna anterioară" away, where a fixed far date is dozens.
+ */
+function nearDate(months: number, time: string) {
+  const [year = 1970, month = 1] = (bucharestDayKey(new Date()) ?? '')
+    .split('-')
+    .map(Number);
+  const day = new Date(Date.UTC(year, month - 1 + months, 15));
+  return `${day.toISOString().slice(0, 10)}T${time}`;
+}
+
 describe('Announcement composer', () => {
   const mutateAsync = vi.fn();
   beforeEach(() => {
@@ -115,9 +133,6 @@ describe('Announcement composer', () => {
     render(<AnnouncementComposeSheet />);
     await user.click(screen.getByRole('button', { name: 'Anunț nou' }));
     const dialog = screen.getByRole('dialog', { name: 'Anunț nou' });
-    expect(
-      within(dialog).queryByRole('option', { name: 'Echipa B' }),
-    ).not.toBeInTheDocument();
     await user.type(
       within(dialog).getByRole('textbox', { name: 'Titlu' }),
       'Ședință',
@@ -126,10 +141,16 @@ describe('Announcement composer', () => {
       within(dialog).getByRole('textbox', { name: 'Mesaj' }),
       'Vineri la 18:00',
     );
-    await user.selectOptions(
+    // The list holds only the Groups the author may publish from.
+    await user.click(
       within(dialog).getByRole('combobox', { name: 'Grup de origine' }),
-      '2',
     );
+    expect(
+      (await screen.findAllByRole('option')).map(
+        (option) => option.textContent,
+      ),
+    ).toEqual(['OSUBB', 'Echipa A', 'Proiect A']);
+    await user.click(screen.getByRole('option', { name: 'Echipa A' }));
     await user.click(
       within(dialog).getByRole('radio', { name: 'Toată organizația' }),
     );
@@ -156,6 +177,85 @@ describe('Announcement composer', () => {
     );
   });
 
+  it('is a form sheet: segmented Audiență and Prioritate, the Termen picker, a pinned footer and no boxed links', async () => {
+    const user = userEvent.setup();
+    render(<AnnouncementComposeSheet />);
+    await user.click(screen.getByRole('button', { name: 'Anunț nou' }));
+    const dialog = screen.getByRole('dialog', { name: 'Anunț nou' });
+    expect(dialog).toHaveAttribute('data-slot', 'form-sheet');
+
+    const audience = within(dialog).getByRole('radiogroup', {
+      name: 'Audiență',
+    });
+    expect(audience).toHaveAttribute('data-slot', 'segmented-radio');
+    expect(
+      within(audience).getByRole('radio', { name: 'Doar grupul' }),
+    ).toBeChecked();
+    const priority = within(dialog).getByRole('radiogroup', {
+      name: 'Prioritate',
+    });
+    expect(priority).toHaveAttribute('data-slot', 'segmented-radio');
+    expect(
+      within(priority)
+        .getAllByRole('radio')
+        .map((radio) => radio.textContent),
+    ).toEqual(['Normală', 'Importantă', 'Critică']);
+    expect(
+      within(priority).getByRole('radio', { name: 'Normală' }),
+    ).toBeChecked();
+
+    expect(
+      within(dialog).getByLabelText('Termen (opțional) — ora României'),
+    ).toHaveAttribute('data-slot', 'date-picker');
+    expect(
+      within(dialog).getByRole('textbox', { name: 'Titlu' }),
+    ).toHaveAttribute('data-slot', 'input');
+    expect(
+      within(dialog).getByRole('textbox', { name: 'Mesaj' }),
+    ).toHaveAttribute('data-slot', 'textarea');
+    expect(
+      within(dialog).getByRole('checkbox', { name: 'Fixează anunțul' }),
+    ).not.toBeChecked();
+
+    const publish = within(dialog).getByRole('button', {
+      name: 'Publică anunțul',
+    });
+    expect(publish.parentElement).toHaveAttribute('data-pinned', 'true');
+    expect(publish.previousElementSibling).toHaveTextContent('Renunță');
+    // The links are a section of the form, not a box inside it.
+    const links = within(dialog).getByRole('group', {
+      name: /Linkuri atașate/,
+    });
+    expect(links.parentElement?.tagName).toBe('FORM');
+  });
+
+  it('sends the Prioritate chosen in the segmented control', async () => {
+    const user = userEvent.setup();
+    render(<AnnouncementComposeSheet />);
+    await user.click(screen.getByRole('button', { name: 'Anunț nou' }));
+    const dialog = screen.getByRole('dialog', { name: 'Anunț nou' });
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'Titlu' }),
+      'Ședință',
+    );
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'Mesaj' }),
+      'Vineri la 18:00',
+    );
+    await chooseOption(
+      user,
+      within(dialog).getByRole('combobox', { name: 'Grup de origine' }),
+      'Echipa A',
+    );
+    await user.click(within(dialog).getByRole('radio', { name: 'Importantă' }));
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Publică anunțul' }),
+    );
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ priority: 'important', audience: 'local' }),
+    );
+  });
+
   async function draftWithTermen(termen: string) {
     const user = userEvent.setup();
     render(<AnnouncementComposeSheet />);
@@ -169,13 +269,15 @@ describe('Announcement composer', () => {
       within(dialog).getByRole('textbox', { name: 'Mesaj' }),
       'Formularul se închide vineri.',
     );
-    await user.selectOptions(
+    await chooseOption(
+      user,
       within(dialog).getByRole('combobox', { name: 'Grup de origine' }),
-      '2',
+      'Echipa A',
     );
-    fireEvent.change(
+    await pickDate(
+      user,
       within(dialog).getByLabelText('Termen (opțional) — ora României'),
-      { target: { value: termen } },
+      termen,
     );
     await user.click(
       within(dialog).getByRole('button', { name: 'Publică anunțul' }),
@@ -184,9 +286,13 @@ describe('Announcement composer', () => {
   }
 
   it('sends an optional Termen read in Romania (#909)', async () => {
-    await draftWithTermen('2099-10-02T23:59');
+    const termen = nearDate(1, '23:59');
+    await draftWithTermen(termen);
     expect(mutateAsync).toHaveBeenCalledWith(
-      expect.objectContaining({ deadline: '2099-10-02T20:59:00.000Z' }),
+      expect.objectContaining({ deadline: bucharestWallTimeToIso(termen) }),
+    );
+    expect(mutateAsync.mock.calls[0]?.[0].deadline).toMatch(
+      /T2[01]:59:00\.000Z$/,
     );
   });
 
@@ -197,14 +303,20 @@ describe('Announcement composer', () => {
     const dialog = screen.getByRole('dialog', { name: 'Anunț nou' });
     const picker = within(dialog).getByRole('combobox', {
       name: 'Cine îl vede',
-    }) as HTMLSelectElement;
-    expect(picker).toHaveValue('0');
-    expect(Array.from(picker.options).map((option) => option.text)).toEqual([
+    });
+    expect(picker).toHaveAttribute('data-value', '0');
+    await user.click(picker);
+    expect(
+      (await screen.findAllByRole('option')).map(
+        (option) => option.textContent,
+      ),
+    ).toEqual([
       'Recrut',
       'Voluntar',
       'Voluntar Activ',
       'Voluntar cu Drept de Vot',
     ]);
+    await user.keyboard('{Escape}');
     await user.type(
       within(dialog).getByRole('textbox', { name: 'Titlu' }),
       'Adunare',
@@ -213,11 +325,12 @@ describe('Announcement composer', () => {
       within(dialog).getByRole('textbox', { name: 'Mesaj' }),
       'Doar pentru votanți.',
     );
-    await user.selectOptions(
+    await chooseOption(
+      user,
       within(dialog).getByRole('combobox', { name: 'Grup de origine' }),
-      '2',
+      'Echipa A',
     );
-    await user.selectOptions(picker, '3');
+    await chooseOption(user, picker, 'Voluntar cu Drept de Vot');
     await user.click(
       within(dialog).getByRole('button', { name: 'Publică anunțul' }),
     );
@@ -227,7 +340,7 @@ describe('Announcement composer', () => {
   });
 
   it('refuses a Termen in the past under its field (#909, R8)', async () => {
-    const dialog = await draftWithTermen('2020-01-01T10:00');
+    const dialog = await draftWithTermen(nearDate(-1, '10:00'));
     expect(mutateAsync).not.toHaveBeenCalled();
     expect(
       within(dialog).getByText('Termenul nu poate fi în trecut.'),
@@ -248,9 +361,10 @@ describe('Announcement composer', () => {
       within(dialog).getByRole('textbox', { name: 'Mesaj' }),
       'Mesaj',
     );
-    await user.selectOptions(
+    await chooseOption(
+      user,
       within(dialog).getByRole('combobox', { name: 'Grup de origine' }),
-      '2',
+      'Echipa A',
     );
     await user.click(
       within(dialog).getByRole('button', { name: 'Publică anunțul' }),
@@ -261,6 +375,25 @@ describe('Announcement composer', () => {
     expect(within(dialog).getByRole('textbox', { name: 'Titlu' })).toHaveValue(
       'Titlu',
     );
+  });
+
+  it('does not call the Origin missing while its list is open', async () => {
+    const user = userEvent.setup();
+    render(<AnnouncementComposeSheet />);
+    await user.click(screen.getByRole('button', { name: 'Anunț nou' }));
+    const dialog = screen.getByRole('dialog', { name: 'Anunț nou' });
+    const origin = within(dialog).getByRole('combobox', {
+      name: 'Grup de origine',
+    });
+    expect(origin).toHaveTextContent('Alege grupul');
+    // Opening moves focus into the list: the member has not left the field.
+    await user.click(origin);
+    await screen.findByRole('option', { name: 'Echipa A' });
+    expect(origin).not.toHaveAttribute('aria-invalid');
+    // Closing it without a choice and moving on is leaving it empty.
+    await user.keyboard('{Escape}');
+    await user.click(within(dialog).getByRole('textbox', { name: 'Titlu' }));
+    expect(origin).toHaveAttribute('aria-invalid', 'true');
   });
 
   it('rejects whitespace-only content and incomplete or non-web form links', async () => {
@@ -275,9 +408,10 @@ describe('Announcement composer', () => {
     });
     await user.type(title, '   ');
     await user.type(message, 'Text');
-    await user.selectOptions(
+    await chooseOption(
+      user,
       within(dialog).getByRole('combobox', { name: 'Grup de origine' }),
-      '2',
+      'Echipa A',
     );
     await user.click(publish);
     expect(title).toHaveAccessibleDescription('Scrie titlul.');

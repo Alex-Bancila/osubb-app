@@ -1,6 +1,7 @@
 import { useId, useState, type FormEvent } from 'react';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
+import { Textarea } from '../../components/ui/input';
 import { fieldForReason, reasonSchema } from '../../lib/schemas/reason';
 import { useFormValidation } from '../../lib/use-form-validation';
 import { useGiveUpTask } from '../../queries/task-give-up';
@@ -77,14 +78,15 @@ export function TaskGiveUpControl({
         <label htmlFor={reasonId} className="block text-sm font-medium">
           Motivul renunțării
         </label>
-        <textarea
+        <Textarea
           id={reasonId}
+          required
+          aria-required="true"
           value={reason}
           disabled={mutation.isPending}
           onChange={(event) => setReason(event.target.value)}
           rows={3}
           autoFocus
-          className="min-h-24 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
           {...form.field('reason', `${reasonId}-help`)}
         />
         <FieldError {...form.errorProps('reason')} />

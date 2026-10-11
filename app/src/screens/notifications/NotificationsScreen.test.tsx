@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { MemoryRouter, Route, Routes } from 'react-router';
@@ -148,8 +148,79 @@ describe('NotificationsScreen', () => {
 
     renderScreen();
 
-    expect(screen.getByText('Necitite: 3')).toBeInTheDocument();
+    expect(screen.getByText('3 notificări necitite')).toBeInTheDocument();
     expect(screen.getAllByText('Necitită')).toHaveLength(1);
+  });
+
+  it('says "unread" once: one dot at the left edge, no chip and no tinted row', () => {
+    hooks.useNotifications.mockReturnValue(
+      feed([
+        notificationRow({ id: 2, read: false }),
+        notificationRow({ id: 1, read: true, title: 'Task vechi' }),
+      ]),
+    );
+
+    renderScreen();
+
+    const [unread, read] = screen.getAllByRole('listitem') as [
+      HTMLElement,
+      HTMLElement,
+    ];
+    const dots = unread.querySelectorAll('[data-slot="unread-dot"]');
+    expect(dots).toHaveLength(1);
+    expect(dots[0]).toHaveAttribute('aria-hidden', 'true');
+    expect(dots[0]).toHaveClass('absolute', 'left-1');
+    expect(read.querySelector('[data-slot="unread-dot"]')).toBeNull();
+    for (const row of [unread, read]) {
+      // The category is the icon, named for a screen reader only.
+      expect(row.querySelector('[data-slot="badge"]')).toBeNull();
+      expect(within(row).getByText('Task')).toHaveClass('sr-only');
+      expect(row.className).not.toMatch(/bg-accent/);
+    }
+  });
+
+  it('keeps the body to two lines and puts the age at the end of the title line', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-20T09:15:00.000Z'));
+    hooks.useNotifications.mockReturnValue(feed([notificationRow()]));
+
+    renderScreen();
+    vi.useRealTimers();
+
+    expect(screen.getByText('Ai fost desemnat executor.')).toHaveClass(
+      'line-clamp-2',
+    );
+    const title = screen.getByText('Task nou: Afiș pentru AGO');
+    const time = within(title.parentElement as HTMLElement).getByText('15 min');
+    expect(time.closest('time')).toHaveAttribute(
+      'dateTime',
+      '2026-09-20T09:00:00.000Z',
+    );
+    // The sentence and the exact moment stay on the same element.
+    expect(time.closest('time')).toHaveTextContent('15 minute în urmă');
+    expect(time.closest('time')).toHaveAttribute(
+      'title',
+      '20 septembrie 2026, 12:00',
+    );
+  });
+
+  it('draws a critical notification with its icon in the alert colour', () => {
+    hooks.useNotifications.mockReturnValue(
+      feed([
+        notificationRow({ id: 2, critical: true }),
+        notificationRow({ id: 1 }),
+      ]),
+    );
+
+    renderScreen();
+
+    const [critical, ordinary] = screen
+      .getAllByRole('listitem')
+      .map((row) => row.querySelector('[data-slot="notification-icon"]'));
+    expect(critical).toHaveAttribute('data-critical', 'true');
+    expect(critical).toHaveClass('text-destructive');
+    expect(ordinary).not.toHaveAttribute('data-critical');
+    expect(ordinary).not.toHaveClass('text-destructive');
   });
 
   it('marks a notification read when it is opened, then follows its link', async () => {
@@ -236,7 +307,7 @@ describe('NotificationsScreen', () => {
         screen.queryByRole('button', { name: /Marchează/ }),
       ).not.toBeInTheDocument();
       expect(screen.queryByText(/Marchează/)).not.toBeInTheDocument();
-      expect(screen.getByText('Necitite: 2')).toBeInTheDocument();
+      expect(screen.getByText('2 notificări necitite')).toBeInTheDocument();
       // Showing the list writes nothing; only opening a row does.
       expect(markRead).not.toHaveBeenCalled();
       expect(markAll).not.toHaveBeenCalled();
@@ -253,9 +324,14 @@ describe('NotificationsScreen', () => {
 
         renderScreen();
 
-        expect(
-          screen.getByRole('button', { name: 'Marchează toate ca citite' }),
-        ).toBeEnabled();
+        const button = screen.getByRole('button', {
+          name: 'Marchează toate ca citite',
+        });
+        expect(button).toBeEnabled();
+        // An icon button on the title's row: its name is not printed.
+        expect(button).toHaveTextContent('');
+        expect(button).toHaveClass('size-11');
+        expect(button.closest('[data-slot="page-header"]')).not.toBeNull();
         expect(markAll).not.toHaveBeenCalled();
       },
     );
@@ -328,7 +404,7 @@ describe('NotificationsScreen', () => {
   });
 
   describe('header counter (B35)', () => {
-    it('says everything is read instead of "Necitite: 0"', () => {
+    it('shows no count when everything is read', () => {
       hooks.useUnreadNotificationCount.mockReturnValue({ data: 0 });
       hooks.useNotifications.mockReturnValue(
         feed([notificationRow({ id: 1, read: true })]),
@@ -336,10 +412,7 @@ describe('NotificationsScreen', () => {
 
       renderScreen();
 
-      expect(
-        screen.getByText('Toate notificările sunt citite'),
-      ).toBeInTheDocument();
-      expect(screen.queryByText('Necitite: 0')).not.toBeInTheDocument();
+      expect(screen.queryByText(/necitit/i)).not.toBeInTheDocument();
     });
 
     it('claims nothing while the count is unknown', () => {

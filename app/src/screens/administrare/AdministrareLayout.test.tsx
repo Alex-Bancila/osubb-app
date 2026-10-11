@@ -2,20 +2,28 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { Plus } from 'lucide-react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FabAction } from '../../components/layout';
 import type { Capabilities } from '../../lib/capabilities';
 
 const api = vi.hoisted(() => ({
   capabilities: vi.fn(),
   applications: vi.fn(),
+  pending: vi.fn(),
 }));
+// The real client needs env that CI does not have; nothing here calls it.
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../lib/capabilities', () => ({
   useCapabilities: api.capabilities,
 }));
 // Whether a managed Group takes Applications is its own tested rule
 // (`applications-tab.test.ts`); here it is an answer the layout reads.
-vi.mock('./applications-tab', () => ({
+vi.mock('./applications-tab', async (original) => ({
+  applicationCount: (await original<typeof import('./applications-tab')>())
+    .applicationCount,
   useApplicationsTabShown: api.applications,
+  usePendingApplicationCount: api.pending,
 }));
 import AdministrareLayout from './AdministrareLayout';
 
@@ -97,8 +105,8 @@ function show(path: string, capabilities: Capabilities | undefined) {
   );
 }
 
-const tabBar = () =>
-  screen.getByRole('navigation', { name: 'Secțiunile administrării' });
+const NAV = 'Secțiunile administrării';
+const tabBar = () => screen.getByRole('navigation', { name: NAV });
 const tabNames = () =>
   within(tabBar())
     .getAllByRole('link')
@@ -108,6 +116,8 @@ beforeEach(() => {
   api.capabilities.mockReset();
   api.applications.mockReset();
   api.applications.mockReturnValue(true);
+  api.pending.mockReset();
+  api.pending.mockReturnValue(0);
 });
 
 it('shows BC the seven tabs in the order Alex listed, then OSUBB Deals (R44)', async () => {
@@ -127,11 +137,8 @@ it('shows BC the seven tabs in the order Alex listed, then OSUBB Deals (R44)', a
   ).toBeVisible();
   // Administrare is the area itself: no eyebrow repeats the title (F-24).
   expect(document.querySelector('[data-slot="page-eyebrow"]')).toBeNull();
-  expect(
-    screen.getByText(
-      'Grupurile OSUBB, membrii, rolurile și setările organizației.',
-    ),
-  ).toBeVisible();
+  // The title says what the page is: no tagline under it.
+  expect(document.querySelector('[data-slot="page-description"]')).toBeNull();
   expect(
     within(tabBar()).getByRole('link', { name: 'Evaluări de rol' }),
   ).toHaveAttribute('href', '/administrare/evaluari');
@@ -154,16 +161,11 @@ it('shows a Responsabil OSUBB Deals with nothing else that one page, no tab stri
   expect(
     screen.queryByRole('navigation', { name: 'Secțiunile administrării' }),
   ).toBeNull();
-  expect(
-    screen.getByText('Echipa OSUBB Deals și deal-urile ei.'),
-  ).toBeVisible();
 });
 
 it('shows a Group Manager or Responsible Grupuri and Cereri de aderare only', () => {
   show('/administrare/grupuri', MANAGER);
   expect(tabNames()).toEqual(['Grupuri', 'Cereri de aderare']);
-  // A Responsible does not coordinate (relevance B56).
-  expect(screen.getByText('Grupurile în care ai o funcție.')).toBeVisible();
 });
 
 it('hides Cereri de aderare while none of the viewer’s Groups takes Applications or has one pending (B55)', () => {
@@ -215,6 +217,7 @@ it('marks the open tab aria-current and moves with a click', async () => {
   ).toHaveAttribute('aria-current', 'page');
 });
 
+// From 1024 px (and in a test DOM, which has no `matchMedia`).
 it.each([
   ['BC', BC, '/administrare/membri'],
   ['a Group Manager', MANAGER, '/administrare/grupuri'],
@@ -227,15 +230,139 @@ it.each([
   },
 );
 
-it('opens the header action slot only on the tab that has an action', () => {
-  const view = show('/administrare/grupuri', BC);
-  expect(
-    document.querySelector('[data-slot="administrare-actions"]'),
-  ).not.toBeNull();
-  view.unmount();
+it('turns a tab’s create action into the page’s plus button', () => {
+  api.capabilities.mockReturnValue({ data: BC });
+  render(
+    <MemoryRouter initialEntries={['/administrare/grupuri']}>
+      <Routes>
+        <Route path="/administrare" element={<AdministrareLayout />}>
+          <Route
+            path="grupuri"
+            element={
+              <FabAction label="Creează Grup" icon={Plus} onSelect={() => {}} />
+            }
+          />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('button', { name: 'Creează Grup' })).toHaveAttribute(
+    'data-slot',
+    'fab',
+  );
+});
 
-  show('/administrare/grupuri', MANAGER);
-  expect(
-    document.querySelector('[data-slot="administrare-actions"]'),
-  ).toBeNull();
+/* Under 1024 px three tabs of nine fit: the sections are a menu instead. */
+describe('on a phone', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: false,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('shows /administrare as a menu of the sections the viewer may open', async () => {
+    api.pending.mockReturnValue(3);
+    const user = userEvent.setup();
+    const { container } = show('/administrare', MODERATOR);
+    expect(window.matchMedia).toHaveBeenCalledWith('(min-width: 64rem)');
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Administrare' }),
+    ).toBeVisible();
+    const menu = tabBar();
+    expect(menu).toHaveAttribute('data-slot', 'administrare-menu');
+    const tiles = within(menu).getAllByRole('link');
+    expect(tiles.map((tile) => tile.getAttribute('href'))).toEqual([
+      '/administrare/membri',
+      '/administrare/grupuri',
+      '/administrare/roluri',
+      '/administrare/cereri',
+      '/administrare/evaluari',
+      '/administrare/confidentialitate',
+      '/administrare/setari',
+      '/administrare/deals',
+      '/administrare/bc',
+    ]);
+    // Each tile: an icon, the section's name, and a count where one is read.
+    for (const tile of tiles) expect(tile.querySelector('svg')).not.toBeNull();
+    expect(within(menu).getByRole('link', { name: 'Membri' })).toBeVisible();
+    const applications = within(menu).getByRole('link', {
+      name: 'Cereri de aderare, 3 cereri în așteptare',
+    });
+    expect(
+      applications.querySelector('[data-slot="section-count"]'),
+    ).toHaveTextContent('3');
+    expect(menu.querySelectorAll('[data-slot="section-count"]')).toHaveLength(
+      1,
+    );
+    expect((await axe.run(container)).violations).toEqual([]);
+
+    await user.click(within(menu).getByRole('link', { name: 'Setări' }));
+    expect(screen.getByTestId('where')).toHaveTextContent(
+      '/administrare/setari',
+    );
+  });
+
+  it('heads a section with its own name and a way back, and no tab strip', () => {
+    show('/administrare/roluri?membru=abc', BC);
+    // A link to a section opens it at every width.
+    expect(screen.getByTestId('where')).toHaveTextContent(
+      '/administrare/roluri?membru=abc',
+    );
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Roluri' }),
+    ).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Administrare' })).toHaveAttribute(
+      'href',
+      '/administrare',
+    );
+    expect(screen.queryByRole('navigation', { name: NAV })).toBeNull();
+  });
+
+  it('lands a viewer with one section straight in it, with no way back to a menu', () => {
+    const view = show('/administrare', DEALS_RESPONSABIL);
+    expect(screen.getByTestId('where')).toHaveTextContent(
+      '/administrare/deals',
+    );
+    expect(screen.queryByRole('link', { name: 'Administrare' })).toBeNull();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Administrare' }),
+    ).toBeVisible();
+    view.unmount();
+
+    show('/administrare', NONE);
+    expect(screen.getByTestId('where')).toHaveTextContent('/');
+  });
+
+  it('waits for Cereri de aderare before choosing between the menu and the one page', () => {
+    // Not known yet: neither the menu nor a redirect past it.
+    api.applications.mockReturnValue(undefined);
+    const waiting = show('/administrare', MANAGER);
+    expect(screen.queryByTestId('where')).toBeNull();
+    expect(screen.queryByRole('navigation', { name: NAV })).toBeNull();
+    waiting.unmount();
+
+    api.applications.mockReturnValue(false);
+    const one = show('/administrare', MANAGER);
+    expect(screen.getByTestId('where')).toHaveTextContent(
+      '/administrare/grupuri',
+    );
+    one.unmount();
+
+    api.applications.mockReturnValue(true);
+    show('/administrare', MANAGER);
+    expect(
+      within(tabBar())
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['Grupuri', 'Cereri de aderare']);
+  });
 });

@@ -8,6 +8,7 @@ import {
 import { NO_UNDO } from '../../components/delete-for-good/delete-text';
 import { Button } from '../../components/ui/button';
 import { DialogDescription, DialogFooter } from '../../components/ui/dialog';
+import { Input } from '../../components/ui/input';
 import { describeFailure } from '../../lib/command-reasons';
 import {
   groupIsEmpty,
@@ -226,11 +227,10 @@ function GroupDeleteBody({
         <label htmlFor={inputId} className="text-sm font-medium">
           Scrie „{group.name}” ca să confirmi
         </label>
-        <input
+        <Input
           id={inputId}
           autoComplete="off"
           spellCheck={false}
-          className="min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           value={typed}
           disabled={pending}
           onChange={(event) => setTyped(event.target.value)}

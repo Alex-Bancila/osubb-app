@@ -213,6 +213,35 @@ describe('PreferredGroupsCard (R43)', () => {
     expect(box('Educațional')).toBeChecked();
   });
 
+  it('is a form sheet: no intro paragraph, the explanation behind the "i", the actions pinned', async () => {
+    const { user, dialog } = await openSheet();
+    expect(dialog).toHaveAttribute('data-slot', 'form-sheet');
+    expect(dialog).not.toHaveAccessibleDescription();
+    expect(
+      within(dialog).queryByText(/Grupurile debifate nu îți mai/),
+    ).toBeNull();
+    const footer = within(dialog)
+      .getByRole('button', { name: 'Salvează' })
+      .closest('[data-slot="sheet-footer"]') as HTMLElement;
+    expect(footer).toHaveAttribute('data-pinned', 'true');
+    expect(
+      within(footer)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Renunță', 'Salvează']);
+
+    await user.click(
+      within(dialog).getByRole('button', {
+        name: 'Despre grupurile preferate',
+      }),
+    );
+    expect(
+      await screen.findByText(
+        /Grupurile debifate nu îți mai trimit notificări/,
+      ),
+    ).toBeVisible();
+  });
+
   it('Renunță leaves everything as it was', async () => {
     const { user } = await openSheet();
     await user.click(box('Educațional'));

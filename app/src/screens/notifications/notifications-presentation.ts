@@ -40,7 +40,7 @@ export function notificationKindMeta(
 }
 
 /* Group membership, Appointments and Applications travel as `system`
-   notifications (the enum has no Group kind), so the chip names them by what
+   notifications (the enum has no Group kind), so the row names them by what
    they are about (#858, B37). A link to a Group page says so; the titles the
    server writes cover the ones that carry no link (an archived or Private
    Group, a raised Minimum Level). */
@@ -66,7 +66,7 @@ export function isGroupNotification(
   return GROUP_TITLE_PREFIXES.some((prefix) => row.title.startsWith(prefix));
 }
 
-/** The chip and icon for one row: its kind, or "Grupuri" for Group news. */
+/** The icon and its name for one row: its kind, or "Grupuri" for Group news. */
 export function notificationMeta(
   row: Pick<NotificationRow, 'kind' | 'title' | 'link'>,
 ): NotificationKindMeta {
@@ -100,6 +100,46 @@ export function formatNotificationAge(
   return formatDistance(date, now, { addSuffix: true, locale: ro });
 }
 
+const shortDateFormatter = new Intl.DateTimeFormat('ro-RO', {
+  timeZone: BUCHAREST_TIME_ZONE,
+  calendar: 'gregory',
+  day: 'numeric',
+  month: 'short',
+});
+
+const shortDateWithYearFormatter = new Intl.DateTimeFormat('ro-RO', {
+  timeZone: BUCHAREST_TIME_ZONE,
+  calendar: 'gregory',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
+/**
+ * `acum`, `15 min`, `2 h`, `3 zile`, then the day (`14 oct.`, with the year
+ * once it is more than a year back) — the age as it fits at the end of a
+ * title's line on a phone. The sentence (`formatNotificationAge`) and the
+ * exact moment stay on the same element for whoever needs them.
+ */
+export function formatNotificationShortAge(
+  instant: string,
+  now: Date = new Date(),
+): string {
+  const date = new Date(instant);
+  if (Number.isNaN(date.getTime())) return '—';
+
+  const minutes = Math.floor((now.getTime() - date.getTime()) / 60_000);
+  if (minutes < 1) return 'acum';
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return days === 1 ? '1 zi' : `${days} zile`;
+  return (days < 365 ? shortDateFormatter : shortDateWithYearFormatter).format(
+    date,
+  );
+}
+
 /**
  * Notification links are in-app routes — `/tracker/12`, `/grupuri/3`,
  * `/administrare/grupuri/3`, `/calendar`. Anything else (absent, empty, or an
@@ -125,6 +165,8 @@ export type NotificationPresentation = {
   link: string | null;
   createdAt: string;
   ageLabel: string;
+  /** The age in a few characters, for the end of the title's line. */
+  shortAgeLabel: string;
   momentLabel: string;
 };
 
@@ -146,6 +188,7 @@ export function toNotificationPresentation(
     link: inAppLink(row.link),
     createdAt: row.created_at,
     ageLabel: formatNotificationAge(row.created_at, now),
+    shortAgeLabel: formatNotificationShortAge(row.created_at, now),
     momentLabel: formatNotificationMoment(row.created_at),
   };
 }

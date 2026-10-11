@@ -31,7 +31,7 @@ const DEAL: DealPresentation = {
   authorMember: { memberId: 'author', fullName: 'Ioana Popescu' },
   authorId: 'author',
   publishedAt: '2026-10-07T10:00:00Z',
-  publishedLabel: '7 octombrie 2026, 13:00',
+  publishedLabel: '7 oct. · 13:00',
   deadline: null,
   links: [],
   code: 'CAFE50',
@@ -69,51 +69,86 @@ beforeEach(() => {
 });
 
 describe('DealCard (R45)', () => {
-  it('tears the Deal Code off as the last strip of the card, under the footer', () => {
+  it('tears the Deal Code off as the last strip of the card, right under its content', () => {
     renderCard(<DealCard deal={DEAL} onOpen={() => {}} />);
     const card = screen.getByRole('article', { name: DEAL.title });
     const stub = stubIn(card);
     expect(stub).toHaveClass('deal-stub');
     expect(card.lastElementChild).toBe(stub);
-    expect(stub.previousElementSibling).toBe(footerOf(card));
-    // The footer meets the perforation square; the stub rounds the corners.
-    expect(footerOf(card)).toHaveClass('rounded-b-none');
+    // A member's card has no footer row: the content meets the perforation.
+    expect(card.querySelector('[data-slot="card-footer"]')).toBeNull();
+    expect(stub.previousElementSibling).toHaveAttribute(
+      'data-slot',
+      'card-content',
+    );
     expect(stub).toHaveClass('rounded-b-md');
   });
 
-  it('gives a Deal without a code no stub, and a footer that closes the card', () => {
+  it('gives a Deal without a code no stub', () => {
     renderCard(<DealCard deal={{ ...DEAL, code: null }} onOpen={() => {}} />);
     const card = screen.getByRole('article', { name: DEAL.title });
     expect(stubOf(card)).toBeNull();
-    expect(card.lastElementChild).toBe(footerOf(card));
-    expect(footerOf(card)).not.toHaveClass('rounded-b-none');
+    expect(card.querySelector('[data-slot="card-footer"]')).toBeNull();
   });
 
-  it('puts the author, the team meta and the actions in one footer row with Citește', async () => {
+  it('carries no "OSUBB Deals" eyebrow, and names the author and the date on one line under the title', () => {
+    renderCard(<DealCard deal={DEAL} onOpen={() => {}} />);
+    const card = screen.getByRole('article', { name: DEAL.title });
+    expect(within(card).queryByText(/OSUBB Deals/i)).toBeNull();
+    const byline = within(card).getByRole('heading', { level: 3 }).parentElement
+      ?.nextElementSibling;
+    expect(byline).toHaveAttribute('data-slot', 'announcement-byline');
+    expect(byline).toHaveTextContent('Ioana Popescu·7 oct. · 13:00');
+    expect(
+      within(card).getByRole('button', {
+        name: 'Profilul membrului Ioana Popescu',
+      }),
+    ).toHaveClass('relative', 'z-1');
+  });
+
+  it('opens from anywhere on the card through its title, leaving the stub its own button above it', async () => {
     const user = userEvent.setup();
     const onOpen = vi.fn();
+    renderCard(<DealCard deal={DEAL} onOpen={onOpen} />);
+    const card = screen.getByRole('article', { name: DEAL.title });
+    expect(card).toHaveClass('relative');
+    const open = within(card).getByRole('button', {
+      name: `Citește deal-ul ${DEAL.title}`,
+    });
+    expect(open).toHaveClass('after:absolute', 'after:inset-0');
+    expect(open.closest('h3')).not.toBeNull();
+    expect(stubIn(card)).toHaveClass('z-1');
+
+    await user.click(
+      within(stubIn(card)).getByRole('button', { name: /Arată codul/ }),
+    );
+    expect(onOpen).not.toHaveBeenCalled();
+    await user.click(open);
+    expect(onOpen).toHaveBeenCalledWith(DEAL);
+  });
+
+  it('adds a footer row only for the team: the meta, then the actions above the card’s tap target', () => {
     renderCard(
       <DealCard
         deal={DEAL}
-        onOpen={onOpen}
+        onOpen={() => {}}
         footerMeta={<span>Codul a fost deschis de 2 membri</span>}
         footerActions={<button type="button">Editează</button>}
       />,
     );
-    const footer = footerOf(screen.getByRole('article', { name: DEAL.title }));
-    expect(within(footer).getByText('Ioana Popescu')).toBeVisible();
+    const card = screen.getByRole('article', { name: DEAL.title });
+    const footer = footerOf(card);
     expect(
       within(footer).getByText('Codul a fost deschis de 2 membri'),
     ).toBeVisible();
+    const edit = within(footer).getByRole('button', { name: 'Editează' });
+    expect(edit.parentElement).toHaveClass('relative', 'z-1');
+    // The footer meets the perforation square; the stub rounds the corners.
+    expect(stubIn(card).previousElementSibling).toBe(footer);
+    expect(footer).toHaveClass('rounded-b-none');
     expect(
-      within(footer).getByRole('button', { name: 'Editează' }),
-    ).toBeVisible();
-    await user.click(
-      within(footer).getByRole('button', {
-        name: `Citește deal-ul ${DEAL.title}`,
-      }),
-    );
-    expect(onOpen).toHaveBeenCalledWith(DEAL);
+      within(footer).queryByRole('button', { name: /Citește/ }),
+    ).toBeNull();
   });
 
   it('marks an expired Deal once, by its Termen row, and mutes its stub without disabling it', async () => {

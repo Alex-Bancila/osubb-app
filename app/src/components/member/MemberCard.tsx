@@ -1,6 +1,7 @@
 import { useId } from 'react';
 import { Link, useLocation } from 'react-router';
 import {
+  CalendarIcon,
   HistoryIcon,
   MailIcon,
   PencilIcon,
@@ -14,23 +15,33 @@ import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { MemberAvatar } from '@/components/ui/combobox';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetBackdrop,
+  SheetCloseButton,
+  SheetDescription,
+  SheetFooter,
+  SheetPopup,
+  SheetPortal,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { useCapability } from '@/lib/capabilities';
-import { formatDayMonthYear } from '@/lib/format';
 import { useMemberCard, type MemberCardData } from '@/queries/member-card';
 import { useMyGroupRoles } from '@/queries/my-groups';
 
-import { memberDisplayName, type MemberIdentity } from './member-identity';
+import {
+  memberDisplayName,
+  memberSinceLabel,
+  type MemberIdentity,
+} from './member-identity';
 
 /**
- * The Member Card (CONTEXT.md, ruling R6): the pop-up behind every name.
- * Nickname, full name, Role, "Membru din", the first Department with "+n",
- * the Groups and — only for viewers the server lets read it — contact.
+ * The Member Card (CONTEXT.md, ruling R6): the sheet behind every name — a
+ * panel from the right on a desktop, rising from the bottom to its content's
+ * height on a phone (DESIGN.md, "Four surfaces"). Titled by the Member, as
+ * Profil is: the avatar in their colour, the Nickname, then one line of what
+ * they are (Role, full name, "Membru din"). Under it the Groups with the
+ * Member's Group Role in each and — only for viewers the server lets read
+ * it — contact; the links to their pages are pinned at the foot.
  * Task Points and rank never appear here, whatever the surrounding row shows.
  */
 export function MemberCard({
@@ -42,17 +53,22 @@ export function MemberCard({
   onOpenChange: (open: boolean) => void;
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* One shrinkable column: a long Group Role label wraps or truncates
-          inside the dialog instead of widening it past 375 px (layout N3). */}
-      <DialogContent className="grid-cols-[minmax(0,1fr)] gap-5 sm:max-w-sm">
-        <MemberCardBody {...identity} onClose={() => onOpenChange(false)} />
-      </DialogContent>
-    </Dialog>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetPortal>
+        <SheetBackdrop />
+        <SheetPopup
+          side="bottom"
+          data-slot="member-card"
+          className="gap-5 p-4 sm:max-w-md sm:p-6"
+        >
+          <MemberCardBody {...identity} onClose={() => onOpenChange(false)} />
+        </SheetPopup>
+      </SheetPortal>
+    </Sheet>
   );
 }
 
-// Mounted only while the Dialog is open, so a list of fifty names does not
+// Mounted only while the sheet is open, so a list of fifty names does not
 // read fifty cards.
 function MemberCardBody({
   memberId,
@@ -67,7 +83,7 @@ function MemberCardBody({
   const title = data
     ? memberDisplayName(data.nickname, data.fullName)
     : memberDisplayName(nickname, fullName);
-  // The full name sits under the Nickname only when it says something new.
+  // The full name follows the Nickname only when it says something new.
   const subtitle = data
     ? data.nickname && data.nickname !== data.fullName
       ? data.fullName
@@ -75,56 +91,70 @@ function MemberCardBody({
     : nickname?.trim() && nickname.trim() !== fullName
       ? fullName
       : null;
-  const joined = data ? formatDayMonthYear(data.joinedAt) : null;
-  const facts = [
-    data?.roleLabel,
-    // A Board Title names the Role (#963); the rank stays beside it.
-    data?.rankLabel !== data?.roleLabel ? data?.rankLabel : null,
-    joined ? `Membru din ${joined}` : null,
-  ].filter(Boolean);
-  const ring = data?.primaryGroup?.color ?? 'var(--border)';
+  const joined = data ? memberSinceLabel(data.joinedAt) : null;
+  // A Board Title names the Role (#963); the rank stays beside it.
+  const rank =
+    data?.rankLabel && data.rankLabel !== data.roleLabel
+      ? data.rankLabel
+      : null;
 
   return (
     <>
-      <DialogHeader className="min-w-0 flex-row items-center gap-4">
-        {/* The frame keeps its size when a photo replaces the initials (#629);
-            its ring is the first Group's colour, named by the chip below. */}
-        <span
-          data-slot="member-photo"
-          className="grid size-16 shrink-0 place-items-center rounded-full p-0.5"
-          style={{ boxShadow: `0 0 0 2px ${ring}` }}
-        >
+      {/* The identity is the sheet's header, as on Profil: the avatar, the
+          title and the X on one row, then one line of what the Member is. */}
+      <div data-slot="member-card-identity" className="grid min-w-0 gap-2">
+        <div className="flex min-w-0 items-center gap-3">
           <MemberAvatar
             name={data?.fullName ?? fullName}
             avatarColor={data?.avatarColor ?? avatarColor}
-            className="size-full text-base"
+            className="size-12 text-lg"
           />
-        </span>
-        <div className="min-w-0 space-y-0.5">
-          {/* The dialog's own title size (#842): no override here. */}
-          <DialogTitle className="wrap-anywhere">{title}</DialogTitle>
-          {subtitle && (
-            <p className="text-sm font-medium wrap-anywhere">{subtitle}</p>
-          )}
-          <DialogDescription className="text-xs">
-            {facts.length ? facts.join(' · ') : 'Profil de membru'}
-          </DialogDescription>
+          <SheetTitle className="min-w-0 flex-1 wrap-anywhere">
+            {title}
+          </SheetTitle>
+          <SheetCloseButton className="-mr-2 shrink-0" />
         </div>
-      </DialogHeader>
+        <SheetDescription
+          data-slot="member-card-meta"
+          className="m-0 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1"
+        >
+          {/* The spaces draw nothing in a flex row; they keep the words
+              apart where the line is read out as the sheet's description. */}
+          {data?.roleLabel && (
+            <span className="role-badge">
+              <span className="role-dot" aria-hidden="true" />
+              {data.roleLabel}
+            </span>
+          )}{' '}
+          {rank && <span>{rank}</span>}{' '}
+          {subtitle && <span className="wrap-anywhere">{subtitle}</span>}{' '}
+          {joined && (
+            <span className="flex items-center gap-1.5">
+              <CalendarIcon aria-hidden="true" className="size-3.5 shrink-0" />
+              <span>{joined}</span>
+            </span>
+          )}
+          {!data?.roleLabel && !rank && !subtitle && !joined && (
+            <span>Profil de membru</span>
+          )}
+        </SheetDescription>
+      </div>
 
       {card.isPending ? (
-        <p role="status" className="text-muted-foreground">
+        <p role="status" className="m-0 text-muted-foreground">
           Se încarcă profilul…
         </p>
       ) : card.isError ? (
         <div role="alert" className="space-y-2">
-          <p>Nu am putut încărca profilul.</p>
+          <p className="m-0">Nu am putut încărca profilul.</p>
           <Button variant="outline" onClick={() => void card.refetch()}>
             Reîncarcă profilul
           </Button>
         </div>
       ) : !data ? (
-        <p className="text-muted-foreground">Profilul nu este disponibil.</p>
+        <p className="m-0 text-muted-foreground">
+          Profilul nu este disponibil.
+        </p>
       ) : (
         <CardSections data={data} ids={ids} onClose={onClose} />
       )}
@@ -132,10 +162,9 @@ function MemberCardBody({
   );
 }
 
-const actionClass = cn(
-  buttonVariants({ variant: 'outline', size: 'sm' }),
-  'min-w-0',
-);
+/** A contact fact: a lucide icon and the value, one 44 px link in the text colour. */
+const contactClass =
+  'inline-flex min-h-11 max-w-full items-center gap-3 rounded-sm text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground';
 
 function CardSections({
   data,
@@ -149,57 +178,24 @@ function CardSections({
   const manageRoles = useCapability('manageRoles').data === true;
   const seeLeadership = useCapability('seeLeadership').data === true;
   const administer = useCapability('administer').data === true;
-  const { primaryGroup, otherMemberships } = data;
   return (
     <>
-      {primaryGroup && (
-        <p className="-mt-1 flex min-w-0 flex-wrap items-center gap-2">
-          <span
-            className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold"
-            style={{
-              borderColor: primaryGroup.color ?? 'var(--border)',
-              backgroundColor: primaryGroup.color
-                ? `color-mix(in oklab, ${primaryGroup.color} 12%, transparent)`
-                : undefined,
-            }}
-          >
-            <span
-              aria-hidden="true"
-              className="size-2 shrink-0 rounded-full"
-              style={{
-                backgroundColor: primaryGroup.color ?? 'var(--brand-red)',
-              }}
-            />
-            <span className="truncate">{primaryGroup.name}</span>
-            <PrivateGroupBadge isPrivate={primaryGroup.isPrivate} compact />
-          </span>
-          {otherMemberships > 0 && (
-            <span
-              className="text-xs font-semibold text-muted-foreground tabular-nums"
-              aria-label={
-                otherMemberships === 1
-                  ? 'și încă un grup'
-                  : `și încă ${otherMemberships} grupuri`
-              }
-            >
-              +{otherMemberships}
-            </span>
-          )}
-        </p>
-      )}
-
+      {/* Every Group is listed, so there is no "first Group + n" chip above. */}
       {data.groups.length > 0 && (
         <section aria-labelledby={`${ids}-groups`} className="min-w-0">
-          <SubHeading id={`${ids}-groups`} className="mb-2">
+          <SubHeading id={`${ids}-groups`} variant="label" className="mb-1">
             Grupuri
           </SubHeading>
-          <ul className="max-h-56 divide-y divide-border overflow-y-auto">
+          <ul className="m-0 list-none divide-y divide-border p-0">
             {data.groups.map((group) => (
+              // The name wraps and the Group Role drops under it when the two
+              // do not fit side by side: nothing is cut with "…".
               <li
                 key={group.id}
-                className="flex min-w-0 items-center justify-between gap-3 py-1.5"
+                data-slot="member-card-group"
+                className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 py-2.5"
               >
-                <span className="flex min-w-0 items-center gap-2">
+                <span className="flex min-w-0 flex-1 basis-40 items-center gap-2.5">
                   <span
                     aria-hidden="true"
                     className="size-2.5 shrink-0 rounded-full"
@@ -207,19 +203,14 @@ function CardSections({
                       backgroundColor: group.color ?? 'var(--brand-red)',
                     }}
                   />
-                  <span className="truncate" title={group.label}>
-                    {group.label}
-                  </span>
+                  <span className="min-w-0 wrap-anywhere">{group.label}</span>
                   <PrivateGroupBadge isPrivate={group.isPrivate} />
                 </span>
-                {/* A long position ("Responsabil logistică și voluntari")
-                    truncates at half the row, with the whole label on hover. */}
                 <Badge
                   variant="outline"
-                  className="max-w-1/2 min-w-0 shrink-0 justify-start"
-                  title={group.roleLabel}
+                  className="ml-auto h-auto max-w-full shrink text-left whitespace-normal wrap-anywhere"
                 >
-                  <span className="truncate">{group.roleLabel}</span>
+                  {group.roleLabel}
                 </Badge>
               </li>
             ))}
@@ -229,28 +220,25 @@ function CardSections({
 
       {data.contact && (
         <section aria-labelledby={`${ids}-contact`} className="min-w-0">
-          <SubHeading id={`${ids}-contact`} className="mb-2">
+          <SubHeading id={`${ids}-contact`} variant="label" className="mb-1">
             Contact
           </SubHeading>
-          <ul>
+          <ul className="m-0 list-none p-0">
             {data.contact.email && (
               <li>
                 <a
                   href={`mailto:${data.contact.email}`}
-                  className="inline-flex min-h-11 items-center gap-2 break-all underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                  className={cn(contactClass, 'break-all')}
                 >
-                  <MailIcon aria-hidden="true" className="size-4 shrink-0" />
+                  <MailIcon aria-hidden="true" />
                   {data.contact.email}
                 </a>
               </li>
             )}
             {data.contact.phone && (
               <li>
-                <a
-                  href={`tel:${data.contact.phone}`}
-                  className="inline-flex min-h-11 items-center gap-2 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-                >
-                  <PhoneIcon aria-hidden="true" className="size-4 shrink-0" />
+                <a href={`tel:${data.contact.phone}`} className={contactClass}>
+                  <PhoneIcon aria-hidden="true" />
                   {data.contact.phone}
                 </a>
               </li>
@@ -273,15 +261,18 @@ function CardSections({
 }
 
 /**
- * The card's links, in one grid inside the dialog's padding: two columns
- * when both fit, one under the other on a narrow phone.
+ * The card's links, pinned at the sheet's foot: one filled, the other
+ * outline before it (DESIGN.md, "One filled button per surface").
  *
- * - "Vezi trackerul" for leadership (BCE, BC, Moderator).
+ * - "Vezi trackerul" for leadership (BCE, BC, Moderator). The primary: what a
+ *   leader opens a name for is that Member's work.
  * - "Editează" for `manageRoles` (BC, Moderator): the member page.
  * - "Pagina membrului" for a viewer who may open Administrare (`administer`)
  *   and holds a Group Role (Coordonator or Responsabil) in a Group this member
  *   belongs to — the member page is theirs to read for their Groups
  *   (navigation D19). Never both: it is the same page as "Editează".
+ *
+ * The member page is the primary only where it is the one link offered.
  */
 function CardActions({
   data,
@@ -333,45 +324,39 @@ function CardLinks({
   const tracker = seeLeadership && location.pathname !== trackerPage;
   const page = (manageRoles || leads) && location.pathname !== memberPage;
   if (!tracker && !page) return null;
+  const PageIcon = manageRoles ? PencilIcon : UserIcon;
   return (
-    <nav
-      aria-label="Acțiuni pentru membru"
-      className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-2 border-t pt-4"
-    >
-      {tracker && (
-        <Link
-          to={trackerPage}
-          state={from}
-          onClick={onClose}
-          className={actionClass}
-        >
-          <HistoryIcon aria-hidden="true" />
-          Vezi trackerul
-        </Link>
-      )}
-      {page &&
-        (manageRoles ? (
+    <SheetFooter pinned>
+      {/* The footer's one child, so the two links share its row: the
+          secondary a third, the primary two thirds, as in a form sheet. */}
+      <nav aria-label="Acțiuni pentru membru" className="flex min-w-0 gap-2">
+        {page && (
           <Link
             to={memberPage}
             state={from}
             onClick={onClose}
-            className={actionClass}
+            className={cn(
+              buttonVariants({ variant: tracker ? 'outline' : 'default' }),
+              'min-w-0 flex-1',
+            )}
           >
-            <PencilIcon aria-hidden="true" />
-            Editează
+            <PageIcon aria-hidden="true" />
+            {manageRoles ? 'Editează' : 'Pagina membrului'}
           </Link>
-        ) : (
+        )}
+        {tracker && (
           <Link
-            to={memberPage}
+            to={trackerPage}
             state={from}
             onClick={onClose}
-            className={actionClass}
+            className={cn(buttonVariants(), 'min-w-0 flex-2')}
           >
-            <UserIcon aria-hidden="true" />
-            Pagina membrului
+            <HistoryIcon aria-hidden="true" />
+            Vezi trackerul
           </Link>
-        ))}
-    </nav>
+        )}
+      </nav>
+    </SheetFooter>
   );
 }
 

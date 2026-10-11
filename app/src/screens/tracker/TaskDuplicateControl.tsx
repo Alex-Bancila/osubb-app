@@ -1,19 +1,19 @@
-import { useMemo, useRef, useState, type FormEvent } from 'react';
+import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Copy } from 'lucide-react';
 import { Button } from '../../components/ui/button';
+import { DateTimePicker } from '../../components/ui/date-picker';
 import { FieldError } from '../../components/ui/field';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../../components/ui/dialog';
+import { FormSheet, FormSheetFooter } from '../../components/ui/form-sheet';
+import { InfoHint } from '../../components/ui/info-hint';
 import { fieldForReason, taskDuplicateSchema } from '../../lib/schemas/task';
 import { useFormValidation } from '../../lib/use-form-validation';
 import { useDuplicateTask } from '../../queries/task-duplication';
 
-/** "Duplică" asks for one thing, the new deadline, in a small pop-up. */
+/**
+ * "Duplică" asks for one thing, the new deadline, in a form sheet; what the
+ * copy keeps is behind the field's "i". Its button is the copy icon alone,
+ * named "Duplică".
+ */
 export function TaskDuplicateControl({
   taskId,
   onDuplicated,
@@ -21,6 +21,7 @@ export function TaskDuplicateControl({
   taskId: number;
   onDuplicated: (id: number) => void;
 }) {
+  const id = useId();
   const mutation = useDuplicateTask();
   const [open, setOpen] = useState(false);
   const [deadline, setDeadline] = useState('');
@@ -52,72 +53,76 @@ export function TaskDuplicateControl({
       setPending(false);
     }
   }
+  function close() {
+    if (pending) return;
+    setOpen(false);
+    form.reset();
+  }
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (pending) return;
-        setOpen(next);
-        if (!next) form.reset();
-      }}
-    >
+    <>
       <Button
         variant="outline"
-        className="min-h-11"
+        size="icon"
+        title="Duplică"
         onClick={() => setOpen(true)}
       >
-        Duplică
+        <Copy aria-hidden="true" />
+        <span className="sr-only">Duplică</span>
       </Button>
-      <DialogContent finalFocus={() => !duplicated.current}>
+      <FormSheet
+        open={open}
+        onOpenChange={(next) => {
+          if (next) setOpen(true);
+          else close();
+        }}
+        title="Duplică taskul"
+        busy={pending}
+        finalFocus={() => !duplicated.current}
+      >
         <form
-          className="grid gap-4"
+          className="flex flex-1 flex-col gap-5"
           aria-label="Duplică taskul"
           noValidate
           onSubmit={submit}
         >
-          <DialogHeader>
-            <DialogTitle>Duplică taskul</DialogTitle>
-            <DialogDescription>
-              Copia va avea un termen nou și va păstra legătura cu acest task.
-              Executorul și rezultatele nu se copiază.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-1">
-            <label className="block space-y-1">
-              <span className="font-semibold">Termen nou (ora României)</span>
-              <input
-                required
-                type="datetime-local"
-                value={deadline}
-                onChange={(event) => setDeadline(event.target.value)}
-                disabled={pending}
-                className="min-h-11 w-full rounded-md border border-input bg-background px-3"
-                {...form.field('deadline')}
-              />
-            </label>
+          <div className="grid gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor={`${id}-deadline`} className="text-sm font-medium">
+                Termen nou — ora României
+              </label>
+              <InfoHint label="Despre copie" id={`${id}-info`}>
+                Copia are un termen nou și păstrează legătura cu acest task.
+                Executorul și rezultatele nu se copiază.
+              </InfoHint>
+            </div>
+            <DateTimePicker
+              id={`${id}-deadline`}
+              required
+              defaultTime="23:59"
+              value={deadline}
+              onChange={setDeadline}
+              disabled={pending}
+              {...form.field('deadline', `${id}-info`)}
+            />
             <FieldError {...form.errorProps('deadline')} />
           </div>
           <FieldError>{form.formError}</FieldError>
           {pending && <p role="status">Se duplică taskul…</p>}
-          <DialogFooter>
+          <FormSheetFooter>
             <Button
               type="button"
               variant="outline"
-              className="min-h-11"
               disabled={pending}
-              onClick={() => {
-                setOpen(false);
-                form.reset();
-              }}
+              onClick={close}
             >
               Renunță
             </Button>
-            <Button type="submit" className="min-h-11" disabled={pending}>
+            <Button type="submit" disabled={pending}>
               Creează copia
             </Button>
-          </DialogFooter>
+          </FormSheetFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </FormSheet>
+    </>
   );
 }

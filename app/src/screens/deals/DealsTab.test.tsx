@@ -127,6 +127,8 @@ describe('Anunțuri › OSUBB Deals (R45)', () => {
     const sheet = await screen.findByRole('dialog', {
       name: 'Reducere la cafenea',
     });
+    // The sheet's header is the Deal's title: no "OSUBB Deals" eyebrow.
+    expect(within(sheet).queryByText('OSUBB Deals')).toBeNull();
     expect(
       within(sheet).getByRole('link', {
         name: 'Deschide: Meniu (se deschide într-o filă nouă)',

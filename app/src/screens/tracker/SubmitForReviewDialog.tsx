@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from '../../components/ui/dialog';
 import { FieldError } from '../../components/ui/field';
+import { Textarea } from '../../components/ui/input';
 import { charLength } from '../../lib/normalize';
 import { fieldForReason, submissionSchema } from '../../lib/schemas/submission';
 import { useFormValidation } from '../../lib/use-form-validation';
@@ -115,13 +116,12 @@ export function SubmitForReviewDialog({
             <label className="text-sm font-medium" htmlFor={`${id}-note`}>
               Notă pentru verificator (opțional)
             </label>
-            <textarea
+            <Textarea
               id={`${id}-note`}
               rows={4}
               value={note}
               onChange={(event) => setNote(event.target.value)}
               disabled={pending}
-              className="w-full rounded-md border border-input bg-background p-3 text-sm focus-visible:outline-2 focus-visible:outline-ring"
               {...form.field('note', `${id}-note-help`)}
             />
             <p

@@ -67,6 +67,7 @@ vi.mock('../../queries/completed-tasks', () => ({
   useCompletedTaskExecutors: () => ({ data: [], isSuccess: true }),
 }));
 import { RequestDecisionQueue } from './RequestDecisionQueue';
+import { chooseOption } from '../../test/select';
 import { CommandError } from '../../lib/command-reasons';
 vi.mock(
   '../../queries/member-card',
@@ -115,14 +116,9 @@ it('shares evaluation fields and retains success after the queue refetches empty
   );
   expect(state.mutate).not.toHaveBeenCalled();
   await user.click(screen.getByRole('radio', { name: /^2 stele — / }));
-  await user.click(
-    screen.getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
-  );
+  await user.click(screen.getByRole('spinbutton', { name: 'Nota' }));
   await user.keyboard('5');
-  await user.type(
-    screen.getByLabelText('Observații (obligatoriu)'),
-    'Bine făcut',
-  );
+  await user.type(screen.getByLabelText('Observații'), 'Bine făcut');
   await user.dblClick(
     screen.getByRole('button', { name: 'Aprobă și acordă punctele' }),
   );
@@ -157,11 +153,11 @@ it('requires a rejection note, calls rejection only, and has no axe violations',
   // Nothing is disabled before the first try; the rule shows under the field.
   await user.click(screen.getByRole('button', { name: 'Respinge cererea' }));
   expect(
-    screen.getByLabelText('Motivul respingerii (obligatoriu)'),
+    screen.getByLabelText('Motivul respingerii'),
   ).toHaveAccessibleDescription('Scrie motivul respingerii.');
   expect(state.mutate).not.toHaveBeenCalled();
   await user.type(
-    screen.getByLabelText('Motivul respingerii (obligatoriu)'),
+    screen.getByLabelText('Motivul respingerii'),
     'Mai sunt necesare detalii',
   );
   expect(
@@ -179,19 +175,23 @@ it('requires a rejection note, calls rejection only, and has no axe violations',
   });
   expect(await screen.findByRole('status')).toHaveTextContent('respinsă');
 });
-it('evaluates in a dialog with the dialog header, listing the Request once (#855, R1)', async () => {
+it('evaluates in a form sheet, listing the Request once (#855, R1)', async () => {
   const user = userEvent.setup();
   render(<RequestDecisionQueue />);
   await user.click(screen.getByRole('button', { name: 'Evaluează cererea' }));
   const dialog = await screen.findByRole('dialog', {
     name: 'Evaluează cererea',
   });
+  // A form as long as a Task's opens in a form sheet, titled by what it
+  // does, with no intro paragraph.
+  expect(dialog).toHaveAttribute('data-slot', 'form-sheet');
   expect(
     dialog.querySelector(
-      '[data-slot="dialog-header"] [data-slot="dialog-title"]',
+      '[data-slot="sheet-header"] [data-slot="sheet-title"]',
     ),
   ).toHaveTextContent('Evaluează cererea');
-  // The form is not a second box with its own title inside the dialog: its
+  expect(dialog).not.toHaveTextContent(/Aprobarea creează taskul finalizat/);
+  // The form is not a second box with its own title inside the sheet: its
   // two blocks are the Task and its Evaluation (#915).
   expect(
     within(dialog)
@@ -201,7 +201,7 @@ it('evaluates in a dialog with the dialog header, listing the Request once (#855
   expect(
     within(dialog)
       .getByRole('button', { name: 'Aprobă și acordă punctele' })
-      .closest('[data-slot="dialog-footer"]'),
+      .closest('[data-slot="sheet-footer"][data-pinned]'),
   ).not.toBeNull();
   // The Request under decision shows once in the dialog, and the list keeps
   // its one row instead of gaining a copy.
@@ -219,10 +219,29 @@ it('evaluates in a dialog with the dialog header, listing the Request once (#855
 it('says there is nothing to decide when the queue is the page (#855, B30)', () => {
   state.queue.mockReturnValue({ data: [] });
   render(<RequestDecisionQueue showEmpty />);
+  // The view's one section: named for assistive technology, with no eyebrow
+  // and heading repeating where the viewer already is.
+  const region = screen.getByRole('region', { name: 'Cereri de evaluat' });
+  expect(within(region).queryByRole('heading')).toBeNull();
+  expect(region.querySelector('[data-slot="section-eyebrow"]')).toBeNull();
+  expect(screen.getByText('Nicio cerere de evaluat.')).toBeVisible();
+});
+it('counts the Requests in a small caption when the queue is the view', () => {
+  state.queue.mockReturnValue({ data: [request, { ...request, id: 92 }] });
+  const view = render(<RequestDecisionQueue showEmpty />);
+  const region = screen.getByRole('region', { name: 'Cereri de evaluat' });
+  expect(within(region).queryByRole('heading')).toBeNull();
+  expect(screen.queryByText('De decis')).toBeNull();
+  expect(region.querySelector('[data-slot="request-count"]')).toHaveTextContent(
+    '2 cereri de evaluat',
+  );
+  // Beside the form and Cererile mele it is headed like those panels.
+  view.rerender(<RequestDecisionQueue />);
   expect(
     screen.getByRole('heading', { name: 'Cereri de evaluat' }),
   ).toBeVisible();
-  expect(screen.getByText('Nicio cerere de evaluat.')).toBeVisible();
+  expect(screen.getByText('De decis')).toBeVisible();
+  expect(document.querySelector('[data-slot="request-count"]')).toBeNull();
 });
 it('stays hidden for a member with nothing to decide, including while it loads', () => {
   state.queue.mockReturnValue({ data: [] });
@@ -246,10 +265,7 @@ it('keeps the request and note on unexpected failure without leaking details', a
   state.mutate.mockRejectedValue(new Error('private SQL'));
   render(<RequestDecisionQueue />);
   await userEvent.click(screen.getByRole('button', { name: 'Respinge' }));
-  await userEvent.type(
-    screen.getByLabelText('Motivul respingerii (obligatoriu)'),
-    'Notă',
-  );
+  await userEvent.type(screen.getByLabelText('Motivul respingerii'), 'Notă');
   await userEvent.click(
     screen.getByRole('button', { name: 'Respinge cererea' }),
   );
@@ -257,9 +273,7 @@ it('keeps the request and note on unexpected failure without leaking details', a
     'Nu am putut salva decizia',
   );
   expect(screen.queryByText(/private SQL/)).not.toBeInTheDocument();
-  expect(
-    screen.getByLabelText('Motivul respingerii (obligatoriu)'),
-  ).toHaveValue('Notă');
+  expect(screen.getByLabelText('Motivul respingerii')).toHaveValue('Notă');
 });
 it('names the Requester by Nickname as a button that opens their Member Card', async () => {
   state.queue.mockReturnValue({
@@ -281,11 +295,9 @@ it('names the Requester by Nickname as a button that opens their Member Card', a
 
 async function score(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('radio', { name: /^2 stele — / }));
-  await user.click(
-    screen.getByRole('spinbutton', { name: 'Nota (obligatoriu)' }),
-  );
+  await user.click(screen.getByRole('spinbutton', { name: 'Nota' }));
   await user.keyboard('5');
-  await user.type(screen.getByLabelText('Observații (obligatoriu)'), 'Bine');
+  await user.type(screen.getByLabelText('Observații'), 'Bine');
 }
 
 it('prefills the Task from the Request and approves it as the decider shaped it (#915)', async () => {
@@ -304,14 +316,14 @@ it('prefills the Task from the Request and approves it as the decider shaped it 
     }),
   ).toHaveLength(1);
   expect(dialog.querySelector('[data-slot="completed-volunteer"]')).toBeNull();
-  const title = within(dialog).getByLabelText('Titlu (obligatoriu)');
+  const title = within(dialog).getByLabelText('Titlu');
   expect(title).toHaveValue(request.description);
-  expect(within(dialog).getByLabelText('Detalii')).toHaveValue(
+  expect(within(dialog).getByLabelText('Detalii (opțional)')).toHaveValue(
     request.description,
   );
   expect(
     within(dialog).getByRole('combobox', {
-      name: 'Grup principal (obligatoriu)',
+      name: 'Grup principal',
     }),
   ).toHaveTextContent('Ateliere');
   // No deadline and no Audience: a completed Task is no Opportunity.
@@ -320,10 +332,11 @@ it('prefills the Task from the Request and approves it as the decider shaped it 
 
   await user.clear(title);
   await user.type(title, 'Materiale pentru atelier');
-  await user.clear(within(dialog).getByLabelText('Detalii'));
-  await user.selectOptions(
+  await user.clear(within(dialog).getByLabelText('Detalii (opțional)'));
+  await chooseOption(
+    user,
     within(dialog).getByLabelText('Campanie (opțional)'),
-    '11',
+    'Bun venit',
   );
   // Moving the work to the Child Group keeps a Campaign owned above it.
   await user.click(
@@ -375,7 +388,7 @@ it('shows a refusal about the requester under Grup, in Romanian (#915)', async (
     screen.getByRole('button', { name: 'Aprobă și acordă punctele' }),
   );
   const group = await screen.findByRole('combobox', {
-    name: 'Grup principal (obligatoriu)',
+    name: 'Grup principal',
   });
   await waitFor(() =>
     expect(group).toHaveAccessibleDescription(
@@ -394,7 +407,7 @@ it("always offers the Request's own Group, even when the read leaves it out (#91
   render(<RequestDecisionQueue />);
   await user.click(screen.getByRole('button', { name: 'Evaluează cererea' }));
   expect(
-    screen.getByRole('combobox', { name: 'Grup principal (obligatoriu)' }),
+    screen.getByRole('combobox', { name: 'Grup principal' }),
   ).toHaveTextContent('Ateliere');
 });
 

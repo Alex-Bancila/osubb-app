@@ -11,6 +11,7 @@ import {
   GroupOption,
   groupOptionLabel,
 } from '../../components/ui/combobox';
+import { InfoHint } from '../../components/ui/info-hint';
 import {
   groupsBelow,
   rootGroups,
@@ -24,8 +25,10 @@ const ONLY_ROOT = 'Doar grupul principal';
  * The Task's Origin as two steps (ruling R3): **Grup principal** — a managed
  * Group with no managed ancestor — then, optionally, a **Subgrup** anywhere
  * below it. Choosing only the first step picks that Group itself, so the
- * value is always exactly one Group. The Work Filter (#678) is a different
- * control; this one only ever offers Groups the caller manages.
+ * value is always exactly one Group. Grup principal is required, which only
+ * assistive technology is told: the labels mark just the optional step. The
+ * Work Filter (#678) is a different control; this one only ever offers
+ * Groups the caller manages.
  */
 export function TaskGroupCascade({
   groups,
@@ -63,7 +66,7 @@ export function TaskGroupCascade({
     <div className="grid gap-3">
       <div className="grid gap-1.5">
         <span id={`${id}-root`} className="text-sm font-medium">
-          Grup principal (obligatoriu)
+          Grup principal
         </span>
         <Combobox<ManagedWorkGroup>
           items={roots}
@@ -77,6 +80,7 @@ export function TaskGroupCascade({
         >
           <ComboboxTrigger
             aria-labelledby={`${id}-root`}
+            aria-required="true"
             aria-describedby={describedBy}
             aria-invalid={invalid || undefined}
           >
@@ -108,9 +112,14 @@ export function TaskGroupCascade({
       </div>
       {root && below.length > 0 && (
         <div className="grid gap-1.5">
-          <span id={`${id}-sub`} className="text-sm font-medium">
-            Subgrup (opțional)
-          </span>
+          <div className="flex items-center justify-between gap-2">
+            <span id={`${id}-sub`} className="text-sm font-medium">
+              Subgrup (opțional)
+            </span>
+            <InfoHint label="Despre subgrup" id={`${id}-sub-hint`}>
+              Fără subgrup, taskul aparține grupului principal.
+            </InfoHint>
+          </div>
           <Combobox<ManagedWorkGroup>
             items={[root, ...below]}
             value={selected}
@@ -155,9 +164,6 @@ export function TaskGroupCascade({
               </ComboboxList>
             </ComboboxContent>
           </Combobox>
-          <p id={`${id}-sub-hint`} className="text-sm text-muted-foreground">
-            Fără subgrup, taskul aparține grupului principal.
-          </p>
         </div>
       )}
     </div>

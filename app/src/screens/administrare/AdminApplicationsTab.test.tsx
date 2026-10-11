@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import axe from 'axe-core';
@@ -182,6 +182,71 @@ it('lists every Group the leader leads — inherited ones and those with 0 reque
   ]);
   expect(links[0]).toHaveAttribute('aria-current', 'page');
   expect(links[3]).toHaveAttribute('href', '/administrare/cereri?grup=2');
+});
+
+it('offers the Groups as one searchable picker on a phone, which opens the chosen Group', async () => {
+  const user = userEvent.setup();
+  queue([
+    application(1, 'Ana Pop', 'Logistică', 2),
+    application(2, 'Dan Ionescu', 'Echipa IT', 3),
+  ]);
+  show();
+  // The app's Group picker, not the browser's select; the side list is the
+  // desktop's.
+  const picker = screen.getByRole('combobox', { name: 'Grupurile tale' });
+  expect(picker.tagName).toBe('BUTTON');
+  expect(picker).toHaveAttribute('data-slot', 'combobox-trigger');
+  expect(picker.closest('[data-slot="group-picker"]')).toHaveClass('md:hidden');
+  expect(document.querySelector('select')).toBeNull();
+  expect(picker).toHaveTextContent('Toate grupurile (2)');
+
+  await user.click(picker);
+  await screen.findByRole('listbox');
+  const options = () =>
+    within(screen.getByRole('listbox'))
+      .getAllByRole('option')
+      .map((option) => option.textContent);
+  // Every Group with its pending count, "Toate grupurile" first.
+  expect(options()).toEqual([
+    'Toate grupurile22 cereri',
+    'Diverse00 cereri',
+    'Echipa IT· Diverse11 cerere',
+    'Logistică11 cerere',
+  ]);
+  // Typing narrows the list, by the Group's or its parent's name.
+  await user.type(
+    screen.getByRole('combobox', { name: 'Caută un grup' }),
+    'it',
+  );
+  await waitFor(() =>
+    expect(options()).toEqual(['Echipa IT· Diverse11 cerere']),
+  );
+  await user.click(screen.getByRole('option', { name: /Echipa IT/ }));
+  expect(
+    await screen.findByRole('button', {
+      name: 'Profilul membrului Dan Ionescu',
+    }),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole('button', { name: 'Profilul membrului Ana Pop' }),
+  ).toBeNull();
+  expect(
+    screen.getByRole('link', { name: /^Echipa IT/, current: 'page' }),
+  ).toBeVisible();
+  expect(picker).toHaveTextContent('Echipa IT · Diverse (1)');
+
+  // "Toate grupurile" clears the choice.
+  await user.click(picker);
+  await user.click(
+    await screen.findByRole('option', { name: /Toate grupurile/ }),
+  );
+  expect(
+    await screen.findByRole('button', { name: 'Profilul membrului Ana Pop' }),
+  ).toBeVisible();
+  expect(screen.getByRole('link', { name: /^Toate/ })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
 });
 
 it('shows one Group’s Applications under ?grup=, and says when it has none', () => {

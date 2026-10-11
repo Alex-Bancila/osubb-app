@@ -70,6 +70,13 @@ describe('AttachedLinksFields', () => {
     expect(screen.queryByLabelText(/Etichetă link/)).toBeNull();
     await user.click(add());
     expect(label(1)).toHaveFocus();
+    // The shared field surface, and no box around the list: it reads the
+    // same in every form.
+    expect(label(1)).toHaveAttribute('data-slot', 'input');
+    expect(address(1)).toHaveAttribute('data-slot', 'input');
+    expect(
+      screen.getByRole('group', { name: /Linkuri atașate/ }),
+    ).not.toHaveClass('border');
     await user.click(add());
     expect(label(2)).toHaveFocus();
     expect(screen.getByText('2 din 5')).toBeInTheDocument();

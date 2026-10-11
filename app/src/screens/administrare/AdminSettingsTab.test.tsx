@@ -53,7 +53,9 @@ vi.mock('../../queries/groups-admin', async (original) => ({
   ...(await original<object>()),
   useAdminGroups: db.groups,
 }));
+import { chooseOption } from '../../test/select';
 import AdminSettingsTab from './AdminSettingsTab';
+import { optionNames } from './select-test-options';
 
 vi.setConfig({ testTimeout: 15_000 });
 
@@ -149,12 +151,12 @@ it('groups the settings by purpose, each with its effect, value and one Editeaz�
       .getAllByRole('listitem')
       .map((item) => item.getAttribute('data-setting')),
   ).toEqual(['board_group_id']);
-  const emails = screen.getByRole('region', { name: 'Emailuri' });
+  // The daily email digest left the app's UI: its quota, still stored on the
+  // server, is not a setting here.
+  expect(screen.queryByRole('region', { name: 'Emailuri' })).toBeNull();
   expect(
-    within(emails)
-      .getAllByRole('listitem')
-      .map((item) => item.getAttribute('data-setting')),
-  ).toEqual(['email_daily_quota']);
+    container.querySelector('[data-setting="email_daily_quota"]'),
+  ).toBeNull();
   // The thresholds and shares live in Evaluări de rol (R28, R30).
   expect(
     within(promotions).getByRole('link', { name: /Praguri și procente/ }),
@@ -325,19 +327,17 @@ it('edits the Adunarea Generală among top-level Teams with automatic membership
     name: 'Grupul Adunării Generale',
   });
   expect(select).toHaveFocus();
-  expect(select).toHaveAttribute('data-slot', 'native-select');
+  expect(select).toHaveAttribute('data-slot', 'select');
+  // Nothing stored: the empty field asks for a Group.
+  expect(select).toHaveTextContent('Alege un grup');
   // Not OSUBB, a Department, a child Team, a Team with a roster or one at
   // another Minimum Level than 3.
-  expect(
-    within(select)
-      .getAllByRole('option')
-      .map((option) => option.textContent),
-  ).toEqual(['Alege un grup', 'Adunarea Generală']);
+  expect(await optionNames(user, select)).toEqual(['Adunarea Generală']);
   const save = within(item).getByRole('button', { name: 'Salvează' });
   expect(save).toBeDisabled();
 
   // Renunță after a choice sends nothing and keeps "Nesetat".
-  await user.selectOptions(select, '5');
+  await chooseOption(user, select, 'Adunarea Generală');
   expect(save).toBeEnabled();
   await user.click(within(item).getByRole('button', { name: 'Renunță' }));
   expect(rpcCalls('set_org_setting')).toEqual([]);
@@ -350,7 +350,11 @@ it('edits the Adunarea Generală among top-level Teams with automatic membership
       name: 'Editează Grupul Adunării Generale',
     }),
   );
-  await user.selectOptions(within(item).getByRole('combobox'), '5');
+  await chooseOption(
+    user,
+    within(item).getByRole('combobox'),
+    'Adunarea Generală',
+  );
   await user.click(within(item).getByRole('button', { name: 'Salvează' }));
   expect(await within(item).findByRole('alert')).toHaveTextContent(
     /Valoarea nu este acceptată/,
@@ -386,15 +390,15 @@ it('points the board setting at an active Private Group and clears it (#824)', a
   const select = within(item).getByRole('combobox', {
     name: 'Grupul Biroului de Conducere',
   });
-  expect(select).toHaveValue('6');
-  expect(
-    within(select)
-      .getAllByRole('option')
-      .map((option) => option.textContent),
-  ).toEqual(['Niciun grup', 'Consiliu privat']);
+  expect(select).toHaveAttribute('data-value', '6');
+  expect(select).toHaveTextContent('Consiliu privat');
+  expect(await optionNames(user, select)).toEqual([
+    'Niciun grup',
+    'Consiliu privat',
+  ]);
 
   // A blank choice clears it on the server.
-  await user.selectOptions(select, '');
+  await chooseOption(user, select, 'Niciun grup');
   await user.click(within(item).getByRole('button', { name: 'Salvează' }));
   await waitFor(() =>
     expect(rpcCalls('set_org_setting').at(-1)).toEqual({
@@ -446,83 +450,4 @@ it('lets the editor be left when the Groups cannot be loaded', async () => {
     }),
   ).toHaveFocus();
   expect(rpcCalls('set_org_setting')).toEqual([]);
-});
-
-it('shows and edits the daily email quota, refusing anything but 0-99999 (#932)', async () => {
-  const user = userEvent.setup();
-  show();
-  const item = await row('Limita zilnică de emailuri');
-  // What it limits, read from claim_email_digests (#775).
-  expect(
-    within(item).getByText(
-      'Câte rezumate cu notificările necitite pleacă pe email într-o zi, la toți membrii la un loc; cele peste limită așteaptă ziua următoare.',
-    ),
-  ).toBeVisible();
-  expect(valueOf(item)).toHaveTextContent('90 pe zi');
-
-  await user.click(
-    within(item).getByRole('button', {
-      name: 'Editează Limita zilnică de emailuri',
-    }),
-  );
-  const field = within(item).getByRole('textbox', {
-    name: 'Limita zilnică de emailuri',
-  });
-  expect(field).toHaveFocus();
-  expect(field).toHaveValue('90');
-  expect(field).toHaveAttribute('inputmode', 'numeric');
-  expect(field).toHaveAccessibleDescription(/0 oprește rezumatele/);
-  const save = within(item).getByRole('button', { name: 'Salvează' });
-  expect(save).toBeDisabled();
-
-  // Blank, negative, decimal and too-large values never reach the server.
-  for (const bad of [' ', '-1', '2.5', '100000']) {
-    await user.clear(field);
-    await user.type(field, bad);
-    await user.click(save);
-    expect(
-      within(item).getByText('Scrie un număr întreg de la 0 la 99999.'),
-    ).toBeVisible();
-  }
-  expect(rpcCalls('set_org_setting')).toEqual([]);
-
-  // A server refusal clears once the value changes.
-  db.refuse.set('set_org_setting', 'org_settings_manage_forbidden');
-  await user.clear(field);
-  await user.type(field, '80');
-  await user.click(save);
-  expect(
-    await within(item).findByText(
-      'Doar BC și Moderatorul pot schimba setările organizației.',
-    ),
-  ).toBeVisible();
-  db.refuse.clear();
-  await user.type(field, '5');
-  expect(
-    within(item).queryByText(
-      'Doar BC și Moderatorul pot schimba setările organizației.',
-    ),
-  ).toBeNull();
-
-  await user.clear(field);
-  await user.type(field, ' 0 ');
-  await user.click(save);
-  await waitFor(() =>
-    expect(rpcCalls('set_org_setting').at(-1)).toEqual({
-      p_key: 'email_daily_quota',
-      p_value: '0',
-    }),
-  );
-  expect(await within(item).findByRole('status')).toHaveTextContent(
-    'Setare salvată.',
-  );
-  // 0 pauses the digest, and the row says so.
-  expect(
-    await within(valueOf(item)).findByText('Oprit: niciun rezumat pe email'),
-  ).toBeVisible();
-  expect(
-    within(item).getByRole('button', {
-      name: 'Editează Limita zilnică de emailuri',
-    }),
-  ).toHaveFocus();
 });

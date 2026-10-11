@@ -91,6 +91,12 @@ describe('LoginScreen', () => {
     render(<LoginScreen initialEmail="membru@exemplu.ro" />);
 
     expect(screen.getByLabelText('Email')).toHaveValue('membru@exemplu.ro');
+    // The shared field, at 16 px so iOS does not zoom the page on focus.
+    expect(screen.getByLabelText('Email')).toHaveAttribute(
+      'data-slot',
+      'input',
+    );
+    expect(screen.getByLabelText('Email')).toHaveClass('text-base');
     fireEvent.click(screen.getByRole('button', { name: 'Trimite linkul' }));
 
     await waitFor(() =>

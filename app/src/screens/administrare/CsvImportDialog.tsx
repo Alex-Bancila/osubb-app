@@ -2,15 +2,15 @@ import { useCallback, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Upload } from 'lucide-react';
 import { cn } from 'cn';
-import { SubHeading } from '../../components/layout';
+import { FabAction, SubHeading } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog';
+import { InfoHint } from '../../components/ui/info-hint';
 import { reasonCopy } from '../../lib/command-reasons';
 import { supabase } from '../../lib/supabase';
 import { keys } from '../../queries/keys';
@@ -67,10 +67,13 @@ async function importErrorMessage(error: unknown): Promise<string> {
 }
 
 /**
- * "Import CSV" (#72, #949): the second of the Membri header's two ways in,
- * beside "Invită membru" and opened the same way. The file's rows go through
+ * "Import CSV" (#72, #949): the second of Membri's two ways in, beside
+ * "Invită membru" behind the page's plus button and opened the same way. The file's rows go through
  * the same invitation path one at a time, every one as a Recrut; the report
- * stays in the dialog until it is closed. Mounted only behind
+ * stays in the dialog until it is closed. It stays a dialog: one field (the
+ * file) and a report, and the volunteer preview wants the screen's width.
+ * The two formats are explained behind the "i" beside the field. Mounted
+ * only behind
  * `provisionMembers`, the function's own level-6 gate.
  */
 export function CsvImportDialog({
@@ -151,18 +154,15 @@ export function CsvImportDialog({
         if (next) reset();
       }}
     >
-      <Button
-        type="button"
+      <FabAction
+        label="Import CSV"
+        icon={Upload}
         variant="outline"
-        className="w-full"
-        onClick={() => {
+        onSelect={() => {
           reset();
           setOpen(true);
         }}
-      >
-        <Upload aria-hidden="true" />
-        Import CSV
-      </Button>
+      />
       <DialogContent
         className={cn(
           'grid-cols-[minmax(0,1fr)]',
@@ -172,43 +172,36 @@ export function CsvImportDialog({
       >
         <DialogHeader>
           <DialogTitle>Import CSV</DialogTitle>
-          <DialogDescription>
-            Adaugă membri dintr-unul din cele două fișiere de mai jos.
-          </DialogDescription>
         </DialogHeader>
-        {/* The format is read from the header row, so both share one picker. */}
-        <ul className="grid list-inside list-disc gap-1 text-sm text-muted-foreground">
-          <li>
-            <span className="font-medium text-foreground">
-              Baza de voluntari
-            </span>{' '}
-            (coloana „Nume & Prenume”): se verifică întâi, apoi membrii se
-            creează fără niciun email. Invitațiile pleacă din „De invitat”.
-          </li>
-          <li>
-            <span className="font-medium text-foreground">
-              name,email,dept,team
-            </span>
-            : fiecare primește o invitație și intră ca Recrut. Pentru dept și
-            team, folosește numele scurt sau numele afișat al Grupului; literele
-            mari și diacriticele nu contează.
-          </li>
-        </ul>
-        <a
-          className="inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4"
-          href="/model-import-membri.csv"
-          download="model-import-membri.csv"
-        >
-          Descarcă șablon
-        </a>
 
         <div className="flex flex-wrap items-end gap-3">
           <div className="grid gap-1.5">
-            <span className="block text-sm font-medium">Fișier CSV</span>
+            <div className="flex items-center gap-1">
+              <span className="block text-sm font-medium">Fișier CSV</span>
+              {/* The format is read from the header row, so both share one
+                  picker. */}
+              <InfoHint label="Despre fișierul CSV" id="csv-import-file-hint">
+                <span className="grid gap-2">
+                  <span>
+                    <span className="font-medium">Baza de voluntari</span>{' '}
+                    (coloana „Nume & Prenume”): se verifică întâi, apoi membrii
+                    se creează fără niciun email. Invitațiile pleacă din „De
+                    invitat”.
+                  </span>
+                  <span>
+                    <span className="font-medium">name,email,dept,team</span>:
+                    fiecare primește o invitație și intră ca Recrut. Pentru dept
+                    și team, folosește numele scurt sau numele afișat al
+                    Grupului; literele mari și diacriticele nu contează.
+                  </span>
+                </span>
+              </InfoHint>
+            </div>
             <input
               id="csv-import-file"
               type="file"
               aria-label="Fișier CSV"
+              aria-describedby="csv-import-file-hint"
               accept=".csv,text/csv"
               disabled={pending || busy}
               className="peer sr-only"
@@ -231,6 +224,13 @@ export function CsvImportDialog({
               {pending ? 'Se importă…' : 'Importă fișierul'}
             </Button>
           )}
+          <a
+            className="inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4"
+            href="/model-import-membri.csv"
+            download="model-import-membri.csv"
+          >
+            Descarcă șablon
+          </a>
         </div>
 
         {volunteerCsv !== null && (

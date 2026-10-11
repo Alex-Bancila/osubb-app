@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
-import { Star } from 'lucide-react';
 import { Panel } from '../../components/layout';
 import { PREFERRED_GROUPS_ANCHOR } from '../../components/preferred-groups/preferred-groups';
 import { ErrorState, Loading } from '../../components/states';
@@ -19,9 +18,9 @@ import { PreferredGroupsSheet } from './PreferredGroupsSheet';
 const NAMED = 4;
 
 /**
- * **Grupuri preferate** (ruling R43), under the notification settings in
- * Profil: how many Groups are selected, which ones are not, and the button
- * that opens the tree. Only a BCE, BC or Moderator has one — the server
+ * **Grupuri preferate** (ruling R43), on Profil's Preferințe tab: how many
+ * Groups are selected, which ones are not, and the button that opens the
+ * tree. Only a BCE, BC or Moderator has one — the server
  * answers nobody else — so for everyone else the card is not drawn at all.
  */
 export function PreferredGroupsCard() {
@@ -59,7 +58,7 @@ export function PreferredGroupsCard() {
   const off = nodes.filter((node) => !node.lock && initial.has(node.group.id));
 
   return (
-    <Panel eyebrow="Setări" icon={Star} title="Grupuri preferate">
+    <Panel title="Grupuri preferate">
       <div
         ref={sectionRef}
         id={PREFERRED_GROUPS_ANCHOR}

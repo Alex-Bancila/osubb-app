@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { Page, PageHeader } from '../../components/layout';
+import { useMemo, useState } from 'react';
+import { FabActions, Page, PageHeader } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
 import { groupOptionLabel } from '../../components/ui/combobox';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
@@ -23,6 +23,9 @@ import {
  * With no Group chosen the page lists every Campaign the caller may read
  * (#908) — never a redirect or a default Group: filters only narrow. Rows of
  * Groups the caller does not manage show their name and owner only.
+ *
+ * The header's row holds Filtrează and the Active / Inactive switch; Campanie
+ * nouă, when a Group is chosen, is the page's plus button.
  */
 export default function CampaignsScreen() {
   const options = useTaskFormOptions();
@@ -60,59 +63,72 @@ export default function CampaignsScreen() {
   );
   const filter = useCampaignsFilter(groups);
   const group = managed.find((row) => row.id === filter.routeGroupId);
+  const [filterSlot, setFilterSlot] = useState<HTMLElement | null>(null);
+  const [stateSlot, setStateSlot] = useState<HTMLElement | null>(null);
   return (
     <Page width="reading">
-      <PageHeader
-        eyebrow="Administrare"
-        title="Campanii"
-        description="Toate campaniile, cu raportul celor din grupurile pe care le gestionezi."
-      />
-      {options.isPending ? (
-        <Loading label="Se încarcă grupurile…" />
-      ) : options.isError ? (
-        <ErrorState
-          error={options.error}
-          text="Nu am putut încărca grupurile."
-          retryLabel="Reîncearcă"
-          onRetry={() => void options.refetch()}
+      <FabActions>
+        <PageHeader
+          title="Campanii"
+          actions={
+            <>
+              {/* Filtrează is drawn here by the Work Filter below, and the
+                Active / Inactive switch by the panel. */}
+              <span ref={setFilterSlot} className="contents" />
+              <span ref={setStateSlot} className="contents" />
+            </>
+          }
         />
-      ) : (
-        groups.length > 0 && (
-          <WorkFilter
-            label="Filtre campanii"
-            groups={groups}
-            groupNames={options.data?.groupNames}
-            campaigns={[]}
-            levels={CAMPAIGNS_FILTER_LEVELS}
-            roots="topmost"
-            state={filter}
-            hint="Grupul include toate subgrupurile sale. Perioada, după data acordării punctelor, se aplică raportului fiecărei campanii."
+        {options.isPending ? (
+          <Loading label="Se încarcă grupurile…" />
+        ) : options.isError ? (
+          <ErrorState
+            error={options.error}
+            text="Nu am putut încărca grupurile."
+            retryLabel="Reîncearcă"
+            onRetry={() => void options.refetch()}
           />
-        )
-      )}
-      {filter.routeGroupId !== undefined && options.isSuccess && !group && (
-        <p role="alert">
-          Nu ai permisiunea de a gestiona campaniile acestui grup.
-        </p>
-      )}
-      {group ? (
-        <CampaignsPanel
-          group={group}
-          label={groupOptionLabel(group, groupsById)}
-          groups={managed}
-          range={filter.params}
-        />
-      ) : (
-        filter.routeGroupId === undefined &&
-        options.isSuccess && (
+        ) : (
+          groups.length > 0 && (
+            <WorkFilter
+              label="Filtre campanii"
+              groups={groups}
+              groupNames={options.data?.groupNames}
+              campaigns={[]}
+              levels={CAMPAIGNS_FILTER_LEVELS}
+              roots="topmost"
+              state={filter}
+              hint="Grupul include toate subgrupurile sale. Perioada, după data acordării punctelor, se aplică raportului fiecărei campanii."
+              buttonSlot={filterSlot}
+            />
+          )
+        )}
+        {filter.routeGroupId !== undefined && options.isSuccess && !group && (
+          <p role="alert">
+            Nu ai permisiunea de a gestiona campaniile acestui grup.
+          </p>
+        )}
+        {group ? (
           <CampaignsPanel
-            label="Toate grupurile"
-            groups={owners}
+            group={group}
+            label={groupOptionLabel(group, groupsById)}
+            groups={managed}
             range={filter.params}
-            manages={(id) => managedIds.has(id)}
+            stateSlot={stateSlot}
           />
-        )
-      )}
+        ) : (
+          filter.routeGroupId === undefined &&
+          options.isSuccess && (
+            <CampaignsPanel
+              label="Toate grupurile"
+              groups={owners}
+              range={filter.params}
+              manages={(id) => managedIds.has(id)}
+              stateSlot={stateSlot}
+            />
+          )
+        )}
+      </FabActions>
     </Page>
   );
 }

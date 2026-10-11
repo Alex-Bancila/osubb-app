@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { memberDisplayName, memberRoleLabel } from './member-identity';
+import {
+  memberDisplayName,
+  memberRoleLabel,
+  memberSinceLabel,
+} from './member-identity';
 
 describe('memberDisplayName', () => {
   it('prefers the Nickname and falls back to the full name (R5)', () => {
@@ -25,5 +29,16 @@ describe('memberRoleLabel (#963)', () => {
     expect(memberRoleLabel(null, null)).toBe('—');
     expect(memberRoleLabel(undefined, '')).toBe('—');
     expect(memberRoleLabel('  ', undefined)).toBe('—');
+  });
+});
+
+describe('memberSinceLabel', () => {
+  it('says the join date short, with its year', () => {
+    expect(memberSinceLabel('2024-03-12')).toBe('Membru din 12 mar. 2024');
+  });
+
+  it('says nothing for a date never recorded or malformed', () => {
+    expect(memberSinceLabel(null)).toBeNull();
+    expect(memberSinceLabel('2024-13-40')).toBeNull();
   });
 });

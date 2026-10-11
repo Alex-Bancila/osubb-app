@@ -4,10 +4,31 @@ import { TaskDeleteControl } from './TaskDeleteControl';
 import { TaskReopenControl } from './TaskReopenControl';
 import { TaskFeedbackControl } from './TaskFeedbackControl';
 import { TaskReviewCapabilityNotice } from './TaskReviewCapabilityNotice';
-import { useRef, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+  ArrowLeft,
+  Award,
+  Ban,
+  CircleX,
+  Clock,
+  CornerLeftUp,
+  Files,
+  Flag,
+  History,
+  Layers,
+  RefreshCw,
+  Trash2,
+  UserCheck,
+  UserRound,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
+import { AttachedLinksList } from '../../components/attached-link/AttachedLinksList';
 import { focusRingClass, SubHeading } from '../../components/layout';
+import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
+import { Disclosure } from '../../components/ui/disclosure';
+import { ActionMenu } from '../../components/ui/menu';
 import {
   Sheet,
   SheetBackdrop,
@@ -17,10 +38,7 @@ import {
   SheetTitle,
 } from '../../components/ui/sheet';
 import { useAuth } from '../../lib/auth';
-import {
-  formatBucharestDay,
-  formatBucharestTime,
-} from '../../lib/calendar-time';
+import { formatBucharestShort } from '../../lib/calendar-time';
 import { useTaskHistory } from '../../queries/task-history';
 import { cn } from '../../lib/utils';
 import {
@@ -33,15 +51,32 @@ import { TaskDuplicateControl } from './TaskDuplicateControl';
 import { TaskActionSuccess } from './TaskActionSuccess';
 import { useReceiptTurn } from './receipt-turn';
 import { ReceiptTurnScope } from './ReceiptTurnScope';
-import { TaskCard } from './TaskCard';
+import {
+  TaskEvaluationLine,
+  TaskGroupChip,
+  TaskStatusBadges,
+} from './TaskCard';
+import { TaskExecutorActions } from './TaskExecutorActions';
+import { TaskStageSummary } from './TaskStageSummary';
+import { TaskQueueStatus } from './TaskQueueStatus';
+import { showsExecutorLine } from './task-executor-line';
 import { SubmissionNote } from './SubmissionNote';
 import { TaskCandidateSelector } from './TaskCandidateSelector';
 import { UmbrellaTaskSection } from './UmbrellaTaskSection';
 import { TaskQueueControl } from './TaskQueueControl';
 import { TaskHistory } from './TaskHistory';
 import { TaskEditControl } from './TaskEditControl';
-import { TaskEvaluationControl } from './TaskEvaluationControl';
-import { isTerminalTask, toTaskPresentation } from './task-presentation';
+import {
+  TaskEvaluationControl,
+  type TaskEvaluationActions,
+} from './TaskEvaluationControl';
+import { canCancelTask, useCanMarkUnfulfilled } from './task-menu-actions';
+import {
+  isTerminalTask,
+  toTaskPresentation,
+  type TaskPresentation,
+} from './task-presentation';
+import type { MenuDialog } from './menu-dialog';
 import {
   sheetTrailBack,
   sheetTrailCurrent,
@@ -89,14 +124,157 @@ function ReturnNote({ taskId }: { taskId: number }) {
           dateTime={latest.occurred_at}
           className="font-normal tracking-normal normal-case"
         >
-          {formatBucharestDay(latest.occurred_at)},{' '}
-          {formatBucharestTime(latest.occurred_at)}
+          {formatBucharestShort(latest.occurred_at)}
         </time>
       </p>
       <p className="text-sm whitespace-pre-wrap wrap-anywhere">{note}</p>
     </section>
   );
 }
+
+/** The sheet's name until the Task has loaded, and when it cannot be shown. */
+const SHEET_TITLE = 'Detalii task';
+
+/**
+ * The sheet is titled by the Task it shows. Its own small reader of the
+ * details query, so the title element stays the same one across a step to
+ * another Task and can keep the focus it was given.
+ */
+function SheetTaskTitle({ taskId }: { taskId: number }) {
+  const query = useTaskDetails(taskId);
+  return query.data?.task.title.trim() || SHEET_TITLE;
+}
+
+/** Under the title: the Task's Group and where it stands. */
+function SheetTaskChips({ taskId }: { taskId: number }) {
+  const query = useTaskDetails(taskId);
+  if (!query.data) return null;
+  const task = toTaskPresentation(query.data.task, new Date());
+  return (
+    <div
+      data-slot="task-sheet-chips"
+      className="flex min-w-0 flex-wrap items-center gap-1.5"
+      style={
+        {
+          '--task-stripe': task.origin.color ?? 'var(--ink-400)',
+        } as CSSProperties
+      }
+    >
+      <TaskGroupChip task={task} />
+      <TaskStatusBadges task={task} />
+    </div>
+  );
+}
+
+/** One fact about the Task: its icon and label, then the value. */
+function Fact({
+  icon: Icon,
+  label,
+  children,
+}: {
+  icon: LucideIcon;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-x-3 py-2">
+      <dt className="flex w-36 shrink-0 items-center gap-2 text-muted-foreground max-sm:w-28">
+        <Icon aria-hidden="true" className="size-4 shrink-0" />
+        {label}
+      </dt>
+      <dd className="m-0 min-w-0 flex-1 font-medium wrap-anywhere">
+        {children}
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * The Task's facts as plain label/value rows — no card inside the sheet. A
+ * row is shown only when it says something true that concerns the reader.
+ */
+function TaskFacts({
+  task,
+  memberId,
+  showReviewRound,
+}: {
+  task: TaskPresentation;
+  memberId: string | undefined;
+  showReviewRound: boolean;
+}) {
+  return (
+    <dl
+      data-slot="task-facts"
+      className="m-0 divide-y divide-(--border-soft) border-y border-(--border-soft) text-sm"
+    >
+      <Fact icon={Clock} label="Termen">
+        {task.deadline ? (
+          <time
+            dateTime={task.deadline}
+            className={task.overdue ? 'font-semibold text-destructive' : ''}
+          >
+            {formatBucharestShort(task.deadline)}
+          </time>
+        ) : (
+          task.deadlineLabel
+        )}
+      </Fact>
+      {showsExecutorLine(task, memberId) && (
+        <Fact icon={UserRound} label="Executor">
+          {/* Only an identity #499's lookup returned becomes a name button;
+              an Executor known by id alone stays anonymous. */}
+          {task.executor?.name ? (
+            <MemberName
+              size="sm"
+              memberId={task.executor.memberId}
+              nickname={task.executor.nickname}
+              fullName={task.executor.name}
+            />
+          ) : task.executor ? (
+            'Nume indisponibil'
+          ) : (
+            'Neatribuit'
+          )}
+        </Fact>
+      )}
+      {task.campaign && (
+        <Fact icon={Flag} label="Campanie">
+          {task.campaign.name}
+        </Fact>
+      )}
+      {task.parent && (
+        <Fact icon={Layers} label="Subtask din">
+          {task.parent.title}
+        </Fact>
+      )}
+      {/* An Umbrella has no Assignment (F-28): no Atribuire fact. */}
+      {task.assignmentMode !== null && task.kind === 'task' && (
+        <Fact icon={UserCheck} label="Atribuire">
+          {task.assignmentMode === 'direct' ? 'Directă' : 'Publică'}
+        </Fact>
+      )}
+      {/* A direct Task is local only (R26): its Audience says nothing. */}
+      {task.assignmentMode === 'public' && (
+        <Fact icon={Users} label="Audiență">
+          {task.audienceLabel}
+        </Fact>
+      )}
+      {showReviewRound && (
+        <Fact icon={RefreshCw} label="Rundă de verificare">
+          <span className="tabular-nums">{task.reviewRound}</span>
+        </Fact>
+      )}
+      {task.points !== null && (
+        <Fact icon={Award} label="Evaluare">
+          <TaskEvaluationLine task={task} />
+        </Fact>
+      )}
+    </dl>
+  );
+}
+
+/** Which of the menu's pop-ups is open. */
+type MenuAction = 'cancel' | 'delete';
 
 function TaskDetails({
   taskId,
@@ -131,55 +309,57 @@ function TaskDetails({
   // Rundă de verificare says something only once a review returned the work,
   // and only to whoever reviews it (relevance B20).
   const showReviewRound = canManage && task.reviewRound >= 1;
-  const ownReturnedTask =
-    task.feedbackPending &&
+  // The viewer holds this Task: no queue news for them (relevance B14).
+  const ownTask =
+    task.kind === 'task' &&
     memberId !== undefined &&
-    task.executor?.memberId === memberId &&
-    task.executor.isCurrent;
+    task.executor?.memberId === memberId;
+  const ownReturnedTask =
+    task.feedbackPending && ownTask && task.executor?.isCurrent === true;
   return (
     <div className="flex flex-col gap-5">
-      <div className="[&>article]:h-auto [&_[data-slot=card]]:h-auto">
-        {/* The card says the Group, status, deadline, Executor, stage and
-            Evaluation; the list below adds only what it does not. */}
-        <TaskCard
-          task={task}
-          memberId={memberId}
-          pending={progress.isPending}
-          onProgress={(input) => progress.mutateAsync(input)}
-          anchor={false}
-          showSubmissionNote={false}
-          inSheet
-        />
-      </div>
+      {task.description && (
+        <p
+          data-slot="task-description"
+          className="m-0 text-sm whitespace-pre-wrap wrap-anywhere"
+        >
+          {task.description}
+        </p>
+      )}
+      {(task.assignmentMode !== 'public' || ownTask) && (
+        <TaskStageSummary task={task} />
+      )}
+      {/* Queue lines are for a Candidate: never for the Executor (B14),
+          never on a finished Task, where they are history (Audit D-1). */}
+      {task.assignmentMode === 'public' &&
+        !ownTask &&
+        !isTerminalTask(task.status) && (
+          <TaskQueueStatus taskId={task.id} task={task} />
+        )}
       {ownReturnedTask && <ReturnNote taskId={taskId} />}
       {task.submission && (
         <SubmissionNote submission={task.submission} showTime />
       )}
-      <dl
-        data-slot="task-facts"
-        className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm empty:hidden"
-      >
-        {/* An Umbrella has no Assignment (F-28): no Atribuire fact. */}
-        {task.assignmentMode !== null && task.kind === 'task' && (
-          <div className="min-w-0">
-            <dt className="font-semibold">Atribuire</dt>
-            <dd>{task.assignmentMode === 'direct' ? 'Directă' : 'Publică'}</dd>
-          </div>
-        )}
-        {/* A direct Task is local only (R26): its Audience says nothing. */}
-        {task.assignmentMode === 'public' && (
-          <div className="min-w-0">
-            <dt className="font-semibold">Audiență</dt>
-            <dd>{task.audienceLabel}</dd>
-          </div>
-        )}
-        {showReviewRound && (
-          <div className="min-w-0">
-            <dt className="font-semibold">Rundă de verificare</dt>
-            <dd className="tabular-nums">{task.reviewRound}</dd>
-          </div>
-        )}
-      </dl>
+      <TaskFacts
+        task={task}
+        memberId={memberId}
+        showReviewRound={showReviewRound}
+      />
+      {/* R46: "Deschide: <etichetă>" in a details view. */}
+      <AttachedLinksList
+        links={task.links}
+        variant="details"
+        buttonClassName="max-w-full text-left wrap-anywhere"
+      />
+      {/* The Executor's own steps: Începe, Trimite la verificare, Renunță. */}
+      <TaskExecutorActions
+        task={task}
+        memberId={memberId}
+        pending={progress.isPending}
+        onProgress={(input) => progress.mutateAsync(input)}
+        className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+        messagesClassName="space-y-2"
+      />
       {(parentId !== undefined || sourceId !== null) && (
         <div className="flex flex-wrap gap-2">
           {parentId !== undefined && (
@@ -188,6 +368,7 @@ function TaskDetails({
               className="whitespace-normal"
               onClick={() => onNavigate(parentId)}
             >
+              <CornerLeftUp aria-hidden="true" />
               Deschide taskul-umbrelă
             </Button>
           )}
@@ -197,65 +378,20 @@ function TaskDetails({
               className="whitespace-normal"
               onClick={() => onNavigate(sourceId)}
             >
+              <Files aria-hidden="true" />
               Duplicat din #{task.duplicatedFromTaskId}
             </Button>
           )}
         </div>
       )}
-      {/* The commands in one wrapping row (layout T5). A control that opens
-          an inline form or leaves a receipt takes the full row. */}
-      <div
-        data-slot="task-actions"
-        className="flex flex-wrap items-start gap-2 empty:hidden [&>*:has(form)]:basis-full [&>*:has([role=status])]:basis-full [&>[role=status]]:basis-full"
-      >
-        {canManage && task.kind === 'task' && (
-          <TaskDuplicateControl taskId={taskId} onDuplicated={onNavigate} />
-        )}
-        <TaskEditControl task={query.data.task} canManage={canManage} />
-        {/* "Has an Executor" means one who holds the Task now; the Member who
-            finished it (#861) is named on the card, not assignable again. */}
-        <TaskAssignControl
-          taskId={taskId}
-          groupId={query.data.task.group_id}
-          status={task.status}
-          kind={task.kind}
-          assignmentMode={task.assignmentMode}
-          hasExecutor={task.executor?.isCurrent === true}
-          canManage={canManage}
-        />
-        <TaskCancelControl
-          taskId={taskId}
-          status={task.status}
-          kind={task.kind}
-          canManage={canManage}
-        />
-        <TaskReopenControl
-          taskId={taskId}
-          status={task.status}
-          kind={task.kind}
-        />
-        <TaskFeedbackControl
-          taskId={taskId}
-          status={task.status}
-          kind={task.kind}
-        />
-        <TaskEvaluationControl
-          taskId={taskId}
-          status={task.status}
-          kind={task.kind}
-          overdue={task.overdue}
-          hasExecutor={task.executor?.isCurrent === true}
-          executorName={query.data.executorName}
-          groupId={query.data.task.group_id}
-        />
-        {/* Last and apart from the rest (#1017): the one act that cannot be
-            undone, offered to the Task's managers in every status. */}
-        <TaskDeleteControl
-          taskId={taskId}
-          canManage={canManage}
-          onDeleted={onDeleted}
-        />
-      </div>
+      <TaskActions
+        task={task}
+        row={query.data.task}
+        executorName={query.data.executorName}
+        canManage={canManage}
+        onNavigate={onNavigate}
+        onDeleted={onDeleted}
+      />
       {task.kind === 'task' && <TaskReviewCapabilityNotice taskId={taskId} />}
       {task.kind === 'umbrella' && (
         <UmbrellaTaskSection
@@ -297,17 +433,157 @@ function TaskDetails({
             )}
           </section>
         )}
-      <details>
-        <summary
-          className={cn(
-            'min-h-11 cursor-pointer rounded-sm py-3 font-semibold',
-            focusRingClass,
-          )}
-        >
-          Istoricul taskului
-        </summary>
+      <Disclosure
+        className="border-t border-(--border-soft)"
+        summary={
+          <>
+            <History
+              aria-hidden="true"
+              className="size-4 shrink-0 text-muted-foreground"
+            />
+            Istoricul taskului
+          </>
+        }
+      >
         <TaskHistory taskId={taskId} />
-      </details>
+      </Disclosure>
+    </div>
+  );
+}
+
+/**
+ * The commands on the Task, in one row with a hierarchy: the step the Task
+ * waits for as a filled button (Editează, or Evaluează once it is in
+ * review), the other steps outlined beside it, Duplică as an icon button,
+ * and the rest — Anulează taskul, Marchează nerealizat and, last, Șterge
+ * definitiv — behind one "⋯" menu. Each control keeps its own rule for who
+ * sees it, its own pop-up and its own receipt; a control that opens an
+ * inline form or leaves a receipt takes the full row.
+ */
+function TaskActions({
+  task,
+  row,
+  executorName,
+  canManage,
+  onNavigate,
+  onDeleted,
+}: {
+  task: TaskPresentation;
+  row: Parameters<typeof TaskEditControl>[0]['task'];
+  executorName: string | null;
+  canManage: boolean;
+  onNavigate: (id: number) => void;
+  onDeleted: (receipt: string) => void;
+}) {
+  const taskId = task.id;
+  // "Has an Executor" means one who holds the Task now; the Member who
+  // finished it (#861) is named among the facts, not assignable again.
+  const hasExecutor = task.executor?.isCurrent === true;
+  const [menuAction, setMenuAction] = useState<MenuAction | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const evaluation = useRef<TaskEvaluationActions>(null);
+  const canMarkUnfulfilled = useCanMarkUnfulfilled({
+    taskId,
+    status: task.status,
+    kind: task.kind,
+    overdue: task.overdue,
+    hasExecutor,
+  });
+  const canCancel = canCancelTask(task.status, canManage);
+  const canDuplicate = canManage && task.kind === 'task';
+  const hasMenu = canCancel || canMarkUnfulfilled || canManage;
+  const menuDialog = (action: MenuAction): MenuDialog => ({
+    open: menuAction === action,
+    onOpenChange: (open) => setMenuAction(open ? action : null),
+    // The "⋯" button, not Duplică beside it.
+    returnFocus: () =>
+      menuRef.current?.querySelector<HTMLElement>(
+        '[data-slot="action-menu"]',
+      ) ?? null,
+  });
+  return (
+    <div
+      data-slot="task-actions"
+      className="flex flex-wrap items-start gap-2 empty:hidden [&>*:has(form)]:basis-full [&>*:has([role=status])]:basis-full [&>[role=status]]:basis-full"
+    >
+      <TaskEditControl task={row} canManage={canManage} />
+      <TaskAssignControl
+        taskId={taskId}
+        groupId={row.group_id}
+        status={task.status}
+        kind={task.kind}
+        assignmentMode={task.assignmentMode}
+        hasExecutor={hasExecutor}
+        canManage={canManage}
+      />
+      <TaskEvaluationControl
+        taskId={taskId}
+        status={task.status}
+        kind={task.kind}
+        overdue={task.overdue}
+        hasExecutor={hasExecutor}
+        executorName={executorName}
+        groupId={row.group_id}
+        unfulfilledInMenu
+        actions={evaluation}
+      />
+      <TaskFeedbackControl
+        taskId={taskId}
+        status={task.status}
+        kind={task.kind}
+      />
+      <TaskReopenControl
+        taskId={taskId}
+        status={task.status}
+        kind={task.kind}
+      />
+      {(canDuplicate || hasMenu) && (
+        <div
+          ref={menuRef}
+          data-slot="task-more-actions"
+          className="ml-auto flex shrink-0 items-center gap-2"
+        >
+          {canDuplicate && (
+            <TaskDuplicateControl taskId={taskId} onDuplicated={onNavigate} />
+          )}
+          {/* Destructive last (#1017): the one act that cannot be undone,
+              offered to the Task's managers in every status. */}
+          <ActionMenu
+            items={[
+              canCancel && {
+                label: 'Anulează taskul',
+                icon: Ban,
+                onSelect: () => setMenuAction('cancel'),
+              },
+              canMarkUnfulfilled && {
+                label: 'Marchează nerealizat',
+                icon: CircleX,
+                onSelect: () => evaluation.current?.markUnfulfilled(),
+              },
+              canManage && {
+                label: 'Șterge definitiv',
+                icon: Trash2,
+                destructive: true,
+                onSelect: () => setMenuAction('delete'),
+              },
+            ]}
+          />
+        </div>
+      )}
+      {/* Their pop-ups and receipts; the menu above opens them. */}
+      <TaskCancelControl
+        taskId={taskId}
+        status={task.status}
+        kind={task.kind}
+        canManage={canManage}
+        menu={menuDialog('cancel')}
+      />
+      <TaskDeleteControl
+        taskId={taskId}
+        canManage={canManage}
+        onDeleted={onDeleted}
+        menu={menuDialog('delete')}
+      />
     </div>
   );
 }
@@ -370,10 +646,20 @@ export function TaskDetailsSheet({
           className="max-w-2xl gap-5 p-4 sm:p-6"
           aria-describedby={undefined}
         >
+          {/* Titled by the Task itself, its Group and status under it. */}
           <SheetHeader>
-            <SheetTitle ref={titleRef} tabIndex={-1} className="outline-none">
-              Detalii task
+            <SheetTitle
+              ref={titleRef}
+              tabIndex={-1}
+              className="wrap-anywhere outline-none"
+            >
+              {shownId === null ? (
+                SHEET_TITLE
+              ) : (
+                <SheetTaskTitle taskId={shownId} />
+              )}
             </SheetTitle>
+            {shownId !== null && <SheetTaskChips taskId={shownId} />}
           </SheetHeader>
           {current && previousId !== null && (
             <button

@@ -13,8 +13,12 @@ import { usePageTitleId } from './page-context';
  *   Notificări, Profil, Cereri, the Grupuri list) has no eyebrow — "OSUBB"
  *   tells the reader nothing in an OSUBB-only app. Acasă's is the date.
  * - The title is 31 px (24 px under 768 px), weight 800 — the only `h1` size.
- * - Under 640 px the actions stack below the text at full width; from 640 px
- *   they sit on the right, aligned to the bottom of the text.
+ * - A page says what it is in its title; a description is for something the
+ *   reader cannot see otherwise (a Group's category, a state), never a
+ *   tagline.
+ * - The actions sit on the title's row, on the right, at every width — a
+ *   phone's first screen is for the content. They drop under the text only
+ *   when the two do not fit side by side.
  * - It sits directly in a `Page`, whose 24 px gap spaces it from the content;
  *   a `BackLink`, when there is one, goes above it.
  */
@@ -40,7 +44,8 @@ export function PageHeader({
     <header
       data-slot="page-header"
       className={cn(
-        'flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between',
+        'flex flex-wrap justify-between gap-x-4 gap-y-3',
+        description ? 'items-end' : 'items-center',
         className,
       )}
     >
@@ -74,7 +79,7 @@ export function PageHeader({
       {actions && (
         <div
           data-slot="page-actions"
-          className="flex w-full min-w-0 flex-wrap items-center gap-2 empty:hidden sm:w-auto sm:shrink-0 sm:justify-end"
+          className="flex max-w-full min-w-0 flex-wrap items-center gap-2 empty:hidden has-[>:only-child:empty]:hidden"
         >
           {actions}
         </div>

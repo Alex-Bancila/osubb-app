@@ -1,13 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { CalendarX, Pencil } from 'lucide-react';
 
 import { Button } from '../../components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '../../components/ui/dialog';
+import { FormSheet } from '../../components/ui/form-sheet';
 import { useAuth } from '../../lib/auth';
 import { useCapabilities } from '../../lib/capabilities';
 import { useCampaigns } from '../../queries/campaigns';
@@ -41,7 +36,7 @@ import {
  * people `update_event` / `cancel_event` accept (`canManageEvent`), and
  * **Șterge definitiv** (#1017) for the same managers — on a cancelled Event
  * too, which `delete_event` accepts. Nobody else sees them; the server still
- * decides, and a refusal is shown in the dialog in Romanian.
+ * decides, and a refusal is shown in the sheet or dialog in Romanian.
  */
 export function EventManageControls({
   event,
@@ -138,16 +133,11 @@ function EditEventDialog({
   const saved = useRef(false);
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next && update.isPending) return;
-        setOpen(next);
-      }}
-    >
+    <>
       <Button
         type="button"
         variant="outline"
+        size="sm"
         className="min-h-11"
         onClick={() => {
           saved.current = false;
@@ -155,22 +145,18 @@ function EditEventDialog({
           setOpen(true);
         }}
       >
+        <Pencil aria-hidden="true" />
         Editează
       </Button>
       {/* After a save the receipt takes focus; otherwise back to Editează. */}
-      <DialogContent
-        fullScreenOnPhone
+      <FormSheet
+        open={open}
+        onOpenChange={setOpen}
+        title="Editează evenimentul"
+        busy={update.isPending}
         className="sm:max-w-2xl"
         finalFocus={() => !saved.current}
       >
-        <DialogHeader>
-          <DialogTitle>Editează evenimentul</DialogTitle>
-          <DialogDescription>
-            O schimbare de oră, loc, grup sau vizibilitate îi anunță pe membrii
-            grupului și pe cei care au răspuns „Particip”. Orele sunt
-            interpretate în fusul României.
-          </DialogDescription>
-        </DialogHeader>
         <EditEventForm
           key={attempt}
           event={event}
@@ -185,8 +171,8 @@ function EditEventDialog({
             onSaved();
           }}
         />
-      </DialogContent>
-    </Dialog>
+      </FormSheet>
+    </>
   );
 }
 
@@ -216,7 +202,7 @@ function EditEventForm({
     };
     return editEventFormOptions(available, event, groups, campaigns.data);
   }, [options, actorLevel, event, groups, campaigns.data]);
-  // Read once, when the dialog opens: a refetch must not reset what is typed.
+  // Read once, when the sheet opens: a refetch must not reset what is typed.
   const [initialValues] = useState(() => eventFormValuesFor(event));
 
   return (
@@ -244,7 +230,13 @@ function CancelEventDialog({
   const cancel = useCancelEvent();
   return (
     <TaskReasonDialog
-      triggerLabel="Anulează evenimentul"
+      triggerLabel={
+        <span>
+          Anulează <span className="max-sm:sr-only">evenimentul</span>
+        </span>
+      }
+      triggerIcon={CalendarX}
+      triggerSize="sm"
       title="Anulează evenimentul"
       description={
         <>
@@ -254,7 +246,7 @@ function CancelEventDialog({
         </>
       }
       field="reason"
-      fieldLabel="Motiv (obligatoriu)"
+      fieldLabel="Motiv"
       confirmLabel="Confirmă anularea"
       failureMessage="Nu am putut anula evenimentul. Reîncearcă."
       isPending={cancel.isPending}

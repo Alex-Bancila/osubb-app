@@ -2,10 +2,7 @@ import type { ReactNode } from 'react';
 import { AttachedLinkButton } from '../../components/attached-link/AttachedLinkButton';
 import { DifficultyMark } from '../../components/tasks/DifficultyMark';
 import { Button } from '../../components/ui/button';
-import {
-  formatBucharestDay,
-  formatBucharestTime,
-} from '../../lib/calendar-time';
+import { formatBucharestShort } from '../../lib/calendar-time';
 import type { Database, Json } from '../../lib/database.types';
 import { attachedLinksFrom } from '../../lib/schemas/attached-link';
 import { useGroups } from '../../queries/reference';
@@ -158,7 +155,7 @@ function changes(
       ];
     const text =
       field === 'deadline' && typeof value === 'string'
-        ? `${formatBucharestDay(value)}, ${formatBucharestTime(value)}`
+        ? formatBucharestShort(value)
         : field === 'audience'
           ? value === 'org'
             ? 'OSUBB'
@@ -230,8 +227,7 @@ export function TaskTimeline({
                   : 'Sistem'}{' '}
                 ·{' '}
                 <time dateTime={entry.occurred_at}>
-                  {formatBucharestDay(entry.occurred_at)},{' '}
-                  {formatBucharestTime(entry.occurred_at)}
+                  {formatBucharestShort(entry.occurred_at)}
                 </time>
               </p>
               {(entry.from_status || entry.to_status) && (

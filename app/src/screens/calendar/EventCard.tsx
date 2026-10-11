@@ -1,5 +1,7 @@
 import { createElement, type CSSProperties } from 'react';
+import { Clock, MapPin, Users } from 'lucide-react';
 
+import { formatBucharestShortDay } from '../../lib/calendar-time';
 import { cn } from '../../lib/utils';
 import type { EventPresentation } from '../../queries/events';
 import type { Group } from '../../queries/reference';
@@ -25,8 +27,9 @@ type EventCardProps = {
   /** The `?event=<id>` landing. */
   highlighted?: boolean;
   /**
-   * Print the Event's day in the card (Acasă, X9/A2). The Calendar's lists sit
-   * under a day heading, so there the card shows only the time.
+   * Print the Event's day in the card, in its short form (Acasă, X9/A2). The
+   * Calendar's lists sit under a day heading, so there the card shows only
+   * the time.
    */
   showDay?: boolean;
   /**
@@ -92,34 +95,43 @@ export default function EventCard({
         {event.title}
       </h3>
 
+      {/* One wrapping line: when, where, how many. The icons draw the labels;
+          the words stay for a screen reader. */}
       <dl className="event-details">
-        {showDay && (
-          <div>
-            <dt>Data</dt>
-            <dd className="event-day">
-              <time dateTime={event.dayKey}>{event.dayLabel}</time>
-            </dd>
-          </div>
-        )}
-
         <div>
-          <dt>Ora</dt>
+          <dt className="sr-only">{showDay ? 'Data și ora' : 'Ora'}</dt>
           <dd>
+            <Clock className="event-detail-icon" aria-hidden="true" />
+            {showDay && (
+              <>
+                <time dateTime={event.dayKey}>
+                  {formatBucharestShortDay(event.startsAt)}
+                </time>
+                <span aria-hidden="true">·</span>
+              </>
+            )}
             <time dateTime={event.startsAt}>{timeLabel}</time>
           </dd>
         </div>
 
         {event.location && (
           <div>
-            <dt>Loc</dt>
-            <dd>{event.location}</dd>
+            <dt className="sr-only">Loc</dt>
+            <dd>
+              <MapPin className="event-detail-icon" aria-hidden="true" />
+              {event.location}
+            </dd>
           </div>
         )}
 
         {event.capacity !== null && (
           <div>
-            <dt>Locuri</dt>
-            <dd className="event-capacity">{event.capacity}</dd>
+            <dt className="sr-only">Locuri</dt>
+            <dd>
+              <Users className="event-detail-icon" aria-hidden="true" />
+              <span className="event-capacity">{event.capacity}</span>
+              <span aria-hidden="true">locuri</span>
+            </dd>
           </div>
         )}
       </dl>

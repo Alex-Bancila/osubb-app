@@ -3,6 +3,7 @@ import { CalendarDays, ListIcon } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 
 import {
+  FabActions,
   Page,
   PageHeader,
   SegmentedToggle,
@@ -68,6 +69,7 @@ function CalendarContent() {
   const [params, setParams] = useSearchParams();
   const filter = useWorkFilter();
   const [storedView, storeView] = useCalendarView();
+  const [filterSlot, setFilterSlot] = useState<HTMLElement | null>(null);
   const linkedId = linkedEventId(params.get('event'));
   // The deep link opens the Agendă for this visit, whatever this device
   // remembers; it does not change what is remembered.
@@ -145,82 +147,77 @@ function CalendarContent() {
   const shownMonth = monthOfDay(
     filter.value.from ?? filter.value.to ?? todayKey,
   );
-  const agendaFromToday =
-    filter.value.from === undefined || filter.value.from === todayKey;
-  // The month's name sits between its arrows (C2); the title names the view.
-  const title =
-    view === 'month'
-      ? 'Lună'
-      : agendaFromToday && filter.value.to === undefined
-        ? 'Ce urmează'
-        : 'Agendă';
 
   return (
     <Page>
-      <PageHeader
-        eyebrow="Calendar"
-        title={title}
-        description="Întâlnirile, activitățile și termenele vizibile pentru tine."
-        actions={
-          <>
-            <SegmentedToggle
-              label="Vizualizare"
-              options={VIEWS}
-              value={view}
-              onChange={chooseView}
-            />
-            <NewEventControl onCreated={showCreated} />
-          </>
-        }
-      />
-
-      <WorkFilter
-        label="Filtre calendar"
-        status={{
-          pending: !groups.data || !campaigns.data || !calendarWork.ready,
-          failed: groups.isError || campaigns.isError || calendarWork.failed,
-          error: groups.error ?? campaigns.error ?? calendarWork.error,
-          onRetry: () => {
-            if (groups.isError) void groups.refetch();
-            if (campaigns.isError) void campaigns.refetch();
-            calendarWork.retry();
-          },
-        }}
-        groups={filterGroups}
-        campaigns={campaigns.data ?? []}
-        work={calendarWork.work}
-        alwaysShowGroups
-        hint="Grupul include subgrupurile sale."
-      />
-
-      {deleted && (
-        <CalendarReceipt key={deleted.key}>{deleted.text}</CalendarReceipt>
-      )}
-
-      {view === 'month' ? (
-        <CalendarMonth
-          month={shownMonth}
-          now={now}
-          todayKey={todayKey}
-          filter={filter}
-          groups={groups.data}
-          relevanceOf={relevanceOf}
-          keepEvent={keepEvent}
-          keepGroup={preferred.keepGroup}
-          showManaged={showManaged}
-          onShowManagedChange={setShowManaged}
+      <FabActions>
+        <PageHeader
+          title="Calendar"
+          actions={
+            <>
+              {/* Filtrează is drawn here by the Work Filter below. */}
+              <span ref={setFilterSlot} className="contents" />
+              <SegmentedToggle
+                label="Vizualizare"
+                options={VIEWS}
+                value={view}
+                onChange={chooseView}
+                compact
+              />
+              <NewEventControl onCreated={showCreated} />
+            </>
+          }
         />
-      ) : (
-        <CalendarAgenda
-          now={now}
-          todayKey={todayKey}
-          filter={filter}
-          linkedId={linkedId}
-          groups={groups.data}
-          relevanceOf={relevanceOf}
-          keepEvent={keepEvent}
+
+        <WorkFilter
+          label="Filtre calendar"
+          status={{
+            pending: !groups.data || !campaigns.data || !calendarWork.ready,
+            failed: groups.isError || campaigns.isError || calendarWork.failed,
+            error: groups.error ?? campaigns.error ?? calendarWork.error,
+            onRetry: () => {
+              if (groups.isError) void groups.refetch();
+              if (campaigns.isError) void campaigns.refetch();
+              calendarWork.retry();
+            },
+          }}
+          groups={filterGroups}
+          campaigns={campaigns.data ?? []}
+          work={calendarWork.work}
+          alwaysShowGroups
+          hint="Grupul include subgrupurile sale."
+          buttonSlot={filterSlot}
         />
-      )}
+
+        {deleted && (
+          <CalendarReceipt key={deleted.key}>{deleted.text}</CalendarReceipt>
+        )}
+
+        {view === 'month' ? (
+          <CalendarMonth
+            month={shownMonth}
+            now={now}
+            todayKey={todayKey}
+            filter={filter}
+            groups={groups.data}
+            relevanceOf={relevanceOf}
+            keepEvent={keepEvent}
+            keepGroup={preferred.keepGroup}
+            showManaged={showManaged}
+            onShowManagedChange={setShowManaged}
+          />
+        ) : (
+          <CalendarAgenda
+            now={now}
+            todayKey={todayKey}
+            filter={filter}
+            linkedId={linkedId}
+            groups={groups.data}
+            relevanceOf={relevanceOf}
+            keepEvent={keepEvent}
+          />
+        )}
+      </FabActions>
     </Page>
   );
 }

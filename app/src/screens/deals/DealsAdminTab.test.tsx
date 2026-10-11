@@ -1,13 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
+import { Fragment } from 'react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { FabActions } from '../../components/layout';
 import type { RawDealRow } from '../../queries/deals';
 import { resetSupabaseMock, supabaseMock } from '../../test/supabase-mock';
 
 const viewer = vi.hoisted(() => ({ caps: {} as Record<string, boolean> }));
-// The Administrare header's action slot, where "Deal nou" is portalled.
-const slot = vi.hoisted(() => ({ el: null as HTMLElement | null }));
 
 vi.mock('../../lib/supabase', async () => {
   const { supabaseClientMock } = await vi.importActual<
@@ -37,12 +37,6 @@ vi.mock(
 );
 // The team has its own suite (DealsTeamPanel.test.tsx).
 vi.mock('./DealsTeamPanel', () => ({ DealsTeamPanel: () => null }));
-vi.mock('../administrare/administrare-tabs', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('../administrare/administrare-tabs')
-  >()),
-  useAdministrareActionSlot: () => slot.el,
-}));
 
 import DealsAdminTab from './DealsAdminTab';
 
@@ -75,14 +69,18 @@ const ROWS = [
   }),
 ];
 
-function renderTab() {
+/** In Administrare the tab sits in the layout's `FabActions`. */
+function renderTab({ fab = false } = {}) {
+  const Frame = fab ? FabActions : Fragment;
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={['/administrare/deals']}>
-        <DealsAdminTab />
+        <Frame>
+          <DealsAdminTab />
+        </Frame>
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -91,8 +89,6 @@ function renderTab() {
 const card = (name: string) => screen.findByRole('article', { name });
 
 beforeEach(() => {
-  slot.el?.remove();
-  slot.el = document.body.appendChild(document.createElement('div'));
   resetSupabaseMock();
   supabaseMock.order.mockResolvedValue({ data: ROWS, error: null });
   supabaseMock.rpc.mockResolvedValue({ data: 3, error: null });
@@ -153,9 +149,18 @@ describe('Administrare › OSUBB Deals (R44)', () => {
       manageDealsTeam: true,
       pickDealsCoordinator: true,
     };
-    renderTab();
+    const alone = renderTab();
     await card('Al meu');
     expect(screen.getByRole('button', { name: 'Deal nou' })).toBeVisible();
+    alone.unmount();
+
+    // In Administrare it is the page's plus button, not a header button.
+    renderTab({ fab: true });
+    await card('Al meu');
+    expect(screen.getByRole('button', { name: 'Deal nou' })).toHaveAttribute(
+      'data-slot',
+      'fab',
+    );
   });
 
   it('gives the Moderator, with every Atribuție power, Deal nou, Editează and Șterge (R44 amended)', async () => {
@@ -175,7 +180,7 @@ describe('Administrare › OSUBB Deals (R44)', () => {
     ).toBeVisible();
     expect(within(other).getByRole('button', { name: /Șterge/ })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Deal nou' })).toBeVisible();
-    // Both sit in the card's footer row, beside Citește, not mid-card.
+    // Both sit in the card's footer row, not mid-card; the title opens it.
     const footer = other.querySelector<HTMLElement>(
       '[data-slot="card-footer"]',
     );
@@ -188,7 +193,7 @@ describe('Administrare › OSUBB Deals (R44)', () => {
       within(footer).getByRole('button', { name: /Șterge/ }),
     ).toBeVisible();
     expect(
-      within(footer).getByRole('button', { name: /Citește deal-ul/ }),
+      within(other).getByRole('button', { name: /Citește deal-ul/ }),
     ).toBeVisible();
   });
 

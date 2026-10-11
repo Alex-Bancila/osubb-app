@@ -1,20 +1,16 @@
-import { useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
+import { PlusIcon } from 'lucide-react';
+import { FabAction } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
+import { ColorPicker } from '../../components/ui/color-picker';
 import { FieldError } from '../../components/ui/field';
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from '../../components/ui/native-select';
+import { Select } from '../../components/ui/select';
+import { FormSheet, FormSheetFooter } from '../../components/ui/form-sheet';
+import { InfoHint } from '../../components/ui/info-hint';
+import { Input } from '../../components/ui/input';
 import { ChoiceRow } from '../../components/ui/radio-group';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../../components/ui/dialog';
+import { SegmentedRadio } from '../../components/ui/segmented-radio';
 import { GroupFilterCombobox } from '../../components/group/GroupFilterCombobox';
 import { minimumLevelText } from '../../lib/minimum-level';
 import { fieldForReason, groupCreateSchema } from '../../lib/schemas/group';
@@ -35,12 +31,18 @@ import {
   PRIVATE_GROUP_HINT,
 } from './group-tree';
 
-const control =
-  'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
+const labelClass = 'text-sm font-medium';
+/** A label with its "i" at the end of the row. */
+const labelRowClass = 'flex items-center justify-between gap-2';
+
+/** The Minimum Level drop-down's first option: the parent's, or Recrut. */
+const DEFAULT_MIN_LEVEL = 'default';
 
 /**
- * Creating a Group, in a pop-up (dobre, 2026-09-21: a single-purpose action is
- * a dialog, not a page).
+ * Creating a Group, in a form sheet (a form of this many fields is never a
+ * dialog). It opens from the page's plus button (`FabAction`). Only the
+ * optional fields say so; what a field needs explained once sits behind the
+ * "i" beside its label.
  *
  * The parent is chosen here and never again: a Group's place in the tree is
  * fixed at creation (ADR-0009, ruling R20), which is why there is no "Mută
@@ -72,7 +74,7 @@ export function GroupCreateDialog({
 }: {
   trigger: string;
   title: string;
-  /** Fixed parent (the Grupuri copil tab); `null` offers the picker. */
+  /** Fixed parent (the Subgrupuri tab); `null` offers the picker. */
   parent: AdminGroup | null;
   groups: AdminGroup[];
   groupsById: ReadonlyMap<number, { name: string }>;
@@ -85,6 +87,7 @@ export function GroupCreateDialog({
   onCreate: RunGroupCommand;
 }) {
   const [open, setOpen] = useState(false);
+  const id = useId();
   const [name, setName] = useState('');
   const [category, setCategory] = useState<string>(
     parent ? 'team' : 'department',
@@ -172,77 +175,94 @@ export function GroupCreateDialog({
     }
   }
 
+  const parentHint = parent
+    ? `Grupul nou va face parte din ${parent.name}. Grupul părinte nu se mai poate schimba după creare.`
+    : 'Grupul părinte nu se mai poate schimba după creare.';
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (disabled) return;
-        setOpen(next);
-        if (next) reset();
-      }}
-    >
-      <Button
-        type="button"
-        disabled={disabled}
-        onClick={() => {
+    <>
+      <FabAction
+        label={trigger}
+        icon={PlusIcon}
+        onSelect={() => {
+          if (disabled) return;
           reset();
           setOpen(true);
         }}
+      />
+      <FormSheet
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (next) reset();
+        }}
+        title={title}
+        busy={disabled}
       >
-        {trigger}
-      </Button>
-      <DialogContent>
-        <form onSubmit={submit} noValidate className="grid gap-4">
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>
-              {parent
-                ? `Grupul nou va face parte din ${parent.name}. Grupul părinte nu se mai poate schimba după creare.`
-                : 'Grupul părinte nu se mai poate schimba după creare.'}
-            </DialogDescription>
-          </DialogHeader>
-
+        <form
+          onSubmit={submit}
+          noValidate
+          className="flex flex-1 flex-col gap-4"
+        >
           <div className="grid gap-1.5">
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium">Numele grupului</span>
-              <input
-                className={control}
-                value={name}
-                required
-                disabled={disabled}
-                onChange={(event) => setName(event.target.value)}
-                {...form.field('name')}
-              />
-            </label>
+            <div className={labelRowClass}>
+              <label htmlFor={`${id}-name`} className={labelClass}>
+                Numele grupului
+              </label>
+              {/* With the parent fixed there is no parent field to carry it. */}
+              {parent && (
+                <InfoHint
+                  label="Despre grupul părinte"
+                  id={`${id}-parent-hint`}
+                >
+                  {parentHint}
+                </InfoHint>
+              )}
+            </div>
+            <Input
+              id={`${id}-name`}
+              value={name}
+              required
+              disabled={disabled}
+              onChange={(event) => setName(event.target.value)}
+              {...form.field('name', parent ? `${id}-parent-hint` : undefined)}
+            />
             <FieldError {...form.errorProps('name')} />
           </div>
 
-          <div className="grid gap-1.5">
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium">Categorie</span>
-              <NativeSelect
-                value={category}
-                disabled={disabled}
-                onChange={(event) => setCategory(event.target.value)}
-                {...form.field('category')}
-              >
-                {GROUP_CATEGORIES.map((option) => (
-                  <NativeSelectOption key={option.value} value={option.value}>
-                    {option.label}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </label>
+          <div className="grid gap-1.5" {...form.slot('category')}>
+            <span id={`${id}-category`} className={labelClass}>
+              Categorie
+            </span>
+            <SegmentedRadio<string>
+              aria-labelledby={`${id}-category`}
+              aria-describedby={
+                form.error('category') ? form.errorId('category') : undefined
+              }
+              options={GROUP_CATEGORIES}
+              value={category}
+              onValueChange={setCategory}
+              disabled={disabled}
+            />
             <FieldError {...form.errorProps('category')} />
           </div>
 
           {!parent && (
             <div className="grid gap-1.5">
-              <span id="create-group-parent" className="text-sm font-medium">
-                Grup părinte
-              </span>
+              <div className={labelRowClass}>
+                <span id="create-group-parent" className={labelClass}>
+                  Grup părinte (opțional)
+                </span>
+                <InfoHint
+                  label="Despre grupul părinte"
+                  id={`${id}-parent-hint`}
+                >
+                  {parentHint}
+                </InfoHint>
+              </div>
               <GroupFilterCombobox
                 ariaLabelledBy="create-group-parent"
+                ariaDescribedBy={`${id}-parent-hint`}
                 groups={groups}
                 groupsById={groupsById}
                 value={chosenParent}
@@ -256,41 +276,52 @@ export function GroupCreateDialog({
           )}
 
           <div className="grid gap-1.5">
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium">Nivel minim</span>
-              <NativeSelect
-                value={minLevel}
-                disabled={disabled}
-                onChange={(event) => {
-                  setMinLevel(event.target.value);
-                  dropIneligibleManager(
-                    minLevelOf(event.target.value, effectiveParent),
-                  );
-                }}
-                {...form.field('minLevel')}
-              >
-                <NativeSelectOption value="">
-                  {effectiveParent
+            <label htmlFor={`${id}-min-level`} className={labelClass}>
+              Nivel minim
+            </label>
+            <Select
+              id={`${id}-min-level`}
+              value={minLevel || DEFAULT_MIN_LEVEL}
+              options={[
+                {
+                  value: DEFAULT_MIN_LEVEL,
+                  label: effectiveParent
                     ? `Ca grupul părinte (${minimumLevelText(effectiveParent.min_level)})`
-                    : minimumLevelText(0)}
-                </NativeSelectOption>
-                {choices
+                    : minimumLevelText(0),
+                },
+                ...choices
                   // A top-level Group's default is Recrut already: one option.
                   .filter((level) => effectiveParent || level !== 0)
-                  .map((level) => (
-                    <NativeSelectOption key={level} value={level}>
-                      {minimumLevelText(level)}
-                    </NativeSelectOption>
-                  ))}
-              </NativeSelect>
-            </label>
+                  .map((level) => ({
+                    value: String(level),
+                    label: minimumLevelText(level),
+                  })),
+              ]}
+              disabled={disabled}
+              onValueChange={(value) => {
+                const next = value === DEFAULT_MIN_LEVEL ? '' : value;
+                setMinLevel(next);
+                dropIneligibleManager(minLevelOf(next, effectiveParent));
+              }}
+              {...form.field('minLevel')}
+            />
             <FieldError {...form.errorProps('minLevel')} />
           </div>
 
           <div className="grid gap-1.5">
-            <span id="create-group-manager" className="text-sm font-medium">
-              Manager direct ({managerTitleFor(category)})
-            </span>
+            <div className={labelRowClass}>
+              <span id="create-group-manager" className={labelClass}>
+                Manager direct — {managerTitleFor(category)} (opțional)
+              </span>
+              <InfoHint
+                label="Despre managerul direct"
+                id="create-group-manager-hint"
+              >
+                {effectiveParent
+                  ? 'Fără el, grupul este condus de managerii grupurilor de deasupra.'
+                  : 'Fără el, grupul este condus de BC și Moderator.'}
+              </InfoHint>
+            </div>
             <MemberPicker
               ariaLabelledBy="create-group-manager"
               ariaDescribedBy="create-group-manager-hint"
@@ -300,69 +331,76 @@ export function GroupCreateDialog({
               noneLabel="Fără manager direct"
               disabled={disabled}
             />
-            <p
-              id="create-group-manager-hint"
-              className="text-sm text-muted-foreground"
-            >
-              {effectiveParent
-                ? 'Opțional. Fără el, grupul este condus de managerii grupurilor de deasupra.'
-                : 'Opțional. Fără el, grupul este condus de BC și Moderator.'}
-            </p>
           </div>
 
           {(choosePrivate || inheritsPrivate) && (
-            <ChoiceRow className="items-start">
-              <Checkbox
-                className="mt-0.5"
-                checked={privateChoice}
-                disabled={disabled || inheritsPrivate}
-                onCheckedChange={(checked) => setIsPrivate(checked)}
-              />
-              <span className="grid gap-0.5">
-                <span className="text-sm font-medium">Grup privat</span>
-                <span className="text-sm text-muted-foreground">
-                  {inheritsPrivate
-                    ? `${effectiveParent?.name ?? 'Grupul părinte'} este privat, deci și grupul nou va fi privat.`
-                    : PRIVATE_GROUP_HINT}
-                </span>
-              </span>
-            </ChoiceRow>
+            <div className="grid gap-1">
+              <div className={labelRowClass}>
+                <ChoiceRow>
+                  <Checkbox
+                    checked={privateChoice}
+                    disabled={disabled || inheritsPrivate}
+                    aria-describedby={`${id}-private-hint`}
+                    onCheckedChange={(checked) => setIsPrivate(checked)}
+                  />
+                  <span className={labelClass}>Grup privat</span>
+                </ChoiceRow>
+                {!inheritsPrivate && (
+                  <InfoHint
+                    label="Despre grupul privat"
+                    id={`${id}-private-hint`}
+                  >
+                    {PRIVATE_GROUP_HINT}
+                  </InfoHint>
+                )}
+              </div>
+              {/* Why the box is ticked and locked: said in view. */}
+              {inheritsPrivate && (
+                <p
+                  id={`${id}-private-hint`}
+                  className="m-0 text-sm text-muted-foreground"
+                >
+                  {effectiveParent?.name ?? 'Grupul părinte'} este privat, deci
+                  și grupul nou va fi privat.
+                </p>
+              )}
+            </div>
           )}
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-1.5">
-              <label className="grid gap-1.5">
-                <span className="text-sm font-medium">Prescurtare</span>
-                <input
-                  className={control}
-                  value={short}
-                  maxLength={16}
-                  disabled={disabled}
-                  onChange={(event) => setShort(event.target.value)}
-                  {...form.field('short')}
-                />
+            <div className="grid content-start gap-1.5">
+              <label htmlFor={`${id}-short`} className={labelClass}>
+                Prescurtare (opțional)
               </label>
+              <Input
+                id={`${id}-short`}
+                value={short}
+                maxLength={16}
+                disabled={disabled}
+                onChange={(event) => setShort(event.target.value)}
+                {...form.field('short')}
+              />
               <FieldError {...form.errorProps('short')} />
             </div>
-            <div className="grid gap-1.5">
-              <label className="grid gap-1.5">
-                <span className="text-sm font-medium">Culoare</span>
-                <input
-                  className={control}
-                  value={color}
-                  placeholder="#C8102E"
-                  disabled={disabled}
-                  onChange={(event) => setColor(event.target.value)}
-                  {...form.field('color')}
-                />
-              </label>
+            <div
+              className="grid content-start gap-1.5 sm:col-span-2"
+              {...form.slot('color')}
+            >
+              <span className={labelClass}>Culoare (opțional)</span>
+              <ColorPicker
+                label="Alege culoarea grupului"
+                noneLabel="Fără culoare"
+                value={color}
+                disabled={disabled}
+                onChange={setColor}
+              />
               <FieldError {...form.errorProps('color')} />
             </div>
           </div>
 
           <FieldError>{form.formError}</FieldError>
 
-          <DialogFooter>
+          <FormSheetFooter>
             <Button
               type="button"
               variant="outline"
@@ -374,10 +412,10 @@ export function GroupCreateDialog({
             <Button type="submit" disabled={disabled}>
               Creează
             </Button>
-          </DialogFooter>
+          </FormSheetFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </FormSheet>
+    </>
   );
 }
 

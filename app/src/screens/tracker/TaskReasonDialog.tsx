@@ -1,6 +1,8 @@
 import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
+import { Textarea } from '../../components/ui/input';
 import {
   fieldForReason as noteFields,
   noteSchema,
@@ -20,15 +22,21 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '../../components/ui/dialog';
+import type { MenuDialog } from './menu-dialog';
 
 /**
  * One small pop-up for the Task actions that need a written reason: send work
  * back with feedback (a `note`), reopen or cancel (a `reason`). The text is
  * required and at most 1000 characters (ruling R8); a refusal stays inside the
  * pop-up, under the field, with the text kept, so the member can fix it.
+ *
+ * It draws its own trigger button, unless `menu` hands it the open state of
+ * an action that lives in a menu.
  */
 export function TaskReasonDialog({
   triggerLabel,
+  triggerIcon: TriggerIcon,
+  triggerSize,
   title,
   description,
   children,
@@ -39,8 +47,12 @@ export function TaskReasonDialog({
   isPending,
   onConfirm,
   onSuccess,
+  menu,
 }: {
-  triggerLabel: string;
+  /** The trigger's words; its accessible name is all of them, hidden or not. */
+  triggerLabel?: ReactNode;
+  triggerIcon?: LucideIcon;
+  triggerSize?: 'default' | 'sm';
   title: string;
   description: ReactNode;
   children?: ReactNode;
@@ -53,9 +65,13 @@ export function TaskReasonDialog({
   onConfirm: (text: string) => Promise<unknown>;
   /** Runs after the command succeeds; the caller shows (and focuses) a receipt. */
   onSuccess: () => void;
+  /** Opened from a menu item: no trigger of its own. */
+  menu?: MenuDialog | undefined;
 }) {
   const id = useId();
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = menu ? menu.open : ownOpen;
+  const setOpen = menu ? menu.onOpenChange : setOwnOpen;
   const [text, setText] = useState('');
   const form = useFormValidation(
     field === 'note' ? noteSchema : reasonSchema,
@@ -70,6 +86,7 @@ export function TaskReasonDialog({
     const values = form.validate();
     if (!values) return;
     submitting.current = true;
+    succeeded.current = false;
     try {
       await onConfirm('note' in values ? values.note : values.reason);
       succeeded.current = true;
@@ -92,14 +109,28 @@ export function TaskReasonDialog({
         setOpen(next);
       }}
     >
-      <DialogTrigger
-        render={<Button type="button" variant="outline" className="min-h-11" />}
-      >
-        {triggerLabel}
-      </DialogTrigger>
+      {!menu && (
+        <DialogTrigger
+          render={
+            <Button
+              type="button"
+              variant="outline"
+              size={triggerSize}
+              className="min-h-11"
+            />
+          }
+        >
+          {TriggerIcon && <TriggerIcon aria-hidden="true" />}
+          {triggerLabel}
+        </DialogTrigger>
+      )}
       {/* After success the trigger is gone and the receipt takes focus;
-          otherwise focus goes back to the trigger. */}
-      <DialogContent finalFocus={() => !succeeded.current}>
+          otherwise focus goes back to the trigger (the menu's button). */}
+      <DialogContent
+        finalFocus={() =>
+          succeeded.current ? false : (menu?.returnFocus() ?? true)
+        }
+      >
         <form onSubmit={submit} noValidate className="grid gap-4">
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
@@ -107,17 +138,17 @@ export function TaskReasonDialog({
           </DialogHeader>
           {children}
           <div className="grid gap-2">
-            <label className="font-medium" htmlFor={id}>
+            <label className="text-sm font-medium" htmlFor={id}>
               {fieldLabel}
             </label>
-            <textarea
+            <Textarea
               id={id}
               required
+              aria-required="true"
               rows={4}
               value={text}
               onChange={(event) => setText(event.target.value)}
               disabled={isPending}
-              className="w-full rounded-md border border-input bg-background p-3"
               {...form.field(field)}
             />
             <FieldError {...form.errorProps(field)} />

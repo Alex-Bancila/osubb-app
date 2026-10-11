@@ -1,6 +1,7 @@
 import { TaskActionSuccess } from './TaskActionSuccess';
 import { useReceiptTurn } from './receipt-turn';
 import { useState } from 'react';
+import { RotateCcw } from 'lucide-react';
 import { useTaskEvaluationCapability } from '../../queries/task-review';
 import { useReopenTask } from '../../queries/task-reopen';
 import type { TaskStatus } from './task-presentation';
@@ -58,10 +59,11 @@ function ReopenDialog({
   return (
     <TaskReasonDialog
       triggerLabel="Redeschide taskul"
+      triggerIcon={RotateCcw}
       title="Redeschide taskul"
       description="Taskul revine în lucru pentru același Executor. Punctele evaluării sunt inversate în aceeași operațiune: un premiu se scade, iar o penalizare se restituie. Istoricul rămâne păstrat."
       field="reason"
-      fieldLabel="Motiv (obligatoriu)"
+      fieldLabel="Motiv"
       confirmLabel="Confirmă redeschiderea"
       failureMessage="Nu am putut redeschide taskul."
       isPending={mutation.isPending}

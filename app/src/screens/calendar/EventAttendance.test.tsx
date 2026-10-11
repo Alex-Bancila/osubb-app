@@ -120,6 +120,12 @@ describe('EventAttendance — Cine participă (#934)', () => {
     const toggle = screen.getByRole('button', { name: 'Cine participă' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('heading', { name: /Particip/ })).toBeNull();
+    // One row: the bar of the split sits between the label and the counts.
+    const row = toggle.parentElement;
+    expect(row).toContainElement(screen.getByText('2 participă · 1 nu'));
+    const bar = row?.querySelector<HTMLElement>('.event-attendance-bar');
+    expect(bar).toHaveAttribute('aria-hidden', 'true');
+    expect(bar?.style.getPropertyValue('--going-share')).toMatch(/^66\.6/);
 
     await user.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');

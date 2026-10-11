@@ -63,8 +63,8 @@ function trackerPath(memberId: string, search = ''): string {
 }
 
 const VIEWS: ReadonlyArray<SegmentedOption<ClasamentView>> = [
-  { value: 'members', label: 'Clasament' },
-  { value: 'cup', label: 'Cupa Departamentelor' },
+  { value: 'members', label: 'Clasament', icon: Trophy },
+  { value: 'cup', label: 'Cupa Departamentelor', icon: Award },
 ];
 
 /**
@@ -80,8 +80,19 @@ const LEVELS: Record<ClasamentView, WorkFilterLevels> = {
 const memberCount = (n: number) => `${n} ${n === 1 ? 'membru' : 'membri'}`;
 
 /**
+ * The podium: gold, silver and bronze for ranks 1–3, each a tinted disc with
+ * its number in the metal's dark shade (its light one in the dark theme), so
+ * the three read apart from each other and from the muted ranks below.
+ */
+const MEDAL: Record<number, string> = {
+  1: 'bg-amber-400/20 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300',
+  2: 'bg-slate-400/25 text-slate-600 dark:bg-slate-300/15 dark:text-slate-200',
+  3: 'bg-orange-500/15 text-orange-800 dark:bg-orange-400/15 dark:text-orange-300',
+};
+
+/**
  * One Clasament row (R11, R27) on the shared `ListRow`: rank (the top three
- * in red), the Member's name button (avatar, Nickname) and their first Group
+ * as medals — gold, silver, bronze), the Member's name button (avatar, Nickname) and their first Group
  * chip with "+n" — both open the Member Card — then the points.
  *
  * The row is one link to the member's tracker (relevance B66): an empty link
@@ -131,9 +142,10 @@ function BoardRow({
         )}
         leading={
           <span
+            data-medal={MEDAL[rank] ? rank : undefined}
             className={cn(
-              'text-lg font-extrabold tabular-nums',
-              rank <= 3 ? 'text-primary' : 'text-muted-foreground',
+              'grid size-[2.25rem] place-items-center rounded-full text-lg font-extrabold tabular-nums',
+              MEDAL[rank] ?? 'text-muted-foreground',
             )}
           >
             <span className="sr-only">Locul </span>
@@ -373,6 +385,7 @@ const RANGE_FIRST = 'Corectează perioada din filtre ca să vezi rezultatele.';
  */
 function LeadershipContent() {
   const [view, chooseView] = useClasamentView();
+  const [filterSlot, setFilterSlot] = useState<HTMLElement | null>(null);
   const levels = LEVELS[view];
   const { value, params } = useWorkFilter(levels);
   const options = useLeadershipFilters();
@@ -392,17 +405,19 @@ function LeadershipContent() {
   return (
     <Page>
       <PageHeader
-        eyebrow="Conducere"
         title="Clasament"
-        description="Punctele taskurilor, pe membri și pe departamente."
         actions={
-          <SegmentedToggle
-            label="Vizualizare"
-            options={VIEWS}
-            value={view}
-            onChange={chooseView}
-            className="max-sm:w-full max-sm:*:flex-auto max-sm:*:px-3"
-          />
+          <>
+            {/* Filtrează is drawn here by the Work Filter below. */}
+            <span ref={setFilterSlot} className="contents" />
+            <SegmentedToggle
+              label="Vizualizare"
+              options={VIEWS}
+              value={view}
+              onChange={chooseView}
+              compact
+            />
+          </>
         }
       />
       <WorkFilter
@@ -417,12 +432,13 @@ function LeadershipContent() {
         campaigns={options.data?.campaigns ?? []}
         work={options.data?.work}
         levels={levels}
+        buttonSlot={filterSlot}
       />
       {view === 'members' ? (
+        // One board on the page: the title above already names it, so the
+        // list starts under a small caption and the region keeps its name.
         <Panel
-          eyebrow="Clasament"
-          icon={Trophy}
-          title="Clasamentul membrilor"
+          aria-label="Clasamentul membrilor"
           description={
             params && board.data ? memberCount(board.data.length) : null
           }
@@ -446,9 +462,7 @@ function LeadershipContent() {
         </Panel>
       ) : (
         <Panel
-          eyebrow="Cupa"
-          icon={Award}
-          title="Cupa Departamentelor"
+          aria-label="Cupa Departamentelor"
           description={cupScope(
             value,
             options.data?.campaigns.find(

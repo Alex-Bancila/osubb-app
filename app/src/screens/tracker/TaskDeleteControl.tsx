@@ -22,6 +22,7 @@ import {
 import { useMemberIdentities } from '../../queries/member-identities';
 
 import { taskDeletedReceipt } from './task-delete-receipt';
+import type { MenuDialog } from './menu-dialog';
 
 const FAILED = 'Nu am putut șterge taskul. Încearcă din nou.';
 
@@ -31,22 +32,31 @@ const FAILED = 'Nu am putut șterge taskul. Încearcă din nou.';
  * finished Task is exactly the one that may hold points. The dialog reads
  * what the Task still holds; without points it asks once, with points it
  * names every Member and asks whether to take the points back.
+ *
+ * In the sheet the action is the last item of the "⋯" menu (`menu`); on its
+ * own it draws the destructive button.
  */
 export function TaskDeleteControl({
   taskId,
   canManage,
   onDeleted,
+  menu,
 }: {
   taskId: number;
   canManage: boolean;
   /** The Task is gone: close the sheet and leave this receipt on the list. */
   onDeleted: (receipt: string) => void;
+  /** The action sits in the details sheet's menu, which opens the pop-up. */
+  menu?: MenuDialog;
 }) {
   if (!canManage) return null;
   return (
     <DeleteForGoodDialog
       title="Ștergi definitiv taskul?"
       className="sm:ml-auto"
+      open={menu?.open}
+      onOpenChange={menu?.onOpenChange}
+      returnFocus={menu?.returnFocus}
     >
       {(controls) => (
         <TaskDeleteBody

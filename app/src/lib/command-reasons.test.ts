@@ -209,7 +209,7 @@ it.each([
 ])('has Romanian copy for the Nickname reason %s', (reason) => {
   const copy = reasonCopy(reason);
   expect(copy).toBeDefined();
-  expect(copy).toMatch(/^Pseudonimul /);
+  expect(copy).toMatch(/^Porecla /);
   expect(commandReason({ code: '23514', message: reason })).toBe(reason);
 });
 

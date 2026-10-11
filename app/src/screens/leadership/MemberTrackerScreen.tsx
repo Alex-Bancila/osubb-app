@@ -1,18 +1,24 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router';
+import { cn } from 'cn';
 import {
   BackLink,
   EmptyState,
+  FabActions,
+  focusRingClass,
   Page,
   PageGrid,
   PageHeader,
   Panel,
 } from '../../components/layout';
-import { MemberName } from '../../components/member/MemberName';
+import { MemberCard } from '../../components/member/MemberCard';
+import { memberDisplayName } from '../../components/member/member-identity';
 import { ErrorState, Loading } from '../../components/states';
+import { Disclosure } from '../../components/ui/disclosure';
 import { Button } from '../../components/ui/button';
+import { MemberAvatar } from '../../components/ui/combobox';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
-import { formatBucharestDay } from '../../lib/calendar-time';
+import { formatBucharestShortDay } from '../../lib/calendar-time';
 import { formatDayMonthYear, formatPoints, pointWord } from '../../lib/format';
 import { isUuid } from '../../lib/ids';
 import { useWorkFilter } from '../../lib/use-work-filter';
@@ -27,7 +33,11 @@ import {
   useLeadershipMemberTotal,
   type MemberTask,
 } from '../../queries/leadership';
-import { useMemberCard, type MemberCardGroup } from '../../queries/member-card';
+import {
+  useMemberCard,
+  type MemberCardData,
+  type MemberCardGroup,
+} from '../../queries/member-card';
 import {
   NO_SUBJECTS,
   useReadNotificationsAbout,
@@ -60,8 +70,9 @@ const endReasons: Record<string, string> = {
   unfulfilled: 'Nerealizat',
   cancelled: 'Anulat',
 };
+/** `mie., 14 oct.` — the year only when it is not this one. */
 function day(value: string | null | undefined) {
-  return value ? formatBucharestDay(value) : '—';
+  return value ? formatBucharestShortDay(value) : '—';
 }
 const score = (value: number | null) => (value === null ? '—' : String(value));
 
@@ -95,10 +106,10 @@ function AssignmentRecord({ task }: { task: MemberTask }) {
           Motiv anulare: {task.cancel_reason}
         </p>
       )}
-      <details className="border-t border-border pt-2">
-        <summary className="flex min-h-11 cursor-pointer items-center font-medium">
-          Evaluări ({evaluations.length})
-        </summary>
+      <Disclosure
+        className="border-t border-border pt-2"
+        summary={`Evaluări (${evaluations.length})`}
+      >
         {evaluations.length ? (
           <ul className="space-y-2">
             {evaluations.map((entry) => (
@@ -145,12 +156,12 @@ function AssignmentRecord({ task }: { task: MemberTask }) {
             Nicio evaluare pentru această atribuire.
           </p>
         )}
-      </details>
+      </Disclosure>
       {subtasks.length > 0 && (
-        <details className="border-t border-border pt-2">
-          <summary className="flex min-h-11 cursor-pointer items-center font-medium">
-            Subtaskuri ({subtasks.length})
-          </summary>
+        <Disclosure
+          className="border-t border-border pt-2"
+          summary={`Subtaskuri (${subtasks.length})`}
+        >
           <ul className="space-y-1">
             {subtasks.map((child) => (
               <li key={child.id}>
@@ -160,7 +171,7 @@ function AssignmentRecord({ task }: { task: MemberTask }) {
               </li>
             ))}
           </ul>
-        </details>
+        </Disclosure>
       )}
     </div>
   );
@@ -184,13 +195,18 @@ function totalScope(value: WorkFilterValue): string {
           : null;
   const narrowed =
     chosenGroupId(value) !== undefined || value.campaignId !== undefined;
-  if (!narrowed && !period) return 'din toate taskurile';
+  if (!narrowed && !period) return WHOLE_RECORD;
   return [narrowed && 'din filtrele alese', period].filter(Boolean).join(' · ');
 }
 
+/** What the total says when nothing narrows it: the figure alone shows it. */
+const WHOLE_RECORD = 'din toate taskurile';
+
 /**
  * The Member's Task points under the Work Filter (#906): Clasament's figure
- * for the same Member and the same filter, read from the server.
+ * for the same Member and the same filter, read from the server. One item of
+ * the header's meta line — "12 pct", the whole noun for a screen reader —
+ * followed by what it counts once a filter narrows it.
  */
 function MemberTotal({
   memberId,
@@ -202,28 +218,22 @@ function MemberTotal({
   params: WorkFilterParams | null;
 }) {
   const total = useLeadershipMemberTotal(memberId, params);
+  const scope = totalScope(value);
   return (
     <section
       aria-label="Puncte"
       data-slot="member-total"
-      className="flex min-w-0 flex-col gap-1 sm:row-span-2 sm:max-w-72 sm:items-end sm:text-right"
+      className="flex max-w-full min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1"
     >
       {!params ? (
-        <p className="m-0 text-sm text-muted-foreground">
-          Corectează perioada ca să vezi punctele.
-        </p>
+        <p className="m-0">Corectează perioada ca să vezi punctele.</p>
       ) : total.isPending ? (
-        <p className="m-0 text-sm text-muted-foreground" role="status">
+        <p className="m-0" role="status">
           Se încarcă punctele…
         </p>
       ) : total.isError ? (
-        <div
-          role="alert"
-          className="flex flex-wrap items-center gap-2 sm:justify-end"
-        >
-          <p className="m-0 text-sm text-muted-foreground">
-            Punctele nu s-au încărcat.
-          </p>
+        <div role="alert" className="flex flex-wrap items-center gap-2">
+          <p className="m-0">Punctele nu s-au încărcat.</p>
           <Button
             variant="outline"
             size="sm"
@@ -233,73 +243,49 @@ function MemberTotal({
           </Button>
         </div>
       ) : (
-        <p className="m-0 inline-flex items-baseline gap-1.5 leading-none">
+        <p className="m-0 whitespace-nowrap">
           <span
             data-slot="member-total-value"
-            className="text-[length:var(--fs-xl)] font-extrabold tracking-[-0.03em] tabular-nums"
+            className="font-bold text-foreground tabular-nums"
           >
             {formatPoints(total.data)}
           </span>{' '}
-          <span className="text-sm font-semibold text-muted-foreground">
-            {pointWord(total.data)}
+          <span aria-hidden="true" className="text-xs">
+            pct
           </span>
+          <span className="sr-only">{pointWord(total.data)}</span>
         </p>
-      )}
-      <p className="m-0 text-xs text-muted-foreground">{totalScope(value)}</p>
+      )}{' '}
+      <p
+        data-slot="member-total-scope"
+        className={cn('m-0 text-xs', scope === WHOLE_RECORD && 'sr-only')}
+      >
+        {scope}
+      </p>
     </section>
   );
 }
 
-/**
- * The Member Card's summary (#676): Nickname, full name, Role and Groups,
- * with the Member's points under the Work Filter beside them (#906).
- */
-function MemberSummary({
-  memberId,
-  value,
-  params,
-}: {
-  memberId: string;
-  value: WorkFilterValue;
-  params: WorkFilterParams | null;
-}) {
-  const card = useMemberCard(memberId);
-  if (card.isPending) return <Loading label="Se încarcă profilul…" />;
-  if (card.isError || !card.data)
-    return <EmptyState>Profilul nu este disponibil.</EmptyState>;
-  const member = card.data;
-  return (
-    // Phone: who, their points, their Groups — the total stays at the top.
-    // Wider: the total takes its own column beside the identity and Groups.
-    <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-6 sm:gap-y-2">
-      <div className="min-w-0">
-        <MemberName
-          memberId={member.memberId}
-          nickname={member.nickname}
-          fullName={member.fullName}
-          avatarColor={member.avatarColor}
-          showFullName
-        />
-        {member.roleLabel && (
-          <p className="text-sm text-muted-foreground">{member.roleLabel}</p>
-        )}
-      </div>
-      <MemberTotal memberId={memberId} value={value} params={params} />
-      {member.groups.length > 0 && <MemberGroups groups={member.groups} />}
-    </div>
-  );
-}
+/** How many Groups the meta line names before it counts the rest. */
+const GROUPS_SHOWN = 2;
 
+/**
+ * The Member's Groups on the meta line: the first two as chips that shrink
+ * rather than wrap, and a count of the rest. The Member Card behind the
+ * avatar lists them all, with the Group Role in each.
+ */
 function MemberGroups({ groups }: { groups: MemberCardGroup[] }) {
+  const more = groups.length - GROUPS_SHOWN;
   return (
     <ul
       aria-label="Grupuri"
-      className="flex min-w-0 flex-wrap gap-1.5 sm:col-start-1"
+      className="m-0 flex max-w-full min-w-0 list-none items-center gap-1.5 p-0"
     >
-      {groups.map((group) => (
+      {groups.slice(0, GROUPS_SHOWN).map((group) => (
         <li
           key={group.id}
-          className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-xs font-medium"
+          title={group.label}
+          className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-xs font-medium text-foreground"
         >
           <span
             aria-hidden="true"
@@ -309,7 +295,136 @@ function MemberGroups({ groups }: { groups: MemberCardGroup[] }) {
           <span className="truncate">{group.label}</span>
         </li>
       ))}
+      {more > 0 && (
+        <li
+          data-slot="member-groups-more"
+          className="shrink-0 text-xs font-semibold tabular-nums"
+        >
+          <span aria-hidden="true">+{more}</span>
+          <span className="sr-only">
+            {more === 1 ? 'și încă un grup' : `și încă ${more} grupuri`}
+          </span>
+        </li>
+      )}
     </ul>
+  );
+}
+
+/** The avatar, as the button that opens the Member Card (#676). */
+function MemberCardButton({
+  member,
+  name,
+}: {
+  member: MemberCardData;
+  name: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={`Profilul membrului ${name}`}
+        aria-haspopup="dialog"
+        onClick={() => setOpen(true)}
+        className={cn('shrink-0 rounded-full', focusRingClass)}
+      >
+        <MemberAvatar
+          name={member.fullName}
+          avatarColor={member.avatarColor}
+          className="size-12 text-lg md:size-14 md:text-xl"
+        />
+      </button>
+      <MemberCard
+        memberId={member.memberId}
+        nickname={member.nickname}
+        fullName={member.fullName}
+        avatarColor={member.avatarColor}
+        open={open}
+        onOpenChange={setOpen}
+      />
+    </>
+  );
+}
+
+/**
+ * The page's header is the Member, as Profil's is (#676): the avatar — the
+ * button that opens their Member Card — and their name as the `h1`, with
+ * Filtrează as an icon on the same row; then one line of what they are: the
+ * Role, the full name when the Nickname differs, their points under the Work
+ * Filter (#906) and their Groups. "Trackerul membrului" stays in the `h1` for
+ * a screen reader, and is the whole title until the Member is known.
+ */
+function MemberHeader({
+  memberId,
+  value,
+  params,
+  filterSlot,
+}: {
+  memberId: string;
+  value: WorkFilterValue;
+  params: WorkFilterParams | null;
+  /** Where the Work Filter draws **Filtrează**. */
+  filterSlot: (element: HTMLElement | null) => void;
+}) {
+  const card = useMemberCard(memberId);
+  const member = card.data ?? null;
+  const name = member
+    ? memberDisplayName(member.nickname, member.fullName)
+    : null;
+  return (
+    <div data-slot="member-identity" className="grid min-w-0 gap-2">
+      <div className="flex min-w-0 items-center gap-3">
+        {member && name && <MemberCardButton member={member} name={name} />}
+        <PageHeader
+          className="min-w-0 flex-1"
+          title={
+            name ? (
+              <>
+                <span className="sr-only">Trackerul membrului:</span> {name}
+              </>
+            ) : (
+              'Trackerul membrului'
+            )
+          }
+        />
+        {/* Beside the header, not in its `actions`: those drop under a long
+            name on a phone, and Filtrează stays on the name's row. */}
+        <div
+          data-slot="member-actions"
+          className="flex shrink-0 items-center gap-2 empty:hidden"
+        >
+          <span ref={filterSlot} className="contents" />
+        </div>
+      </div>
+      <div
+        data-slot="member-meta"
+        className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-muted-foreground"
+      >
+        {card.isPending ? (
+          <p className="m-0" role="status">
+            Se încarcă profilul…
+          </p>
+        ) : !member ? (
+          <p className="m-0">Profilul nu este disponibil.</p>
+        ) : (
+          <>
+            {member.roleLabel && (
+              <span className="role-badge">
+                <span className="role-dot" aria-hidden="true" />
+                {member.roleLabel}
+              </span>
+            )}
+            {name !== member.fullName && (
+              <span className="wrap-anywhere">{member.fullName}</span>
+            )}
+            <MemberTotal memberId={memberId} value={value} params={params} />
+            {member.groups.length > 0 && (
+              <MemberGroups groups={member.groups} />
+            )}
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -341,6 +456,7 @@ function MemberHistory({ memberId }: { memberId: string }) {
     null,
   );
   const options = useLeadershipFilters();
+  const [filterSlot, setFilterSlot] = useState<HTMLElement | null>(null);
   const [now] = useState(() => new Date());
   const groupsById = useMemo(
     () =>
@@ -366,94 +482,100 @@ function MemberHistory({ memberId }: { memberId: string }) {
 
   return (
     <Page>
-      <BackToClasament />
-      <PageHeader
-        eyebrow="Conducere"
-        title="Trackerul membrului"
-        description="Toate atribuirile membrului, inclusiv cele încheiate și evaluările anulate."
-        actions={
-          volunteer && (
-            <AddCompletedTaskForMember
-              volunteer={volunteer}
-              onAdded={({ id, title }) => setAdded({ id, title })}
-            />
-          )
-        }
-      />
-      {added && (
-        <TaskActionSuccess key={added.id}>
-          Taskul finalizat „{added.title}” a fost adăugat și punctele au fost
-          acordate.
-        </TaskActionSuccess>
-      )}
-      <Panel aria-label="Membru">
-        <MemberSummary memberId={memberId} value={value} params={params} />
-      </Panel>
-      <WorkFilter
-        label="Filtre tracker"
-        status={{
-          pending: options.isPending,
-          failed: options.isError,
-          error: options.error,
-          onRetry: () => void options.refetch(),
-        }}
-        groups={options.data?.groups ?? []}
-        campaigns={options.data?.campaigns ?? []}
-        work={options.data?.work}
-        hint="Grupul include toate subgrupurile sale. Perioada citește termenul taskului, așa că un task fără termen apare doar când perioada e goală."
-      />
-      <Panel
-        eyebrow="Taskuri"
-        title="Atribuiri"
-        description={count && <span className="tabular-nums">{count}</span>}
-        bare
-      >
-        {!params ? (
-          <EmptyState bare>
-            Corectează perioada din filtre ca să vezi atribuirile.
-          </EmptyState>
-        ) : query.isPending ? (
-          <Loading label="Se încarcă istoricul…" />
-        ) : query.isError ? (
-          <ErrorState
-            error={query.error}
-            text="Nu am putut încărca istoricul."
-            retryLabel="Reîncarcă istoricul"
-            onRetry={() => void query.refetch()}
+      {/* "Adaugă task finalizat" is the page's plus button (#915). */}
+      <FabActions>
+        <BackToClasament />
+        <MemberHeader
+          memberId={memberId}
+          value={value}
+          params={params}
+          filterSlot={setFilterSlot}
+        />
+        {volunteer && (
+          <AddCompletedTaskForMember
+            volunteer={volunteer}
+            onAdded={({ id, title }) => setAdded({ id, title })}
           />
-        ) : !groupsReady ? (
-          options.isError ? (
-            <EmptyState bare role="status">
-              Filtrul de grup se aplică după ce se încarcă filtrele.
+        )}
+        {added && (
+          <TaskActionSuccess key={added.id}>
+            Taskul finalizat „{added.title}” a fost adăugat și punctele au fost
+            acordate.
+          </TaskActionSuccess>
+        )}
+        <WorkFilter
+          label="Filtre tracker"
+          status={{
+            pending: options.isPending,
+            failed: options.isError,
+            error: options.error,
+            onRetry: () => void options.refetch(),
+          }}
+          groups={options.data?.groups ?? []}
+          campaigns={options.data?.campaigns ?? []}
+          work={options.data?.work}
+          hint="Grupul include toate subgrupurile sale. Perioada citește termenul taskului, așa că un task fără termen apare doar când perioada e goală."
+          buttonSlot={filterSlot}
+        />
+        <Panel
+          title="Atribuiri"
+          // The count sits on the title's row, so the list starts right under.
+          control={
+            count && (
+              <span className="text-sm text-muted-foreground tabular-nums">
+                {count}
+              </span>
+            )
+          }
+          bare
+        >
+          {!params ? (
+            <EmptyState bare>
+              Corectează perioada din filtre ca să vezi atribuirile.
+            </EmptyState>
+          ) : query.isPending ? (
+            <Loading label="Se încarcă istoricul…" />
+          ) : query.isError ? (
+            <ErrorState
+              error={query.error}
+              text="Nu am putut încărca istoricul."
+              retryLabel="Reîncarcă istoricul"
+              onRetry={() => void query.refetch()}
+            />
+          ) : !groupsReady ? (
+            options.isError ? (
+              <EmptyState bare role="status">
+                Filtrul de grup se aplică după ce se încarcă filtrele.
+              </EmptyState>
+            ) : (
+              <Loading label="Se încarcă filtrele…" />
+            )
+          ) : !query.data.length && !ranged ? (
+            <EmptyState bare>
+              Nu există atribuiri disponibile pentru acest membru.
+            </EmptyState>
+          ) : !rows.length ? (
+            <EmptyState bare>
+              Nicio atribuire pentru filtrele alese. Schimbă grupul, campania
+              sau perioada.
             </EmptyState>
           ) : (
-            <Loading label="Se încarcă filtrele…" />
-          )
-        ) : !query.data.length && !ranged ? (
-          <EmptyState bare>
-            Nu există atribuiri disponibile pentru acest membru.
-          </EmptyState>
-        ) : !rows.length ? (
-          <EmptyState bare>
-            Nicio atribuire pentru filtrele alese. Schimbă grupul, campania sau
-            perioada.
-          </EmptyState>
-        ) : (
-          // Taskuri's collection grid (layout L3). Cards keep to their own
-          // height: an opened evaluation record never stretches its row.
-          <PageGrid as="ul" columns="collection" data-grid="assignments">
-            {rows.map((task) => (
-              <li key={task.assignment_id}>
-                <TaskCard
-                  task={memberTaskPresentation(task, groupsById, now)}
-                  anchor={false}
-                  history={<AssignmentRecord task={task} />}
-                />
-              </li>
-            ))}
-          </PageGrid>
-        )}
-      </Panel>
+            // Taskuri's collection grid (layout L3). Cards keep to their own
+            // height: an opened evaluation record never stretches its row.
+            <PageGrid as="ul" columns="collection" data-grid="assignments">
+              {rows.map((task) => (
+                <li key={task.assignment_id}>
+                  <TaskCard
+                    task={memberTaskPresentation(task, groupsById, now)}
+                    anchor={false}
+                    history={<AssignmentRecord task={task} />}
+                  />
+                </li>
+              ))}
+            </PageGrid>
+          )}
+        </Panel>
+      </FabActions>
     </Page>
   );
 }
@@ -475,7 +597,7 @@ export default function MemberTrackerScreen() {
       ) : (
         <Page>
           <BackToClasament />
-          <PageHeader eyebrow="Conducere" title="Membru indisponibil" />
+          <PageHeader title="Membru indisponibil" />
         </Page>
       )}
     </LeadershipAccess>

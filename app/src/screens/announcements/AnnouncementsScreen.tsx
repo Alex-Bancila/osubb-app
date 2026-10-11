@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Mail } from 'lucide-react';
 import { useLocation, useSearchParams } from 'react-router';
 import { useAuth } from '../../lib/auth';
 import {
@@ -19,10 +20,18 @@ import AnnouncementDetailsSheet from './AnnouncementDetailsSheet';
 import CriticalAnnouncementBanner from './CriticalAnnouncementBanner';
 import AnnouncementComposeSheet from './AnnouncementComposeSheet';
 import { Empty, ErrorState, Loading } from '../../components/states';
-import { Page, PageGrid, PageHeader } from '../../components/layout';
-import { PreferredGroupsChip } from '../../components/preferred-groups/PreferredGroupsChip';
+import {
+  FabActions,
+  Page,
+  PageGrid,
+  PageHeader,
+} from '../../components/layout';
 import { PreferredGroupsScope } from '../../components/preferred-groups/PreferredGroupsScope';
 import { usePreferredGroups } from '../../components/preferred-groups/preferred-groups';
+import { Badge } from '../../components/ui/badge';
+import { WorkFilter } from '../../components/work-filter/WorkFilter';
+import { useWorkFilter } from '../../lib/use-work-filter';
+import { chosenGroupId, type WorkFilterLevels } from '../../lib/work-filter';
 import { NewDealControl } from '../deals/DealFormSheet';
 import DealsTab from '../deals/DealsTab';
 import { DEALS_PATH } from '../deals/deals-presentation';
@@ -30,6 +39,9 @@ import { AnnouncementsTabs } from './AnnouncementsTabs';
 
 /** The deep link a "Anunț nou" notification carries: `/anunturi?anunt=<id>` (#843). */
 const ANNOUNCEMENT_PARAM = 'anunt';
+
+/** Anunțuri filters by Group alone: an Announcement has no Campaign or day. */
+const FILTER_LEVELS: WorkFilterLevels = { campaign: false, dates: false };
 
 function parseAnnouncementId(value: string | null): number | null {
   if (!value || !/^\d+$/.test(value)) return null;
@@ -39,7 +51,7 @@ function parseAnnouncementId(value: string | null): number | null {
 
 /**
  * Anunțuri opens on the member's Grupuri preferate (R43): a local
- * Announcement of a Group they unselected waits behind **Arată tot**. A
+ * Announcement of a Group they unselected waits behind the star beside Filtrează. A
  * critical or organization-wide Announcement, and the member's own, always
  * show — the same ones the badge still counts.
  */
@@ -58,13 +70,11 @@ export default function AnnouncementsScreen() {
 function DealsScreen() {
   return (
     <Page width="reading">
-      <PageHeader
-        title="Anunțuri"
-        description="Oferte, reduceri și acces pentru membrii OSUBB."
-        actions={<NewDealControl />}
-      />
-      <AnnouncementsTabs />
-      <DealsTab />
+      <FabActions>
+        <PageHeader title="Anunțuri" actions={<NewDealControl />} />
+        <AnnouncementsTabs />
+        <DealsTab />
+      </FabActions>
     </Page>
   );
 }
@@ -126,15 +136,35 @@ function AnnouncementsContent() {
     ),
   );
   const preferred = usePreferredGroups();
-  const announcements = allAnnouncements.filter(
+  const inPreferred = allAnnouncements.filter(
     (announcement) =>
       preferred.keepGroup(announcement.groupId) ||
       announcement.priority === 'critical' ||
       announcement.audience === 'org' ||
       announcement.authorMember?.memberId === memberId,
   );
+  // The header counts what the member has to read; the Group filter only
+  // narrows the list below it.
+  const unreadCount = countUnreadAnnouncements(inPreferred);
 
-  const unreadCount = countUnreadAnnouncements(announcements);
+  // Filtrează, by Group: the chosen Group and every Group below it.
+  const filter = useWorkFilter(FILTER_LEVELS);
+  const [filterSlot, setFilterSlot] = useState<HTMLElement | null>(null);
+  const filterGroups = useMemo(
+    () => [...(groupsQuery.data?.values() ?? [])],
+    [groupsQuery.data],
+  );
+  const filterGroupId = chosenGroupId(filter.value);
+  const announcements =
+    filterGroupId === undefined
+      ? inPreferred
+      : inPreferred.filter((announcement) =>
+          (
+            groupsQuery.data?.get(announcement.groupId)?.path ?? [
+              announcement.groupId,
+            ]
+          ).includes(filterGroupId),
+        );
 
   // B33: the banner points at a critical Announcement further down; when that
   // Announcement is already the first card, the card is enough.
@@ -195,85 +225,116 @@ function AnnouncementsContent() {
 
   return (
     <Page width="reading">
-      <PageHeader
-        title="Anunțuri"
-        description={
-          unreadCount === 0
-            ? 'Toate anunțurile sunt citite'
-            : unreadCount === 1
-              ? '1 anunț necitit'
-              : `${unreadCount} anunțuri necitite`
-        }
-        actions={<AnnouncementComposeSheet />}
-      />
-      <AnnouncementsTabs />
-
-      {deleted && (
-        <p
-          role="status"
-          className="m-0 text-sm text-emerald-700 dark:text-emerald-400"
-        >
-          Anunțul a fost șters.
-        </p>
-      )}
-
-      {isPending ? (
-        <Loading label="Se încarcă anunțurile…" />
-      ) : feedQuery.isError ? (
-        <ErrorState
-          error={feedQuery.error}
-          text="Nu am putut încărca anunțurile."
-          onRetry={() => void feedQuery.refetch()}
+      <FabActions>
+        <PageHeader
+          title="Anunțuri"
+          badge={
+            unreadCount > 0 && (
+              <Badge
+                variant="destructive"
+                className="h-6 gap-1.5 px-2.5 text-sm"
+              >
+                <Mail aria-hidden="true" />
+                <span aria-hidden="true">{unreadCount}</span>
+                <span className="sr-only">
+                  {unreadCount === 1
+                    ? '1 anunț necitit'
+                    : `${unreadCount} anunțuri necitite`}
+                </span>
+              </Badge>
+            )
+          }
+          actions={
+            <>
+              {/* Filtrează is drawn here by the Work Filter below. */}
+              <span ref={setFilterSlot} className="contents" />
+              <AnnouncementComposeSheet />
+            </>
+          }
         />
-      ) : announcements.length === 0 ? (
-        <div className="space-y-4">
-          <PreferredGroupsChip />
+        <AnnouncementsTabs />
+        {/* Its row holds the active filter's chips and Grupuri preferate. */}
+        <WorkFilter
+          label="Filtre anunțuri"
+          groups={filterGroups}
+          campaigns={[]}
+          levels={FILTER_LEVELS}
+          alwaysShowGroups
+          hint="Grupul include subgrupurile sale."
+          status={{
+            pending: groupsQuery.isPending,
+            failed: groupsQuery.isError,
+            error: groupsQuery.error,
+            onRetry: () => void groupsQuery.refetch(),
+          }}
+          buttonSlot={filterSlot}
+        />
+
+        {deleted && (
+          <p
+            role="status"
+            className="m-0 text-sm text-emerald-700 dark:text-emerald-400"
+          >
+            Anunțul a fost șters.
+          </p>
+        )}
+
+        {isPending ? (
+          <Loading label="Se încarcă anunțurile…" />
+        ) : feedQuery.isError ? (
+          <ErrorState
+            error={feedQuery.error}
+            text="Nu am putut încărca anunțurile."
+            onRetry={() => void feedQuery.refetch()}
+          />
+        ) : announcements.length === 0 ? (
           <Empty
             bare
             text={
-              allAnnouncements.length > 0
-                ? 'Niciun anunț în grupurile tale preferate.'
-                : 'Nu sunt anunțuri disponibile în acest moment.'
+              filterGroupId !== undefined && inPreferred.length > 0
+                ? 'Niciun anunț în grupul ales.'
+                : allAnnouncements.length > 0
+                  ? 'Niciun anunț în grupurile tale preferate.'
+                  : 'Nu sunt anunțuri disponibile în acest moment.'
             }
           />
-        </div>
-      ) : (
-        <div className="space-y-6">
-          <PreferredGroupsChip />
-          {showCriticalBanner && (
-            <CriticalAnnouncementBanner
-              announcement={unreadCritical}
-              onOpen={handleOpenAnnouncement}
-            />
-          )}
+        ) : (
+          <div className="space-y-6">
+            {showCriticalBanner && (
+              <CriticalAnnouncementBanner
+                announcement={unreadCritical}
+                onOpen={handleOpenAnnouncement}
+              />
+            )}
 
-          <PageGrid
-            columns={1}
-            as="ul"
-            role="list"
-            aria-label="Flux de anunțuri"
-          >
-            {announcements.map((announcement) => (
-              <li key={announcement.id}>
-                <AnnouncementCard
-                  announcement={announcement}
-                  onOpen={handleOpenAnnouncement}
-                />
-              </li>
-            ))}
-          </PageGrid>
-        </div>
-      )}
+            <PageGrid
+              columns={1}
+              as="ul"
+              role="list"
+              aria-label="Flux de anunțuri"
+            >
+              {announcements.map((announcement) => (
+                <li key={announcement.id}>
+                  <AnnouncementCard
+                    announcement={announcement}
+                    onOpen={handleOpenAnnouncement}
+                  />
+                </li>
+              ))}
+            </PageGrid>
+          </div>
+        )}
 
-      <AnnouncementDetailsSheet
-        announcement={selectedAnnouncement}
-        unavailable={linkUnavailable}
-        onClose={closeDetails}
-        onDeleted={() => {
-          closeDetails();
-          setDeleted(true);
-        }}
-      />
+        <AnnouncementDetailsSheet
+          announcement={selectedAnnouncement}
+          unavailable={linkUnavailable}
+          onClose={closeDetails}
+          onDeleted={() => {
+            closeDetails();
+            setDeleted(true);
+          }}
+        />
+      </FabActions>
     </Page>
   );
 }

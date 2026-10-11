@@ -1,6 +1,14 @@
 export { Page, type PageWidth } from './Page';
 export { PageHeader } from './PageHeader';
-export { PageTabs, tabClass, tabListClass, type PageTab } from './PageTabs';
+export {
+  PageTabs,
+  tabClass,
+  tabLabelsFrom,
+  tabListClass,
+  tabThumbClass,
+  type PageTab,
+  type TabLabelsFrom,
+} from './PageTabs';
 export { useActiveTabInView } from './use-active-tab-in-view';
 export { SegmentedToggle, type SegmentedOption } from './SegmentedToggle';
 export { Section } from './Section';
@@ -18,4 +26,6 @@ export {
 } from './back-link-state';
 export { focusRingClass, focusRingInsetClass } from './focus';
 export { ListRow, rowListClass } from './ListRow';
+export { FabAction, FabActions } from './Fab';
+export { FabSlotContext } from './fab-context';
 export { EmptyState, stateBoxClass } from './EmptyState';

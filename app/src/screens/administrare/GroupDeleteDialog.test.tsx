@@ -112,12 +112,12 @@ it('turns the preview into Romanian counts, only the non-zero ones', () => {
     '2 anunțuri',
     '1 campanie',
     '3 cereri de înscriere',
-    '7 membri din roster (conturile lor rămân)',
+    '7 membri din grup (conturile lor rămân)',
   ]);
   expect(groupDeleteItems(EMPTY)).toEqual([]);
   expect(groupDeleteItems({ ...EMPTY, requests: 1, members: 1 })).toEqual([
     '1 cerere de activitate realizată',
-    '1 membru din roster (conturile lor rămân)',
+    '1 membru din grup (conturile lor rămân)',
   ]);
 });
 
@@ -162,7 +162,7 @@ it('deletes a Group with no content in the empty mode', async () => {
   show();
   const dialog = await open(user);
   expect(
-    within(dialog).getByText('3 membri din roster (conturile lor rămân)'),
+    within(dialog).getByText('3 membri din grup (conturile lor rămân)'),
   ).toBeVisible();
   await user.type(
     within(dialog).getByLabelText('Scrie „Logistică” ca să confirmi'),

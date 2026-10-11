@@ -83,6 +83,23 @@ function first(elements: HTMLElement[]): HTMLElement {
   if (!element) throw new Error('no match');
   return element;
 }
+/** The row of a Campaign: activating it opens the report. */
+const reportButton = (
+  name: string,
+  scope: Pick<typeof screen, 'getByRole'> = screen,
+) => scope.getByRole('button', { name: new RegExp(`^${name}.*raport$`) });
+/** Opens a row's "⋯" and returns its menu. */
+async function openMenu(name: string) {
+  await userEvent.click(
+    screen.getByRole('button', { name: `Acțiuni pentru ${name}` }),
+  );
+  return screen.findByRole('menu');
+}
+/** Chooses one entry of a row's "⋯". */
+async function choose(name: string, item: string) {
+  const menu = await openMenu(name);
+  await userEvent.click(within(menu).getByRole('menuitem', { name: item }));
+}
 const noViolations = async (element: Element) =>
   expect(
     (
@@ -123,9 +140,11 @@ describe('CampaignsPanel', () => {
     expect(screen.getByTestId('where')).toHaveTextContent('?stare=inactive');
     const list = screen.getByRole('list', { name: 'Campanii inactive' });
     expect(rowNames(list)).toEqual(['Vară']);
+    const menu = await openMenu('Vară');
     expect(
-      within(list).getByRole('button', { name: 'Activează' }),
+      within(menu).getByRole('menuitem', { name: 'Activează' }),
     ).toBeVisible();
+    await user.keyboard('{Escape}');
 
     await user.click(screen.getByRole('button', { name: 'Active' }));
     expect(screen.getByTestId('where')).toHaveTextContent('');
@@ -154,7 +173,17 @@ describe('CampaignsPanel', () => {
     const create = await screen.findByRole('dialog', {
       name: 'Campanie nouă',
     });
-    await user.type(within(create).getByLabelText('Numele campaniei'), 'Iarnă');
+    // The owning Group is said behind the "i", not in a paragraph on top.
+    const nameField = within(create).getByLabelText('Numele campaniei');
+    expect(nameField).toHaveAttribute('data-slot', 'input');
+    expect(nameField).toHaveAccessibleDescription(
+      /^Campania aparține grupului /,
+    );
+    expect(create).not.toHaveAccessibleDescription();
+    expect(
+      within(create).getByRole('button', { name: 'Despre campanie' }),
+    ).toBeVisible();
+    await user.type(nameField, 'Iarnă');
     await user.click(within(create).getByRole('button', { name: 'Creează' }));
     expect(api.mutate).toHaveBeenCalledWith({
       kind: 'create',
@@ -169,13 +198,7 @@ describe('CampaignsPanel', () => {
         'Nu am putut salva campania. Reîncearcă.',
       ),
     );
-    const below = within(
-      screen.getByRole('list', { name: 'Campanii active' }),
-    ).getAllByRole('listitem')[1];
-    if (!below) throw new Error('no second row');
-    await user.click(
-      within(below).getByRole('button', { name: 'Dezactivează' }),
-    );
+    await choose('Mentorat', 'Dezactivează');
     expect(api.mutate).toHaveBeenLastCalledWith({
       kind: 'active',
       id: 12,
@@ -183,6 +206,31 @@ describe('CampaignsPanel', () => {
     });
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Nu mai ai permisiunea de a modifica această campanie.',
+    );
+  });
+
+  it('renames from the row’s menu and hands focus back to it', async () => {
+    const user = userEvent.setup();
+    show();
+    await choose('Toamnă', 'Redenumește');
+    const rename = await screen.findByRole('dialog', {
+      name: 'Redenumește campania',
+    });
+    const field = within(rename).getByLabelText('Numele campaniei');
+    expect(field).toHaveValue('Toamnă');
+    await user.clear(field);
+    await user.type(field, 'Toamnă nouă');
+    await user.click(within(rename).getByRole('button', { name: 'Salvează' }));
+    expect(api.mutate).toHaveBeenCalledWith({
+      kind: 'rename',
+      id: 10,
+      name: 'Toamnă nouă',
+    });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Acțiuni pentru Toamnă' }),
+      ).toHaveFocus(),
     );
   });
 
@@ -210,10 +258,9 @@ describe('CampaignsPanel', () => {
     });
     const { container } = show('', range);
     expect(api.report).not.toHaveBeenCalled();
-    await user.click(
-      first(screen.getAllByRole('button', { name: 'Vezi raportul' })),
-    );
+    await user.click(reportButton('Toamnă'));
     expect(api.report).toHaveBeenCalledWith(10, range);
+    expect(reportButton('Toamnă')).toHaveAttribute('aria-expanded', 'true');
     expect(
       screen.getByText('Doar punctele acordate în perioada aleasă.'),
     ).toBeVisible();
@@ -229,16 +276,12 @@ describe('CampaignsPanel', () => {
   it('reads the report undated by default and not at all while the range is inverted', async () => {
     const user = userEvent.setup();
     const { unmount } = show();
-    await user.click(
-      first(screen.getAllByRole('button', { name: 'Vezi raportul' })),
-    );
+    await user.click(reportButton('Toamnă'));
     expect(api.report).toHaveBeenLastCalledWith(10, {});
     unmount();
 
     show('', null);
-    await user.click(
-      first(screen.getAllByRole('button', { name: 'Vezi raportul' })),
-    );
+    await user.click(reportButton('Toamnă'));
     expect(api.report).toHaveBeenLastCalledWith(10, null);
     expect(screen.getByText(/Corectează perioada/)).toBeVisible();
   });
@@ -264,25 +307,20 @@ it("offers only the report for an archived owner's Campaign", () => {
       .getAllByRole('listitem')
       .filter((item) => item.textContent?.includes('Mentorat')),
   );
+  // The row still opens its report; there is no menu of changes.
   expect(
-    within(archivedRow).queryByRole('button', { name: 'Redenumește' }),
-  ).toBeNull();
-  expect(
-    within(archivedRow).queryByRole('button', { name: 'Dezactivează' }),
-  ).toBeNull();
-  expect(
-    within(archivedRow).queryByRole('button', { name: 'Șterge definitiv' }),
-  ).toBeNull();
-  expect(
-    within(archivedRow).getByRole('button', { name: 'Vezi raportul' }),
-  ).toBeVisible();
+    within(archivedRow)
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-expanded')),
+  ).toEqual(['false']);
+  expect(reportButton('Mentorat', within(archivedRow))).toBeVisible();
   const activeRow = first(
     screen
       .getAllByRole('listitem')
       .filter((item) => item.textContent?.includes('Toamnă')),
   );
   expect(
-    within(activeRow).getByRole('button', { name: 'Redenumește' }),
+    within(activeRow).getByRole('button', { name: 'Acțiuni pentru Toamnă' }),
   ).toBeVisible();
 });
 
@@ -320,14 +358,20 @@ it('lists every Campaign without a Group, by owner, and only names the unmanaged
       .getAllByRole('listitem')
       .filter((item) => item.textContent?.includes('Pe părinte')),
   );
+  expect(reportButton('Pe părinte', within(managed))).toBeVisible();
+  // How a Campaign is created, said once under the list.
   expect(
-    within(managed).getByRole('button', { name: 'Vezi raportul' }),
+    screen.getByText(/Alege un grup din filtre ca să creezi una\.$/),
   ).toBeVisible();
+  // No heading of its own: the page already says Campanii.
+  expect(screen.queryByRole('heading')).toBeNull();
+  expect(screen.getByRole('region', { name: 'Toate grupurile' })).toBeVisible();
   await noViolations(container);
 });
 
-/* #1017: Șterge definitiv beside Redenumește, for the same managers. A
-   Campaign is a reporting label: what it labelled stays, without it. */
+/* #1017: Șterge definitiv in the row's menu, for the same managers as
+   Redenumește. A Campaign is a reporting label: what it labelled stays,
+   without it. */
 describe('Șterge definitiv', () => {
   beforeEach(() => {
     api.remove.mockReset().mockResolvedValue({ tasks: 3, events: 1 });
@@ -341,7 +385,7 @@ describe('Șterge definitiv', () => {
     );
   }
 
-  it('is offered on a managed row, last and destructive, never on an unmanaged one', () => {
+  it('is offered in a managed row’s menu, last and destructive, never on an unmanaged one', async () => {
     render(
       <MemoryRouter initialEntries={['/administrare/campanii']}>
         <CampaignsPanel
@@ -351,27 +395,28 @@ describe('Șterge definitiv', () => {
         />
       </MemoryRouter>,
     );
-    const buttons = within(rowOf('Toamnă')).getAllByRole('button');
-    expect(buttons.map((button) => button.textContent)).toEqual([
+    // The row is the Campaign and one "⋯": no wall of buttons.
+    expect(
+      within(rowOf('Toamnă'))
+        .getAllByRole('button')
+        .map((button) => button.getAttribute('aria-label') ?? 'row'),
+    ).toEqual(['row', 'Acțiuni pentru Toamnă']);
+    expect(within(rowOf('Pe frate')).queryAllByRole('button')).toEqual([]);
+    // The pop-up opens from the menu: no unseen trigger waits in the row.
+    expect(rowOf('Toamnă').querySelector('[hidden]')).toBeNull();
+    const items = within(await openMenu('Toamnă')).getAllByRole('menuitem');
+    expect(items.map((item) => item.textContent)).toEqual([
       'Redenumește',
       'Dezactivează',
-      'Vezi raportul',
       'Șterge definitiv',
     ]);
-    expect(buttons.at(-1)).toHaveClass('text-destructive');
-    expect(
-      within(rowOf('Pe frate')).queryByRole('button', {
-        name: 'Șterge definitiv',
-      }),
-    ).toBeNull();
+    expect(items.at(-1)).toHaveClass('text-destructive');
   });
 
   it('says the labelled work stays, sends delete_campaign and leaves a receipt', async () => {
     const user = userEvent.setup();
     show();
-    await user.click(
-      within(rowOf('Toamnă')).getByRole('button', { name: 'Șterge definitiv' }),
-    );
+    await choose('Toamnă', 'Șterge definitiv');
     const dialog = await screen.findByRole('dialog', {
       name: 'Ștergi definitiv campania?',
     });
@@ -383,8 +428,20 @@ describe('Șterge definitiv', () => {
         'Taskurile și evenimentele etichetate cu ea rămân, fără etichetă.',
       ),
     ).toBeVisible();
+    // Renunță hands focus back to the row's menu button.
+    await user.click(within(dialog).getByRole('button', { name: 'Renunță' }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Acțiuni pentru Toamnă' }),
+      ).toHaveFocus(),
+    );
+    await choose('Toamnă', 'Șterge definitiv');
     await user.click(
-      within(dialog).getByRole('button', { name: 'Șterge definitiv' }),
+      within(
+        await screen.findByRole('dialog', {
+          name: 'Ștergi definitiv campania?',
+        }),
+      ).getByRole('button', { name: 'Șterge definitiv' }),
     );
     expect(api.remove).toHaveBeenCalledWith(10);
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -402,9 +459,7 @@ describe('Șterge definitiv', () => {
     );
     const user = userEvent.setup();
     show();
-    await user.click(
-      within(rowOf('Toamnă')).getByRole('button', { name: 'Șterge definitiv' }),
-    );
+    await choose('Toamnă', 'Șterge definitiv');
     const dialog = await screen.findByRole('dialog');
     await user.click(
       within(dialog).getByRole('button', { name: 'Șterge definitiv' }),

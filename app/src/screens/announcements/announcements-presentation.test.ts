@@ -309,10 +309,23 @@ describe('announcements-presentation', () => {
   });
 
   describe('formatAnnouncementDate', () => {
-    it('formats date in Romanian using Bucharest timezone', () => {
-      const formatted = formatAnnouncementDate('2026-09-18T15:30:00.000Z');
-      expect(formatted).toContain('septembrie');
-      expect(formatted).toContain('2026');
+    it('formats the day short, with its hour, in Romanian and Bucharest time', () => {
+      const now = new Date('2026-10-10T09:00:00.000Z');
+      expect(formatAnnouncementDate('2026-09-18T15:30:00.000Z', now)).toBe(
+        '18 sept. · 18:30',
+      );
+      // Past midnight in Romania is the next day there.
+      expect(formatAnnouncementDate('2026-10-09T21:03:00.000Z', now)).toBe(
+        '10 oct. · 00:03',
+      );
+    });
+
+    it('names the year only when it is not this one', () => {
+      const now = new Date('2027-02-01T09:00:00.000Z');
+      expect(formatAnnouncementDate('2026-09-18T15:30:00.000Z', now)).toBe(
+        '18 sept. 2026 · 18:30',
+      );
+      expect(formatAnnouncementDate('not a date', now)).toBe('—');
     });
   });
   describe('R15 ordering', () => {
@@ -586,7 +599,7 @@ describe('describeTermen (#909)', () => {
     expect(describeTermen('2026-10-02T20:59:00.000Z', now)).toEqual({
       state: 'upcoming',
       label: 'Termen',
-      when: 'vineri, 2 octombrie, 23:59',
+      when: 'vin., 2 oct. · 23:59',
     });
   });
 
@@ -594,15 +607,15 @@ describe('describeTermen (#909)', () => {
     expect(describeTermen('2026-09-29T20:59:00.000Z', now)).toEqual({
       state: 'soon',
       label: 'Termen',
-      when: 'azi, 23:59',
+      when: 'azi · 23:59',
     });
     expect(describeTermen('2026-09-30T15:40:00.000Z', now)?.when).toBe(
-      'mâine, 18:40',
+      'mâine · 18:40',
     );
     // 47 hours away, the day after tomorrow: soon, but named by its day.
     expect(describeTermen('2026-10-01T08:00:00.000Z', now)).toMatchObject({
       state: 'soon',
-      when: 'joi, 1 octombrie, 11:00',
+      when: 'joi, 1 oct. · 11:00',
     });
     expect(describeTermen('2026-10-01T09:00:01.000Z', now)?.state).toBe(
       'upcoming',
@@ -613,13 +626,13 @@ describe('describeTermen (#909)', () => {
     expect(describeTermen('2026-09-29T08:00:00.000Z', now)).toEqual({
       state: 'expired',
       label: 'Termen expirat',
-      when: 'marți, 29 septembrie, 11:00',
+      when: 'mar., 29 sept. · 11:00',
     });
   });
 
   it('names the year only when it is not this one', () => {
     expect(describeTermen('2027-01-15T10:00:00.000Z', now)?.when).toBe(
-      'vineri, 15 ianuarie 2027, 12:00',
+      'vin., 15 ian. 2027 · 12:00',
     );
     expect(describeTermen('not a date', now)).toBeNull();
   });

@@ -183,9 +183,24 @@ describe('EventManageControls', () => {
     });
     const title = within(dialog).getByLabelText('Titlu');
     expect(title).toHaveValue('Ședință Educațional');
-    expect(within(dialog).getByLabelText(/Începe/)).toHaveValue(
+    // A form sheet: no intro, the times in the picker, the actions pinned.
+    expect(dialog).toHaveAttribute('data-slot', 'form-sheet');
+    expect(within(dialog).queryByText(/Orele sunt interpretate/)).toBeNull();
+    expect(within(dialog).getByLabelText(/Începe/)).toHaveAttribute(
+      'data-value',
       '2030-10-01T18:00',
     );
+    expect(within(dialog).getByLabelText(/Începe/)).toHaveTextContent(
+      'mar., 1 oct. 2030 · 18:00',
+    );
+    expect(
+      within(dialog).getByRole('button', { name: 'Salvează modificările' })
+        .parentElement,
+    ).toHaveAttribute('data-pinned', 'true');
+    // What a save sets off stays readable above the actions.
+    expect(
+      within(dialog).getByText(/îi anunță pe membrii grupului/),
+    ).toBeVisible();
     expect(within(dialog).getByLabelText('Loc (opțional)')).toHaveValue(
       'Sala 305',
     );
@@ -319,7 +334,7 @@ describe('EventManageControls', () => {
     expect(state.cancelAsync).not.toHaveBeenCalled();
 
     await user.type(
-      within(dialog).getByLabelText('Motiv (obligatoriu)'),
+      within(dialog).getByLabelText('Motiv'),
       '  Sala nu mai este liberă.  ',
     );
     await user.click(
@@ -340,7 +355,7 @@ describe('EventManageControls', () => {
       screen.getByRole('button', { name: 'Anulează evenimentul' }),
     );
     await user.type(
-      await screen.findByLabelText('Motiv (obligatoriu)'),
+      await screen.findByLabelText('Motiv'),
       'Sala nu mai este liberă.',
     );
     await user.click(screen.getByRole('button', { name: 'Confirmă anularea' }));
@@ -388,10 +403,7 @@ describe('EventManageControls', () => {
     const dialog = await screen.findByRole('dialog', {
       name: 'Anulează evenimentul',
     });
-    await user.type(
-      within(dialog).getByLabelText('Motiv (obligatoriu)'),
-      'Motiv',
-    );
+    await user.type(within(dialog).getByLabelText('Motiv'), 'Motiv');
     await user.click(
       within(dialog).getByRole('button', { name: 'Confirmă anularea' }),
     );
@@ -400,9 +412,7 @@ describe('EventManageControls', () => {
         'Evenimentul a fost deja anulat și nu mai poate fi modificat.',
       ),
     ).toBeVisible();
-    expect(within(dialog).getByLabelText('Motiv (obligatoriu)')).toHaveValue(
-      'Motiv',
-    );
+    expect(within(dialog).getByLabelText('Motiv')).toHaveValue('Motiv');
   });
 
   /* #1017: Șterge definitiv, for the same managers, cancelled Events too. */

@@ -307,7 +307,8 @@ describe('AnnouncementDetailsSheet', () => {
       expect(
         within(read).getByRole('button', { name: 'Profilul membrului Radu' }),
       ).toBeInTheDocument();
-      expect(read).toHaveTextContent('20 septembrie 2026, 12:30');
+      // Short, hour kept; the year only once 2026 is no longer this year.
+      expect(read).toHaveTextContent(/20 sept\.( 2026)? · 12:30/);
       const unread = within(dialog).getByRole('region', {
         name: 'Nu au citit încă (1)',
       });

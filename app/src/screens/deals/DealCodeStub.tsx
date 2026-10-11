@@ -22,8 +22,8 @@ type DealCodeStubProps = {
  * off along a perforation (`.deal-stub` in screens.css). Hidden, it shows a
  * blurred, code-shaped mask — never the code — under "atinge ca să-l vezi",
  * and the whole stub is one button. Tapped, `reveal_deal_code` records the
- * reveal and answers the code, which shows large in monospace with Copiază and
- * a "Dezvăluit" stamp. A code the Member opened before, on any device, starts
+ * reveal and answers the code, which shows large in monospace with Copiază.
+ * A code the Member opened before, on any device, starts
  * revealed: the server remembers it, so it is asked for once.
  */
 export function DealCodeStub({
@@ -100,28 +100,15 @@ export function DealCodeStub({
           className="flex flex-wrap items-end gap-x-5 gap-y-3"
         >
           <div className="flex min-w-0 flex-col gap-1">
-            <div className="flex items-center gap-3">
-              <p
-                id={titleId}
-                className={cn(
-                  'm-0 text-[11px] font-bold tracking-[0.14em] uppercase',
-                  eyebrowClass,
-                )}
-              >
-                Cod OSUBB
-              </p>
-              {/* Stamped beside the label, as on a punched ticket. */}
-              <span
-                aria-hidden="true"
-                className={cn(
-                  'pointer-events-none inline-block rotate-[-8deg] rounded-sm border-2 border-current px-1.5 py-0.5 text-[10px] leading-none font-extrabold tracking-[0.18em] uppercase opacity-90',
-                  muted ? 'text-muted-foreground' : 'text-primary',
-                  justRevealed && 'deal-code-stamp',
-                )}
-              >
-                Dezvăluit
-              </span>
-            </div>
+            <p
+              id={titleId}
+              className={cn(
+                'm-0 text-[11px] font-bold tracking-[0.14em] uppercase',
+                eyebrowClass,
+              )}
+            >
+              Cod OSUBB
+            </p>
             <p
               ref={codeRef}
               tabIndex={-1}

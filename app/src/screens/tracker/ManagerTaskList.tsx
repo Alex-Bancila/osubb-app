@@ -1,23 +1,25 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { EmptyState } from '../../components/layout';
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from '../../components/ui/native-select';
-import { FilterSearch } from '../../components/work-filter/FilterToolbar';
+import { SegmentedRadio } from '../../components/ui/segmented-radio';
+import { Select } from '../../components/ui/select';
 import { workFilterCellClass } from '../../components/work-filter/field-class';
 import { formatTaskCount } from '../../lib/format';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import { matchesWorkFilter } from '../../lib/work-filter';
 import { executesTask } from '../../lib/preferred-groups';
 import { usePreferredGroups } from '../../components/preferred-groups/preferred-groups';
-import { RANGE_FIRST, TrackerWorkFilter } from './TrackerWorkFilter';
+import {
+  ClearSearchButton,
+  RANGE_FIRST,
+  trackerListClass,
+  TrackerWorkFilter,
+} from './TrackerWorkFilter';
+import { matchesTitle, type TitleSearch } from './use-title-search';
 import { TaskRow } from './TaskRow';
 import {
   compareManagedTasks,
   MANAGER_TASK_STATES,
   matchesTaskState,
-  searchableTitle,
   type ManagerTaskSort,
 } from './manager-task-list';
 import {
@@ -25,28 +27,37 @@ import {
   type TaskPresentationRow,
 } from './task-presentation';
 
-const SEARCH_DELAY_MS = 200;
-
 /**
- * Stare, Caută and Ordonează appear from this many Tasks up: below it the
- * whole list fits on one screen (relevance B18).
+ * Stare and Ordonează appear from this many Tasks up: below it the whole list
+ * fits on one screen (relevance B18). The title search is always there, as on
+ * every Tracker list.
  */
 export const LIST_CONTROLS_FROM = 6;
 
+const SORT_CHOICES: ReadonlyArray<{ value: ManagerTaskSort; label: string }> = [
+  { value: 'deadline', label: 'Termen' },
+  { value: 'title', label: 'Titlu' },
+];
+
 /**
- * De gestionat and Toate (#687): the filter toolbar (#903) — Filtrează, whose
- * sheet holds the Work Filter, Stare (only the states the list holds) and the
- * order (#845, layout T4), then the title search, visible beside it — then
- * the Tasks as dense rows, no table, so nothing scrolls sideways at any
- * width.
+ * De gestionat and Toate (#687): the Tracker's toolbar (#903) — the title
+ * search, whose placeholder says how many Tasks the list shows, then
+ * Filtrează, whose sheet holds the Work Filter, Stare (only the states the
+ * list holds) and the order (#845, layout T4) — then the Tasks as dense rows,
+ * no table, so nothing scrolls sideways at any width. `empty` is what the
+ * list says when it holds no Task at all.
  */
 export function ManagerTaskList({
   rows,
   now,
+  search,
+  empty,
   onOpenTask,
 }: {
   rows: readonly TaskPresentationRow[];
   now: Date;
+  search: TitleSearch;
+  empty: string;
   onOpenTask?: (id: number) => void;
 }) {
   const { params } = useWorkFilter();
@@ -54,20 +65,11 @@ export function ManagerTaskList({
   // stays whatever its Group.
   const preferred = usePreferredGroups();
   const [chosenState, setState] = useState('');
-  const [search, setSearch] = useState('');
-  const [needle, setNeedle] = useState('');
   const [chosenSort, setSort] = useState<ManagerTaskSort>('deadline');
-  useEffect(() => {
-    const timer = window.setTimeout(
-      () => setNeedle(searchableTitle(search.trim())),
-      SEARCH_DELAY_MS,
-    );
-    return () => window.clearTimeout(timer);
-  }, [search]);
+  const { needle } = search;
 
   const listControls = rows.length >= LIST_CONTROLS_FROM;
   const sort = listControls ? chosenSort : 'deadline';
-  const query = listControls ? needle : '';
 
   const presented = useMemo(
     () => rows.map((row) => ({ row, task: toTaskPresentation(row, now) })),
@@ -99,12 +101,12 @@ export function ManagerTaskList({
                 (preferred.keepGroup(row.group_id) ||
                   executesTask(row, preferred.memberId)) &&
                 matchesTaskState(task, state) &&
-                (!query || searchableTitle(task.title).includes(query)),
+                matchesTitle(task.title, needle),
             )
             .map(({ task }) => task)
             .sort(compareManagedTasks(sort))
         : [],
-    [presented, params, state, query, sort, preferred],
+    [presented, params, state, needle, sort, preferred],
   );
 
   const fields = listControls
@@ -112,40 +114,38 @@ export function ManagerTaskList({
         <>
           <label className={workFilterCellClass} htmlFor={`${id}-state`}>
             <span className="text-sm font-medium">Stare</span>
-            <NativeSelect
+            <Select
               id={`${id}-state`}
               value={state}
-              onChange={(event) => setState(event.target.value)}
-            >
-              <NativeSelectOption value="">Toate stările</NativeSelectOption>
-              {states.map(([value, label]) => (
-                <NativeSelectOption key={value} value={value}>
-                  {label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+              options={[
+                { value: '', label: 'Toate stările' },
+                ...states.map(([value, label]) => ({ value, label })),
+              ]}
+              onValueChange={setState}
+            />
           </label>
-          <label className={workFilterCellClass} htmlFor={`${id}-sort`}>
-            <span className="text-sm font-medium">Ordonează după</span>
-            <NativeSelect
-              id={`${id}-sort`}
+          {/* Two choices: a segmented control, not a list (DESIGN.md). */}
+          <div className={workFilterCellClass}>
+            <span id={`${id}-sort`} className="text-sm font-medium">
+              Ordonează după
+            </span>
+            <SegmentedRadio
+              aria-labelledby={`${id}-sort`}
               value={sort}
-              onChange={(event) =>
-                setSort(event.target.value as ManagerTaskSort)
-              }
-            >
-              <NativeSelectOption value="deadline">Termen</NativeSelectOption>
-              <NativeSelectOption value="title">Titlu</NativeSelectOption>
-            </NativeSelect>
-          </label>
+              options={SORT_CHOICES}
+              onValueChange={setSort}
+            />
+          </div>
         </>
       )
     : undefined;
 
   return (
-    <div className="min-w-0 space-y-4">
+    <div className={trackerListClass}>
       <TrackerWorkFilter
         rows={rows}
+        search={search}
+        count={params ? tasks.length : undefined}
         fields={fields}
         extraChips={
           state
@@ -159,16 +159,6 @@ export function ManagerTaskList({
               ]
             : []
         }
-        search={
-          listControls && (
-            <FilterSearch
-              label="Caută după titlu"
-              placeholder="Caută după titlu"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          )
-        }
       />
       {!params ? (
         <p>{RANGE_FIRST}</p>
@@ -176,10 +166,8 @@ export function ManagerTaskList({
         <section aria-label="Lista taskurilor" className="min-w-0 space-y-2">
           {tasks.length ? (
             <>
-              <p
-                role="status"
-                className="text-sm text-muted-foreground tabular-nums"
-              >
+              {/* Said to a screen reader; sighted, the search names it. */}
+              <p role="status" className="sr-only">
                 {formatTaskCount(tasks.length)}
               </p>
               <ul data-slot="task-row-list" className="grid min-w-0 gap-2 p-0">
@@ -191,10 +179,17 @@ export function ManagerTaskList({
               </ul>
             </>
           ) : (
-            <EmptyState bare>
-              {preferred.active && rows.length > 0
-                ? 'Niciun task în grupurile tale preferate.'
-                : 'Niciun task nu corespunde filtrelor.'}
+            <EmptyState
+              bare
+              action={needle ? <ClearSearchButton search={search} /> : null}
+            >
+              {!rows.length
+                ? empty
+                : needle
+                  ? 'Niciun task nu corespunde căutării.'
+                  : preferred.active
+                    ? 'Niciun task în grupurile tale preferate.'
+                    : 'Niciun task nu corespunde filtrelor.'}
             </EmptyState>
           )}
         </section>

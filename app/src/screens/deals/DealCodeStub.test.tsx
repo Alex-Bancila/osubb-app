@@ -56,7 +56,7 @@ describe('DealCodeStub (R45)', () => {
     );
   });
 
-  it('reveals on a tap: asks the server once, then shows the code, Copiază and the stamp', async () => {
+  it('reveals on a tap: asks the server once, then shows the code and Copiază', async () => {
     const user = userEvent.setup();
     const { container } = renderStub(<DealCodeStub deal={deal} />);
     await user.click(screen.getByRole('button', { name: /Arată codul/ }));
@@ -66,7 +66,6 @@ describe('DealCodeStub (R45)', () => {
     expect(supabaseMock.rpc).toHaveBeenCalledWith('reveal_deal_code', {
       p_announcement_id: 42,
     });
-    expect(screen.getByText('Dezvăluit')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Copiază' })).toBeVisible();
     expect(screen.queryByRole('button', { name: /Arată codul/ })).toBeNull();
     expect(container.querySelector('[data-slot="deal-code"]')).toHaveAttribute(

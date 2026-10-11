@@ -21,9 +21,9 @@ import type { EventPresentation } from '../../queries/events';
 import { useMemberIdentities } from '../../queries/member-identities';
 
 /**
- * The answers on this Event, for its managers only (#934): the counts on the
- * card, and **Cine participă** — every Member who answered, grouped Particip /
- * Nu particip. Everyone else sees nothing here; the server's
+ * The answers on this Event, for its managers only (#934): one row on the
+ * card — **Cine participă**, a thin bar of the split, the counts — which opens
+ * every Member who answered, grouped Particip / Nu particip. Everyone else sees nothing here; the server's
  * `event_attendance_read` would show them only their own answer anyway.
  */
 export function EventAttendance({ event }: { event: EventPresentation }) {
@@ -73,6 +73,18 @@ export function EventAttendance({ event }: { event: EventPresentation }) {
         ) : (
           <p className="event-attendance-label">Cine participă</p>
         )}
+        {/* The split, drawn thin between the label and its counts. */}
+        {answers && total > 0 && (
+          <span
+            className="event-attendance-bar"
+            aria-hidden="true"
+            style={
+              {
+                '--going-share': `${(answers.going.length / total) * 100}%`,
+              } as CSSProperties
+            }
+          />
+        )}
         <p className="event-attendance-tally" role="status">
           {answers
             ? total > 0
@@ -94,18 +106,6 @@ export function EventAttendance({ event }: { event: EventPresentation }) {
         >
           Reîncearcă
         </Button>
-      )}
-
-      {answers && total > 0 && (
-        <div
-          className="event-attendance-bar"
-          aria-hidden="true"
-          style={
-            {
-              '--going-share': `${(answers.going.length / total) * 100}%`,
-            } as CSSProperties
-          }
-        />
       )}
 
       {answers && open && <AttendanceList id={listId} answers={answers} />}

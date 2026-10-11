@@ -1,4 +1,5 @@
 import { FieldError } from '../ui/field';
+import { Textarea } from '../ui/input';
 import { formatPoints } from '../../lib/format';
 import type { useFormValidation } from '../../lib/use-form-validation';
 import {
@@ -27,6 +28,8 @@ type Bound = Pick<
  * between them. One definition for every form that evaluates: the Evaluation
  * dialog (`EvaluationFields`) and the completed-Task form (#915). The caller
  * owns the values and the validation; the server computes the real points.
+ * All three are required, which their labels do not repeat: the group's
+ * legend and `aria-required` say it.
  */
 export function EvaluationInputs({
   id,
@@ -52,7 +55,7 @@ export function EvaluationInputs({
         Dificultate, notă și observații obligatorii
       </legend>
       <DifficultyPicker
-        label="Dificultate (obligatoriu)"
+        label="Dificultate"
         prompt="Alege 1–5 stele pentru un task sau o responsabilitate: medalie, Responsabil, Coordonator."
         value={difficulty === '' ? null : Number(difficulty)}
         onChange={(value) => onChange({ difficulty: String(value) })}
@@ -64,7 +67,7 @@ export function EvaluationInputs({
       />
       <FieldError {...form.errorProps('difficulty')} />
       <RatingPicker
-        label="Nota (obligatoriu)"
+        label="Nota"
         prompt="Alege o notă între 1 și 5."
         value={rating === '' ? null : Number(rating)}
         onChange={(value) => onChange({ rating: String(value) })}
@@ -81,15 +84,15 @@ export function EvaluationInputs({
           : `Previzualizare: ${formatPoints(points)} puncte. ${points < 0 ? 'Se scad puncte.' : points === 0 ? 'Nu se acordă puncte.' : 'Se acordă puncte.'} Serverul confirmă punctajul final.`}
       </p>
       <label htmlFor={`${id}-note`} className="block text-sm font-medium">
-        Observații (obligatoriu)
+        Observații
       </label>
-      <textarea
+      <Textarea
         id={`${id}-note`}
         required
+        aria-required="true"
         value={note}
         onChange={(event) => onChange({ note: event.target.value })}
         rows={3}
-        className="min-h-24 w-full rounded-md border border-input bg-background p-3"
         {...form.field('note')}
       />
       <FieldError {...form.errorProps('note')} />

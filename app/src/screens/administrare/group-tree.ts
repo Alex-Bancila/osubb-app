@@ -368,12 +368,15 @@ export function unfinishedTasksPath(
   return `/tracker?${params.toString()}`;
 }
 
-/** The Group page's tabs, in their order; each is `?tab=<id>` (navigation D6). */
+/**
+ * The Group page's tabs, in their order; each is `?tab=<id>` (navigation D6).
+ * The ids are the links' — `roster` is the Membri tab, `copii` Subgrupuri.
+ */
 export const GROUP_TABS = [
   { id: 'setari', label: 'Setări' },
-  { id: 'roster', label: 'Roster' },
+  { id: 'roster', label: 'Membri' },
   { id: 'roluri', label: 'Roluri' },
-  { id: 'copii', label: 'Grupuri copil' },
+  { id: 'copii', label: 'Subgrupuri' },
   { id: 'campanii', label: 'Campanii' },
   { id: 'cereri', label: 'Cereri' },
 ] as const;
@@ -383,8 +386,8 @@ export type GroupTabId = (typeof GROUP_TABS)[number]['id'];
 /**
  * The tabs a viewer can use on one Group (relevance B49): Setări for whoever
  * edits its settings or structure, Roluri for whoever appoints to a position,
- * Grupuri copil when the Group has Child Groups or the viewer may create one,
- * Cereri when the Group takes Applications or still has pending ones. Roster
+ * Subgrupuri when the Group has Child Groups or the viewer may create one,
+ * Cereri when the Group takes Applications or still has pending ones. Membri
  * and Campanii are always there.
  */
 export function groupTabs(
@@ -438,9 +441,9 @@ export function varies<T>(rows: readonly T[], value: (row: T) => unknown) {
 }
 
 /**
- * The `state` a Roster name passes to the member page, so its back link
- * returns to this Group's Roster (navigation D4) rather than to a Membri tab
- * the viewer may not be able to open.
+ * The `state` a name on a Group's Membri tab passes to the member page, so
+ * its back link returns to that tab (navigation D4) rather than to
+ * Administrare's Membri, which the viewer may not be able to open.
  */
 export function rosterBackState(groupId: number): BackLinkState {
   return {
@@ -470,8 +473,8 @@ const OUTSIDE_POSITIONS: Record<
  * Who the Coordonator or the Responsabil picker offers (F-27, #957, R42): a
  * live active Member at or above the Group's Minimum Level, not of a rank
  * kept outside that position, who holds no position here yet — on this
- * roster or inherited from a Group above. The Roster's add picker keeps its
- * own list.
+ * roster or inherited from a Group above. The Membri tab's add picker keeps
+ * its own list.
  */
 export function positionCandidates(
   members: readonly AppointableMember[],

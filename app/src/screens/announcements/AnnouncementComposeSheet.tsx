@@ -1,26 +1,13 @@
 import { useId, useState, type FormEvent } from 'react';
 import { Plus } from 'lucide-react';
+import { FabAction } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
 import { FieldError } from '../../components/ui/field';
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from '../../components/ui/native-select';
-import {
-  ChoiceRow,
-  RadioGroup,
-  RadioGroupItem,
-} from '../../components/ui/radio-group';
-import {
-  Sheet,
-  SheetBackdrop,
-  SheetFooter,
-  SheetHeader,
-  SheetPopup,
-  SheetPortal,
-  SheetTitle,
-} from '../../components/ui/sheet';
+import { Select } from '../../components/ui/select';
+import { FormSheet, FormSheetFooter } from '../../components/ui/form-sheet';
+import { ChoiceRow } from '../../components/ui/radio-group';
+import { SegmentedRadio } from '../../components/ui/segmented-radio';
 import { useAuth } from '../../lib/auth';
 import { bucharestWallTimeToIso } from '../../lib/calendar-time';
 import { useCapabilities } from '../../lib/capabilities';
@@ -41,10 +28,12 @@ import {
   EMPTY_ANNOUNCEMENT_DRAFT,
   type AnnouncementDraft,
 } from './announcement-draft';
-import {
-  AnnouncementFields,
-  announcementFieldClass,
-} from './AnnouncementFields';
+import { AnnouncementFields } from './AnnouncementFields';
+
+const AUDIENCES: ReadonlyArray<{ value: 'local' | 'org'; label: string }> = [
+  { value: 'local', label: 'Doar grupul' },
+  { value: 'org', label: 'Toată organizația' },
+];
 
 export default function AnnouncementComposeSheet() {
   const { session, claims } = useAuth();
@@ -53,6 +42,7 @@ export default function AnnouncementComposeSheet() {
   const groups = useGroups();
   const create = useCreateAnnouncement();
   const [open, setOpen] = useState(false);
+  const originFieldId = useId();
   const audienceLabelId = useId();
   const [originId, setOriginId] = useState('');
   const [audience, setAudience] = useState<'local' | 'org'>('local');
@@ -137,26 +127,20 @@ export default function AnnouncementComposeSheet() {
     }
   }
 
+  const originField = form.field('groupId');
+
   return (
-    <Sheet
-      open={open}
-      onOpenChange={(next) => {
-        if (create.isPending) return;
-        setOpen(next);
-        if (!next) clear();
-      }}
-    >
-      <div className="space-y-1">
-        <Button
-          type="button"
-          onClick={() => {
+    <>
+      <div className="space-y-1 empty:hidden">
+        <FabAction
+          label="Anunț nou"
+          icon={Plus}
+          className="gap-2"
+          onSelect={() => {
             setPublished(false);
             setOpen(true);
           }}
-          className="min-h-11 gap-2"
-        >
-          <Plus className="size-4" aria-hidden="true" /> Anunț nou
-        </Button>
+        />
         {published && (
           <p
             role="status"
@@ -166,116 +150,103 @@ export default function AnnouncementComposeSheet() {
           </p>
         )}
       </div>
-      <SheetPortal>
-        <SheetBackdrop />
-        <SheetPopup
-          side="right"
-          className="max-w-xl gap-5 p-4 sm:p-6"
-          aria-describedby={undefined}
+      <FormSheet
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) clear();
+        }}
+        title="Anunț nou"
+        busy={create.isPending}
+      >
+        <form
+          onSubmit={(event) => void submit(event)}
+          noValidate
+          className="flex flex-1 flex-col gap-5"
         >
-          <SheetHeader showCloseButton={!create.isPending}>
-            <SheetTitle>Anunț nou</SheetTitle>
-          </SheetHeader>
-          <form
-            onSubmit={(event) => void submit(event)}
-            noValidate
-            className="flex flex-1 flex-col gap-4"
-          >
-            <AnnouncementFields
-              draft={draft}
-              onChange={(patch) =>
-                setDraft((current) => ({ ...current, ...patch }))
-              }
-              form={form}
-              levelChoices={levelChoices}
-              origin={
-                <>
-                  <div className="space-y-1.5">
-                    <label className={announcementFieldClass}>
-                      Grup de origine
-                      <NativeSelect
-                        value={originId}
-                        onChange={(event) => setOriginId(event.target.value)}
-                        required
-                        disabled={
-                          myGroups.isPending ||
-                          myGroups.isError ||
-                          groups.isPending ||
-                          groups.isError
-                        }
-                        {...form.field('groupId')}
-                      >
-                        <NativeSelectOption value="">
-                          Alege grupul
-                        </NativeSelectOption>
-                        {origins.map((group) => (
-                          <NativeSelectOption key={group.id} value={group.id}>
-                            {group.is_organization ? 'OSUBB' : group.name}
-                          </NativeSelectOption>
-                        ))}
-                      </NativeSelect>
-                    </label>
-                    <FieldError {...form.errorProps('groupId')} />
-                  </div>
-                  {(myGroups.isError || groups.isError) && (
-                    <p role="alert" className="text-sm text-destructive">
-                      Nu am putut încărca grupurile. Încearcă din nou.
-                    </p>
-                  )}
-                  <div className="space-y-1">
-                    <span id={audienceLabelId} className="text-sm font-medium">
-                      Audiență
-                    </span>
-                    <RadioGroup
-                      aria-labelledby={audienceLabelId}
-                      value={audience}
-                      onValueChange={(next: 'local' | 'org') =>
-                        setAudience(next)
-                      }
-                      className="flex flex-wrap gap-x-6 gap-y-0"
-                    >
-                      <ChoiceRow>
-                        <RadioGroupItem value="local" />
-                        Doar grupul
-                      </ChoiceRow>
-                      <ChoiceRow>
-                        <RadioGroupItem value="org" />
-                        Toată organizația
-                      </ChoiceRow>
-                    </RadioGroup>
-                  </div>
-                </>
-              }
-              extra={
-                <ChoiceRow className="font-medium">
-                  <Checkbox
-                    checked={pinned}
-                    onCheckedChange={(next) => setPinned(next === true)}
+          <AnnouncementFields
+            draft={draft}
+            onChange={(patch) =>
+              setDraft((current) => ({ ...current, ...patch }))
+            }
+            form={form}
+            levelChoices={levelChoices}
+            origin={
+              <>
+                <div className="grid gap-1.5">
+                  <label
+                    htmlFor={originFieldId}
+                    className="text-sm font-medium"
+                  >
+                    Grup de origine
+                  </label>
+                  <Select
+                    id={originFieldId}
+                    value={originId}
+                    placeholder="Alege grupul"
+                    options={origins.map((group) => ({
+                      value: String(group.id),
+                      label: group.is_organization ? 'OSUBB' : group.name,
+                    }))}
+                    onValueChange={setOriginId}
+                    required
+                    disabled={
+                      myGroups.isPending ||
+                      myGroups.isError ||
+                      groups.isPending ||
+                      groups.isError
+                    }
+                    {...originField}
                   />
-                  Fixează anunțul
-                </ChoiceRow>
-              }
-            />
-            <FieldError>{form.formError}</FieldError>
-            <SheetFooter>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={create.isPending}
-                onClick={() => setOpen(false)}
-              >
-                Renunță
-              </Button>
-              <Button
-                type="submit"
-                disabled={create.isPending || origins.length === 0}
-              >
-                {create.isPending ? 'Se publică…' : 'Publică anunțul'}
-              </Button>
-            </SheetFooter>
-          </form>
-        </SheetPopup>
-      </SheetPortal>
-    </Sheet>
+                  <FieldError {...form.errorProps('groupId')} />
+                </div>
+                {(myGroups.isError || groups.isError) && (
+                  <p role="alert" className="m-0 text-sm text-destructive">
+                    Nu am putut încărca grupurile. Încearcă din nou.
+                  </p>
+                )}
+                <div className="grid gap-1.5">
+                  <span id={audienceLabelId} className="text-sm font-medium">
+                    Audiență
+                  </span>
+                  <SegmentedRadio
+                    aria-labelledby={audienceLabelId}
+                    options={AUDIENCES}
+                    value={audience}
+                    onValueChange={setAudience}
+                  />
+                </div>
+              </>
+            }
+            extra={
+              <ChoiceRow className="font-medium">
+                <Checkbox
+                  checked={pinned}
+                  onCheckedChange={(next) => setPinned(next === true)}
+                />
+                Fixează anunțul
+              </ChoiceRow>
+            }
+          />
+          <FieldError>{form.formError}</FieldError>
+          <FormSheetFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={create.isPending}
+              onClick={() => setOpen(false)}
+            >
+              Renunță
+            </Button>
+            <Button
+              type="submit"
+              disabled={create.isPending || origins.length === 0}
+            >
+              {create.isPending ? 'Se publică…' : 'Publică anunțul'}
+            </Button>
+          </FormSheetFooter>
+        </form>
+      </FormSheet>
+    </>
   );
 }

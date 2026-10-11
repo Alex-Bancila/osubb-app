@@ -1,21 +1,13 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useId, useMemo, useState, type FormEvent } from 'react';
 import { UserPlus } from 'lucide-react';
 import { GroupMultiCombobox } from '../../components/group/GroupMultiCombobox';
-import { SubHeading } from '../../components/layout';
+import { FabAction } from '../../components/layout';
 import { Button } from '../../components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../../components/ui/dialog';
 import { FieldError } from '../../components/ui/field';
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from '../../components/ui/native-select';
+import { FormSheet, FormSheetFooter } from '../../components/ui/form-sheet';
+import { InfoHint } from '../../components/ui/info-hint';
+import { Input } from '../../components/ui/input';
+import { Select } from '../../components/ui/select';
 import {
   inviteFieldForReason,
   memberInviteSchema,
@@ -29,8 +21,9 @@ import {
 import { useRoles } from '../../queries/reference';
 import { inviteGroupOptions, inviteRankOptions } from './invite-options';
 
-const control =
-  'min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
+const labelClass = 'text-sm font-medium';
+/** A label with its "i" at the end of the row. */
+const labelRowClass = 'flex items-center justify-between gap-2';
 
 /** The rank a new Member starts at unless BC chooses otherwise. */
 const DEFAULT_RANK = 'recrut';
@@ -41,9 +34,12 @@ const LEADERSHIP_RANKS: ReadonlySet<string> = new Set(['bc', 'moderator']);
 export type InvitedMember = { userId: string; email: string; name: string };
 
 /**
- * "Invită membru" (#931, #949): one invitation through `invite-member`. The
- * address and full name are required; the rank (Recrut unless chosen) and
- * the Groups (none: OSUBB only, by Automatic Membership) are optional. The
+ * "Invită membru" (#931, #949): one invitation through `invite-member`, in
+ * a form sheet. The address and full name are required; the rank (Recrut
+ * unless chosen) and the Groups (none: OSUBB only, by Automatic Membership)
+ * are optional. What the invitation does and what no Group means sit behind
+ * the "i" of the field they concern; the warning for a leadership rank stays
+ * in view. The
  * function asks every chosen Group before it sends the magic link, then
  * places the Member in all of them or in none. Group Roles are appointed
  * from the Group's own page, never here. Mounted only behind
@@ -55,6 +51,9 @@ export function InviteMemberDialog({
   onInvited: (member: InvitedMember) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const id = useId();
+  const emailHintId = `${id}-email-hint`;
+  const groupsHintId = `${id}-groups-hint`;
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [rank, setRank] = useState(DEFAULT_RANK);
@@ -124,147 +123,136 @@ export function InviteMemberDialog({
   }
 
   const rankName = roles.data?.get(rank)?.name;
-  const groupsDescribedBy =
-    [
-      selected.length === 0 ? 'invite-groups-hint' : null,
-      form.error('groups') ? form.errorId('groups') : null,
-    ]
-      .filter(Boolean)
-      .join(' ') || undefined;
+  const groupsDescribedBy = [
+    groupsHintId,
+    form.error('groups') ? form.errorId('groups') : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (pending) return;
-        setOpen(next);
-        if (next) reset();
-      }}
-    >
-      <Button
-        type="button"
-        className="w-full"
-        onClick={() => {
+    <>
+      <FabAction
+        label="Invită membru"
+        icon={UserPlus}
+        onSelect={() => {
           reset();
           setOpen(true);
         }}
+      />
+      <FormSheet
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (next) reset();
+        }}
+        title="Invită membru"
+        busy={pending}
       >
-        <UserPlus aria-hidden="true" />
-        Invită membru
-      </Button>
-      <DialogContent className="grid-cols-[minmax(0,1fr)]">
-        <form onSubmit={submit} noValidate className="grid gap-4">
-          <DialogHeader>
-            <DialogTitle>Invită membru</DialogTitle>
-            <DialogDescription>
-              Primește pe email un link de autentificare. Apare în listă de acum
-              și intră în aplicație când deschide linkul.
-            </DialogDescription>
-          </DialogHeader>
-
+        <form
+          onSubmit={submit}
+          noValidate
+          className="flex flex-1 flex-col gap-4"
+        >
           <div className="grid gap-1.5">
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium">Adresa de email</span>
-              <input
-                className={control}
-                type="email"
-                required
-                autoComplete="off"
-                inputMode="email"
-                value={email}
-                disabled={pending}
-                onChange={(event) => setEmail(event.target.value)}
-                {...form.field('email')}
-              />
-            </label>
+            <div className={labelRowClass}>
+              <label htmlFor={`${id}-email`} className={labelClass}>
+                Adresa de email
+              </label>
+              <InfoHint label="Despre invitație" id={emailHintId}>
+                Primește pe email un link de autentificare. Apare în listă de
+                acum și intră în aplicație când deschide linkul.
+              </InfoHint>
+            </div>
+            <Input
+              id={`${id}-email`}
+              type="email"
+              required
+              autoComplete="off"
+              inputMode="email"
+              value={email}
+              disabled={pending}
+              onChange={(event) => setEmail(event.target.value)}
+              {...form.field('email', emailHintId)}
+            />
             <FieldError {...form.errorProps('email')} />
           </div>
 
           <div className="grid gap-1.5">
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium">Numele complet</span>
-              <input
-                className={control}
-                required
-                autoComplete="off"
-                value={fullName}
-                disabled={pending}
-                onChange={(event) => setFullName(event.target.value)}
-                {...form.field('fullName')}
-              />
+            <label htmlFor={`${id}-name`} className={labelClass}>
+              Numele complet
             </label>
+            <Input
+              id={`${id}-name`}
+              required
+              autoComplete="off"
+              value={fullName}
+              disabled={pending}
+              onChange={(event) => setFullName(event.target.value)}
+              {...form.field('fullName')}
+            />
             <FieldError {...form.errorProps('fullName')} />
           </div>
 
-          <fieldset className="m-0 grid min-w-0 gap-4 border-0 border-t border-border p-0 pt-4">
-            <legend className="float-left w-full p-0">
-              <SubHeading as="p">Opțional</SubHeading>
-            </legend>
+          <div className="grid gap-1.5">
+            <label htmlFor={`${id}-rank`} className={labelClass}>
+              Rol
+            </label>
+            <Select
+              id={`${id}-rank`}
+              value={rank}
+              options={
+                rankOptions.length === 0
+                  ? [{ value: DEFAULT_RANK, label: 'Recrut' }]
+                  : rankOptions.map(([roleId, role]) => ({
+                      value: roleId,
+                      label: role.name,
+                    }))
+              }
+              disabled={pending || rankOptions.length === 0}
+              aria-describedby={
+                LEADERSHIP_RANKS.has(rank) ? 'invite-rank-hint' : undefined
+              }
+              onValueChange={setRank}
+            />
+            {/* Read before sending: it stays in view, not behind an "i". */}
+            {LEADERSHIP_RANKS.has(rank) && (
+              <p
+                id="invite-rank-hint"
+                className="text-sm text-muted-foreground"
+              >
+                Rolul {rankName ?? rank} deschide Administrare: poate invita
+                membri și schimba rolul oricui.
+              </p>
+            )}
+          </div>
 
-            <div className="grid gap-1.5">
-              <label className="grid gap-1.5">
-                <span className="text-sm font-medium">Rol</span>
-                <NativeSelect
-                  value={rank}
-                  disabled={pending || rankOptions.length === 0}
-                  aria-describedby={
-                    LEADERSHIP_RANKS.has(rank) ? 'invite-rank-hint' : undefined
-                  }
-                  onChange={(event) => setRank(event.target.value)}
-                >
-                  {rankOptions.length === 0 && (
-                    <NativeSelectOption value={DEFAULT_RANK}>
-                      Recrut
-                    </NativeSelectOption>
-                  )}
-                  {rankOptions.map(([id, role]) => (
-                    <NativeSelectOption key={id} value={id}>
-                      {role.name}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </label>
-              {LEADERSHIP_RANKS.has(rank) && (
-                <p
-                  id="invite-rank-hint"
-                  className="text-sm text-muted-foreground"
-                >
-                  Rolul {rankName ?? rank} deschide Administrare: poate invita
-                  membri și schimba rolul oricui.
-                </p>
-              )}
-            </div>
-
-            <div className="grid gap-1.5" {...form.slot('groups')}>
-              <span id="invite-member-groups" className="text-sm font-medium">
-                Grupuri
+          <div className="grid gap-1.5" {...form.slot('groups')}>
+            <div className={labelRowClass}>
+              <span id="invite-member-groups" className={labelClass}>
+                Grupuri (opțional)
               </span>
-              <GroupMultiCombobox
-                ariaLabelledBy="invite-member-groups"
-                ariaDescribedBy={groupsDescribedBy}
-                groups={groupOptions}
-                groupsById={groupsById}
-                value={selected}
-                onValueChange={setChosen}
-                placeholder="Niciun grup"
-                disabled={pending}
-              />
-              {selected.length === 0 && (
-                <p
-                  id="invite-groups-hint"
-                  className="text-sm text-muted-foreground"
-                >
-                  Fără grup: membrul intră doar în OSUBB și își alege
-                  departamentul mai târziu.
-                </p>
-              )}
-              <FieldError {...form.errorProps('groups')} />
+              <InfoHint label="Despre grupuri" id={groupsHintId}>
+                Fără grup: membrul intră doar în OSUBB și își alege
+                departamentul mai târziu.
+              </InfoHint>
             </div>
-          </fieldset>
+            <GroupMultiCombobox
+              ariaLabelledBy="invite-member-groups"
+              ariaDescribedBy={groupsDescribedBy}
+              groups={groupOptions}
+              groupsById={groupsById}
+              value={selected}
+              onValueChange={setChosen}
+              placeholder="Niciun grup"
+              disabled={pending}
+            />
+            <FieldError {...form.errorProps('groups')} />
+          </div>
 
           <FieldError>{form.formError}</FieldError>
 
-          <DialogFooter>
+          <FormSheetFooter>
             <Button
               type="button"
               variant="outline"
@@ -276,9 +264,9 @@ export function InviteMemberDialog({
             <Button type="submit" disabled={pending}>
               {pending ? 'Se trimite…' : 'Trimite invitația'}
             </Button>
-          </DialogFooter>
+          </FormSheetFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </FormSheet>
+    </>
   );
 }

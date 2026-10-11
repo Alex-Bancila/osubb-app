@@ -461,16 +461,13 @@ const REASON_COPY = new Map<string, string>([
     'Membrul care pierde rolul nu își poate fi propriul înlocuitor.',
   ],
   // #675 (ruling R5): the Nickname guard on `profiles`.
-  ['nickname_too_short', 'Pseudonimul are cel puțin 2 caractere.'],
-  ['nickname_too_long', 'Pseudonimul are cel mult 24 de caractere.'],
+  ['nickname_too_short', 'Porecla are cel puțin 2 caractere.'],
+  ['nickname_too_long', 'Porecla are cel mult 24 de caractere.'],
   [
     'nickname_invalid',
-    'Pseudonimul poate avea doar litere latine, cifre, spații, punct, cratimă sau underscore.',
+    'Porecla poate avea doar litere latine, cifre, spații, punct, cratimă sau underscore.',
   ],
-  [
-    'nickname_taken',
-    'Pseudonimul este deja folosit de alt membru. Alege altul.',
-  ],
+  ['nickname_taken', 'Porecla este deja folosită de alt membru. Alege alta.'],
   /* browser */
   ['full_name_required', 'Scrie numele complet.'],
   // #932: the join date BC sets on a Member's page.

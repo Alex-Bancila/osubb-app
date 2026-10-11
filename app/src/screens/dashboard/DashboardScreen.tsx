@@ -1,66 +1,54 @@
 import { useEffect, useState } from 'react';
-import { Page, PageGrid, PageHeader } from '../../components/layout';
+import { Page, PageHeader } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
 import { useCapabilities } from '../../lib/capabilities';
 import { firstName, formatLongDate } from '../../lib/format';
 import { useMyProfile } from '../../queries/profile';
-import AwaitingReviewCard from './AwaitingReviewCard';
-import NextEventCard from './NextEventCard';
-import NextTaskCard from './NextTaskCard';
+import CountTiles from './CountTiles';
+import LeadershipLinks from './LeadershipLinks';
 import PointsStat from './PointsStat';
 import PushPromptCard from './PushPromptCard';
+import UpNext from './UpNext';
 
 /** "sâmbătă, 27 septembrie 2026" → "Sâmbătă, 27 septembrie 2026". */
 function capitalised(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/*
- * Headers and boxes on shared rows. Once panels sit side by side, each spans
- * two grid rows — its header, then its box — through a subgrid, so a header
- * that wraps its link or carries a description never pushes its box below
- * the boxes next to it. Two cards are like items, so the row has
- * `equalHeights` (#876) and their boxes start and end together. Headers
- * keep to the bottom of their row, so the titles share one line whether or
- * not a panel carries an eyebrow (none repeats its title: B7, #848).
- */
-const twoColumnPanel =
-  'md:row-span-2 md:grid md:grid-rows-subgrid md:gap-y-0 md:*:first:self-end ' +
-  // A box holding only an empty state keeps its own height beside a card:
-  // equal heights are for two cards, never for a mostly empty box (Alex,
-  // 2026-09-28). The tops still line up.
-  'md:[&:has([data-slot=empty-state])>[data-slot=panel-box]]:self-start';
-/** One row: each panel spans its header row and its box row. */
-const panelRow = 'md:grid-rows-[auto_1fr]';
-
 /**
- * Acasă (#822, ruling R27; #859): equal boxes that answer "what next".
+ * Acasă (#822, ruling R27; #859): what is waiting, then what comes next.
  *
- * The page decides which panels exist before it renders the grid, from the
- * server's capability row (`my_capabilities()`):
+ * Under the date and the greeting, a row of count tiles that open what is
+ * waiting (`CountTiles`), then — on a phone or a tablet, for whoever has
+ * them — **Mai mult** (`LeadershipLinks`): the pages that are on neither the
+ * tab bar nor the top bar, which have no other door there. Then one list,
+ * **Urmează** (`UpNext`): the next deadlines, Events and the Task to
+ * evaluate, as compact rows that link to where the full card lives. The page decides what applies to the viewer
+ * before it renders either, from the server's capability row
+ * (`my_capabilities()`):
  * - below BCE (`seeLeadership` false): the points and Role as a stat on the
- *   greeting line (`PointsStat`, no panel — Alex, 2026-09-28), then
- *   **Următorul task** and **Următorul eveniment** in two columns from `md`;
- *   a Group Responsible or Coordonator (`manageTasks`, plan D2) has
- *   **De evaluat** in its own row above them;
- * - BC / BCE: **De evaluat** (or **Următorul task** without `manageTasks`)
- *   and **Următorul eveniment**. They do not work by points, so no stat.
+ *   greeting line (`PointsStat`, no panel — Alex, 2026-09-28), their own
+ *   Tasks in the tiles and the list; a Group Responsible or Coordonator
+ *   (`manageTasks`, plan D2) also has **De evaluat** and **Cereri de decis**;
+ * - BC / BCE with `manageTasks`: **De evaluat** and **Cereri de decis** in
+ *   place of their own Tasks, which are never read. They do not work by
+ *   points, so no stat. Leadership without `manageTasks` keeps its own Tasks.
  *
  * Above them, for every Role, **Pornește notificările** (2026-10-06) while
  * this device could receive Web Push and nobody has answered the permission
  * yet; it renders nothing otherwise (`PushPromptCard`).
  *
  * The Clasament and the Cupa Departamentelor live on Clasament, not here.
- * Each panel owns its query and its loading, empty and error states, so a
- * slow or failed read never blanks the panel next to it.
+ * Each tile and each source of the list owns its query and its states, so a
+ * slow or failed read never blanks what is next to it.
  */
 export default function DashboardScreen() {
   const profile = useMyProfile();
   const nickname = profile.data?.nickname?.trim();
   const name = nickname || firstName(profile.data?.full_name);
   const capabilities = useCapabilities();
-  // One clock for every panel, so "overdue" and "has it started" follow the
-  // wall while the page stays open.
+  // One clock for the page, so "overdue" and "has it started" follow the
+  // wall while it stays open.
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
@@ -69,6 +57,8 @@ export default function DashboardScreen() {
 
   const leader = capabilities.data?.seeLeadership === true;
   const reviewer = capabilities.data?.manageTasks === true;
+  // BC and BCE who manage Tasks evaluate them; everyone else executes them.
+  const ownTasks = !(leader && reviewer);
 
   return (
     <Page>
@@ -80,8 +70,6 @@ export default function DashboardScreen() {
         actions={capabilities.data && !leader ? <PointsStat /> : undefined}
       />
       <PushPromptCard />
-      {/* F-1 (#893): every `equalHeights` row below is Alex's 2026-09-29
-          exception to the content-height rule — keep it. */}
       {capabilities.isPending ? (
         <Loading />
       ) : capabilities.isError ? (
@@ -89,30 +77,12 @@ export default function DashboardScreen() {
           error={capabilities.error}
           onRetry={() => void capabilities.refetch()}
         />
-      ) : leader ? (
-        <PageGrid columns={2} equalHeights className={panelRow}>
-          {reviewer ? (
-            <AwaitingReviewCard now={now} className={twoColumnPanel} />
-          ) : (
-            <NextTaskCard now={now} className={twoColumnPanel} />
-          )}
-          <NextEventCard now={now} className={twoColumnPanel} />
-        </PageGrid>
-      ) : reviewer ? (
-        <>
-          {/* Its own row, as tall as what it holds: the row below shares one
-              height between two cards, which this one should not dictate. */}
-          <AwaitingReviewCard now={now} />
-          <PageGrid columns={2} equalHeights className={panelRow}>
-            <NextTaskCard now={now} className={twoColumnPanel} />
-            <NextEventCard now={now} className={twoColumnPanel} />
-          </PageGrid>
-        </>
       ) : (
-        <PageGrid columns={2} equalHeights className={panelRow}>
-          <NextTaskCard now={now} className={twoColumnPanel} />
-          <NextEventCard now={now} className={twoColumnPanel} />
-        </PageGrid>
+        <>
+          <CountTiles ownTasks={ownTasks} reviewer={reviewer} />
+          <LeadershipLinks capabilities={capabilities.data} />
+          <UpNext now={now} ownTasks={ownTasks} reviewer={reviewer} />
+        </>
       )}
     </Page>
   );

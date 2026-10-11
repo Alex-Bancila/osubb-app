@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type FormEvent } from 'react';
+import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { ClipboardCheck } from 'lucide-react';
 import {
   EmptyState,
@@ -6,6 +6,7 @@ import {
   Panel,
   rowListClass,
 } from '../../components/layout';
+import { countLabel } from '../../components/delete-for-good/delete-text';
 import { MemberName } from '../../components/member/MemberName';
 import { ErrorState, Loading } from '../../components/states';
 import { Button } from '../../components/ui/button';
@@ -18,6 +19,8 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog';
 import { FieldError } from '../../components/ui/field';
+import { FormSheet } from '../../components/ui/form-sheet';
+import { Textarea } from '../../components/ui/input';
 import { fieldForReason, rejectionNoteSchema } from '../../lib/schemas/note';
 import { useFormValidation } from '../../lib/use-form-validation';
 import {
@@ -75,6 +78,7 @@ function RejectForm({
   onReject: (note: string) => Promise<void>;
   onCancel: () => void;
 }) {
+  const id = useId();
   const [note, setNote] = useState('');
   const form = useFormValidation(rejectionNoteSchema, { note }, fieldForReason);
   async function submit(event: FormEvent) {
@@ -90,17 +94,18 @@ function RejectForm({
   return (
     <form onSubmit={submit} noValidate className="grid gap-4">
       <div className="grid gap-1.5">
-        <label className="grid gap-1.5 text-sm font-medium">
-          <span>Motivul respingerii (obligatoriu)</span>
-          <textarea
-            required
-            className="min-h-24 w-full rounded-md border border-input bg-background p-3 font-normal"
-            value={note}
-            disabled={pending}
-            onChange={(event) => setNote(event.target.value)}
-            {...form.field('note')}
-          />
+        <label htmlFor={id} className="text-sm font-medium">
+          Motivul respingerii
         </label>
+        <Textarea
+          id={id}
+          required
+          aria-required="true"
+          value={note}
+          disabled={pending}
+          onChange={(event) => setNote(event.target.value)}
+          {...form.field('note')}
+        />
         <FieldError {...form.errorProps('note')} />
       </div>
       <FieldError>{form.formError}</FieldError>
@@ -199,13 +204,16 @@ function ApproveRequestForm({
 type Selection = { request: PendingDecision; kind: 'approve' | 'reject' };
 
 /**
- * The Requests the viewer may decide, each listed once: evaluating or
- * rejecting one opens a dialog over the list instead of a second copy of the
- * Request inside it (#855, R1).
+ * The Requests the viewer may decide, each listed once: evaluating one opens
+ * a form sheet over the list and rejecting one a dialog, instead of a second
+ * copy of the Request inside it (#855, R1).
  *
  * `showEmpty` is for a viewer who only decides (level 5 and up): the panel is
- * the whole page, so an empty queue says so. For everyone else the section
- * stays out of the way until the server returns something to decide.
+ * the whole view, so an empty queue says so — and, under Taskuri's Cereri
+ * switch, it needs no eyebrow and heading to say where the viewer is: the
+ * region keeps its name and a small caption counts the Requests. For
+ * everyone else the section stays out of the way until the server returns
+ * something to decide, and is headed like the panels beside it.
  */
 export function RequestDecisionQueue({
   showEmpty = false,
@@ -224,10 +232,13 @@ export function RequestDecisionQueue({
   );
   useReadNotificationsAbout(queuedSubjects);
   const mutation = useRequestDecision();
-  // Kept after the dialog closes, so its content does not vanish while it
-  // animates out; cleared once it has.
+  // Kept after the surface closes, so its content does not vanish while it
+  // animates out. The dialog clears it once it has; the sheet leaves it for
+  // the next opening to replace.
   const [selected, setSelected] = useState<Selection | null>(null);
   const [open, setOpen] = useState(false);
+  // Each opening starts from the Request as filed, not from a dropped draft.
+  const [attempt, setAttempt] = useState(0);
   const [receipt, setReceipt] = useState<string | null>(null);
   const submitting = useRef(false);
   // After a decision the receipt takes focus: the row that opened the dialog
@@ -235,6 +246,7 @@ export function RequestDecisionQueue({
   const decided = useRef(false);
   function openDialog(request: PendingDecision, kind: Selection['kind']) {
     decided.current = false;
+    setAttempt((current) => current + 1);
     setSelected({ request, kind });
     setOpen(true);
     setReceipt(null);
@@ -261,18 +273,41 @@ export function RequestDecisionQueue({
   }
   const rows = queue.isPending || queue.isError ? [] : (queue.data ?? []);
   const nothingToDecide = !queue.isError && rows.length === 0;
-  // `selected` keeps the panel (and the dialog in it) mounted until the
-  // dialog has finished closing, even if the queue emptied meanwhile.
-  if (nothingToDecide && !receipt && !open && !selected && !showEmpty)
+  // A rejection's `selected` keeps the panel (and the dialog in it) mounted
+  // until the dialog has finished closing, even if the queue emptied
+  // meanwhile.
+  if (
+    nothingToDecide &&
+    !receipt &&
+    !open &&
+    selected?.kind !== 'reject' &&
+    !showEmpty
+  )
     return null;
+  const requestUnderDecision = selected && (
+    <div data-slot="request-under-decision" className="rounded-md bg-muted p-3">
+      <RequestSummary request={selected.request} />
+    </div>
+  );
   // A list alone fills the box edge to edge; with a receipt above it, the box
   // keeps its padding and the rows step out to meet it.
   const flush = rows.length > 0 && !receipt;
   return (
     <Panel
-      eyebrow="De decis"
-      icon={ClipboardCheck}
-      title="Cereri de evaluat"
+      {...(showEmpty
+        ? {
+            'aria-label': 'Cereri de evaluat',
+            description: rows.length > 0 && (
+              <span data-slot="request-count">
+                {countLabel(rows.length, 'cerere', 'cereri')} de evaluat
+              </span>
+            ),
+          }
+        : {
+            eyebrow: 'De decis',
+            icon: ClipboardCheck,
+            title: 'Cereri de evaluat',
+          })}
       flush={flush}
       stack={flush ? undefined : 3}
     >
@@ -317,80 +352,81 @@ export function RequestDecisionQueue({
           ))}
         </ul>
       )}
+      <FormSheet
+        open={open && selected?.kind === 'approve'}
+        onOpenChange={(next) => {
+          if (!next) close();
+        }}
+        title="Evaluează cererea"
+        busy={mutation.isPending}
+        finalFocus={() => !decided.current}
+        className="sm:max-w-2xl"
+      >
+        {selected?.kind === 'approve' && (
+          <>
+            {requestUnderDecision}
+            <ApproveRequestForm
+              key={attempt}
+              request={selected.request}
+              isPending={mutation.isPending}
+              onApprove={(draft) =>
+                decide({
+                  kind: 'approve',
+                  requestId: selected.request.id,
+                  difficulty: draft.difficulty,
+                  rating: draft.rating,
+                  note: draft.note,
+                  task: {
+                    title: draft.title,
+                    description: draft.description,
+                    groupId: draft.groupId,
+                    links: draft.links,
+                    campaignId: draft.campaignId,
+                  },
+                })
+              }
+              onCancel={close}
+            />
+          </>
+        )}
+      </FormSheet>
       <Dialog
-        open={open}
+        open={open && selected?.kind === 'reject'}
         onOpenChange={(next) => {
           if (!next) close();
         }}
         onOpenChangeComplete={(next) => {
-          if (!next) setSelected(null);
+          if (!next)
+            setSelected((current) =>
+              current?.kind === 'reject' ? null : current,
+            );
         }}
       >
         <DialogContent
           finalFocus={() => !decided.current}
-          // A form as long as a Task's: a sheet on a phone (#915).
-          fullScreenOnPhone={selected?.kind === 'approve'}
-          className={
-            selected?.kind === 'approve' ? 'sm:max-w-2xl' : 'sm:max-w-lg'
-          }
+          className="sm:max-w-lg"
         >
-          {selected && (
+          {selected?.kind === 'reject' && (
             <>
               <DialogHeader>
-                <DialogTitle>
-                  {selected.kind === 'approve'
-                    ? 'Evaluează cererea'
-                    : 'Respinge cererea'}
-                </DialogTitle>
+                <DialogTitle>Respinge cererea</DialogTitle>
                 <DialogDescription>
-                  {selected.kind === 'approve'
-                    ? 'Aprobarea creează taskul finalizat așa cum îl lași mai jos și acordă punctele solicitantului.'
-                    : 'Solicitantul vede motivul în Cererile mele.'}
+                  Solicitantul vede motivul în Cererile mele.
                 </DialogDescription>
               </DialogHeader>
-              <div
-                data-slot="request-under-decision"
-                className="rounded-md bg-muted p-3"
-              >
-                <RequestSummary request={selected.request} />
-              </div>
-              {selected.kind === 'approve' ? (
-                <ApproveRequestForm
-                  key={selected.request.id}
-                  request={selected.request}
-                  isPending={mutation.isPending}
-                  onApprove={(draft) =>
-                    decide({
-                      kind: 'approve',
-                      requestId: selected.request.id,
-                      difficulty: draft.difficulty,
-                      rating: draft.rating,
-                      note: draft.note,
-                      task: {
-                        title: draft.title,
-                        description: draft.description,
-                        groupId: draft.groupId,
-                        links: draft.links,
-                        campaignId: draft.campaignId,
-                      },
-                    })
-                  }
-                  onCancel={close}
-                />
-              ) : (
-                <RejectForm
-                  key={selected.request.id}
-                  pending={mutation.isPending}
-                  onReject={(note) =>
-                    decide({
-                      kind: 'reject',
-                      requestId: selected.request.id,
-                      note,
-                    })
-                  }
-                  onCancel={close}
-                />
-              )}
+              {requestUnderDecision}
+              <RejectForm
+                key={attempt}
+                pending={mutation.isPending}
+                onReject={(note) =>
+                  decide({
+                    kind: 'reject',
+                    requestId: selected.request.id,
+                    note,
+                  })
+                }
+                onCancel={close}
+              />
             </>
           )}
         </DialogContent>

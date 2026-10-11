@@ -14,8 +14,10 @@ import {
 import { MemberName } from '../../components/member/MemberName';
 import { memberDisplayName } from '../../components/member/member-identity';
 import { ErrorState, Loading } from '../../components/states';
+import { FilterSearch } from '../../components/work-filter/FilterToolbar';
 import { Badge } from '../../components/ui/badge';
 import { useCapabilities } from '../../lib/capabilities';
+import { formatMemberCount } from '../../lib/format';
 import {
   useAppointableMembers,
   type AppointableMember,
@@ -50,11 +52,6 @@ function nameColumn(
     id: 'name',
     accessorFn: (row) => memberDisplayName(row.nickname, row.name),
     header: 'Membru',
-    // Case- and diacritic-blind, so "stefan" finds "Ștefan".
-    filterFn: (row, _columnId, value: string) =>
-      normalizeSearch(
-        `${memberDisplayName(row.original.nickname, row.original.name)} ${row.original.name}`,
-      ).includes(normalizeSearch(value.trim())),
     sortFn: (left, right) =>
       memberDisplayName(
         left.original.nickname,
@@ -137,12 +134,28 @@ function memberColumns(
     : [name, roleColumn];
 }
 
-/** Voluntari's count, in its place under the search, following it (#1018). */
-function memberCount(shown: number, total: number) {
-  return <MemberCount shown={shown} total={total} />;
+/**
+ * The Members whose name or pseudonym holds the search — case- and
+ * diacritic-blind, so "stefan" finds "Ștefan".
+ */
+function searchMembers(
+  members: readonly AppointableMember[],
+  search: string,
+): AppointableMember[] {
+  const needle = normalizeSearch(search.trim());
+  if (!needle) return [...members];
+  return members.filter((member) =>
+    normalizeSearch(
+      `${memberDisplayName(member.nickname, member.name)} ${member.name}`,
+    ).includes(needle),
+  );
 }
 
-/** Rol and Status fold under the name on a phone (layout AD1). */
+/**
+ * Rol and Status fold under the name on a phone (layout AD1), and the header
+ * row goes with them (`hideHeaderUnderSm`): over one column of names it says
+ * nothing. Sorting stays on the header from 640 px.
+ */
 const columnClassName = {
   name: 'min-w-40 whitespace-normal',
   role: 'max-sm:hidden',
@@ -176,34 +189,30 @@ function MembersPanel({ provision }: { provision: boolean }) {
     [invited],
   );
   const data = useMemo(() => members.data ?? [], [members.data]);
+  const [search, setSearch] = useState('');
+  const found = useMemo(() => searchMembers(data, search), [data, search]);
+  // The columns follow every Member, not the search: a column never comes
+  // and goes while typing.
   const columns = useMemo(
     () => memberColumns(data, invitedIds),
     [data, invitedIds],
   );
   const latest = invited.at(-1);
   return (
-    <Panel
-      title="Membri"
-      control={
-        provision && (
-          // The two ways a Member comes in, as one pair (#949): two equal
-          // columns, so they match in size at every width.
-          <div
-            role="group"
-            aria-label="Adaugă membri"
-            className="grid grid-cols-2 gap-2"
-          >
-            <InviteMemberDialog
-              onInvited={(member) =>
-                setInvited((current) => [...current, member])
-              }
-            />
-            <CsvImportDialog onShowUninvited={() => setView('uninvited')} />
-          </div>
-        )
-      }
-      stack={latest || provision ? 3 : undefined}
-    >
+    // No heading: the tab (or the page's title on a phone) already says
+    // Membri.
+    <Panel aria-label="Membri" stack={3}>
+      {/* The two ways a Member comes in (#949), behind the page's plus. */}
+      {provision && (
+        <>
+          <InviteMemberDialog
+            onInvited={(member) =>
+              setInvited((current) => [...current, member])
+            }
+          />
+          <CsvImportDialog onShowUninvited={() => setView('uninvited')} />
+        </>
+      )}
       {provision && (
         <SegmentedToggle
           label="Vizualizare"
@@ -246,16 +255,29 @@ function MembersPanel({ provision }: { provision: boolean }) {
           onRetry={() => void members.refetch()}
         />
       ) : (
-        <DataTable
-          columns={columns}
-          data={data}
-          filters={[{ columnId: 'name', label: 'Caută un membru' }]}
-          initialSorting={[{ id: 'name', desc: false }]}
-          emptyTitle="Niciun membru găsit."
-          columnClassName={columnClassName}
-          onRowClick={(row) => void navigate(memberPagePath(row.memberId))}
-          summary={memberCount}
-        />
+        <>
+          <FilterSearch
+            label="Caută un membru"
+            placeholder={`Caută în ${formatMemberCount(data.length)}`}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="flex-none basis-auto"
+          />
+          {/* Voluntari's count (#1018), once the search narrows the list:
+              until then the search field itself says how many there are. */}
+          {found.length !== data.length && (
+            <MemberCount shown={found.length} total={data.length} />
+          )}
+          <DataTable
+            columns={columns}
+            data={found}
+            initialSorting={[{ id: 'name', desc: false }]}
+            emptyTitle="Niciun membru găsit."
+            columnClassName={columnClassName}
+            hideHeaderUnderSm
+            onRowClick={(row) => void navigate(memberPagePath(row.memberId))}
+          />
+        </>
       )}
     </Panel>
   );
@@ -264,7 +286,7 @@ function MembersPanel({ provision }: { provision: boolean }) {
 /**
  * Administrare → Membri (#825): every Member, each opening their page (#103),
  * and — for whoever may provision accounts — "Invită membru" (#931) and
- * "Import CSV" side by side in the panel's header (#949). Mounted behind
+ * "Import CSV" (#949) behind the page's plus button. Mounted behind
  * `manageRoles` or `provisionMembers`; the server decides every read again.
  */
 export default function AdminMembersTab() {
