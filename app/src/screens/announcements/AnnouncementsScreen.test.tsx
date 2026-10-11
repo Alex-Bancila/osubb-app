@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { swipe } from '../../test/swipe';
 import type { ReactNode } from 'react';
 import { MemoryRouter, useLocation } from 'react-router';
 import userEvent from '@testing-library/user-event';
@@ -777,4 +778,12 @@ describe('AnnouncementsScreen', () => {
       ).not.toBeInTheDocument();
     });
   });
+});
+
+it('moves between Anunțuri and OSUBB Deals with a finger swipe over the panel (2026-10-11)', async () => {
+  renderAt('/anunturi/deals');
+  swipe(await screen.findByText('Conținutul tabului OSUBB Deals'), 'right');
+  expect(
+    await screen.findByRole('link', { name: /^Anunțuri/ }),
+  ).toHaveAttribute('aria-current', 'page');
 });

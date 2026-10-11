@@ -2,8 +2,10 @@ import { Toast } from '../../components/ui/toast';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Mail } from 'lucide-react';
-import { useLocation, useSearchParams } from 'react-router';
+import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../../lib/auth';
+import { useSwipeTabs } from '../../lib/swipe-tabs';
+import { ANNOUNCEMENTS_PATH } from '../../components/shell/navItems';
 import {
   useAnnouncementsFeed,
   useMarkAnnouncementRead,
@@ -62,6 +64,13 @@ export default function AnnouncementsScreen() {
   // Two tabs, routed (R45): Anunțuri never shows a Deal, OSUBB Deals only Deals.
   const deals =
     pathname === DEALS_PATH || pathname.startsWith(`${DEALS_PATH}/`);
+  const navigate = useNavigate();
+  // A swipe over the tab's content moves between the two as a tap would (2026-10-11).
+  const swipe = useSwipeTabs<string>({
+    order: [ANNOUNCEMENTS_PATH, DEALS_PATH],
+    current: deals ? DEALS_PATH : ANNOUNCEMENTS_PATH,
+    onSelect: (path) => void navigate(path),
+  });
   // The page, its tabs and the plus button stay while the tab under them
   // changes, so the tabs' thumb slides; each tab draws its own header into
   // this slot above them.
@@ -74,6 +83,7 @@ export default function AnnouncementsScreen() {
         <div
           key={deals ? 'deals' : 'announcements'}
           className="flex min-w-0 motion-enter flex-col gap-6"
+          {...swipe}
         >
           {deals ? (
             <>

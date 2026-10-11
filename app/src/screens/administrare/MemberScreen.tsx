@@ -18,6 +18,7 @@ import {
   Users,
 } from 'lucide-react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router';
+import { SwipePanels } from '../../components/ui/swipe-panels';
 import {
   BackLink,
   backLinkState,
@@ -813,59 +814,71 @@ export default function MemberScreen() {
             </Tabs.Tab>
           </Tabs.List>
 
-          <Tabs.Panel
-            value="cont"
-            keepMounted
-            className="motion-enter outline-none"
+          {/* A swipe over the panel moves between the tabs as a tap would (2026-10-11). */}
+          <SwipePanels
+            order={tabs}
+            current={tab}
+            onSelect={(value) =>
+              setParams(
+                { [TAB_KEY]: value },
+                { replace: true, state: location.state },
+              )
+            }
           >
-            <div className="grid min-w-0 gap-4 md:grid-cols-2 md:items-start md:gap-6">
-              <AccountPanel
-                member={data}
-                canEdit={rights.profile}
-                leads={leads}
-              />
-              {rights.profile && <ReinvitePanel memberId={data.memberId} />}
-            </div>
-          </Tabs.Panel>
-
-          <Tabs.Panel
-            value="grupuri"
-            keepMounted
-            className="motion-enter outline-none"
-          >
-            <GroupsPanel groups={visibleGroups} from={fromHere} />
-          </Tabs.Panel>
-
-          {tabs.includes('roluri') && (
             <Tabs.Panel
-              value="roluri"
+              value="cont"
               keepMounted
               className="motion-enter outline-none"
             >
-              <div className="flex min-w-0 flex-col gap-4 md:gap-6">
-                {rights.rankAndStatus && (
-                  <RolePanel selectedMemberId={data.memberId} />
-                )}
-                {showTimeline && data.role && (
-                  <Panel title="Istoric roluri">
-                    <MemberRoleTimeline
-                      memberId={data.memberId}
-                      joinedAt={data.joinedAt}
-                      role={data.role}
-                    />
-                  </Panel>
-                )}
+              <div className="grid min-w-0 gap-4 md:grid-cols-2 md:items-start md:gap-6">
+                <AccountPanel
+                  member={data}
+                  canEdit={rights.profile}
+                  leads={leads}
+                />
+                {rights.profile && <ReinvitePanel memberId={data.memberId} />}
               </div>
             </Tabs.Panel>
-          )}
 
-          <Tabs.Panel
-            value="puncte"
-            keepMounted
-            className="motion-enter outline-none"
-          >
-            <PointsPanel points={data.points} />
-          </Tabs.Panel>
+            <Tabs.Panel
+              value="grupuri"
+              keepMounted
+              className="motion-enter outline-none"
+            >
+              <GroupsPanel groups={visibleGroups} from={fromHere} />
+            </Tabs.Panel>
+
+            {tabs.includes('roluri') && (
+              <Tabs.Panel
+                value="roluri"
+                keepMounted
+                className="motion-enter outline-none"
+              >
+                <div className="flex min-w-0 flex-col gap-4 md:gap-6">
+                  {rights.rankAndStatus && (
+                    <RolePanel selectedMemberId={data.memberId} />
+                  )}
+                  {showTimeline && data.role && (
+                    <Panel title="Istoric roluri">
+                      <MemberRoleTimeline
+                        memberId={data.memberId}
+                        joinedAt={data.joinedAt}
+                        role={data.role}
+                      />
+                    </Panel>
+                  )}
+                </div>
+              </Tabs.Panel>
+            )}
+
+            <Tabs.Panel
+              value="puncte"
+              keepMounted
+              className="motion-enter outline-none"
+            >
+              <PointsPanel points={data.points} />
+            </Tabs.Panel>
+          </SwipePanels>
         </Tabs.Root>
       </Page>
     </ReceiptTurnScope>

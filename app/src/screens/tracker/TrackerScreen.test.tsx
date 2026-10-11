@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { swipe } from '../../test/swipe';
 import type { ReactNode } from 'react';
 import { Link, MemoryRouter, useLocation, useNavigate } from 'react-router';
 import userEvent from '@testing-library/user-event';
@@ -1992,4 +1993,19 @@ describe('My tasks screen', () => {
       expect(taskToolbar()).toBeNull();
     });
   });
+});
+
+it('moves between tabs with a finger swipe over the panel (2026-10-11)', () => {
+  query();
+  render(<TrackerScreen />, { wrapper: Router });
+  swipe(screen.getByRole('tabpanel'), 'left');
+  expect(screen.getByRole('tab', { name: 'Disponibile' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  swipe(screen.getByRole('tabpanel'), 'right');
+  expect(screen.getByRole('tab', { name: 'Taskurile mele' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
 });

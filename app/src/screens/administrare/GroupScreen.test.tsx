@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { swipe } from '../../test/swipe';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -1667,4 +1668,10 @@ it('offers BC only Șterge definitiv on an archived Group', () => {
   expect(
     screen.queryByRole('region', { name: 'Setările grupului' }),
   ).toBeNull();
+});
+
+it('moves between tabs with a finger swipe over the panel (2026-10-11)', async () => {
+  show();
+  swipe(await screen.findByRole('region', { name: 'Setări' }), 'left');
+  expect(tab('Membri')).toHaveAttribute('aria-current', 'page');
 });
