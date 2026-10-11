@@ -24,7 +24,6 @@ declare
   v_executors uuid[] := coalesce(p_executor_ids, '{}'::uuid[]);
   v_given     integer := coalesce(array_length(v_executors, 1), 0);
   v_task      public.tasks%rowtype;
-  i           integer;
 begin
   -- 1. Malformed for every caller (conventions section 2: before the gate).
   if p_copies is null or p_copies < 1 then

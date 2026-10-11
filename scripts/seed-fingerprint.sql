@@ -109,9 +109,7 @@ select md5(string_agg(x, '|' order by x))
                             a.audience, a.priority, a.pinned, a.kind,
                             coalesce(a.code, '-'), a.links)
                 from announcements a join groups g on g.id=a.group_id
-    -- R44/R45: the Atribuție, its team and the Deal Code reveals.
-    union all select format('bc-assignment:%s:%s', b.assignment, p.full_name)
-                from bc_assignments b join profiles p on p.id = b.member_id
+    -- R44/R45/R47: the OSUBB Deals team and the Deal Code reveals.
     union all select format('assignment-team:%s:%s:%s', t.assignment, t.team_role, p.full_name)
                 from assignment_team t join profiles p on p.id = t.member_id
     union all select format('deal-reveal:%s:%s', a.title, p.full_name)
