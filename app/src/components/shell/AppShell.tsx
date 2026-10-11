@@ -306,8 +306,9 @@ export default function AppShell() {
           to={PROFILE_PATH}
           className={cn(
             'shrink-0 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 lg:hidden',
+            // The avatar keeps its size: the pill grows around it.
             isProfileActive
-              ? cn(topPillClass, 'pl-1')
+              ? cn(topPillClass, 'h-[44px] pl-[2px]')
               : 'grid size-11 place-items-center rounded-full',
           )}
           aria-current={isProfileActive ? 'page' : undefined}
@@ -315,8 +316,7 @@ export default function AppShell() {
         >
           <span
             className={cn(
-              'grid place-items-center rounded-full font-bold text-white',
-              isProfileActive ? 'size-7 text-[10px]' : 'size-8 text-xs',
+              'grid size-8 place-items-center rounded-full text-xs font-bold text-white',
             )}
             style={{
               backgroundColor: safeHexColor(profile.data?.avatar_color),
