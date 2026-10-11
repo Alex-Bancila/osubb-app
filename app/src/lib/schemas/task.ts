@@ -80,7 +80,7 @@ export function taskDraftSchema(options: TaskFormOptions, when: When = {}) {
       assignmentMode: z.enum(['direct', 'public']).nullable(),
       executorId: z.string().nullable(),
       campaignId: z.number().nullable(),
-      copies: z.number(),
+      copies: z.number({ error: 'invalid_copies' }),
       links: attachedLinksSchema,
     })
     .superRefine((draft, ctx) => {

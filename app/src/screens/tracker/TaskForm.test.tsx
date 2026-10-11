@@ -163,6 +163,7 @@ it('picks the Origin as a root Group, then a Group below it, and emits a trimmed
     executorId: 'ana',
     campaignId: 10,
     links: [],
+    copies: 1,
   });
 });
 it("disables the organization-wide Audience for a Private Group's Task, with the reason (#757)", async () => {
@@ -732,4 +733,89 @@ it('marks both cascade steps invalid when the server refuses the chosen Group', 
   expect(subgroupBox()).toHaveAccessibleDescription(
     expect.stringContaining(refusal),
   );
+});
+
+it('offers Exemplare to a Task, not to an Umbrella, and labels the button by the count', async () => {
+  const user = userEvent.setup();
+  render(
+    <TaskForm
+      options={options}
+      onDraft={vi.fn()}
+      submitLabel="Creează taskul"
+    />,
+  );
+  const copies = screen.getByLabelText('Exemplare');
+  expect(copies).toHaveValue(1);
+  expect(copies).toHaveAttribute('max', '20');
+  expect(
+    screen.getByRole('button', { name: 'Creează taskul' }),
+  ).toBeInTheDocument();
+  await user.click(screen.getByRole('radio', { name: 'Public' }));
+  await user.clear(copies);
+  await user.type(copies, '3');
+  expect(
+    screen.getByRole('button', { name: 'Creează 3 taskuri' }),
+  ).toBeInTheDocument();
+  await user.click(screen.getByRole('radio', { name: 'Task-umbrelă' }));
+  expect(screen.queryByLabelText('Exemplare')).toBeNull();
+  expect(
+    screen.getByRole('button', { name: 'Creează taskul' }),
+  ).toBeInTheDocument();
+});
+
+it('hands direct copies to the next step: no Executor picker, the button says Continuă', async () => {
+  const user = userEvent.setup();
+  const onDraft = vi.fn();
+  render(
+    <TaskForm
+      options={options}
+      onDraft={onDraft}
+      submitLabel="Creează taskul"
+    />,
+  );
+  await chooseOrigin(user, 'Tineret');
+  expect(
+    screen.getByRole('combobox', { name: 'Executor' }),
+  ).toBeInTheDocument();
+  const copies = screen.getByLabelText('Exemplare');
+  await user.clear(copies);
+  await user.type(copies, '2');
+  expect(screen.queryByRole('combobox', { name: 'Executor' })).toBeNull();
+  expect(screen.getByText(/Executorii se aleg la pasul următor/)).toBeVisible();
+  await user.type(screen.getByLabelText('Titlu'), 'Două afișe');
+  await pickDate(user, screen.getByLabelText(/Termen/), DEADLINE);
+  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+  await waitFor(() => expect(onDraft).toHaveBeenCalledTimes(1));
+  expect(onDraft.mock.calls[0]?.[0]).toMatchObject({
+    copies: 2,
+    assignmentMode: 'direct',
+    executorId: null,
+  });
+});
+
+it.each([
+  ['', 'Numărul de exemplare nu e valid'],
+  ['abc', 'Numărul de exemplare nu e valid'],
+  ['2.5', 'Numărul de exemplare nu e valid'],
+  ['0', 'Numărul de exemplare nu e valid'],
+  ['21', 'Cel mult 20 de exemplare'],
+])('refuses "%s" copies in the browser', async (typed, message) => {
+  const user = userEvent.setup();
+  const onDraft = vi.fn();
+  render(
+    <TaskForm
+      options={options}
+      onDraft={onDraft}
+      submitLabel="Creează taskul"
+    />,
+  );
+  await chooseOrigin(user, 'Tineret');
+  await user.type(screen.getByLabelText('Titlu'), 'Fără număr');
+  await pickDate(user, screen.getByLabelText(/Termen/), DEADLINE);
+  const copies = screen.getByLabelText('Exemplare');
+  await user.clear(copies);
+  if (typed) fireEvent.change(copies, { target: { value: typed } });
+  await user.click(screen.getByRole('button', { name: /Creează|Continuă/ }));
+  expect(await screen.findByText(new RegExp(message))).toBeVisible();
+  expect(onDraft).not.toHaveBeenCalled();
 });
