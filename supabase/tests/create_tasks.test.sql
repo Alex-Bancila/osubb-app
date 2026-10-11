@@ -29,7 +29,7 @@ select is((select prosecdef from pg_proc where proname = 'create_tasks'
 select is((select prosecdef from pg_proc where proname = 'create_tasks_impl'
             and pronamespace = 'private'::regnamespace), true,
   'the body is security definer');
-select ok((select proconfig @> array['search_path='] from pg_proc where proname = 'create_tasks_impl'
+select ok((select proconfig @> array['search_path=""'] from pg_proc where proname = 'create_tasks_impl'
             and pronamespace = 'private'::regnamespace),
   'the body pins an empty search_path');
 select is((select proretset from pg_proc where proname = 'create_tasks'
