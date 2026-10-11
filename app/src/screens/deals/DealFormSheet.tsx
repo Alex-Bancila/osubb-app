@@ -1,3 +1,4 @@
+import { Toast } from '../../components/ui/toast';
 import { useId, useState, type FormEvent } from 'react';
 import { Plus } from 'lucide-react';
 import { FabAction } from '../../components/layout';
@@ -294,12 +295,9 @@ export function NewDealControl() {
         }}
       />
       {published && (
-        <p
-          role="status"
-          className="m-0 text-sm text-emerald-700 dark:text-emerald-400"
-        >
+        <Toast onClose={() => setPublished(false)}>
           Deal-ul a fost publicat.
-        </p>
+        </Toast>
       )}
       <DealFormSheet
         key={openings}

@@ -259,8 +259,11 @@ sit above that target. A list of rows that can change under the member is an
 optional fields say "(opțional)". Errors appear under the field, in Romanian,
 and name the fix. Sections are separated by space, not boxes.
 
-**Receipts.** After a command succeeds, one sentence in the success colour
-says what happened, takes focus, and stays for the visit.
+**Receipts.** After a command succeeds, one sentence says what happened. A
+receipt that only confirms ("Anunțul a fost publicat.") is a `Toast`: it
+floats above the tab bar for four seconds and takes no place on the page. A
+receipt the member must still be able to read, or that names what to do
+next, stays on the page in the success colour and takes focus.
 
 ## Do's and Don'ts
 
