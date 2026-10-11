@@ -847,7 +847,9 @@ describe('phone navigation (#972)', () => {
       // Every tab keeps its name; only the current one draws it.
       expect(label?.textContent).not.toBe('');
       expect(label?.classList.contains('sr-only')).toBe(!current);
-      expect(link.className.includes('flex-1')).toBe(current);
+      // Fit first, scroll last: the current tab grows to its share and never
+      // shrinks below its name (Part C, spec 2026-10-11).
+      expect(link.className.includes('flex-auto shrink-0')).toBe(current);
     }
     expect(
       within(quick).getByRole('link', { name: 'Calendar', current: 'page' }),

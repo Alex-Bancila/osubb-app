@@ -93,4 +93,23 @@ describe('PageTabs', () => {
     );
     expect(tabLabelsFrom.always.tab).toBe('');
   });
+
+  it('scrolls sideways when its tabs do not fit, with no scrollbar and no shrinking tabs', () => {
+    render(
+      <MemoryRouter>
+        <PageTabs label="Secțiuni" tabs={tabs} />
+      </MemoryRouter>,
+    );
+    const nav = screen.getByRole('navigation', { name: 'Secțiuni' });
+    expect(nav).toHaveClass(
+      'overflow-x-auto',
+      '[scrollbar-width:none]',
+      '[&::-webkit-scrollbar]:hidden',
+    );
+    for (const link of screen.getAllByRole('link'))
+      expect(link).toHaveClass('shrink-0');
+    // Labels never truncate any more: the track scrolls instead.
+    for (const size of Object.values(tabLabelsFrom))
+      expect(size.label).not.toContain('truncate');
+  });
 });

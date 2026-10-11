@@ -8,6 +8,7 @@ import {
 import { Link, useLocation } from 'react-router';
 import { cn } from '../../lib/utils';
 import { usePopMotion } from '../../lib/motion';
+import { useScrollCurrentTabIntoView } from '../layout/tab-scroll';
 import { Badge } from '../ui/badge';
 import { isNavItemActive, type NavItem } from './navItems';
 
@@ -23,9 +24,11 @@ type Badges = Partial<Record<string, { count: number; label: string }>>;
  * (each keeps its name for a screen reader). No tab is louder than the rest —
  * the page's plus button is the one solid red thing in this corner.
  *
- * A name too long for the space it gets ("Administrare" on a 320 px phone)
- * falls back to the item's `shortLabel`. While a phone keyboard is open the
- * bar steps aside (#1013).
+ * Fit first, scroll last: the current tab spells its full name if the five
+ * fit; if not, its short name (`shortLabel`); only if the five still overflow
+ * does the bar scroll sideways, with no scrollbar, the current tab brought
+ * into view. A new width starts from the full name again. While a phone
+ * keyboard is open the bar steps aside (#1013).
  */
 export function TabBar({
   tabs,
@@ -71,11 +74,12 @@ export function TabBar({
         : next,
     );
     if (!current) setWasEmpty(true);
-    const label = current?.querySelector<HTMLElement>(
-      '[data-slot="tab-label"]',
-    );
-    if (label && label.scrollWidth > label.clientWidth + 1)
-      setShortFor(current?.dataset.path ?? null);
+    // The track, not the label, says whether the full name fits: labels no
+    // longer clip. Overflowing with the short name already shown changes
+    // nothing more -- the bar scrolls.
+    const track = bar.current;
+    if (current && track && track.scrollWidth > track.clientWidth + 1)
+      setShortFor(current.dataset.path ?? null);
   }, []);
   // After every render: the route, a count or the label may have changed.
   useLayoutEffect(measure);
@@ -89,6 +93,7 @@ export function TabBar({
     observer.observe(root);
     return () => observer.disconnect();
   }, [measure]);
+  useScrollCurrentTabIntoView(bar, '[aria-current="page"]');
 
   return (
     <nav
@@ -98,7 +103,7 @@ export function TabBar({
     >
       <div
         ref={bar}
-        className="relative mx-auto flex max-w-md gap-1 rounded-full border border-border bg-card p-[5px] shadow-(--sh-md)"
+        className="relative mx-auto flex max-w-md gap-1 overflow-x-auto overscroll-x-contain rounded-full border border-border bg-card p-[5px] shadow-(--sh-md) [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {thumb && (
           <span
@@ -124,14 +129,18 @@ export function TabBar({
               aria-current={current ? 'page' : undefined}
               className={cn(
                 'relative z-1 flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-bold whitespace-nowrap no-underline transition-colors duration-200 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring motion-reduce:transition-none',
+                // A tab never shrinks below its content: when the five do not
+                // fit, the track scrolls (fit first, scroll last).
                 current
-                  ? 'min-w-0 flex-1 text-(--surface)'
+                  ? 'flex-auto shrink-0 text-(--surface)'
                   : parent
-                    ? 'min-w-0 flex-[2] text-foreground ring-[1.5px] ring-muted-foreground/70 ring-inset'
+                    ? 'flex-auto shrink-0 text-foreground ring-[1.5px] ring-muted-foreground/70 ring-inset'
                     : 'text-muted-foreground hover:text-foreground',
                 // On a page that is none of the five (Profil, Notificări)
                 // nothing opens, so the five share the bar evenly.
-                !current && !parent && (active ? 'flex-none' : 'flex-1'),
+                !current &&
+                  !parent &&
+                  (active ? 'flex-none' : 'flex-auto shrink-0'),
                 current && !thumb && 'bg-(--text)',
               )}
             >
@@ -154,9 +163,7 @@ export function TabBar({
               <span
                 data-slot="tab-label"
                 className={cn(
-                  current || parent
-                    ? 'min-w-0 overflow-hidden text-clip'
-                    : 'sr-only',
+                  current || parent ? 'whitespace-nowrap' : 'sr-only',
                 )}
               >
                 {current && short && item.shortLabel
