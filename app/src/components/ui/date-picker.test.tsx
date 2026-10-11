@@ -15,7 +15,10 @@ vi.mock('@base-ui/react/popover', async (importOriginal) => {
     positionerProps.push(props);
     return <actual.Popover.Positioner {...(props as never)} />;
   };
-  return { ...actual, Popover: { ...actual.Popover, Positioner } };
+  return {
+    ...actual,
+    Popover: Object.assign({}, actual.Popover, { Positioner }),
+  };
 });
 
 function Field({
