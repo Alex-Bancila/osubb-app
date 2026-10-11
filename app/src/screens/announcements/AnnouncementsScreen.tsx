@@ -1,3 +1,4 @@
+import { Toast } from '../../components/ui/toast';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Mail } from 'lucide-react';
@@ -292,12 +293,7 @@ function AnnouncementsContent({
       />
 
       {deleted && (
-        <p
-          role="status"
-          className="m-0 text-sm text-emerald-700 dark:text-emerald-400"
-        >
-          Anunțul a fost șters.
-        </p>
+        <Toast onClose={() => setDeleted(false)}>Anunțul a fost șters.</Toast>
       )}
 
       {isPending ? (

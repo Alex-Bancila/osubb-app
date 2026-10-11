@@ -449,15 +449,25 @@ function countText(count: number) {
 
 /**
  * How many Groups the list holds. Beside the view switch on a phone there is
- * no room for it, so it is only spoken there.
+ * no room for it, so it is only spoken there; with nothing else on the row —
+ * no switch, nothing to expand — a number alone above the list is only
+ * spoken, and the row takes no space.
  */
-function GroupCount({ count, quiet }: { count: number; quiet: boolean }) {
+function GroupCount({
+  count,
+  quiet,
+}: {
+  count: number;
+  /** `phone`: spoken only under 640 px; `always`: spoken only, everywhere. */
+  quiet: false | 'phone' | 'always';
+}) {
   return (
     <p
       role="status"
       className={cn(
         'm-0 ms-auto text-sm text-muted-foreground',
-        quiet && 'max-sm:sr-only',
+        quiet === 'phone' && 'max-sm:sr-only',
+        quiet === 'always' && 'sr-only',
       )}
     >
       {countText(count)}
@@ -484,7 +494,7 @@ function GroupsList({
       {toolbar && (
         <div
           data-slot="groups-toolbar"
-          className="flex min-h-11 min-w-0 items-center gap-2 empty:hidden"
+          className="flex min-h-11 min-w-0 items-center gap-2 empty:hidden has-[>.sr-only:only-child]:contents"
         >
           {toolbar}
         </div>
@@ -525,7 +535,12 @@ function GroupTree({
       toolbar={
         <>
           {viewToggle}
-          <GroupCount count={groups.length} quiet={Boolean(viewToggle)} />
+          <GroupCount
+            count={groups.length}
+            quiet={
+              viewToggle ? 'phone' : expandable.length > 0 ? false : 'always'
+            }
+          />
           {expandable.length > 0 && (
             <Button
               type="button"
@@ -579,7 +594,7 @@ function LedGroups({
         <>
           {viewToggle}
           {count > 0 && (
-            <GroupCount count={count} quiet={Boolean(viewToggle)} />
+            <GroupCount count={count} quiet={viewToggle ? 'phone' : 'always'} />
           )}
         </>
       }

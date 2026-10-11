@@ -58,23 +58,29 @@ export default function AnnouncementDetailsSheet({
   onClose,
   onDeleted = onClose,
 }: AnnouncementDetailsSheetProps) {
-  if (!announcement && !unavailable) return null;
+  // The sheet stays mounted so it slides in and out; while it closes it
+  // keeps showing what it held.
+  const open = Boolean(announcement) || unavailable;
+  const [held, setHeld] = useState({ announcement, unavailable });
+  if (
+    open &&
+    (held.announcement !== announcement || held.unavailable !== unavailable)
+  )
+    setHeld({ announcement, unavailable });
+  const shown = open ? announcement : held.announcement;
 
   return (
     <Sheet
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
       }}
     >
       <SheetPortal>
         <SheetBackdrop />
-        <SheetPopup side="right" className="max-w-2xl gap-5 p-4 sm:p-6">
-          {announcement ? (
-            <AnnouncementDetails
-              announcement={announcement}
-              onDeleted={onDeleted}
-            />
+        <SheetPopup side="bottom" className="gap-5 p-4 sm:max-w-2xl sm:p-6">
+          {shown ? (
+            <AnnouncementDetails announcement={shown} onDeleted={onDeleted} />
           ) : (
             <>
               <SheetHeader>
@@ -235,11 +241,13 @@ function AnnouncementManageActions({
 
   return (
     <div className="space-y-2 border-t pt-4">
-      <div className="flex flex-wrap items-center gap-2">
+      {/* One row at every width: under `sm` Șterge is its icon alone (it
+          keeps its name), and the pin button's label gives way first. */}
+      <div className="flex items-center gap-2">
         <Button
           type="button"
           variant="outline"
-          className="gap-2"
+          className="shrink-0 gap-2"
           disabled={busy}
           onClick={() => {
             setOutcome(null);
@@ -253,7 +261,7 @@ function AnnouncementManageActions({
         <Button
           type="button"
           variant="outline"
-          className="gap-2"
+          className="min-w-0 gap-2"
           disabled={busy}
           onClick={toggle}
         >
@@ -262,12 +270,14 @@ function AnnouncementManageActions({
           ) : (
             <Pin className="size-4" aria-hidden="true" />
           )}
-          {pinned ? 'Anulează fixarea' : 'Fixează anunțul'}
+          <span className="min-w-0 truncate">
+            {pinned ? 'Anulează fixarea' : 'Fixează anunțul'}
+          </span>
         </Button>
         <Button
           type="button"
           variant="destructive"
-          className="gap-2 sm:ml-auto"
+          className="ml-auto shrink-0 gap-2 max-sm:px-0"
           disabled={busy}
           onClick={() => {
             setOutcome(null);
@@ -276,7 +286,7 @@ function AnnouncementManageActions({
           }}
         >
           <Trash2 className="size-4" aria-hidden="true" />
-          Șterge
+          <span className="max-sm:sr-only">Șterge</span>
         </Button>
       </div>
       {outcome && (

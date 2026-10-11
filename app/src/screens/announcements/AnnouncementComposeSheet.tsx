@@ -1,3 +1,4 @@
+import { Toast } from '../../components/ui/toast';
 import { useId, useState, type FormEvent } from 'react';
 import { Plus } from 'lucide-react';
 import { FabAction } from '../../components/layout';
@@ -142,12 +143,9 @@ export default function AnnouncementComposeSheet() {
           }}
         />
         {published && (
-          <p
-            role="status"
-            className="text-sm text-emerald-700 dark:text-emerald-400"
-          >
+          <Toast onClose={() => setPublished(false)}>
             Anunțul a fost publicat.
-          </p>
+          </Toast>
         )}
       </div>
       <FormSheet

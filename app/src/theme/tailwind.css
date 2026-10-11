@@ -191,6 +191,23 @@
   }
 }
 
+@keyframes motion-shrink {
+  to {
+    opacity: 0;
+    scale: 0.6;
+  }
+}
+
+/* A selection that is dropped with nowhere to slide to shrinks away where
+   it stood; without motion it is simply gone. */
+@utility motion-shrink {
+  animation: motion-shrink 180ms ease-in forwards;
+
+  @media (prefers-reduced-motion: reduce) {
+    display: none;
+  }
+}
+
 /* Content that has just arrived: a tab's panel, a list after its skeleton. */
 @utility motion-enter {
   @media (prefers-reduced-motion: no-preference) {

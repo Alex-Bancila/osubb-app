@@ -28,7 +28,9 @@ type Badges = Partial<Record<string, { count: number; label: string }>>;
  * fit; if not, its short name (`shortLabel`); only if the five still overflow
  * does the bar scroll sideways, with no scrollbar, the current tab brought
  * into view. A new width starts from the full name again. While a phone
- * keyboard is open the bar steps aside (#1013).
+ * keyboard is open the bar steps aside (#1013). The bar floats over the page:
+ * frosted, with the page scrolling under it; the shell leaves its height of
+ * room at the page's end.
  */
 export function TabBar({
   tabs,
@@ -52,6 +54,13 @@ export function TabBar({
   const [thumb, setThumb] = useState<{ left: number; width: number } | null>(
     null,
   );
+  // The thumb as it last stood, drawn once more while it shrinks away when
+  // the page leaves the bar (a tab to Profil): it has nowhere to slide to.
+  const lastThumb = useRef<{ left: number; width: number } | null>(null);
+  const [leaving, setLeaving] = useState<{
+    left: number;
+    width: number;
+  } | null>(null);
   // Whether the bar has stood with no tab selected (Profil, Notificări): the
   // thumb then has nowhere to slide from, so it grows in on the tab instead.
   const [wasEmpty, setWasEmpty] = useState(false);
@@ -74,6 +83,9 @@ export function TabBar({
         : next,
     );
     if (!current) setWasEmpty(true);
+    if (next) setLeaving(null);
+    else if (lastThumb.current) setLeaving(lastThumb.current);
+    lastThumb.current = next;
     // The track, not the label, says whether the full name fits: labels no
     // longer clip. Overflowing with the short name already shown changes
     // nothing more -- the bar scrolls.
@@ -99,11 +111,11 @@ export function TabBar({
     <nav
       aria-label="Navigare rapidă"
       data-slot="tab-bar"
-      className="relative z-10 px-3 pt-2 pb-[calc(.75rem+env(safe-area-inset-bottom))] [grid-area:tabbar] keyboard:hidden lg:hidden"
+      className="pointer-events-none relative z-10 self-end px-3 pt-2 pb-[calc(.75rem+env(safe-area-inset-bottom))] [grid-area:main] *:pointer-events-auto keyboard:hidden lg:hidden"
     >
       <div
         ref={bar}
-        className="relative mx-auto flex max-w-md gap-1 overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-full border border-border bg-card p-[5px] shadow-(--sh-md) [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="relative mx-auto flex max-w-md gap-1 overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-full border border-border bg-card/80 p-[5px] shadow-(--sh-md) backdrop-blur-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {thumb && (
           <span
@@ -114,6 +126,15 @@ export function TabBar({
               wasEmpty && 'motion-grow',
             )}
             style={{ width: thumb.width, translate: `${thumb.left}px 0` }}
+          />
+        )}
+        {leaving && (
+          <span
+            aria-hidden="true"
+            data-slot="tab-thumb-leaving"
+            className="pointer-events-none absolute inset-y-[5px] left-0 rounded-full bg-(--text) motion-shrink"
+            style={{ width: leaving.width, translate: `${leaving.left}px 0` }}
+            onAnimationEnd={() => setLeaving(null)}
           />
         )}
         {tabs.map((item) => {
