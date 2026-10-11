@@ -42,6 +42,9 @@ export function TabBar({
   const [thumb, setThumb] = useState<{ left: number; width: number } | null>(
     null,
   );
+  // Whether the bar has stood with no tab selected (Profil, Notificări): the
+  // thumb then has nowhere to slide from, so it grows in on the tab instead.
+  const [wasEmpty, setWasEmpty] = useState(false);
   // The tab whose name did not fit, which says its short one; a new tab or
   // a new width starts from the full name again.
   const [shortFor, setShortFor] = useState<string | null>(null);
@@ -60,6 +63,7 @@ export function TabBar({
         ? previous
         : next,
     );
+    if (!current) setWasEmpty(true);
     const label = current?.querySelector<HTMLElement>(
       '[data-slot="tab-label"]',
     );
@@ -93,7 +97,10 @@ export function TabBar({
           <span
             aria-hidden="true"
             data-slot="tab-thumb"
-            className="pointer-events-none absolute inset-y-[5px] left-0 rounded-full bg-(--text) transition-[translate,width] duration-300 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none"
+            className={cn(
+              'pointer-events-none absolute inset-y-[5px] left-0 rounded-full bg-(--text) transition-[translate,width] duration-300 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none',
+              wasEmpty && 'motion-grow',
+            )}
             style={{ width: thumb.width, translate: `${thumb.left}px 0` }}
           />
         )}
