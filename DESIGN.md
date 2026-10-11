@@ -119,7 +119,8 @@ Eight rules carry the whole language:
 1. **Four surfaces, each with one job.** A _page_ is a list or a place. A
    _sheet_ reads or edits one thing: a panel from the right on a desktop,
    rising from the bottom on a phone. A _dialog_ confirms or asks for a reason
-   — three fields at most. A _pop-over_ is a menu or a hint.
+   — three fields at most, or one like field per copy (the Executors of n
+   Tasks). A _pop-over_ is a menu or a hint.
 2. **One filled button per surface.** Red is the primary action, the plus
    button, and "needs you" signals (unread, overdue). Everything else is
    outline or ghost. Destructive actions come last and are never filled.

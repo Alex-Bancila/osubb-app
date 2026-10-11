@@ -19,14 +19,21 @@ vi.mock('../../queries/task-form-options', () => ({
 }));
 vi.mock('./DirectExecutorSelector', () => ({
   DirectExecutorSelector: ({
+    label = 'Executor',
     value,
     onChange,
   }: {
+    label?: string;
     value: string | null;
     onChange: (id: string | null) => void;
   }) => (
-    <button type="button" onClick={() => onChange('executor-1')}>
-      {value ? `Executor ales: ${value}` : 'Alege Executorul'}
+    <button
+      type="button"
+      onClick={() =>
+        onChange(label === 'Executor' ? 'executor-1' : `${label}-ales`)
+      }
+    >
+      {value ? `${label} ales: ${value}` : `Alege ${label}`}
     </button>
   ),
 }));
@@ -142,12 +149,12 @@ describe('Task nou', () => {
   });
 
   it('creates a direct Task with its Executor and Campaign, then opens it', async () => {
-    state.rpc.mockResolvedValue({ data: { id: 41 }, error: null });
+    state.rpc.mockResolvedValue({ data: [{ id: 41 }], error: null });
     const { user, onCreated } = renderControl();
     await openDialog(user);
     await pickOrigin(user);
     await fillContent(user, 'Afișe pentru târg');
-    await user.click(screen.getByRole('button', { name: 'Alege Executorul' }));
+    await user.click(screen.getByRole('button', { name: 'Alege Executor' }));
     // Another Group's Campaign is not in the list.
     await user.click(screen.getByLabelText('Campanie (opțional)'));
     expect(
@@ -159,15 +166,16 @@ describe('Task nou', () => {
       screen.getByRole('option', { name: 'Campania de toamnă' }),
     );
     await user.click(screen.getByRole('button', { name: 'Creează taskul' }));
-    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(41));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ ids: [41] }));
     expect(state.rpc).toHaveBeenCalledTimes(1);
-    expect(state.rpc).toHaveBeenCalledWith('create_task', {
+    expect(state.rpc).toHaveBeenCalledWith('create_tasks', {
       p_group_id: 3,
       p_kind: 'task',
       p_parent_task_id: null,
       // R46: the links only, never the old pair.
       p_links: [],
-      p_executor_id: 'executor-1',
+      p_executor_ids: ['executor-1'],
+      p_copies: 1,
       p_campaign_id: 7,
       p_audience: 'local',
       p_assignment_mode: 'direct',
@@ -179,7 +187,7 @@ describe('Task nou', () => {
   });
 
   it('creates a public Task for all eligible OSUBB members', async () => {
-    state.rpc.mockResolvedValue({ data: { id: 42 }, error: null });
+    state.rpc.mockResolvedValue({ data: [{ id: 42 }], error: null });
     const { user, onCreated } = renderControl();
     await openDialog(user);
     await pickOrigin(user);
@@ -187,26 +195,27 @@ describe('Task nou', () => {
     await user.click(screen.getByRole('radio', { name: 'Public' }));
     await user.click(screen.getByRole('radio', { name: 'Toți membrii OSUBB' }));
     await user.click(screen.getByRole('button', { name: 'Creează taskul' }));
-    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(42));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ ids: [42] }));
     expect(state.rpc).toHaveBeenCalledTimes(1);
     expect(state.rpc.mock.calls[0]?.[1]).toMatchObject({
       p_group_id: 3,
       p_kind: 'task',
       p_assignment_mode: 'public',
       p_audience: 'org',
-      p_executor_id: null,
+      p_executor_ids: null,
+      p_copies: 1,
     });
   });
 
   it('creates an Umbrella without a mode, audience or deadline', async () => {
-    state.rpc.mockResolvedValue({ data: { id: 43 }, error: null });
+    state.rpc.mockResolvedValue({ data: [{ id: 43 }], error: null });
     const { user, onCreated } = renderControl();
     await openDialog(user);
     await user.click(screen.getByRole('radio', { name: 'Task-umbrelă' }));
     await pickOrigin(user);
     await fillContent(user, 'Târgul de cariere', null);
     await user.click(screen.getByRole('button', { name: 'Creează taskul' }));
-    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(43));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ ids: [43] }));
     expect(state.rpc).toHaveBeenCalledTimes(1);
     expect(state.rpc.mock.calls[0]?.[1]).toEqual({
       p_group_id: 3,
@@ -214,7 +223,8 @@ describe('Task nou', () => {
       p_parent_task_id: null,
       // R46: the links only, never the old pair.
       p_links: [],
-      p_executor_id: null,
+      p_executor_ids: null,
+      p_copies: 1,
       p_campaign_id: null,
       p_audience: null,
       p_assignment_mode: null,
@@ -237,7 +247,7 @@ describe('Task nou', () => {
     await openDialog(user);
     await pickOrigin(user);
     await fillContent(user, 'Draft păstrat');
-    await user.click(screen.getByRole('button', { name: 'Alege Executorul' }));
+    await user.click(screen.getByRole('button', { name: 'Alege Executor' }));
     await user.click(screen.getByRole('button', { name: 'Creează taskul' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Executorul nu mai este eligibil',
@@ -260,5 +270,139 @@ describe('Task nou', () => {
       'Alege exact un grup de origine.',
     );
     expect(state.rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe('Task nou, n copies (spec 2026-10-11)', () => {
+  beforeEach(() => {
+    state.management.mockReturnValue({ data: true });
+    state.formOptions.mockReturnValue({
+      data: options,
+      refetch: state.refetch,
+    });
+    state.refetch.mockResolvedValue({ data: options });
+    state.rpc.mockReset();
+  });
+
+  it('creates three public copies and reports them without opening one', async () => {
+    state.rpc.mockResolvedValue({
+      data: [{ id: 51 }, { id: 52 }, { id: 53 }],
+      error: null,
+    });
+    const { user, onCreated } = renderControl();
+    await openDialog(user);
+    await pickOrigin(user);
+    await fillContent(user, 'Voluntari la trei standuri');
+    await user.click(screen.getByRole('radio', { name: 'Public' }));
+    const copies = screen.getByLabelText('Exemplare');
+    await user.clear(copies);
+    await user.type(copies, '3');
+    await user.click(screen.getByRole('button', { name: 'Creează 3 taskuri' }));
+    await waitFor(() =>
+      expect(onCreated).toHaveBeenCalledWith({ ids: [51, 52, 53] }),
+    );
+    expect(state.rpc.mock.calls[0]?.[1]).toMatchObject({
+      p_copies: 3,
+      p_executor_ids: null,
+      p_assignment_mode: 'public',
+    });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('asks for one Executor per direct copy, then creates them all at once', async () => {
+    state.rpc.mockResolvedValue({
+      data: [{ id: 61 }, { id: 62 }],
+      error: null,
+    });
+    const { user, onCreated } = renderControl();
+    await openDialog(user);
+    await pickOrigin(user);
+    await fillContent(user, 'Două afișe');
+    const copies = screen.getByLabelText('Exemplare');
+    await user.clear(copies);
+    await user.type(copies, '2');
+    expect(screen.queryByRole('button', { name: 'Alege Executor' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Continuă' }));
+    const step = await screen.findByRole('dialog', {
+      name: 'Executorii celor 2 taskuri',
+    });
+    expect(state.rpc).not.toHaveBeenCalled();
+    await user.click(
+      within(step).getByRole('button', { name: 'Alege Exemplarul 1' }),
+    );
+    await user.click(
+      within(step).getByRole('button', { name: 'Alege Exemplarul 2' }),
+    );
+    await user.click(
+      within(step).getByRole('button', { name: 'Creează 2 taskuri' }),
+    );
+    await waitFor(() =>
+      expect(onCreated).toHaveBeenCalledWith({ ids: [61, 62] }),
+    );
+    expect(state.rpc).toHaveBeenCalledWith(
+      'create_tasks',
+      expect.objectContaining({
+        p_copies: 2,
+        p_assignment_mode: 'direct',
+        p_executor_ids: ['Exemplarul 1-ales', 'Exemplarul 2-ales'],
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('returns to the form with the draft intact when the executors step is dismissed', async () => {
+    const { user, onCreated } = renderControl();
+    await openDialog(user);
+    await pickOrigin(user);
+    await fillContent(user, 'Draft cu două exemplare');
+    const copies = screen.getByLabelText('Exemplare');
+    await user.clear(copies);
+    await user.type(copies, '2');
+    await user.click(screen.getByRole('button', { name: 'Continuă' }));
+    await screen.findByRole('dialog', { name: 'Executorii celor 2 taskuri' });
+    await user.keyboard('{Escape}');
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: /Executorii/ })).toBeNull(),
+    );
+    expect(screen.getByRole('dialog', { name: 'Task nou' })).toBeVisible();
+    expect(screen.getByLabelText('Titlu')).toHaveValue(
+      'Draft cu două exemplare',
+    );
+    expect(screen.getByLabelText('Exemplare')).toHaveValue(2);
+    expect(state.rpc).not.toHaveBeenCalled();
+    expect(onCreated).not.toHaveBeenCalled();
+  });
+
+  it('shows a refusal inside the executors step and keeps it open', async () => {
+    state.rpc.mockResolvedValue({
+      data: null,
+      error: { code: 'PT400', message: 'invalid_executor' },
+    });
+    const { user } = renderControl();
+    await openDialog(user);
+    await pickOrigin(user);
+    await fillContent(user, 'Refuzat');
+    const copies = screen.getByLabelText('Exemplare');
+    await user.clear(copies);
+    await user.type(copies, '2');
+    await user.click(screen.getByRole('button', { name: 'Continuă' }));
+    const step = await screen.findByRole('dialog', {
+      name: 'Executorii celor 2 taskuri',
+    });
+    await user.click(
+      within(step).getByRole('button', { name: 'Alege Exemplarul 1' }),
+    );
+    await user.click(
+      within(step).getByRole('button', { name: 'Alege Exemplarul 2' }),
+    );
+    await user.click(
+      within(step).getByRole('button', { name: 'Creează 2 taskuri' }),
+    );
+    expect(await within(step).findByRole('alert')).toHaveTextContent(
+      'Executorul nu mai este eligibil',
+    );
+    expect(
+      screen.getByRole('dialog', { name: 'Executorii celor 2 taskuri' }),
+    ).toBeVisible();
   });
 });

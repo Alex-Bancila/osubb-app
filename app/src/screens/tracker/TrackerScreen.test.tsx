@@ -127,8 +127,12 @@ vi.mock('../../lib/auth', () => ({
 }));
 // "Task nou" has its own suite; here it only reports a created Task.
 vi.mock('./NewTaskControl', () => ({
-  NewTaskControl: ({ onCreated }: { onCreated: (id: number) => void }) => (
-    <button type="button" onClick={() => onCreated(42)}>
+  NewTaskControl: ({
+    onCreated,
+  }: {
+    onCreated: (created: { ids: number[] }) => void;
+  }) => (
+    <button type="button" onClick={() => onCreated({ ids: [42] })}>
       Task nou
     </button>
   ),

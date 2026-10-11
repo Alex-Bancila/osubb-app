@@ -263,6 +263,12 @@ function TrackerContent() {
     id: number;
     receipt: string;
   } | null>(null);
+  // Several Tasks created at once (spec 2026-10-11): the list says so; no
+  // details sheet opens. Keyed so a second batch announces itself afresh.
+  const [createdMany, setCreatedMany] = useState<{
+    key: number;
+    receipt: string;
+  } | null>(null);
   // `null` until the page has chosen its opening tab; a click sets it.
   const [tab, setTab] = useState<TrackerTab | null>(null);
   // The deep links (#685, #822, #846): `/tracker?task=<id>` lands on the
@@ -441,9 +447,17 @@ function TrackerContent() {
             view === 'taskuri' && (
               <>
                 <NewTaskControl
-                  onCreated={(id) => {
-                    setCreated({ id, notice: 'Taskul a fost creat.' });
-                    setDetailId(id);
+                  onCreated={({ ids }) => {
+                    const [only] = ids;
+                    if (ids.length === 1 && only !== undefined) {
+                      setCreated({ id: only, notice: 'Taskul a fost creat.' });
+                      setDetailId(only);
+                      return;
+                    }
+                    setCreatedMany({
+                      key: Date.now(),
+                      receipt: `${ids.length} taskuri create.`,
+                    });
                   }}
                 />
                 <AddCompletedTaskControl
@@ -490,6 +504,11 @@ function TrackerContent() {
         {view === 'taskuri' && deleted !== null && (
           <TaskActionSuccess key={deleted.id}>
             {deleted.receipt}
+          </TaskActionSuccess>
+        )}
+        {view === 'taskuri' && createdMany !== null && (
+          <TaskActionSuccess key={createdMany.key}>
+            {createdMany.receipt}
           </TaskActionSuccess>
         )}
         <Tabs.Root

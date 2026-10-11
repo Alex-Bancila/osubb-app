@@ -5,11 +5,14 @@ import { FormSheet } from '../../components/ui/form-sheet';
 import { commandErrorMessage } from '../../lib/command-reasons';
 import {
   useCompleteUmbrella,
-  useCreateTask,
+  useCreateTasks,
+  type CreateTasksInput,
 } from '../../queries/task-umbrella';
 import type { TaskDetailsData } from '../../queries/task-details';
 import { SubHeading } from '../../components/layout';
+import { CopiesExecutorsDialog } from './CopiesExecutorsDialog';
 import { ManagedTaskForm } from './ManagedTaskForm';
+import type { TaskDraft } from './task-form-model';
 import {
   isTerminalTask,
   toTaskPresentation,
@@ -29,12 +32,17 @@ function UmbrellaActions({
   terminal: number;
   onNavigate: (id: number) => void;
 }) {
-  const create = useCreateTask();
+  const create = useCreateTasks();
   const complete = useCompleteUmbrella();
   const [adding, setAdding] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  // n Subtasks at once (spec 2026-10-11): the receipt stays on the Umbrella.
+  const [added, setAdded] = useState<string | null>(null);
+  // A direct draft with several copies waits here for its Executors.
+  const [pendingDraft, setPendingDraft] = useState<TaskDraft | null>(null);
+  const [stepError, setStepError] = useState<string | null>(null);
   const saving = useRef(false);
   const mounted = useRef(true);
   const formAttempt = useRef(0);
@@ -46,6 +54,19 @@ function UmbrellaActions({
     if (create.isPending) return;
     formAttempt.current += 1;
     setAdding(false);
+  }
+  async function finish(input: CreateTasksInput) {
+    const tasks = await create.mutateAsync(input);
+    if (!mounted.current) return;
+    setPendingDraft(null);
+    setAdding(false);
+    const [first] = tasks;
+    if (tasks.length === 1 && first) {
+      created.current = true;
+      onNavigate(first.id);
+    } else {
+      setAdded(`${tasks.length} subtaskuri create.`);
+    }
   }
   useEffect(() => {
     currentStatus.current = status;
@@ -65,6 +86,7 @@ function UmbrellaActions({
   return (
     <div className="space-y-3">
       {done && <p role="status">Taskul-umbrelă a fost finalizat.</p>}
+      {added && <p role="status">{added}</p>}
       {error && <p role="alert">{error}</p>}
       {!isTerminalTask(status) && (
         <>
@@ -136,6 +158,7 @@ function UmbrellaActions({
               heading={null}
               submitLabel="Creează subtaskul"
               pendingLabel="Se creează subtaskul…"
+              plural="subtaskuri"
               onCancel={closeForm}
               onDraft={async (draft) => {
                 if (
@@ -144,15 +167,49 @@ function UmbrellaActions({
                   isTerminalTask(currentStatus.current)
                 )
                   return;
-                const task = await create.mutateAsync(draft);
+                setAdded(null);
+                if (draft.assignmentMode === 'direct' && draft.copies > 1) {
+                  setStepError(null);
+                  setPendingDraft(draft);
+                  return;
+                }
+                const tasks = await create.mutateAsync({ draft });
                 if (mounted.current && attempt === formAttempt.current) {
-                  created.current = true;
                   setAdding(false);
-                  onNavigate(task.id);
+                  const [first] = tasks;
+                  if (tasks.length === 1 && first) {
+                    created.current = true;
+                    onNavigate(first.id);
+                  } else {
+                    setAdded(`${tasks.length} subtaskuri create.`);
+                  }
                 }
               }}
             />
           </FormSheet>
+          {pendingDraft && (
+            <CopiesExecutorsDialog
+              count={pendingDraft.copies}
+              originGroupId={pendingDraft.groupId}
+              plural="subtaskuri"
+              busy={create.isPending}
+              error={stepError}
+              onBack={() => setPendingDraft(null)}
+              onConfirm={async (executorIds) => {
+                setStepError(null);
+                try {
+                  await finish({ draft: pendingDraft, executorIds });
+                } catch (failure) {
+                  setStepError(
+                    commandErrorMessage(
+                      failure,
+                      'Nu am putut crea subtaskurile. Încearcă din nou.',
+                    ),
+                  );
+                }
+              }}
+            />
+          )}
         </>
       )}
     </div>
