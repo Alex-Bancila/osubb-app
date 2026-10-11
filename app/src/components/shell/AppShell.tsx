@@ -275,7 +275,7 @@ export default function AppShell() {
   };
 
   return (
-    <div className="grid h-[calc(100dvh-var(--keyboard-inset))] grid-cols-1 grid-rows-[calc(var(--topbar-h)+env(safe-area-inset-top))_minmax(0,1fr)_auto] [grid-template-areas:'topbar'_'main'_'tabbar'] bg-background lg:grid-cols-[var(--sidebar-w)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:[grid-template-areas:'sidebar_main']">
+    <div className="grid h-[calc(100dvh-var(--keyboard-inset))] grid-cols-1 grid-rows-[calc(var(--topbar-h)+env(safe-area-inset-top))_minmax(0,1fr)] [grid-template-areas:'topbar'_'main'] bg-background lg:grid-cols-[var(--sidebar-w)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:[grid-template-areas:'sidebar_main']">
       <aside className="hidden min-h-0 flex-col border-r border-border bg-card lg:flex lg:[grid-area:sidebar]">
         <SidebarContent {...sidebarProps} />
       </aside>
@@ -378,7 +378,12 @@ export default function AppShell() {
             {/* A page arrives when the area changes; its own tabs move
                 their own content. */}
             <HomePagesContext.Provider value={homePages}>
-              <div ref={page}>
+              {/* A phone's bar floats over the page: the page ends with the
+                  bar's height of room, so its last row scrolls clear. */}
+              <div
+                ref={page}
+                className="max-lg:pb-[calc(4.75rem+env(safe-area-inset-bottom))] keyboard:pb-0"
+              >
                 <Outlet />
               </div>
             </HomePagesContext.Provider>
@@ -387,12 +392,12 @@ export default function AppShell() {
       </main>
 
       {/* The page's floating create button (`FabActions`) is drawn here: the
-          content area's bottom right corner, so it clears the tab bar and
-          the sidebar by itself, and steps aside for a phone keyboard. */}
+          content area's bottom right corner, above a phone's floating tab
+          bar and clear of the sidebar, and steps aside for a phone keyboard. */}
       <div
         ref={setFabSlot}
         data-slot="fab-slot"
-        className="pointer-events-none z-10 self-end justify-self-end p-4 [grid-area:main] *:pointer-events-auto md:p-6 keyboard:hidden"
+        className="pointer-events-none z-10 self-end justify-self-end px-4 pt-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] [grid-area:main] *:pointer-events-auto md:px-6 lg:p-6 keyboard:hidden"
       />
 
       <TabBar tabs={tabs} badges={badges} under={under} />

@@ -25,7 +25,9 @@ type Badges = Partial<Record<string, { count: number; label: string }>>;
  *
  * A name too long for the space it gets ("Administrare" on a 320 px phone)
  * falls back to the item's `shortLabel`. While a phone keyboard is open the
- * bar steps aside (#1013).
+ * bar steps aside (#1013). The bar floats over the page: frosted, with the
+ * page scrolling under it; the shell leaves its height of room at the page's
+ * end.
  */
 export function TabBar({
   tabs,
@@ -104,11 +106,11 @@ export function TabBar({
     <nav
       aria-label="Navigare rapidă"
       data-slot="tab-bar"
-      className="relative z-10 px-3 pt-2 pb-[calc(.75rem+env(safe-area-inset-bottom))] [grid-area:tabbar] keyboard:hidden lg:hidden"
+      className="pointer-events-none relative z-10 self-end px-3 pt-2 pb-[calc(.75rem+env(safe-area-inset-bottom))] [grid-area:main] *:pointer-events-auto keyboard:hidden lg:hidden"
     >
       <div
         ref={bar}
-        className="relative mx-auto flex max-w-md gap-1 rounded-full border border-border bg-card p-[5px] shadow-(--sh-md)"
+        className="relative mx-auto flex max-w-md gap-1 rounded-full border border-border bg-card/80 p-[5px] shadow-(--sh-md) backdrop-blur-md"
       >
         {thumb && (
           <span
