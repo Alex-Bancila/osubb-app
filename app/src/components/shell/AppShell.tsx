@@ -26,7 +26,6 @@ import { unreadBadgeLabel } from '../../screens/notifications/notifications-pres
 import { decisionsBadgeLabel } from '../../screens/requests/requests-presentation';
 import { FabSlotContext } from '../layout/fab-context';
 import { Badge } from '../ui/badge';
-import { buttonVariants } from '../ui/button';
 import { TabBar } from './TabBar';
 import {
   ANNOUNCEMENTS_PATH,
@@ -175,10 +174,41 @@ function SidebarContent({
 /**
  * Notificări and Profil are the top bar's two places: on either, its mark
  * opens into the bar's own selection — the light pill with the page's name —
- * so "you are here" looks the same at the top as at the bottom.
+ * so "you are here" looks the same at the top as at the bottom. The mark is
+ * one element in both states (`data-open`), so the pill opens and closes
+ * instead of swapping.
  */
+const topMarkClass =
+  'group/mark inline-flex h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground no-underline outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 lg:hidden';
+
 const topPillClass =
-  'inline-flex h-[36px] items-center gap-1.5 rounded-full bg-(--text) px-3 text-xs font-bold whitespace-nowrap text-(--surface) no-underline motion-grow';
+  'inline-flex items-center rounded-full transition-[background-color,color] duration-200 group-data-open/mark:bg-(--text) group-data-open/mark:text-(--surface) motion-reduce:transition-none';
+
+/** The page's name in the mark: no width until the mark is open. */
+function TopMarkLabel({
+  className,
+  children,
+}: {
+  className?: string;
+  children: string;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      data-slot="top-mark-label"
+      className="grid grid-cols-[0fr] transition-[grid-template-columns] duration-200 ease-out group-data-open/mark:grid-cols-[1fr] motion-reduce:transition-none"
+    >
+      <span
+        className={cn(
+          'overflow-hidden text-xs font-bold whitespace-nowrap transition-[padding] duration-200 group-data-open/mark:pl-1.5 motion-reduce:transition-none',
+          className,
+        )}
+      >
+        {children}
+      </span>
+    </span>
+  );
+}
 
 export default function AppShell() {
   const { session } = useAuth();
@@ -271,12 +301,8 @@ export default function AppShell() {
               would announce it as a button (F-26). */}
         <Link
           to={NOTIFICATIONS_PATH}
-          className={cn(
-            isNotificationsActive
-              ? topPillClass
-              : buttonVariants({ variant: 'ghost', size: 'icon' }),
-            'relative ml-auto shrink-0 lg:hidden',
-          )}
+          data-open={isNotificationsActive || undefined}
+          className={cn(topMarkClass, 'ml-auto')}
           aria-current={isNotificationsActive ? 'page' : undefined}
           aria-label={
             unreadCount > 0
@@ -284,48 +310,54 @@ export default function AppShell() {
               : 'Notificări'
           }
         >
-          <Bell aria-hidden="true" className="size-4 shrink-0" />
-          {isNotificationsActive && <span aria-hidden="true">Notificări</span>}
-          {unreadCount > 0 && (
-            <Badge
-              variant="destructive"
-              className={cn(
-                'h-4 min-w-4 justify-center rounded-full px-1 text-[10px]',
-                !isNotificationsActive && 'absolute top-1.5 right-1.5',
+          <span className={cn(topPillClass, 'h-[36px] px-[10px]')}>
+            <span className="relative inline-flex shrink-0">
+              <Bell aria-hidden="true" className="size-4" />
+              {unreadCount > 0 && (
+                <Badge
+                  variant="destructive"
+                  className="absolute -top-2 left-2.5 h-4 min-w-4 justify-center rounded-full bg-destructive px-1 text-[10px] text-white ring-2 ring-card transition-[box-shadow] group-data-open/mark:ring-(--text) dark:bg-destructive"
+                >
+                  <span
+                    ref={unreadPop}
+                    aria-hidden="true"
+                    className="inline-block"
+                  >
+                    {unreadCount}
+                  </span>
+                </Badge>
               )}
-            >
-              <span ref={unreadPop} aria-hidden="true" className="inline-block">
-                {unreadCount}
-              </span>
-            </Badge>
-          )}
+            </span>
+            {/* Clear of the count on the bell's corner. */}
+            <TopMarkLabel className="group-data-open/mark:pl-3">
+              Notificări
+            </TopMarkLabel>
+          </span>
         </Link>
         {/* Profil's only door on a phone (#972): the Member's own initials
               on their colour, the one personal mark in the top bar. */}
         <Link
           to={PROFILE_PATH}
-          className={cn(
-            'shrink-0 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 lg:hidden',
-            // The avatar keeps its size: the pill grows around it.
-            isProfileActive
-              ? cn(topPillClass, 'h-[44px] pl-[2px]')
-              : 'grid size-11 place-items-center rounded-full',
-          )}
+          data-open={isProfileActive || undefined}
+          className={topMarkClass}
           aria-current={isProfileActive ? 'page' : undefined}
           aria-label="Profil"
         >
-          <span
-            className={cn(
-              'grid size-8 place-items-center rounded-full text-xs font-bold text-white',
-            )}
-            style={{
-              backgroundColor: safeHexColor(profile.data?.avatar_color),
-            }}
-            aria-hidden="true"
-          >
-            {initials(profile.data?.full_name ?? session?.user.email)}
+          {/* The avatar keeps its size: the pill grows around it. */}
+          <span className={cn(topPillClass, 'h-[44px] p-[2px]')}>
+            <span
+              className="grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
+              style={{
+                backgroundColor: safeHexColor(profile.data?.avatar_color),
+              }}
+              aria-hidden="true"
+            >
+              {initials(profile.data?.full_name ?? session?.user.email)}
+            </span>
+            <TopMarkLabel className="group-data-open/mark:pr-2.5">
+              Profil
+            </TopMarkLabel>
           </span>
-          {isProfileActive && <span aria-hidden="true">Profil</span>}
         </Link>
       </header>
 

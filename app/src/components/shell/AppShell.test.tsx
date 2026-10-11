@@ -923,20 +923,24 @@ describe('the top bar carries no page name (#981)', () => {
     );
     const avatar = profileHeader.getByRole('link', { name: 'Profil' });
     expect(avatar).toHaveAttribute('aria-current', 'page');
+    expect(avatar).toHaveAttribute('data-open');
     expect(avatar).toHaveTextContent('Profil');
     expect(
       profileHeader.getByRole('link', { name: 'Notificări' }),
-    ).not.toHaveTextContent('Notificări');
+    ).not.toHaveAttribute('data-open');
     profile.unmount();
 
     const { container } = renderShell('/notificari');
     const header = within(container.querySelector('header') as HTMLElement);
-    expect(header.getByRole('link', { name: 'Notificări' })).toHaveTextContent(
-      'Notificări',
+    expect(header.getByRole('link', { name: 'Notificări' })).toHaveAttribute(
+      'data-open',
     );
-    expect(header.getByRole('link', { name: 'Profil' })).not.toHaveTextContent(
-      'Profil',
-    );
+    // One element in both states, so the pill closes instead of vanishing.
+    const closed = header.getByRole('link', { name: 'Profil' });
+    expect(closed).not.toHaveAttribute('data-open');
+    expect(
+      closed.querySelector('[data-slot="top-mark-label"]'),
+    ).toHaveTextContent('Profil');
   });
 
   it('keeps Acasă outlined and named on a page reached from its tiles, and nothing current', () => {

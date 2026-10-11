@@ -49,6 +49,13 @@ export function TabBar({
   const [thumb, setThumb] = useState<{ left: number; width: number } | null>(
     null,
   );
+  // The thumb as it last stood, drawn once more while it shrinks away when
+  // the page leaves the bar (a tab to Profil): it has nowhere to slide to.
+  const lastThumb = useRef<{ left: number; width: number } | null>(null);
+  const [leaving, setLeaving] = useState<{
+    left: number;
+    width: number;
+  } | null>(null);
   // Whether the bar has stood with no tab selected (Profil, Notificări): the
   // thumb then has nowhere to slide from, so it grows in on the tab instead.
   const [wasEmpty, setWasEmpty] = useState(false);
@@ -71,6 +78,9 @@ export function TabBar({
         : next,
     );
     if (!current) setWasEmpty(true);
+    if (next) setLeaving(null);
+    else if (lastThumb.current) setLeaving(lastThumb.current);
+    lastThumb.current = next;
     const label = current?.querySelector<HTMLElement>(
       '[data-slot="tab-label"]',
     );
@@ -109,6 +119,15 @@ export function TabBar({
               wasEmpty && 'motion-grow',
             )}
             style={{ width: thumb.width, translate: `${thumb.left}px 0` }}
+          />
+        )}
+        {leaving && (
+          <span
+            aria-hidden="true"
+            data-slot="tab-thumb-leaving"
+            className="pointer-events-none absolute inset-y-[5px] left-0 rounded-full bg-(--text) motion-shrink"
+            style={{ width: leaving.width, translate: `${leaving.left}px 0` }}
+            onAnimationEnd={() => setLeaving(null)}
           />
         )}
         {tabs.map((item) => {
