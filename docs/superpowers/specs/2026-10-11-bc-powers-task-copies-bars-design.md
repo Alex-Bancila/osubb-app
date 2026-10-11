@@ -10,7 +10,7 @@ Four independent changes that ship together on one branch and one PR (Alex opens
 
 ### Decision
 
-BC decided that an Atribuție is no longer given to one BC member. **Every BC member and the Moderator hold every Atribuție's powers by default.** There is no holder, nothing to tick, nothing to withdraw, and therefore no Administrare BC page. The BC decision supersedes ruling R44's holder model; a new ruling row (R47) records it, see *Docs* below.
+BC decided that an Atribuție is no longer given to one BC member. **Every BC member and the Moderator hold every Atribuție's powers by default.** There is no holder, nothing to tick, nothing to withdraw, and therefore no Administrare BC page. The BC decision supersedes ruling R44's holder model; a new ruling row (R47) records it, see _Docs_ below.
 
 OSUBB Deals stays its own page under Administrare. Its team is two places, a **Coordonator** (a live BCE member) and a **Responsabil** (any live active Member). Any BC member or the Moderator sets both places. The Coordonator keeps today's powers: everything except choosing the Coordonator, so they still pick the Responsabil. The Responsabil publishes Deals and manages their own. Nothing dissolves the team any more; a place changes only when someone sets or clears it.
 
@@ -18,13 +18,13 @@ Future Atribuții (Pagina Interne, Anunțuri Educaționale, Anunțuri de Tineret
 
 ### Authority matrix (after)
 
-| Actor (live rows, never the token) | Publish a Deal | Edit / delete any Deal | Edit / delete own Deal | Set Coordonator | Set Responsabil | Sees Administrare › OSUBB Deals |
-|---|---|---|---|---|---|---|
-| Moderator (level 9) | yes | yes | yes | yes | yes | yes |
-| BC member (level 6) | yes | yes | yes | yes | yes | yes |
-| Coordonator (live level 5, in the place) | yes | yes | yes | no | yes | yes |
-| Responsabil (live active, in the place) | yes | no | yes | no | no | yes, and only that page |
-| Anyone else | no | no | no | no | no | no |
+| Actor (live rows, never the token)       | Publish a Deal | Edit / delete any Deal | Edit / delete own Deal | Set Coordonator | Set Responsabil | Sees Administrare › OSUBB Deals |
+| ---------------------------------------- | -------------- | ---------------------- | ---------------------- | --------------- | --------------- | ------------------------------- |
+| Moderator (level 9)                      | yes            | yes                    | yes                    | yes             | yes             | yes                             |
+| BC member (level 6)                      | yes            | yes                    | yes                    | yes             | yes             | yes                             |
+| Coordonator (live level 5, in the place) | yes            | yes                    | yes                    | no              | yes             | yes                             |
+| Responsabil (live active, in the place)  | yes            | no                     | yes                    | no              | no              | yes, and only that page         |
+| Anyone else                              | no             | no                     | no                     | no              | no              | no                              |
 
 Today's matrix differs in one row only: a BC member who was not the holder could neither publish nor set the team. Everything else is unchanged.
 
@@ -54,6 +54,7 @@ One migration, dated after `20261008090000_moderator_deals_team.sql` (the newest
 Delete: `screens/administrare/AdminBcTab.tsx` and its test, `screens/administrare/bc-assignments-view.ts`, `queries/bc-assignments.ts`, the lazy import and the `bc` route in `App.tsx`, the Administrare BC entry in `screens/administrare/administrare-tabs.ts`, `'/administrare/bc'` in `components/shell/navItems.ts`, `administerBc` in `lib/capabilities.ts` and every test literal, `keys.assignments.holders`, the `bc_assignments` row in `queries/live-changes.ts`, the four retired reasons in `lib/command-reasons.ts`.
 
 Change:
+
 - `queries/deals.ts`: `DealsTeam` becomes `{ coordinatorId, responsibleId }`; `fetchDealsTeam` reads `assignment_team` only.
 - `screens/deals/deals-presentation.ts`: candidates no longer exclude a holder; comments rewritten.
 - `screens/deals/DealsTeamPanel.tsx`: the `held` gate goes; two `TeamPlace`s, Coordonator and Responsabil, on one row (`sm:grid-cols-2`); `TeamPlace` loses `hint`; a picker shows when the viewer holds `pickDealsCoordinator` / `manageDealsTeam`, a name otherwise; the header comment states the new rule.
@@ -65,7 +66,7 @@ Frontend tests to update: `DealsTeamPanel.test.tsx` (a BC member picks both; the
 ### Docs
 
 - `docs/superpowers/plans/2026-09-23-prod-readiness-grill.md`: a new row **R47** after R46, "Atribuții held by every BC member (2026-10-11)", quoting Alex ("All of BC members should be able to do all the specific actions … this button should disappear and by default they will be able to do anything. OSUBB Deals will remain as a separate page, but only the BCE and Responsabil will be selected, thing that can be done by any BC/Moderator"), stating the matrix above, that R44's holder, checkboxes, move and dissolve are superseded, that the Coordonator keeps their powers, and that the three placeholder Atribuții follow the same shape. R44's row gets one trailing sentence pointing at R47.
-- `CONTEXT.md`, glossary entry *Atribuție*: "A named BC responsibility area, independent of Roles and Group positions (R44, amended by R47 on 2026-10-11). Every BC member and the Moderator hold its powers by default; nobody is its holder. The first is OSUBB Deals: BC or the Moderator pick a Coordonator (a BCE member) and a Responsabil (any active Member); the Coordonator can do everything except pick the Coordonator; the Responsabil publishes Deals and manages their own." Keep `_Avoid_`.
+- `CONTEXT.md`, glossary entry _Atribuție_: "A named BC responsibility area, independent of Roles and Group positions (R44, amended by R47 on 2026-10-11). Every BC member and the Moderator hold its powers by default; nobody is its holder. The first is OSUBB Deals: BC or the Moderator pick a Coordonator (a BCE member) and a Responsabil (any active Member); the Coordonator can do everything except pick the Coordonator; the Responsabil publishes Deals and manages their own." Keep `_Avoid_`.
 - `docs/backend/deals.md`: the Atribuții section rewritten (no holder table, the check list, the matrix, the advisory lock, the retired reasons); `docs/README.md` line 20 reworded.
 - `docs/backend/conventions.md` §3: the retired reasons removed.
 - `CLAUDE.md` status: one sentence that Atribuții are BC-wide since 2026-10-11.
@@ -95,6 +96,7 @@ returns setof public.tasks   -- the created rows, in creation order
 `language sql`, security invoker, delegating to `private.create_tasks_impl` (`security definer`, `set search_path = ''`). No legacy `p_link_label` / `p_link_url` pair: the new command only knows `p_links`. `public.create_task` is untouched.
 
 Step 1 (malformed input, before the gate), in this order:
+
 - `p_copies` null or below 1 → `PT400 invalid_copies`; above 20 → `PT400 too_many_copies` (the `too_many_links` precedent).
 - `p_kind = 'umbrella'` with `p_copies > 1` → `PT400 invalid_copies` (an Umbrella has no copies; its Subtasks do).
 - `p_assignment_mode = 'public'` with a non-empty `p_executor_ids` → `PT400 invalid_executors`.
@@ -112,8 +114,8 @@ New `supabase/tests/create_tasks.test.sql`: signature and grants (anon cannot ex
 
 - `lib/schemas/task.ts`: `copies` (integer 1–20, default 1), `executorIds` (array, direct only). `fieldForReason` maps the three reasons to `copies` / the dialog.
 - `screens/tracker/task-form-model.ts`: `TaskDraft` gains `copies` and `executorIds: (string | null)[]`; an Umbrella forces `copies = 1`.
-- `screens/tracker/TaskForm.tsx`: a number field **Exemplare** (`Input type="number" min=1 max=20 step=1 inputMode="numeric"`, the Event capacity pattern) after *Mod de atribuire*, hidden for an Umbrella. At `copies = 1` the form is exactly today's form. Public with `copies > 1`: the submit button reads "Creează n taskuri" ("Creează n subtaskuri" under an Umbrella). Direct with `copies > 1`: the in-form `DirectExecutorSelector` is replaced by a `FieldDescription` "Executorii se aleg la pasul următor" and the button reads "Continuă".
-- New `screens/tracker/CopiesExecutorsDialog.tsx`: a `Dialog` (`fullScreenOnPhone`), title "Executorii celor n taskuri", description "Alege câte un executor pentru fiecare exemplar.", one `DirectExecutorSelector` per copy labelled "Exemplarul i", each required, a Member chosen in one picker excluded from the others (`DirectExecutorSelector` gains an optional `excludeIds` prop), footer *Înapoi* / "Creează n taskuri"; `busy` while the mutation runs; a server refusal shows in the dialog under the matching picker when `invalid_executor` names one, else as the dialog's error line.
+- `screens/tracker/TaskForm.tsx`: a number field **Exemplare** (`Input type="number" min=1 max=20 step=1 inputMode="numeric"`, the Event capacity pattern) after _Mod de atribuire_, hidden for an Umbrella. At `copies = 1` the form is exactly today's form. Public with `copies > 1`: the submit button reads "Creează n taskuri" ("Creează n subtaskuri" under an Umbrella). Direct with `copies > 1`: the in-form `DirectExecutorSelector` is replaced by a `FieldDescription` "Executorii se aleg la pasul următor" and the button reads "Continuă".
+- New `screens/tracker/CopiesExecutorsDialog.tsx`: a `Dialog` (`fullScreenOnPhone`), title "Executorii celor n taskuri", description "Alege câte un executor pentru fiecare exemplar.", one `DirectExecutorSelector` per copy labelled "Exemplarul i", each required, a Member chosen in one picker excluded from the others (`DirectExecutorSelector` gains an optional `excludeIds` prop), footer _Înapoi_ / "Creează n taskuri"; `busy` while the mutation runs; a server refusal shows in the dialog under the matching picker when `invalid_executor` names one, else as the dialog's error line.
 - `queries/task-umbrella.ts`: `createTasks(draft)` → `supabase.rpc('create_tasks', …)` returning the rows; `useCreateTasks` invalidates `keys.tasks.all` once. The form submits through `createTasks` for every `copies`, including 1 (one path; `create_task` stays for the smoke script and other callers).
 - `screens/tracker/NewTaskControl.tsx` and `screens/tracker/UmbrellaTaskSection.tsx`: own the two-step flow (form → dialog when direct and `copies > 1`); on success with one Task behave as today (open its details); with more, close the sheet and report "n taskuri create." / "n subtaskuri create." through the existing notice slot (`TrackerScreen`'s `created` state gains a plural variant without an id; the Umbrella section refreshes its Subtask list). No details sheet opens for n above 1.
 - `lib/command-reasons.ts`: Romanian copy for `invalid_copies` ("Numărul de exemplare nu e valid."), `too_many_copies` ("Cel mult 20 de exemplare odată."), `invalid_executors` ("Alege câte un executor pentru fiecare exemplar.").

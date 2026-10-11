@@ -219,7 +219,7 @@ export function DatePicker({
         >
           <Popover.Popup
             aria-label={withTime ? 'Alege data și ora' : 'Alege data'}
-            className="w-[min(20rem,calc(100vw-1.5rem))] origin-(--transform-origin) rounded-lg bg-popover p-3 text-popover-foreground shadow-md ring-1 ring-foreground/10 transition-[opacity,scale] outline-none motion-reduce:transition-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0"
+            className="max-h-[calc(100dvh-24px)] w-[min(20rem,calc(100vw-1.5rem))] origin-(--transform-origin) overflow-y-auto rounded-lg bg-popover p-3 text-popover-foreground shadow-md ring-1 ring-foreground/10 transition-[opacity,scale] outline-none motion-reduce:transition-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0"
           >
             <Calendar
               day={day}

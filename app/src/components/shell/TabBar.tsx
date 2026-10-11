@@ -103,7 +103,7 @@ export function TabBar({
     >
       <div
         ref={bar}
-        className="relative mx-auto flex max-w-md gap-1 overflow-x-auto overscroll-x-contain rounded-full border border-border bg-card p-[5px] shadow-(--sh-md) [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="relative mx-auto flex max-w-md gap-1 overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-full border border-border bg-card p-[5px] shadow-(--sh-md) [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {thumb && (
           <span

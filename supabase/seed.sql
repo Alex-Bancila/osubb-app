@@ -1840,13 +1840,16 @@ insert into announcements (title, body, priority, pinned, form_label, form_url, 
 -- ==================== OSUBB Deals (R44, R45, R47) ====================
 -- Nobody holds an Atribuție (R47): the demo BCE member is Coordonator and the
 -- demo Voluntar Responsabil, set by the demo BC member. On a staging database
--- where a real team sits in the places, the demo leaves it alone (on conflict
--- do nothing). The rows go with the demo profiles on the next run (on delete
--- cascade). Two Deals: an active one with a code and two Attached Links, and
--- an expired one only the team, BC and the Moderator still see.
+-- where a real team already sits in either place, the demo adds no team at
+-- all (never a demo member beside a real one). The rows go with the demo
+-- profiles on the next run (on delete cascade). Two Deals: an active one with
+-- a code and two Attached Links, and an expired one only the team, BC and the
+-- Moderator still see.
 insert into assignment_team (assignment, team_role, member_id, set_by)
-values ('osubb_deals', 'coordinator', 'd0000000-0000-0000-0000-000000000006', 'd0000000-0000-0000-0000-000000000007'),
-       ('osubb_deals', 'responsible', 'd0000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000007')
+select 'osubb_deals', team.team_role, team.member_id, 'd0000000-0000-0000-0000-000000000007'
+  from (values ('coordinator', 'd0000000-0000-0000-0000-000000000006'::uuid),
+               ('responsible', 'd0000000-0000-0000-0000-000000000002'::uuid)) as team (team_role, member_id)
+ where not exists (select 1 from assignment_team where assignment = 'osubb_deals')
 on conflict do nothing;
 
 insert into announcements (kind, title, body, code, links, published_at, created_by, group_id, audience, deadline) values

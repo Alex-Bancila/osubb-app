@@ -21,7 +21,7 @@ import { useScrollCurrentTabIntoView } from './tab-scroll';
  *   only when even those overflow.
  */
 export const tabListClass =
-  'relative flex w-full min-w-0 gap-0.5 overflow-x-auto overscroll-x-contain rounded-lg border border-border bg-(--surface-3) p-[3px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
+  'relative flex w-full min-w-0 gap-0.5 overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-lg border border-border bg-(--surface-3) p-[3px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
 /**
  * The thumb under the selected tab. For Base UI `Tabs`, put it on a

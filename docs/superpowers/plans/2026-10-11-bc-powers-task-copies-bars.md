@@ -42,10 +42,12 @@
 ### Task 1: Part A backend — the new team suite (red)
 
 **Files:**
+
 - Create: `supabase/tests/assignment_team.test.sql`
 - Delete: `supabase/tests/bc_assignments.test.sql`
 
 **Interfaces:**
+
 - Consumes: today's `public.set_assignment_team_member(text, text, uuid)`, `public.my_capabilities()`, `private.notify`.
 - Produces: the assertions Task 2's migration must satisfy.
 
@@ -259,10 +261,12 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 2: Part A backend — the migration, the seed and the other suites (green)
 
 **Files:**
+
 - Create: `supabase/migrations/20261011120000_atributii_held_by_bc.sql`
 - Modify: `supabase/seed.sql:1840-1857`, `supabase/tests/osubb_deals.test.sql`, `supabase/tests/my_capabilities.test.sql`, `supabase/tests/tracker_grants.test.sql`, `supabase/tests/rls_deny_by_default.test.sql`
 
 **Interfaces:**
+
 - Produces: `private.assignment_team_role` answering `'holder'` for live level ≥ 6; `public.my_capabilities()` with eleven columns (no `administer_bc`); `public.set_assignment_team_member` unchanged in signature.
 
 - [ ] **Step 1: Confirm the date is the newest**
@@ -547,6 +551,7 @@ on conflict do nothing;
 - [ ] **Step 4: Update the Deals suite**
 
 In `supabase/tests/osubb_deals.test.sql`:
+
 - Lines 40–41: delete `delete from public.bc_assignments;` and the `insert into public.bc_assignments(...)` line. Keep the `assignment_team` insert (its `set_by` stays `pg_temp.u45(2)`).
 - Line ~104: replace the `throws_ok` whose description is `'a BC member outside the team cannot publish a Deal'` with
   ```sql
@@ -564,6 +569,7 @@ In `supabase/tests/osubb_deals.test.sql`:
 - [ ] **Step 5: Update the capability suite**
 
 In `supabase/tests/my_capabilities.test.sql` every persona string has twelve values; remove the ninth (`administer_bc`) from each, so `'(t,t,t,t,t,t,t,t,f,f,f,f)'` becomes `'(t,t,t,t,t,t,t,t,f,f,f)'`. Then:
+
 - persona 11 "BC (level 6)" becomes `'(t,t,t,t,t,t,t,t,t,t,t)'`;
 - persona 12 "Moderator" becomes `'(t,t,t,t,t,t,t,t,t,t,t)'` and its comment reads `-- 12. Moderator (level 9): every Deals power (R47).`;
 - the "BCE promoted to BC" assertion (line ~188) becomes `'(t,t,t,t,t,t,t,t,t,t,t)'` with the text `'BCE promoted to BC: every level-6 input flips, the Deals powers included (R47)'`;
@@ -572,6 +578,7 @@ In `supabase/tests/my_capabilities.test.sql` every persona string has twelve val
 - [ ] **Step 6: Update the grant rosters and the RLS sweep**
 
 In `supabase/tests/tracker_grants.test.sql`:
+
 - delete the two wrapper rows `('set_bc_assignment', …)` and `('bc_assignments_directory', …)` (keep `set_assignment_team_member`), and reword the comment above them to `-- R44/R47: the team command. Same wrapper shape; BC / Moderator / Coordonator gates live in the body.`;
 - delete the two private rows `('set_bc_assignment_impl', …)` and `('bc_assignments_directory_impl', …)`, reword the comment above `assignment_team_role` to drop "the two command bodies and the directory body";
 - change the private count pin `220` (line ~925) to `218`.
@@ -599,14 +606,17 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
+
 ### Task 3: Part A frontend — Administrare BC goes, the Echipa panel shows two places
 
 **Files:**
+
 - Delete: `app/src/screens/administrare/AdminBcTab.tsx`, `app/src/screens/administrare/AdminBcTab.test.tsx`, `app/src/screens/administrare/bc-assignments-view.ts`, `app/src/queries/bc-assignments.ts`
 - Modify: `app/src/App.tsx:80,499-505`, `app/src/screens/administrare/administrare-tabs.ts:95-101`, `app/src/components/shell/navItems.ts:139`, `app/src/lib/capabilities.ts`, `app/src/queries/keys.ts:254-262`, `app/src/queries/live-changes.ts:88-90`, `app/src/lib/command-reasons.ts:34-48`, `app/src/queries/deals.ts:238-324`, `app/src/screens/deals/deals-presentation.ts:110-205`, `app/src/screens/deals/DealsTeamPanel.tsx`, `app/src/screens/deals/DealsAdminTab.tsx:17-25`, `app/src/lib/database.types.ts` (generated)
 - Test: `app/src/screens/deals/DealsTeamPanel.test.tsx`, `app/src/screens/deals/DealsAdminTab.test.tsx`, `app/src/screens/administrare/AdministrareLayout.test.tsx`, `app/src/App.test.tsx`, `app/src/lib/auth-destination.test.ts`, `app/src/queries/deals.test.ts`, `app/src/lib/capabilities.test.tsx`, `app/src/components/shell/AppShell.test.tsx`, `app/src/queries/event-creation.test.ts`, `app/src/queries/event-edit.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 2's `my_capabilities()` (eleven columns) and `assignment_team` as the only team table.
 - Produces: `DealsTeam = { coordinatorId, responsibleId }`; `Capabilities` without `administerBc`.
 
@@ -630,12 +640,12 @@ const state = vi.hoisted(() => ({
   mutate: vi.fn(),
 }));
 
-vi.mock('../../lib/supabase', () => ({ supabase: {} }));
-vi.mock('../../lib/capabilities', () => ({
+vi.mock("../../lib/supabase", () => ({ supabase: {} }));
+vi.mock("../../lib/capabilities", () => ({
   useCapabilities: () => ({ data: state.caps }),
   useCapability: (name: string) => ({ data: state.caps?.[name] === true }),
 }));
-vi.mock('../../queries/deals', () => ({
+vi.mock("../../queries/deals", () => ({
   useDealsTeam: () => ({
     data: state.team,
     isPending: false,
@@ -643,10 +653,10 @@ vi.mock('../../queries/deals', () => ({
   }),
   useSetDealsTeamMember: () => ({ mutate: state.mutate, isPending: false }),
 }));
-vi.mock('../../queries/groups-admin', () => ({
+vi.mock("../../queries/groups-admin", () => ({
   useAppointableMembers: () => ({ data: state.members, isPending: false }),
 }));
-vi.mock('../../queries/member-identities', () => ({
+vi.mock("../../queries/member-identities", () => ({
   useMemberIdentities: () => ({
     data: new Map(
       state.members.map((m) => [
@@ -657,11 +667,11 @@ vi.mock('../../queries/member-identities', () => ({
   }),
 }));
 vi.mock(
-  '../../queries/member-card',
-  () => import('../../test/member-card-mock'),
+  "../../queries/member-card",
+  () => import("../../test/member-card-mock"),
 );
 
-import { DealsTeamPanel } from './DealsTeamPanel';
+import { DealsTeamPanel } from "./DealsTeamPanel";
 
 function member(memberId: string, name: string, level: number) {
   return {
@@ -669,9 +679,9 @@ function member(memberId: string, name: string, level: number) {
     name,
     nickname: null,
     avatarColor: null,
-    status: 'activ',
+    status: "activ",
     roleId: null,
-    roleLabel: level === 5 ? 'BCE' : level === 6 ? 'BC' : 'Voluntar',
+    roleLabel: level === 5 ? "BCE" : level === 6 ? "BC" : "Voluntar",
     level,
   } satisfies AppointableMember;
 }
@@ -687,34 +697,34 @@ const BC = {
 
 beforeEach(() => {
   state.members = [
-    member('bc', 'Bogdan BC', 6),
-    member('bce', 'Carmen BCE', 5),
-    member('vol', 'Victor Voluntar', 2),
+    member("bc", "Bogdan BC", 6),
+    member("bce", "Carmen BCE", 5),
+    member("vol", "Victor Voluntar", 2),
   ];
   state.team = { coordinatorId: null, responsibleId: null };
   state.caps = BC;
   state.mutate.mockReset();
 });
 
-const pickers = () => screen.queryAllByRole('combobox');
+const pickers = () => screen.queryAllByRole("combobox");
 ```
 
 Then replace every `it(...)` in the file with these:
 
 ```tsx
-describe('the OSUBB Deals team, per persona (R47)', () => {
-  it('shows two places on one row, Coordonator and Responsabil, without hints', () => {
+describe("the OSUBB Deals team, per persona (R47)", () => {
+  it("shows two places on one row, Coordonator and Responsabil, without hints", () => {
     render(<DealsTeamPanel />);
-    const terms = screen.getAllByRole('term').map((term) => term.textContent);
-    expect(terms).toEqual(['Coordonator', 'Responsabil']);
+    const terms = screen.getAllByRole("term").map((term) => term.textContent);
+    expect(terms).toEqual(["Coordonator", "Responsabil"]);
     expect(screen.queryByText(/Membru BCE/)).toBeNull();
     expect(screen.queryByText(/Orice membru activ/)).toBeNull();
     expect(screen.queryByText(/Atribuție BC/)).toBeNull();
     expect(screen.queryByText(/Responsabil OSUBB Deals/)).toBeNull();
-    expect(document.querySelector('dl')).toHaveClass('sm:grid-cols-2');
+    expect(document.querySelector("dl")).toHaveClass("sm:grid-cols-2");
   });
 
-  it('lets a BC member pick both places and offers BCE members alone as Coordonator', async () => {
+  it("lets a BC member pick both places and offers BCE members alone as Coordonator", async () => {
     const user = userEvent.setup();
     state.mutate.mockImplementation(
       (_input: unknown, options?: { onSuccess?: () => void }) =>
@@ -723,60 +733,60 @@ describe('the OSUBB Deals team, per persona (R47)', () => {
     render(<DealsTeamPanel />);
     const [coordinator, responsible] = pickers();
     expect(pickers()).toHaveLength(2);
-    if (!coordinator || !responsible) throw new Error('two pickers expected');
+    if (!coordinator || !responsible) throw new Error("two pickers expected");
     await user.click(coordinator);
-    await screen.findByPlaceholderText('Caută un membru');
+    await screen.findByPlaceholderText("Caută un membru");
     expect(
-      screen.getAllByRole('option').map((option) => option.textContent),
-    ).toEqual(['Fără coordonator', 'Carmen BCE']);
-    await user.click(screen.getByRole('option', { name: /Carmen BCE/ }));
+      screen.getAllByRole("option").map((option) => option.textContent),
+    ).toEqual(["Fără coordonator", "Carmen BCE"]);
+    await user.click(screen.getByRole("option", { name: /Carmen BCE/ }));
     expect(state.mutate).toHaveBeenCalledWith(
-      { role: 'coordinator', memberId: 'bce' },
+      { role: "coordinator", memberId: "bce" },
       expect.anything(),
     );
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Carmen BCE este acum Coordonator OSUBB Deals.',
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Carmen BCE este acum Coordonator OSUBB Deals.",
     );
   });
 
-  it('lets the Coordonator pick the Responsabil only', () => {
+  it("lets the Coordonator pick the Responsabil only", () => {
     state.caps = { manageDeals: true, manageDealsTeam: true, administer: true };
-    state.team = { coordinatorId: 'bce', responsibleId: null };
+    state.team = { coordinatorId: "bce", responsibleId: null };
     render(<DealsTeamPanel />);
     expect(pickers()).toHaveLength(1);
-    expect(screen.getByText('Carmen BCE')).toBeVisible();
-    expect(pickers()[0]).toHaveTextContent('Fără responsabil');
+    expect(screen.getByText("Carmen BCE")).toBeVisible();
+    expect(pickers()[0]).toHaveTextContent("Fără responsabil");
   });
 
-  it('shows the Responsabil names only', () => {
+  it("shows the Responsabil names only", () => {
     state.caps = { manageDeals: true, administer: true };
-    state.team = { coordinatorId: 'bce', responsibleId: 'vol' };
+    state.team = { coordinatorId: "bce", responsibleId: "vol" };
     render(<DealsTeamPanel />);
     expect(pickers()).toHaveLength(0);
-    expect(screen.getByText('Carmen BCE')).toBeVisible();
-    expect(screen.getByText('Victor Voluntar')).toBeVisible();
+    expect(screen.getByText("Carmen BCE")).toBeVisible();
+    expect(screen.getByText("Victor Voluntar")).toBeVisible();
   });
 
-  it('shows names only while the capability row is still loading', () => {
+  it("shows names only while the capability row is still loading", () => {
     state.caps = undefined;
-    state.team = { coordinatorId: 'bce', responsibleId: null };
+    state.team = { coordinatorId: "bce", responsibleId: null };
     render(<DealsTeamPanel />);
     expect(pickers()).toHaveLength(0);
-    expect(screen.getByText('Carmen BCE')).toBeVisible();
-    expect(screen.getByText('Neales')).toBeVisible();
+    expect(screen.getByText("Carmen BCE")).toBeVisible();
+    expect(screen.getByText("Neales")).toBeVisible();
   });
 
-  it('keeps the other place out of a picker: the Coordonator is not offered as Responsabil', async () => {
+  it("keeps the other place out of a picker: the Coordonator is not offered as Responsabil", async () => {
     const user = userEvent.setup();
-    state.team = { coordinatorId: 'bce', responsibleId: null };
+    state.team = { coordinatorId: "bce", responsibleId: null };
     render(<DealsTeamPanel />);
     const responsible = pickers()[1];
-    if (!responsible) throw new Error('no Responsabil picker');
+    if (!responsible) throw new Error("no Responsabil picker");
     await user.click(responsible);
-    await screen.findByPlaceholderText('Caută un membru');
+    await screen.findByPlaceholderText("Caută un membru");
     expect(
-      screen.getAllByRole('option').map((option) => option.textContent),
-    ).toEqual(['Fără responsabil', 'Bogdan BC', 'Victor Voluntar']);
+      screen.getAllByRole("option").map((option) => option.textContent),
+    ).toEqual(["Fără responsabil", "Bogdan BC", "Victor Voluntar"]);
   });
 });
 ```
@@ -799,7 +809,7 @@ export type DealsTeam = {
   responsibleId: string | null;
 };
 
-export type TeamRole = 'coordinator' | 'responsible';
+export type TeamRole = "coordinator" | "responsible";
 
 /**
  * Who sits in the OSUBB Deals team (R44/R47). The table is readable by every
@@ -807,15 +817,15 @@ export type TeamRole = 'coordinator' | 'responsible';
  */
 export async function fetchDealsTeam(): Promise<DealsTeam> {
   const team = await supabase
-    .from('assignment_team')
-    .select('team_role, member_id')
-    .eq('assignment', OSUBB_DEALS_ASSIGNMENT);
+    .from("assignment_team")
+    .select("team_role, member_id")
+    .eq("assignment", OSUBB_DEALS_ASSIGNMENT);
   if (team.error) throw team.error;
   const place = (role: TeamRole) =>
     (team.data ?? []).find((row) => row.team_role === role)?.member_id ?? null;
   return {
-    coordinatorId: place('coordinator'),
-    responsibleId: place('responsible'),
+    coordinatorId: place("coordinator"),
+    responsibleId: place("responsible"),
   };
 }
 ```
@@ -823,6 +833,7 @@ export async function fetchDealsTeam(): Promise<DealsTeam> {
 and reword `setDealsTeamMember`'s comment to `BC and the Moderator set both places, the Coordonator the Responsabil only (R47); the server decides, and notifies the person set and the one replaced.`
 
 In `app/src/screens/deals/deals-presentation.ts`:
+
 - `DealsViewer` comments: `manageDealsTeam`: `BC, the Moderator or the Coordonator (my_capabilities().manage_deals_team).`; `manageDeals`: `Any Deals power: BC, the Moderator, the Coordonator or the Responsabil (manage_deals).`
 - `mayEditDeal`'s doc comment: `Editează (R47): BC, the Moderator and the Coordonator on every Deal, the Responsabil on their own. Presentation only: the policies decide.`
 - `teamMemberIds` returns `[team.coordinatorId, team.responsibleId].filter(...)`.
@@ -830,6 +841,7 @@ In `app/src/screens/deals/deals-presentation.ts`:
 - `coordinatorCandidates` comment: `The Coordonator picker's choices (R47): active BCE members (level 5), never the Responsabil.`
 
 In `app/src/screens/deals/DealsTeamPanel.tsx`:
+
 - replace the header doc comment with:
   ```tsx
   /**
@@ -850,7 +862,13 @@ In `app/src/screens/deals/DealsTeamPanel.tsx`:
 - change `<TeamPlace label="Coordonator" hint="Membru BCE">` to `<TeamPlace label="Coordonator">` and `<TeamPlace label="Responsabil" hint="Orice membru activ">` to `<TeamPlace label="Responsabil">`;
 - replace `TeamPlace` with
   ```tsx
-  function TeamPlace({ label, children }: { label: string; children: ReactNode }) {
+  function TeamPlace({
+    label,
+    children,
+  }: {
+    label: string;
+    children: ReactNode;
+  }) {
     return (
       <div className="min-w-0 space-y-1.5">
         <dt className="text-xs font-semibold text-foreground">{label}</dt>
@@ -861,6 +879,7 @@ In `app/src/screens/deals/DealsTeamPanel.tsx`:
   ```
 
 In `app/src/screens/deals/DealsAdminTab.tsx` replace the doc comment with:
+
 ```tsx
 /**
  * Administrare › OSUBB Deals (ruling R47): the team, then every Deal —
@@ -879,6 +898,7 @@ git rm -q app/src/screens/administrare/AdminBcTab.tsx app/src/screens/administra
 ```
 
 Then:
+
 - `app/src/App.tsx`: delete line 80 (`const AdminBcTab = lazy(...)`) and the `<Route path="bc" …>…</Route>` block (lines 499–505).
 - `app/src/screens/administrare/administrare-tabs.ts`: delete the `/administrare/bc` entry (the object with `label: 'Administrare BC'` and its comment), remove `Crown` from the `lucide-react` import if nothing else uses it, and change the comment `then R44's two` to `then R44's OSUBB Deals`.
 - `app/src/components/shell/navItems.ts`: delete the line `'/administrare/bc',`.
@@ -896,8 +916,9 @@ Then:
 - `lib/capabilities.test.tsx`: remove `administer_bc: false,` and `administerBc: false,`.
 - `components/shell/AppShell.test.tsx`, `queries/event-creation.test.ts`, `queries/event-edit.test.ts`, `screens/deals/DealsAdminTab.test.tsx:171`: remove every `administerBc:` line.
 - `screens/deals/DealsAdminTab.test.tsx`: replace the two tests `'gives BC and the Moderator Șterge only, and no Deal nou'` and `'keeps a BC member who does not hold it to Șterge, with no Deal nou'` with one:
+
   ```tsx
-  it('gives a BC member Deal nou, Editează and Șterge on any Deal (R47)', async () => {
+  it("gives a BC member Deal nou, Editează and Șterge on any Deal (R47)", async () => {
     viewer.caps = {
       manageRoles: true,
       administer: true,
@@ -906,12 +927,15 @@ Then:
       pickDealsCoordinator: true,
     };
     renderTab();
-    const other = await card('Expirat de la Coordonator');
-    expect(screen.getByRole('button', { name: 'Deal nou' })).toBeVisible();
-    expect(within(other).getByRole('button', { name: /Editează/ })).toBeVisible();
-    expect(within(other).getByRole('button', { name: /Șterge/ })).toBeVisible();
+    const other = await card("Expirat de la Coordonator");
+    expect(screen.getByRole("button", { name: "Deal nou" })).toBeVisible();
+    expect(
+      within(other).getByRole("button", { name: /Editează/ }),
+    ).toBeVisible();
+    expect(within(other).getByRole("button", { name: /Șterge/ })).toBeVisible();
   });
   ```
+
   (use the file's existing `viewer`, `renderTab` and `card` helpers; if the "Deal nou" control's accessible name differs in this file's other tests, use that name).
 
 - [ ] **Step 7: Typecheck, lint, test**
@@ -933,6 +957,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 4: Part A docs — ruling R47, glossary, deals doc, CLAUDE.md
 
 **Files:**
+
 - Modify: `docs/superpowers/plans/2026-09-23-prod-readiness-grill.md:75` (R44 row) and a new row after line 77; `CONTEXT.md:27-29`; `docs/backend/deals.md`; `docs/README.md:20`; `CLAUDE.md:10`
 
 - [ ] **Step 1: The ruling**
@@ -945,7 +970,7 @@ In `docs/superpowers/plans/2026-09-23-prod-readiness-grill.md`, append to the en
 
 - [ ] **Step 2: The glossary**
 
-In `CONTEXT.md` replace the *Atribuție* entry (the paragraph under `**Atribuție** (BC Assignment):`, keeping the `_Avoid_` line) with:
+In `CONTEXT.md` replace the _Atribuție_ entry (the paragraph under `**Atribuție** (BC Assignment):`, keeping the `_Avoid_` line) with:
 
 ```
 A named BC responsibility area, independent of Roles and Group positions (ruling R44, 2026-10-07, amended by R47 on 2026-10-11). Every BC member and the Moderator hold its powers by default; nobody is its holder. The first is OSUBB Deals: any BC member or the Moderator picks a Coordonator (a BCE member) and a Responsabil (any active Member); the Coordonator can do everything except pick the Coordonator; the Responsabil publishes Deals and manages their own. Nothing dissolves the team.
@@ -954,6 +979,7 @@ A named BC responsibility area, independent of Roles and Group positions (ruling
 - [ ] **Step 3: The deals doc**
 
 In `docs/backend/deals.md`:
+
 - first paragraph: after `20261008090000_moderator_deals_team.sql` carries R44's amendment …`, add `; \`20261011120000_atributii_held_by_bc.sql\` carries R47 (2026-10-11): every BC member and the Moderator hold every Atribuție's powers, nobody is a holder.`
 - replace the whole `## Atribuții (R44)` section (heading through the **Capabilities** paragraph) with:
 
@@ -962,18 +988,18 @@ In `docs/backend/deals.md`:
 
 An Atribuție is a named BC responsibility area. Since R47 (2026-10-11) **every live BC member (level 6) and the Moderator (level 9) hold every Atribuție's powers by default; nobody is its holder.** The only one today is `osubb_deals`, **OSUBB Deals**; adding another is a new value in `assignment_team_assignment_ck`, in `set_assignment_team_member_impl`'s step-1 list and in `private.assignment_label`.
 
-| Object                                                                      | What it is                                                                                                                                                                                                                            |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `public.assignment_team`                                                    | The team: at most one `coordinator` and one `responsible` (primary key `(assignment, team_role)`), never one person twice; `assignment` is checked against the known Atribuții. Readable by every live Member; no direct writes.       |
-| `public.set_assignment_team_member(p_assignment, p_team_role, p_member_id)` | BC and the Moderator set either place; the Coordonator sets only the Responsabil. A null member clears the place. Serialized per Atribuție by a transaction advisory lock.                                                              |
+| Object                                                                      | What it is                                                                                                                                                                                                                                                                    |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `public.assignment_team`                                                    | The team: at most one `coordinator` and one `responsible` (primary key `(assignment, team_role)`), never one person twice; `assignment` is checked against the known Atribuții. Readable by every live Member; no direct writes.                                              |
+| `public.set_assignment_team_member(p_assignment, p_team_role, p_member_id)` | BC and the Moderator set either place; the Coordonator sets only the Responsabil. A null member clears the place. Serialized per Atribuție by a transaction advisory lock.                                                                                                    |
 | `private.assignment_team_role(p_assignment, p_member)`                      | The one live definition: `holder` (any live BC member or the live Moderator -- the word the callers know), `coordinator` (the place and live bce), `responsible` (the place and live activ), or null. Every capability, policy and command reads it; nothing reads the token. |
 
-| Actor (live rows)                         | Publish a Deal | Edit / delete any Deal | Edit / delete own Deal | Set Coordonator | Set Responsabil |
-| ----------------------------------------- | -------------- | ---------------------- | ---------------------- | --------------- | --------------- |
-| Moderator (9) or BC member (6)            | yes            | yes                    | yes                    | yes             | yes             |
-| Coordonator (live 5, in the place)        | yes            | yes                    | yes                    | no              | yes             |
-| Responsabil (live activ, in the place)    | yes            | no                     | yes                    | no              | no              |
-| anyone else                               | no             | no                     | no                     | no              | no              |
+| Actor (live rows)                      | Publish a Deal | Edit / delete any Deal | Edit / delete own Deal | Set Coordonator | Set Responsabil |
+| -------------------------------------- | -------------- | ---------------------- | ---------------------- | --------------- | --------------- |
+| Moderator (9) or BC member (6)         | yes            | yes                    | yes                    | yes             | yes             |
+| Coordonator (live 5, in the place)     | yes            | yes                    | yes                    | no              | yes             |
+| Responsabil (live activ, in the place) | yes            | no                     | yes                    | no              | no              |
+| anyone else                            | no             | no                     | no                     | no              | no              |
 
 **Setting a place.** A Coordonator must be live bce (`PT400 coordinator_not_bce`), a Responsabil a live activ Member (`invalid_team_member`); the member of the other place is refused (`assignment_team_duplicate`); naming the current member again changes nothing. **Notifications** (kind `system`): the member set hears "Ești acum Coordonator/Responsabil OSUBB Deals" (`/administrare/deals`), the one replaced or cleared "Nu mai ești Coordonator/Responsabil OSUBB Deals". R44's holder table (`bc_assignments`), `set_bc_assignment`, `bc_assignments_directory` and the grant/withdraw notifications were dropped by R47; the team rows survived the migration (only their foreign key went).
 
@@ -1000,12 +1026,15 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
+
 ### Task 5: Part B backend — the `create_tasks` suite (red)
 
 **Files:**
+
 - Create: `supabase/tests/create_tasks.test.sql`
 
 **Interfaces:**
+
 - Consumes: `supabase/tests/_group_task_fixtures.psql` (personas `pg_temp.g521_uid(n)`: 1 bc and manager everywhere, 3/4/5 voluntari in `Project #521`, 12 vot (level 3); `pg_temp.g521_task(name, origin, executor, status, mode, kind)`; temp table `g521_tasks(name, id)`).
 - Produces: the contract Task 6 implements: `public.create_tasks(p_title, p_description, p_deadline, p_audience, p_assignment_mode, p_executor_ids uuid[] default null, p_campaign_id, p_parent_task_id, p_kind default 'task', p_group_id, p_links default '[]', p_copies integer default 1) returns setof public.tasks`.
 
@@ -1209,6 +1238,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 6: Part B backend — the migration, rosters, smoke, ADR and conventions (green)
 
 **Files:**
+
 - Create: `supabase/migrations/20261011121000_create_tasks.sql`
 - Modify: `supabase/tests/tracker_grants.test.sql` (wrapper roster after `create_task`, private roster after `create_task_impl`, the count pin), `scripts/smoke-tracker-commands.sql` (after step 1), `docs/adr/0007-task-tracker-lifecycle.md:108`, `docs/backend/conventions.md` (§3, before `## 4. Grants and RLS`)
 
@@ -1311,6 +1341,7 @@ grant execute on function public.create_tasks(text, text, timestamptz, text, tex
 - [ ] **Step 2: Rosters**
 
 In `supabase/tests/tracker_grants.test.sql`:
+
 - after the `('create_task', …)` wrapper row add
   ```sql
   -- Task copies (spec 2026-10-11): n copies in one transaction, same wrapper shape.
@@ -1377,13 +1408,16 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
+
 ### Task 7: Part B frontend — the draft gains `copies`; the mutation calls `create_tasks`
 
 **Files:**
+
 - Modify: `app/src/lib/schemas/task.ts`, `app/src/screens/tracker/task-form-model.ts`, `app/src/queries/task-umbrella.ts`, `app/src/lib/command-reasons.ts`, `app/src/lib/database.types.ts` (generated)
 - Test: `app/src/queries/task-umbrella.test.ts`
 
 **Interfaces:**
+
 - Consumes: `public.create_tasks` from Task 6 (`Database['public']['Functions']['create_tasks']` after `npm run gen:types`).
 - Produces: `TaskDraft.copies: number`; `TaskFormValues.copies: string`; `MAX_TASK_COPIES = 20`; `createTasksArgs({ draft, executorIds? })`; `createTasks(input): Promise<Task[]>`; `useCreateTasks()`; reasons `invalid_copies`, `too_many_copies`, `invalid_executors` with copy.
 
@@ -1397,31 +1431,51 @@ Expected: `database.types.ts` gains `create_tasks` under `Functions` with `Args`
 In `app/src/queries/task-umbrella.test.ts`, add `copies: 1` to the `draft` literal, change the import to also take `createTasksArgs, createTasks`, and append:
 
 ```ts
-describe('create_tasks arguments', () => {
-  it('sends one Executor as a one-entry list for a single direct Task', () => {
+describe("create_tasks arguments", () => {
+  it("sends one Executor as a one-entry list for a single direct Task", () => {
     expect(
       createTasksArgs({
-        draft: { ...draft, parentTaskId: null, assignmentMode: 'direct', audience: 'local', executorId: 'executor-1' },
+        draft: {
+          ...draft,
+          parentTaskId: null,
+          assignmentMode: "direct",
+          audience: "local",
+          executorId: "executor-1",
+        },
       }),
-    ).toMatchObject({ p_executor_ids: ['executor-1'], p_copies: 1 });
+    ).toMatchObject({ p_executor_ids: ["executor-1"], p_copies: 1 });
   });
-  it('sends the dialog’s Executors, one per copy, for n direct copies', () => {
+  it("sends the dialog’s Executors, one per copy, for n direct copies", () => {
     expect(
       createTasksArgs({
-        draft: { ...draft, assignmentMode: 'direct', audience: 'local', copies: 3 },
-        executorIds: ['a', 'b', 'c'],
+        draft: {
+          ...draft,
+          assignmentMode: "direct",
+          audience: "local",
+          copies: 3,
+        },
+        executorIds: ["a", "b", "c"],
       }),
-    ).toMatchObject({ p_executor_ids: ['a', 'b', 'c'], p_copies: 3 });
+    ).toMatchObject({ p_executor_ids: ["a", "b", "c"], p_copies: 3 });
   });
-  it('sends no Executors for public copies, whatever the form held', () => {
+  it("sends no Executors for public copies, whatever the form held", () => {
     expect(
-      createTasksArgs({ draft: { ...draft, copies: 4, executorId: 'stale' } }),
-    ).toMatchObject({ p_executor_ids: null, p_copies: 4, p_assignment_mode: 'public' });
+      createTasksArgs({ draft: { ...draft, copies: 4, executorId: "stale" } }),
+    ).toMatchObject({
+      p_executor_ids: null,
+      p_copies: 4,
+      p_assignment_mode: "public",
+    });
   });
-  it('calls create_tasks and returns the rows', async () => {
+  it("calls create_tasks and returns the rows", async () => {
     rpc.mockResolvedValue({ data: [{ id: 1 }, { id: 2 }], error: null });
-    await expect(createTasks({ draft: { ...draft, copies: 2 } })).resolves.toEqual([{ id: 1 }, { id: 2 }]);
-    expect(rpc).toHaveBeenLastCalledWith('create_tasks', expect.objectContaining({ p_copies: 2, p_executor_ids: null }));
+    await expect(
+      createTasks({ draft: { ...draft, copies: 2 } }),
+    ).resolves.toEqual([{ id: 1 }, { id: 2 }]);
+    expect(rpc).toHaveBeenLastCalledWith(
+      "create_tasks",
+      expect.objectContaining({ p_copies: 2, p_executor_ids: null }),
+    );
   });
 });
 ```
@@ -1432,18 +1486,20 @@ Expected: FAIL — `createTasksArgs` is not exported; `copies` is not a known pr
 - [ ] **Step 3: The schema**
 
 In `app/src/lib/schemas/task.ts`:
+
 - after the imports add `export const MAX_TASK_COPIES = 20;`
 - in `taskDraftSchema`'s `z.object({ … })` add `copies: z.number(),` after `campaignId`;
 - in `superRefine`, before `const umbrella = draft.kind === 'umbrella';` add:
   ```ts
   // Task copies (spec 2026-10-11): 1 to 20; an Umbrella has exactly one.
   if (!Number.isInteger(draft.copies) || draft.copies < 1)
-    issue('copies', 'invalid_copies');
-  else if (draft.copies > MAX_TASK_COPIES) issue('copies', 'too_many_copies');
-  else if (draft.kind === 'umbrella' && draft.copies !== 1)
-    issue('copies', 'invalid_copies');
+    issue("copies", "invalid_copies");
+  else if (draft.copies > MAX_TASK_COPIES) issue("copies", "too_many_copies");
+  else if (draft.kind === "umbrella" && draft.copies !== 1)
+    issue("copies", "invalid_copies");
   ```
 - in `fieldForReason` add, after `umbrella_has_no_campaign: 'campaignId',`:
+
   ```ts
   // Task copies (spec 2026-10-11).
   invalid_copies: 'copies',
@@ -1454,9 +1510,11 @@ In `app/src/lib/schemas/task.ts`:
 - [ ] **Step 4: The model**
 
 In `app/src/screens/tracker/task-form-model.ts`:
+
 - `TaskDraft` gains `/** How many identical Tasks to create at once (1–20; 1 for an Umbrella). */ copies: number;` after `campaignId`;
 - `TaskFormValues` gains `/** "Exemplare" as typed; the schema judges it. */ copies: string;` after `campaignId`;
 - in `taskDraftInput`'s returned object, add after `campaignId: …`:
+
   ```ts
   copies: umbrella
     ? 1
@@ -1464,7 +1522,9 @@ In `app/src/screens/tracker/task-form-model.ts`:
       ? Number.NaN
       : Number(values.copies),
   ```
+
   and change the `executorId` entry to
+
   ```ts
   // With more than one copy the Executors come from the dialog, not the form.
   executorId:
@@ -1493,7 +1553,7 @@ export type CreateTasksInput = {
  * anything public or an Umbrella sends none.
  */
 export function createTasksArgs({ draft, executorIds }: CreateTasksInput) {
-  const direct = draft.assignmentMode === 'direct';
+  const direct = draft.assignmentMode === "direct";
   const executors = !direct
     ? null
     : draft.copies > 1
@@ -1519,11 +1579,13 @@ export function createTasksArgs({ draft, executorIds }: CreateTasksInput) {
 
 /** The Tracker's one create path: n copies (n = 1 included) in one transaction. */
 export async function createTasks(input: CreateTasksInput) {
-  if (input.draft.kind === 'umbrella' && input.draft.parentTaskId !== null)
-    throw new Error('An Umbrella cannot be a Subtask');
+  if (input.draft.kind === "umbrella" && input.draft.parentTaskId !== null)
+    throw new Error("An Umbrella cannot be a Subtask");
   const { data, error } = await supabase.rpc(
-    'create_tasks',
-    createTasksArgs(input) as unknown as Database['public']['Functions']['create_tasks']['Args'],
+    "create_tasks",
+    createTasksArgs(
+      input,
+    ) as unknown as Database["public"]["Functions"]["create_tasks"]["Args"],
   );
   if (error) throw error;
   return data;
@@ -1571,10 +1633,12 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 8: Part B frontend — the "Exemplare" field
 
 **Files:**
+
 - Modify: `app/src/screens/tracker/TaskForm.tsx`, `app/src/screens/tracker/ManagedTaskForm.tsx`
 - Test: `app/src/screens/tracker/TaskForm.test.tsx`
 
 **Interfaces:**
+
 - Consumes: Task 7's `TaskFormValues.copies`, `MAX_TASK_COPIES`, `fieldForReason`.
 - Produces: `TaskForm` props `plural?: 'taskuri' | 'subtaskuri'` (default `'taskuri'`); the submit button reads `submitLabel` at one copy, `Creează n <plural>` for public copies, `Continuă` for direct copies; the in-form Executor picker is hidden for direct copies above one. `ManagedTaskForm` passes `plural` through.
 
@@ -1583,57 +1647,87 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 Append to `app/src/screens/tracker/TaskForm.test.tsx` (reuse its `options`, `chooseOrigin`, `DEADLINE`, `pickDate` helpers; the `onDraft` mock pattern of the file's other cases):
 
 ```tsx
-it('offers Exemplare to a Task, not to an Umbrella, and labels the button by the count', async () => {
+it("offers Exemplare to a Task, not to an Umbrella, and labels the button by the count", async () => {
   const user = userEvent.setup();
-  render(<TaskForm options={options} onDraft={vi.fn()} submitLabel="Creează taskul" />);
-  const copies = screen.getByLabelText('Exemplare');
+  render(
+    <TaskForm
+      options={options}
+      onDraft={vi.fn()}
+      submitLabel="Creează taskul"
+    />,
+  );
+  const copies = screen.getByLabelText("Exemplare");
   expect(copies).toHaveValue(1);
-  expect(copies).toHaveAttribute('max', '20');
-  expect(screen.getByRole('button', { name: 'Creează taskul' })).toBeInTheDocument();
-  await user.click(screen.getByRole('radio', { name: 'Public' }));
+  expect(copies).toHaveAttribute("max", "20");
+  expect(
+    screen.getByRole("button", { name: "Creează taskul" }),
+  ).toBeInTheDocument();
+  await user.click(screen.getByRole("radio", { name: "Public" }));
   await user.clear(copies);
-  await user.type(copies, '3');
-  expect(screen.getByRole('button', { name: 'Creează 3 taskuri' })).toBeInTheDocument();
-  await user.click(screen.getByRole('radio', { name: 'Task-umbrelă' }));
-  expect(screen.queryByLabelText('Exemplare')).toBeNull();
-  expect(screen.getByRole('button', { name: 'Creează taskul' })).toBeInTheDocument();
+  await user.type(copies, "3");
+  expect(
+    screen.getByRole("button", { name: "Creează 3 taskuri" }),
+  ).toBeInTheDocument();
+  await user.click(screen.getByRole("radio", { name: "Task-umbrelă" }));
+  expect(screen.queryByLabelText("Exemplare")).toBeNull();
+  expect(
+    screen.getByRole("button", { name: "Creează taskul" }),
+  ).toBeInTheDocument();
 });
 
-it('hands direct copies to the next step: no Executor picker, the button says Continuă', async () => {
+it("hands direct copies to the next step: no Executor picker, the button says Continuă", async () => {
   const user = userEvent.setup();
   const onDraft = vi.fn();
-  render(<TaskForm options={options} onDraft={onDraft} submitLabel="Creează taskul" />);
-  await chooseOrigin(user, 'Tineret');
-  expect(screen.getByRole('combobox', { name: 'Executor' })).toBeInTheDocument();
-  const copies = screen.getByLabelText('Exemplare');
+  render(
+    <TaskForm
+      options={options}
+      onDraft={onDraft}
+      submitLabel="Creează taskul"
+    />,
+  );
+  await chooseOrigin(user, "Tineret");
+  expect(
+    screen.getByRole("combobox", { name: "Executor" }),
+  ).toBeInTheDocument();
+  const copies = screen.getByLabelText("Exemplare");
   await user.clear(copies);
-  await user.type(copies, '2');
-  expect(screen.queryByRole('combobox', { name: 'Executor' })).toBeNull();
+  await user.type(copies, "2");
+  expect(screen.queryByRole("combobox", { name: "Executor" })).toBeNull();
   expect(screen.getByText(/Executorii se aleg la pasul următor/)).toBeVisible();
-  await user.type(screen.getByLabelText('Titlu'), 'Două afișe');
+  await user.type(screen.getByLabelText("Titlu"), "Două afișe");
   await pickDate(user, screen.getByLabelText(/Termen/), DEADLINE);
-  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+  await user.click(screen.getByRole("button", { name: "Continuă" }));
   await waitFor(() => expect(onDraft).toHaveBeenCalledTimes(1));
-  expect(onDraft.mock.calls[0]?.[0]).toMatchObject({ copies: 2, assignmentMode: 'direct', executorId: null });
+  expect(onDraft.mock.calls[0]?.[0]).toMatchObject({
+    copies: 2,
+    assignmentMode: "direct",
+    executorId: null,
+  });
 });
 
 it.each([
-  ['', 'Numărul de exemplare nu e valid'],
-  ['abc', 'Numărul de exemplare nu e valid'],
-  ['2.5', 'Numărul de exemplare nu e valid'],
-  ['0', 'Numărul de exemplare nu e valid'],
-  ['21', 'Cel mult 20 de exemplare'],
+  ["", "Numărul de exemplare nu e valid"],
+  ["abc", "Numărul de exemplare nu e valid"],
+  ["2.5", "Numărul de exemplare nu e valid"],
+  ["0", "Numărul de exemplare nu e valid"],
+  ["21", "Cel mult 20 de exemplare"],
 ])('refuses "%s" copies in the browser', async (typed, message) => {
   const user = userEvent.setup();
   const onDraft = vi.fn();
-  render(<TaskForm options={options} onDraft={onDraft} submitLabel="Creează taskul" />);
-  await chooseOrigin(user, 'Tineret');
-  await user.type(screen.getByLabelText('Titlu'), 'Fără număr');
+  render(
+    <TaskForm
+      options={options}
+      onDraft={onDraft}
+      submitLabel="Creează taskul"
+    />,
+  );
+  await chooseOrigin(user, "Tineret");
+  await user.type(screen.getByLabelText("Titlu"), "Fără număr");
   await pickDate(user, screen.getByLabelText(/Termen/), DEADLINE);
-  const copies = screen.getByLabelText('Exemplare');
+  const copies = screen.getByLabelText("Exemplare");
   await user.clear(copies);
   if (typed) fireEvent.change(copies, { target: { value: typed } });
-  await user.click(screen.getByRole('button', { name: /Creează|Continuă/ }));
+  await user.click(screen.getByRole("button", { name: /Creează|Continuă/ }));
   expect(await screen.findByText(new RegExp(message))).toBeVisible();
   expect(onDraft).not.toHaveBeenCalled();
 });
@@ -1647,6 +1741,7 @@ Expected: FAIL — no field labelled "Exemplare".
 - [ ] **Step 2: The field**
 
 In `app/src/screens/tracker/TaskForm.tsx`:
+
 - import `MAX_TASK_COPIES` from `'../../lib/schemas/task'` (same line as `fieldForReason, taskDraftSchema`);
 - add the prop `plural = 'taskuri',` to the destructured props with the type `/** The noun the button counts: "subtaskuri" under an Umbrella. */ plural?: 'taskuri' | 'subtaskuri';`;
 - add `copies: '1',` to the initial `values`;
@@ -1657,15 +1752,15 @@ In `app/src/screens/tracker/TaskForm.tsx`:
   const manyCopies = Number.isInteger(copies) && copies > 1;
   const label =
     !umbrella && manyCopies
-      ? values.assignmentMode === 'direct'
-        ? 'Continuă'
+      ? values.assignmentMode === "direct"
+        ? "Continuă"
         : `Creează ${copies} ${plural}`
       : submitLabel;
   ```
 - add after the `COPIES` constants at the top of the file:
   ```tsx
   const COPIES_INFO =
-    'Creează mai multe taskuri identice odată, până la 20. Pentru un task direct alegi câte un executor pentru fiecare exemplar la pasul următor.';
+    "Creează mai multe taskuri identice odată, până la 20. Pentru un task direct alegi câte un executor pentru fiecare exemplar la pasul următor.";
   ```
 - inside the `!umbrella && (<>…</>)` fragment, right after `<AssignmentModeField … />`, insert:
   ```tsx
@@ -1688,28 +1783,32 @@ In `app/src/screens/tracker/TaskForm.tsx`:
       className="w-28"
       value={values.copies}
       onChange={(event) => update({ copies: event.target.value })}
-      {...form.field('copies', `${id}-copies-info`)}
+      {...form.field("copies", `${id}-copies-info`)}
     />
-    <FieldError {...form.errorProps('copies')} />
+    <FieldError {...form.errorProps("copies")} />
   </div>
   ```
 - change the Executor block to
   ```tsx
-  {values.assignmentMode === 'direct' && origin && !manyCopies && (
-    <div className="grid gap-1.5" {...form.slot('executorId')}>
-      <DirectExecutorSelector
-        originGroupId={origin.id}
-        value={values.executorId}
-        onChange={(executorId) => update({ executorId })}
-      />
-      <FieldError {...form.errorProps('executorId')} />
-    </div>
-  )}
-  {values.assignmentMode === 'direct' && manyCopies && (
-    <p className="text-sm text-muted-foreground" {...form.slot('executorId')}>
-      Executorii se aleg la pasul următor, câte unul pentru fiecare exemplar.
-    </p>
-  )}
+  {
+    values.assignmentMode === "direct" && origin && !manyCopies && (
+      <div className="grid gap-1.5" {...form.slot("executorId")}>
+        <DirectExecutorSelector
+          originGroupId={origin.id}
+          value={values.executorId}
+          onChange={(executorId) => update({ executorId })}
+        />
+        <FieldError {...form.errorProps("executorId")} />
+      </div>
+    );
+  }
+  {
+    values.assignmentMode === "direct" && manyCopies && (
+      <p className="text-sm text-muted-foreground" {...form.slot("executorId")}>
+        Executorii se aleg la pasul următor, câte unul pentru fiecare exemplar.
+      </p>
+    );
+  }
   ```
 - change `<Button type="submit">{submitLabel}</Button>` to `<Button type="submit">{label}</Button>`.
 
@@ -1728,13 +1827,16 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
+
 ### Task 9: Part B frontend — the executors dialog
 
 **Files:**
+
 - Create: `app/src/screens/tracker/CopiesExecutorsDialog.tsx`, `app/src/screens/tracker/CopiesExecutorsDialog.test.tsx`
 - Modify: `app/src/screens/tracker/DirectExecutorSelector.tsx`
 
 **Interfaces:**
+
 - Consumes: `DirectExecutorSelector`, `Dialog*` from `components/ui/dialog`, `Button`.
 - Produces: `DirectExecutorSelector` props `label?: string` (default `'Executor'`) and `excludeIds?: readonly string[]`; `CopiesExecutorsDialog({ count, originGroupId, plural, busy, error, onBack, onConfirm })` — mounted only while needed, always open; `EXECUTORS_REQUIRED` copy constant.
 
@@ -1743,12 +1845,12 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 Create `app/src/screens/tracker/CopiesExecutorsDialog.test.tsx`:
 
 ```tsx
-import { render, screen, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 
-vi.mock('../../lib/supabase', () => ({ supabase: {} }));
-vi.mock('./DirectExecutorSelector', () => ({
+vi.mock("../../lib/supabase", () => ({ supabase: {} }));
+vi.mock("./DirectExecutorSelector", () => ({
   DirectExecutorSelector: ({
     label,
     value,
@@ -1760,7 +1862,7 @@ vi.mock('./DirectExecutorSelector', () => ({
     excludeIds?: readonly string[];
     onChange: (id: string | null) => void;
   }) => (
-    <div data-testid="picker" data-excluded={(excludeIds ?? []).join(',')}>
+    <div data-testid="picker" data-excluded={(excludeIds ?? []).join(",")}>
       <span>{label}</span>
       <button type="button" onClick={() => onChange(`${label}-ales`)}>
         {value ? `${label}: ${value}` : `Alege pentru ${label}`}
@@ -1768,13 +1870,15 @@ vi.mock('./DirectExecutorSelector', () => ({
     </div>
   ),
 }));
-import { CopiesExecutorsDialog } from './CopiesExecutorsDialog';
+import { CopiesExecutorsDialog } from "./CopiesExecutorsDialog";
 
-function renderDialog(overrides: Partial<Parameters<typeof CopiesExecutorsDialog>[0]> = {}) {
+function renderDialog(
+  overrides: Partial<Parameters<typeof CopiesExecutorsDialog>[0]> = {},
+) {
   const props = {
     count: 3,
     originGroupId: 4,
-    plural: 'taskuri' as const,
+    plural: "taskuri" as const,
     busy: false,
     error: null,
     onBack: vi.fn(),
@@ -1785,55 +1889,76 @@ function renderDialog(overrides: Partial<Parameters<typeof CopiesExecutorsDialog
   return { ...props, user: userEvent.setup() };
 }
 
-describe('the executors of n Tasks', () => {
-  it('asks for one Executor per copy, titled by the count', () => {
+describe("the executors of n Tasks", () => {
+  it("asks for one Executor per copy, titled by the count", () => {
     renderDialog();
-    const dialog = screen.getByRole('dialog', { name: 'Executorii celor 3 taskuri' });
-    expect(dialog).toHaveAccessibleDescription('Alege câte un executor pentru fiecare exemplar.');
-    expect(screen.getAllByTestId('picker')).toHaveLength(3);
-    expect(within(dialog).getByText('Exemplarul 1')).toBeVisible();
-    expect(within(dialog).getByText('Exemplarul 3')).toBeVisible();
+    const dialog = screen.getByRole("dialog", {
+      name: "Executorii celor 3 taskuri",
+    });
+    expect(dialog).toHaveAccessibleDescription(
+      "Alege câte un executor pentru fiecare exemplar.",
+    );
+    expect(screen.getAllByTestId("picker")).toHaveLength(3);
+    expect(within(dialog).getByText("Exemplarul 1")).toBeVisible();
+    expect(within(dialog).getByText("Exemplarul 3")).toBeVisible();
     expect(
-      within(dialog).getAllByRole('button').map((button) => button.textContent),
-    ).toEqual(expect.arrayContaining(['Înapoi', 'Creează 3 taskuri']));
+      within(dialog)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(expect.arrayContaining(["Înapoi", "Creează 3 taskuri"]));
   });
 
-  it('keeps a chosen Member out of the other pickers', async () => {
+  it("keeps a chosen Member out of the other pickers", async () => {
     const { user } = renderDialog({ count: 2 });
-    await user.click(screen.getByRole('button', { name: 'Alege pentru Exemplarul 1' }));
-    const [first, second] = screen.getAllByTestId('picker');
-    expect(first).toHaveAttribute('data-excluded', '');
-    expect(second).toHaveAttribute('data-excluded', 'Exemplarul 1-ales');
+    await user.click(
+      screen.getByRole("button", { name: "Alege pentru Exemplarul 1" }),
+    );
+    const [first, second] = screen.getAllByTestId("picker");
+    expect(first).toHaveAttribute("data-excluded", "");
+    expect(second).toHaveAttribute("data-excluded", "Exemplarul 1-ales");
   });
 
-  it('refuses to create until every copy has an Executor, then confirms with the list', async () => {
+  it("refuses to create until every copy has an Executor, then confirms with the list", async () => {
     const { user, onConfirm } = renderDialog({ count: 2 });
-    await user.click(screen.getByRole('button', { name: 'Creează 2 taskuri' }));
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Alege câte un executor pentru fiecare exemplar.',
+    await user.click(screen.getByRole("button", { name: "Creează 2 taskuri" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Alege câte un executor pentru fiecare exemplar.",
     );
     expect(onConfirm).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: 'Alege pentru Exemplarul 1' }));
-    await user.click(screen.getByRole('button', { name: 'Alege pentru Exemplarul 2' }));
-    expect(screen.queryByRole('alert')).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Creează 2 taskuri' }));
-    expect(onConfirm).toHaveBeenCalledWith(['Exemplarul 1-ales', 'Exemplarul 2-ales']);
+    await user.click(
+      screen.getByRole("button", { name: "Alege pentru Exemplarul 1" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Alege pentru Exemplarul 2" }),
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Creează 2 taskuri" }));
+    expect(onConfirm).toHaveBeenCalledWith([
+      "Exemplarul 1-ales",
+      "Exemplarul 2-ales",
+    ]);
   });
 
-  it('shows the server’s refusal and goes back on Înapoi or Escape', async () => {
-    const { user, onBack } = renderDialog({ error: 'Executorul nu mai este eligibil.' });
-    expect(screen.getByRole('alert')).toHaveTextContent('Executorul nu mai este eligibil.');
-    await user.click(screen.getByRole('button', { name: 'Înapoi' }));
+  it("shows the server’s refusal and goes back on Înapoi or Escape", async () => {
+    const { user, onBack } = renderDialog({
+      error: "Executorul nu mai este eligibil.",
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Executorul nu mai este eligibil.",
+    );
+    await user.click(screen.getByRole("button", { name: "Înapoi" }));
     expect(onBack).toHaveBeenCalledTimes(1);
-    await user.keyboard('{Escape}');
+    await user.keyboard("{Escape}");
     expect(onBack).toHaveBeenCalledTimes(2);
   });
 
-  it('is full screen on a phone and disables its buttons while busy', () => {
+  it("is full screen on a phone and disables its buttons while busy", () => {
     renderDialog({ busy: true });
-    expect(screen.getByRole('dialog').className).toContain('max-sm:h-(--visible-height)');
-    expect(screen.getByRole('button', { name: 'Înapoi' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Se creează…' })).toBeDisabled();
+    expect(screen.getByRole("dialog").className).toContain(
+      "max-sm:h-(--visible-height)",
+    );
+    expect(screen.getByRole("button", { name: "Înapoi" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Se creează…" })).toBeDisabled();
   });
 });
 ```
@@ -1844,11 +1969,15 @@ Expected: FAIL — module not found.
 - [ ] **Step 2: Extend the executor picker**
 
 In `app/src/screens/tracker/DirectExecutorSelector.tsx`:
+
 - props: add `/** The field's label; "Exemplarul 2" in the executors dialog. */ label = 'Executor',` and `/** Members already chosen for another copy: not offered here. */ excludeIds = [],` with types `label?: string; excludeIds?: readonly string[];`;
 - after `const [groupId, setGroupId] = useState<number | null>(null);` add
   ```tsx
-  const excludedKey = excludeIds.join(',');
-  const excluded = useMemo(() => new Set(excludedKey ? excludedKey.split(',') : []), [excludedKey]);
+  const excludedKey = excludeIds.join(",");
+  const excluded = useMemo(
+    () => new Set(excludedKey ? excludedKey.split(",") : []),
+    [excludedKey],
+  );
   ```
 - change the `eligible` memo to
   ```tsx
@@ -1875,8 +2004,8 @@ In `app/src/screens/tracker/DirectExecutorSelector.tsx`:
 Create `app/src/screens/tracker/CopiesExecutorsDialog.tsx`:
 
 ```tsx
-import { useState, type FormEvent } from 'react';
-import { Button } from '../../components/ui/button';
+import { useState, type FormEvent } from "react";
+import { Button } from "../../components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -1884,12 +2013,12 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '../../components/ui/dialog';
-import { DirectExecutorSelector } from './DirectExecutorSelector';
+} from "../../components/ui/dialog";
+import { DirectExecutorSelector } from "./DirectExecutorSelector";
 
 /** The same words the server uses for `invalid_executors`. */
 export const EXECUTORS_REQUIRED =
-  'Alege câte un executor pentru fiecare exemplar.';
+  "Alege câte un executor pentru fiecare exemplar.";
 
 /**
  * The second step of n direct copies (spec 2026-10-11): one Executor per
@@ -1909,7 +2038,7 @@ export function CopiesExecutorsDialog({
 }: {
   count: number;
   originGroupId: number;
-  plural: 'taskuri' | 'subtaskuri';
+  plural: "taskuri" | "subtaskuri";
   busy: boolean;
   error: string | null;
   onBack: () => void;
@@ -1985,7 +2114,7 @@ export function CopiesExecutorsDialog({
               Înapoi
             </Button>
             <Button type="submit" disabled={busy}>
-              {busy ? 'Se creează…' : `Creează ${count} ${plural}`}
+              {busy ? "Se creează…" : `Creează ${count} ${plural}`}
             </Button>
           </DialogFooter>
         </form>
@@ -2014,21 +2143,24 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 10: Part B frontend — the two-step flow and the plural receipts
 
 **Files:**
+
 - Modify: `app/src/screens/tracker/NewTaskControl.tsx`, `app/src/screens/tracker/UmbrellaTaskSection.tsx:19-160`, `app/src/screens/tracker/TrackerScreen.tsx:249-262,436-462,488-494`, `DESIGN.md:119-121`
 - Test: `app/src/screens/tracker/NewTaskControl.test.tsx`, `app/src/screens/tracker/UmbrellaTaskSection.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `useCreateTasks`, `CreateTasksInput` (Task 7), `CopiesExecutorsDialog` (Task 9), `commandErrorMessage` from `lib/command-reasons`, `TaskActionSuccess` (already imported in `TrackerScreen`).
 - Produces: `NewTaskControl` prop `onCreated: (created: { ids: number[] }) => void`; `TrackerScreen` state `createdMany: { key: number; receipt: string } | null`.
 
 - [ ] **Step 1: Rewrite the New Task tests (red)**
 
 In `app/src/screens/tracker/NewTaskControl.test.tsx`:
-- the `DirectExecutorSelector` mock gains `label = 'Executor'` and renders `{value ? `${label} ales: ${value}` : `Alege ${label}`}`, choosing `'executor-1'` when `label === 'Executor'` and `` `${label}-ales` `` otherwise:
+
+- the `DirectExecutorSelector` mock gains `label = 'Executor'` and renders `{value ? `${label} ales: ${value}`:`Alege ${label}`}`, choosing `'executor-1'` when `label === 'Executor'` and `` `${label}-ales` `` otherwise:
   ```tsx
-  vi.mock('./DirectExecutorSelector', () => ({
+  vi.mock("./DirectExecutorSelector", () => ({
     DirectExecutorSelector: ({
-      label = 'Executor',
+      label = "Executor",
       value,
       onChange,
     }: {
@@ -2038,7 +2170,9 @@ In `app/src/screens/tracker/NewTaskControl.test.tsx`:
     }) => (
       <button
         type="button"
-        onClick={() => onChange(label === 'Executor' ? 'executor-1' : `${label}-ales`)}
+        onClick={() =>
+          onChange(label === "Executor" ? "executor-1" : `${label}-ales`)
+        }
       >
         {value ? `${label} ales: ${value}` : `Alege ${label}`}
       </button>
@@ -2051,83 +2185,122 @@ In `app/src/screens/tracker/NewTaskControl.test.tsx`:
 - append:
 
 ```tsx
-  it('creates three public copies and reports them without opening one', async () => {
-    state.rpc.mockResolvedValue({ data: [{ id: 51 }, { id: 52 }, { id: 53 }], error: null });
-    const { user, onCreated } = renderControl();
-    await openDialog(user);
-    await pickOrigin(user);
-    await fillContent(user, 'Voluntari la trei standuri');
-    await user.click(screen.getByRole('radio', { name: 'Public' }));
-    const copies = screen.getByLabelText('Exemplare');
-    await user.clear(copies);
-    await user.type(copies, '3');
-    await user.click(screen.getByRole('button', { name: 'Creează 3 taskuri' }));
-    await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ ids: [51, 52, 53] }));
-    expect(state.rpc.mock.calls[0]?.[1]).toMatchObject({ p_copies: 3, p_executor_ids: null, p_assignment_mode: 'public' });
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+it("creates three public copies and reports them without opening one", async () => {
+  state.rpc.mockResolvedValue({
+    data: [{ id: 51 }, { id: 52 }, { id: 53 }],
+    error: null,
   });
+  const { user, onCreated } = renderControl();
+  await openDialog(user);
+  await pickOrigin(user);
+  await fillContent(user, "Voluntari la trei standuri");
+  await user.click(screen.getByRole("radio", { name: "Public" }));
+  const copies = screen.getByLabelText("Exemplare");
+  await user.clear(copies);
+  await user.type(copies, "3");
+  await user.click(screen.getByRole("button", { name: "Creează 3 taskuri" }));
+  await waitFor(() =>
+    expect(onCreated).toHaveBeenCalledWith({ ids: [51, 52, 53] }),
+  );
+  expect(state.rpc.mock.calls[0]?.[1]).toMatchObject({
+    p_copies: 3,
+    p_executor_ids: null,
+    p_assignment_mode: "public",
+  });
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+});
 
-  it('asks for one Executor per direct copy, then creates them all at once', async () => {
-    state.rpc.mockResolvedValue({ data: [{ id: 61 }, { id: 62 }], error: null });
-    const { user, onCreated } = renderControl();
-    await openDialog(user);
-    await pickOrigin(user);
-    await fillContent(user, 'Două afișe');
-    const copies = screen.getByLabelText('Exemplare');
-    await user.clear(copies);
-    await user.type(copies, '2');
-    expect(screen.queryByRole('button', { name: 'Alege Executor' })).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Continuă' }));
-    const step = await screen.findByRole('dialog', { name: 'Executorii celor 2 taskuri' });
-    expect(state.rpc).not.toHaveBeenCalled();
-    await user.click(within(step).getByRole('button', { name: 'Alege Exemplarul 1' }));
-    await user.click(within(step).getByRole('button', { name: 'Alege Exemplarul 2' }));
-    await user.click(within(step).getByRole('button', { name: 'Creează 2 taskuri' }));
-    await waitFor(() => expect(onCreated).toHaveBeenCalledWith({ ids: [61, 62] }));
-    expect(state.rpc).toHaveBeenCalledWith('create_tasks', expect.objectContaining({
+it("asks for one Executor per direct copy, then creates them all at once", async () => {
+  state.rpc.mockResolvedValue({ data: [{ id: 61 }, { id: 62 }], error: null });
+  const { user, onCreated } = renderControl();
+  await openDialog(user);
+  await pickOrigin(user);
+  await fillContent(user, "Două afișe");
+  const copies = screen.getByLabelText("Exemplare");
+  await user.clear(copies);
+  await user.type(copies, "2");
+  expect(screen.queryByRole("button", { name: "Alege Executor" })).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Continuă" }));
+  const step = await screen.findByRole("dialog", {
+    name: "Executorii celor 2 taskuri",
+  });
+  expect(state.rpc).not.toHaveBeenCalled();
+  await user.click(
+    within(step).getByRole("button", { name: "Alege Exemplarul 1" }),
+  );
+  await user.click(
+    within(step).getByRole("button", { name: "Alege Exemplarul 2" }),
+  );
+  await user.click(
+    within(step).getByRole("button", { name: "Creează 2 taskuri" }),
+  );
+  await waitFor(() =>
+    expect(onCreated).toHaveBeenCalledWith({ ids: [61, 62] }),
+  );
+  expect(state.rpc).toHaveBeenCalledWith(
+    "create_tasks",
+    expect.objectContaining({
       p_copies: 2,
-      p_assignment_mode: 'direct',
-      p_executor_ids: ['Exemplarul 1-ales', 'Exemplarul 2-ales'],
-    }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-  });
+      p_assignment_mode: "direct",
+      p_executor_ids: ["Exemplarul 1-ales", "Exemplarul 2-ales"],
+    }),
+  );
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+});
 
-  it('returns to the form with the draft intact when the executors step is dismissed', async () => {
-    const { user, onCreated } = renderControl();
-    await openDialog(user);
-    await pickOrigin(user);
-    await fillContent(user, 'Draft cu două exemplare');
-    const copies = screen.getByLabelText('Exemplare');
-    await user.clear(copies);
-    await user.type(copies, '2');
-    await user.click(screen.getByRole('button', { name: 'Continuă' }));
-    await screen.findByRole('dialog', { name: 'Executorii celor 2 taskuri' });
-    await user.keyboard('{Escape}');
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Executorii/ })).toBeNull());
-    expect(screen.getByRole('dialog', { name: 'Task nou' })).toBeVisible();
-    expect(screen.getByLabelText('Titlu')).toHaveValue('Draft cu două exemplare');
-    expect(screen.getByLabelText('Exemplare')).toHaveValue(2);
-    expect(state.rpc).not.toHaveBeenCalled();
-    expect(onCreated).not.toHaveBeenCalled();
-  });
+it("returns to the form with the draft intact when the executors step is dismissed", async () => {
+  const { user, onCreated } = renderControl();
+  await openDialog(user);
+  await pickOrigin(user);
+  await fillContent(user, "Draft cu două exemplare");
+  const copies = screen.getByLabelText("Exemplare");
+  await user.clear(copies);
+  await user.type(copies, "2");
+  await user.click(screen.getByRole("button", { name: "Continuă" }));
+  await screen.findByRole("dialog", { name: "Executorii celor 2 taskuri" });
+  await user.keyboard("{Escape}");
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog", { name: /Executorii/ })).toBeNull(),
+  );
+  expect(screen.getByRole("dialog", { name: "Task nou" })).toBeVisible();
+  expect(screen.getByLabelText("Titlu")).toHaveValue("Draft cu două exemplare");
+  expect(screen.getByLabelText("Exemplare")).toHaveValue(2);
+  expect(state.rpc).not.toHaveBeenCalled();
+  expect(onCreated).not.toHaveBeenCalled();
+});
 
-  it('shows a refusal inside the executors step and keeps it open', async () => {
-    state.rpc.mockResolvedValue({ data: null, error: { code: 'PT400', message: 'invalid_executor' } });
-    const { user } = renderControl();
-    await openDialog(user);
-    await pickOrigin(user);
-    await fillContent(user, 'Refuzat');
-    const copies = screen.getByLabelText('Exemplare');
-    await user.clear(copies);
-    await user.type(copies, '2');
-    await user.click(screen.getByRole('button', { name: 'Continuă' }));
-    const step = await screen.findByRole('dialog', { name: 'Executorii celor 2 taskuri' });
-    await user.click(within(step).getByRole('button', { name: 'Alege Exemplarul 1' }));
-    await user.click(within(step).getByRole('button', { name: 'Alege Exemplarul 2' }));
-    await user.click(within(step).getByRole('button', { name: 'Creează 2 taskuri' }));
-    expect(await within(step).findByRole('alert')).toHaveTextContent('Executorul nu mai este eligibil');
-    expect(screen.getByRole('dialog', { name: 'Executorii celor 2 taskuri' })).toBeVisible();
+it("shows a refusal inside the executors step and keeps it open", async () => {
+  state.rpc.mockResolvedValue({
+    data: null,
+    error: { code: "PT400", message: "invalid_executor" },
   });
+  const { user } = renderControl();
+  await openDialog(user);
+  await pickOrigin(user);
+  await fillContent(user, "Refuzat");
+  const copies = screen.getByLabelText("Exemplare");
+  await user.clear(copies);
+  await user.type(copies, "2");
+  await user.click(screen.getByRole("button", { name: "Continuă" }));
+  const step = await screen.findByRole("dialog", {
+    name: "Executorii celor 2 taskuri",
+  });
+  await user.click(
+    within(step).getByRole("button", { name: "Alege Exemplarul 1" }),
+  );
+  await user.click(
+    within(step).getByRole("button", { name: "Alege Exemplarul 2" }),
+  );
+  await user.click(
+    within(step).getByRole("button", { name: "Creează 2 taskuri" }),
+  );
+  expect(await within(step).findByRole("alert")).toHaveTextContent(
+    "Executorul nu mai este eligibil",
+  );
+  expect(
+    screen.getByRole("dialog", { name: "Executorii celor 2 taskuri" }),
+  ).toBeVisible();
+});
 ```
 
 Run (in `app/`): `npx vitest run src/screens/tracker/NewTaskControl.test.tsx`
@@ -2138,19 +2311,19 @@ Expected: FAIL (still `create_task`, `onCreated(41)`).
 Replace `app/src/screens/tracker/NewTaskControl.tsx` with:
 
 ```tsx
-import { useRef, useState } from 'react';
-import { PlusIcon } from 'lucide-react';
-import { FabAction } from '../../components/layout';
-import { FormSheet } from '../../components/ui/form-sheet';
-import { commandErrorMessage } from '../../lib/command-reasons';
-import { useTaskManagement } from '../../queries/task-tabs';
+import { useRef, useState } from "react";
+import { PlusIcon } from "lucide-react";
+import { FabAction } from "../../components/layout";
+import { FormSheet } from "../../components/ui/form-sheet";
+import { commandErrorMessage } from "../../lib/command-reasons";
+import { useTaskManagement } from "../../queries/task-tabs";
 import {
   useCreateTasks,
   type CreateTasksInput,
-} from '../../queries/task-umbrella';
-import { CopiesExecutorsDialog } from './CopiesExecutorsDialog';
-import { ManagedTaskForm } from './ManagedTaskForm';
-import type { TaskDraft } from './task-form-model';
+} from "../../queries/task-umbrella";
+import { CopiesExecutorsDialog } from "./CopiesExecutorsDialog";
+import { ManagedTaskForm } from "./ManagedTaskForm";
+import type { TaskDraft } from "./task-form-model";
 
 export type TasksCreated = { ids: number[] };
 
@@ -2221,7 +2394,7 @@ function NewTaskDialog({
             if (!create.isPending) setOpen(false);
           }}
           onDraft={async (draft) => {
-            if (draft.assignmentMode === 'direct' && draft.copies > 1) {
+            if (draft.assignmentMode === "direct" && draft.copies > 1) {
               setStepError(null);
               setPendingDraft(draft);
               return;
@@ -2246,7 +2419,7 @@ function NewTaskDialog({
               setStepError(
                 commandErrorMessage(
                   failure,
-                  'Nu am putut crea taskurile. Încearcă din nou.',
+                  "Nu am putut crea taskurile. Încearcă din nou.",
                 ),
               );
             }
@@ -2261,6 +2434,7 @@ function NewTaskDialog({
 - [ ] **Step 3: The Umbrella section**
 
 In `app/src/screens/tracker/UmbrellaTaskSection.tsx`:
+
 - imports: replace `useCreateTask` with `useCreateTasks, type CreateTasksInput`; add `import { CopiesExecutorsDialog } from './CopiesExecutorsDialog';` and `import type { TaskDraft } from './task-form-model';`;
 - `const create = useCreateTask();` becomes `const create = useCreateTasks();`;
 - add state after `const [done, setDone] = useState(false);`:
@@ -2307,41 +2481,55 @@ In `app/src/screens/tracker/UmbrellaTaskSection.tsx`:
   ```
 - after the `</FormSheet>` add:
   ```tsx
-  {pendingDraft && (
-    <CopiesExecutorsDialog
-      count={pendingDraft.copies}
-      originGroupId={pendingDraft.groupId}
-      plural="subtaskuri"
-      busy={create.isPending}
-      error={stepError}
-      onBack={() => setPendingDraft(null)}
-      onConfirm={async (executorIds) => {
-        setStepError(null);
-        try {
-          await finish({ draft: pendingDraft, executorIds });
-        } catch (failure) {
-          setStepError(
-            commandErrorMessage(
-              failure,
-              'Nu am putut crea subtaskurile. Încearcă din nou.',
-            ),
-          );
-        }
-      }}
-    />
-  )}
+  {
+    pendingDraft && (
+      <CopiesExecutorsDialog
+        count={pendingDraft.copies}
+        originGroupId={pendingDraft.groupId}
+        plural="subtaskuri"
+        busy={create.isPending}
+        error={stepError}
+        onBack={() => setPendingDraft(null)}
+        onConfirm={async (executorIds) => {
+          setStepError(null);
+          try {
+            await finish({ draft: pendingDraft, executorIds });
+          } catch (failure) {
+            setStepError(
+              commandErrorMessage(
+                failure,
+                "Nu am putut crea subtaskurile. Încearcă din nou.",
+              ),
+            );
+          }
+        }}
+      />
+    );
+  }
   ```
 - in `UmbrellaTaskSection.test.tsx`, the mock `useCreateTask: () => ({ mutateAsync: create, isPending: false })` becomes `useCreateTasks: () => ({ mutateAsync: create, isPending: false })`, and every `create.mockResolvedValue({ id: N })` becomes `create.mockResolvedValue([{ id: N }])`; the mocked `ManagedTaskForm`'s button sends `{ parentTaskId, title: 'Copil nou', copies: 1, assignmentMode: 'public' }`. Add one case:
+
   ```tsx
-  it('reports several Subtasks on the Umbrella instead of opening one', async () => {
+  it("reports several Subtasks on the Umbrella instead of opening one", async () => {
     create.mockResolvedValue([{ id: 1 }, { id: 2 }]);
     const onNavigate = vi.fn();
-    render(<UmbrellaTaskSection {...common} onNavigate={onNavigate} subtasks={[]} />);
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Adaugă subtask' }));
+    render(
+      <UmbrellaTaskSection {...common} onNavigate={onNavigate} subtasks={[]} />,
+    );
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Adaugă subtask" }));
     await act(async () => {
-      form.onDraft({ parentTaskId: 10, title: 'Copil nou', copies: 2, assignmentMode: 'public' });
+      form.onDraft({
+        parentTaskId: 10,
+        title: "Copil nou",
+        copies: 2,
+        assignmentMode: "public",
+      });
     });
-    expect(await screen.findByRole('status')).toHaveTextContent('2 subtaskuri create.');
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "2 subtaskuri create.",
+    );
     expect(onNavigate).not.toHaveBeenCalled();
   });
   ```
@@ -2349,6 +2537,7 @@ In `app/src/screens/tracker/UmbrellaTaskSection.tsx`:
 - [ ] **Step 4: The Tracker receipt**
 
 In `app/src/screens/tracker/TrackerScreen.tsx`:
+
 - after the `deleted` state add
   ```tsx
   // Several Tasks created at once (spec 2026-10-11): the list says so; no
@@ -2371,10 +2560,15 @@ In `app/src/screens/tracker/TrackerScreen.tsx`:
   }}
   ```
 - next to the `deleted` receipt (`{view === 'taskuri' && deleted !== null && (…)}`) add
+
   ```tsx
-  {view === 'taskuri' && createdMany !== null && (
-    <TaskActionSuccess key={createdMany.key}>{createdMany.receipt}</TaskActionSuccess>
-  )}
+  {
+    view === "taskuri" && createdMany !== null && (
+      <TaskActionSuccess key={createdMany.key}>
+        {createdMany.receipt}
+      </TaskActionSuccess>
+    );
+  }
   ```
 
 - [ ] **Step 5: DESIGN.md**
@@ -2394,14 +2588,17 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
+
 ### Task 11: Part C — both tab tracks scroll sideways, look unchanged
 
 **Files:**
+
 - Create: `app/src/components/layout/tab-scroll.ts`, `app/src/components/layout/tab-scroll.test.ts`, `app/src/components/shell/TabBar.test.tsx`
 - Modify: `app/src/components/layout/PageTabs.tsx`, `app/src/components/shell/TabBar.tsx`, `DESIGN.md:215`
 - Test: `app/src/components/layout/PageTabs.test.tsx`
 
 **Interfaces:**
+
 - Produces: `scrollTabIntoView(track, tab, smooth)` (pure), `useScrollCurrentTabIntoView(trackRef, selector)` (runs on every route change); `tabListClass` and `tabClass` gain the overflow and no-shrink classes; `tabLabelsFrom[*].label` loses `truncate`.
 
 - [ ] **Step 1: Failing tests — the pure scroll rule**
@@ -2409,38 +2606,42 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 Create `app/src/components/layout/tab-scroll.test.ts`:
 
 ```ts
-import { describe, expect, it, vi } from 'vitest';
-import { scrollTabIntoView } from './tab-scroll';
+import { describe, expect, it, vi } from "vitest";
+import { scrollTabIntoView } from "./tab-scroll";
 
 function track(scrollLeft: number, clientWidth: number) {
-  return { scrollLeft, clientWidth, scrollTo: vi.fn() } as unknown as HTMLElement & {
+  return {
+    scrollLeft,
+    clientWidth,
+    scrollTo: vi.fn(),
+  } as unknown as HTMLElement & {
     scrollTo: ReturnType<typeof vi.fn>;
   };
 }
 const tab = (offsetLeft: number, offsetWidth: number) =>
   ({ offsetLeft, offsetWidth }) as unknown as HTMLElement;
 
-describe('scrollTabIntoView', () => {
-  it('leaves a tab already in view where it is', () => {
+describe("scrollTabIntoView", () => {
+  it("leaves a tab already in view where it is", () => {
     const t = track(0, 300);
     scrollTabIntoView(t, tab(40, 80), false);
     expect(t.scrollLeft).toBe(0);
     expect(t.scrollTo).not.toHaveBeenCalled();
   });
-  it('brings a tab cut off on the right to the right edge', () => {
+  it("brings a tab cut off on the right to the right edge", () => {
     const t = track(0, 300);
     scrollTabIntoView(t, tab(260, 100), false);
     expect(t.scrollLeft).toBe(60);
   });
-  it('brings a tab hidden on the left to the left edge', () => {
+  it("brings a tab hidden on the left to the left edge", () => {
     const t = track(200, 300);
     scrollTabIntoView(t, tab(50, 80), false);
     expect(t.scrollLeft).toBe(50);
   });
-  it('animates when motion is allowed and the element can scroll smoothly', () => {
+  it("animates when motion is allowed and the element can scroll smoothly", () => {
     const t = track(0, 300);
     scrollTabIntoView(t, tab(260, 100), true);
-    expect(t.scrollTo).toHaveBeenCalledWith({ left: 60, behavior: 'smooth' });
+    expect(t.scrollTo).toHaveBeenCalledWith({ left: 60, behavior: "smooth" });
   });
 });
 ```
@@ -2448,42 +2649,53 @@ describe('scrollTabIntoView', () => {
 Append to `app/src/components/layout/PageTabs.test.tsx`:
 
 ```tsx
-it('scrolls sideways when its tabs do not fit, with no scrollbar and no shrinking tabs', () => {
+it("scrolls sideways when its tabs do not fit, with no scrollbar and no shrinking tabs", () => {
   render(
     <MemoryRouter>
       <PageTabs label="Secțiuni" tabs={tabs} />
     </MemoryRouter>,
   );
-  const nav = screen.getByRole('navigation', { name: 'Secțiuni' });
-  expect(nav).toHaveClass('overflow-x-auto', '[scrollbar-width:none]', '[&::-webkit-scrollbar]:hidden');
-  for (const link of screen.getAllByRole('link')) expect(link).toHaveClass('shrink-0');
+  const nav = screen.getByRole("navigation", { name: "Secțiuni" });
+  expect(nav).toHaveClass(
+    "overflow-x-auto",
+    "[scrollbar-width:none]",
+    "[&::-webkit-scrollbar]:hidden",
+  );
+  for (const link of screen.getAllByRole("link"))
+    expect(link).toHaveClass("shrink-0");
   // Labels never truncate any more: the track scrolls instead.
-  for (const size of Object.values(tabLabelsFrom)) expect(size.label).not.toContain('truncate');
+  for (const size of Object.values(tabLabelsFrom))
+    expect(size.label).not.toContain("truncate");
 });
 ```
 
 Create `app/src/components/shell/TabBar.test.tsx`:
 
 ```tsx
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Home, ListTodo, Calendar, Megaphone, ShieldCheck } from 'lucide-react';
-import { TabBar } from './TabBar';
-import type { NavItem } from './navItems';
+import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { Home, ListTodo, Calendar, Megaphone, ShieldCheck } from "lucide-react";
+import { TabBar } from "./TabBar";
+import type { NavItem } from "./navItems";
 
 const tabs: NavItem[] = [
-  { path: '/tracker', label: 'Taskuri', icon: ListTodo },
-  { path: '/calendar', label: 'Calendar', icon: Calendar },
-  { path: '/', label: 'Acasă', icon: Home },
-  { path: '/anunturi', label: 'Anunțuri', icon: Megaphone },
-  { path: '/administrare', label: 'Administrare', shortLabel: 'Admin', icon: ShieldCheck },
+  { path: "/tracker", label: "Taskuri", icon: ListTodo },
+  { path: "/calendar", label: "Calendar", icon: Calendar },
+  { path: "/", label: "Acasă", icon: Home },
+  { path: "/anunturi", label: "Anunțuri", icon: Megaphone },
+  {
+    path: "/administrare",
+    label: "Administrare",
+    shortLabel: "Admin",
+    icon: ShieldCheck,
+  },
 ] as NavItem[];
 
 /** jsdom lays nothing out: the track's overflow is whatever the test says. */
 function trackOverflows(by: number) {
-  vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(300);
-  vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockReturnValue(300 + by);
+  vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(300);
+  vi.spyOn(Element.prototype, "scrollWidth", "get").mockReturnValue(300 + by);
 }
 afterEach(() => vi.restoreAllMocks());
 
@@ -2494,33 +2706,46 @@ function renderAt(path: string) {
     </MemoryRouter>,
   );
 }
-const track = () => screen.getByRole('navigation', { name: 'Navigare rapidă' }).firstElementChild as HTMLElement;
+const track = () =>
+  screen.getByRole("navigation", { name: "Navigare rapidă" })
+    .firstElementChild as HTMLElement;
 
-describe('the phone bar: fit first, scroll last', () => {
-  it('spells the current tab’s full name when the five fit', () => {
+describe("the phone bar: fit first, scroll last", () => {
+  it("spells the current tab’s full name when the five fit", () => {
     trackOverflows(0);
-    renderAt('/administrare');
-    expect(screen.getByRole('link', { name: 'Administrare' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByText('Administrare')).toBeVisible();
-    expect(track()).toHaveClass('overflow-x-auto', '[scrollbar-width:none]');
+    renderAt("/administrare");
+    expect(screen.getByRole("link", { name: "Administrare" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByText("Administrare")).toBeVisible();
+    expect(track()).toHaveClass("overflow-x-auto", "[scrollbar-width:none]");
   });
-  it('falls back to the short name when the full one overflows the track', () => {
+  it("falls back to the short name when the full one overflows the track", () => {
     trackOverflows(40);
-    renderAt('/administrare');
-    expect(screen.getByText('Admin')).toBeVisible();
-    expect(screen.queryByText('Administrare')).toBeNull();
+    renderAt("/administrare");
+    expect(screen.getByText("Admin")).toBeVisible();
+    expect(screen.queryByText("Administrare")).toBeNull();
   });
-  it('keeps the short name and lets the bar scroll when even that overflows', () => {
+  it("keeps the short name and lets the bar scroll when even that overflows", () => {
     trackOverflows(400);
-    renderAt('/administrare');
-    expect(screen.getByText('Admin')).toBeVisible();
+    renderAt("/administrare");
+    expect(screen.getByText("Admin")).toBeVisible();
   });
-  it('shows a short name only to the current tab: a page outside the five changes nothing', () => {
+  it("shows a short name only to the current tab: a page outside the five changes nothing", () => {
     trackOverflows(400);
-    expect(() => renderAt('/profil')).not.toThrow();
-    for (const name of ['Taskuri', 'Calendar', 'Acasă', 'Anunțuri', 'Administrare'])
-      expect(screen.getByRole('link', { name })).not.toHaveAttribute('aria-current');
-    expect(screen.queryByText('Admin')).toBeNull();
+    expect(() => renderAt("/profil")).not.toThrow();
+    for (const name of [
+      "Taskuri",
+      "Calendar",
+      "Acasă",
+      "Anunțuri",
+      "Administrare",
+    ])
+      expect(screen.getByRole("link", { name })).not.toHaveAttribute(
+        "aria-current",
+      );
+    expect(screen.queryByText("Admin")).toBeNull();
   });
 });
 ```
@@ -2535,8 +2760,8 @@ Expected: FAIL — `tab-scroll` missing; overflow classes missing; the short-nam
 Create `app/src/components/layout/tab-scroll.ts`:
 
 ```ts
-import { useEffect, type RefObject } from 'react';
-import { useLocation } from 'react-router';
+import { useEffect, type RefObject } from "react";
+import { useLocation } from "react-router";
 
 /**
  * Bring one tab fully into its track's view by moving the track's own
@@ -2552,10 +2777,14 @@ export function scrollTabIntoView(
   const viewLeft = track.scrollLeft;
   const viewRight = viewLeft + track.clientWidth;
   const next =
-    left < viewLeft ? left : right > viewRight ? right - track.clientWidth : null;
+    left < viewLeft
+      ? left
+      : right > viewRight
+        ? right - track.clientWidth
+        : null;
   if (next === null) return;
-  if (smooth && typeof track.scrollTo === 'function')
-    track.scrollTo({ left: next, behavior: 'smooth' });
+  if (smooth && typeof track.scrollTo === "function")
+    track.scrollTo({ left: next, behavior: "smooth" });
   else track.scrollLeft = next;
 }
 
@@ -2574,8 +2803,8 @@ export function useScrollCurrentTabIntoView(
     const current = root?.querySelector<HTMLElement>(selector);
     if (!root || !current) return;
     const reduce =
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     scrollTabIntoView(root, current, !reduce);
   }, [track, selector, pathname]);
 }
@@ -2584,6 +2813,7 @@ export function useScrollCurrentTabIntoView(
 - [ ] **Step 3: PageTabs**
 
 In `app/src/components/layout/PageTabs.tsx`:
+
 - replace the file comment's two bullets with:
   ```
    * - The track is as wide as the content column and its tabs share it; it has
@@ -2597,7 +2827,7 @@ In `app/src/components/layout/PageTabs.tsx`:
 - `tabListClass` becomes
   ```ts
   export const tabListClass =
-    'relative flex w-full min-w-0 gap-0.5 overflow-x-auto overscroll-x-contain rounded-lg border border-border bg-(--surface-3) p-[3px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
+    "relative flex w-full min-w-0 gap-0.5 overflow-x-auto overscroll-x-contain rounded-lg border border-border bg-(--surface-3) p-[3px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
   ```
 - in `tabClass` replace `flex-auto` with `flex-auto shrink-0`;
 - in `tabLabelsFrom`, every `label` string loses `truncate` (`'min-w-0 truncate'` → `'min-w-0'`, `'min-w-0 truncate max-sm:sr-only …'` → `'min-w-0 max-sm:sr-only …'`, and so on for `md`, `lg`, `xl`, `2xl`);
@@ -2606,6 +2836,7 @@ In `app/src/components/layout/PageTabs.tsx`:
 - [ ] **Step 4: TabBar**
 
 In `app/src/components/shell/TabBar.tsx`:
+
 - import `useScrollCurrentTabIntoView` from `'../layout/tab-scroll'`;
 - replace the doc comment's last paragraph with:
   ```
@@ -2659,6 +2890,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 12: Part D — the date picker popup shows everything
 
 **Files:**
+
 - Modify: `app/src/components/ui/date-picker.tsx:204-213`
 - Test: `app/src/components/ui/date-picker.test.tsx`
 
@@ -2667,12 +2899,16 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 Append to the `describe('DateTimePicker', …)` block in `app/src/components/ui/date-picker.test.tsx` (use the file's existing render-and-open helper; the popup is `role="dialog"` named "Alege data și ora"):
 
 ```tsx
-it('is always its full height: nothing scrolls inside the popup', async () => {
+it("is always its full height: nothing scrolls inside the popup", async () => {
   const user = userEvent.setup();
   render(<DateTimePicker id="d" value="" onChange={() => undefined} />);
-  await user.click(screen.getByRole('button', { name: /Alege data și ora/ }));
-  const popup = await screen.findByRole('dialog', { name: 'Alege data și ora' });
-  expect(popup.className).not.toMatch(/max-h-|overflow-y-auto|overscroll-contain/);
+  await user.click(screen.getByRole("button", { name: /Alege data și ora/ }));
+  const popup = await screen.findByRole("dialog", {
+    name: "Alege data și ora",
+  });
+  expect(popup.className).not.toMatch(
+    /max-h-|overflow-y-auto|overscroll-contain/,
+  );
 });
 ```
 
@@ -2682,6 +2918,7 @@ Expected: FAIL — the class list has `max-h-(--available-height) … overflow-y
 - [ ] **Step 2: The change**
 
 In `app/src/components/ui/date-picker.tsx`:
+
 - the `Popover.Positioner` gains, after `collisionPadding={12}`:
   ```tsx
   // The popup is always its full height (spec 2026-10-11): it prefers
@@ -2691,6 +2928,7 @@ In `app/src/components/ui/date-picker.tsx`:
   collisionAvoidance={{ side: 'shift', align: 'shift', fallbackAxisSide: 'none' }}
   ```
 - the `Popover.Popup` className loses `max-h-(--available-height) `, ` overflow-y-auto overscroll-contain`:
+
   ```
   'w-[min(20rem,calc(100vw-1.5rem))] origin-(--transform-origin) rounded-lg bg-popover p-3 text-popover-foreground shadow-md ring-1 ring-foreground/10 transition-[opacity,scale] outline-none motion-reduce:transition-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0'
   ```

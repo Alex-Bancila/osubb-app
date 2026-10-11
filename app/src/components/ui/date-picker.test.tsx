@@ -5,6 +5,19 @@ import { describe, expect, it, vi } from 'vitest';
 import { clearDate, pickDate } from '../../test/date-picker';
 import { DatePicker, DateTimePicker, formatPickerValue } from './date-picker';
 
+// The positioner's props, captured so the test can pin how the popup avoids
+// the screen's edges (Part D, spec 2026-10-11).
+const positionerProps = vi.hoisted(() => [] as Record<string, unknown>[]);
+vi.mock('@base-ui/react/popover', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@base-ui/react/popover')>();
+  const Positioner = (props: Record<string, unknown>) => {
+    positionerProps.push(props);
+    return <actual.Popover.Positioner {...(props as never)} />;
+  };
+  return { ...actual, Popover: { ...actual.Popover, Positioner } };
+});
+
 function Field({
   initial = '',
   withTime = true,
@@ -193,7 +206,18 @@ it('is always its full height: nothing scrolls inside the popup (spec 2026-10-11
   const popup = await screen.findByRole('dialog', {
     name: 'Alege data și ora',
   });
-  expect(popup.className).not.toMatch(
-    /max-h-|overflow-y-auto|overscroll-contain/,
-  );
+  // No clamp to the room on one side of the field: the whole calendar shows.
+  expect(popup.className).not.toContain('--available-height');
+  // Only the viewport itself bounds it, so a phone in landscape can still
+  // reach Gata by scrolling inside; on any screen that fits, nothing scrolls.
+  expect(popup.className).toContain('max-h-[calc(100dvh-24px)]');
+  expect(popup.className).toContain('overflow-y-auto');
+  // And the popup shifts along the field's side instead of flipping.
+  expect(positionerProps.at(-1)).toMatchObject({
+    collisionAvoidance: {
+      side: 'shift',
+      align: 'shift',
+      fallbackAxisSide: 'none',
+    },
+  });
 });

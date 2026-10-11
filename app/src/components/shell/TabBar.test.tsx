@@ -45,7 +45,11 @@ describe('the phone bar: fit first, scroll last', () => {
       'page',
     );
     expect(screen.getByText('Administrare')).toBeVisible();
-    expect(track()).toHaveClass('overflow-x-auto', '[scrollbar-width:none]');
+    expect(track()).toHaveClass(
+      'overflow-x-auto',
+      'overflow-y-hidden',
+      '[scrollbar-width:none]',
+    );
   });
   it('falls back to the short name when the full one overflows the track', () => {
     trackOverflows(40);
