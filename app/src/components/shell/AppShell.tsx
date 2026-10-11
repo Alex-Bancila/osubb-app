@@ -178,7 +178,7 @@ function SidebarContent({
  * so "you are here" looks the same at the top as at the bottom.
  */
 const topPillClass =
-  'inline-flex h-9 items-center gap-1.5 rounded-full bg-(--text) px-3 text-xs font-bold whitespace-nowrap text-(--surface) no-underline motion-grow';
+  'inline-flex h-[36px] items-center gap-1.5 rounded-full bg-(--text) px-3 text-xs font-bold whitespace-nowrap text-(--surface) no-underline motion-grow';
 
 export default function AppShell() {
   const { session } = useAuth();
