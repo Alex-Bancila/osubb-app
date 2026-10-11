@@ -910,4 +910,49 @@ describe('the top bar carries no page name (#981)', () => {
     expect(root.className).toContain("lg:[grid-template-areas:'sidebar_main']");
     expect(root.className).not.toContain('sidebar_topbar');
   });
+
+  it('opens the top bar’s bell and avatar into the named pill on their own pages', () => {
+    const profile = renderShell('/profil');
+    const profileHeader = within(
+      profile.container.querySelector('header') as HTMLElement,
+    );
+    const avatar = profileHeader.getByRole('link', { name: 'Profil' });
+    expect(avatar).toHaveAttribute('aria-current', 'page');
+    expect(avatar).toHaveTextContent('Profil');
+    expect(
+      profileHeader.getByRole('link', { name: 'Notificări' }),
+    ).not.toHaveTextContent('Notificări');
+    profile.unmount();
+
+    const { container } = renderShell('/notificari');
+    const header = within(container.querySelector('header') as HTMLElement);
+    expect(header.getByRole('link', { name: 'Notificări' })).toHaveTextContent(
+      'Notificări',
+    );
+    expect(header.getByRole('link', { name: 'Profil' })).not.toHaveTextContent(
+      'Profil',
+    );
+  });
+
+  it('keeps Acasă outlined and named on a page reached from its tiles, and nothing current', () => {
+    queries.useCapabilities.mockReturnValue({
+      data: capabilities({ seeLeadership: true }),
+    });
+    renderShell('/clasament');
+    const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
+    const home = within(quick).getByRole('link', { name: 'Acasă' });
+    expect(home).not.toHaveAttribute('aria-current');
+    expect(home.className).toContain('ring-inset');
+    expect(
+      home.querySelector('[data-slot="tab-label"]')?.className,
+    ).not.toContain('sr-only');
+    expect(within(quick).queryByRole('link', { current: 'page' })).toBeNull();
+  });
+
+  it('outlines no tab on Profil, which is the top bar’s', () => {
+    renderShell('/profil');
+    const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
+    for (const link of within(quick).getAllByRole('link'))
+      expect(link.className).not.toContain('ring-inset');
+  });
 });

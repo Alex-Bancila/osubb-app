@@ -1,3 +1,4 @@
+import { HomeBackLink } from '../../components/shell/HomeBackLink';
 import { useState } from 'react';
 import { LayoutGrid, List } from 'lucide-react';
 import { MemberCard } from '../../components/member/MemberCard';
@@ -280,6 +281,7 @@ export default function VolunteersScreen() {
     : 'Niciun membru disponibil.';
   return (
     <Page>
+      <HomeBackLink />
       <PageHeader
         title="Voluntari"
         // The count rides beside the title: no row of its own.

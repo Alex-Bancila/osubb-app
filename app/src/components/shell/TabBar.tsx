@@ -11,6 +11,9 @@ import { usePopMotion } from '../../lib/motion';
 import { Badge } from '../ui/badge';
 import { isNavItemActive, type NavItem } from './navItems';
 
+const badgeClass =
+  'h-4 min-w-4 justify-center rounded-full bg-destructive px-1 text-[10px] text-white dark:bg-destructive';
+
 type Badges = Partial<Record<string, { count: number; label: string }>>;
 
 /**
@@ -27,9 +30,16 @@ type Badges = Partial<Record<string, { count: number; label: string }>>;
 export function TabBar({
   tabs,
   badges,
+  under,
 }: {
   tabs: readonly NavItem[];
   badges: Badges;
+  /**
+   * The tab the current page sits under without being it (Acasă, for a page
+   * reached from its tiles): outlined and named, where the current tab is
+   * filled. Ignored while a tab is current.
+   */
+  under?: string;
 }) {
   const { pathname } = useLocation();
   const active = tabs.find((item) => isNavItemActive(item, pathname))?.path;
@@ -39,6 +49,9 @@ export function TabBar({
   const [thumb, setThumb] = useState<{ left: number; width: number } | null>(
     null,
   );
+  // Whether the bar has stood with no tab selected (Profil, Notificări): the
+  // thumb then has nowhere to slide from, so it grows in on the tab instead.
+  const [wasEmpty, setWasEmpty] = useState(false);
   // The tab whose name did not fit, which says its short one; a new tab or
   // a new width starts from the full name again.
   const [shortFor, setShortFor] = useState<string | null>(null);
@@ -57,6 +70,7 @@ export function TabBar({
         ? previous
         : next,
     );
+    if (!current) setWasEmpty(true);
     const label = current?.querySelector<HTMLElement>(
       '[data-slot="tab-label"]',
     );
@@ -90,7 +104,10 @@ export function TabBar({
           <span
             aria-hidden="true"
             data-slot="tab-thumb"
-            className="pointer-events-none absolute inset-y-[5px] left-0 rounded-full bg-(--text) transition-[translate,width] duration-300 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none"
+            className={cn(
+              'pointer-events-none absolute inset-y-[5px] left-0 rounded-full bg-(--text) transition-[translate,width] duration-300 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none',
+              wasEmpty && 'motion-grow',
+            )}
             style={{ width: thumb.width, translate: `${thumb.left}px 0` }}
           />
         )}
@@ -98,6 +115,7 @@ export function TabBar({
           const Icon = item.icon;
           const badge = badges[item.path];
           const current = item.path === active;
+          const parent = !active && item.path === under;
           return (
             <Link
               key={item.path}
@@ -108,38 +126,49 @@ export function TabBar({
                 'relative z-1 flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-bold whitespace-nowrap no-underline transition-colors duration-200 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring motion-reduce:transition-none',
                 current
                   ? 'min-w-0 flex-1 text-(--surface)'
-                  : 'text-muted-foreground hover:text-foreground',
+                  : parent
+                    ? 'min-w-0 flex-[2] text-foreground ring-[1.5px] ring-muted-foreground/70 ring-inset'
+                    : 'text-muted-foreground hover:text-foreground',
                 // On a page that is none of the five (Profil, Notificări)
                 // nothing opens, so the five share the bar evenly.
-                !current && (active ? 'flex-none' : 'flex-1'),
+                !current && !parent && (active ? 'flex-none' : 'flex-1'),
                 current && !thumb && 'bg-(--text)',
               )}
             >
-              <Icon className="size-5 shrink-0" aria-hidden="true" />
+              {/* Unselected, the count sits on the icon's corner, ringed in
+                  the bar's colour; selected, it follows the label. */}
+              <span className="relative inline-flex shrink-0">
+                <Icon className="size-5 shrink-0" aria-hidden="true" />
+                {badge && !current && !parent && (
+                  <Badge
+                    variant="destructive"
+                    className={cn(
+                      badgeClass,
+                      'absolute -top-1.5 left-3 ring-2 ring-card',
+                    )}
+                  >
+                    <PopCount count={badge.count} />
+                  </Badge>
+                )}
+              </span>
               <span
                 data-slot="tab-label"
                 className={cn(
-                  current ? 'min-w-0 overflow-hidden text-clip' : 'sr-only',
+                  current || parent
+                    ? 'min-w-0 overflow-hidden text-clip'
+                    : 'sr-only',
                 )}
               >
                 {current && short && item.shortLabel
                   ? item.shortLabel
                   : item.label}
               </span>
-              {badge && (
-                <>
-                  <Badge
-                    variant="destructive"
-                    className={cn(
-                      'h-4 min-w-4 justify-center rounded-full bg-destructive px-1 text-[10px] text-white dark:bg-destructive',
-                      !current && 'absolute top-0.5 right-0.5',
-                    )}
-                  >
-                    <PopCount count={badge.count} />
-                  </Badge>
-                  <span className="sr-only">, {badge.label}</span>
-                </>
+              {badge && (current || parent) && (
+                <Badge variant="destructive" className={badgeClass}>
+                  <PopCount count={badge.count} />
+                </Badge>
               )}
+              {badge && <span className="sr-only">, {badge.label}</span>}
             </Link>
           );
         })}

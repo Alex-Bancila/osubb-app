@@ -137,13 +137,13 @@ const NAV_LABELS_FROM = {
     tab: 'max-sm:flex-none max-sm:aria-selected:flex-1 sm:flex-auto sm:px-4',
     label: 'max-sm:in-[[aria-selected=false]]:sr-only',
     badge:
-      'max-sm:in-[[aria-selected=false]]:absolute max-sm:in-[[aria-selected=false]]:-top-1.5 max-sm:in-[[aria-selected=false]]:-right-1',
+      'max-sm:in-[[aria-selected=false]]:absolute max-sm:in-[[aria-selected=false]]:top-0 max-sm:in-[[aria-selected=false]]:right-0.5 max-sm:in-[[aria-selected=false]]:h-4 max-sm:in-[[aria-selected=false]]:min-w-4 max-sm:in-[[aria-selected=false]]:px-1 max-sm:in-[[aria-selected=false]]:text-[10px] max-sm:in-[[aria-selected=false]]:ring-2 max-sm:in-[[aria-selected=false]]:ring-(--surface-3)',
   },
   md: {
     tab: 'max-md:flex-none max-md:aria-selected:flex-1 md:flex-auto md:px-4',
     label: 'max-md:in-[[aria-selected=false]]:sr-only',
     badge:
-      'max-md:in-[[aria-selected=false]]:absolute max-md:in-[[aria-selected=false]]:-top-1.5 max-md:in-[[aria-selected=false]]:-right-1',
+      'max-md:in-[[aria-selected=false]]:absolute max-md:in-[[aria-selected=false]]:top-0 max-md:in-[[aria-selected=false]]:right-0.5 max-md:in-[[aria-selected=false]]:h-4 max-md:in-[[aria-selected=false]]:min-w-4 max-md:in-[[aria-selected=false]]:px-1 max-md:in-[[aria-selected=false]]:text-[10px] max-md:in-[[aria-selected=false]]:ring-2 max-md:in-[[aria-selected=false]]:ring-(--surface-3)',
   },
 } as const;
 
