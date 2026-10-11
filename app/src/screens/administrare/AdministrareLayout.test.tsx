@@ -12,6 +12,8 @@ const api = vi.hoisted(() => ({
   applications: vi.fn(),
   pending: vi.fn(),
 }));
+// The real client needs env that CI does not have; nothing here calls it.
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../lib/capabilities', () => ({
   useCapabilities: api.capabilities,
 }));

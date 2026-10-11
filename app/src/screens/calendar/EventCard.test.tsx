@@ -5,6 +5,8 @@ import { formatBucharestShortDay } from '../../lib/calendar-time';
 import type { EventPresentation } from '../../queries/events';
 
 // Each part has its own suite; here only the card's own lines are read.
+// The real client needs env that CI does not have; nothing here calls it.
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('./EventRsvpControls', () => ({ default: () => null }));
 vi.mock('./EventAttendance', () => ({ EventAttendance: () => null }));
 vi.mock('./EventManageControls', () => ({ EventManageControls: () => null }));

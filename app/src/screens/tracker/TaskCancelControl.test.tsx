@@ -6,6 +6,8 @@ import { CommandError } from '../../lib/command-reasons';
 const state = vi.hoisted(() => ({
   mutation: { isPending: false, mutateAsync: vi.fn() },
 }));
+// The real client needs env that CI does not have; nothing here calls it.
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../queries/task-cancel', () => ({
   useCancelTask: () => state.mutation,
 }));
