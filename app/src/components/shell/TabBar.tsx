@@ -11,6 +11,9 @@ import { usePopMotion } from '../../lib/motion';
 import { Badge } from '../ui/badge';
 import { isNavItemActive, type NavItem } from './navItems';
 
+const badgeClass =
+  'h-4 min-w-4 justify-center rounded-full bg-destructive px-1 text-[10px] text-white dark:bg-destructive';
+
 type Badges = Partial<Record<string, { count: number; label: string }>>;
 
 /**
@@ -115,7 +118,22 @@ export function TabBar({
                 current && !thumb && 'bg-(--text)',
               )}
             >
-              <Icon className="size-5 shrink-0" aria-hidden="true" />
+              {/* Unselected, the count sits on the icon's corner, ringed in
+                  the bar's colour; selected, it follows the label. */}
+              <span className="relative inline-flex shrink-0">
+                <Icon className="size-5 shrink-0" aria-hidden="true" />
+                {badge && !current && (
+                  <Badge
+                    variant="destructive"
+                    className={cn(
+                      badgeClass,
+                      'absolute -top-1.5 left-3 ring-2 ring-card',
+                    )}
+                  >
+                    <PopCount count={badge.count} />
+                  </Badge>
+                )}
+              </span>
               <span
                 data-slot="tab-label"
                 className={cn(
@@ -126,20 +144,12 @@ export function TabBar({
                   ? item.shortLabel
                   : item.label}
               </span>
-              {badge && (
-                <>
-                  <Badge
-                    variant="destructive"
-                    className={cn(
-                      'h-4 min-w-4 justify-center rounded-full bg-destructive px-1 text-[10px] text-white dark:bg-destructive',
-                      !current && 'absolute top-0.5 right-0.5',
-                    )}
-                  >
-                    <PopCount count={badge.count} />
-                  </Badge>
-                  <span className="sr-only">, {badge.label}</span>
-                </>
+              {badge && current && (
+                <Badge variant="destructive" className={badgeClass}>
+                  <PopCount count={badge.count} />
+                </Badge>
               )}
+              {badge && <span className="sr-only">, {badge.label}</span>}
             </Link>
           );
         })}
