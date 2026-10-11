@@ -58,23 +58,29 @@ export default function AnnouncementDetailsSheet({
   onClose,
   onDeleted = onClose,
 }: AnnouncementDetailsSheetProps) {
-  if (!announcement && !unavailable) return null;
+  // The sheet stays mounted so it slides in and out; while it closes it
+  // keeps showing what it held.
+  const open = Boolean(announcement) || unavailable;
+  const [held, setHeld] = useState({ announcement, unavailable });
+  if (
+    open &&
+    (held.announcement !== announcement || held.unavailable !== unavailable)
+  )
+    setHeld({ announcement, unavailable });
+  const shown = open ? announcement : held.announcement;
 
   return (
     <Sheet
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
       }}
     >
       <SheetPortal>
         <SheetBackdrop />
-        <SheetPopup side="right" className="max-w-2xl gap-5 p-4 sm:p-6">
-          {announcement ? (
-            <AnnouncementDetails
-              announcement={announcement}
-              onDeleted={onDeleted}
-            />
+        <SheetPopup side="bottom" className="gap-5 p-4 sm:max-w-2xl sm:p-6">
+          {shown ? (
+            <AnnouncementDetails announcement={shown} onDeleted={onDeleted} />
           ) : (
             <>
               <SheetHeader>
