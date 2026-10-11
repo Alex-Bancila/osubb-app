@@ -121,26 +121,27 @@ const navThumbClass = tabThumbClass;
  * the first paint, a hidden page, jsdom.
  */
 const navTabClass = cn(
-  'relative z-1 inline-flex min-h-[36px] min-w-11 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-bold whitespace-nowrap text-muted-foreground [transition:color_200ms] after:absolute after:inset-x-0 after:-inset-y-1 hover:text-foreground motion-reduce:transition-none aria-selected:bg-(--text) aria-selected:text-(--surface) aria-selected:[transition:color_200ms,background-color_0s_200ms] aria-selected:hover:text-(--surface) motion-reduce:aria-selected:transition-none [&_svg]:size-4 [&_svg]:shrink-0',
+  'relative z-1 inline-flex min-h-[36px] min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-bold whitespace-nowrap text-muted-foreground [transition:color_200ms] after:absolute after:inset-x-0 after:-inset-y-1 hover:text-foreground motion-reduce:transition-none aria-selected:bg-(--text) aria-selected:text-(--surface) aria-selected:[transition:color_200ms,background-color_0s_200ms] aria-selected:hover:text-(--surface) motion-reduce:aria-selected:transition-none [&_svg]:size-4 [&_svg]:shrink-0',
   focusRingClass,
 );
 
 /**
  * Where the segments spell their names. Below it only the chosen one does,
- * taking the width the others leave — they are their icons, 44 px each, the
- * name kept for a screen reader — so five fit at 360 px without scrolling
- * sideways, and a count rides its icon's corner. From it up every segment is
- * icon and name, as wide as its name needs. Five names need `md`.
+ * as wide as its name needs and never cut short; the others are their icons,
+ * 44 px each, the name kept for a screen reader, and a count rides its icon's
+ * corner. Five fit at 360 px; narrower, the track scrolls sideways (Part C,
+ * spec 2026-10-11). From it up every segment is icon and name, as wide as
+ * its name needs. Five names need `md`.
  */
 const NAV_LABELS_FROM = {
   sm: {
-    tab: 'max-sm:flex-none max-sm:aria-selected:flex-1 sm:flex-auto sm:px-4',
+    tab: 'max-sm:flex-none max-sm:aria-selected:flex-auto sm:flex-auto sm:px-4',
     label: 'max-sm:in-[[aria-selected=false]]:sr-only',
     badge:
       'max-sm:in-[[aria-selected=false]]:absolute max-sm:in-[[aria-selected=false]]:top-0 max-sm:in-[[aria-selected=false]]:right-0.5 max-sm:in-[[aria-selected=false]]:h-4 max-sm:in-[[aria-selected=false]]:min-w-4 max-sm:in-[[aria-selected=false]]:px-1 max-sm:in-[[aria-selected=false]]:text-[10px] max-sm:in-[[aria-selected=false]]:ring-2 max-sm:in-[[aria-selected=false]]:ring-(--surface-3)',
   },
   md: {
-    tab: 'max-md:flex-none max-md:aria-selected:flex-1 md:flex-auto md:px-4',
+    tab: 'max-md:flex-none max-md:aria-selected:flex-auto md:flex-auto md:px-4',
     label: 'max-md:in-[[aria-selected=false]]:sr-only',
     badge:
       'max-md:in-[[aria-selected=false]]:absolute max-md:in-[[aria-selected=false]]:top-0 max-md:in-[[aria-selected=false]]:right-0.5 max-md:in-[[aria-selected=false]]:h-4 max-md:in-[[aria-selected=false]]:min-w-4 max-md:in-[[aria-selected=false]]:px-1 max-md:in-[[aria-selected=false]]:text-[10px] max-md:in-[[aria-selected=false]]:ring-2 max-md:in-[[aria-selected=false]]:ring-(--surface-3)',
@@ -428,7 +429,7 @@ function TrackerContent() {
       3 + Number(Boolean(management.data)) + Number(showAll) >= 5 ? 'md' : 'sm'
     ];
   const tabClass = cn(navTabClass, nav.tab);
-  const labelClass = cn('min-w-0 truncate', nav.label);
+  const labelClass = cn('min-w-0', nav.label);
   // Between the toolbar and the cards of Taskurile mele, loading or loaded.
   const mineHeader = (
     <>

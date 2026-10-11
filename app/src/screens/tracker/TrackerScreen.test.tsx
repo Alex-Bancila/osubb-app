@@ -1445,12 +1445,15 @@ describe('My tasks screen', () => {
         );
       expect(mine).toHaveAttribute('aria-selected', 'true');
       // On a phone only the chosen tab spells its name; the others keep
-      // theirs for a screen reader.
-      expect(within(mine).getByText('Taskurile mele')).toHaveClass(
+      // theirs for a screen reader. The name is never cut short: when the
+      // tabs do not fit, the track scrolls (Part C, spec 2026-10-11).
+      const mineLabel = within(mine).getByText('Taskurile mele');
+      expect(mineLabel).toHaveClass(
         'max-sm:in-[[aria-selected=false]]:sr-only',
-        'truncate',
       );
-      expect(mine).toHaveClass('max-sm:aria-selected:flex-1');
+      expect(mineLabel).not.toHaveClass('truncate');
+      expect(mine).toHaveClass('shrink-0', 'max-sm:aria-selected:flex-auto');
+      expect(mine).not.toHaveClass('max-sm:aria-selected:flex-1');
       expect(screen.getByRole('tab', { name: 'Cereri' })).toHaveClass(
         'max-sm:flex-none',
       );
