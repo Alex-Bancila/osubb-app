@@ -550,7 +550,7 @@ function TrackerContent() {
               )}
             </Tabs.Tab>
           </Tabs.List>
-          <Tabs.Panel value="mine">
+          <Tabs.Panel value="mine" className="motion-enter">
             <TaskQueryStates
               query={mine}
               search={search}
@@ -571,7 +571,7 @@ function TrackerContent() {
               )}
             </TaskQueryStates>
           </Tabs.Panel>
-          <Tabs.Panel value="available">
+          <Tabs.Panel value="available" className="motion-enter">
             <TaskQueryStates query={available} search={search}>
               {(opportunities) => (
                 <AvailableOpportunities
@@ -584,7 +584,7 @@ function TrackerContent() {
             </TaskQueryStates>
           </Tabs.Panel>
           {management.data && (
-            <Tabs.Panel value="managed">
+            <Tabs.Panel value="managed" className="motion-enter">
               <TaskQueryStates query={managed} search={search}>
                 {(rows) => (
                   <ManagerTaskList
@@ -599,7 +599,7 @@ function TrackerContent() {
             </Tabs.Panel>
           )}
           {showAll && (
-            <Tabs.Panel value="all">
+            <Tabs.Panel value="all" className="motion-enter">
               <TaskQueryStates query={all} search={search}>
                 {(rows) => (
                   <ManagerTaskList
@@ -614,7 +614,10 @@ function TrackerContent() {
             </Tabs.Panel>
           )}
           {/* Cereri is other content: no toolbar, its own blocks 24 px apart. */}
-          <Tabs.Panel value={REQUESTS_TAB} className="flex flex-col gap-6">
+          <Tabs.Panel
+            value={REQUESTS_TAB}
+            className="flex motion-enter flex-col gap-6"
+          >
             <RequestsView />
           </Tabs.Panel>
         </Tabs.Root>

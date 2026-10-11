@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { EmptyState } from '../../components/layout';
+import { AnimatedList, EmptyState } from '../../components/layout';
 import { SegmentedRadio } from '../../components/ui/segmented-radio';
 import { Select } from '../../components/ui/select';
 import { workFilterCellClass } from '../../components/work-filter/field-class';
@@ -170,13 +170,14 @@ export function ManagerTaskList({
               <p role="status" className="sr-only">
                 {formatTaskCount(tasks.length)}
               </p>
-              <ul data-slot="task-row-list" className="grid min-w-0 gap-2 p-0">
-                {tasks.map((task) => (
-                  <li key={task.id} className="min-w-0">
-                    <TaskRow task={task} onOpenTask={onOpenTask} />
-                  </li>
-                ))}
-              </ul>
+              <AnimatedList
+                data-slot="task-row-list"
+                className="gap-2"
+                items={tasks}
+                getKey={(task) => task.id}
+              >
+                {(task) => <TaskRow task={task} onOpenTask={onOpenTask} />}
+              </AnimatedList>
             </>
           ) : (
             <EmptyState

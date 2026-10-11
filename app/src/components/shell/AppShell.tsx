@@ -7,6 +7,7 @@ import { useAuth } from '../../lib/auth';
 import { useCapabilities } from '../../lib/capabilities';
 import { safeHexColor } from '../../lib/color';
 import { initials } from '../../lib/format';
+import { useEnterMotion, usePopMotion } from '../../lib/motion';
 import { cn } from '../../lib/utils';
 import { useUnreadAnnouncementsCount } from '../../queries/announcements';
 import { useLiveChanges } from '../../queries/live-changes';
@@ -205,6 +206,10 @@ export default function AppShell() {
   // the bar nor the top bar are Acasă's Conducere tiles (`navFor`).
   const { visible, tabs } = navFor(capabilities.data);
   const denied = deniedMessage(location.state);
+  const unreadPop = usePopMotion<HTMLSpanElement>(unreadCount);
+  const page = useEnterMotion<HTMLDivElement>(
+    location.pathname.split('/')[1] ?? '',
+  );
   const isNotificationsActive =
     location.pathname.startsWith(NOTIFICATIONS_PATH);
   const isProfileActive = location.pathname.startsWith(PROFILE_PATH);
@@ -263,7 +268,9 @@ export default function AppShell() {
               variant="destructive"
               className="absolute top-1.5 right-1.5 h-4 min-w-4 justify-center rounded-full px-1 text-[10px]"
             >
-              <span aria-hidden="true">{unreadCount}</span>
+              <span ref={unreadPop} aria-hidden="true" className="inline-block">
+                {unreadCount}
+              </span>
             </Badge>
           )}
         </Link>
@@ -304,7 +311,11 @@ export default function AppShell() {
             </div>
           )}
           <FabSlotContext.Provider value={fabSlot}>
-            <Outlet />
+            {/* A page arrives when the area changes; its own tabs move
+                their own content. */}
+            <div ref={page}>
+              <Outlet />
+            </div>
           </FabSlotContext.Provider>
         </>
       </main>

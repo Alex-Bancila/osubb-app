@@ -813,7 +813,11 @@ export default function MemberScreen() {
             </Tabs.Tab>
           </Tabs.List>
 
-          <Tabs.Panel value="cont" keepMounted className="outline-none">
+          <Tabs.Panel
+            value="cont"
+            keepMounted
+            className="motion-enter outline-none"
+          >
             <div className="grid min-w-0 gap-4 md:grid-cols-2 md:items-start md:gap-6">
               <AccountPanel
                 member={data}
@@ -824,12 +828,20 @@ export default function MemberScreen() {
             </div>
           </Tabs.Panel>
 
-          <Tabs.Panel value="grupuri" keepMounted className="outline-none">
+          <Tabs.Panel
+            value="grupuri"
+            keepMounted
+            className="motion-enter outline-none"
+          >
             <GroupsPanel groups={visibleGroups} from={fromHere} />
           </Tabs.Panel>
 
           {tabs.includes('roluri') && (
-            <Tabs.Panel value="roluri" keepMounted className="outline-none">
+            <Tabs.Panel
+              value="roluri"
+              keepMounted
+              className="motion-enter outline-none"
+            >
               <div className="flex min-w-0 flex-col gap-4 md:gap-6">
                 {rights.rankAndStatus && (
                   <RolePanel selectedMemberId={data.memberId} />
@@ -847,7 +859,11 @@ export default function MemberScreen() {
             </Tabs.Panel>
           )}
 
-          <Tabs.Panel value="puncte" keepMounted className="outline-none">
+          <Tabs.Panel
+            value="puncte"
+            keepMounted
+            className="motion-enter outline-none"
+          >
             <PointsPanel points={data.points} />
           </Tabs.Panel>
         </Tabs.Root>

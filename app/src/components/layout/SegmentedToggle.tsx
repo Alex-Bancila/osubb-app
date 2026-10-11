@@ -1,15 +1,9 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import type { ReactNode } from 'react';
 import { Toggle } from '@base-ui/react/toggle';
 import { ToggleGroup } from '@base-ui/react/toggle-group';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from 'cn';
+import { SlidingThumb, useSlidingThumb } from '../ui/sliding-thumb';
 import { focusRingClass } from './focus';
 
 export type SegmentedOption<T extends string> = {
@@ -53,36 +47,11 @@ export function SegmentedToggle<T extends string>({
   compact?: boolean;
   className?: string;
 }) {
-  const track = useRef<HTMLDivElement>(null);
   // Where the chosen segment is, for the thumb. Unmeasured (the first paint,
   // a hidden toggle), the segment inks itself instead.
-  const [thumb, setThumb] = useState<{ left: number; width: number } | null>(
-    null,
+  const { track, thumb } = useSlidingThumb<HTMLDivElement>(
+    '[aria-pressed="true"]',
   );
-  const measure = useCallback(() => {
-    const pressed = track.current?.querySelector<HTMLElement>(
-      '[aria-pressed="true"]',
-    );
-    const next =
-      pressed && pressed.offsetWidth > 0
-        ? { left: pressed.offsetLeft, width: pressed.offsetWidth }
-        : null;
-    setThumb((current) =>
-      current?.left === next?.left && current?.width === next?.width
-        ? current
-        : next,
-    );
-  }, []);
-  // After every render: the choice, or a label, may have changed.
-  useLayoutEffect(measure);
-  // And when the track itself resizes (the 640 px breakpoint, a late font).
-  useEffect(() => {
-    const root = track.current;
-    if (!root || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(root);
-    return () => observer.disconnect();
-  }, [measure]);
 
   return (
     <ToggleGroup
@@ -100,14 +69,7 @@ export function SegmentedToggle<T extends string>({
         className,
       )}
     >
-      {thumb && (
-        <span
-          aria-hidden="true"
-          data-slot="segmented-thumb"
-          className="pointer-events-none absolute inset-y-[3px] left-0 rounded-md bg-(--text) transition-[translate,width] duration-200 ease-out motion-reduce:transition-none"
-          style={{ width: thumb.width, translate: `${thumb.left}px 0` }}
-        />
-      )}
+      <SlidingThumb thumb={thumb} slot="segmented-thumb" />
       {options.map(({ value: option, label: text, icon: Icon, badge }) => (
         <Toggle
           key={option}

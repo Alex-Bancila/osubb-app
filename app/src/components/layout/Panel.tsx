@@ -6,7 +6,7 @@ import { SectionHeader, type SectionHeaderAction } from './SectionHeader';
 import { stackClass, type PanelStack } from './stack';
 
 /**
- * The box classes: 16 px padding at every width (the `TaskCard` spacing, so
+ * The box classes: 16 px padding at every width (an item card's spacing, so
  * an item card and a panel line up), radius `--r-md` (13 px), the surface
  * colour and the small shadow. `rounded-xl` (24 px) is not used for boxes.
  */
@@ -33,8 +33,8 @@ function fillClass(fill: boolean) {
  * - The header sits outside the box; the box holds content only.
  * - A panel never renders `null` inside a `PageGrid`: it shows `Loading`,
  *   `ErrorState` or `EmptyState` in its box instead.
- * - `bare` drops the box, for a child that is itself a card (`TaskCard`,
- *   `EventCard`).
+ * - `bare` drops the box, for a child that is itself a card or a list of rows
+ *   (`EventCard`, `TaskRow`).
  * - `stack` spaces the box's blocks with a flex gap (12 px for a line of text
  *   over a form, 16 px between forms) — never `space-y-*`.
  * - `flush` is for a box that holds one `ListRow` list: the box loses its

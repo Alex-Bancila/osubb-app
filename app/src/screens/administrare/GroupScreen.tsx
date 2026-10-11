@@ -23,6 +23,10 @@ import {
 } from '../../components/layout';
 import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { Badge } from '../../components/ui/badge';
+import {
+  SlidingThumb,
+  useSlidingThumb,
+} from '../../components/ui/sliding-thumb';
 import { useAuth } from '../../lib/auth';
 import { useCapabilities } from '../../lib/capabilities';
 import { CommandError } from '../../lib/command-reasons';
@@ -137,11 +141,14 @@ function GroupTabs({
   tabs: readonly { id: GroupTabId; label: string }[];
   active: string;
 }) {
-  const nav = useRef<HTMLElement>(null);
+  const { track: nav, thumb } = useSlidingThumb<HTMLElement>(
+    '[aria-current="page"]',
+  );
   const location = useLocation();
   useActiveTabInView(nav, active);
   return (
     <nav ref={nav} aria-label="Secțiunile grupului" className={tabListClass}>
+      <SlidingThumb thumb={thumb} />
       {tabs.map((item) => {
         const Icon = GROUP_TAB_ICONS[item.id];
         const params = new URLSearchParams(location.search);
@@ -387,7 +394,12 @@ export default function GroupScreen() {
 
         <GroupTabs tabs={tabs} active={tab} />
 
-        <div role="region" aria-label={activeLabel} className="min-w-0">
+        <div
+          key={tab}
+          role="region"
+          aria-label={activeLabel}
+          className="min-w-0 motion-enter"
+        >
           {tab === 'setari' && (
             <GroupSettingsTab
               // A new Group is a new draft: every field starts from its row.

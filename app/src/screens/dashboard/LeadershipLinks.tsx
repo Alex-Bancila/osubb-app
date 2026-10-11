@@ -33,7 +33,7 @@ export default function LeadershipLinks({
                   to={item.path}
                   className={cn(
                     panelBoxClass,
-                    'flex min-h-24 flex-1 flex-col items-start justify-between gap-3 text-foreground no-underline hover:bg-muted',
+                    'pressable flex min-h-24 flex-1 flex-col items-start justify-between gap-3 text-foreground no-underline',
                     focusRingClass,
                   )}
                 >

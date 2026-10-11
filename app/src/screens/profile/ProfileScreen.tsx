@@ -351,7 +351,7 @@ export default function ProfileScreen() {
           </Tabs.Tab>
         </Tabs.List>
 
-        <Tabs.Panel value="cont" className="outline-none">
+        <Tabs.Panel value="cont" className="motion-enter outline-none">
           <PageGrid columns={2}>
             <div className={stackClass}>
               <Panel
@@ -445,13 +445,13 @@ export default function ProfileScreen() {
           </PageGrid>
         </Tabs.Panel>
 
-        <Tabs.Panel value="notificari" className="outline-none">
+        <Tabs.Panel value="notificari" className="motion-enter outline-none">
           <Panel title="Notificări pe acest dispozitiv">
             <PushDeviceCard />
           </Panel>
         </Tabs.Panel>
 
-        <Tabs.Panel value="preferinte" className="outline-none">
+        <Tabs.Panel value="preferinte" className="motion-enter outline-none">
           <div className={stackClass}>
             {/* R43: BCE, BC and the Moderator only -- nothing for anyone else. */}
             <PreferredGroupsCard />

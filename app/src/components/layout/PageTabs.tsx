@@ -1,14 +1,8 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router';
 import { cn } from 'cn';
+import { SlidingThumb, useSlidingThumb } from '../ui/sliding-thumb';
 
 /**
  * The app's one tab look (DESIGN.md, Navigation): a pill track, the selected
@@ -113,35 +107,12 @@ export function PageTabs({
   labelsFrom?: TabLabelsFrom;
   className?: string;
 }) {
-  const nav = useRef<HTMLElement>(null);
   // A route change re-renders this, and the thumb is measured after it.
   useLocation();
   // Where the current tab is, for the thumb; unmeasured, the tab inks itself.
-  const [thumb, setThumb] = useState<{ left: number; width: number } | null>(
-    null,
+  const { track: nav, thumb } = useSlidingThumb<HTMLElement>(
+    '[aria-current="page"]',
   );
-  const measure = useCallback(() => {
-    const current = nav.current?.querySelector<HTMLElement>(
-      '[aria-current="page"]',
-    );
-    const next =
-      current && current.offsetWidth > 0
-        ? { left: current.offsetLeft, width: current.offsetWidth }
-        : null;
-    setThumb((previous) =>
-      previous?.left === next?.left && previous?.width === next?.width
-        ? previous
-        : next,
-    );
-  }, []);
-  useLayoutEffect(measure);
-  useEffect(() => {
-    const root = nav.current;
-    if (!root || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(root);
-    return () => observer.disconnect();
-  }, [measure]);
   const sizes = tabLabelsFrom[labelsFrom];
   return (
     <nav
@@ -150,14 +121,7 @@ export function PageTabs({
       data-slot="page-tabs"
       className={cn(tabListClass, className)}
     >
-      {thumb && (
-        <span
-          aria-hidden="true"
-          data-slot="tab-thumb"
-          className="pointer-events-none absolute inset-y-[3px] left-0 rounded-md bg-(--text) transition-[translate,width] duration-200 ease-out motion-reduce:transition-none"
-          style={{ width: thumb.width, translate: `${thumb.left}px 0` }}
-        />
-      )}
+      <SlidingThumb thumb={thumb} />
       {tabs.map((tab) => {
         const Icon = tab.icon;
         return (

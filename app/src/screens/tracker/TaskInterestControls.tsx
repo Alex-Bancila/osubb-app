@@ -1,6 +1,6 @@
 import type { TaskPresentation } from './task-presentation';
 import { TaskStageSummary } from './TaskStageSummary';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Button } from '../../components/ui/button';
 import { useTaskQueue } from '../../queries/task-queue';
 import {
@@ -10,12 +10,21 @@ import {
 import { useWithdrawTaskInterest } from '../../queries/task-withdrawal';
 import { QueuePosition } from './TaskQueueStatus';
 
+/**
+ * A Candidate's place in the queue and the button that joins or leaves it.
+ * By default one stacked block (the details sheet). With `children` it hands
+ * its two halves to the caller instead — what it says (`status`) and the
+ * button (`action`, null while there is none) — so a Task row can put the
+ * text in its content and the button at its end.
+ */
 export function TaskInterestControls({
   taskId,
   task,
+  children,
 }: {
   taskId: number;
   task?: TaskPresentation;
+  children?: (parts: { status: ReactNode; action: ReactNode }) => ReactNode;
 }) {
   const queue = useTaskQueue(taskId);
   const join = useExpressTaskInterest();
@@ -47,25 +56,31 @@ export function TaskInterestControls({
       setBusy(false);
     }
   }
-  if (queue.isPending) return <p role="status">Se încarcă înscrierea…</p>;
-  if (queue.isError)
-    return (
+  if (queue.isPending) {
+    const loading = <p role="status">Se încarcă înscrierea…</p>;
+    return children ? children({ status: loading, action: null }) : loading;
+  }
+  if (queue.isError) {
+    const failed = (
       <div role="alert">
         <p>Nu am putut încărca înscrierea.</p>
         <Button
           variant="outline"
-          className="min-h-11 min-w-11"
+          // Above a row's stretched open button.
+          className="relative z-10 min-h-11 min-w-11"
           onClick={() => queue.refetch()}
         >
           Reîncarcă înscrierea
         </Button>
       </div>
     );
-  return (
-    <div className="space-y-3">
-      {/* One queue sentence (B21): right after a join or a withdrawal the
-          receipt says it; otherwise the stage sentence names the place and
-          the queue line adds only what it does not. */}
+    return children ? children({ status: failed, action: null }) : failed;
+  }
+  /* One queue sentence (B21): right after a join or a withdrawal the receipt
+     says it; otherwise the stage sentence names the place and the queue line
+     adds only what it does not. */
+  const place = (
+    <>
       {task && !message && (
         <TaskStageSummary
           task={{
@@ -79,24 +94,45 @@ export function TaskInterestControls({
       {!message && (
         <QueuePosition queue={queue.data} stageShown={task !== undefined} />
       )}
-      {queue.data.status !== 'selected' && (
-        <Button
-          variant="outline"
-          className="min-h-11 min-w-11 whitespace-normal"
-          disabled={busy || join.isPending || withdraw.isPending}
-          onClick={act}
-        >
-          {busy
-            ? 'Se salvează…'
-            : queue.data.status === 'pending'
-              ? 'Retrage înscrierea'
-              : queue.data.status
-                ? 'Înscrie-te din nou'
-                : 'Vreau să particip'}
-        </Button>
-      )}
+    </>
+  );
+  const action = queue.data.status !== 'selected' && (
+    <Button
+      variant="outline"
+      className="min-h-11 min-w-11 whitespace-normal"
+      disabled={busy || join.isPending || withdraw.isPending}
+      onClick={act}
+    >
+      {busy
+        ? 'Se salvează…'
+        : queue.data.status === 'pending'
+          ? 'Retrage înscrierea'
+          : queue.data.status
+            ? 'Înscrie-te din nou'
+            : 'Vreau să particip'}
+    </Button>
+  );
+  const receipt = (
+    <>
       {message && <p role="status">{message}</p>}
       {error && <p role="alert">{error}</p>}
+    </>
+  );
+  if (children)
+    return children({
+      status: (
+        <>
+          {place}
+          {receipt}
+        </>
+      ),
+      action: action || null,
+    });
+  return (
+    <div className="space-y-3">
+      {place}
+      {action}
+      {receipt}
     </div>
   );
 }

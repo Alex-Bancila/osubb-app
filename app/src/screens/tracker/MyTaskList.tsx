@@ -3,8 +3,8 @@ import { EmptyState } from '../../components/layout';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import { matchesWorkFilter } from '../../lib/work-filter';
 import type { OnGaveUp } from './give-up-receipt';
-import { TaskCardGrid } from './TaskCardGrid';
 import type { TaskPresentationRow } from './task-presentation';
+import { TaskRowList } from './TaskRowList';
 import {
   ClearSearchButton,
   RANGE_FIRST,
@@ -15,13 +15,13 @@ import { matchesTitle, type TitleSearch } from './use-title-search';
 
 /**
  * Taskurile mele: under the Tracker's toolbar, the member's own Tasks as
- * cards, narrowed by the title search and the Work Filter (Rule W over their
+ * rows, narrowed by the title search and the Work Filter (Rule W over their
  * own Tasks). Grupuri preferate never narrows it (R43), so the toolbar has no
  * star here. `header` (the Personal Score, a receipt) sits between the toolbar
- * and the cards.
+ * and the rows.
  *
  * The link wins: the Task a `?task=` link names (`linkedId`) stays in the
- * list whatever the search and the filters say, so the card the link lands on
+ * list whatever the search and the filters say, so the row the link lands on
  * is always there to scroll to.
  */
 export function MyTaskList({
@@ -62,7 +62,7 @@ export function MyTaskList({
       {header}
       {!params && <p>{RANGE_FIRST}</p>}
       {shown.length ? (
-        <TaskCardGrid
+        <TaskRowList
           rows={shown}
           now={now}
           onOpenTask={onOpenTask}
