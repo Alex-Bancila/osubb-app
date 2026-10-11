@@ -58,7 +58,7 @@ Example: `supabase/migrations/20260909151741_project_membership_commands.sql` ra
 
 **Grandfathered:** the six `23514` messages in `20260909003930_project_manager_invariants.sql` are full English sentences (e.g. `'active project managers must be active OSUBB members'`), not `snake_case` reasons — leave them as they are.
 
-**Task copies (`create_tasks`, spec 2026-10-11) add three step-1 reasons.** `invalid_copies` (a null count, below 1, or above 1 for an Umbrella), `too_many_copies` (above 20; the `too_many_links` shape) and `invalid_executors` (any executors on a public Task, or a direct list whose length is not the count). Every other refusal is `create_task`'s, raised per copy inside the one transaction, so one bad copy rolls back all of them; the `task_create` cap is spent once per copy.
+**Task copies (`create_tasks`, spec 2026-10-11) add three step-1 reasons.** `invalid_copies` (a null count, below 1, or above 1 for an Umbrella), `too_many_copies` (above 100 — 20 until 2026-10-11; the `too_many_links` shape) and `invalid_executors` (any executors on a public Task, or a direct list whose length is not the count). Every other refusal is `create_task`'s, raised per copy inside the one transaction, so one bad copy rolls back all of them; the `task_create` cap is spent once per copy. `create_completed_tasks` (Part E) reuses the three; there a missing list or an empty entry is also `invalid_executors`, since a finished Task always names its Executor, and the same Member may be listed several times.
 
 ## 4. Grants and RLS
 

@@ -746,7 +746,7 @@ it('offers Exemplare to a Task, not to an Umbrella, and labels the button by the
   );
   const copies = screen.getByLabelText('Exemplare');
   expect(copies).toHaveValue(1);
-  expect(copies).toHaveAttribute('max', '20');
+  expect(copies).toHaveAttribute('max', '100');
   expect(
     screen.getByRole('button', { name: 'Creează taskul' }),
   ).toBeInTheDocument();
@@ -798,7 +798,7 @@ it.each([
   ['abc', 'Numărul de exemplare nu e valid'],
   ['2.5', 'Numărul de exemplare nu e valid'],
   ['0', 'Numărul de exemplare nu e valid'],
-  ['21', 'Cel mult 20 de exemplare'],
+  ['101', 'Cel mult 100 de exemplare'],
 ])('refuses "%s" copies in the browser', async (typed, message) => {
   const user = userEvent.setup();
   const onDraft = vi.fn();

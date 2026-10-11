@@ -8,7 +8,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(33);
+select plan(34);
 \ir _group_task_fixtures.psql
 
 create function pg_temp.project() returns bigint language sql stable as $$
@@ -52,8 +52,11 @@ select throws_ok($$select count(*) from public.create_tasks('Nul', null, now() +
   p_group_id => pg_temp.project(), p_copies => null)$$,
   'PT400', 'invalid_copies', 'a null count is refused');
 select throws_ok($$select count(*) from public.create_tasks('Prea multe', null, now() + interval '7 days', 'local', 'public',
-  p_group_id => pg_temp.project(), p_copies => 21)$$,
-  'PT400', 'too_many_copies', 'twenty-one copies are too many');
+  p_group_id => pg_temp.project(), p_copies => 101)$$,
+  'PT400', 'too_many_copies', 'a hundred and one copies are too many');
+select is((select count(*) from public.create_tasks('Douazeci si unu', null, now() + interval '7 days', 'local', 'public',
+  p_group_id => pg_temp.project(), p_copies => 21))::int, 21,
+  'twenty-one copies are accepted since the limit became 100 (2026-10-11)');
 select throws_ok($$select count(*) from public.create_tasks('Umbrela dubla', null, null, null, null,
   p_kind => 'umbrella', p_group_id => pg_temp.project(), p_copies => 2)$$,
   'PT400', 'invalid_copies', 'an Umbrella has no copies');

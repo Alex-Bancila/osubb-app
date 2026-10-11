@@ -8,7 +8,7 @@ import { attachedLinksSchema, linksFieldForReason } from './attached-link';
 import { isId, optionalText, requiredText } from './text';
 
 /** How many identical copies one create may ask for (spec 2026-10-11). */
-export const MAX_TASK_COPIES = 20;
+export const MAX_TASK_COPIES = 100;
 
 /**
  * A Task, as `create_task` / `update_task` accept it (#673, ruling R8): title
@@ -95,7 +95,7 @@ export function taskDraftSchema(options: TaskFormOptions, when: When = {}) {
       const deadline = deadlineIssue(draft.deadline, when);
       if (deadline) issue('deadline', deadline);
 
-      // Task copies (spec 2026-10-11): 1 to 20; an Umbrella has exactly one.
+      // Task copies (spec 2026-10-11): 1 to 100; an Umbrella has exactly one.
       if (!Number.isInteger(draft.copies) || draft.copies < 1)
         issue('copies', 'invalid_copies');
       else if (draft.copies > MAX_TASK_COPIES)

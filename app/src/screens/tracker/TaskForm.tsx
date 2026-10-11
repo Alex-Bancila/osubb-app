@@ -63,7 +63,7 @@ const CAMPAIGN_INFO =
   'O etichetă pentru raportare: campania arată punctele obținute și cine a lucrat. Nu schimbă cine poate lucra la task.';
 
 const COPIES_INFO =
-  'Creează mai multe taskuri identice odată, până la 20. Pentru un task direct alegi câte un executor pentru fiecare exemplar la pasul următor.';
+  'Creează mai multe taskuri identice odată, până la 100. Pentru un task direct alegi câte un executor pentru fiecare exemplar la pasul următor.';
 
 /**
  * Draft-only form; its caller owns the eventual atomic create command. When

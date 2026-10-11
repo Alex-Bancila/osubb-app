@@ -23,7 +23,7 @@ const REASON_COPY = new Map<string, string>([
   ['rate_limited', 'Ai atins limita zilnică. Încearcă mâine.'],
   /* ---- Task copies (spec 2026-10-11) ---- */
   ['invalid_copies', 'Numărul de exemplare nu e valid: între 1 și 20.'],
-  ['too_many_copies', 'Cel mult 20 de exemplare odată.'],
+  ['too_many_copies', 'Cel mult 100 de exemplare odată.'],
   ['invalid_executors', 'Alege câte un executor pentru fiecare exemplar.'],
   /* ---- Grupuri preferate (R43) ---- */
   [

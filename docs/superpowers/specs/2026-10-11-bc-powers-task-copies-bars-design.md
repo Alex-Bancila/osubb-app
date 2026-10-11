@@ -97,28 +97,28 @@ returns setof public.tasks   -- the created rows, in creation order
 
 Step 1 (malformed input, before the gate), in this order:
 
-- `p_copies` null or below 1 → `PT400 invalid_copies`; above 20 → `PT400 too_many_copies` (the `too_many_links` precedent).
+- `p_copies` null or below 1 → `PT400 invalid_copies`; above 100 → `PT400 too_many_copies` (the `too_many_links` precedent). Raised from 20 to 100 on 2026-10-11 (Alex: "add a greater limit, like 100 for both options" — this command and Part E's).
 - `p_kind = 'umbrella'` with `p_copies > 1` → `PT400 invalid_copies` (an Umbrella has no copies; its Subtasks do).
 - `p_assignment_mode = 'public'` with a non-empty `p_executor_ids` → `PT400 invalid_executors`.
 - `p_assignment_mode = 'direct'` with `p_executor_ids` present and `array_length <> p_copies` → `PT400 invalid_executors`. A null array means n unassigned direct copies; a null element means that copy is unassigned (a direct Task may already start without an Executor). The same Member may appear twice: the server allows what n separate `create_task` calls allow; the app's picker is what prevents repeats.
 
-Then the loop: `for i in 1..p_copies loop … private.create_task_impl(p_title, …, p_executor_id => p_executor_ids[i], …)`, collecting each returned row. Everything else is inherited per copy: the gate, `require_group_work_manager`, every shape and audience rule, `invalid_executor` for an Executor below the Group's Minimum Level, the Umbrella parent lock (`for no key update`, re-taken harmlessly each iteration, never `for update`), `require_daily_cap('task_create')` counted per copy inside the one transaction (20 copies spend 20 of the day's 100; the 101st raises `PT409 rate_limited` and rolls back all), the `created` and `executor_assigned` activity rows, and one "Task nou" notification per assigned Executor (two copies to one Member are two notifications, as two Tasks are). Copies carry no provenance link to each other.
+Then the loop: `for i in 1..p_copies loop … private.create_task_impl(p_title, …, p_executor_id => p_executor_ids[i], …)`, collecting each returned row. Everything else is inherited per copy: the gate, `require_group_work_manager`, every shape and audience rule, `invalid_executor` for an Executor below the Group's Minimum Level, the Umbrella parent lock (`for no key update`, re-taken harmlessly each iteration, never `for update`), `require_daily_cap('task_create')` counted per copy inside the one transaction (100 copies spend the whole day's 100; a batch the cap cannot hold raises `PT409 rate_limited` and rolls back all), the `created` and `executor_assigned` activity rows, and one "Task nou" notification per assigned Executor (two copies to one Member are two notifications, as two Tasks are). Copies carry no provenance link to each other.
 
 Grants: the four-role revoke then `grant execute … to authenticated` for both functions, like every command.
 
 ### Backend tests
 
-New `supabase/tests/create_tasks.test.sql`: signature and grants (anon cannot execute; invoker wrapper, definer impl with empty `search_path`); `invalid_copies` (0, null, Umbrella with 2), `too_many_copies` (21), `invalid_executors` (public with executors, direct with 2 executors for 3 copies); 3 public copies are 3 `todo` Tasks with open queues and one `created` row each, no notification; 3 direct copies with 3 Executors notify each once and write two activity rows each; a null element leaves that copy unassigned; **atomicity**: 3 copies where the third Executor is below the Group's Minimum Level creates nothing and raises `invalid_executor`; the cap: with 99 creations spent today, 2 copies raise `rate_limited` and create nothing; 3 Subtasks under one Umbrella inherit its Group, and the Umbrella is held exactly `For No Key Update` during the call (the `pgrowlocks` probe pattern from `create_task.test.sql`); `p_copies = 1` behaves as `create_task`. Rosters: `tracker_grants.test.sql` (wrapper and impl rows, count pins), `scripts/smoke-tracker-commands.sql` (one call with 2 public copies), ADR-0007 command list, conventions §3 (the three reasons).
+New `supabase/tests/create_tasks.test.sql`: signature and grants (anon cannot execute; invoker wrapper, definer impl with empty `search_path`); `invalid_copies` (0, null, Umbrella with 2), `too_many_copies` (101; 21 are accepted), `invalid_executors` (public with executors, direct with 2 executors for 3 copies); 3 public copies are 3 `todo` Tasks with open queues and one `created` row each, no notification; 3 direct copies with 3 Executors notify each once and write two activity rows each; a null element leaves that copy unassigned; **atomicity**: 3 copies where the third Executor is below the Group's Minimum Level creates nothing and raises `invalid_executor`; the cap: with 99 creations spent today, 2 copies raise `rate_limited` and create nothing; 3 Subtasks under one Umbrella inherit its Group, and the Umbrella is held exactly `For No Key Update` during the call (the `pgrowlocks` probe pattern from `create_task.test.sql`); `p_copies = 1` behaves as `create_task`. Rosters: `tracker_grants.test.sql` (wrapper and impl rows, count pins), `scripts/smoke-tracker-commands.sql` (one call with 2 public copies), ADR-0007 command list, conventions §3 (the three reasons).
 
 ### Frontend
 
-- `lib/schemas/task.ts`: `copies` (integer 1–20, default 1), `executorIds` (array, direct only). `fieldForReason` maps the three reasons to `copies` / the dialog.
+- `lib/schemas/task.ts`: `copies` (integer 1–100, default 1), `executorIds` (array, direct only). `fieldForReason` maps the three reasons to `copies` / the dialog.
 - `screens/tracker/task-form-model.ts`: `TaskDraft` gains `copies` and `executorIds: (string | null)[]`; an Umbrella forces `copies = 1`.
-- `screens/tracker/TaskForm.tsx`: a number field **Exemplare** (`Input type="number" min=1 max=20 step=1 inputMode="numeric"`, the Event capacity pattern) after _Mod de atribuire_, hidden for an Umbrella. At `copies = 1` the form is exactly today's form. Public with `copies > 1`: the submit button reads "Creează n taskuri" ("Creează n subtaskuri" under an Umbrella). Direct with `copies > 1`: the in-form `DirectExecutorSelector` is replaced by a `FieldDescription` "Executorii se aleg la pasul următor" and the button reads "Continuă".
+- `screens/tracker/TaskForm.tsx`: a number field **Exemplare** (`Input type="number" min=1 max=100 step=1 inputMode="numeric"`, the Event capacity pattern) after _Mod de atribuire_, hidden for an Umbrella. At `copies = 1` the form is exactly today's form. Public with `copies > 1`: the submit button reads "Creează n taskuri" ("Creează n subtaskuri" under an Umbrella). Direct with `copies > 1`: the in-form `DirectExecutorSelector` is replaced by a `FieldDescription` "Executorii se aleg la pasul următor" and the button reads "Continuă".
 - New `screens/tracker/CopiesExecutorsDialog.tsx`: a `Dialog` (`fullScreenOnPhone`), title "Executorii celor n taskuri", description "Alege câte un executor pentru fiecare exemplar.", one `DirectExecutorSelector` per copy labelled "Exemplarul i", each required, a Member chosen in one picker excluded from the others (`DirectExecutorSelector` gains an optional `excludeIds` prop), footer _Înapoi_ / "Creează n taskuri"; `busy` while the mutation runs; a server refusal shows in the dialog under the matching picker when `invalid_executor` names one, else as the dialog's error line.
 - `queries/task-umbrella.ts`: `createTasks(draft)` → `supabase.rpc('create_tasks', …)` returning the rows; `useCreateTasks` invalidates `keys.tasks.all` once. The form submits through `createTasks` for every `copies`, including 1 (one path; `create_task` stays for the smoke script and other callers).
 - `screens/tracker/NewTaskControl.tsx` and `screens/tracker/UmbrellaTaskSection.tsx`: own the two-step flow (form → dialog when direct and `copies > 1`); on success with one Task behave as today (open its details); with more, close the sheet and report "n taskuri create." / "n subtaskuri create." through the existing notice slot (`TrackerScreen`'s `created` state gains a plural variant without an id; the Umbrella section refreshes its Subtask list). No details sheet opens for n above 1.
-- `lib/command-reasons.ts`: Romanian copy for `invalid_copies` ("Numărul de exemplare nu e valid."), `too_many_copies` ("Cel mult 20 de exemplare odată."), `invalid_executors` ("Alege câte un executor pentru fiecare exemplar.").
+- `lib/command-reasons.ts`: Romanian copy for `invalid_copies` ("Numărul de exemplare nu e valid."), `too_many_copies` ("Cel mult 100 de exemplare odată."), `invalid_executors` ("Alege câte un executor pentru fiecare exemplar.").
 - `lib/database.types.ts` regenerated.
 - `DESIGN.md`, the dialog rule: "A dialog confirms or asks for a reason — three fields at most, or one like field per copy (the Executors of n Tasks)."
 
@@ -157,6 +157,57 @@ The date/time popup (`components/ui/date-picker.tsx`, used by the Task, Deal, Ev
 - The popup drops `max-h-(--available-height) overflow-y-auto overscroll-contain`.
 - The positioner keeps `side="bottom" align="start" sideOffset={6} collisionPadding={12}` and adds `collisionAvoidance={{ side: 'shift', align: 'shift', fallbackAxisSide: 'none' }}` (Base UI 1.8.0): the popup prefers opening under the field and, near the bottom of the screen, slides up as far as needed, over the field if it must, instead of flipping and being clamped.
 - `date-picker.test.tsx`: the popup carries no max-height or overflow class; the positioner is configured to shift.
+
+---
+
+## Part E — Add a finished Task n times for n volunteers: `create_completed_tasks`
+
+Added 2026-10-11, after Parts A–D landed. Alex: "i also want to be able to add finished task for n number of times for n number of people, but make sure to be able to select the same person more than once, it should work as we talked for the duplication before" and, approving it, "add a greater limit, like 100 for both options".
+
+### Decision
+
+"Adaugă task finalizat" can add the same finished Task for **n volunteers at once**, and the same person may be chosen more than once. The flow is Part B's: an **Exemplare** count on the form; at n above 1 the volunteer picker gives way and "Continuă" opens a dialog that asks one volunteer per copy; the n finished Tasks, their Evaluations and their points are written **atomically by one server command**. The limit is **100 copies**, for this command and for `create_tasks` alike. The approval of a Completed-work Request and Trackerul membrului keep one copy.
+
+### Command contract
+
+```
+public.create_completed_tasks(
+  p_executor_ids uuid[], p_group_id bigint, p_title text, p_description text,
+  p_campaign_id bigint default null, p_difficulty integer default null,
+  p_rating integer default null, p_note text default null,
+  p_links jsonb default '[]'::jsonb, p_copies integer default 1)
+returns setof public.tasks   -- the created rows, in creation order
+```
+
+`language sql`, security invoker, delegating to `private.create_completed_tasks_impl` (`security definer`, `set search_path = ''`). No legacy `p_link_label` / `p_link_url` pair. `public.create_completed_task` is untouched.
+
+Step 1 (malformed input, before the gate), in this order:
+
+- `p_copies` null or below 1 → `PT400 invalid_copies`; above 100 → `PT400 too_many_copies`.
+- `p_executor_ids` null, of a length other than `p_copies`, or holding a null entry → `PT400 invalid_executors`: a finished Task always names its Executor. The same Member may appear any number of times.
+
+Then the loop: `for i in 1..p_copies loop … private.create_completed_task_impl(p_executor_ids[i], p_group_id, p_title, p_description, null, null, p_campaign_id, p_difficulty, p_rating, p_note, p_links)`, collecting each returned row. Everything else is inherited per copy: the authority rule of `completed_task_groups`, the eligibility refusals (`executor_not_group_member`, `executor_below_min_level`, `executor_role_excluded`), the completed Task and its ended Assignment, the Evaluation and its points, the one "Task evaluat" notification, and `require_daily_cap('task_create')`. One refusal rolls back all. Copies carry no link to each other.
+
+The `task_create` cap is 100 creations per actor per day: a batch at the limit spends the whole day's allowance, and a batch the cap cannot hold raises `PT409 rate_limited` and creates nothing.
+
+Grants: the four-role revoke then `grant execute … to authenticated` for both functions.
+
+### Backend tests
+
+New `supabase/tests/create_completed_tasks.test.sql`: surface and grants (anon cannot execute; invoker wrapper, definer impl with empty `search_path`, set-returning); `invalid_copies` (0, before the gate), `too_many_copies` (101), `invalid_executors` (no list; one entry for two copies; a null entry); nothing exists after a refusal; two volunteers → two completed Tasks, each crediting its own volunteer; the same volunteer three times → three Evaluations, three times the points in the ledger, three "Task evaluat" notifications; **atomicity**: a volunteer outside the Group, or a BC member, among the list refuses the whole call with the inherited reason and writes nothing; the body takes no lock of its own. Rosters: `tracker_grants.test.sql` (wrapper and impl rows, the private pin), ADR-0007's command list, conventions (the copies paragraph).
+
+### Frontend
+
+- `screens/tracker/CopiesExecutorsDialog.tsx` becomes the one "one picker per copy" dialog: new optional props `title`, `description`, `confirmLabel`, `busyLabel`, `allowRepeats` and `renderPicker`; their defaults keep Part B's callers exactly as they are. With `allowRepeats` no picker excludes another's choice.
+- `VolunteerPicker` moves out of `CompletedTaskForm.tsx` into `components/tasks/VolunteerPicker.tsx`, with `label` (default "Voluntar") and `excludeIds` (default none).
+- `lib/schemas/completed-task.ts`: `copies` as typed (a string), parsed like Part B's — `invalid_copies` for a blank, a fraction, zero; `too_many_copies` above 100 — under Exemplare; the volunteer is required only at one copy; `invalid_executors` lands under the volunteer field.
+- `components/tasks/CompletedTaskForm.tsx`: prop `copies` (the manager's "Adaugă task finalizat" passes it; approvals and Trackerul membrului do not); the **Exemplare** field after the Group, with the hint "Adaugă același task finalizat pentru mai mulți voluntari odată, până la 100. Alegi voluntarii la pasul următor; aceeași persoană poate fi aleasă de mai multe ori."; at n above 1 the picker gives way to "Voluntarii se aleg la pasul următor, câte unul pentru fiecare exemplar." and the button reads "Continuă"; the draft carries `copies` and, at n above 1, no `executorId`.
+- `queries/completed-tasks.ts`: `createCompletedTasks({ draft, executorIds })` → `supabase.rpc('create_completed_tasks', …)` with `p_executor_ids` the list (or `[draft.executorId]` at one copy) and `p_copies`; `useCreateCompletedTasks` invalidates `keys.tasks.all` and `keys.points.all`. `createCompletedTask` stays for the approval flow.
+- `screens/tracker/AddCompletedTaskControl.tsx`: the manager variant owns the two-step flow (form → dialog at n above 1): dialog title "Voluntarii celor n taskuri finalizate", description "Alege câte un voluntar pentru fiecare exemplar.", confirm "Adaugă n taskuri și acordă punctele", busy "Se salvează…", repeats allowed; `onAdded({ ids, title })`. One copy behaves as today (the details open). Trackerul membrului reports one id.
+- `screens/tracker/TrackerScreen.tsx`: at one id today's notice and details; at more, the receipt "n taskuri finalizate adăugate. Punctele au fost acordate." in the plural slot.
+- `lib/command-reasons.ts`: "Cel mult 100 de exemplare odată."; `lib/database.types.ts` regenerated.
+
+Frontend tests: `CopiesExecutorsDialog.test.tsx` (repeats allowed, given title and labels), `AddCompletedTaskControl.test.tsx` (three copies, the same person twice, through the dialog to `create_completed_tasks`; Exemplare hides the picker and reads "Continuă"), `queries/completed-tasks.test.ts`, `lib/schemas/completed-task.test.ts`, `TrackerScreen.test.tsx` (the plural receipt).
 
 ---
 

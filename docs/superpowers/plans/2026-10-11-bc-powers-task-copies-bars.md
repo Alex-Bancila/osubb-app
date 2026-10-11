@@ -17,7 +17,7 @@
 - Every `security definer` function has `set search_path = ''` and fully-qualified names; a command is `public.<verb>_<noun>` (`language sql`, security invoker) over `private.<verb>_<noun>_impl` (`security definer`); grants are "revoke from public, anon, authenticated, service_role" then "grant to authenticated" for both.
 - Error reasons are `snake_case`, raised `raise sqlstate 'PT400' using message = '<reason>'` or `raise exception using errcode = '42501', message = '<reason>'`; every new reason gets Romanian copy in `app/src/lib/command-reasons.ts`.
 - The Umbrella parent row is locked `for no key update`, never `for update`.
-- Copies: 1 to 20. Reasons: `invalid_copies`, `too_many_copies`, `invalid_executors`.
+- Copies: 1 to 100 (20 until Task 14; Alex, 2026-10-11: "add a greater limit, like 100 for both options"). Reasons: `invalid_copies`, `too_many_copies`, `invalid_executors`.
 - Vocabulary from `CONTEXT.md`: Member, Task, Subtask, Umbrella Task, Executor, Group, BC, BCE, Moderator, Atribuție, Deal, Coordonator, Responsabil. UI copy is Romanian.
 - Tests ship in the same commit as the code they prove. Both `npx supabase db reset && npx supabase test db` and, in `app/`, `npm run typecheck && npm run lint && npm run test:run` are green before every commit that touches their side.
 - Files are LF. Commit messages end with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
@@ -2977,3 +2977,503 @@ Expected: every gate CI runs passes locally.
 - [ ] **Step 3: Report**
 
 Summarize per part what shipped and what was verified, list the commits, and hand the branch to Alex for the PR. Do not push unless Alex asks.
+
+---
+
+### Task 14: The copies limit becomes 100 on both sides (red, then green)
+
+Alex, approving Part E: "add a greater limit, like 100 for both options". `create_tasks` and its browser mirror still say 20. The migration `20261011121000_create_tasks.sql` is unmerged (this branch only, never applied to staging), so its body is edited in place rather than replaced by a new migration.
+
+**Files:**
+
+- Modify: `supabase/migrations/20261011121000_create_tasks.sql` (`p_copies > 20` → `> 100`; both comments: `above 20` → `above 100`, `(1..20)` → `(1..100)`), `supabase/tests/create_tasks.test.sql` (the 21 case becomes 101; a new case proves 21 are accepted; `plan(33)` → `plan(34)`), `app/src/lib/schemas/task.ts` (`MAX_TASK_COPIES = 100`), `app/src/lib/schemas/task.test.ts`, `app/src/screens/tracker/TaskForm.tsx` (`COPIES_INFO`: "până la 100"), `app/src/screens/tracker/TaskForm.test.tsx` (`max` is `'100'`), `app/src/lib/command-reasons.ts` ("Cel mult 100 de exemplare odată."), `docs/backend/conventions.md` (the copies paragraph: "above 100"), this plan's Global Constraints line ("Copies: 1 to 100").
+
+**Interfaces:**
+
+- Consumes: Part B as merged (`MAX_TASK_COPIES`, `too_many_copies`).
+- Produces: the limit `100` that Task 15's command and Task 16's schema reuse; `MAX_TASK_COPIES` is the one browser constant for both forms.
+
+- [ ] **Step 1: The failing tests**
+
+`supabase/tests/create_tasks.test.sql`: replace the 21 case with
+
+```sql
+select throws_ok($$select count(*) from public.create_tasks('Prea multe', null, now() + interval '7 days', 'local', 'public',
+  p_group_id => pg_temp.project(), p_copies => 101)$$,
+  'PT400', 'too_many_copies', 'a hundred and one copies are too many');
+select is((select count(*) from public.create_tasks('Douazeci si unu', null, now() + interval '7 days', 'local', 'public',
+  p_group_id => pg_temp.project(), p_copies => 21))::int, 21,
+  'twenty-one copies are accepted since the limit became 100 (2026-10-11)');
+```
+
+and `plan(33)` → `plan(34)`.
+
+`app/src/lib/schemas/task.test.ts`: where the copies cases live, `copies: 21` → `too_many_copies` becomes `copies: 101`, and a `copies: 21` draft parses with no issue on `copies`; `MAX_TASK_COPIES` is `100`.
+
+`app/src/screens/tracker/TaskForm.test.tsx:749`: `expect(copies).toHaveAttribute('max', '100');`.
+
+Run: `npx supabase test db supabase/tests/create_tasks.test.sql` and, in `app/`, `npx vitest run src/lib/schemas/task.test.ts src/screens/tracker/TaskForm.test.tsx`
+Expected: FAIL — 21 copies raise `too_many_copies`; `MAX_TASK_COPIES` is 20; `max` is `'20'`.
+
+- [ ] **Step 2: The code and the words**
+
+The migration body: `if p_copies > 100 then`; its two comments say `above 100` and `(1..100)`. `MAX_TASK_COPIES = 100`. `COPIES_INFO` "…până la 100…". `command-reasons.ts`: `['too_many_copies', 'Cel mult 100 de exemplare odată.']`. `docs/backend/conventions.md`: `too_many_copies` (above 100; …). This plan: "Copies: 1 to 100."
+
+- [ ] **Step 3: Rebuild, run, commit**
+
+Run: `npx supabase db reset && npx supabase test db supabase/tests/create_tasks.test.sql` → 34/34; in `app/`: `npm run typecheck && npm run lint && npx vitest run src/lib/schemas src/screens/tracker/TaskForm.test.tsx` → green.
+
+```bash
+git add supabase/migrations/20261011121000_create_tasks.sql supabase/tests/create_tasks.test.sql app/src/lib/schemas/task.ts app/src/lib/schemas/task.test.ts app/src/screens/tracker/TaskForm.tsx app/src/screens/tracker/TaskForm.test.tsx app/src/lib/command-reasons.ts docs/backend/conventions.md docs/superpowers/plans/2026-10-11-bc-powers-task-copies-bars.md docs/superpowers/specs/2026-10-11-bc-powers-task-copies-bars-design.md
+git commit -m "feat: the Task copies limit is 100, on the server and in the form
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
+## Part E — Finished Tasks × n (added 2026-10-11, after the Part A/B backend landed)
+
+Alex: "i also want to be able to add finished task for n number of times for n number of people, but make sure to be able to select the same person more than once, it should work as we talked for the duplication before". Spec section "Part E" (appended the same day). Four tasks: the limit raise, then three that reuse Part B's dialog and reasons.
+
+### Task 15: Part E backend — `create_completed_tasks` (red, then green)
+
+**Files:**
+
+- Create: `supabase/tests/create_completed_tasks.test.sql`, `supabase/migrations/20261011123000_create_completed_tasks.sql`
+- Modify: `supabase/tests/tracker_grants.test.sql` (wrapper row after `create_completed_task`, impl row after `create_completed_task_impl`, pin 219 → 220), `docs/adr/0007-task-tracker-lifecycle.md` (command list after `create_completed_task`), `docs/backend/conventions.md` (the Task-copies paragraph)
+
+**Interfaces:**
+
+- Consumes: `private.create_completed_task_impl(uuid, bigint, text, text, text, text, bigint, integer, integer, text, jsonb)` from `20261007190000_attached_links_five.sql:799`; the `#915` persona pattern of `completed_work_tasks.test.sql` (`pg_temp.u915`, `pg_temp.g915`, `pg_temp.c915`).
+- Produces: `public.create_completed_tasks(p_executor_ids uuid[], p_group_id bigint, p_title text, p_description text, p_campaign_id bigint default null, p_difficulty integer default null, p_rating integer default null, p_note text default null, p_links jsonb default '[]'::jsonb, p_copies integer default 1) returns setof public.tasks`. Step 1: `invalid_copies` (null, below 1), `too_many_copies` (above 100), `invalid_executors` (no list, a list whose length is not `p_copies`, or any null entry: a finished Task always has its Executor). The same Member may appear several times. Loops `private.create_completed_task_impl(v_executors[i], p_group_id, p_title, p_description, null, null, p_campaign_id, p_difficulty, p_rating, p_note, p_links)`; everything else (authority, eligibility, the Evaluation and points, the one "Task evaluat" notification per copy, the `task_create` cap per copy) is inherited.
+
+- [ ] **Step 1: Write the failing suite**
+
+Create `supabase/tests/create_completed_tasks.test.sql`:
+
+```sql
+-- create_completed_tasks (spec 2026-10-11, Part E): n finished Tasks for n
+-- volunteers in ONE transaction -- the same Member may be credited several
+-- times. The body loops private.create_completed_task_impl, so every rule of
+-- create_completed_task holds per copy; this suite pins the count and
+-- executor rules, the repeat, the atomicity and that nothing of its own is
+-- locked. Personas and Groups: the #915 fixture shape, prefix 9470.
+begin;
+\set osubb_test_suite true
+\ir _helpers.sql
+set local search_path = public, extensions;
+create extension if not exists pgtap with schema extensions;
+select plan(22);
+
+create function pg_temp.u947(n integer) returns uuid language sql immutable as $$
+  select ('94700000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
+$$;
+grant execute on function pg_temp.u947(integer) to authenticated, anon;
+--  1 bce, Manager of Dept E   2 activ, member of Dept E   3 activ, member of Dept E
+--  4 voluntar, member of Dept F (outside)   5 bc, member of Dept E (never an Executor)
+insert into auth.users (id, email)
+select pg_temp.u947(n), 'm947.' || n || '@test.local' from generate_series(1, 5) n;
+insert into public.profiles (id, full_name, email, role, status)
+select pg_temp.u947(n), 'Membru 947 ' || n, 'm947.' || n || '@test.local',
+       (case n when 1 then 'bce' when 4 then 'voluntar' when 5 then 'bc' else 'activ' end)::public.member_role, 'activ'
+  from generate_series(1, 5) n;
+insert into public.groups (name, category, min_level) values ('Dept E #947', 'department', 0), ('Dept F #947', 'department', 0);
+create function pg_temp.g947(p_name text) returns bigint language sql stable security definer set search_path = '' as $$
+  select id from public.groups where name = p_name
+$$;
+grant execute on function pg_temp.g947(text) to authenticated, anon;
+insert into public.group_members (group_id, member_id, group_role)
+select pg_temp.g947(row_.name), pg_temp.u947(row_.n), row_.group_role
+  from (values ('Dept E #947', 1, 'manager'), ('Dept E #947', 2, 'member'), ('Dept E #947', 3, 'member'),
+               ('Dept E #947', 5, 'member'), ('Dept F #947', 4, 'member')) as row_ (name, n, group_role);
+
+-- ==================== API surface ====================
+select ok(not has_function_privilege('anon',
+  'public.create_completed_tasks(uuid[], bigint, text, text, bigint, integer, integer, text, jsonb, integer)', 'execute'),
+  'anon cannot execute create_completed_tasks');
+select ok(has_function_privilege('authenticated',
+  'public.create_completed_tasks(uuid[], bigint, text, text, bigint, integer, integer, text, jsonb, integer)', 'execute'),
+  'authenticated executes it; the gate is inside');
+select is((select prosecdef from pg_proc where proname = 'create_completed_tasks_impl' and pronamespace = 'private'::regnamespace), true,
+  'the body is security definer');
+select ok((select proconfig @> array['search_path=""'] from pg_proc where proname = 'create_completed_tasks_impl' and pronamespace = 'private'::regnamespace),
+  'the body pins an empty search_path');
+select is((select proretset from pg_proc where proname = 'create_completed_tasks' and pronamespace = 'public'::regnamespace), true,
+  'create_completed_tasks returns the created rows');
+select ok(pg_get_functiondef('private.create_completed_tasks_impl(uuid[], bigint, text, text, bigint, integer, integer, text, jsonb, integer)'::regprocedure) !~* 'for update',
+  'the body takes no lock of its own');
+
+-- ==================== Step 1: malformed before the gate ====================
+select pg_temp.test_clear_jwt();
+set local role authenticated;
+select throws_ok($$select count(*) from public.create_completed_tasks(array[pg_temp.u947(2)], pg_temp.g947('Dept E #947'), 'Zero', null,
+  p_difficulty => 4, p_rating => 5, p_note => 'ok', p_copies => 0)$$,
+  'PT400', 'invalid_copies', 'a count of zero is refused before the gate');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.u947(1));
+select throws_ok($$select count(*) from public.create_completed_tasks(array[pg_temp.u947(2)], pg_temp.g947('Dept E #947'), 'Prea multe', null,
+  p_difficulty => 4, p_rating => 5, p_note => 'ok', p_copies => 101)$$,
+  'PT400', 'too_many_copies', 'a hundred and one are too many');
+select throws_ok($$select count(*) from public.create_completed_tasks(null, pg_temp.g947('Dept E #947'), 'Fara lista', null,
+  p_difficulty => 4, p_rating => 5, p_note => 'ok', p_copies => 2)$$,
+  'PT400', 'invalid_executors', 'no list at all: a finished Task always names its Executor');
+select throws_ok($$select count(*) from public.create_completed_tasks(array[pg_temp.u947(2)], pg_temp.g947('Dept E #947'), 'Unul din doi', null,
+  p_difficulty => 4, p_rating => 5, p_note => 'ok', p_copies => 2)$$,
+  'PT400', 'invalid_executors', 'one entry for two copies');
+select throws_ok($$select count(*) from public.create_completed_tasks(array[pg_temp.u947(2), null], pg_temp.g947('Dept E #947'), 'Gol', null,
+  p_difficulty => 4, p_rating => 5, p_note => 'ok', p_copies => 2)$$,
+  'PT400', 'invalid_executors', 'an empty entry is refused: no unassigned finished Task');
+reset role;
+select is((select count(*) from public.tasks where title in ('Zero', 'Prea multe', 'Fara lista', 'Unul din doi', 'Gol'))::int, 0,
+  'a refused call creates nothing');
+
+-- ==================== Two volunteers, and the same one twice ====================
+select pg_temp.test_login_leadership(pg_temp.u947(1));
+select is((select count(*) from public.create_completed_tasks(array[pg_temp.u947(2), pg_temp.u947(3)], pg_temp.g947('Dept E #947'),
+  'Doi voluntari #947', 'd', p_difficulty => 4, p_rating => 5, p_note => 'Bine', p_copies => 2))::int, 2,
+  'two finished copies for two volunteers come back as two rows');
+select is((select count(*) from public.create_completed_tasks(array[pg_temp.u947(2), pg_temp.u947(2), pg_temp.u947(2)], pg_temp.g947('Dept E #947'),
+  'De trei ori #947', 'd', p_difficulty => 2, p_rating => 5, p_note => 'Bine', p_copies => 3))::int, 3,
+  'the same volunteer three times: three rows');
+reset role;
+select is((select count(*) from public.tasks where title = 'Doi voluntari #947' and status = 'completed')::int, 2,
+  'both copies are completed Tasks');
+select set_eq(
+  $$ select assignment.member_id from public.task_assignments as assignment
+       join public.tasks as task on task.id = assignment.task_id where task.title = 'Doi voluntari #947' $$,
+  $$ values (pg_temp.u947(2)), (pg_temp.u947(3)) $$,
+  'each copy credits its own volunteer');
+select is((select count(*) from public.task_evaluations as evaluation
+             join public.tasks as task on task.id = evaluation.task_id where task.title = 'De trei ori #947')::int, 3,
+  'three Evaluations for the repeated volunteer');
+select is((select sum(ledger.delta) from public.points_ledger as ledger
+             join public.tasks as task on task.id = ledger.task_id
+            where task.title = 'De trei ori #947' and ledger.member_id = pg_temp.u947(2)),
+  3 * (2 * public.rating_mult(5)),
+  'and three times the points in the ledger');
+select is((select count(*) from public.notifications as notification
+             join public.tasks as task on task.id = notification.task_id
+            where task.title = 'De trei ori #947' and notification.member_id = pg_temp.u947(2))::int, 3,
+  'one "Task evaluat" per copy, as three Tasks are');
+
+-- ==================== Atomicity ====================
+select pg_temp.test_login_leadership(pg_temp.u947(1));
+select throws_ok($$select count(*) from public.create_completed_tasks(array[pg_temp.u947(2), pg_temp.u947(4)], pg_temp.g947('Dept E #947'),
+  'Unul din afara #947', 'd', p_difficulty => 4, p_rating => 5, p_note => 'Bine', p_copies => 2)$$,
+  'PT409', 'executor_not_group_member', 'a volunteer outside the Group refuses the whole call');
+select throws_ok($$select count(*) from public.create_completed_tasks(array[pg_temp.u947(2), pg_temp.u947(5)], pg_temp.g947('Dept E #947'),
+  'Un BC #947', 'd', p_difficulty => 4, p_rating => 5, p_note => 'Bine', p_copies => 2)$$,
+  'PT409', 'executor_role_excluded', 'a BC member among the volunteers refuses the whole call');
+reset role;
+select is((select count(*) from public.tasks where title in ('Unul din afara #947', 'Un BC #947'))::int, 0,
+  'nothing of a refused batch exists');
+select is((select count(*) from public.points_ledger as ledger
+             join public.tasks as task on task.id = ledger.task_id
+            where task.title in ('Unul din afara #947', 'Un BC #947'))::int, 0,
+  'and no points were written');
+
+select * from finish();
+rollback;
+```
+
+Run: `npx supabase test db supabase/tests/create_completed_tasks.test.sql`
+Expected: FAIL — `function public.create_completed_tasks(...) does not exist`. Commit the red suite:
+
+```bash
+git add supabase/tests/create_completed_tasks.test.sql
+git commit -m "test(db): create_completed_tasks -- n finished Tasks in one transaction (red)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+- [ ] **Step 2: The migration**
+
+Create `supabase/migrations/20261011123000_create_completed_tasks.sql` (date it after the newest migration on the branch):
+
+```sql
+-- Finished Tasks x n (spec 2026-10-11, Part E; Alex: "add finished task for n
+-- number of times for n number of people, but make sure to be able to select
+-- the same person more than once"). One atomic command over the existing
+-- private.create_completed_task_impl: one Executor per copy, repeats allowed,
+-- every rule (authority, eligibility, Evaluation, points, the one "Task
+-- evaluat", the task_create cap) per copy; one refusal rolls back all.
+
+create function private.create_completed_tasks_impl(
+  p_executor_ids uuid[], p_group_id bigint, p_title text, p_description text,
+  p_campaign_id bigint, p_difficulty integer, p_rating integer, p_note text,
+  p_links jsonb, p_copies integer)
+returns setof public.tasks
+language plpgsql
+security definer
+set search_path to ''
+as $$
+declare
+  v_given integer := coalesce(array_length(p_executor_ids, 1), 0);
+  v_task  public.tasks%rowtype;
+  i       integer;
+begin
+  -- 1. Malformed for every caller, before the gate.
+  if p_copies is null or p_copies < 1 then
+    raise sqlstate 'PT400' using message = 'invalid_copies';
+  end if;
+  if p_copies > 100 then
+    raise sqlstate 'PT400' using message = 'too_many_copies';
+  end if;
+  -- A finished Task always names its Executor: exactly one entry per copy, none empty.
+  if v_given <> p_copies or exists (select 1 from unnest(p_executor_ids) as entry where entry is null) then
+    raise sqlstate 'PT400' using message = 'invalid_executors';
+  end if;
+  -- 2. One finished Task per copy, in order, in this one transaction.
+  for i in 1..p_copies loop
+    v_task := private.create_completed_task_impl(
+      p_executor_ids[i], p_group_id, p_title, p_description,
+      null, null, p_campaign_id, p_difficulty, p_rating, p_note, p_links);
+    return next v_task;
+  end loop;
+  return;
+end;
+$$;
+
+comment on function private.create_completed_tasks_impl(uuid[], bigint, text, text, bigint, integer, integer, text, jsonb, integer) is
+  'Body of public.create_completed_tasks: p_copies finished Tasks, one per entry of p_executor_ids (the same Member may repeat), each through private.create_completed_task_impl in one transaction, so every create_completed_task rule holds per copy and one refusal rolls back all. Step 1: PT400 invalid_copies (null, below 1), too_many_copies (above 100), invalid_executors (no list, a length other than p_copies, or an empty entry).';
+
+create function public.create_completed_tasks(
+  p_executor_ids uuid[], p_group_id bigint, p_title text, p_description text,
+  p_campaign_id bigint default null, p_difficulty integer default null,
+  p_rating integer default null, p_note text default null,
+  p_links jsonb default '[]'::jsonb, p_copies integer default 1)
+returns setof public.tasks
+language sql
+set search_path to ''
+as $$
+  select * from private.create_completed_tasks_impl(p_executor_ids, p_group_id, p_title, p_description,
+                                                    p_campaign_id, p_difficulty, p_rating, p_note, p_links, p_copies);
+$$;
+
+comment on function public.create_completed_tasks(uuid[], bigint, text, text, bigint, integer, integer, text, jsonb, integer) is
+  'Adds p_copies (1..100) finished Tasks at once -- one per volunteer in p_executor_ids, repeats allowed -- atomically, returning the rows in order; the arguments are create_completed_task''s with a list in place of p_executor_id and no legacy link pair. Reasons of its own: PT400 invalid_copies, too_many_copies, invalid_executors; every other reason is create_completed_task''s, per copy.';
+
+revoke execute on function private.create_completed_tasks_impl(uuid[], bigint, text, text, bigint, integer, integer, text, jsonb, integer)
+  from public, anon, authenticated, service_role;
+revoke execute on function public.create_completed_tasks(uuid[], bigint, text, text, bigint, integer, integer, text, jsonb, integer)
+  from public, anon, authenticated, service_role;
+grant execute on function private.create_completed_tasks_impl(uuid[], bigint, text, text, bigint, integer, integer, text, jsonb, integer) to authenticated;
+grant execute on function public.create_completed_tasks(uuid[], bigint, text, text, bigint, integer, integer, text, jsonb, integer) to authenticated;
+```
+
+- [ ] **Step 3: Rosters, ADR, conventions**
+
+`supabase/tests/tracker_grants.test.sql`: after the `('create_completed_task', …)` wrapper row add
+
+```sql
+  ('create_completed_tasks', 'p_executor_ids uuid[], p_group_id bigint, p_title text, p_description text, p_campaign_id bigint, p_difficulty integer, p_rating integer, p_note text, p_links jsonb, p_copies integer', false, true, false, false),
+```
+
+after the `('create_completed_task_impl', …)` private row add
+
+```sql
+  ('create_completed_tasks_impl',                  'p_executor_ids uuid[], p_group_id bigint, p_title text, p_description text, p_campaign_id bigint, p_difficulty integer, p_rating integer, p_note text, p_links jsonb, p_copies integer', 'impl'),
+```
+
+and the private pin `219` → `220`.
+
+`docs/adr/0007-task-tracker-lifecycle.md`: after `create_completed_task` in the command list add `create_completed_tasks (n finished Tasks for n volunteers, repeats allowed, in one transaction; spec 2026-10-11)` — if `create_completed_task` is not listed, add both lines after `create_tasks`.
+
+`docs/backend/conventions.md`, the Task-copies paragraph: append `\`create_completed_tasks\` (Part E) reuses the three; there an empty entry or a missing list is also \`invalid_executors\`, since a finished Task always names its Executor, and the same Member may be listed several times.`
+
+- [ ] **Step 4: Rebuild, run, commit**
+
+Run: `npx supabase db reset && npx supabase test db`
+Expected: green, `create_completed_tasks.test.sql` 22/22 (fix `plan(22)` to the number pgTAP reports if it differs).
+
+```bash
+git add supabase/migrations/20261011123000_create_completed_tasks.sql supabase/tests/create_completed_tasks.test.sql supabase/tests/tracker_grants.test.sql docs/adr/0007-task-tracker-lifecycle.md docs/backend/conventions.md
+git commit -m "feat(db): create_completed_tasks -- n finished Tasks for n volunteers in one transaction
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 16: Part E frontend — the shared executors dialog and the finished-Task flow
+
+**Files:**
+
+- Create: `app/src/components/tasks/VolunteerPicker.tsx` (moved out of `CompletedTaskForm.tsx`, plus `label` and `excludeIds` props)
+- Modify: `app/src/screens/tracker/CopiesExecutorsDialog.tsx` (props `title`, `confirmLabel`, `allowRepeats`, `renderPicker`), `app/src/lib/schemas/completed-task.ts` (`copies`), `app/src/components/tasks/CompletedTaskForm.tsx` (Exemplare, "Continuă", `copies` prop), `app/src/queries/completed-tasks.ts` (`createCompletedTasks`, `useCreateCompletedTasks`), `app/src/screens/tracker/AddCompletedTaskControl.tsx` (two-step flow, plural `onAdded`), `app/src/screens/tracker/TrackerScreen.tsx` (plural receipt), `app/src/lib/database.types.ts` (generated)
+- Test: `app/src/screens/tracker/CopiesExecutorsDialog.test.tsx`, `app/src/screens/tracker/AddCompletedTaskControl.test.tsx`, `app/src/queries/completed-tasks.test.ts`, `app/src/lib/schemas/completed-task.test.ts`
+
+**Interfaces:**
+
+- Consumes: Task 15's `create_completed_tasks`; Part B's `CopiesExecutorsDialog`, `MAX_TASK_COPIES`, `createdMany` receipt in `TrackerScreen`.
+- Produces: `CopiesExecutorsDialog` props `title: string`, `confirmLabel: string`, `allowRepeats?: boolean` (default false), `renderPicker?: (slot: { index: number; value: string | null; excludeIds: string[]; disabled: boolean; onChange: (id: string | null) => void }) => ReactNode` (default: `DirectExecutorSelector` with `originGroupId`); `VolunteerPicker({ groupId, value, onChange, disabled, invalid, errorId, label = 'Voluntar', excludeIds = [] })`; `CompletedTaskDraft.copies: number` (`executorId` null when `copies > 1`); `createCompletedTasks({ draft, executorIds? })`; `useCreateCompletedTasks()`; `AddCompletedTaskControl` prop `onAdded: (created: { ids: number[]; title: string }) => void`.
+
+- [ ] **Step 1: Failing tests**
+
+`CopiesExecutorsDialog.test.tsx`, add:
+
+```tsx
+it("with repeats allowed, excludes nothing and keeps the given title and confirm label", async () => {
+  const { user, onConfirm } = renderDialog({
+    count: 2,
+    allowRepeats: true,
+    title: "Voluntarii celor 2 taskuri finalizate",
+    confirmLabel: "Adaugă 2 taskuri și acordă punctele",
+  });
+  expect(
+    screen.getByRole("dialog", {
+      name: "Voluntarii celor 2 taskuri finalizate",
+    }),
+  ).toBeVisible();
+  await user.click(
+    screen.getByRole("button", { name: "Alege pentru Exemplarul 1" }),
+  );
+  const [, second] = screen.getAllByTestId("picker");
+  expect(second).toHaveAttribute("data-excluded", "");
+  await user.click(
+    screen.getByRole("button", { name: "Alege pentru Exemplarul 2" }),
+  );
+  await user.click(
+    screen.getByRole("button", { name: "Adaugă 2 taskuri și acordă punctele" }),
+  );
+  expect(onConfirm).toHaveBeenCalledWith([
+    "Exemplarul 1-ales",
+    "Exemplarul 2-ales",
+  ]);
+});
+```
+
+(`renderDialog` passes `title`/`confirmLabel` defaults `Executorii celor 3 taskuri` / `Creează 3 taskuri` so the Part B cases still read as before.)
+
+`AddCompletedTaskControl.test.tsx`, add (reuse `open`, `pick`, `evaluate`, `volunteerBox`; mock `VolunteerPicker` the way the dialog test mocks its picker, keyed by `label`; mock `useCreateCompletedTasks` beside `useCreateCompletedTask`):
+
+```tsx
+it("adds the same finished Task for three volunteers at once, the same person allowed twice", async () => {
+  state.createMany.mockResolvedValue([
+    { id: 71, title: "Atelier" },
+    { id: 72, title: "Atelier" },
+    { id: 73, title: "Atelier" },
+  ]);
+  const user = userEvent.setup();
+  const dialog = await open(user);
+  await pick(
+    user,
+    within(dialog).getByRole("combobox", { name: "Grup principal" }),
+    /^Educație/,
+  );
+  const copies = within(dialog).getByLabelText("Exemplare");
+  await user.clear(copies);
+  await user.type(copies, "3");
+  expect(
+    within(dialog).queryByRole("combobox", { name: "Voluntar" }),
+  ).toBeNull();
+  await user.type(within(dialog).getByLabelText("Titlu"), "Atelier");
+  await evaluate(user, dialog);
+  await user.click(within(dialog).getByRole("button", { name: "Continuă" }));
+  const step = await screen.findByRole("dialog", {
+    name: "Voluntarii celor 3 taskuri finalizate",
+  });
+  await user.click(
+    within(step).getByRole("button", { name: "Alege pentru Exemplarul 1" }),
+  );
+  await user.click(
+    within(step).getByRole("button", { name: "Alege pentru Exemplarul 2" }),
+  );
+  await user.click(
+    within(step).getByRole("button", { name: "Alege pentru Exemplarul 3" }),
+  );
+  await user.click(
+    within(step).getByRole("button", {
+      name: "Adaugă 3 taskuri și acordă punctele",
+    }),
+  );
+  await waitFor(() =>
+    expect(onAdded).toHaveBeenCalledWith({
+      ids: [71, 72, 73],
+      title: "Atelier",
+    }),
+  );
+  expect(state.createMany).toHaveBeenCalledWith(
+    expect.objectContaining({
+      executorIds: ["ana", "ana", "bogdan"],
+      draft: expect.objectContaining({
+        copies: 3,
+        groupId: 7,
+        title: "Atelier",
+        executorId: null,
+      }),
+    }),
+  );
+});
+```
+
+(the mocked picker chooses `ana` for Exemplarul 1 and 2 and `bogdan` for 3, by `label`.)
+
+`completed-tasks.test.ts`: `createCompletedTasks({ draft: { …, copies: 1, executorId: 'ana' } })` calls `create_completed_tasks` with `p_executor_ids: ['ana'], p_copies: 1`; with `copies: 2, executorIds: ['ana', 'ana']` → `p_executor_ids: ['ana', 'ana'], p_copies: 2`.
+
+`completed-task.test.ts`: `copies` `0`, `101`, `NaN` → `invalid_copies` / `too_many_copies` on `copies`; with `copies: 2` a null `executorId` is accepted.
+
+Run them: FAIL (missing props, module, fields).
+
+- [ ] **Step 2: The dialog and the picker**
+
+`CopiesExecutorsDialog.tsx`: props gain `title`, `confirmLabel`, `allowRepeats = false`, `renderPicker`, and `originGroupId` becomes optional (required only when `renderPicker` is omitted). The title and the confirm button read the props; `excludeIds` passed to each picker is `[]` when `allowRepeats`; the default picker is today's `DirectExecutorSelector` call. Part B's two callers pass `title={`Executorii celor ${n} ${plural}`}` and `confirmLabel={`Creează ${n} ${plural}`}`.
+
+Move `VolunteerPicker` from `CompletedTaskForm.tsx` into `components/tasks/VolunteerPicker.tsx`, exported, with `label = 'Voluntar'` on its `<span id=…-label>` and `excludeIds` filtering `members` (keeping `value`). `CompletedTaskForm` imports it.
+
+- [ ] **Step 3: Schema, form, query, control, receipt**
+
+- `lib/schemas/completed-task.ts`: `CompletedTaskInput.copies: string`; the schema parses `copies` as in Part B (`invalid_copies`, `too_many_copies` on `copies`); `executorId` is required only when `copies <= 1`; `completedTaskFieldForReason` maps `invalid_copies`/`too_many_copies` → `copies`, `invalid_executors` → the volunteer field.
+- `CompletedTaskForm.tsx`: prop `copies?: boolean` (default false; `AddCompletedTaskControl`'s manager variant passes `true`, the fixed-volunteer variant nothing); initial `copies: '1'`; the **Exemplare** field (same markup as Part B, `InfoHint` "Despre exemplare": "Adaugă același task finalizat pentru mai mulți voluntari odată, până la 100. Alegi voluntarii la pasul următor; aceeași persoană poate fi aleasă de mai multe ori.") rendered after the Group cascade when `copies && !volunteer`; at `copies > 1` the `VolunteerPicker` gives way to "Voluntarii se aleg la pasul următor, câte unul pentru fiecare exemplar." and the submit label becomes `Continuă`; `onSubmit` receives `copies` and `executorId: null` in that case.
+- `queries/completed-tasks.ts`: `CompletedTaskDraft.copies: number`; `createCompletedTasks({ draft, executorIds })` → `supabase.rpc('create_completed_tasks', { p_executor_ids: draft.copies > 1 ? executorIds : [draft.executorId], p_group_id, p_title, p_description, p_links, p_campaign_id, p_difficulty, p_rating, p_note, p_copies: draft.copies })`, throwing `CommandError(error, FAILED)`; `useCreateCompletedTasks` invalidates `keys.tasks.all` and `keys.points.all`. `createCompletedTask` stays for the approval flow.
+- `AddCompletedTaskControl.tsx`: the manager variant uses `useCreateCompletedTasks` with the Part B two-step pattern (`pendingDraft`, `stepError`, `CopiesExecutorsDialog` with `title={`Voluntarii celor ${n} taskuri finalizate`}`, `confirmLabel={`Adaugă ${n} taskuri și acordă punctele`}`, `allowRepeats`, `renderPicker` → `VolunteerPicker` for `pendingDraft.groupId`); `onAdded({ ids, title })`. The fixed-volunteer variant keeps one copy and reports `{ ids: [id], title }`.
+- `TrackerScreen.tsx`: `onAdded={({ ids, title })` → one id: today's notice and details; more: `setCreatedMany({ key: Date.now(), receipt: `${ids.length} taskuri finalizate adăugate. Punctele au fost acordate.` })`. `MemberTrackerScreen` (the fixed-volunteer caller) adapts to the new shape with one id.
+- `npm run gen:types`.
+
+- [ ] **Step 4: Run, commit**
+
+Run (in `app/`): `npm run typecheck && npm run lint && npm run test:run`
+Expected: PASS.
+
+```bash
+git add app/src
+git commit -m "feat(app): finished Tasks x n -- one volunteer per copy, the same person allowed twice
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 17: Part E final gates and the live check
+
+The spec's Part E section and the limit text were written before Task 14 (the spec is the authority the plan argues from). `docs/backend/conventions.md` was amended in Tasks 14 and 15; `DESIGN.md` needs nothing new (the dialog clause from Part B covers "one like field per copy").
+
+**Files:** none new.
+
+- [ ] **Step 1: Whole-suite gates**
+
+Run: `npx supabase db reset && npx supabase test db`
+Expected: green, `create_completed_tasks.test.sql` among the files.
+
+Run (in `app/`): `npm run gen:types && git status --short src/lib/database.types.ts`
+Expected: no diff.
+
+Run (in `app/`): `npm run typecheck && npm run lint && npm run format:check && npm run test:run`
+Expected: green.
+
+Run: `npm run check:root`
+Expected: green (the spec and the plan are Prettier-clean).
+
+- [ ] **Step 2: The dev server, by hand (browser pane, signed in as `bc@demo.osubb`)**
+
+- Taskuri › De gestionat › Adaugă task finalizat: Exemplare = 3 hides Voluntar and the button reads "Continuă"; the dialog "Voluntarii celor 3 taskuri finalizate" offers every volunteer in every picker; choose the same person for 1 and 2 and another for 3; "Adaugă 3 taskuri și acordă punctele" → the receipt "3 taskuri finalizate adăugate. Punctele au fost acordate." and three completed cards.
+- Exemplare = 1 behaves as before: the details sheet opens on the new Task.
+- Task nou with Exemplare = 21, Public → 21 cards in Disponibile (the raised limit).
+- At 320 px (`resize_window`): the dialog is full screen, each picker on its own row, Înapoi and the confirm button reachable; `resize_window preset desktop` afterwards.
+
+- [ ] **Step 3: Ledger and report**
+
+Append `Task 17: complete (...)` with the gate results, then the final report to Alex: what Part E shipped, the limit raise, the rulings made during Tasks 14–17, the daily-cap note (100 creations per actor per day: a batch at the limit spends the whole day's allowance), and the open follow-up (Trackerul membrului keeps one copy).
+
+---
