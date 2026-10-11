@@ -579,6 +579,13 @@ select throws_ok(
   'create_event: and a Member holding no Group Role anywhere is still refused on the Organization Group');
 
 reset role;
+-- Spec 2026-10-11: an Organization Event by a writer below BC waits for approval and
+-- reads for nobody else until then (PT404 event_not_found); approved by hand here (the
+-- owner, claims cleared, the decision flag on) so the creator-only rule is what shows.
+select pg_temp.test_clear_jwt();
+select set_config('osubb.deciding_approval', 'on', true);
+update public.events set approval_status = 'approved' where title = 'Eveniment organizație #582';
+select set_config('osubb.deciding_approval', 'off', true);
 select pg_temp.g582_as(3);
 select throws_ok(
   format($$select public.update_event(
