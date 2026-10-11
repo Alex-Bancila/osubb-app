@@ -30,9 +30,16 @@ type Badges = Partial<Record<string, { count: number; label: string }>>;
 export function TabBar({
   tabs,
   badges,
+  under,
 }: {
   tabs: readonly NavItem[];
   badges: Badges;
+  /**
+   * The tab the current page sits under without being it (Acasă, for a page
+   * reached from its tiles): outlined and named, where the current tab is
+   * filled. Ignored while a tab is current.
+   */
+  under?: string;
 }) {
   const { pathname } = useLocation();
   const active = tabs.find((item) => isNavItemActive(item, pathname))?.path;
@@ -108,6 +115,7 @@ export function TabBar({
           const Icon = item.icon;
           const badge = badges[item.path];
           const current = item.path === active;
+          const parent = !active && item.path === under;
           return (
             <Link
               key={item.path}
@@ -118,10 +126,12 @@ export function TabBar({
                 'relative z-1 flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-bold whitespace-nowrap no-underline transition-colors duration-200 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring motion-reduce:transition-none',
                 current
                   ? 'min-w-0 flex-1 text-(--surface)'
-                  : 'text-muted-foreground hover:text-foreground',
+                  : parent
+                    ? 'min-w-0 flex-[2] text-foreground ring-[1.5px] ring-muted-foreground/70 ring-inset'
+                    : 'text-muted-foreground hover:text-foreground',
                 // On a page that is none of the five (Profil, Notificări)
                 // nothing opens, so the five share the bar evenly.
-                !current && (active ? 'flex-none' : 'flex-1'),
+                !current && !parent && (active ? 'flex-none' : 'flex-1'),
                 current && !thumb && 'bg-(--text)',
               )}
             >
@@ -129,7 +139,7 @@ export function TabBar({
                   the bar's colour; selected, it follows the label. */}
               <span className="relative inline-flex shrink-0">
                 <Icon className="size-5 shrink-0" aria-hidden="true" />
-                {badge && !current && (
+                {badge && !current && !parent && (
                   <Badge
                     variant="destructive"
                     className={cn(
@@ -144,14 +154,16 @@ export function TabBar({
               <span
                 data-slot="tab-label"
                 className={cn(
-                  current ? 'min-w-0 overflow-hidden text-clip' : 'sr-only',
+                  current || parent
+                    ? 'min-w-0 overflow-hidden text-clip'
+                    : 'sr-only',
                 )}
               >
                 {current && short && item.shortLabel
                   ? item.shortLabel
                   : item.label}
               </span>
-              {badge && current && (
+              {badge && (current || parent) && (
                 <Badge variant="destructive" className={badgeClass}>
                   <PopCount count={badge.count} />
                 </Badge>

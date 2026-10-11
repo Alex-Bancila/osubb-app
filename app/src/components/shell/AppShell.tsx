@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Bell } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router';
 import logoDark from '../../assets/brand/osubb-logo-on-dark.png';
@@ -8,6 +8,7 @@ import { useCapabilities } from '../../lib/capabilities';
 import { safeHexColor } from '../../lib/color';
 import { initials } from '../../lib/format';
 import { useEnterMotion, usePopMotion } from '../../lib/motion';
+import { HomePagesContext } from './home-pages';
 import { cn } from '../../lib/utils';
 import { useUnreadAnnouncementsCount } from '../../queries/announcements';
 import { useLiveChanges } from '../../queries/live-changes';
@@ -171,6 +172,14 @@ function SidebarContent({
   );
 }
 
+/**
+ * Notificări and Profil are the top bar's two places: on either, its mark
+ * opens into the bar's own selection — the light pill with the page's name —
+ * so "you are here" looks the same at the top as at the bottom.
+ */
+const topPillClass =
+  'inline-flex h-9 items-center gap-1.5 rounded-full bg-(--text) px-3 text-xs font-bold whitespace-nowrap text-(--surface) no-underline motion-grow';
+
 export default function AppShell() {
   const { session } = useAuth();
   useNotificationRealtime(session?.user.id);
@@ -204,7 +213,19 @@ export default function AppShell() {
 
   // What the viewer may open and the phone bar's five; the pages on neither
   // the bar nor the top bar are Acasă's Conducere tiles (`navFor`).
-  const { visible, tabs } = navFor(capabilities.data);
+  const { visible, tabs, elsewhere } = navFor(capabilities.data);
+  // A page a phone reaches from Acasă's tiles sits under Acasă on the bar,
+  // and carries the way back (`HomeBackLink`).
+  const under = elsewhere.some((item) =>
+    isNavItemActive(item, location.pathname),
+  )
+    ? '/'
+    : undefined;
+  const homePaths = elsewhere.map((item) => item.path).join(' ');
+  const homePages = useMemo(
+    () => homePaths.split(' ').filter(Boolean),
+    [homePaths],
+  );
   const denied = deniedMessage(location.state);
   const unreadPop = usePopMotion<HTMLSpanElement>(unreadCount);
   const page = useEnterMotion<HTMLDivElement>(
@@ -251,9 +272,10 @@ export default function AppShell() {
         <Link
           to={NOTIFICATIONS_PATH}
           className={cn(
-            buttonVariants({ variant: 'ghost', size: 'icon' }),
+            isNotificationsActive
+              ? topPillClass
+              : buttonVariants({ variant: 'ghost', size: 'icon' }),
             'relative ml-auto shrink-0 lg:hidden',
-            isNotificationsActive && 'bg-accent text-accent-foreground',
           )}
           aria-current={isNotificationsActive ? 'page' : undefined}
           aria-label={
@@ -262,11 +284,15 @@ export default function AppShell() {
               : 'Notificări'
           }
         >
-          <Bell aria-hidden="true" />
+          <Bell aria-hidden="true" className="size-4 shrink-0" />
+          {isNotificationsActive && <span aria-hidden="true">Notificări</span>}
           {unreadCount > 0 && (
             <Badge
               variant="destructive"
-              className="absolute top-1.5 right-1.5 h-4 min-w-4 justify-center rounded-full px-1 text-[10px]"
+              className={cn(
+                'h-4 min-w-4 justify-center rounded-full px-1 text-[10px]',
+                !isNotificationsActive && 'absolute top-1.5 right-1.5',
+              )}
             >
               <span ref={unreadPop} aria-hidden="true" className="inline-block">
                 {unreadCount}
@@ -279,14 +305,19 @@ export default function AppShell() {
         <Link
           to={PROFILE_PATH}
           className={cn(
-            'grid size-11 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50 lg:hidden',
-            isProfileActive && 'bg-accent',
+            'shrink-0 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 lg:hidden',
+            isProfileActive
+              ? cn(topPillClass, 'pl-1')
+              : 'grid size-11 place-items-center rounded-full',
           )}
           aria-current={isProfileActive ? 'page' : undefined}
           aria-label="Profil"
         >
           <span
-            className="grid size-8 place-items-center rounded-full text-xs font-bold text-white"
+            className={cn(
+              'grid place-items-center rounded-full font-bold text-white',
+              isProfileActive ? 'size-7 text-[10px]' : 'size-8 text-xs',
+            )}
             style={{
               backgroundColor: safeHexColor(profile.data?.avatar_color),
             }}
@@ -294,6 +325,7 @@ export default function AppShell() {
           >
             {initials(profile.data?.full_name ?? session?.user.email)}
           </span>
+          {isProfileActive && <span aria-hidden="true">Profil</span>}
         </Link>
       </header>
 
@@ -313,9 +345,11 @@ export default function AppShell() {
           <FabSlotContext.Provider value={fabSlot}>
             {/* A page arrives when the area changes; its own tabs move
                 their own content. */}
-            <div ref={page}>
-              <Outlet />
-            </div>
+            <HomePagesContext.Provider value={homePages}>
+              <div ref={page}>
+                <Outlet />
+              </div>
+            </HomePagesContext.Provider>
           </FabSlotContext.Provider>
         </>
       </main>
@@ -329,7 +363,7 @@ export default function AppShell() {
         className="pointer-events-none z-10 self-end justify-self-end p-4 [grid-area:main] *:pointer-events-auto md:p-6 keyboard:hidden"
       />
 
-      <TabBar tabs={tabs} badges={badges} />
+      <TabBar tabs={tabs} badges={badges} under={under} />
     </div>
   );
 }
