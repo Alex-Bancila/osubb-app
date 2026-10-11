@@ -245,9 +245,8 @@ export function useUpdateDeal() {
 
 /* ---------------------------------------------------------------- team ---- */
 
-/** The OSUBB Deals team: the Atribuție's holder and the two places they fill. */
+/** The OSUBB Deals team (R47): the two places BC or the Moderator fill. */
 export type DealsTeam = {
-  holderId: string | null;
   coordinatorId: string | null;
   responsibleId: string | null;
 };
@@ -255,26 +254,18 @@ export type DealsTeam = {
 export type TeamRole = 'coordinator' | 'responsible';
 
 /**
- * Who holds Responsabil OSUBB Deals and who sits in its team (R44). Both
- * tables are readable by every live Member; nobody writes them directly.
+ * Who sits in the OSUBB Deals team (R44/R47). The table is readable by every
+ * live Member; nobody writes it directly.
  */
 export async function fetchDealsTeam(): Promise<DealsTeam> {
-  const [holder, team] = await Promise.all([
-    supabase
-      .from('bc_assignments')
-      .select('member_id')
-      .eq('assignment', OSUBB_DEALS_ASSIGNMENT),
-    supabase
-      .from('assignment_team')
-      .select('team_role, member_id')
-      .eq('assignment', OSUBB_DEALS_ASSIGNMENT),
-  ]);
-  if (holder.error) throw holder.error;
+  const team = await supabase
+    .from('assignment_team')
+    .select('team_role, member_id')
+    .eq('assignment', OSUBB_DEALS_ASSIGNMENT);
   if (team.error) throw team.error;
   const place = (role: TeamRole) =>
     (team.data ?? []).find((row) => row.team_role === role)?.member_id ?? null;
   return {
-    holderId: holder.data?.[0]?.member_id ?? null,
     coordinatorId: place('coordinator'),
     responsibleId: place('responsible'),
   };

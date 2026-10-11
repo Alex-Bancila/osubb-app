@@ -136,7 +136,6 @@ export const NAV_ITEMS: NavItem[] = [
       '/administrare/confidentialitate',
       '/administrare/setari',
       '/administrare/deals',
-      '/administrare/bc',
     ],
   },
 ];

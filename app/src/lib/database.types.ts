@@ -166,13 +166,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "assignment_team_assignment_fkey"
-            columns: ["assignment"]
-            isOneToOne: false
-            referencedRelation: "bc_assignments"
-            referencedColumns: ["assignment"]
-          },
-          {
             foreignKeyName: "assignment_team_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
@@ -210,70 +203,6 @@ export type Database = {
           {
             foreignKeyName: "assignment_team_set_by_fkey"
             columns: ["set_by"]
-            isOneToOne: false
-            referencedRelation: "profiles_directory"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      bc_assignments: {
-        Row: {
-          assignment: string
-          granted_at: string
-          granted_by: string | null
-          member_id: string
-        }
-        Insert: {
-          assignment: string
-          granted_at?: string
-          granted_by?: string | null
-          member_id: string
-        }
-        Update: {
-          assignment?: string
-          granted_at?: string
-          granted_by?: string | null
-          member_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bc_assignments_granted_by_fkey"
-            columns: ["granted_by"]
-            isOneToOne: false
-            referencedRelation: "my_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "bc_assignments_granted_by_fkey"
-            columns: ["granted_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bc_assignments_granted_by_fkey"
-            columns: ["granted_by"]
-            isOneToOne: false
-            referencedRelation: "profiles_directory"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bc_assignments_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "my_points"
-            referencedColumns: ["member_id"]
-          },
-          {
-            foreignKeyName: "bc_assignments_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bc_assignments_member_id_fkey"
-            columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "profiles_directory"
             referencedColumns: ["id"]
@@ -2810,18 +2739,6 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["member_role"]
       }
-      bc_assignments_directory: {
-        Args: never
-        Returns: {
-          assignments: Json
-          avatar_color: string
-          board_title: string
-          full_name: string
-          is_bc: boolean
-          member_id: string
-          nickname: string
-        }[]
-      }
       campaign_report: {
         Args: { p_campaign_id: number; p_from?: string; p_to?: string }
         Returns: {
@@ -3647,7 +3564,6 @@ export type Database = {
         Args: never
         Returns: {
           administer: boolean
-          administer_bc: boolean
           create_top_level_groups: boolean
           manage_deals: boolean
           manage_deals_team: boolean
@@ -4004,26 +3920,6 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "assignment_team"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      set_bc_assignment: {
-        Args: {
-          p_assignment: string
-          p_granted: boolean
-          p_member_id: string
-          p_move?: boolean
-        }
-        Returns: {
-          assignment: string
-          granted_at: string
-          granted_by: string | null
-          member_id: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "bc_assignments"
           isOneToOne: true
           isSetofReturn: false
         }

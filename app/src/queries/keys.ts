@@ -251,11 +251,9 @@ export const keys = {
     dealReveals: (announcementId: number, memberId: string | undefined) =>
       ['announcements', 'deal-reveals', { announcementId, memberId }] as const,
   },
-  /* Atribuții BC (R44): who holds each one and the OSUBB Deals team. */
+  /* The OSUBB Deals team (R44/R47). */
   assignments: {
     all: ['assignments'] as const,
-    holders: (memberId: string | undefined) =>
-      ['assignments', 'holders', { memberId }] as const,
     team: (memberId: string | undefined) =>
       ['assignments', 'team', { memberId }] as const,
   },

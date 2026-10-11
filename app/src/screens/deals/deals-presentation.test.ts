@@ -88,7 +88,7 @@ describe('who may edit and delete a Deal (R44)', () => {
   const mine = { authorId: ME };
   const theirs = { authorId: OTHER };
 
-  it('lets the holder and the Coordonator edit and delete every Deal', () => {
+  it('lets BC and the Coordonator edit and delete every Deal', () => {
     const team = viewer({ manageDeals: true, manageDealsTeam: true });
     expect(mayEditDeal(theirs, team)).toBe(true);
     expect(mayDeleteDeal(theirs, team)).toBe(true);
@@ -108,7 +108,7 @@ describe('who may edit and delete a Deal (R44)', () => {
     expect(mayEditDeal(theirs, bc)).toBe(false);
   });
 
-  it('lets the Moderator, with the holder powers, edit and delete every Deal (R44 amended)', () => {
+  it('lets the Moderator edit and delete every Deal (R47)', () => {
     const moderator = viewer({
       manageDeals: true,
       manageDealsTeam: true,
@@ -130,29 +130,28 @@ describe('who may edit and delete a Deal (R44)', () => {
   });
 });
 
-describe('the team pickers (R44)', () => {
+describe('the team pickers (R47)', () => {
   const members = [
-    { memberId: 'holder', level: 6, status: 'activ' },
+    { memberId: 'bc', level: 6, status: 'activ' },
     { memberId: 'bce', level: 5, status: 'activ' },
     { memberId: 'bce-old', level: 5, status: 'inactiv' },
     { memberId: 'bce-2', level: 5, status: 'activ' },
     { memberId: 'volunteer', level: 2, status: 'activ' },
   ];
   const team = {
-    holderId: 'holder',
     coordinatorId: 'bce-2',
     responsibleId: 'volunteer',
   };
 
-  it('offers active BCE members for Coordonator, never the holder or the Responsabil', () => {
+  it('offers active BCE members for Coordonator, never the Responsabil', () => {
     expect(coordinatorCandidates(members, team).map((m) => m.memberId)).toEqual(
       ['bce', 'bce-2'],
     );
   });
 
-  it('offers any active member for Responsabil except the holder and the Coordonator', () => {
+  it('offers any active member for Responsabil except the Coordonator, a BC member included', () => {
     expect(responsibleCandidates(members, team).map((m) => m.memberId)).toEqual(
-      ['bce', 'volunteer'],
+      ['bc', 'bce', 'volunteer'],
     );
   });
 });

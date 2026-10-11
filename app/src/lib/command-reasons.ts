@@ -31,11 +31,8 @@ const REASON_COPY = new Map<string, string>([
     'OSUBB, Adunarea Generală și Biroul de Conducere rămân mereu selectate.',
   ],
   ['invalid_group_ids', 'Lista de grupuri nu este validă. Reîncarcă pagina.'],
-  /* ---- Atribuții BC and OSUBB Deals (R44, R45) ---- */
-  ['bc_assignment_forbidden', 'Doar Moderatorul dă și retrage atribuțiile BC.'],
-  ['bc_assignment_not_bc', 'O atribuție se dă doar unui membru BC activ.'],
+  /* ---- The OSUBB Deals team and Deals (R44, R45, R47) ---- */
   ['invalid_assignment', 'Atribuția nu mai există. Reîncarcă pagina.'],
-  ['bc_assignment_held', 'Atribuția are deja un titular. Confirmă mutarea ei.'],
   ['assignment_team_forbidden', 'Nu poți schimba echipa OSUBB Deals.'],
   ['coordinator_not_bce', 'Coordonatorul trebuie să fie un membru BCE activ.'],
   [
