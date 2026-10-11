@@ -58,27 +58,27 @@ export const tabLabelsFrom: Record<
 > = {
   always: { tab: '', label: 'min-w-0' },
   sm: {
-    tab: 'max-sm:flex-none max-sm:px-3 max-sm:aria-selected:flex-auto max-sm:aria-[current=page]:flex-auto max-sm:data-active:flex-auto',
+    tab: 'max-sm:flex-none max-sm:px-3 max-sm:aria-selected:grow max-sm:aria-[current=page]:grow max-sm:data-active:grow',
     label:
       'min-w-0 max-sm:sr-only max-sm:in-aria-selected:not-sr-only max-sm:in-aria-[current=page]:not-sr-only max-sm:in-data-active:not-sr-only',
   },
   md: {
-    tab: 'max-md:flex-none max-md:px-3 max-md:aria-selected:flex-auto max-md:aria-[current=page]:flex-auto max-md:data-active:flex-auto',
+    tab: 'max-md:flex-none max-md:px-3 max-md:aria-selected:grow max-md:aria-[current=page]:grow max-md:data-active:grow',
     label:
       'min-w-0 max-md:sr-only max-md:in-aria-selected:not-sr-only max-md:in-aria-[current=page]:not-sr-only max-md:in-data-active:not-sr-only',
   },
   lg: {
-    tab: 'max-lg:flex-none max-lg:px-3 max-lg:aria-selected:flex-auto max-lg:aria-[current=page]:flex-auto max-lg:data-active:flex-auto',
+    tab: 'max-lg:flex-none max-lg:px-3 max-lg:aria-selected:grow max-lg:aria-[current=page]:grow max-lg:data-active:grow',
     label:
       'min-w-0 max-lg:sr-only max-lg:in-aria-selected:not-sr-only max-lg:in-aria-[current=page]:not-sr-only max-lg:in-data-active:not-sr-only',
   },
   xl: {
-    tab: 'max-xl:flex-none max-xl:px-3 max-xl:aria-selected:flex-auto max-xl:aria-[current=page]:flex-auto max-xl:data-active:flex-auto',
+    tab: 'max-xl:flex-none max-xl:px-3 max-xl:aria-selected:grow max-xl:aria-[current=page]:grow max-xl:data-active:grow',
     label:
       'min-w-0 max-xl:sr-only max-xl:in-aria-selected:not-sr-only max-xl:in-aria-[current=page]:not-sr-only max-xl:in-data-active:not-sr-only',
   },
   '2xl': {
-    tab: 'max-2xl:flex-none max-2xl:px-3 max-2xl:aria-selected:flex-auto max-2xl:aria-[current=page]:flex-auto max-2xl:data-active:flex-auto',
+    tab: 'max-2xl:flex-none max-2xl:px-3 max-2xl:aria-selected:grow max-2xl:aria-[current=page]:grow max-2xl:data-active:grow',
     label:
       'min-w-0 max-2xl:sr-only max-2xl:in-aria-selected:not-sr-only max-2xl:in-aria-[current=page]:not-sr-only max-2xl:in-data-active:not-sr-only',
   },

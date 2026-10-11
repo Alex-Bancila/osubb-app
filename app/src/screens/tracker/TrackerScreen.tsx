@@ -135,13 +135,13 @@ const navTabClass = cn(
  */
 const NAV_LABELS_FROM = {
   sm: {
-    tab: 'max-sm:flex-none max-sm:aria-selected:flex-auto sm:flex-auto sm:px-4',
+    tab: 'max-sm:flex-none max-sm:aria-selected:grow sm:grow sm:px-4',
     label: 'max-sm:in-[[aria-selected=false]]:sr-only',
     badge:
       'max-sm:in-[[aria-selected=false]]:absolute max-sm:in-[[aria-selected=false]]:top-0 max-sm:in-[[aria-selected=false]]:right-0.5 max-sm:in-[[aria-selected=false]]:h-4 max-sm:in-[[aria-selected=false]]:min-w-4 max-sm:in-[[aria-selected=false]]:px-1 max-sm:in-[[aria-selected=false]]:text-[10px] max-sm:in-[[aria-selected=false]]:ring-2 max-sm:in-[[aria-selected=false]]:ring-(--surface-3)',
   },
   md: {
-    tab: 'max-md:flex-none max-md:aria-selected:flex-auto md:flex-auto md:px-4',
+    tab: 'max-md:flex-none max-md:aria-selected:grow md:grow md:px-4',
     label: 'max-md:in-[[aria-selected=false]]:sr-only',
     badge:
       'max-md:in-[[aria-selected=false]]:absolute max-md:in-[[aria-selected=false]]:top-0 max-md:in-[[aria-selected=false]]:right-0.5 max-md:in-[[aria-selected=false]]:h-4 max-md:in-[[aria-selected=false]]:min-w-4 max-md:in-[[aria-selected=false]]:px-1 max-md:in-[[aria-selected=false]]:text-[10px] max-md:in-[[aria-selected=false]]:ring-2 max-md:in-[[aria-selected=false]]:ring-(--surface-3)',

@@ -112,6 +112,12 @@ describe('PageTabs', () => {
     // Labels never truncate any more: the track scrolls instead.
     for (const size of Object.values(tabLabelsFrom))
       expect(size.label).not.toContain('truncate');
+    // Under a variant, `flex-auto` would set flex-shrink back to 1 and let
+    // the selected tab shrink below its name: it grows (`grow`) instead and
+    // keeps `shrink-0`.
+    for (const size of Object.values(tabLabelsFrom))
+      expect(size.tab).not.toMatch(/flex-auto/);
+    expect(tabLabelsFrom.sm.tab).toContain('max-sm:aria-selected:grow');
   });
 
   it("brings the current tab into the track's view by scrolling the track itself, never the page", () => {

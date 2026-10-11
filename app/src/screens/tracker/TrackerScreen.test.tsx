@@ -1452,7 +1452,9 @@ describe('My tasks screen', () => {
         'max-sm:in-[[aria-selected=false]]:sr-only',
       );
       expect(mineLabel).not.toHaveClass('truncate');
-      expect(mine).toHaveClass('shrink-0', 'max-sm:aria-selected:flex-auto');
+      expect(mine).toHaveClass('shrink-0', 'max-sm:aria-selected:grow');
+      // `flex-auto` would set flex-shrink back to 1 and let the tab shrink.
+      expect(mine.className).not.toMatch(/:flex-auto/);
       expect(mine).not.toHaveClass('max-sm:aria-selected:flex-1');
       expect(screen.getByRole('tab', { name: 'Cereri' })).toHaveClass(
         'max-sm:flex-none',
