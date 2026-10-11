@@ -21,6 +21,7 @@ import {
   SheetPortal,
   SheetTitle,
 } from '../../components/ui/sheet';
+import { useAuth } from '../../lib/auth';
 import { useCapability } from '../../lib/capabilities';
 import {
   isAnnouncementRefusal,
@@ -177,7 +178,7 @@ function AnnouncementManageActions({
   onDeleted: () => void;
 }) {
   const bcOrModerator = useCapability('manageRoles').data === true;
-  const managesAnyGroup = useCapability('managesAnyGroup').data === true;
+  const memberId = useAuth().session?.user.id ?? null;
   const myGroups = useMyGroupRoles();
   const setPinned = useSetAnnouncementPinned();
   const remove = useDeleteAnnouncement();
@@ -191,7 +192,7 @@ function AnnouncementManageActions({
   if (
     !mayManageAnnouncement(announcement, {
       bcOrModerator,
-      managesAnyGroup,
+      memberId,
       groups: myGroups.data,
     })
   )

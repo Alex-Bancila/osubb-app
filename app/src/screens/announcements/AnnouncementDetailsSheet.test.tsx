@@ -418,18 +418,30 @@ describe('AnnouncementDetailsSheet', () => {
       expect(pinButton()).not.toBeInTheDocument();
     });
 
-    it("offers it to a Responsible of the Origin, and to any Group Role holder on the Organization Group's", () => {
-      viewer.managesAnyGroup = true;
+    it("offers it to a Responsible of the Origin; on the Organization Group's only to its author, besides BC/Moderator (#1042)", () => {
       viewer.groups = [{ id: 7, group_role: 'responsible', status: 'active' }];
-      const { unmount } = renderSheet(
+      const origin = renderSheet(
         <AnnouncementDetailsSheet announcement={local()} onClose={vi.fn()} />,
       );
       expect(pinButton()).toBeInTheDocument();
-      unmount();
+      origin.unmount();
 
+      // A Group Role holder elsewhere may publish there, but manages only their own.
       viewer.groups = [{ id: 9, group_role: 'manager', status: 'active' }];
-      renderSheet(
+      const other = renderSheet(
         <AnnouncementDetailsSheet announcement={org()} onClose={vi.fn()} />,
+      );
+      expect(pinButton()).not.toBeInTheDocument();
+      other.unmount();
+
+      viewer.groups = [];
+      renderSheet(
+        <AnnouncementDetailsSheet
+          announcement={org({
+            authorMember: { memberId: viewer.id, fullName: 'Eu' },
+          })}
+          onClose={vi.fn()}
+        />,
       );
       expect(pinButton()).toBeInTheDocument();
     });

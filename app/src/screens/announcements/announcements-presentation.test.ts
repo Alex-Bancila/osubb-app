@@ -528,20 +528,30 @@ describe('announcements-presentation', () => {
     });
   });
 
-  describe('mayManageAnnouncement (#857, #930: announcements_update and _delete)', () => {
-    const origin = { groupId: 7, group: { id: 7, name: 'Educațional' } };
+  describe('mayManageAnnouncement (#857, #930, #1042: announcements_update and _delete)', () => {
+    const author = (memberId: string) => ({
+      memberId,
+      nickname: null,
+      fullName: 'Autorul',
+      avatarColor: null,
+    });
+    const origin = {
+      groupId: 7,
+      group: { id: 7, name: 'Educațional' },
+      authorMember: author('other'),
+    };
     const orgWide = {
       groupId: 1,
       group: { id: 1, name: 'OSUBB', isOrganization: true },
+      authorMember: author('other'),
     };
-    const none = { bcOrModerator: false, managesAnyGroup: false, groups: [] };
+    const none = { bcOrModerator: false, memberId: 'me', groups: [] };
 
     it('lets a Responsible inherited from a Group above manage it', () => {
       // my_groups() lists the Origin with the Role held on its parent.
       expect(
         mayManageAnnouncement(origin, {
           ...none,
-          managesAnyGroup: true,
           groups: [
             { id: 3, group_role: 'responsible', status: 'active' },
             { id: 7, group_role: 'responsible', status: 'active' },
@@ -550,13 +560,16 @@ describe('announcements-presentation', () => {
       ).toBe(true);
     });
 
-    it('grants the author nothing by itself, nor a plain Member', () => {
+    it('grants the author of a local Announcement nothing by itself, nor a plain Member', () => {
       // The author of a local Announcement who no longer holds a Role there.
       expect(
-        mayManageAnnouncement(origin, {
-          ...none,
-          groups: [{ id: 7, group_role: 'member', status: 'active' }],
-        }),
+        mayManageAnnouncement(
+          { ...origin, authorMember: author('me') },
+          {
+            ...none,
+            groups: [{ id: 7, group_role: 'member', status: 'active' }],
+          },
+        ),
       ).toBe(false);
       expect(mayManageAnnouncement(origin, none)).toBe(false);
     });
@@ -570,7 +583,6 @@ describe('announcements-presentation', () => {
     it("lets a Manager or Responsible of an active Origin pin, not a plain member or another Group's", () => {
       const role = (group_role: string, id = 7, status = 'active') => ({
         ...none,
-        managesAnyGroup: group_role !== 'member',
         groups: [{ id, group_role, status }],
       });
       expect(mayManageAnnouncement(origin, role('responsible'))).toBe(true);
@@ -582,11 +594,35 @@ describe('announcements-presentation', () => {
       ).toBe(false);
     });
 
-    it('lets any Group Role holder pin an Organization Group Announcement', () => {
+    it('lets only BC/Moderator and the author manage an Organization Group Announcement (#1042)', () => {
+      // A Group Role holder may publish there, but manages only their own.
+      const roleElsewhere = {
+        ...none,
+        groups: [{ id: 3, group_role: 'manager', status: 'active' }],
+      };
+      expect(mayManageAnnouncement(orgWide, roleElsewhere)).toBe(false);
       expect(
-        mayManageAnnouncement(orgWide, { ...none, managesAnyGroup: true }),
+        mayManageAnnouncement(
+          { ...orgWide, authorMember: author('me') },
+          roleElsewhere,
+        ),
       ).toBe(true);
-      expect(mayManageAnnouncement(orgWide, none)).toBe(false);
+      expect(
+        mayManageAnnouncement({ ...orgWide, authorMember: author('me') }, none),
+      ).toBe(true);
+      expect(
+        mayManageAnnouncement(orgWide, { ...none, bcOrModerator: true }),
+      ).toBe(true);
+      // A legacy row without an author, or a viewer not signed in: nobody but BC/Moderator.
+      expect(
+        mayManageAnnouncement({ ...orgWide, authorMember: null }, none),
+      ).toBe(false);
+      expect(
+        mayManageAnnouncement(
+          { ...orgWide, authorMember: author('me') },
+          { ...none, memberId: null },
+        ),
+      ).toBe(false);
     });
   });
 });
