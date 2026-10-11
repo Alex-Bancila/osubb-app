@@ -1,3 +1,4 @@
+import { HomeBackLink } from '../../components/shell/HomeBackLink';
 import { useMemo, useState } from 'react';
 import { FabActions, Page, PageHeader } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
@@ -68,6 +69,7 @@ export default function CampaignsScreen() {
   return (
     <Page width="reading">
       <FabActions>
+        <HomeBackLink />
         <PageHeader
           title="Campanii"
           actions={

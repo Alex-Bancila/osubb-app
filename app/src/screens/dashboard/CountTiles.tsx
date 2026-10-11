@@ -11,6 +11,7 @@ import { cn } from 'cn';
 import { focusRingClass, panelBoxClass } from '../../components/layout';
 import { useAuth } from '../../lib/auth';
 import { formatTaskCount } from '../../lib/format';
+import { usePopMotion } from '../../lib/motion';
 import { useUnreadAnnouncementsCount } from '../../queries/announcements';
 import { useUnreadNotificationCount } from '../../queries/notifications';
 import { usePendingDecisions } from '../../queries/request-decisions';
@@ -169,6 +170,8 @@ function CountTile({
   to: string;
 }) {
   const waiting = count !== undefined && count > 0;
+  // The number pops when it changes, not when it first loads.
+  const pop = usePopMotion<HTMLSpanElement>(count);
   return (
     <li className="min-w-0 max-md:last:odd:col-span-2">
       <Link
@@ -177,12 +180,13 @@ function CountTile({
         data-waiting={waiting || undefined}
         className={cn(
           panelBoxClass,
-          'flex h-full min-h-11 flex-col gap-2 no-underline transition-colors hover:bg-muted motion-reduce:transition-none',
+          'pressable flex h-full min-h-11 flex-col gap-2 no-underline',
           focusRingClass,
         )}
       >
         <span className="flex items-center justify-between gap-2">
           <span
+            ref={pop}
             data-slot="count-value"
             aria-hidden="true"
             className={cn(

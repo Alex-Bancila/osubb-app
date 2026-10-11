@@ -227,20 +227,43 @@ not restyle one.
 | A colour                      | `ColorPicker`                                                                   | OSUBB swatches or any colour (pad, hue, hex code).                                                                                                          |
 | A field's one-off explanation | `InfoHint`                                                                      | Pop-over; the text still describes the field.                                                                                                               |
 | Show / hide more              | `Disclosure`                                                                    | Chevron that turns.                                                                                                                                         |
+| A list that changes           | `AnimatedList`                                                                  | One column; rows fade in and close their gap on leaving.                                                                                                    |
 | Loading                       | `Loading`                                                                       | Skeleton rows; the label is for screen readers.                                                                                                             |
 | Nothing here                  | `EmptyState`                                                                    | Only for a page's main list; a secondary section with nothing to show is not drawn.                                                                         |
 
-**Cards and rows.** A card leads with its title and status on one row, then
-one muted line of context (Group · Campaign), then one meta row of icon +
-value pairs (deadline, executor, points). The whole card is the tap target;
-nested controls sit above that target.
+**Rows.** A Task is one row everywhere it is listed (`TaskRow`), in one
+column: its title across the row, then one meta line in a fixed order — Group
+chip, status, deadline, Executor, points at the line's end. Where the member
+acts on it, one line of description follows and the action sits at the row's
+end (under it on a phone). The whole row is the tap target; nested controls
+sit above that target. A list of rows that can change under the member is an
+`AnimatedList`.
+
+**Motion.** Motion shows a change of state and nothing else; every move is
+150–250 ms and off under `prefers-reduced-motion`.
+
+- _A selection slides._ Every pill track — tabs, view switches, a form's
+  two-or-three choice — inks its selection with one thumb that slides to it
+  (`SlidingThumb`); none jumps.
+- _Content arrives._ A tab's panel, a page behind the shell and a list after
+  its skeleton fade up 6 px (`motion-enter`, or `useEnterMotion` where the
+  element is not remounted).
+- _A row leaves._ In an `AnimatedList` a row that has gone fades and closes
+  its gap instead of snapping.
+- _One hover._ A card, row or tile that is itself the action is `pressable`:
+  one tint under the pointer, and a small give when pressed.
+- _A changed number pops._ A badge or count that changes — never one that has
+  just loaded — gives one small pop (`usePopMotion`).
 
 **Forms.** Labels sit above fields. Required is the default and unmarked;
 optional fields say "(opțional)". Errors appear under the field, in Romanian,
 and name the fix. Sections are separated by space, not boxes.
 
-**Receipts.** After a command succeeds, one sentence in the success colour
-says what happened, takes focus, and stays for the visit.
+**Receipts.** After a command succeeds, one sentence says what happened. A
+receipt that only confirms ("Anunțul a fost publicat.") is a `Toast`: it
+floats above the tab bar for four seconds and takes no place on the page. A
+receipt the member must still be able to read, or that names what to do
+next, stays on the page in the success colour and takes focus.
 
 ## Do's and Don'ts
 

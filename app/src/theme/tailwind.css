@@ -166,3 +166,77 @@
     @apply font-sans;
   }
 }
+
+/* Motion (DESIGN.md, Motion): few moves, all 150–250 ms, all off under
+   `prefers-reduced-motion`. */
+@keyframes motion-enter {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+@keyframes motion-grow {
+  from {
+    opacity: 0;
+    scale: 0.6;
+  }
+}
+
+/* A selection with nowhere to slide from (the bar after an unlisted page)
+   grows in where it lands. */
+@utility motion-grow {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: motion-grow 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}
+
+@keyframes motion-shrink {
+  to {
+    opacity: 0;
+    scale: 0.6;
+  }
+}
+
+/* A selection that is dropped with nowhere to slide to shrinks away where
+   it stood; without motion it is simply gone. */
+@utility motion-shrink {
+  animation: motion-shrink 180ms ease-in forwards;
+
+  @media (prefers-reduced-motion: reduce) {
+    display: none;
+  }
+}
+
+/* Content that has just arrived: a tab's panel, a list after its skeleton. */
+@utility motion-enter {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: motion-enter 180ms ease-out;
+  }
+}
+
+/* A card, row or tile that is itself the action: one tint under the pointer,
+   and a link or button gives a little when pressed. */
+@utility pressable {
+  transition:
+    background-color 150ms ease-out,
+    border-color 150ms ease-out,
+    box-shadow 150ms ease-out,
+    scale 150ms ease-out;
+
+  @media (hover: hover) {
+    &:hover {
+      background-color: color-mix(in oklab, var(--muted) 55%, var(--card));
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    &:is(a, button):active {
+      scale: 0.98;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}

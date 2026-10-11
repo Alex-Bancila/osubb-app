@@ -1,4 +1,6 @@
+import { Toast } from '../../components/ui/toast';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Mail } from 'lucide-react';
 import { useLocation, useSearchParams } from 'react-router';
 import { useAuth } from '../../lib/auth';
@@ -58,28 +60,46 @@ function parseAnnouncementId(value: string | null): number | null {
 export default function AnnouncementsScreen() {
   const { pathname } = useLocation();
   // Two tabs, routed (R45): Anunțuri never shows a Deal, OSUBB Deals only Deals.
-  if (pathname === DEALS_PATH || pathname.startsWith(`${DEALS_PATH}/`))
-    return <DealsScreen />;
-  return (
-    <PreferredGroupsScope>
-      <AnnouncementsContent />
-    </PreferredGroupsScope>
-  );
-}
-
-function DealsScreen() {
+  const deals =
+    pathname === DEALS_PATH || pathname.startsWith(`${DEALS_PATH}/`);
+  // The page, its tabs and the plus button stay while the tab under them
+  // changes, so the tabs' thumb slides; each tab draws its own header into
+  // this slot above them.
+  const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
   return (
     <Page width="reading">
       <FabActions>
-        <PageHeader title="Anunțuri" actions={<NewDealControl />} />
+        <div ref={setHeaderSlot} className="contents" />
         <AnnouncementsTabs />
-        <DealsTab />
+        <div
+          key={deals ? 'deals' : 'announcements'}
+          className="flex min-w-0 motion-enter flex-col gap-6"
+        >
+          {deals ? (
+            <>
+              {headerSlot &&
+                createPortal(
+                  <PageHeader title="Anunțuri" actions={<NewDealControl />} />,
+                  headerSlot,
+                )}
+              <DealsTab />
+            </>
+          ) : (
+            <PreferredGroupsScope>
+              <AnnouncementsContent headerSlot={headerSlot} />
+            </PreferredGroupsScope>
+          )}
+        </div>
       </FabActions>
     </Page>
   );
 }
 
-function AnnouncementsContent() {
+function AnnouncementsContent({
+  headerSlot,
+}: {
+  headerSlot: HTMLElement | null;
+}) {
   const { session } = useAuth();
   const memberId = session?.user.id;
   const feedQuery = useAnnouncementsFeed(memberId);
@@ -224,117 +244,113 @@ function AnnouncementsContent() {
   }
 
   return (
-    <Page width="reading">
-      <FabActions>
-        <PageHeader
-          title="Anunțuri"
-          badge={
-            unreadCount > 0 && (
-              <Badge
-                variant="destructive"
-                className="h-6 gap-1.5 px-2.5 text-sm"
-              >
-                <Mail aria-hidden="true" />
-                <span aria-hidden="true">{unreadCount}</span>
-                <span className="sr-only">
-                  {unreadCount === 1
-                    ? '1 anunț necitit'
-                    : `${unreadCount} anunțuri necitite`}
-                </span>
-              </Badge>
-            )
-          }
-          actions={
-            <>
-              {/* Filtrează is drawn here by the Work Filter below. */}
-              <span ref={setFilterSlot} className="contents" />
-              <AnnouncementComposeSheet />
-            </>
-          }
-        />
-        <AnnouncementsTabs />
-        {/* Its row holds the active filter's chips and Grupuri preferate. */}
-        <WorkFilter
-          label="Filtre anunțuri"
-          groups={filterGroups}
-          campaigns={[]}
-          levels={FILTER_LEVELS}
-          alwaysShowGroups
-          hint="Grupul include subgrupurile sale."
-          status={{
-            pending: groupsQuery.isPending,
-            failed: groupsQuery.isError,
-            error: groupsQuery.error,
-            onRetry: () => void groupsQuery.refetch(),
-          }}
-          buttonSlot={filterSlot}
-        />
-
-        {deleted && (
-          <p
-            role="status"
-            className="m-0 text-sm text-emerald-700 dark:text-emerald-400"
-          >
-            Anunțul a fost șters.
-          </p>
-        )}
-
-        {isPending ? (
-          <Loading label="Se încarcă anunțurile…" />
-        ) : feedQuery.isError ? (
-          <ErrorState
-            error={feedQuery.error}
-            text="Nu am putut încărca anunțurile."
-            onRetry={() => void feedQuery.refetch()}
-          />
-        ) : announcements.length === 0 ? (
-          <Empty
-            bare
-            text={
-              filterGroupId !== undefined && inPreferred.length > 0
-                ? 'Niciun anunț în grupul ales.'
-                : allAnnouncements.length > 0
-                  ? 'Niciun anunț în grupurile tale preferate.'
-                  : 'Nu sunt anunțuri disponibile în acest moment.'
+    <>
+      {headerSlot &&
+        createPortal(
+          <PageHeader
+            title="Anunțuri"
+            badge={
+              unreadCount > 0 && (
+                <Badge
+                  variant="destructive"
+                  className="h-6 gap-1.5 px-2.5 text-sm"
+                >
+                  <Mail aria-hidden="true" />
+                  <span aria-hidden="true">{unreadCount}</span>
+                  <span className="sr-only">
+                    {unreadCount === 1
+                      ? '1 anunț necitit'
+                      : `${unreadCount} anunțuri necitite`}
+                  </span>
+                </Badge>
+              )
             }
-          />
-        ) : (
-          <div className="space-y-6">
-            {showCriticalBanner && (
-              <CriticalAnnouncementBanner
-                announcement={unreadCritical}
-                onOpen={handleOpenAnnouncement}
-              />
-            )}
-
-            <PageGrid
-              columns={1}
-              as="ul"
-              role="list"
-              aria-label="Flux de anunțuri"
-            >
-              {announcements.map((announcement) => (
-                <li key={announcement.id}>
-                  <AnnouncementCard
-                    announcement={announcement}
-                    onOpen={handleOpenAnnouncement}
-                  />
-                </li>
-              ))}
-            </PageGrid>
-          </div>
+            actions={
+              <>
+                {/* Filtrează is drawn here by the Work Filter below. */}
+                <span ref={setFilterSlot} className="contents" />
+                <AnnouncementComposeSheet />
+              </>
+            }
+          />,
+          headerSlot,
         )}
+      {/* Its row holds the active filter's chips and Grupuri preferate. */}
+      <WorkFilter
+        label="Filtre anunțuri"
+        groups={filterGroups}
+        campaigns={[]}
+        levels={FILTER_LEVELS}
+        alwaysShowGroups
+        hint="Grupul include subgrupurile sale."
+        status={{
+          pending: groupsQuery.isPending,
+          failed: groupsQuery.isError,
+          error: groupsQuery.error,
+          onRetry: () => void groupsQuery.refetch(),
+        }}
+        buttonSlot={filterSlot}
+      />
 
-        <AnnouncementDetailsSheet
-          announcement={selectedAnnouncement}
-          unavailable={linkUnavailable}
-          onClose={closeDetails}
-          onDeleted={() => {
-            closeDetails();
-            setDeleted(true);
-          }}
+      {deleted && (
+        <Toast onClose={() => setDeleted(false)}>Anunțul a fost șters.</Toast>
+      )}
+
+      {isPending ? (
+        <Loading label="Se încarcă anunțurile…" />
+      ) : feedQuery.isError ? (
+        <ErrorState
+          error={feedQuery.error}
+          text="Nu am putut încărca anunțurile."
+          onRetry={() => void feedQuery.refetch()}
         />
-      </FabActions>
-    </Page>
+      ) : announcements.length === 0 ? (
+        <Empty
+          bare
+          text={
+            filterGroupId !== undefined && inPreferred.length > 0
+              ? 'Niciun anunț în grupul ales.'
+              : allAnnouncements.length > 0
+                ? 'Niciun anunț în grupurile tale preferate.'
+                : 'Nu sunt anunțuri disponibile în acest moment.'
+          }
+        />
+      ) : (
+        <div className="space-y-6">
+          {showCriticalBanner && (
+            <CriticalAnnouncementBanner
+              announcement={unreadCritical}
+              onOpen={handleOpenAnnouncement}
+            />
+          )}
+
+          <PageGrid
+            columns={1}
+            as="ul"
+            role="list"
+            aria-label="Flux de anunțuri"
+          >
+            {announcements.map((announcement) => (
+              <li key={announcement.id}>
+                <AnnouncementCard
+                  announcement={announcement}
+                  onOpen={handleOpenAnnouncement}
+                />
+              </li>
+            ))}
+          </PageGrid>
+        </div>
+      )}
+
+      <AnnouncementDetailsSheet
+        announcement={selectedAnnouncement}
+        unavailable={linkUnavailable}
+        onClose={closeDetails}
+        onDeleted={() => {
+          closeDetails();
+          setDeleted(true);
+        }}
+      />
+    </>
   );
 }

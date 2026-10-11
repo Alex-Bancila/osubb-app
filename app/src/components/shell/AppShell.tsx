@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Bell } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router';
 import logoDark from '../../assets/brand/osubb-logo-on-dark.png';
@@ -7,6 +7,8 @@ import { useAuth } from '../../lib/auth';
 import { useCapabilities } from '../../lib/capabilities';
 import { safeHexColor } from '../../lib/color';
 import { initials } from '../../lib/format';
+import { useEnterMotion, usePopMotion } from '../../lib/motion';
+import { HomePagesContext } from './home-pages';
 import { cn } from '../../lib/utils';
 import { useUnreadAnnouncementsCount } from '../../queries/announcements';
 import { useLiveChanges } from '../../queries/live-changes';
@@ -24,7 +26,6 @@ import { unreadBadgeLabel } from '../../screens/notifications/notifications-pres
 import { decisionsBadgeLabel } from '../../screens/requests/requests-presentation';
 import { FabSlotContext } from '../layout/fab-context';
 import { Badge } from '../ui/badge';
-import { buttonVariants } from '../ui/button';
 import { TabBar } from './TabBar';
 import {
   ANNOUNCEMENTS_PATH,
@@ -170,6 +171,45 @@ function SidebarContent({
   );
 }
 
+/**
+ * Notificări and Profil are the top bar's two places: on either, its mark
+ * opens into the bar's own selection — the light pill with the page's name —
+ * so "you are here" looks the same at the top as at the bottom. The mark is
+ * one element in both states (`data-open`), so the pill opens and closes
+ * instead of swapping.
+ */
+const topMarkClass =
+  'group/mark inline-flex h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground no-underline outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 lg:hidden';
+
+const topPillClass =
+  'inline-flex items-center rounded-full transition-[background-color,color] duration-200 group-data-open/mark:bg-(--text) group-data-open/mark:text-(--surface) motion-reduce:transition-none';
+
+/** The page's name in the mark: no width until the mark is open. */
+function TopMarkLabel({
+  className,
+  children,
+}: {
+  className?: string;
+  children: string;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      data-slot="top-mark-label"
+      className="grid grid-cols-[0fr] transition-[grid-template-columns] duration-200 ease-out group-data-open/mark:grid-cols-[1fr] motion-reduce:transition-none"
+    >
+      <span
+        className={cn(
+          'overflow-hidden text-xs font-bold whitespace-nowrap transition-[padding] duration-200 group-data-open/mark:pl-1.5 motion-reduce:transition-none',
+          className,
+        )}
+      >
+        {children}
+      </span>
+    </span>
+  );
+}
+
 export default function AppShell() {
   const { session } = useAuth();
   useNotificationRealtime(session?.user.id);
@@ -203,8 +243,24 @@ export default function AppShell() {
 
   // What the viewer may open and the phone bar's five; the pages on neither
   // the bar nor the top bar are Acasă's Conducere tiles (`navFor`).
-  const { visible, tabs } = navFor(capabilities.data);
+  const { visible, tabs, elsewhere } = navFor(capabilities.data);
+  // A page a phone reaches from Acasă's tiles sits under Acasă on the bar,
+  // and carries the way back (`HomeBackLink`).
+  const under = elsewhere.some((item) =>
+    isNavItemActive(item, location.pathname),
+  )
+    ? '/'
+    : undefined;
+  const homePaths = elsewhere.map((item) => item.path).join(' ');
+  const homePages = useMemo(
+    () => homePaths.split(' ').filter(Boolean),
+    [homePaths],
+  );
   const denied = deniedMessage(location.state);
+  const unreadPop = usePopMotion<HTMLSpanElement>(unreadCount);
+  const page = useEnterMotion<HTMLDivElement>(
+    location.pathname.split('/')[1] ?? '',
+  );
   const isNotificationsActive =
     location.pathname.startsWith(NOTIFICATIONS_PATH);
   const isProfileActive = location.pathname.startsWith(PROFILE_PATH);
@@ -219,7 +275,7 @@ export default function AppShell() {
   };
 
   return (
-    <div className="grid h-[calc(100dvh-var(--keyboard-inset))] grid-cols-1 grid-rows-[calc(var(--topbar-h)+env(safe-area-inset-top))_minmax(0,1fr)_auto] [grid-template-areas:'topbar'_'main'_'tabbar'] bg-background lg:grid-cols-[var(--sidebar-w)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:[grid-template-areas:'sidebar_main']">
+    <div className="grid h-[calc(100dvh-var(--keyboard-inset))] grid-cols-1 grid-rows-[calc(var(--topbar-h)+env(safe-area-inset-top))_minmax(0,1fr)] [grid-template-areas:'topbar'_'main'] bg-background lg:grid-cols-[var(--sidebar-w)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:[grid-template-areas:'sidebar_main']">
       <aside className="hidden min-h-0 flex-col border-r border-border bg-card lg:flex lg:[grid-area:sidebar]">
         <SidebarContent {...sidebarProps} />
       </aside>
@@ -245,11 +301,8 @@ export default function AppShell() {
               would announce it as a button (F-26). */}
         <Link
           to={NOTIFICATIONS_PATH}
-          className={cn(
-            buttonVariants({ variant: 'ghost', size: 'icon' }),
-            'relative ml-auto shrink-0 lg:hidden',
-            isNotificationsActive && 'bg-accent text-accent-foreground',
-          )}
+          data-open={isNotificationsActive || undefined}
+          className={cn(topMarkClass, 'ml-auto')}
           aria-current={isNotificationsActive ? 'page' : undefined}
           aria-label={
             unreadCount > 0
@@ -257,35 +310,53 @@ export default function AppShell() {
               : 'Notificări'
           }
         >
-          <Bell aria-hidden="true" />
-          {unreadCount > 0 && (
-            <Badge
-              variant="destructive"
-              className="absolute top-1.5 right-1.5 h-4 min-w-4 justify-center rounded-full px-1 text-[10px]"
-            >
-              <span aria-hidden="true">{unreadCount}</span>
-            </Badge>
-          )}
+          <span className={cn(topPillClass, 'h-[36px] px-[10px]')}>
+            <span className="relative inline-flex shrink-0">
+              <Bell aria-hidden="true" className="size-4" />
+              {unreadCount > 0 && (
+                <Badge
+                  variant="destructive"
+                  className="absolute -top-2 left-2.5 h-4 min-w-4 justify-center rounded-full bg-destructive px-1 text-[10px] text-white ring-2 ring-card transition-[box-shadow] group-data-open/mark:ring-(--text) dark:bg-destructive"
+                >
+                  <span
+                    ref={unreadPop}
+                    aria-hidden="true"
+                    className="inline-block"
+                  >
+                    {unreadCount}
+                  </span>
+                </Badge>
+              )}
+            </span>
+            {/* Clear of the count on the bell's corner. */}
+            <TopMarkLabel className="group-data-open/mark:pl-3">
+              Notificări
+            </TopMarkLabel>
+          </span>
         </Link>
         {/* Profil's only door on a phone (#972): the Member's own initials
               on their colour, the one personal mark in the top bar. */}
         <Link
           to={PROFILE_PATH}
-          className={cn(
-            'grid size-11 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50 lg:hidden',
-            isProfileActive && 'bg-accent',
-          )}
+          data-open={isProfileActive || undefined}
+          className={topMarkClass}
           aria-current={isProfileActive ? 'page' : undefined}
           aria-label="Profil"
         >
-          <span
-            className="grid size-8 place-items-center rounded-full text-xs font-bold text-white"
-            style={{
-              backgroundColor: safeHexColor(profile.data?.avatar_color),
-            }}
-            aria-hidden="true"
-          >
-            {initials(profile.data?.full_name ?? session?.user.email)}
+          {/* The avatar keeps its size: the pill grows around it. */}
+          <span className={cn(topPillClass, 'h-[44px] p-[2px]')}>
+            <span
+              className="grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
+              style={{
+                backgroundColor: safeHexColor(profile.data?.avatar_color),
+              }}
+              aria-hidden="true"
+            >
+              {initials(profile.data?.full_name ?? session?.user.email)}
+            </span>
+            <TopMarkLabel className="group-data-open/mark:pr-2.5">
+              Profil
+            </TopMarkLabel>
           </span>
         </Link>
       </header>
@@ -304,21 +375,32 @@ export default function AppShell() {
             </div>
           )}
           <FabSlotContext.Provider value={fabSlot}>
-            <Outlet />
+            {/* A page arrives when the area changes; its own tabs move
+                their own content. */}
+            <HomePagesContext.Provider value={homePages}>
+              {/* A phone's bar floats over the page: the page ends with the
+                  bar's height of room, so its last row scrolls clear. */}
+              <div
+                ref={page}
+                className="max-lg:pb-[calc(4.75rem+env(safe-area-inset-bottom))] keyboard:pb-0"
+              >
+                <Outlet />
+              </div>
+            </HomePagesContext.Provider>
           </FabSlotContext.Provider>
         </>
       </main>
 
       {/* The page's floating create button (`FabActions`) is drawn here: the
-          content area's bottom right corner, so it clears the tab bar and
-          the sidebar by itself, and steps aside for a phone keyboard. */}
+          content area's bottom right corner, above a phone's floating tab
+          bar and clear of the sidebar, and steps aside for a phone keyboard. */}
       <div
         ref={setFabSlot}
         data-slot="fab-slot"
-        className="pointer-events-none z-10 self-end justify-self-end p-4 [grid-area:main] *:pointer-events-auto md:p-6 keyboard:hidden"
+        className="pointer-events-none z-10 self-end justify-self-end px-4 pt-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] [grid-area:main] *:pointer-events-auto md:px-6 lg:p-6 keyboard:hidden"
       />
 
-      <TabBar tabs={tabs} badges={badges} />
+      <TabBar tabs={tabs} badges={badges} under={under} />
     </div>
   );
 }

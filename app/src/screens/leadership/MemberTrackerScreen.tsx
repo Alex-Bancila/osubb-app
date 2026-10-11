@@ -7,7 +7,6 @@ import {
   FabActions,
   focusRingClass,
   Page,
-  PageGrid,
   PageHeader,
   Panel,
 } from '../../components/layout';
@@ -42,7 +41,7 @@ import {
   NO_SUBJECTS,
   useReadNotificationsAbout,
 } from '../../queries/notifications';
-import { TaskCard } from '../tracker/TaskCard';
+import { TaskRow } from '../tracker/TaskRow';
 import { AddCompletedTaskForMember } from '../tracker/AddCompletedTaskControl';
 import { TaskActionSuccess } from '../../components/tasks/TaskActionSuccess';
 import { LeadershipAccess } from './LeadershipAccess';
@@ -76,7 +75,7 @@ function day(value: string | null | undefined) {
 }
 const score = (value: number | null) => (value === null ? '—' : String(value));
 
-/** The Assignment's own record, under the card's Task summary. */
+/** The Assignment's own record, under the row's Task summary. */
 function AssignmentRecord({ task }: { task: MemberTask }) {
   const evaluations = historyEvaluations(task.evaluation_history);
   const subtasks = historySubtasks(task.subtasks);
@@ -560,19 +559,19 @@ function MemberHistory({ memberId }: { memberId: string }) {
               sau perioada.
             </EmptyState>
           ) : (
-            // Taskuri's collection grid (layout L3). Cards keep to their own
-            // height: an opened evaluation record never stretches its row.
-            <PageGrid as="ul" columns="collection" data-grid="assignments">
+            // Taskuri's one column of Task rows, read-only: each closes on
+            // this Assignment's own record.
+            <ul data-slot="task-row-list" className="grid min-w-0 gap-2 p-0">
               {rows.map((task) => (
-                <li key={task.assignment_id}>
-                  <TaskCard
+                <li key={task.assignment_id} className="min-w-0">
+                  <TaskRow
+                    detailed
                     task={memberTaskPresentation(task, groupsById, now)}
-                    anchor={false}
                     history={<AssignmentRecord task={task} />}
                   />
                 </li>
               ))}
-            </PageGrid>
+            </ul>
           )}
         </Panel>
       </FabActions>

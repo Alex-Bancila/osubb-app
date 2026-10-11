@@ -1,3 +1,4 @@
+import { HomeBackLink } from '../../components/shell/HomeBackLink';
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Link } from 'react-router';
@@ -47,7 +48,12 @@ export default function GroupsScreen() {
   const applications = useGroupApplications();
   const level = useAuth().claims?.member_level ?? 0;
   const [search, setSearch] = useState('');
-  const header = <PageHeader title="Grupuri" />;
+  const header = (
+    <>
+      <HomeBackLink />
+      <PageHeader title="Grupuri" />
+    </>
+  );
   if (
     groups.isPending ||
     mine.isPending ||
@@ -194,7 +200,7 @@ function OwnGroupRow({
       : null;
   return (
     <ListRow
-      className="relative has-[a:hover]:bg-muted"
+      className="pressable relative"
       leading={
         <span
           aria-hidden="true"

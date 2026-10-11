@@ -1,3 +1,4 @@
+import { Hand } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Page, PageHeader } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
@@ -66,7 +67,15 @@ export default function DashboardScreen() {
           the moment it takes, and "Salut, ▮▮▮▮" reads like a bug. */}
       <PageHeader
         eyebrow={capitalised(formatLongDate(now))}
-        title={`Salut${name ? `, ${name}` : ''} 👋`}
+        title={
+          <span className="inline-flex max-w-full min-w-0 items-center gap-2.5">
+            <span className="min-w-0">Salut{name ? `, ${name}` : ''}</span>
+            <Hand
+              aria-hidden="true"
+              className="size-[0.85em] shrink-0 -rotate-12 text-primary"
+            />
+          </span>
+        }
         actions={capabilities.data && !leader ? <PointsStat /> : undefined}
       />
       <PushPromptCard />

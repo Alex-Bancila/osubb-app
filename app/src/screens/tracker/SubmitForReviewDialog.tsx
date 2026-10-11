@@ -98,7 +98,7 @@ export function SubmitForReviewDialog({
       >
         Trimite la verificare
       </DialogTrigger>
-      {/* After success the trigger is gone and the card's receipt takes
+      {/* After success the trigger is gone and the row's receipt takes
           focus; otherwise focus goes back to the trigger. */}
       <DialogContent
         finalFocus={() => !succeeded.current}

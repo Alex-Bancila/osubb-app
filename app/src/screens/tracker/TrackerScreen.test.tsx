@@ -330,7 +330,7 @@ describe('My tasks screen', () => {
     expect(screen.getAllByRole('article')).toHaveLength(1);
   });
 
-  it('leaves scrolling to the shell and lays the cards on the collection grid', () => {
+  it('leaves scrolling to the shell and lists Taskurile mele as one column of Task rows', () => {
     query({ data: [taskRow(), taskRow({ id: 2, title: 'Al doilea task' })] });
 
     const { container } = render(<TrackerScreen />, { wrapper: Router });
@@ -339,22 +339,36 @@ describe('My tasks screen', () => {
       'h-full',
       'overflow-y-auto',
     );
-    // Decision D4 (ruling R27): one column, two from md, three from xl.
-    const grid = container.querySelector('[data-grid="task-cards"]');
-    expect(grid).toHaveAttribute('data-columns', 'collection');
-    expect(grid).toHaveClass(
-      'grid-cols-1',
-      'md:grid-cols-2',
-      'xl:grid-cols-3',
-      'items-stretch',
-      '*:h-full',
-      '*:min-w-0',
-    );
-    expect(
-      container.querySelectorAll('[data-slot="task-card-row"]'),
-    ).toHaveLength(2);
-    for (const card of screen.getAllByRole('article')) {
-      expect(card).toHaveClass('h-full', 'min-w-0');
+    // One Task item everywhere (2026-10-11): the row De gestionat draws, in
+    // one column — no card grid, no equal heights.
+    expect(container.querySelector('[data-grid="task-cards"]')).toBeNull();
+    expect(container.querySelector('[data-slot="page-grid"]')).toBeNull();
+    expect(container.querySelector('[data-slot="card"]')).toBeNull();
+    const lists = container.querySelectorAll('[data-slot="task-row-list"]');
+    expect(lists).toHaveLength(1);
+    const list = lists[0] as HTMLElement;
+    expect(list.tagName).toBe('UL');
+    expect(list).toHaveClass('flex', 'flex-col', 'gap-2', 'min-w-0');
+    expect(list.className).not.toMatch(/grid-cols-/);
+    const rows = screen.getAllByRole('article');
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row).toHaveAttribute('data-slot', 'task-row');
+      expect(row.parentElement?.parentElement).toBe(list);
+      expect(row).toHaveClass('min-w-0');
+      expect(row).not.toHaveClass('h-full');
+      // The status is on the meta line, never beside the title.
+      const meta = row.querySelector('[data-slot="task-row-meta"]');
+      expect(within(meta as HTMLElement).getByText('De făcut')).toBeVisible();
+      expect(
+        row.querySelector('[data-slot="list-row-body"]'),
+      ).not.toHaveTextContent('De făcut');
+      // The Executor's action sits in the row, at its end.
+      expect(
+        row.querySelector('[data-slot="task-row-actions"]'),
+      ).toContainElement(
+        within(row).getByRole('button', { name: 'Începe taskul' }),
+      );
     }
   });
 
@@ -715,20 +729,17 @@ describe('My tasks screen', () => {
       expect(container.querySelector('[data-band]')).toBeNull();
       const stripe = (title: string) =>
         (
-          screen
-            .getByRole('article', { name: title })
-            .querySelector('[data-slot="card"]') as HTMLElement
+          screen.getByRole('article', { name: title }) as HTMLElement
         ).style.getPropertyValue('--task-stripe');
       expect(stripe('Voluntari la Balul Bobocilor')).toBe('var(--scope-org)');
       expect(stripe('Afișe pentru atelier')).toBe('#0a7d4f');
       // Another Group's org Opportunity keeps its own colour, never grey.
       expect(stripe('Sondaj pentru membri')).toBe('#b8412c');
-      for (const card of within(band()).getAllByRole('article'))
-        expect(card.querySelector('[data-slot="card"]')).not.toHaveClass(
-          'bg-muted',
-          'border-dashed',
-        );
-      // The heading sits above the card titles.
+      for (const row of within(band()).getAllByRole('article')) {
+        expect(row).toHaveAttribute('data-slot', 'task-row');
+        expect(row).not.toHaveClass('bg-muted', 'border-dashed');
+      }
+      // The heading sits above the row titles.
       expect(
         within(band()).getByRole('heading', {
           level: 3,
@@ -745,10 +756,17 @@ describe('My tasks screen', () => {
       expect(
         within(org).getByText('Departament · Resurse Umane'),
       ).toBeVisible();
-      expect(within(org).getByText('OSUBB')).toBeVisible();
+      // The row names the Group by its chip alone; the Audience is said in
+      // the details sheet ("Toți membrii OSUBB").
+      expect(within(org).queryByText('OSUBB')).toBeNull();
+      const join = within(org).getByRole('button', {
+        name: 'Vreau să particip',
+      });
+      expect(join).toBeEnabled();
+      // The join button is the row's action, at its end.
       expect(
-        within(org).getByRole('button', { name: 'Vreau să particip' }),
-      ).toBeEnabled();
+        org.querySelector('[data-slot="task-row-actions"]'),
+      ).toContainElement(join);
       expect(
         within(org).queryByText('Doar pentru membrii grupului'),
       ).not.toBeInTheDocument();

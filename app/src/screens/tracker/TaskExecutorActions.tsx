@@ -13,7 +13,7 @@ import type { TaskPresentation } from './task-presentation';
  * What the Executor does with their own Task — Începe taskul, Trimite la
  * verificare, Renunță la task — and the receipt or the error those leave.
  * The one place for the rule (only the Member who holds the Task now, and
- * only before review), drawn in a Task card's footer and in the details
+ * only before review), drawn at a Task row's end and in the details
  * sheet. With nothing to offer and nothing to say it draws nothing.
  */
 export function TaskExecutorActions({
@@ -32,7 +32,7 @@ export function TaskExecutorActions({
   onProgress: ((input: TaskProgressInput) => Promise<unknown>) | undefined;
   /** The list shows the give-up receipt; without it the receipt stays here. */
   onGaveUp?: OnGaveUp | undefined;
-  /** The element around the buttons (a card's footer). */
+  /** The element around the buttons. */
   as?: ElementType;
   className?: string;
   /** Around the receipt and the error, which sit above the buttons. */
@@ -123,7 +123,7 @@ export function TaskExecutorActions({
               taskId={task.id}
               assignmentMode={task.assignmentMode}
               onGaveUp={() => {
-                // The list shows the receipt when it holds the card; with no
+                // The list shows the receipt when it holds the row; with no
                 // list (the details sheet) it stays here, since the control
                 // leaves with the Executor's actions (Audit D-3).
                 const receipt = gaveUpReceipt(task.assignmentMode);

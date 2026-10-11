@@ -281,7 +281,7 @@ describe('the greeting', () => {
   it('greets by first name without a Nickname, under the capitalised date', () => {
     renderDashboard();
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Salut, Ioana 👋' }),
+      screen.getByRole('heading', { level: 1, name: 'Salut, Ioana' }),
     ).toBeInTheDocument();
     expect(screen.getByText('Joi, 15 ianuarie 2026')).toBeInTheDocument();
   });
@@ -290,7 +290,7 @@ describe('the greeting', () => {
     hooks.profile = { ...hooks.profile, nickname: '  Ioni  ' };
     renderDashboard();
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Salut, Ioni 👋' }),
+      screen.getByRole('heading', { level: 1, name: 'Salut, Ioni' }),
     ).toBeInTheDocument();
   });
 });

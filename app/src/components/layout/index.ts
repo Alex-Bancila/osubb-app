@@ -29,3 +29,4 @@ export { ListRow, rowListClass } from './ListRow';
 export { FabAction, FabActions } from './Fab';
 export { FabSlotContext } from './fab-context';
 export { EmptyState, stateBoxClass } from './EmptyState';
+export { AnimatedList } from './AnimatedList';
