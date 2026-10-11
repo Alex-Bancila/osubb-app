@@ -110,6 +110,7 @@ export function TaskForm({
       executorId: null,
       campaignId: null,
       links: [],
+      copies: '1',
     };
   });
   const schema = useMemo(() => taskDraftSchema(options), [options]);

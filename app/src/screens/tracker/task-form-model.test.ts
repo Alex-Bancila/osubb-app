@@ -89,6 +89,7 @@ describe('taskDraftInput', () => {
     executorId: 'ana',
     campaignId: 12,
     links: [{ label: 'Brief', url: 'https://example.org' }],
+    copies: '1',
   };
   it('sends exactly the one chosen Group, the Campaign it shows and the links as typed', () => {
     expect(taskDraftInput(values, options)).toMatchObject({

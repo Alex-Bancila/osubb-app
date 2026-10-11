@@ -3188,6 +3188,60 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_tasks: {
+        Args: {
+          p_assignment_mode: string
+          p_audience: string
+          p_campaign_id?: number
+          p_copies?: number
+          p_deadline: string
+          p_description: string
+          p_executor_ids?: string[]
+          p_group_id?: number
+          p_kind?: string
+          p_links?: Json
+          p_parent_task_id?: number
+          p_title: string
+        }
+        Returns: {
+          assignment_mode: string | null
+          audience: string | null
+          campaign_id: number | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          deadline: string | null
+          description: string | null
+          difficulty: number | null
+          duplicated_from_task_id: number | null
+          group_id: number
+          id: number
+          kind: string
+          link_label: string | null
+          link_url: string | null
+          links: Json
+          parent_task_id: number | null
+          queue_closed_at: string | null
+          queue_opened_at: string | null
+          rating: number | null
+          returned_to_progress_at: string | null
+          review_round: number
+          started_at: string | null
+          status: Database["public"]["Enums"]["task_status"]
+          submitted_at: string | null
+          title: string
+          type: string | null
+          unfulfilled_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "tasks"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       deal_code_reveal_count: {
         Args: { p_announcement_id: number }

@@ -30,6 +30,8 @@ export type TaskDraft = {
   assignmentMode: 'direct' | 'public' | null;
   executorId: string | null;
   campaignId: number | null;
+  /** How many identical Tasks to create at once (1–20; 1 for an Umbrella). */
+  copies: number;
   /** The Attached Links (ruling R46): complete rows only, at most five. */
   links: AttachedLink[];
 };
@@ -44,6 +46,8 @@ export type TaskFormValues = {
   assignmentMode: 'direct' | 'public';
   executorId: string | null;
   campaignId: number | null;
+  /** "Exemplare" as typed; the schema judges it. */
+  copies: string;
   /** The Attached Links as typed, one row each (R46). */
   links: AttachedLinkValue[];
 };
@@ -200,11 +204,19 @@ export function taskDraftInput(
         ? 'local'
         : values.audience,
     assignmentMode: umbrella ? null : values.assignmentMode,
+    // With more than one copy the Executors come from the dialog, not the form.
     executorId:
-      !umbrella && values.assignmentMode === 'direct'
+      !umbrella &&
+      values.assignmentMode === 'direct' &&
+      !(Number(values.copies) > 1)
         ? values.executorId
         : null,
     campaignId: umbrella ? null : campaignId,
+    copies: umbrella
+      ? 1
+      : values.copies.trim() === ''
+        ? Number.NaN
+        : Number(values.copies),
     links: values.links,
   };
 }
