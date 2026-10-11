@@ -326,7 +326,7 @@ function DateBlock({ at }: { at: string | null }) {
 function UpNextRow({ item }: { item: UpNextItem }) {
   return (
     <ListRow
-      className="relative has-[a:hover]:bg-muted"
+      className="pressable relative"
       leading={<DateBlock at={item.at} />}
       action={
         <ChevronRight

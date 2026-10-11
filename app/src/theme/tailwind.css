@@ -166,3 +166,45 @@
     @apply font-sans;
   }
 }
+
+/* Motion (DESIGN.md, Motion): few moves, all 150–250 ms, all off under
+   `prefers-reduced-motion`. */
+@keyframes motion-enter {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+/* Content that has just arrived: a tab's panel, a list after its skeleton. */
+@utility motion-enter {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: motion-enter 180ms ease-out;
+  }
+}
+
+/* A card, row or tile that is itself the action: one tint under the pointer,
+   and a link or button gives a little when pressed. */
+@utility pressable {
+  transition:
+    background-color 150ms ease-out,
+    border-color 150ms ease-out,
+    box-shadow 150ms ease-out,
+    scale 150ms ease-out;
+
+  @media (hover: hover) {
+    &:hover {
+      background-color: color-mix(in oklab, var(--muted) 55%, var(--card));
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    &:is(a, button):active {
+      scale: 0.98;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}

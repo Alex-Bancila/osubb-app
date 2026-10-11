@@ -55,7 +55,7 @@ import {
   TaskEvaluationLine,
   TaskGroupChip,
   TaskStatusBadges,
-} from './TaskCard';
+} from './TaskParts';
 import { TaskExecutorActions } from './TaskExecutorActions';
 import { TaskStageSummary } from './TaskStageSummary';
 import { TaskQueueStatus } from './TaskQueueStatus';

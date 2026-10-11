@@ -30,7 +30,7 @@ export default function AnnouncementCard({
       role="article"
       aria-labelledby={titleId}
       className={cn(
-        'relative transition-shadow hover:ring-foreground/25 motion-reduce:transition-none',
+        'pressable relative hover:ring-foreground/25',
         isCritical &&
           'border-destructive/60 bg-destructive/5 dark:bg-destructive/10',
       )}

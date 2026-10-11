@@ -40,7 +40,8 @@ export function TaskQueueStatus({
         <p>Nu am putut încărca înscrierea.</p>
         <Button
           variant="outline"
-          className="min-h-11 min-w-11"
+          // Above a row's stretched open button.
+          className="relative z-10 min-h-11 min-w-11"
           onClick={() => query.refetch()}
         >
           Reîncarcă înscrierea

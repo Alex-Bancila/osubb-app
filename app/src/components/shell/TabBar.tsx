@@ -7,6 +7,7 @@ import {
 } from 'react';
 import { Link, useLocation } from 'react-router';
 import { cn } from '../../lib/utils';
+import { usePopMotion } from '../../lib/motion';
 import { Badge } from '../ui/badge';
 import { isNavItemActive, type NavItem } from './navItems';
 
@@ -134,7 +135,7 @@ export function TabBar({
                       !current && 'absolute top-0.5 right-0.5',
                     )}
                   >
-                    <span aria-hidden="true">{badge.count}</span>
+                    <PopCount count={badge.count} />
                   </Badge>
                   <span className="sr-only">, {badge.label}</span>
                 </>
@@ -144,5 +145,15 @@ export function TabBar({
         })}
       </div>
     </nav>
+  );
+}
+
+/** A badge's number; it pops when it changes. */
+function PopCount({ count }: { count: number }) {
+  const pop = usePopMotion<HTMLSpanElement>(count);
+  return (
+    <span ref={pop} aria-hidden="true" className="inline-block">
+      {count}
+    </span>
   );
 }

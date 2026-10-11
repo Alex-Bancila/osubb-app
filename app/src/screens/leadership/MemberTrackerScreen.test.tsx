@@ -317,7 +317,7 @@ it('opening a Member’s history reads the viewer’s Retention Signals about th
     `retention_signal:${uid}`,
   ]);
 });
-it('draws each Assignment with the Task card, read-only, keeping the evaluation record', async () => {
+it('draws each Assignment with the Task row, read-only, keeping the evaluation record', async () => {
   const user = userEvent.setup();
   const { container } = view();
   expect(state.history).toHaveBeenCalledWith(uid, {});
@@ -326,7 +326,9 @@ it('draws each Assignment with the Task card, read-only, keeping the evaluation 
     within(first).getByRole('heading', { name: 'Pregătește atelierul' }),
   ).toBeInTheDocument();
   expect(first).toHaveTextContent('Echipă · Mentorat');
-  expect(first).toHaveTextContent('Campanie: Bun venit');
+  // The row names the Group by its chip; the Campaign is the filter's.
+  expect(first).toHaveAttribute('data-slot', 'task-row');
+  expect(first).not.toHaveTextContent('Campanie: Bun venit');
   // The standing Evaluation is the one the reversal left.
   expect(first).toHaveTextContent(/18 puncte.*Nota 5/);
   expect(
@@ -512,18 +514,25 @@ it('returns to Voluntari when opened from a Member Card there', () => {
     screen.queryByRole('link', { name: 'Înapoi la clasament' }),
   ).toBeNull();
 });
-it('lays the Assignment cards on the collection grid, each as tall as its own record (L3)', () => {
+it('lists the Assignments as one column of Task rows, each closing on its own record', () => {
   view();
-  const grid = screen
-    .getByRole('region', { name: 'Atribuiri' })
-    .querySelector('[data-slot=page-grid]');
-  expect(grid).toHaveAttribute('data-columns', 'collection');
-  expect(grid).toHaveClass('md:grid-cols-2', 'xl:grid-cols-3', 'items-start');
-  expect(grid).not.toHaveAttribute('data-equal-heights');
-  expect(grid?.tagName).toBe('UL');
-  expect(within(grid as HTMLElement).getAllByRole('article')).toHaveLength(
-    cards().length,
-  );
+  const region = screen.getByRole('region', { name: 'Atribuiri' });
+  expect(region.querySelector('[data-slot=page-grid]')).toBeNull();
+  const list = region.querySelector('[data-slot=task-row-list]');
+  expect(list?.tagName).toBe('UL');
+  expect(list).toHaveClass('grid', 'gap-2', 'min-w-0');
+  expect(list?.className).not.toMatch(/grid-cols-/);
+  const rows = within(list as HTMLElement).getAllByRole('article');
+  expect(rows).toHaveLength(cards().length);
+  for (const row of rows) {
+    expect(row).toHaveAttribute('data-slot', 'task-row');
+    // Read-only: no id for a deep link, nothing to open, its record inside.
+    expect(row).not.toHaveAttribute('id');
+    expect(row.querySelector('[data-slot=task-row-open]')).toBeNull();
+    expect(row.querySelector('[data-slot=task-row-history]')).toHaveTextContent(
+      'Atribuit',
+    );
+  }
 });
 
 function total() {

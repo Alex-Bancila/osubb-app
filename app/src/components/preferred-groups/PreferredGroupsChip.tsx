@@ -1,5 +1,6 @@
 import { Star } from 'lucide-react';
 import { cn } from 'cn';
+import { usePopMotion } from '../../lib/motion';
 import { Button } from '../ui/button';
 import { usePreferredGroups } from './preferred-groups';
 
@@ -13,6 +14,7 @@ import { usePreferredGroups } from './preferred-groups';
  */
 export function PreferredGroupsChip({ className }: { className?: string }) {
   const view = usePreferredGroups();
+  const pop = usePopMotion<SVGSVGElement>(view.active);
   if (!view.available) return null;
   return (
     <Button
@@ -32,6 +34,7 @@ export function PreferredGroupsChip({ className }: { className?: string }) {
     >
       <Star
         aria-hidden="true"
+        ref={pop}
         className={cn(
           view.active ? 'fill-primary text-primary' : 'text-muted-foreground',
         )}

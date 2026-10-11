@@ -4,7 +4,7 @@ import { useWorkFilter } from '../../lib/use-work-filter';
 import { matchesWorkFilter } from '../../lib/work-filter';
 import { usePreferredGroups } from '../../components/preferred-groups/preferred-groups';
 import type { Opportunity } from '../../queries/task-opportunities';
-import { TaskCardGrid } from './TaskCardGrid';
+import { TaskRowList } from './TaskRowList';
 import {
   ClearSearchButton,
   RANGE_FIRST,
@@ -17,7 +17,7 @@ import { matchesTitle, type TitleSearch } from './use-title-search';
  * Disponibile (ruling R26, #795): under the Tracker's toolbar — the title
  * search and the Work Filter — one band of open
  * Opportunities — the Member's own Groups' and every Group's org-Audience ones
- * — each card in its Group colour (the Organization Group's in OSUBB red), in
+ * — each row in its Group colour (the Organization Group's in OSUBB red), in
  * the query's deadline order.
  */
 export function AvailableOpportunities({
@@ -62,11 +62,11 @@ export function AvailableOpportunities({
           }
         >
           {shown.length ? (
-            <TaskCardGrid
+            <TaskRowList
               rows={shown}
               now={now}
               onOpenTask={onOpenTask}
-              card={(task) => ({
+              row={(task) => ({
                 allowInterest: true,
                 joinable: task.joinable,
                 titleLevel: 3,

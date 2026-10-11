@@ -16,7 +16,7 @@ export function TaskGiveUpControl({
   taskId: number;
   assignmentMode: 'direct' | 'public' | null;
   /**
-   * The list the card sits in shows the receipt: the card itself leaves
+   * The list the row sits in shows the receipt: the row itself leaves
    * Taskurile mele once the Task is no longer the Member's (Audit D-3).
    */
   onGaveUp?: () => void;

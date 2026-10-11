@@ -194,7 +194,7 @@ function OwnGroupRow({
       : null;
   return (
     <ListRow
-      className="relative has-[a:hover]:bg-muted"
+      className="pressable relative"
       leading={
         <span
           aria-hidden="true"

@@ -10,6 +10,7 @@ import {
   panelBoxClass,
 } from '../../components/layout';
 import { useCapabilities } from '../../lib/capabilities';
+import { useEnterMotion } from '../../lib/motion';
 import { useMinWidth } from '../volunteers/use-min-width';
 import {
   ADMINISTRARE_PATH,
@@ -50,7 +51,7 @@ function SectionMenu({
                 to={tab.path}
                 className={cn(
                   panelBoxClass,
-                  'relative flex min-h-24 flex-1 flex-col items-start justify-between gap-3 text-foreground no-underline hover:bg-muted',
+                  'pressable relative flex min-h-24 flex-1 flex-col items-start justify-between gap-3 text-foreground no-underline',
                   focusRingClass,
                 )}
               >
@@ -109,6 +110,7 @@ function SectionMenu({
 export default function AdministrareLayout() {
   const capabilities = useCapabilities();
   const { pathname } = useLocation();
+  const section = useEnterMotion<HTMLDivElement>(pathname);
   // Tailwind's `lg`. Without `matchMedia` (a test DOM) this is the wide layout.
   const wide = useMinWidth('64rem');
   const applicationsShown = useApplicationsTabShown(capabilities.data);
@@ -169,7 +171,10 @@ export default function AdministrareLayout() {
             }))}
           />
         )}
-        <Outlet />
+        {/* The section under the strip arrives; the strip itself stays. */}
+        <div ref={section} className="flex min-w-0 flex-col gap-6">
+          <Outlet />
+        </div>
       </FabActions>
     </Page>
   );

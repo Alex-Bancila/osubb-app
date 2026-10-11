@@ -52,7 +52,7 @@ export default function DealCard({
       // The stub's notches cut through the card's edge, so the card does not
       // clip: the footer and the stub round their own corners.
       className={cn(
-        'relative gap-0 overflow-visible transition-shadow hover:ring-foreground/25 motion-reduce:transition-none',
+        'pressable relative gap-0 overflow-visible hover:ring-foreground/25',
         hasStub && 'pb-0',
       )}
     >
