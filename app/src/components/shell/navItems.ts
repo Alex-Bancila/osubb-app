@@ -2,7 +2,7 @@ import {
   Bell,
   CalendarDays,
   Trophy,
-  LayoutDashboard,
+  House,
   ListTodo,
   Megaphone,
   Network,
@@ -62,7 +62,7 @@ export const ADMIN_PATH = '/administrare';
  * stay English (CONTEXT.md).
  */
 export const NAV_ITEMS: NavItem[] = [
-  { path: '/', label: 'Acasă', icon: LayoutDashboard },
+  { path: '/', label: 'Acasă', icon: House },
   {
     path: '/tracker',
     label: 'Taskuri',
