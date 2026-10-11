@@ -707,3 +707,65 @@ it('renders nothing for a viewer who can change none of it', () => {
   );
   expect(container).toBeEmptyDOMElement();
 });
+
+/*
+ * Alex (2026-10-11): "this checkmark should exist only for departments" --
+ * the Department Cup box is a Department's; a top-level Team or Project gets
+ * neither it nor the Child Group's parent-cup box.
+ */
+function showStructure(stored: Partial<AdminGroup>) {
+  return render(
+    <MemoryRouter>
+      <GroupSettingsTab
+        group={group(stored)}
+        parent={undefined}
+        roster={[]}
+        authority={{ ...authority, editStructure: true }}
+        levels={[0, 1, 2, 3, 5, 6]}
+        actorLevel={6}
+        busy={false}
+        error={null}
+        lastReason={undefined}
+        onRun={run}
+      />
+    </MemoryRouter>,
+  );
+}
+
+it('offers "Concurează în Cupa Departamentelor" to a top-level Department only', () => {
+  const department = showStructure({
+    category: 'department',
+    parent_id: null,
+    path: [2],
+  });
+  expect(
+    screen.getByRole('checkbox', {
+      name: 'Concurează în Cupa Departamentelor',
+    }),
+  ).toBeInTheDocument();
+  department.unmount();
+
+  const project = showStructure({
+    category: 'project',
+    parent_id: null,
+    path: [2],
+  });
+  expect(
+    screen.queryByRole('checkbox', { name: /Cupa Departamentelor/ }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole('checkbox', { name: /cupa grupului părinte/ }),
+  ).toBeNull();
+  project.unmount();
+
+  // A Child Group keeps its own box: its points may count toward the parent's cup.
+  showStructure({ category: 'team' });
+  expect(
+    screen.queryByRole('checkbox', { name: /Cupa Departamentelor/ }),
+  ).toBeNull();
+  expect(
+    screen.getByRole('checkbox', {
+      name: 'Punctele merg și la cupa grupului părinte',
+    }),
+  ).toBeInTheDocument();
+});

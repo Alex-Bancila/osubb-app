@@ -827,14 +827,18 @@ export function GroupSettingsTab({
         )}
 
         <div className={choicesClass}>
-          {root ? (
+          {/* The Department Cup is a Department's (Alex, 2026-10-11): a top-level
+              Team or Project competes in nothing, and a Child Group's points
+              may count toward its parent's. */}
+          {root && group.category === 'department' && (
             <Check
               label="Concurează în Cupa Departamentelor"
               checked={competes}
               disabled={busy}
               onChange={setCompetes}
             />
-          ) : (
+          )}
+          {!root && (
             <Check
               label="Punctele merg și la cupa grupului părinte"
               checked={countsToward}
