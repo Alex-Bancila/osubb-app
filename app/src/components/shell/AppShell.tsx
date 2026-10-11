@@ -240,7 +240,7 @@ export default function AppShell() {
   // The Board Title when the Member holds one (#963), else the Role's name.
   const roleLabel = useMyRoleLabel();
 
-  // What the viewer may open, the phone bar's three, and the pages behind
+  // What the viewer may open, the phone bar's four, and the pages behind
   // its Mai mult (`navFor`).
   const { visible, tabs, more } = navFor(capabilities.data);
   const denied = deniedMessage(location.state);

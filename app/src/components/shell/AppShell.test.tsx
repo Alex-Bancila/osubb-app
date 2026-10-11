@@ -159,7 +159,7 @@ describe('AppShell', () => {
     ).toBeNull();
 
     const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
-    expect(within(quick).getAllByRole('link')).toHaveLength(3);
+    expect(within(quick).getAllByRole('link')).toHaveLength(4);
     expect(
       within(primary).getByRole('link', { name: 'Calendar' }),
     ).toHaveAttribute('aria-current', 'page');
@@ -228,7 +228,7 @@ describe('AppShell', () => {
     ).toBeInTheDocument();
   });
 
-  it('badges Anunțuri with the unread-announcements count on the sidebar and, on a phone, on Mai mult', () => {
+  it('badges Anunțuri with the unread-announcements count on the sidebar and the mobile tab', () => {
     queries.useUnreadAnnouncementsCount.mockReturnValue({ data: 2 });
 
     renderShell();
@@ -241,12 +241,15 @@ describe('AppShell', () => {
     expect(within(entry).getByText('2 anunțuri necitite')).toBeInTheDocument();
 
     const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
-    // Anunțuri is behind Mai mult, which carries its count.
+    const tab = within(quick).getByRole('link', {
+      name: 'Anunțuri, 2 anunțuri necitite',
+    });
+    expect(tab).toHaveAttribute('href', '/anunturi');
+    expect(tab).toHaveTextContent('2');
+    // Mai mult counts only the pages behind it.
     expect(
-      within(quick).getByRole('button', {
-        name: 'Mai mult, 2 anunțuri necitite',
-      }),
-    ).toHaveTextContent('2');
+      within(quick).getByRole('button', { name: 'Mai mult' }),
+    ).toHaveTextContent(/^Mai mult$/);
   });
 
   it('says a single unread Announcement in the singular', () => {
@@ -256,9 +259,7 @@ describe('AppShell', () => {
 
     const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
     expect(
-      within(quick).getByRole('button', {
-        name: 'Mai mult, 1 anunț necitit',
-      }),
+      within(quick).getByRole('link', { name: 'Anunțuri, 1 anunț necitit' }),
     ).toBeInTheDocument();
   });
 
@@ -273,8 +274,8 @@ describe('AppShell', () => {
     ).toHaveTextContent(/^Anunțuri$/);
     const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
     expect(
-      within(quick).getByRole('button', { name: 'Mai mult' }),
-    ).toHaveTextContent(/^Mai mult$/);
+      within(quick).getByRole('link', { name: 'Anunțuri' }),
+    ).toHaveTextContent(/^Anunțuri$/);
   });
 
   it('leaves the notification entry unbadged once everything is read', () => {
@@ -591,11 +592,11 @@ describe('AppShell', () => {
       'Acasă',
       'Taskuri',
       'Calendar',
+      'Anunțuri',
     ]);
-    // Everyone's pages first, then the ones a capability gives.
+    // Everyone's page first, then the ones a capability gives.
     expect(more.map((item) => item.label)).toEqual([
       'Grupuri',
-      'Anunțuri',
       'Clasament',
       'Voluntari',
       'Campanii',
@@ -610,15 +611,13 @@ describe('AppShell', () => {
         item.label,
       ).toBe(true);
 
-    // A volunteer's drawer holds the two pages everyone has.
+    // A volunteer's drawer holds the one page everyone has off the bar.
     expect(navFor(capabilities()).more.map((item) => item.label)).toEqual([
       'Grupuri',
-      'Anunțuri',
     ]);
     // Before the capabilities arrive, nothing gated is offered.
     expect(navFor(undefined).more.map((item) => item.label)).toEqual([
       'Grupuri',
-      'Anunțuri',
     ]);
   });
 
@@ -772,15 +771,20 @@ describe('phone navigation (#972)', () => {
       .getAllByRole('link')
       .map((link) => link.textContent?.replace(/\d+$/, '').trim());
 
-  it('orders the bar Acasă, Taskuri, Calendar, then Mai mult', () => {
+  it('orders the bar Acasă, Taskuri, Calendar, Anunțuri, then Mai mult', () => {
     renderShell('/');
     const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
-    expect(captions(quick)).toEqual(['Acasă', 'Taskuri', 'Calendar']);
+    expect(captions(quick)).toEqual([
+      'Acasă',
+      'Taskuri',
+      'Calendar',
+      'Anunțuri',
+    ]);
     expect(within(quick).getByRole('link', { name: 'Acasă' })).toHaveAttribute(
       'aria-current',
       'page',
     );
-    // The last place is a button, after the three links.
+    // The last place is a button, after the four links.
     const more = within(quick).getByRole('button', { name: 'Mai mult' });
     expect(quick.querySelector('a:last-of-type')?.nextElementSibling).toBe(
       more,
@@ -826,7 +830,7 @@ describe('phone navigation (#972)', () => {
     ).toBeNull();
     expect(
       captions(screen.getByRole('navigation', { name: 'Navigare rapidă' })),
-    ).toEqual(['Acasă', 'Taskuri', 'Calendar']);
+    ).toEqual(['Acasă', 'Taskuri', 'Calendar', 'Anunțuri']);
   });
 
   it('badges Taskuri with the Requests waiting for a decision, on the bar and the sidebar', () => {
@@ -855,7 +859,7 @@ describe('phone navigation (#972)', () => {
       ...within(quick).getAllByRole('link'),
       within(quick).getByRole('button', { name: 'Mai mult' }),
     ];
-    expect(controls).toHaveLength(4);
+    expect(controls).toHaveLength(5);
     for (const control of controls) {
       expect(control.className).toMatch(/\bh-11\b/);
       expect(control.className).toMatch(/\bmin-w-11\b/);
@@ -870,7 +874,6 @@ describe('phone navigation (#972)', () => {
 
   it('opens Mai mult as a drawer of the other pages, and closes it on the way to one', async () => {
     const user = userEvent.setup();
-    queries.useUnreadAnnouncementsCount.mockReturnValue({ data: 2 });
     renderShell('/calendar');
     const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -883,14 +886,7 @@ describe('phone navigation (#972)', () => {
         link.textContent?.replace(/\d.*$/, ''),
         link.getAttribute('href'),
       ]),
-    ).toEqual([
-      ['Grupuri', '/grupuri'],
-      ['Anunțuri', '/anunturi'],
-    ]);
-    // A row carries its own count, in words too.
-    expect(
-      within(drawer).getByRole('link', { name: /Anunțuri/ }),
-    ).toHaveTextContent('2 anunțuri necitite');
+    ).toEqual([['Grupuri', '/grupuri']]);
     for (const link of links) expect(link.className).toMatch(/\bmin-h-12\b/);
 
     await user.click(within(drawer).getByRole('link', { name: 'Grupuri' }));
@@ -914,7 +910,7 @@ describe('phone navigation (#972)', () => {
       within(drawer)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['Grupuri', 'Anunțuri', 'Clasament', 'Administrare']);
+    ).toEqual(['Grupuri', 'Clasament', 'Administrare']);
     expect(
       within(drawer).getByRole('link', { current: 'page' }),
     ).toHaveTextContent('Administrare');

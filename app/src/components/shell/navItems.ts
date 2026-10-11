@@ -149,18 +149,18 @@ export function isNavItemActive(item: NavItem, pathname: string): boolean {
 }
 
 /**
- * The phone bar's three places, in order: Acasă, then the two things a
- * volunteer opens the app for. Everything else is one tap further, in the
- * bar's Mai mult drawer; Notificări and Profil live in the top bar.
+ * The phone bar's four places, in order: Acasă, the two things a volunteer
+ * opens the app for, and what they read. Everything else is one tap further,
+ * in the bar's Mai mult drawer; Notificări and Profil live in the top bar.
  */
-export const TAB_ORDER = ['/', TRACKER_PATH, '/calendar'];
+export const TAB_ORDER = ['/', TRACKER_PATH, '/calendar', ANNOUNCEMENTS_PATH];
 
 /**
  * What one viewer's navigation holds, decided once so the bar and its drawer
  * cannot disagree: `visible`, every entry they may open (the desktop
- * sidebar); `tabs`, the phone bar's three; and `more`, the entries a phone
+ * sidebar); `tabs`, the phone bar's four; and `more`, the entries a phone
  * shows on neither the bar nor the top bar — the Mai mult drawer lists them,
- * everyone's pages (Grupuri, Anunțuri) before the ones a capability gives.
+ * everyone's page (Grupuri) before the ones a capability gives.
  */
 export function navFor(capabilities: Capabilities | undefined): {
   visible: NavItem[];

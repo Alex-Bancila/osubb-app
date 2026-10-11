@@ -169,9 +169,9 @@ dates in a column) use tabular figures. Uppercase micro-labels are not used.
   content width 1240 px, or 768 px for a reading page. Blocks stack 24 px
   apart; a page never sets its own padding or max width.
 - **Navigation.** On a phone: a capsule floating over the foot of the page
-  with three places — Acasă, Taskuri, Calendar — and Mai mult, all icons. A
-  tinted thumb slides to the current one. Mai mult opens a drawer from the
-  foot of the screen with every other page (Grupuri, Anunțuri, and what the
+  with four places — Acasă, Taskuri, Calendar, Anunțuri — and Mai mult, all
+  icons. A tinted thumb slides to the current one. Mai mult opens a drawer
+  from the foot of the screen with every other page (Grupuri, and what the
   member's capabilities add), and carries their counts; on one of those
   pages the thumb stands on Mai mult. Notificări and Profil are in the top
   bar. There is no hamburger, and no second list of pages on Acasă. From

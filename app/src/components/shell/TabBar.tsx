@@ -21,8 +21,8 @@ const tabClass =
 
 /**
  * The phone's navigation (2026-10-11): a capsule floating over the foot of
- * the page with the member's three places and **Mai mult**, which opens the
- * drawer of every other page (`MoreDrawer`). All four are icons, each with
+ * the page with the member's four places and **Mai mult**, which opens the
+ * drawer of every other page (`MoreDrawer`). All five are icons, each with
  * its name for a screen reader; a tinted thumb slides to the current one —
  * or to Mai mult, on a page from its drawer. The page's plus button stands
  * beside the capsule (the shell's bottom bar), the one solid red thing here.
@@ -92,11 +92,12 @@ export function TabBar({
     <nav
       aria-label="Navigare rapidă"
       data-slot="tab-bar"
-      className="max-w-72 min-w-0 flex-1 lg:hidden"
+      className="max-w-80 min-w-0 flex-1 lg:hidden"
     >
       <div
         ref={bar}
-        className="relative flex gap-1 rounded-full border border-border bg-card/80 p-[5px] shadow-(--sh-md) backdrop-blur-md"
+        // No gap: five 44 px places and the plus just fit a 320 px phone.
+        className="relative flex rounded-full border border-border bg-card/80 p-[5px] shadow-(--sh-md) backdrop-blur-md"
       >
         {thumb && (
           <span
@@ -154,11 +155,11 @@ export function TabBar({
 
 /**
  * **Mai mult**, the phone bar's last place: a drawer that rises from the foot
- * of the screen with every page the bar itself does not hold (Grupuri,
- * Anunțuri, and what the viewer's capabilities add), one row each. A row
+ * of the screen with every page the bar itself does not hold (Grupuri, and
+ * what the viewer's capabilities add), one row each. A row
  * opens its page and the drawer closes; so does a swipe down, a tap outside
- * or Escape. The button carries the counts of the pages behind it, so an
- * unread Announcement is seen without opening the drawer.
+ * or Escape. The button carries the counts of the pages behind it, so one
+ * is seen without opening the drawer.
  */
 function MoreDrawer({
   items,
