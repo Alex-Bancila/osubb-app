@@ -54,7 +54,7 @@ select ok(not exists (select 1 from pg_proc
                                          'bc_assignments_directory', 'bc_assignments_directory_impl')),
   'the holder commands and the Administrare BC directory are gone (R47)');
 select hasnt_table('public', 'bc_assignments', 'the holder table is gone (R47)');
-select hasnt_fk('public', 'assignment_team', 'the team no longer hangs off a holder row');
+select col_isnt_fk('public', 'assignment_team', 'assignment', 'the team no longer hangs off a holder row: its assignment column is no foreign key');
 select has_check('public', 'assignment_team', 'the known Atribuții are the team table''s check constraint');
 select ok(not has_table_privilege('authenticated', 'public.assignment_team', 'insert')
       and not has_table_privilege('authenticated', 'public.assignment_team', 'update')

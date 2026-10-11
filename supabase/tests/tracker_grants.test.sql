@@ -416,11 +416,9 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   -- the level >= 5 gate lives inside the bodies.
   ('set_unselected_groups',         'p_group_ids bigint[]',         false, true,  false, false),
   ('my_group_preferences',          '',                             false, true,  false, false),
-  -- R44: the Atribuție commands and the Moderator's Administrare BC read. Same
-  -- wrapper shape; the Moderator / holder / Coordonator gates live in the bodies.
-  ('set_bc_assignment',             'p_assignment text, p_member_id uuid, p_granted boolean, p_move boolean', false, true, false, false),
+  -- R44/R47: the team command. Same wrapper shape; the BC / Moderator /
+  -- Coordonator gates live in the body.
   ('set_assignment_team_member',    'p_assignment text, p_team_role text, p_member_id uuid', false, true, false, false),
-  ('bc_assignments_directory',      '',                             false, true,  false, false),
   -- R45: the Deal Code reveal and the team's reveal count. Same wrapper shape.
   ('reveal_deal_code',              'p_announcement_id bigint',     false, true,  false, false),
   ('deal_code_reveal_count',        'p_announcement_id bigint',     false, true,  false, false);
@@ -907,22 +905,20 @@ insert into pinned_private_functions (proname, args, category) values
   -- announcements_guard_text) and the tasks mirror trigger body.
   ('require_attached_links',             'p_links jsonb, p_label text, p_url text', 'require'),
   ('mirror_task_links',                  '',                  'trigger'),
-  -- R44: the one live team-place definition (definer callers only), the
-  -- caller-only policy predicate over it, the Atribuție label, and the two
-  -- command bodies and the directory body, granted to authenticated like every _impl.
+  -- R44/R47: the one live team-place definition (definer callers only), the
+  -- caller-only policy predicate over it, the Atribuție label, and the team
+  -- command body, granted to authenticated like every _impl.
   ('assignment_team_role',               'p_assignment text, p_member uuid', 'none'),
   ('deals_team_role',                    '',                  'predicate'),
   ('assignment_label',                   'p_assignment text', 'none'),
-  ('set_bc_assignment_impl',             'p_assignment text, p_member_id uuid, p_granted boolean, p_move boolean', 'impl'),
   ('set_assignment_team_member_impl',    'p_assignment text, p_team_role text, p_member_id uuid', 'impl'),
-  ('bc_assignments_directory_impl',      '',                  'impl'),
   -- R45: the Deal edit/delete predicate, the reveal body and the count body.
   ('can_manage_deal',                    'p_created_by uuid', 'predicate'),
   ('reveal_deal_code_impl',              'p_announcement_id bigint', 'impl'),
   ('deal_code_reveal_count_impl',        'p_announcement_id bigint', 'impl');
 
 select is(
-  (select count(*) from pinned_private_functions)::int, 220,
+  (select count(*) from pinned_private_functions)::int, 218,
   'the audited roster includes R46''s Attached Links list rule and tasks mirror trigger body, R44''s team-place definition, its policy predicate, the Atribuție label and the two command and directory bodies, R45''s Deal edit predicate and reveal and count bodies, R43''s six Grupuri preferate functions (the lock reason, the muting rule, the caller-only muted predicate, the unmuted audience and the save and read bodies), R42''s BC position holders, #1017''s six delete-for-good command and preview bodies, Group remover gate, Task deletion effect, points-at-stake read and Group delete summary, #1012''s Notification subject rule, subject trigger body, own-rows read write, read-for and mark-all command bodies and five act-on trigger bodies, #1006''s contact read body, #991''s "De invitat" read body, #983''s live Promotion Candidate refresh and its statement-trigger body, #968''s invitation re-send verdict body, #963''s Board Title view helper, #961''s live change broadcast trigger body, #936''s RSVP command body and Announcement Group/Audience guard trigger body (less its two retired Task command bodies, update_task_content_impl and convert_task_mode_impl), #935''s Promotion Rule command body, #934''s Event manager predicate, #929''s Group member set, notification audience and roster read body, #915''s completed-Task command body, decider rule and set, Minimum Level check, caller standing, award predicate and set, and Group gate, #909''s Announcement Termen and Minimum Level guard trigger body, compose predicate and Event Announcement body, #905''s rank-change effect, #891''s changed-field label map, #861''s Announcement-read Notification trigger body, #866''s share command body, #775''s Email Digest quota read, selection and job body, the security pass''s daily cap and Announcement cap trigger body, the Web Push registration guard trigger body, Announcement authorship stamp trigger body and profile text guard trigger body, #776''s Resend delivery-problem body, #771''s Privacy Acknowledgement command body and status read body, #632''s profile email sync trigger body, #589''s Group coordination reader body, #794''s groups_read org-Opportunity limb predicate, #826''s Role Evaluation core over a range, full ranking and ranking read body, standing read body, three command bodies (run, threshold, reject) and candidate-closing trigger body, #52''s tenure-rule job body and its one-row core, #51''s tenure-rule detection, #512''s eligibility-data read predicate, #769''s Web Push health job body, #756''s Private Group visibility predicate, #703''s Web Push enqueue trigger body, #681''s organization settings command body, #693''s Announcement readers body, #691''s Event Campaign trigger body, #677''s Work Filter range check, #684''s Attached Link rule, #673''s constraints kit (the step-1 length check, the http(s) and phone helpers, and the two row-guard trigger bodies), #675''s Nickname fold, its guard trigger body and the Member Card body, #68''s Announcement fan-out trigger body, #581''s live announcement visibility predicate, #584''s three Application command bodies with the shared recipient set and the groups_read limb predicate, #583''s three roster command bodies and the shared Appointment core, #582''s Manager tier, four Group structure command bodies and the shared Event cancellation effect, Groups Wave 2 authority and commands, the #50 Role history guard, the #69 deadline job, #580''s two Member command bodies, #603''s session-revoke helper, #626''s update_task / preview_task_update bodies with their two shared helpers, #625''s two Campaign reporting bodies plus their shared require_* preamble, #370''s Event creation implementation, #248''s three Event edit/cancellation functions (the two implementations and the Notification recipient set), and #576''s holds_any_group_role predicate with the my_capabilities / my_groups bodies, and #601''s group_audience helper with the shared can_read_event predicate -- less #579''s seven bridge functions (the four *_sync_group_origin triggers, group_id_for_legacy_origin, can_manage_origin, require_origin_manager), less #585''s twenty-three private helpers and gate functions behind the retired legacy Department Team / Independent Team / Project structure commands (the ten command impl bodies, eight require_*/predicate gates, and five project-manager trigger functions), and less #586''s fourteen forward-mirror sync/rederive functions (the three mirror-on-insert bodies, three mirror-on-membership bodies, the Role rederivation body, and the seven sync/repair bodies), and less #590''s three legacy structure predicates (can_read_team, is_active_project_member, can_manage_department_memberships)');
 
 create function pg_temp.unpinned_private_functions() returns text[]

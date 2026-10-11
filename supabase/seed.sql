@@ -1837,23 +1837,16 @@ insert into announcements (title, body, priority, pinned, form_label, form_url, 
    'normal', false, null, null,
    now() - interval '8 days', 'd0000000-0000-0000-0000-000000000007', (select id from groups where is_organization), 'org', null);
 
--- ==================== OSUBB Deals (R44, R45) ====================
--- The demo BC member holds Responsabil OSUBB Deals, with the demo BCE member as
--- Coordonator and the demo Voluntar as Responsabil. On a staging database where
--- a real BC member already holds it, the demo leaves it alone (on conflict do
--- nothing) and adds no team. The rows go with the demo profiles on the next run
--- (on delete cascade). Two Deals: an active one with a code and two Attached
--- Links, and an expired one only the team still sees.
-insert into bc_assignments (assignment, member_id, granted_by) values
-  ('osubb_deals', 'd0000000-0000-0000-0000-000000000007', 'd0000000-0000-0000-0000-000000000008')
-on conflict (assignment) do nothing;
+-- ==================== OSUBB Deals (R44, R45, R47) ====================
+-- Nobody holds an Atribuție (R47): the demo BCE member is Coordonator and the
+-- demo Voluntar Responsabil, set by the demo BC member. On a staging database
+-- where a real team sits in the places, the demo leaves it alone (on conflict
+-- do nothing). The rows go with the demo profiles on the next run (on delete
+-- cascade). Two Deals: an active one with a code and two Attached Links, and
+-- an expired one only the team, BC and the Moderator still see.
 insert into assignment_team (assignment, team_role, member_id, set_by)
-select 'osubb_deals', team.team_role, team.member_id, 'd0000000-0000-0000-0000-000000000007'
-  from (values ('coordinator', 'd0000000-0000-0000-0000-000000000006'::uuid),
-               ('responsible', 'd0000000-0000-0000-0000-000000000002'::uuid)) as team (team_role, member_id)
- where exists (select 1 from bc_assignments
-                where assignment = 'osubb_deals'
-                  and member_id = 'd0000000-0000-0000-0000-000000000007')
+values ('osubb_deals', 'coordinator', 'd0000000-0000-0000-0000-000000000006', 'd0000000-0000-0000-0000-000000000007'),
+       ('osubb_deals', 'responsible', 'd0000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000007')
 on conflict do nothing;
 
 insert into announcements (kind, title, body, code, links, published_at, created_by, group_id, audience, deadline) values
