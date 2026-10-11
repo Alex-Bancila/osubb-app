@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState } from 'react';
+import { useState, type ComponentType } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { clearDate, pickDate } from '../../test/date-picker';
 import { DatePicker, DateTimePicker, formatPickerValue } from './date-picker';
@@ -11,9 +11,12 @@ const positionerProps = vi.hoisted(() => [] as Record<string, unknown>[]);
 vi.mock('@base-ui/react/popover', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@base-ui/react/popover')>();
+  const Original = actual.Popover.Positioner as ComponentType<
+    Record<string, unknown>
+  >;
   const Positioner = (props: Record<string, unknown>) => {
     positionerProps.push(props);
-    return <actual.Popover.Positioner {...(props as never)} />;
+    return <Original {...props} />;
   };
   return {
     ...actual,
