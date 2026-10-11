@@ -1430,8 +1430,9 @@ describe('My tasks screen', () => {
         'bg-(--surface-3)',
         'p-[3px]',
       );
-      // Nothing scrolls sideways: the strip's scroller and fade are gone.
-      expect(list).not.toHaveClass('overflow-x-auto');
+      // The track scrolls sideways only when its tabs overflow (Part C,
+      // spec 2026-10-11); there is no fade and no visible scrollbar.
+      expect(list).toHaveClass('overflow-x-auto', '[scrollbar-width:none]');
       const mine = screen.getByRole('tab', { name: 'Taskurile mele' });
       for (const tab of screen.getAllByRole('tab'))
         expect(tab).toHaveClass(

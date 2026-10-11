@@ -1474,9 +1474,10 @@ it('links a top-level Group’s unfinished work without a Subgrup', async () => 
   ).toHaveAttribute('href', '/tracker?lista=gestionat&grup=1');
 });
 
-it('puts the Group tabs on one pill track that neither wraps nor scrolls: icons, the current tab spelling its name under 768 px', () => {
+it('puts the Group tabs on one pill track that never wraps and scrolls only when they overflow: icons, the current tab spelling its name under 768 px', () => {
   show();
-  expect(tabBar().className).not.toContain('overflow-x-auto');
+  // Part C (spec 2026-10-11): the track scrolls sideways, with no scrollbar, when its tabs overflow.
+  expect(tabBar()).toHaveClass('overflow-x-auto', '[scrollbar-width:none]');
   expect(tabBar().className).not.toContain('flex-wrap');
   expect(tabBar()).toHaveClass('rounded-lg', 'p-[3px]');
   for (const link of within(tabBar()).getAllByRole('link')) {
