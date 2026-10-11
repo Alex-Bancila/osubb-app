@@ -2601,7 +2601,7 @@ In `app/src/components/layout/PageTabs.tsx`:
   ```
 - in `tabClass` replace `flex-auto` with `flex-auto shrink-0`;
 - in `tabLabelsFrom`, every `label` string loses `truncate` (`'min-w-0 truncate'` → `'min-w-0'`, `'min-w-0 truncate max-sm:sr-only …'` → `'min-w-0 max-sm:sr-only …'`, and so on for `md`, `lg`, `xl`, `2xl`);
-- import `useScrollCurrentTabIntoView` from `'./tab-scroll'` and call `useScrollCurrentTabIntoView(nav, '[aria-current="page"]');` right after `useLocation();` in `PageTabs`.
+- import `useScrollCurrentTabIntoView` from `'./tab-scroll'` and call `useScrollCurrentTabIntoView(nav, '[aria-current="page"]');` right after the `useSlidingThumb` line in `PageTabs` (after PR #1041, `nav` is the `track` ref that hook returns; the thumb measuring code the old plan text mentions now lives in `components/ui/sliding-thumb.tsx` and is not touched).
 
 - [ ] **Step 4: TabBar**
 
