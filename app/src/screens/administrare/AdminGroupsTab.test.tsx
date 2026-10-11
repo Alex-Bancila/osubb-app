@@ -1052,3 +1052,31 @@ it('says a Group was deleted for good when its page sends the member back', asyn
   expect(receipt).toHaveAttribute('role', 'status');
   expect(receipt).toHaveFocus();
 });
+
+it('drops Departament from the categories once a parent Group is chosen (Alex, 2026-10-11)', async () => {
+  const user = userEvent.setup();
+  capabilities({ createTopLevelGroups: true });
+  show();
+  await user.click(screen.getByRole('button', { name: 'Creează Grup' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Grup nou' });
+  const category = within(dialog).getByRole('radiogroup', {
+    name: 'Categorie',
+  });
+  expect(
+    within(category).getByRole('radio', { name: 'Departament' }),
+  ).toBeChecked();
+  await user.click(
+    within(dialog).getByRole('combobox', { name: 'Grup părinte (opțional)' }),
+  );
+  const parents = (await screen.findAllByRole('option')).filter(
+    (option) => !option.textContent?.startsWith('Fără'),
+  );
+  await user.click(parents[0] as HTMLElement);
+  // A Subgrup is an Echipă or a Proiect; the choice moves off Departament.
+  expect(
+    within(category)
+      .getAllByRole('radio')
+      .map((radio) => radio.textContent),
+  ).toEqual(['Echipă', 'Proiect']);
+  expect(within(category).getByRole('radio', { name: 'Echipă' })).toBeChecked();
+});

@@ -1010,6 +1010,12 @@ it('creates a Child Group under this Group and archives one, in pop-ups', async 
   });
   // The parent is fixed at creation — there is no picker and no "Mută grupul".
   expect(within(create).queryByLabelText(/Grup părinte/)).toBeNull();
+  // A Subgrup is an Echipă or a Proiect, never a Departament (Alex, 2026-10-11).
+  expect(
+    within(within(create).getByRole('radiogroup', { name: 'Categorie' }))
+      .getAllByRole('radio')
+      .map((radio) => radio.textContent),
+  ).toEqual(['Echipă', 'Proiect']);
   expect(
     within(create).getByLabelText('Numele grupului'),
   ).toHaveAccessibleDescription(
