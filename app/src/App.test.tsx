@@ -271,7 +271,13 @@ describe('route guards', () => {
     window.history.pushState({}, '', '/administrare');
     const view = render(<App />);
     expect(
-      await screen.findByRole('heading', { name: 'Administrare' }),
+      // The layout is the first lazy chunk this file loads: under a full
+      // parallel run it can take more than the default second to arrive.
+      await screen.findByRole(
+        'heading',
+        { name: 'Administrare' },
+        { timeout: 5000 },
+      ),
     ).toBeInTheDocument();
     // A Group Manager lands on the first tab they may open: Grupuri.
     expect(
