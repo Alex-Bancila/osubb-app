@@ -19,20 +19,23 @@ import {
   type FabRegistry,
 } from './fab-context';
 
+// As tall as a phone's tab bar, which it stands beside: a rounded square
+// there, the round button in the corner from `lg`.
 const fabClass =
-  'size-14 rounded-full shadow-lg shadow-black/25 [&_svg:not([class*="size-"])]:size-6';
+  'size-14 rounded-[1.125rem] lg:rounded-full shadow-lg shadow-black/25';
 
 /**
- * The page's create actions, as one round plus button in the bottom right
- * corner (above the tab bar on a phone). Wrap a `Page`'s content in it; every
+ * The page's create actions, as one plus button: beside the tab bar on a
+ * phone, in the content area's bottom right corner from `lg`. Wrap a `Page`'s content in it; every
  * `FabAction` below reports here instead of drawing its own button.
  *
  * - One action: the plus is that action, and carries its label as its name.
  * - Several: the plus opens a menu of them, the first nearest the thumb.
  * - None (the viewer may create nothing here): no button at all.
  *
- * The page ends with a spacer the button's height, so the last row can always
- * be scrolled clear of it.
+ * From `lg` the page ends with a spacer the button's height, so the last row
+ * can always be scrolled clear of it; on a phone the shell already leaves the
+ * bar's height, and the button is in the bar's row.
  */
 export function FabActions({
   label = 'Adaugă',
@@ -67,7 +70,7 @@ export function FabActions({
       className={fabClass}
       onClick={only.onSelect}
     >
-      <PlusIcon aria-hidden="true" />
+      <PlusIcon aria-hidden="true" className="size-6" />
     </Button>
   ) : actions.length > 1 ? (
     <FabMenu label={label} actions={actions} />
@@ -78,7 +81,11 @@ export function FabActions({
       {children}
       {fab && (
         <>
-          <div data-slot="fab-spacer" aria-hidden="true" className="h-14" />
+          <div
+            data-slot="fab-spacer"
+            aria-hidden="true"
+            className={cn('h-14', slot && 'max-lg:hidden')}
+          />
           {slot ? (
             createPortal(fab, slot)
           ) : (
@@ -106,7 +113,7 @@ function FabMenu({
       >
         <PlusIcon
           aria-hidden="true"
-          className="transition-transform group-data-popup-open/button:rotate-45 motion-reduce:transition-none"
+          className="size-6 transition-transform group-data-popup-open/button:rotate-45 motion-reduce:transition-none"
         />
       </Menu.Trigger>
       <Menu.Portal>

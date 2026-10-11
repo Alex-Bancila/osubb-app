@@ -87,7 +87,7 @@ app/
     │   └── reference.ts    # departments/roles lookups for display
     ├── components/
     │   ├── ui/             # locally owned shadcn Base UI/Nova primitives
-    │   ├── shell/          # AppShell.tsx, navItems.ts — one list drives sidebar/topbar/tab bar; on a phone the top bar holds the bell and the avatar (Notificări, Profil), the bar Taskuri · Calendar · Acasă · Anunțuri · Grupuri (#972)
+    │   ├── shell/          # AppShell.tsx, navItems.ts — one list drives sidebar/topbar/tab bar; on a phone the top bar holds the bell and the avatar (Notificări, Profil), the bar Acasă · Taskuri · Calendar · Mai mult, whose drawer lists the rest, with the page's plus button beside it
     │   ├── states/         # Loading, Empty, ErrorState — every query renders all three (+ test)
     │   └── work-filter/    # WorkFilter: Grup principal → Subgrup → Campanie → dates, with chips (+ test)
     ├── screens/

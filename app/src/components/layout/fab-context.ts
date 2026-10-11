@@ -16,5 +16,5 @@ export type FabRegistry = {
 /** The page's `FabActions`, which a `FabAction` below it reports to. */
 export const FabRegistryContext = createContext<FabRegistry | null>(null);
 
-/** The shell's corner of the content area, above the tab bar on a phone. */
+/** The shell's place for the plus: beside the tab bar on a phone, the content area's corner from `lg`. */
 export const FabSlotContext = createContext<HTMLElement | null>(null);

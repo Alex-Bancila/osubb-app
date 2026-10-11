@@ -17,7 +17,8 @@ import type { Capabilities, Capability } from '../../lib/capabilities';
 
 export type NavItem = {
   path: string;
-  /** Sidebar label and, when the item is on the tab bar, the tab caption. */
+  /** The name in the sidebar, in a phone's Mai mult drawer and, for a tab, the
+   *  one a screen reader says. */
   label: string;
   icon: LucideIcon;
   /** Shown to everyone when absent; otherwise gated on this server
@@ -30,10 +31,6 @@ export type NavItem = {
    * marks both (#825).
    */
   activeOn?: readonly string[];
-  /** A phone's bar shows five of these (`TAB_ORDER`). */
-  onTabBar?: boolean;
-  /** What the phone's bar says when the label does not fit ("Admin"). */
-  shortLabel?: string;
 };
 
 /**
@@ -46,7 +43,7 @@ export const NOTIFICATIONS_PATH = '/notificari';
 /** The Anunțuri page, named once for the same reason: it carries the unread-announcements badge. */
 export const ANNOUNCEMENTS_PATH = '/anunturi';
 
-/** Taskuri, named once: on a phone its entry carries the Requests-to-decide badge (#972). */
+/** Taskuri, named once: its entry carries the Requests-to-decide badge (#972). */
 export const TRACKER_PATH = '/tracker';
 
 /**
@@ -56,7 +53,6 @@ export const TRACKER_PATH = '/tracker';
  */
 export const PROFILE_PATH = '/profil';
 export const ADMIN_PATH = '/administrare';
-const GROUPS_PATH = '/grupuri';
 
 /**
  * One list drives the sidebar, the mobile tab bar and the page title, so those
@@ -66,12 +62,11 @@ const GROUPS_PATH = '/grupuri';
  * stay English (CONTEXT.md).
  */
 export const NAV_ITEMS: NavItem[] = [
-  { path: '/', label: 'Acasă', icon: LayoutDashboard, onTabBar: true },
+  { path: '/', label: 'Acasă', icon: LayoutDashboard },
   {
     path: '/tracker',
     label: 'Taskuri',
     icon: ListTodo,
-    onTabBar: true,
     // A member's history below it is Clasament's page (#844, D17). Its Cereri
     // view (`?vedere=cereri`, #973) is this page too: only the path is matched.
     activeOn: ['/tracker'],
@@ -90,8 +85,8 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Users,
     capability: 'seeDirectory',
   },
-  // Its own icon, not Voluntari's: on the bar the two must read apart (#972).
-  { path: '/grupuri', label: 'Grupuri', icon: Network, onTabBar: true },
+  // Its own icon, not Voluntari's: side by side the two must read apart (#972).
+  { path: '/grupuri', label: 'Grupuri', icon: Network },
   {
     path: '/administrare/campanii',
     label: 'Campanii',
@@ -106,20 +101,17 @@ export const NAV_ITEMS: NavItem[] = [
     path: '/calendar',
     label: 'Calendar',
     icon: CalendarDays,
-    onTabBar: true,
   },
   {
     path: ANNOUNCEMENTS_PATH,
     label: 'Anunțuri',
     icon: Megaphone,
-    onTabBar: true,
   },
   { path: NOTIFICATIONS_PATH, label: 'Notificări', icon: Bell },
   { path: PROFILE_PATH, label: 'Profil', icon: UserRound },
   {
     path: ADMIN_PATH,
     label: 'Administrare',
-    shortLabel: 'Admin',
     icon: ShieldCheck,
     capability: 'administer',
     // The area's tabs and the Group and Member pages below them — never the
@@ -156,52 +148,40 @@ export function isNavItemActive(item: NavItem, pathname: string): boolean {
   return pathname === item.path || pathname.startsWith(`${item.path}/`);
 }
 
-/* The phone bar carries five, in a different order from the sidebar (#972):
-   Acasă in the centre as the raised home, the two things a volunteer opens
-   the app for on its left, what they read on its right. Notificări and Profil
-   live in the top bar instead. */
 /**
- * The phone bar's five places, in order. The last is Grupuri — or, for a
- * member who has it, Administrare (2026-10-11): the page they run things
- * from takes the bar's place, and Grupuri moves to Acasă's tiles.
+ * The phone bar's three places, in order: Acasă, then the two things a
+ * volunteer opens the app for. Everything else is one tap further, in the
+ * bar's Mai mult drawer; Notificări and Profil live in the top bar.
  */
-export const TAB_ORDER = [
-  TRACKER_PATH,
-  '/calendar',
-  '/',
-  ANNOUNCEMENTS_PATH,
-  GROUPS_PATH,
-];
+export const TAB_ORDER = ['/', TRACKER_PATH, '/calendar'];
 
 /**
- * What one viewer's navigation holds, decided once so the shell and Acasă
+ * What one viewer's navigation holds, decided once so the bar and its drawer
  * cannot disagree: `visible`, every entry they may open (the desktop
- * sidebar); `tabs`, the phone bar's five (Administrare in Grupuri's place
- * for a member who has it); and `elsewhere`, the entries a phone shows on
- * neither the bar nor the top bar (Clasament, Voluntari, Campanii, and
- * Grupuri when Administrare took its tab) — Acasă lists those as tiles, the
- * only way to them below `lg`. A volunteer has none.
+ * sidebar); `tabs`, the phone bar's three; and `more`, the entries a phone
+ * shows on neither the bar nor the top bar — the Mai mult drawer lists them,
+ * everyone's pages (Grupuri, Anunțuri) before the ones a capability gives.
  */
 export function navFor(capabilities: Capabilities | undefined): {
   visible: NavItem[];
   tabs: NavItem[];
-  elsewhere: NavItem[];
+  more: NavItem[];
 } {
   const visible = NAV_ITEMS.filter(
     (item) => !item.capability || capabilities?.[item.capability] === true,
   );
-  const administers = visible.some((item) => item.path === ADMIN_PATH);
   const tabs = TAB_ORDER.map((path) =>
-    visible.find(
-      (item) =>
-        item.path === (path === GROUPS_PATH && administers ? ADMIN_PATH : path),
-    ),
+    visible.find((item) => item.path === path),
   ).filter((item) => item !== undefined);
-  const elsewhere = visible.filter(
+  const rest = visible.filter(
     (item) =>
       !tabs.includes(item) &&
       item.path !== NOTIFICATIONS_PATH &&
       item.path !== PROFILE_PATH,
   );
-  return { visible, tabs, elsewhere };
+  const more = [
+    ...rest.filter((item) => !item.capability),
+    ...rest.filter((item) => item.capability),
+  ];
+  return { visible, tabs, more };
 }

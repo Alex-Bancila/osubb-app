@@ -1,4 +1,3 @@
-import { HomeBackLink } from '../../components/shell/HomeBackLink';
 import { useState, type CSSProperties } from 'react';
 import { Link, useLocation } from 'react-router';
 import { Award, ChevronRight, Trophy } from 'lucide-react';
@@ -405,7 +404,6 @@ function LeadershipContent() {
   );
   return (
     <Page>
-      <HomeBackLink />
       <PageHeader
         title="Clasament"
         actions={

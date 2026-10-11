@@ -169,12 +169,12 @@ dates in a column) use tabular figures. Uppercase micro-labels are not used.
   content width 1240 px, or 768 px for a reading page. Blocks stack 24 px
   apart; a page never sets its own padding or max width.
 - **Navigation.** On a phone: a capsule floating over the foot of the page
-  with five places — Taskuri, Calendar, Acasă, Anunțuri and Grupuri, or
-  Administrare in Grupuri's place for a member who has it. The current place
-  opens to show its name on a light thumb that slides to it; the others are
-  icons. Notificări and Profil are in the top bar. There is no hamburger;
-  the pages left over (Clasament, Voluntari, Campanii, and Grupuri when
-  Administrare took its tab) are tiles under "Mai mult" on Acasă. From
+  with three places — Acasă, Taskuri, Calendar — and Mai mult, all icons. A
+  tinted thumb slides to the current one. Mai mult opens a drawer from the
+  foot of the screen with every other page (Grupuri, Anunțuri, and what the
+  member's capabilities add), and carries their counts; on one of those
+  pages the thumb stands on Mai mult. Notificări and Profil are in the top
+  bar. There is no hamburger, and no second list of pages on Acasă. From
   1024 px: the sidebar lists every page.
 - **A page's own sections** (Taskuri's lists and Cereri) are one segmented
   nav of the same kind: the selected one spells its name, the rest are icons
@@ -183,9 +183,12 @@ dates in a column) use tabular figures. Uppercase micro-labels are not used.
   are icon buttons at its end. Without a search they sit on the header's
   row. A toolbar keeps its place across a page's tabs and while a list loads.
 - **Touch targets** are 44 px. A control may look smaller; its hit area may not.
-- **The plus button** sits in the content area's bottom-right corner, above
-  the tab bar. One create action: the plus is that action. Several: it opens
-  them, the first nearest the thumb. A page ends with room to scroll clear of it.
+- **The plus button** is the page's create action. On a phone it stands
+  beside the tab bar, a rounded square as tall as the bar, and is there only
+  on a page where the member can create something. From 1024 px it is round,
+  in the content area's bottom-right corner. One create action: the plus is
+  that action. Several: it opens them, the first nearest the thumb. A page
+  ends with room to scroll clear of it.
 
 ## Elevation & Depth
 
