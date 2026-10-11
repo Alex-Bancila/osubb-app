@@ -142,14 +142,22 @@ vi.mock('./AddCompletedTaskControl', () => ({
   AddCompletedTaskControl: ({
     onAdded,
   }: {
-    onAdded: (task: { id: number; title: string }) => void;
+    onAdded: (added: { ids: number[]; title: string }) => void;
   }) => (
-    <button
-      type="button"
-      onClick={() => onAdded({ id: 43, title: 'Stand la târg' })}
-    >
-      Adaugă task finalizat
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={() => onAdded({ ids: [43], title: 'Stand la târg' })}
+      >
+        Adaugă task finalizat
+      </button>
+      <button
+        type="button"
+        onClick={() => onAdded({ ids: [43, 44, 45], title: 'Stand la târg' })}
+      >
+        Adaugă 3 taskuri finalizate
+      </button>
+    </>
   ),
 }));
 vi.mock('./TaskDetailsSheet', () => ({
@@ -509,6 +517,19 @@ describe('My tasks screen', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'Taskul finalizat a fost adăugat. Punctele au fost acordate.',
     );
+  });
+
+  it('reports several finished Tasks added at once and opens no details (Part E)', async () => {
+    const user = userEvent.setup();
+    query();
+    render(<TrackerScreen />, { wrapper: Router });
+    await user.click(
+      screen.getByRole('button', { name: 'Adaugă 3 taskuri finalizate' }),
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '3 taskuri finalizate adăugate. Punctele au fost acordate.',
+    );
+    expect(screen.queryByRole('dialog', { name: 'Detalii task' })).toBeNull();
   });
 
   it('uses live server capability to show All despite stale advisory claims', async () => {

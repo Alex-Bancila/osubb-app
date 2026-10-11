@@ -173,7 +173,8 @@ export function useCompletedTaskExecutors(groupId: number | null) {
 
 /** A completed Task as the form hands it over, already validated. */
 export type CompletedTaskDraft = {
-  executorId: string;
+  /** The volunteer; null only above one copy, when they come with the call. */
+  executorId: string | null;
   groupId: number;
   title: string;
   description: string | null;
@@ -183,9 +184,13 @@ export type CompletedTaskDraft = {
   difficulty: number;
   rating: number;
   note: string;
+  /** How many finished Tasks to add (spec 2026-10-11, Part E); 1 everywhere but "Adaugă task finalizat". */
+  copies: number;
 };
 
 const FAILED = 'Nu am putut adăuga taskul finalizat. Încearcă din nou.';
+const BATCH_FAILED =
+  'Nu am putut adăuga taskurile finalizate. Încearcă din nou.';
 
 /** "Adaugă task finalizat": the one `create_completed_task` caller. */
 export async function createCompletedTask(draft: CompletedTaskDraft) {
@@ -214,6 +219,57 @@ export function useCreateCompletedTask() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: createCompletedTask,
+    onSettled: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: keys.tasks.all }),
+        client.invalidateQueries({ queryKey: keys.points.all }),
+      ]),
+  });
+}
+
+/** "Adaugă task finalizat" at any count: the draft plus, above one copy, the volunteers in order. */
+export type CreateCompletedTasksInput = {
+  draft: CompletedTaskDraft;
+  /** One per copy, repeats allowed; ignored at one copy (the draft's volunteer). */
+  executorIds?: readonly string[];
+};
+
+/**
+ * The one `create_completed_tasks` caller (spec 2026-10-11, Part E): n
+ * finished Tasks in one transaction, the same person allowed several times.
+ * One copy goes the same way, with the form's volunteer as the one entry.
+ */
+export async function createCompletedTasks({
+  draft,
+  executorIds,
+}: CreateCompletedTasksInput) {
+  const args = {
+    p_executor_ids:
+      draft.copies > 1 ? [...(executorIds ?? [])] : [draft.executorId],
+    p_group_id: draft.groupId,
+    p_title: draft.title,
+    p_description: draft.description,
+    p_links: draft.links,
+    p_campaign_id: draft.campaignId,
+    p_difficulty: draft.difficulty,
+    p_rating: draft.rating,
+    p_note: draft.note,
+    p_copies: draft.copies,
+  };
+  // Generated RPC argument types omit nullability; isolate that here.
+  const { data, error } = await supabase.rpc(
+    'create_completed_tasks',
+    args as unknown as Database['public']['Functions']['create_completed_tasks']['Args'],
+  );
+  if (error)
+    throw new CommandError(error, draft.copies > 1 ? BATCH_FAILED : FAILED);
+  return data;
+}
+
+export function useCreateCompletedTasks() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: createCompletedTasks,
     onSettled: () =>
       Promise.all([
         client.invalidateQueries({ queryKey: keys.tasks.all }),

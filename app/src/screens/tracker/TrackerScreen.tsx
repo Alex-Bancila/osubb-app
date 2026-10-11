@@ -462,13 +462,22 @@ function TrackerContent() {
                   }}
                 />
                 <AddCompletedTaskControl
-                  onAdded={({ id }) => {
-                    setCreated({
-                      id,
-                      notice:
-                        'Taskul finalizat a fost adăugat. Punctele au fost acordate.',
+                  onAdded={({ ids }) => {
+                    const [only] = ids;
+                    if (ids.length === 1 && only !== undefined) {
+                      setCreated({
+                        id: only,
+                        notice:
+                          'Taskul finalizat a fost adăugat. Punctele au fost acordate.',
+                      });
+                      setDetailId(only);
+                      return;
+                    }
+                    // Several at once (Part E): the list says so; no details.
+                    setCreatedMany({
+                      key: Date.now(),
+                      receipt: `${ids.length} taskuri finalizate adăugate. Punctele au fost acordate.`,
                     });
-                    setDetailId(id);
                   }}
                 />
               </>
