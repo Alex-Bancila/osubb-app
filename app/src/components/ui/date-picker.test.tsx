@@ -185,3 +185,15 @@ describe('DatePicker', () => {
     );
   });
 });
+
+it('is always its full height: nothing scrolls inside the popup (spec 2026-10-11, Part D)', async () => {
+  const user = userEvent.setup();
+  render(<Field />);
+  await user.click(screen.getByLabelText('Termen'));
+  const popup = await screen.findByRole('dialog', {
+    name: 'Alege data și ora',
+  });
+  expect(popup.className).not.toMatch(
+    /max-h-|overflow-y-auto|overscroll-contain/,
+  );
+});
