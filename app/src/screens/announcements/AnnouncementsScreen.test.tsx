@@ -34,6 +34,12 @@ vi.mock('../../lib/auth', () => ({
   }),
 }));
 
+// Spec 2026-10-11: the Cereri de aprobare icon, read through one hook.
+const approvals = vi.hoisted(() => ({ data: [] as unknown[] }));
+vi.mock('../../queries/approvals', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../queries/approvals')>()),
+  useApprovalRequests: () => ({ data: approvals.data }),
+}));
 vi.mock('../../queries/announcements', () => ({
   useAnnouncementsFeed: hooks.useAnnouncementsFeed,
   useMarkAnnouncementRead: hooks.useMarkAnnouncementRead,
@@ -790,4 +796,24 @@ it('moves between Anunțuri and OSUBB Deals with a finger swipe over the panel (
   expect(
     await screen.findByRole('link', { name: /^Anunțuri/ }),
   ).toHaveAttribute('aria-current', 'page');
+});
+
+it('shows the request icon beside Filtrează only while OSUBB-wide Announcements wait (spec 2026-10-11)', () => {
+  approvals.data = [
+    {
+      kind: 'announcement',
+      id: 3,
+      title: 'Burse',
+      groupId: 10,
+      createdBy: null,
+      createdAt: '2026-10-11T09:00:00Z',
+      startsAt: null,
+    },
+  ];
+  renderAt('/anunturi');
+  const icon = screen.getByRole('button', { name: '1 cerere de aprobare' });
+  expect(icon.closest('[data-slot="page-actions"]')).toContainElement(
+    screen.getByRole('button', { name: 'Filtrează' }),
+  );
+  approvals.data = [];
 });

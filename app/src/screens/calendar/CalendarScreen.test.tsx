@@ -47,6 +47,16 @@ const hooks = vi.hoisted(() => ({
 // The membership rule (isMemberOf) lives beside the my_groups() read; no
 // request is made, but the module loads the client.
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+// The requests sheet names each author; the Calendar host has no viewer here.
+vi.mock('../../queries/member-identities', () => ({
+  useMemberIdentities: () => ({ data: undefined }),
+}));
+// Spec 2026-10-11: the Cereri de aprobare icon, read through one hook.
+const approvals = vi.hoisted(() => ({ data: [] as unknown[] }));
+vi.mock('../../queries/approvals', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../queries/approvals')>()),
+  useApprovalRequests: () => ({ data: approvals.data }),
+}));
 vi.mock('../../queries/events', () => ({
   useEventsInRange: hooks.useEventsInRange,
   useEvent: hooks.useEvent,
@@ -1175,4 +1185,28 @@ describe('CalendarScreen', () => {
       ).toBeInTheDocument();
     });
   });
+});
+
+it('shows the request icon in both views only while OSUBB-wide Events wait (spec 2026-10-11)', async () => {
+  approvals.data = [
+    {
+      kind: 'event',
+      id: 7,
+      title: 'Gala',
+      groupId: 1,
+      createdBy: null,
+      createdAt: '2026-10-11T10:00:00Z',
+      startsAt: '2026-11-01T18:00:00Z',
+    },
+  ];
+  const user = userEvent.setup();
+  renderCalendar();
+  expect(
+    screen.getByRole('button', { name: '1 cerere de aprobare' }),
+  ).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Lună' }));
+  expect(
+    screen.getByRole('button', { name: '1 cerere de aprobare' }),
+  ).toBeVisible();
+  approvals.data = [];
 });

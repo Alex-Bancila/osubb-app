@@ -23,6 +23,7 @@ import AnnouncementCard from './AnnouncementCard';
 import AnnouncementDetailsSheet from './AnnouncementDetailsSheet';
 import CriticalAnnouncementBanner from './CriticalAnnouncementBanner';
 import AnnouncementComposeSheet from './AnnouncementComposeSheet';
+import { ApprovalRequestsButton } from '../../components/approvals/ApprovalRequestsButton';
 import { Empty, ErrorState, Loading } from '../../components/states';
 import {
   FabActions,
@@ -279,6 +280,8 @@ function AnnouncementsContent({
               <>
                 {/* Filtrează is drawn here by the Work Filter below. */}
                 <span ref={setFilterSlot} className="contents" />
+                {/* The Cereri de aprobare (spec 2026-10-11), beside Filtrează. */}
+                <ApprovalRequestsButton kind="announcement" />
                 <AnnouncementComposeSheet />
               </>
             }
