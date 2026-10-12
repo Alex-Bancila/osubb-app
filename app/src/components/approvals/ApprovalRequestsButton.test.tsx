@@ -42,6 +42,24 @@ vi.mock('../member/MemberName', () => ({
 }));
 // The review surface itself is the edit sheet's own suite; here it is a stub
 // that decides on a click.
+vi.mock('../../screens/calendar/EventReviewSheet', () => ({
+  EventReviewSheet: ({
+    id,
+    open,
+    onDecided,
+  }: {
+    id: number;
+    open: boolean;
+    onDecided: (outcome: 'approved' | 'rejected') => void;
+  }) =>
+    open ? (
+      <div role="dialog" aria-label={`Revizuire eveniment ${id}`}>
+        <button type="button" onClick={() => onDecided('rejected')}>
+          Decide
+        </button>
+      </div>
+    ) : null,
+}));
 vi.mock('../../screens/announcements/AnnouncementReviewSheet', () => ({
   AnnouncementReviewSheet: ({
     id,
@@ -135,6 +153,26 @@ describe('ApprovalRequestsButton', () => {
     expect(screen.queryByLabelText('Revizuire 3')).toBeNull();
     expect(
       within(sheet).getByText('Anunțul a fost aprobat și publicat.'),
+    ).toHaveAttribute('role', 'status');
+  });
+  it('opens an Event row for its own review and says how it ended', async () => {
+    state.requests = [gala];
+    const user = userEvent.setup();
+    render(<ApprovalRequestsButton kind="event" />);
+    await user.click(
+      screen.getByRole('button', { name: '1 cerere de aprobare' }),
+    );
+    const sheet = await screen.findByRole('dialog', {
+      name: 'Cereri de aprobare',
+    });
+    await user.click(
+      within(sheet).getByRole('button', { name: 'Revizuiește: Gala' }),
+    );
+    const review = await screen.findByLabelText('Revizuire eveniment 7');
+    await user.click(within(review).getByText('Decide'));
+    expect(screen.queryByLabelText('Revizuire eveniment 7')).toBeNull();
+    expect(
+      within(sheet).getByText('Evenimentul a fost respins.'),
     ).toHaveAttribute('role', 'status');
   });
 });

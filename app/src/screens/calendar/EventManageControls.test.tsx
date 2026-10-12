@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,6 +13,9 @@ const state = vi.hoisted(() => ({
   cancelAsync: vi.fn(),
   deleteAsync: vi.fn(),
   attendance: vi.fn(),
+  // Spec 2026-10-11: the two decisions of a review.
+  approveAsync: vi.fn(),
+  rejectAsync: vi.fn(),
 }));
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -35,9 +38,17 @@ vi.mock('../../queries/event-edit', async (importActual) => ({
   useUpdateEvent: state.update,
   useCancelEvent: state.cancel,
 }));
+vi.mock('../../queries/approvals', () => ({
+  useApproveEvent: () => ({
+    mutateAsync: state.approveAsync,
+    isPending: false,
+  }),
+  useRejectEvent: () => ({ mutateAsync: state.rejectAsync, isPending: false }),
+}));
 
 import type { EventPresentation } from '../../queries/events';
-import { EventManageControls } from './EventManageControls';
+import { CommandError } from '../../lib/command-reasons';
+import { EditEventSheet, EventManageControls } from './EventManageControls';
 import { clearEventReceipts, useCalendarReceipt } from './event-receipts';
 
 const MEMBER = 'd0000000-0000-0000-0000-000000000006';
@@ -516,5 +527,148 @@ describe('EventManageControls', () => {
         'Nu mai ai permisiunea să gestionezi evenimentele acestui grup.',
       );
     });
+  });
+});
+
+describe('EditEventSheet in review mode (spec 2026-10-11)', () => {
+  const pending = () =>
+    event({
+      id: 40,
+      title: 'Gala OSUBB',
+      groupId: 5,
+      group: {
+        name: 'OSUBB',
+        short: 'OSUBB',
+        color: '#000000',
+        category: 'organization',
+        path: [5],
+        is_organization: true,
+      },
+      campaignId: null,
+      createdBy: 'a-volunteer',
+      approvalStatus: 'pending',
+    });
+
+  function setupReview() {
+    const user = userEvent.setup();
+    const onDecided = vi.fn();
+    render(
+      <EditEventSheet
+        event={pending()}
+        groups={undefined}
+        options={managerOptions}
+        open
+        onOpenChange={vi.fn()}
+        onSaved={vi.fn()}
+        review={{ onDecided }}
+      />,
+    );
+    const sheet = screen.getByRole('dialog', {
+      name: 'Revizuiește evenimentul',
+    });
+    return { user, onDecided, sheet };
+  }
+
+  beforeEach(() => {
+    state.auth.mockReturnValue({
+      session: { user: { id: MEMBER } },
+      claims: { member_level: 7 },
+    });
+    state.campaigns.mockReturnValue({ data: [] });
+    state.updateAsync.mockReset().mockResolvedValue({ id: 40 });
+    state.approveAsync.mockReset().mockResolvedValue({ id: 40 });
+    state.rejectAsync.mockReset().mockResolvedValue({ id: 40 });
+    state.update.mockReturnValue({
+      mutateAsync: state.updateAsync,
+      isPending: false,
+    });
+  });
+
+  it('offers Respinge and Aprobă și publică over the prefilled form', () => {
+    const { sheet } = setupReview();
+    expect(within(sheet).getByLabelText('Titlu')).toHaveValue('Gala OSUBB');
+    expect(
+      within(sheet).getByRole('button', { name: 'Respinge' }),
+    ).toBeVisible();
+    expect(
+      within(sheet).getByRole('button', { name: 'Aprobă și publică' }),
+    ).toBeVisible();
+    expect(
+      within(sheet).queryByRole('button', { name: 'Salvează modificările' }),
+    ).toBeNull();
+  });
+
+  it('saves a changed field first, then approves, and reports approved', async () => {
+    const { user, onDecided, sheet } = setupReview();
+    await user.type(within(sheet).getByLabelText('Titlu'), ' 2027');
+    await user.click(
+      within(sheet).getByRole('button', { name: 'Aprobă și publică' }),
+    );
+
+    await waitFor(() => expect(onDecided).toHaveBeenCalledWith('approved'));
+    expect(state.updateAsync).toHaveBeenCalledWith({
+      eventId: 40,
+      draft: expect.objectContaining({ title: 'Gala OSUBB 2027' }),
+    });
+    expect(state.approveAsync).toHaveBeenCalledWith({ id: 40 });
+    expect(state.updateAsync.mock.invocationCallOrder[0]).toBeLessThan(
+      state.approveAsync.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it('approves as it stands when nothing was changed', async () => {
+    const { user, onDecided, sheet } = setupReview();
+    await user.click(
+      within(sheet).getByRole('button', { name: 'Aprobă și publică' }),
+    );
+
+    await waitFor(() => expect(onDecided).toHaveBeenCalledWith('approved'));
+    expect(state.updateAsync).not.toHaveBeenCalled();
+    expect(state.approveAsync).toHaveBeenCalledWith({ id: 40 });
+  });
+
+  it('rejects only with a written reason, and reports rejected', async () => {
+    const { user, onDecided, sheet } = setupReview();
+    await user.click(within(sheet).getByRole('button', { name: 'Respinge' }));
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Respinge evenimentul',
+    });
+    await user.click(within(dialog).getByRole('button', { name: 'Respinge' }));
+    expect(
+      await within(dialog).findByText('Scrie motivul respingerii.'),
+    ).toBeInTheDocument();
+    expect(state.rejectAsync).not.toHaveBeenCalled();
+    expect(state.approveAsync).not.toHaveBeenCalled();
+
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'Motivul respingerii' }),
+      'Data se suprapune cu Adunarea Generală.',
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Respinge' }));
+
+    await waitFor(() => expect(onDecided).toHaveBeenCalledWith('rejected'));
+    expect(state.rejectAsync).toHaveBeenCalledWith({
+      id: 40,
+      reason: 'Data se suprapune cu Adunarea Generală.',
+    });
+    expect(state.updateAsync).not.toHaveBeenCalled();
+  });
+
+  it('shows the refusal when the request was already decided', async () => {
+    state.approveAsync.mockRejectedValueOnce(
+      new CommandError(
+        { code: 'PT409', message: 'not_pending' },
+        'Nu am putut salva decizia. Încearcă din nou.',
+      ),
+    );
+    const { user, onDecided, sheet } = setupReview();
+    await user.click(
+      within(sheet).getByRole('button', { name: 'Aprobă și publică' }),
+    );
+
+    expect(
+      await within(sheet).findByText('Cererea a fost deja decisă.'),
+    ).toBeInTheDocument();
+    expect(onDecided).not.toHaveBeenCalled();
   });
 });

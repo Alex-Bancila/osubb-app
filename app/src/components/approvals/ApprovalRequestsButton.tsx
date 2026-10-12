@@ -7,6 +7,7 @@ import {
   type ReviewOutcome,
 } from '../../queries/approvals';
 import { AnnouncementReviewSheet } from '../../screens/announcements/AnnouncementReviewSheet';
+import { EventReviewSheet } from '../../screens/calendar/EventReviewSheet';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { approvalRequestsLabel } from './approval-labels';
@@ -85,6 +86,16 @@ export function ApprovalRequestsButton({ kind }: { kind: ApprovalKind }) {
       />
       {reviewing?.kind === 'announcement' && (
         <AnnouncementReviewSheet
+          id={reviewing.id}
+          open
+          onOpenChange={(next) => {
+            if (!next) setReviewing(null);
+          }}
+          onDecided={decided}
+        />
+      )}
+      {reviewing?.kind === 'event' && (
+        <EventReviewSheet
           id={reviewing.id}
           open
           onOpenChange={(next) => {
