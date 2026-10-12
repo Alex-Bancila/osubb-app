@@ -203,6 +203,8 @@ function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
     createdBy: null,
     cancelledAt: null,
     cancelReason: null,
+    approvalStatus: 'approved',
+    rejectionReason: null,
     ...overrides,
   };
 }
@@ -491,6 +493,8 @@ describe('CalendarScreen', () => {
           title: 'Ședință anulată',
           cancelledAt: '2026-10-19T10:00:00.000Z',
           cancelReason: 'Sala nu mai este disponibilă.',
+          approvalStatus: 'approved',
+          rejectionReason: null,
         }),
       ]);
       renderCalendar();
@@ -532,6 +536,8 @@ describe('CalendarScreen', () => {
           title: 'Ședință anulată',
           cancelledAt: '2026-10-19T10:00:00.000Z',
           cancelReason: 'Sala nu mai este disponibilă.',
+          approvalStatus: 'approved',
+          rejectionReason: null,
         }),
       ]);
       renderCalendar();

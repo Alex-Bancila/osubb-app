@@ -208,6 +208,12 @@ export const keys = {
     mine: (memberId: string | undefined) =>
       ['requests', 'mine', { memberId }] as const,
   },
+  /* The Cereri de aprobare (spec 2026-10-11): one list for both kinds. */
+  approvals: {
+    all: ['approvals'] as const,
+    list: (memberId: string | undefined) =>
+      ['approvals', 'list', { memberId }] as const,
+  },
   events: {
     all: ['events'] as const,
     formOptions: (memberId: string | undefined) =>

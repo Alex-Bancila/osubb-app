@@ -90,6 +90,8 @@ function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
     createdBy: 'someone-else',
     cancelledAt: null,
     cancelReason: null,
+    approvalStatus: 'approved',
+    rejectionReason: null,
     ...overrides,
   };
 }
@@ -366,6 +368,8 @@ describe('EventManageControls', () => {
         event={event({
           cancelledAt: '2030-09-01T10:00:00Z',
           cancelReason: 'Sala nu mai este liberă.',
+          approvalStatus: 'approved',
+          rejectionReason: null,
         })}
         groups={undefined}
       />,
@@ -434,6 +438,8 @@ describe('EventManageControls', () => {
         event({
           cancelledAt: '2030-09-01T10:00:00Z',
           cancelReason: 'Sala nu mai este liberă.',
+          approvalStatus: 'approved',
+          rejectionReason: null,
         }),
       );
       expect(

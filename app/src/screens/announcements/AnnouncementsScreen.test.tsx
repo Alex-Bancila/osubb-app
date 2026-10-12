@@ -110,6 +110,10 @@ function createRow(
 ): AnnouncementFeedRow {
   return {
     id: 1,
+    approval_status: 'approved',
+    approval_decided_by: null,
+    approval_decided_at: null,
+    rejection_reason: null,
     title: 'Anunț test',
     body: 'Conținut detaliat anunț.',
     priority: 'normal',

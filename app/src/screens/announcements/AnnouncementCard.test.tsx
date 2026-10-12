@@ -28,6 +28,8 @@ function presentation(
     links: [],
     publishedAt: '2026-09-18T15:00:00.000Z',
     publishedLabel: '18 sept. · 18:00',
+    approvalStatus: 'approved',
+    rejectionReason: null,
     deadline: null,
     minLevel: 0,
     minLevelLabel: null,

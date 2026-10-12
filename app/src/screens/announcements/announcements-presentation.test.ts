@@ -71,6 +71,10 @@ function rawRow(
 ): RawAnnouncementRow {
   return {
     id: 1,
+    approval_status: 'approved',
+    approval_decided_by: null,
+    approval_decided_at: null,
+    rejection_reason: null,
     title: 'Ședință extraordinară BC',
     body: 'Vineri la ora 18:00 în Aula Magna.',
     group_id: 1,

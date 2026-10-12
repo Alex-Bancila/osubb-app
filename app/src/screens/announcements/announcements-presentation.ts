@@ -12,6 +12,7 @@ import {
 } from '../../lib/schemas/attached-link';
 import type { MemberIdentity } from '../../components/member/member-identity';
 import type { Group } from '../../queries/reference';
+import { approvalStatusOf, type ApprovalStatus } from '../../queries/approvals';
 
 export type AnnouncementPriority =
   Database['public']['Enums']['announce_priority'];
@@ -63,6 +64,12 @@ export type AnnouncementPresentation = {
   deadline: string | null;
   /** The Minimum Level (#909); 0 is everyone in the Audience. */
   minLevel: number;
+  /**
+   * A Cerere de aprobare (spec 2026-10-11): pending or rejected until BC
+   * publishes it; approved for every row anyone else can read.
+   */
+  approvalStatus: ApprovalStatus;
+  rejectionReason: string | null;
   /** "Nivel minim: Voluntar Activ", or null at 0 (it says nothing then). */
   minLevelLabel: string | null;
   isRead: boolean;
@@ -233,6 +240,8 @@ export function toAnnouncementPresentation(
     deadline: row.deadline ?? null,
     minLevel: row.min_level ?? 0,
     minLevelLabel: minLevelLabel(row.min_level ?? 0),
+    approvalStatus: approvalStatusOf(row.approval_status),
+    rejectionReason: row.rejection_reason ?? null,
     isRead,
   };
 }
