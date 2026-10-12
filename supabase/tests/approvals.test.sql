@@ -10,7 +10,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(97);
+select plan(100);
 
 create function pg_temp.u47(n integer) returns uuid language sql immutable as $$
   select ('47000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -317,7 +317,9 @@ select results_eq($$select * from pg_temp.told('Eveniment nou: Ev move local #47
 select is((select count(*) from pg_temp.told('Eveniment actualizat: Ev move local #4700'))::int, 0,
   'and nobody hears of the move of an Event they never saw');
 
--- M4: only the author's edit re-enters review.
+-- M4 (as revised by the security review of 2026-10-13): any writer below BC
+-- changing the content asks again; a Campaign change never does; a row that
+-- becomes OSUBB-wide by an update below BC is a request whoever made it.
 select pg_temp.test_login_leadership(pg_temp.u47(1));
 insert into announcements (title, body, group_id, audience) select 'Ann reentry #4700', 'x', org, 'local' from fx47;
 reset role;
@@ -328,13 +330,27 @@ reset role;
 select pg_temp.test_login_leadership(pg_temp.u47(5));
 reset role;
 update public.announcements set body = 'edited by another' where title = 'Ann reentry #4700';
-select is((pg_temp.ann('Ann reentry #4700')).approval_status, 'approved',
-  'a content change by someone other than the author is not the author''s edit');
+select is((pg_temp.ann('Ann reentry #4700')).approval_status, 'pending',
+  'a content change by any writer below BC asks again');
+select pg_temp.test_clear_jwt();
+-- A Campaign is a label (ADR-0007): attaching or clearing one asks nobody.
+insert into public.campaigns (group_id, name, created_by) select org, 'Campanie #4700', pg_temp.u47(2) from fx47;
 select pg_temp.test_login_leadership(pg_temp.u47(1));
 reset role;
-update public.announcements set body = 'edited by the author' where title = 'Ann reentry #4700';
-select is((pg_temp.ann('Ann reentry #4700')).approval_status, 'pending', 'the author''s edit asks again');
+update public.events set campaign_id = (select id from public.campaigns where name = 'Campanie #4700') where title = 'Ev pending #4700';
+select is((pg_temp.ev('Ev pending #4700')).approval_status, 'approved', 'a Campaign change on an approved Event re-enters nothing');
 select pg_temp.test_clear_jwt();
+-- A Group Manager below BC moves a member's local Event onto the Organization
+-- Group: a request, though the manager is not its author.
+insert into public.events (title, type, group_id, starts_at, created_by)
+  select 'Ev moved up #4700', 'activitate', dept, '2031-08-01 10:00+00', pg_temp.u47(4) from fx47;
+select pg_temp.test_login_leadership(pg_temp.u47(1));
+select lives_ok($$select public.update_event((pg_temp.ev('Ev moved up #4700')).id, 'Ev moved up #4700', 'activitate',
+  (select org from fx47), '2031-08-01 10:00+00', null, null, null, null, 0, null)$$,
+  'the Department''s Manager moves a member''s Event onto the Organization Group');
+reset role;
+select is((pg_temp.ev('Ev moved up #4700')).approval_status, 'pending', 'which makes it a request, whoever moved it');
+select is((select count(*) from pg_temp.told('Eveniment nou: Ev moved up #4700'))::int, 0, 'and tells the organisation nothing yet');
 
 -- M7: the decision flag covers no insert.
 select pg_temp.test_login_leadership(pg_temp.u47(1));

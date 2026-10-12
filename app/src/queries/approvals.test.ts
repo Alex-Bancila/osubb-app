@@ -85,10 +85,10 @@ it('turns a refusal into its Romanian copy, keeping the reason', async () => {
   });
   api.rpc.mockResolvedValue({
     data: null,
-    error: { code: 'PT409', message: 'not_pending' },
+    error: { code: 'PT409', message: 'announcement_not_pending' },
   });
   await expect(approveAnnouncement({ id: 3 })).rejects.toMatchObject({
-    reason: 'not_pending',
+    reason: 'announcement_not_pending',
     message: 'Cererea a fost deja decisă.',
   });
   api.rpc.mockResolvedValue({

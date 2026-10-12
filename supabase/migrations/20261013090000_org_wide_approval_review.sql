@@ -11,8 +11,9 @@
 --       target row (docs/backend/conventions.md §1);
 --   M3  PT409 not_pending becomes announcement_not_pending / event_not_pending
 --       (the <subject>_<state> vocabulary);
---   M4  only the author's edit re-enters review; M7 the decision flag covers
---       no insert.
+--   M4  a Campaign change (a label, ADR-0007) never re-enters review; a row
+--       that becomes OSUBB-wide by an update below BC is a request whoever
+--       made it; M7 the decision flag covers no insert.
 
 -- ==================== 1. the stamp ====================
 create or replace function private.stamp_approval()
@@ -25,8 +26,12 @@ declare
   v_actor uuid := (select auth.uid());
   v_level integer;
   v_org boolean;
+  -- A Campaign is a reporting label, never content (ADR-0007): changing or
+  -- clearing it -- a Campaign manager's deletion does -- asks nobody again (M4).
   v_skip constant text[] := array['approval_status', 'approval_decided_by', 'approval_decided_at', 'rejection_reason',
-                                  'updated_at', 'pinned', 'cancelled_at', 'cancel_reason', 'announce_on_approval'];
+                                  'updated_at', 'pinned', 'cancelled_at', 'cancel_reason', 'announce_on_approval',
+                                  'campaign_id'];
+  v_was_org boolean;
   v_changed boolean;
 begin
   -- The decision commands write the approval columns themselves -- on an
@@ -93,11 +98,23 @@ begin
   if v_level >= 6 then
     return new;
   end if;
+  -- Became OSUBB-wide by this very change -- a local Event moved onto the
+  -- Organization Group, an Audience widened -- below BC: a request, whoever
+  -- made it (a Group Manager may move a member's Event; security review of
+  -- 2026-10-13).
+  select grp.is_organization into v_was_org from public.groups as grp where grp.id = old.group_id;
+  v_was_org := coalesce(v_was_org, false)
+               or (tg_table_name = 'announcements' and (to_jsonb(old) ->> 'audience') = 'org');
+  if not v_was_org then
+    new.approval_status := 'pending';
+    new.approval_decided_by := null;
+    new.approval_decided_at := null;
+    new.rejection_reason := null;
+    return new;
+  end if;
+  -- A content change by any writer below BC asks again.
   v_changed := (to_jsonb(new) - v_skip) is distinct from (to_jsonb(old) - v_skip);
-  -- Only the author's own edit asks again (spec: "an edit by its author"):
-  -- another writer below BC who reaches the row -- a Campaign manager whose
-  -- deletion clears campaign_id -- changes no decision (M4).
-  if v_changed and old.approval_status in ('approved', 'rejected') and new.created_by = v_actor then
+  if v_changed and old.approval_status in ('approved', 'rejected') then
     new.approval_status := 'pending';
     new.approval_decided_by := null;
     new.approval_decided_at := null;
@@ -107,7 +124,7 @@ begin
 end;
 $$;
 comment on function private.stamp_approval() is
-  'announcements_stamp_approval / events_stamp_approval (before insert or update; spec 2026-10-11): on insert the status is pending for a row on the Organization Group -- or an Announcement with the organisation Audience from any Group -- by a signed-in writer below level 6 and approved otherwise (a client value is ignored; a write with no auth.uid() publishes); on update the approval columns are kept, except that the author (created_by = auth.uid()) below level 6 changing the content of a decided OSUBB-wide row (anything but the approval columns, updated_at, pinned, cancelled_at, cancel_reason and announce_on_approval) sends it back to pending with the decision cleared, and that a pending or rejected row which stops being OSUBB-wide (moved to a local Group, or its Audience narrowed) is published by that change, its announce_on_approval dropped (final review of 2026-10-13). A Deal (kind deal, R45) is never pending: the OSUBB Deals team publishes it at once. The decision commands set osubb.deciding_approval = on for their own update; an insert is always judged.';
+  'announcements_stamp_approval / events_stamp_approval (before insert or update; spec 2026-10-11): on insert the status is pending for a row on the Organization Group -- or an Announcement with the organisation Audience from any Group -- by a signed-in writer below level 6 and approved otherwise (a client value is ignored; a write with no auth.uid() publishes); on update the approval columns are kept, except that a writer below level 6 changing the content of a decided OSUBB-wide row (anything but the approval columns, updated_at, pinned, cancelled_at, cancel_reason, announce_on_approval and campaign_id -- a Campaign is a label) sends it back to pending with the decision cleared, that a row which becomes OSUBB-wide by an update below level 6 (a move onto the Organization Group, an Audience widened) is pending whoever made the change, and that a pending or rejected row which stops being OSUBB-wide (moved to a local Group, or its Audience narrowed) is published by that change, its announce_on_approval dropped (final review of 2026-10-13). A Deal (kind deal, R45) is never pending: the OSUBB Deals team publishes it at once. The decision commands set osubb.deciding_approval = on for their own update; an insert is always judged.';
 
 -- ==================== 2. the decider, held while the decision commits ====================
 create function private.require_approval_decider_locked(p_actor uuid)
