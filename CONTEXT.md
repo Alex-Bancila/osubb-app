@@ -270,7 +270,7 @@ A deferred BC/Moderator action that may reduce a Member’s Personal Score and m
 ## Calendar
 
 **Event**:
-A future or past OSUBB activity owned by one Group. Creating it notifies its Group Audience once, unless its Announcement is published with it and speaks for it (ruling R39).
+A future or past OSUBB activity owned by one Group. Creating it notifies its Group Audience once, unless its Announcement is published with it and speaks for it (ruling R39). An Event of the Organization Group created by a Member below BC is a Cerere de aprobare until BC or the Moderator approve it; that notice, and its Announcement if asked for, go out at the approval (ruling R49).
 
 **Event Scope**:
 The Group that owns an Event. An organization-wide Event belongs to the Organization Group.
@@ -290,8 +290,12 @@ Informational attendance guidance for an Event. It does not reject an RSVP or cr
 ## Communication
 
 **Announcement**:
-An OSUBB message posted on behalf of one Group, its Origin, by one of that Group's Managers or Responsibles, with an Announcement Audience, a normal, important, or critical Priority, up to five Attached Links, an optional **Termen** (the date by which its readers should act, never in the past when posted), and a Minimum Level: only Members of its Audience at or above it read the Announcement or are notified of it (everyone by default). An Announcement of the Organization Group may be posted by anyone holding a Group Role; once posted, BC, the Moderator and its author edit, pin or delete it, nobody else (ruling R48, #1042). Creating an Event may publish its Announcement in the same step, with the Event's Group, Audience and Minimum Level and Termen = the Event's start.
+An OSUBB message posted on behalf of one Group, its Origin, by one of that Group's Managers or Responsibles, with an Announcement Audience, a normal, important, or critical Priority, up to five Attached Links, an optional **Termen** (the date by which its readers should act, never in the past when posted), and a Minimum Level: only Members of its Audience at or above it read the Announcement or are notified of it (everyone by default). An Announcement of the Organization Group may be posted by anyone holding a Group Role; once posted, BC, the Moderator and its author edit, pin or delete it, nobody else (ruling R48, #1042). An Announcement of the Organization Group, or one with the organisation Audience, posted by a Member below BC is a Cerere de aprobare until BC or the Moderator approve it (ruling R49). Creating an Event may publish its Announcement in the same step, with the Event's Group, Audience and Minimum Level and Termen = the Event's start.
 _Avoid_: Post, news item, broadcast when the Audience is local
+
+**Cerere de aprobare** (Approval Request):
+An OSUBB-wide Announcement or Event — one on the Organization Group, or an Announcement with the organisation Audience — posted by a Member below BC, waiting for a BC member or the Moderator to approve it or reject it with a reason (ruling R49, 2026-10-11). Until approved it is read only by its author, BC and the Moderator, counts in no badge, takes no RSVP and notifies nobody; BC decides it from the item's own form, where they may correct it first — it stays its author's, published under their name, and the author is told of the decision. An author's later edit of a decided OSUBB-wide item asks again. BC and the Moderator publish directly. A Deal is never one.
+_Avoid_: Moderation queue, draft, pending post
 
 **Deal** (OSUBB Deal):
 An Announcement of kind deal: an offer, discount or access that a company gives OSUBB members, posted by the OSUBB Deals team from the Organization Group to every active Member, Recruți included, with Titlu, Descriere, an optional Termen, up to five Attached Links and an optional Deal Code (ruling R45, 2026-10-07). It is never critical or pinned. It lives on the OSUBB Deals tab of Anunțuri, never among the Announcements, and after its Termen only its team still sees it.

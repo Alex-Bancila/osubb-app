@@ -675,8 +675,6 @@ begin
          rejection_reason = null, announce_on_approval = false
    where id = p_id returning * into v_row;
   perform set_config('osubb.deciding_approval', 'off', true);
-  if (select announce_on_approval from public.events where id = p_id) is false and
-     exists (select 1 from public.events where id = p_id) then null; end if;  -- (no-op; the flag was read below before the update)
   return v_row;
 end; $$;
 ```

@@ -8,6 +8,7 @@
 - **Amended:** 2026-09-23 — past Events readable under the same Minimum Level rule; an Event may carry one Campaign; the month view and the Work Filter
 - **Amended:** 2026-09-28 — Other OSUBB Events are labelled by their Group's name ("Alt eveniment OSUBB" retired); a deadline Event offers no RSVP
 - **Amended:** 2026-09-29 — an Event's RSVPs are read by its managers (the people who may edit or cancel it), no longer by every BCE and above
+- **Amended:** 2026-10-11 — an OSUBB-wide Event (one on the Organization Group) by a writer below BC is a **Cerere de aprobare**: pending until a BC member or the Moderator approve it from its own form or reject it with a reason; a pending or rejected Event reads only for its author, BC and the Moderator, takes no RSVP, and the "Eveniment nou" notice (R39) and its Announcement, if asked for, move to the approval; an author's later edit of a decided OSUBB-wide Event asks again. BC and the Moderator publish directly, as before (spec `docs/superpowers/specs/2026-10-11-org-wide-approval-design.md`, ruling R49)
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
