@@ -56,6 +56,18 @@ export function AnnouncementMeta({
         </Badge>
       )}
 
+      {/* A request (spec 2026-10-11): what its author and BC see of it. */}
+      {announcement.approvalStatus === 'pending' && (
+        <Badge variant="outline" className="shrink-0">
+          În așteptare
+        </Badge>
+      )}
+      {announcement.approvalStatus === 'rejected' && (
+        <Badge variant="destructive" className="shrink-0">
+          Respins
+        </Badge>
+      )}
+
       <span
         className={cn(
           'inline-block min-w-0 truncate rounded-md px-2 py-0.5 text-xs font-semibold',

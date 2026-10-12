@@ -599,3 +599,54 @@ describe('NewEventControl receipt', () => {
     });
   });
 });
+
+describe('NewEventControl receipt — a request (spec 2026-10-11)', () => {
+  beforeEach(() => {
+    state.options.mockReturnValue({
+      data: { ...formOptions, announceGroupIds: [1, 7] },
+    });
+    state.create.mockReturnValue({
+      mutateAsync: state.mutateAsync,
+      isPending: false,
+    });
+    state.auth.mockReturnValue({
+      session: { user: { id: 'bce-1' } },
+      claims: { member_level: 5 },
+    });
+    state.mutateAsync.mockReset();
+    clearEventReceipts();
+  });
+
+  it('says the Event waits for BC when the server left it pending', async () => {
+    state.mutateAsync.mockResolvedValue({ id: 46, approval_status: 'pending' });
+    const user = setup();
+    await open(user);
+    await fillRequired(user);
+    await user.click(
+      screen.getByRole('button', { name: 'Creează evenimentul' }),
+    );
+
+    await waitFor(() => expect(state.mutateAsync).toHaveBeenCalledOnce());
+    const receipt = renderHook(() => useEventReceipt(46));
+    expect(receipt.result.current).toBe('Evenimentul așteaptă aprobarea BC.');
+  });
+
+  it('adds that its Announcement follows the approval when one was asked for', async () => {
+    state.mutateAsync.mockResolvedValue({ id: 47, approval_status: 'pending' });
+    const user = setup();
+    await open(user);
+    await fillRequired(user);
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Creează și un anunț' }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Creează evenimentul' }),
+    );
+
+    await waitFor(() => expect(state.mutateAsync).toHaveBeenCalledOnce());
+    const receipt = renderHook(() => useEventReceipt(47));
+    expect(receipt.result.current).toBe(
+      'Evenimentul așteaptă aprobarea BC. Anunțul lui va fi publicat odată cu el.',
+    );
+  });
+});

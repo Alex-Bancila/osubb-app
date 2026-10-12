@@ -702,3 +702,31 @@ describe('AnnouncementDetailsSheet', () => {
     });
   });
 });
+
+describe('AnnouncementDetailsSheet — approval (spec 2026-10-11)', () => {
+  it('shows the reason a rejected Announcement was refused', () => {
+    renderSheet(
+      <AnnouncementDetailsSheet
+        announcement={presentation({
+          approvalStatus: 'rejected',
+          rejectionReason: 'Lipsesc datele de contact.',
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Respins')).toBeInTheDocument();
+    expect(screen.getByText('Motivul respingerii')).toBeInTheDocument();
+    expect(screen.getByText('Lipsesc datele de contact.')).toBeInTheDocument();
+  });
+
+  it('shows the pending badge and no reason block while BC decides', () => {
+    renderSheet(
+      <AnnouncementDetailsSheet
+        announcement={presentation({ approvalStatus: 'pending' })}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('În așteptare')).toBeInTheDocument();
+    expect(screen.queryByText('Motivul respingerii')).toBeNull();
+  });
+});
