@@ -19,6 +19,8 @@ import { keys } from './keys';
  */
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+/** What BC's review of one request ends in. */
+export type ReviewOutcome = Exclude<ApprovalStatus, 'pending'>;
 export type ApprovalKind = 'announcement' | 'event';
 
 /** The stored status as the presentations carry it; a row read before the flow is approved. */

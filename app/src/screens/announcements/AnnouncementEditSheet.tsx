@@ -18,6 +18,12 @@ import {
   useUpdateAnnouncement,
 } from '../../queries/announcements';
 import {
+  useApproveAnnouncement,
+  useRejectAnnouncement,
+  type ReviewOutcome,
+} from '../../queries/approvals';
+import { TaskReasonDialog } from '../tracker/TaskReasonDialog';
+import {
   announcementChanges,
   draftFromAnnouncement,
   type AnnouncementDraft,
@@ -29,35 +35,60 @@ import {
 } from './announcements-presentation';
 
 /**
+ * BC's review of a pending OSUBB-wide Announcement (spec 2026-10-11): the
+ * same sheet, with the decision in the footer. `onDecided` runs after the
+ * command succeeds; the caller closes the sheet and shows the receipt.
+ */
+export type AnnouncementReview = {
+  onDecided: (outcome: ReviewOutcome) => void;
+};
+
+const DECISION_FAILED = 'Nu am putut salva decizia. Încearcă din nou.';
+
+/**
  * "Editează anunțul" (#930): the Anunț nou fields, prefilled. The Origin and
  * Audience are shown, never changed (moving an Announcement is out of scope);
  * the pin has its own control in the details sheet. Save sends only what
  * changed and notifies nobody again. The caller keys it by the opening, so
  * every Editează starts from the stored row.
+ *
+ * In review mode (`review`, spec 2026-10-11) the sheet is "Revizuiește
+ * anunțul": **Aprobă și publică** saves BC's edits, if any, then approves —
+ * the Announcement stays the author's — and **Respinge** asks for the reason
+ * the author is told.
  */
 export default function AnnouncementEditSheet({
   announcement,
   open,
   onOpenChange,
   onSaved,
+  review,
 }: {
   announcement: AnnouncementPresentation;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
+  review?: AnnouncementReview;
 }) {
   const update = useUpdateAnnouncement();
+  const approve = useApproveAnnouncement();
+  const reject = useRejectAnnouncement();
+  const busy = update.isPending || approve.isPending || reject.isPending;
 
   return (
     <FormSheet
       open={open}
       onOpenChange={onOpenChange}
-      title="Editează anunțul"
-      busy={update.isPending}
+      title={review ? 'Revizuiește anunțul' : 'Editează anunțul'}
+      busy={busy}
     >
       <EditForm
         announcement={announcement}
         update={update}
+        approve={approve}
+        reject={reject}
+        busy={busy}
+        review={review}
         onCancel={() => onOpenChange(false)}
         onSaved={onSaved}
       />
@@ -68,11 +99,19 @@ export default function AnnouncementEditSheet({
 function EditForm({
   announcement,
   update,
+  approve,
+  reject,
+  busy,
+  review,
   onCancel,
   onSaved,
 }: {
   announcement: AnnouncementPresentation;
   update: ReturnType<typeof useUpdateAnnouncement>;
+  approve: ReturnType<typeof useApproveAnnouncement>;
+  reject: ReturnType<typeof useRejectAnnouncement>;
+  busy: boolean;
+  review: AnnouncementReview | undefined;
   onCancel: () => void;
   onSaved: () => void;
 }) {
@@ -110,20 +149,30 @@ function EditForm({
     const values = form.validate();
     if (!values) return;
     const changes = announcementChanges(initial, draft, values);
-    if (Object.keys(changes).length === 0) {
+    const changed = Object.keys(changes).length > 0;
+    if (!review && !changed) {
       onCancel();
       return;
     }
     try {
-      await update.mutateAsync({ id: announcement.id, changes });
-      onSaved();
+      // In review the edit lands first, so the organisation reads BC's
+      // corrected text when the approval publishes it.
+      if (changed) await update.mutateAsync({ id: announcement.id, changes });
+      if (review) {
+        await approve.mutateAsync({ id: announcement.id });
+        review.onDecided('approved');
+      } else {
+        onSaved();
+      }
     } catch (cause) {
       // A guard's 23514 reason lands under its field (R8).
       form.fail(
         cause,
         isAnnouncementRefusal(cause)
           ? 'Nu poți modifica acest anunț.'
-          : 'Anunțul nu a putut fi salvat. Încearcă din nou.',
+          : review
+            ? DECISION_FAILED
+            : 'Anunțul nu a putut fi salvat. Încearcă din nou.',
       );
     }
   }
@@ -156,17 +205,41 @@ function EditForm({
       />
       <FieldError>{form.formError}</FieldError>
       <FormSheetFooter>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={update.isPending}
-          onClick={onCancel}
-        >
-          Renunță
-        </Button>
-        <Button type="submit" disabled={update.isPending}>
-          {update.isPending ? 'Se salvează…' : 'Salvează modificările'}
-        </Button>
+        {review ? (
+          <>
+            <TaskReasonDialog
+              triggerLabel="Respinge"
+              title="Respinge anunțul"
+              description="Autorul este anunțat și vede motivul pe anunțul său; îl poate corecta și trimite din nou."
+              field="rejection"
+              fieldLabel="Motivul respingerii"
+              confirmLabel="Respinge"
+              failureMessage={DECISION_FAILED}
+              isPending={reject.isPending}
+              onConfirm={(reason) =>
+                reject.mutateAsync({ id: announcement.id, reason })
+              }
+              onSuccess={() => review.onDecided('rejected')}
+            />
+            <Button type="submit" disabled={busy}>
+              {busy ? 'Se trimite…' : 'Aprobă și publică'}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={onCancel}
+            >
+              Renunță
+            </Button>
+            <Button type="submit" disabled={busy}>
+              {busy ? 'Se salvează…' : 'Salvează modificările'}
+            </Button>
+          </>
+        )}
       </FormSheetFooter>
     </form>
   );

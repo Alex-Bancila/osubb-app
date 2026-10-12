@@ -18,3 +18,22 @@ export const fieldForReason: Readonly<Record<string, 'reason'>> = {
   reason_required: 'reason',
   reason_too_long: 'reason',
 };
+
+/**
+ * The reason BC writes when it rejects an OSUBB-wide Announcement or Event
+ * (spec 2026-10-11): required, at most 1000 characters, under the reason codes
+ * `reject_announcement` and `reject_event` raise, so the browser and the
+ * server refuse in the same words.
+ */
+export const rejectionReasonSchema = z.object({
+  reason: requiredText({
+    required: 'rejection_reason_required',
+    max: 1000,
+    tooLong: 'rejection_reason_too_long',
+  }),
+});
+
+export const fieldForRejectionReason: Readonly<Record<string, 'reason'>> = {
+  rejection_reason_required: 'reason',
+  rejection_reason_too_long: 'reason',
+};

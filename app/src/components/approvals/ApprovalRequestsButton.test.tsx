@@ -40,6 +40,26 @@ vi.mock('../../queries/reference', () => ({
 vi.mock('../member/MemberName', () => ({
   MemberName: ({ fullName }: { fullName: string }) => <span>{fullName}</span>,
 }));
+// The review surface itself is the edit sheet's own suite; here it is a stub
+// that decides on a click.
+vi.mock('../../screens/announcements/AnnouncementReviewSheet', () => ({
+  AnnouncementReviewSheet: ({
+    id,
+    open,
+    onDecided,
+  }: {
+    id: number;
+    open: boolean;
+    onDecided: (outcome: 'approved' | 'rejected') => void;
+  }) =>
+    open ? (
+      <div role="dialog" aria-label={`Revizuire ${id}`}>
+        <button type="button" onClick={() => onDecided('approved')}>
+          Decide
+        </button>
+      </div>
+    ) : null,
+}));
 import { approvalRequestsLabel } from './approval-labels';
 import { ApprovalRequestsButton } from './ApprovalRequestsButton';
 import { ApprovalRequestsSheet } from './ApprovalRequestsSheet';
@@ -94,6 +114,28 @@ describe('ApprovalRequestsButton', () => {
       within(sheet).getByRole('button', { name: 'Revizuiește: Burse' }),
     ).toBeVisible();
     expect(within(sheet).queryByText('Gala')).toBeNull();
+  });
+  it('opens an Announcement row for review and keeps the receipt under the list', async () => {
+    state.requests = [burse];
+    const user = userEvent.setup();
+    render(<ApprovalRequestsButton kind="announcement" />);
+    await user.click(
+      screen.getByRole('button', { name: '1 cerere de aprobare' }),
+    );
+    const sheet = await screen.findByRole('dialog', {
+      name: 'Cereri de aprobare',
+    });
+    await user.click(
+      within(sheet).getByRole('button', { name: 'Revizuiește: Burse' }),
+    );
+    // The stub sits beside the modal list, so the role query would skip it as
+    // hidden; its label finds it.
+    const review = await screen.findByLabelText('Revizuire 3');
+    await user.click(within(review).getByText('Decide'));
+    expect(screen.queryByLabelText('Revizuire 3')).toBeNull();
+    expect(
+      within(sheet).getByText('Anunțul a fost aprobat și publicat.'),
+    ).toHaveAttribute('role', 'status');
   });
 });
 
