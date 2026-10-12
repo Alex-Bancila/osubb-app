@@ -10,7 +10,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(74);
+select plan(77);
 
 create function pg_temp.u47(n integer) returns uuid language sql immutable as $$
   select ('47000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -249,6 +249,18 @@ select lives_ok($$select public.update_event((pg_temp.ev('Ev listed #4700')).id,
 reset role;
 select is((select count(*) from pg_temp.told('Eveniment actualizat: Ev listed edited #4700'))::int, 0,
   'nobody hears of a change to a pending Event');
+
+-- ==================== 9. no answer to a request ====================
+select pg_temp.test_login_leadership(pg_temp.u47(4));
+select throws_ok($$select public.set_event_rsvp((pg_temp.ev('Ev listed edited #4700')).id, 'going')$$, 'PT404', 'event_not_visible',
+  'a Member cannot RSVP to a pending Event they cannot see');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.u47(1));
+select throws_ok($$select public.set_event_rsvp((pg_temp.ev('Ev listed edited #4700')).id, 'going')$$, 'PT404', 'event_not_visible',
+  'nor its author, until it is published');
+select lives_ok($$select public.set_event_rsvp((pg_temp.ev('Ev pending #4700')).id, 'going')$$,
+  'an approved Event takes the answer');
+reset role;
 
 select * from finish();
 rollback;

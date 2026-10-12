@@ -856,3 +856,64 @@ begin
   execute format('comment on function private.event_notification_recipients(bigint) is %L',
     v_old || ' Spec 2026-10-11: nobody while the Event is pending or rejected -- an edit or cancellation of a request tells no audience; approve_event gives the creation notice once the Event is approved.');
 end $$;
+
+-- ==================== 10. an RSVP needs an approved Event ====================
+-- Security review (2026-10-12, gate parity): set_event_rsvp read the Event through
+-- private.can_read_event alone, so a Member who knew a pending Event's id could
+-- answer it although events_read hides it. Rebuilt from
+-- 20260929234000_retire_dead_surface.sql with the approval state: a pending or
+-- rejected Event is "not visible" to an RSVP, as it is to the Calendar.
+create or replace function private.set_event_rsvp_impl(p_event_id bigint, p_status text)
+returns public.event_attendance
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor uuid;
+  v_rsvp public.event_attendance%rowtype;
+begin
+  -- 1. Gate. The order of the three refusals is the one the invoker version had:
+  --    a caller who is not a live Member hears 42501 before any input verdict.
+  v_actor := private.require_active_member();
+  -- Hold the live Profile, so a concurrent deactivation serializes behind the answer.
+  perform 1 from public.profiles as profile
+    where profile.id = v_actor and profile.status = 'activ'
+    for share of profile;
+  if not found then
+    raise exception using errcode = '42501', message = 'not_active_member';
+  end if;
+
+  if p_status is null or p_status not in ('going', 'declined') then
+    raise sqlstate 'PT400' using message = 'invalid_rsvp_status';
+  end if;
+
+  -- 2. Visibility: the one Event rule (events_read asks the same question), so a
+  --    hidden Event and a missing one share one error. Spec 2026-10-11: an Event
+  --    still waiting for approval, or rejected, takes no answer.
+  perform 1 from public.events as event
+    where event.id = p_event_id
+      and event.approval_status = 'approved'
+      and private.can_read_event(event.group_id, event.min_level, v_actor)
+    for key share of event;
+  if not found then
+    raise sqlstate 'PT404' using message = 'event_not_visible';
+  end if;
+
+  -- 3. One atomic insert-or-update on (event_id, member_id). Only status changes;
+  --    checked_in stays server-owned.
+  insert into public.event_attendance as attendance (event_id, member_id, status)
+  values (p_event_id, v_actor, p_status)
+  on conflict (event_id, member_id)
+  do update set status = excluded.status
+  returning attendance.* into v_rsvp;
+
+  return v_rsvp;
+end;
+$$;
+do $$
+declare v_old text := obj_description('private.set_event_rsvp_impl(bigint, text)'::regprocedure, 'pg_proc');
+begin
+  execute format('comment on function private.set_event_rsvp_impl(bigint, text) is %L',
+    v_old || ' Spec 2026-10-11: a pending or rejected Event is not visible to an RSVP either.');
+end $$;
