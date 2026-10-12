@@ -3,7 +3,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(75);
+select plan(77);
 insert into auth.users(id,email)
 select ('24800000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid, 'event248-'||n||'@test.local'
 from generate_series(1,9) n;
@@ -192,7 +192,16 @@ select ok((select group_id=(select id from gx where name='org') from public.even
 -- active Member but the actor, where the explicit-roster reading reached only
 -- the old Project's roster.
 -- #929 (R32): BC and the Moderator are never notified through the Group Audience.
-select set_eq($q$select member_id from public.notifications where dedupe_key='event:'||(select id from ex2 where title='Move to org #248')||':group'$q$,$q$select p.id from public.profiles p join public.roles r on r.id=p.role where p.status='activ' and r.level<6 and p.id<>'24800000-0000-0000-0000-000000000002'$q$,'a move onto the Organization Group notifies every active Member except the actor, BC and the Moderator');
+-- Spec 2026-10-11: moved onto the Organization Group by a writer below BC, the
+-- Event is a request: the move tells nobody; once published, "Eveniment nou"
+-- reaches every active Member but the actor, BC and the Moderator -- the set
+-- the move notice reached before the approval flow (#601, R32).
+select is((select approval_status from public.events where id=(select id from ex2 where title='Move to org #248')),'pending','a move onto the Organization Group by a Group Role holder is a request');
+-- The old Group's audience, who could read the Event already, hears that it moved;
+-- nobody else does until it is published.
+select is((select count(*) from public.notifications as n where n.dedupe_key='event:'||(select id from ex2 where title='Move to org #248')||':group' and n.member_id not in (select private.group_audience((select id from gx where name='a')))),0::bigint,'and the move tells nobody beyond the old Group''s audience yet');
+select pg_temp.test_publish_event('To org');
+select set_eq($q$select member_id from public.notifications where dedupe_key='event:'||(select id from ex2 where title='Move to org #248')||':created'$q$,$q$select p.id from public.profiles p join public.roles r on r.id=p.role where p.status='activ' and r.level<6 and p.id<>'24800000-0000-0000-0000-000000000002'$q$,'once published, every active Member except the actor, BC and the Moderator hears of it');
 select set_eq($q$select * from private.event_notification_recipients((select id from ex where title='Event a #248'))$q$,$q$select * from private.group_audience((select group_id from public.events where id=(select id from ex where title='Event a #248'))) union select member_id from public.event_attendance a join public.profiles p on p.id=a.member_id and p.status='activ' where a.event_id=(select id from ex where title='Event a #248') and a.status='going'$q$,'the recipient set is the Event Group''s Group Audience plus its active going attendees');
 reset role;
 select pg_temp.test_login_leadership('24800000-0000-0000-0000-000000000001');

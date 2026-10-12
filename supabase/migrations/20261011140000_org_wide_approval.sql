@@ -70,8 +70,12 @@ begin
       return new;
     end if;
     select grp.is_organization into v_org from public.groups as grp where grp.id = new.group_id;
+    -- OSUBB-wide: the Organization Group, or an Announcement whose Audience is
+    -- the whole organisation from any Group (security review of 2026-10-11).
+    v_org := coalesce(v_org, false)
+             or (tg_table_name = 'announcements' and (to_jsonb(new) ->> 'audience') = 'org');
     v_level := coalesce(private.actor_level(v_actor), 0);
-    if coalesce(v_org, false) and v_level < 6 then
+    if v_org and v_level < 6 then
       new.approval_status := 'pending';
     end if;
     return new;
@@ -89,7 +93,9 @@ begin
     return new;
   end if;
   select grp.is_organization into v_org from public.groups as grp where grp.id = new.group_id;
-  if not coalesce(v_org, false) then
+  v_org := coalesce(v_org, false)
+           or (tg_table_name = 'announcements' and (to_jsonb(new) ->> 'audience') = 'org');
+  if not v_org then
     return new;
   end if;
   v_level := coalesce(private.actor_level(v_actor), 0);
@@ -107,7 +113,7 @@ begin
 end;
 $$;
 comment on function private.stamp_approval() is
-  'announcements_stamp_approval / events_stamp_approval (before insert or update; spec 2026-10-11): on insert the status is pending for a row on the Organization Group by a signed-in writer below level 6 and approved otherwise (a client value is ignored; a write with no auth.uid() publishes); on update the approval columns are kept, except that a writer below level 6 changing the content of a decided OSUBB-wide row (anything but the approval columns, updated_at, pinned, cancelled_at, cancel_reason and announce_on_approval) sends it back to pending with the decision cleared. A Deal (kind deal, R45) is never pending: the OSUBB Deals team publishes it at once. The decision commands set osubb.deciding_approval = on for their own write.';
+  'announcements_stamp_approval / events_stamp_approval (before insert or update; spec 2026-10-11): on insert the status is pending for a row on the Organization Group -- or an Announcement with the organisation Audience from any Group -- by a signed-in writer below level 6 and approved otherwise (a client value is ignored; a write with no auth.uid() publishes); on update the approval columns are kept, except that a writer below level 6 changing the content of a decided OSUBB-wide row (anything but the approval columns, updated_at, pinned, cancelled_at, cancel_reason and announce_on_approval) sends it back to pending with the decision cleared. A Deal (kind deal, R45) is never pending: the OSUBB Deals team publishes it at once. The decision commands set osubb.deciding_approval = on for their own write.';
 revoke execute on function private.stamp_approval() from public, anon, authenticated, service_role;
 create trigger announcements_stamp_approval before insert or update on public.announcements
   for each row execute function private.stamp_approval();
@@ -545,4 +551,308 @@ declare v_old text := obj_description('private.create_event_impl(text,text,bigin
 begin
   execute format('comment on function private.create_event_impl(text,text,bigint,timestamptz,timestamptz,text,integer,text,integer,bigint,boolean) is %L',
     v_old || ' Spec 2026-10-11: an OSUBB-wide Event by a writer below BC is written pending (private.stamp_approval), tells nobody and keeps p_announce as announce_on_approval for approve_event; the "Eveniment nou" notice lives in private.notify_event_created.');
+end $$;
+
+-- ==================== 7. the decisions ====================
+create function private.approval_decider()
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor uuid;
+begin
+  v_actor := private.require_active_member();
+  if coalesce(private.actor_level(v_actor), 0) < 6 then
+    raise exception using errcode = '42501', message = 'approval_forbidden';
+  end if;
+  return v_actor;
+end;
+$$;
+comment on function private.approval_decider() is
+  'The gate of the four decision commands (spec 2026-10-11): the live caller at level 6 or above (a BC member or the Moderator), else 42501 approval_forbidden -- or private.require_active_member''s own refusal for a caller with no standing.';
+revoke execute on function private.approval_decider() from public, anon, authenticated, service_role;
+
+create function private.require_rejection_reason(p_reason text)
+returns text
+language plpgsql
+immutable
+set search_path = ''
+as $$
+begin
+  if p_reason is null or btrim(p_reason) = '' then
+    raise sqlstate 'PT400' using message = 'rejection_reason_required';
+  end if;
+  if char_length(btrim(p_reason)) > 1000 then
+    raise sqlstate 'PT400' using message = 'rejection_reason_too_long';
+  end if;
+  return btrim(p_reason);
+end;
+$$;
+comment on function private.require_rejection_reason(text) is
+  'A rejection''s reason as stored (spec 2026-10-11: "a rejection reason is required"): trimmed, 1 to 1000 characters, else PT400 rejection_reason_required / rejection_reason_too_long -- judged before the gate, as every malformed input is.';
+revoke execute on function private.require_rejection_reason(text) from public, anon, authenticated, service_role;
+
+create function private.approve_announcement_impl(p_id bigint)
+returns public.announcements
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor uuid;
+  v_row public.announcements%rowtype;
+  v_decider text;
+begin
+  v_actor := private.approval_decider();
+  select * into v_row from public.announcements where id = p_id for no key update;
+  if not found then
+    raise sqlstate 'PT404' using message = 'announcement_not_found';
+  end if;
+  if v_row.approval_status <> 'pending' then
+    raise sqlstate 'PT409' using message = 'not_pending';
+  end if;
+  perform set_config('osubb.deciding_approval', 'on', true);
+  update public.announcements
+     set approval_status = 'approved', approval_decided_by = v_actor, approval_decided_at = now(), rejection_reason = null
+   where id = p_id
+   returning * into v_row;
+  perform set_config('osubb.deciding_approval', 'off', true);
+  -- The notice the Announcement would have given when written: once, now,
+  -- never to its author.
+  perform private.fan_out_announcement_row(v_row, v_row.created_by);
+  select profile.full_name into v_decider from public.profiles as profile where profile.id = v_actor;
+  perform private.notify(array[v_row.created_by], 'announce', 'Anunțul tău a fost aprobat: ' || v_row.title,
+    'Publicat de ' || coalesce(v_decider, 'BC') || '.', null,
+    'approval:announcements:' || p_id::text || ':approved', v_actor, '/anunturi?anunt=' || p_id::text);
+  return v_row;
+end;
+$$;
+comment on function private.approve_announcement_impl(bigint) is
+  'Body of public.approve_announcement (spec 2026-10-11): a BC member or the Moderator (private.approval_decider) publishes a pending Announcement -- approved, with the decider and the time -- then its fan-out runs once as if it had just been written (never to its author) and the author is told. PT404 announcement_not_found; PT409 not_pending for an Announcement already decided.';
+
+create function private.reject_announcement_impl(p_id bigint, p_reason text)
+returns public.announcements
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor uuid;
+  v_row public.announcements%rowtype;
+  v_reason text;
+begin
+  v_reason := private.require_rejection_reason(p_reason);
+  v_actor := private.approval_decider();
+  select * into v_row from public.announcements where id = p_id for no key update;
+  if not found then
+    raise sqlstate 'PT404' using message = 'announcement_not_found';
+  end if;
+  if v_row.approval_status <> 'pending' then
+    raise sqlstate 'PT409' using message = 'not_pending';
+  end if;
+  perform set_config('osubb.deciding_approval', 'on', true);
+  update public.announcements
+     set approval_status = 'rejected', approval_decided_by = v_actor, approval_decided_at = now(), rejection_reason = v_reason
+   where id = p_id
+   returning * into v_row;
+  perform set_config('osubb.deciding_approval', 'off', true);
+  perform private.notify(array[v_row.created_by], 'announce', 'Anunțul tău a fost respins: ' || v_row.title,
+    v_reason, null, 'approval:announcements:' || p_id::text || ':rejected', v_actor, '/anunturi?anunt=' || p_id::text);
+  return v_row;
+end;
+$$;
+comment on function private.reject_announcement_impl(bigint, text) is
+  'Body of public.reject_announcement (spec 2026-10-11): the reason first (private.require_rejection_reason), then the gate; a pending Announcement becomes rejected with the reason, which its author reads in their Notification and on the item; the author''s next edit asks again. PT404 announcement_not_found; PT409 not_pending.';
+
+create function private.approve_event_impl(p_id bigint)
+returns public.events
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor uuid;
+  v_row public.events%rowtype;
+  v_group public.groups%rowtype;
+  v_announce boolean;
+  v_decider text;
+begin
+  v_actor := private.approval_decider();
+  select * into v_row from public.events where id = p_id for no key update;
+  if not found then
+    raise sqlstate 'PT404' using message = 'event_not_found';
+  end if;
+  if v_row.approval_status <> 'pending' then
+    raise sqlstate 'PT409' using message = 'not_pending';
+  end if;
+  select * into v_group from public.groups where id = v_row.group_id;
+  v_announce := v_row.announce_on_approval;
+  perform set_config('osubb.deciding_approval', 'on', true);
+  update public.events
+     set approval_status = 'approved', approval_decided_by = v_actor, approval_decided_at = now(),
+         rejection_reason = null, announce_on_approval = false
+   where id = p_id
+   returning * into v_row;
+  perform set_config('osubb.deciding_approval', 'off', true);
+  if v_announce then
+    -- The Announcement the Event asked for, as the Event's author (the authorship
+    -- stamp honours osubb.announcement_author), approved since BC inserts it,
+    -- with its own fan-out -- and never "Anunț nou" to that author.
+    perform set_config('osubb.announcement_author', v_row.created_by::text, true);
+    insert into public.announcements(title, body, group_id, audience, min_level, deadline, created_by)
+      values (v_row.title,
+              private.event_announcement_body(v_row.starts_at, v_row.ends_at, v_row.location, v_row.description),
+              v_row.group_id,
+              case when v_group.is_organization then 'org' else 'local' end,
+              v_row.min_level,
+              v_row.starts_at,
+              v_row.created_by);
+    perform set_config('osubb.announcement_author', '', true);
+  else
+    perform private.notify_event_created(v_row, v_row.created_by);
+  end if;
+  select profile.full_name into v_decider from public.profiles as profile where profile.id = v_actor;
+  perform private.notify(array[v_row.created_by], 'event', 'Evenimentul tău a fost aprobat: ' || v_row.title,
+    'Publicat de ' || coalesce(v_decider, 'BC') || '.', null,
+    'approval:events:' || p_id::text || ':approved', v_actor, '/calendar?event=' || p_id::text);
+  return v_row;
+end;
+$$;
+comment on function private.approve_event_impl(bigint) is
+  'Body of public.approve_event (spec 2026-10-11): a BC member or the Moderator publishes a pending Event -- approved, with the decider and the time -- then, if the Event asked for its Announcement (announce_on_approval), writes that Announcement as the Event''s author (osubb.announcement_author; its own fan-out is the notice), else gives the "Eveniment nou" notice once (never to the author); the author is told. PT404 event_not_found; PT409 not_pending.';
+
+create function private.reject_event_impl(p_id bigint, p_reason text)
+returns public.events
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor uuid;
+  v_row public.events%rowtype;
+  v_reason text;
+begin
+  v_reason := private.require_rejection_reason(p_reason);
+  v_actor := private.approval_decider();
+  select * into v_row from public.events where id = p_id for no key update;
+  if not found then
+    raise sqlstate 'PT404' using message = 'event_not_found';
+  end if;
+  if v_row.approval_status <> 'pending' then
+    raise sqlstate 'PT409' using message = 'not_pending';
+  end if;
+  perform set_config('osubb.deciding_approval', 'on', true);
+  update public.events
+     set approval_status = 'rejected', approval_decided_by = v_actor, approval_decided_at = now(), rejection_reason = v_reason
+   where id = p_id
+   returning * into v_row;
+  perform set_config('osubb.deciding_approval', 'off', true);
+  perform private.notify(array[v_row.created_by], 'event', 'Evenimentul tău a fost respins: ' || v_row.title,
+    v_reason, null, 'approval:events:' || p_id::text || ':rejected', v_actor, '/calendar?event=' || p_id::text);
+  return v_row;
+end;
+$$;
+comment on function private.reject_event_impl(bigint, text) is
+  'Body of public.reject_event (spec 2026-10-11): the reason first, then the gate; a pending Event becomes rejected with the reason its author reads; the author''s next edit asks again. PT404 event_not_found; PT409 not_pending.';
+
+-- ==================== 8. the wrappers and the read ====================
+create function public.approve_announcement(p_id bigint)
+returns public.announcements
+language sql
+set search_path = ''
+as $$ select private.approve_announcement_impl(p_id); $$;
+comment on function public.approve_announcement(bigint) is
+  'Publishes a pending OSUBB-wide Announcement (spec 2026-10-11): BC member or Moderator only (42501 approval_forbidden); PT404 announcement_not_found; PT409 not_pending. The Announcement stays posted by its author; the fan-out runs once, now.';
+
+create function public.reject_announcement(p_id bigint, p_reason text)
+returns public.announcements
+language sql
+set search_path = ''
+as $$ select private.reject_announcement_impl(p_id, p_reason); $$;
+comment on function public.reject_announcement(bigint, text) is
+  'Rejects a pending OSUBB-wide Announcement with a required reason (spec 2026-10-11): PT400 rejection_reason_required / rejection_reason_too_long (above 1000 characters); BC member or Moderator only (42501 approval_forbidden); PT404 announcement_not_found; PT409 not_pending.';
+
+create function public.approve_event(p_id bigint)
+returns public.events
+language sql
+set search_path = ''
+as $$ select private.approve_event_impl(p_id); $$;
+comment on function public.approve_event(bigint) is
+  'Publishes a pending OSUBB-wide Event (spec 2026-10-11): BC member or Moderator only (42501 approval_forbidden); PT404 event_not_found; PT409 not_pending. Its Announcement, if asked for at creation, is written now as the Event''s author; otherwise the audience gets "Eveniment nou" now.';
+
+create function public.reject_event(p_id bigint, p_reason text)
+returns public.events
+language sql
+set search_path = ''
+as $$ select private.reject_event_impl(p_id, p_reason); $$;
+comment on function public.reject_event(bigint, text) is
+  'Rejects a pending OSUBB-wide Event with a required reason (spec 2026-10-11): PT400 rejection_reason_required / rejection_reason_too_long; BC member or Moderator only (42501 approval_forbidden); PT404 event_not_found; PT409 not_pending.';
+
+create function public.approval_requests()
+returns table (kind text, id bigint, title text, group_id bigint, created_by uuid, created_at timestamptz, starts_at timestamptz)
+language sql
+stable
+set search_path = ''
+as $$
+  -- Invoker: the two read policies already show BC the pending rows; the gate
+  -- keeps the list empty for everyone else.
+  select pending.kind, pending.id, pending.title, pending.group_id, pending.created_by, pending.created_at, pending.starts_at
+    from (select 'announcement'::text as kind, a.id, a.title, a.group_id, a.created_by, a.published_at as created_at, null::timestamptz as starts_at
+            from public.announcements as a
+           where a.approval_status = 'pending' and a.kind = 'announcement'
+          union all
+          select 'event', e.id, e.title, e.group_id, e.created_by, e.created_at, e.starts_at
+            from public.events as e
+           where e.approval_status = 'pending') as pending
+   where coalesce((select private.caller_level()), 0) >= 6
+   order by pending.created_at desc, pending.id desc;
+$$;
+comment on function public.approval_requests() is
+  'The Cereri de aprobare (spec 2026-10-11): the pending OSUBB-wide Announcements and Events, newest first, for a BC member or the Moderator -- the counts behind the request icons in Calendar and Anunțuri and the rows of their sheet. Empty for everyone else. Invoker: the read policies decide what it sees.';
+
+revoke execute on function
+  private.approve_announcement_impl(bigint), private.reject_announcement_impl(bigint, text),
+  private.approve_event_impl(bigint), private.reject_event_impl(bigint, text),
+  public.approve_announcement(bigint), public.reject_announcement(bigint, text),
+  public.approve_event(bigint), public.reject_event(bigint, text), public.approval_requests()
+  from public, anon, authenticated, service_role;
+grant execute on function
+  private.approve_announcement_impl(bigint), private.reject_announcement_impl(bigint, text),
+  private.approve_event_impl(bigint), private.reject_event_impl(bigint, text),
+  public.approve_announcement(bigint), public.reject_announcement(bigint, text),
+  public.approve_event(bigint), public.reject_event(bigint, text), public.approval_requests()
+  to authenticated;
+
+-- ==================== 9. every Event fan-out reads only an approved Event ====================
+-- Security review (2026-10-11): update_event and cancel_event notify through this
+-- set, so an author editing a pending Event would tell people who cannot read
+-- it. Rebuilt from 20260929200000_group_member_set.sql with the approval state.
+create or replace function private.event_notification_recipients(p_event_id bigint)
+returns setof uuid
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select candidate.member_id
+    from public.events as event
+    cross join lateral (
+      select audience.member_id
+        from private.group_notification_audience(event.group_id) as audience(member_id)
+      union
+      select attendance.member_id
+        from public.event_attendance as attendance
+       where attendance.event_id = event.id and attendance.status = 'going'
+    ) as candidate
+   where event.id = p_event_id
+     and event.approval_status = 'approved'
+     and private.can_read_event(event.group_id, event.min_level, candidate.member_id);
+$$;
+do $$
+declare v_old text := obj_description('private.event_notification_recipients(bigint)'::regprocedure, 'pg_proc');
+begin
+  execute format('comment on function private.event_notification_recipients(bigint) is %L',
+    v_old || ' Spec 2026-10-11: nobody while the Event is pending or rejected -- an edit or cancellation of a request tells no audience; approve_event gives the creation notice once the Event is approved.');
 end $$;

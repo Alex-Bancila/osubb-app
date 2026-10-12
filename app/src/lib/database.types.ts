@@ -58,6 +58,9 @@ export type Database = {
       }
       announcements: {
         Row: {
+          approval_decided_at: string | null
+          approval_decided_by: string | null
+          approval_status: string
           audience: string
           body: string
           code: string | null
@@ -73,9 +76,13 @@ export type Database = {
           pinned: boolean
           priority: Database["public"]["Enums"]["announce_priority"]
           published_at: string
+          rejection_reason: string | null
           title: string
         }
         Insert: {
+          approval_decided_at?: string | null
+          approval_decided_by?: string | null
+          approval_status?: string
           audience?: string
           body: string
           code?: string | null
@@ -91,9 +98,13 @@ export type Database = {
           pinned?: boolean
           priority?: Database["public"]["Enums"]["announce_priority"]
           published_at?: string
+          rejection_reason?: string | null
           title: string
         }
         Update: {
+          approval_decided_at?: string | null
+          approval_decided_by?: string | null
+          approval_status?: string
           audience?: string
           body?: string
           code?: string | null
@@ -109,9 +120,31 @@ export type Database = {
           pinned?: boolean
           priority?: Database["public"]["Enums"]["announce_priority"]
           published_at?: string
+          rejection_reason?: string | null
           title?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "announcements_approval_decided_by_fkey"
+            columns: ["approval_decided_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "announcements_approval_decided_by_fkey"
+            columns: ["approval_decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcements_approval_decided_by_fkey"
+            columns: ["approval_decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "announcements_created_by_fkey"
             columns: ["created_by"]
@@ -470,6 +503,10 @@ export type Database = {
       }
       events: {
         Row: {
+          announce_on_approval: boolean
+          approval_decided_at: string | null
+          approval_decided_by: string | null
+          approval_status: string
           campaign_id: number | null
           cancel_reason: string | null
           cancelled_at: string | null
@@ -483,12 +520,17 @@ export type Database = {
           id: number
           location: string | null
           min_level: number
+          rejection_reason: string | null
           starts_at: string
           title: string
           type: Database["public"]["Enums"]["event_type"]
           updated_at: string
         }
         Insert: {
+          announce_on_approval?: boolean
+          approval_decided_at?: string | null
+          approval_decided_by?: string | null
+          approval_status?: string
           campaign_id?: number | null
           cancel_reason?: string | null
           cancelled_at?: string | null
@@ -502,12 +544,17 @@ export type Database = {
           id?: never
           location?: string | null
           min_level?: number
+          rejection_reason?: string | null
           starts_at: string
           title: string
           type: Database["public"]["Enums"]["event_type"]
           updated_at?: string
         }
         Update: {
+          announce_on_approval?: boolean
+          approval_decided_at?: string | null
+          approval_decided_by?: string | null
+          approval_status?: string
           campaign_id?: number | null
           cancel_reason?: string | null
           cancelled_at?: string | null
@@ -521,12 +568,34 @@ export type Database = {
           id?: never
           location?: string | null
           min_level?: number
+          rejection_reason?: string | null
           starts_at?: string
           title?: string
           type?: Database["public"]["Enums"]["event_type"]
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "events_approval_decided_by_fkey"
+            columns: ["approval_decided_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "events_approval_decided_by_fkey"
+            columns: ["approval_decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_approval_decided_by_fkey"
+            columns: ["approval_decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "events_campaign_id_fkey"
             columns: ["campaign_id"]
@@ -2623,6 +2692,49 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      approval_requests: {
+        Args: never
+        Returns: {
+          created_at: string
+          created_by: string
+          group_id: number
+          id: number
+          kind: string
+          starts_at: string
+          title: string
+        }[]
+      }
+      approve_announcement: {
+        Args: { p_id: number }
+        Returns: {
+          approval_decided_at: string | null
+          approval_decided_by: string | null
+          approval_status: string
+          audience: string
+          body: string
+          code: string | null
+          created_by: string | null
+          deadline: string | null
+          form_label: string | null
+          form_url: string | null
+          group_id: number
+          id: number
+          kind: string
+          links: Json
+          min_level: number
+          pinned: boolean
+          priority: Database["public"]["Enums"]["announce_priority"]
+          published_at: string
+          rejection_reason: string | null
+          title: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "announcements"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       approve_completed_work_request: {
         Args: {
           p_campaign_id?: number
@@ -2652,6 +2764,39 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "completed_work_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      approve_event: {
+        Args: { p_id: number }
+        Returns: {
+          announce_on_approval: boolean
+          approval_decided_at: string | null
+          approval_decided_by: string | null
+          approval_status: string
+          campaign_id: number | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          capacity: number | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          ends_at: string | null
+          group_id: number
+          has_qr: boolean | null
+          id: number
+          location: string | null
+          min_level: number
+          rejection_reason: string | null
+          starts_at: string
+          title: string
+          type: Database["public"]["Enums"]["event_type"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "events"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -2763,6 +2908,10 @@ export type Database = {
       cancel_event: {
         Args: { p_event_id: number; p_reason: string }
         Returns: {
+          announce_on_approval: boolean
+          approval_decided_at: string | null
+          approval_decided_by: string | null
+          approval_status: string
           campaign_id: number | null
           cancel_reason: string | null
           cancelled_at: string | null
@@ -2776,6 +2925,7 @@ export type Database = {
           id: number
           location: string | null
           min_level: number
+          rejection_reason: string | null
           starts_at: string
           title: string
           type: Database["public"]["Enums"]["event_type"]
@@ -3116,6 +3266,10 @@ export type Database = {
           p_type: string
         }
         Returns: {
+          announce_on_approval: boolean
+          approval_decided_at: string | null
+          approval_decided_by: string | null
+          approval_status: string
           campaign_id: number | null
           cancel_reason: string | null
           cancelled_at: string | null
@@ -3129,6 +3283,7 @@ export type Database = {
           id: number
           location: string | null
           min_level: number
+          rejection_reason: string | null
           starts_at: string
           title: string
           type: Database["public"]["Enums"]["event_type"]
@@ -3802,6 +3957,37 @@ export type Database = {
       }
       rating_mult: { Args: { r: number }; Returns: number }
       record_invitation_sent: { Args: { p_member_id: string }; Returns: string }
+      reject_announcement: {
+        Args: { p_id: number; p_reason: string }
+        Returns: {
+          approval_decided_at: string | null
+          approval_decided_by: string | null
+          approval_status: string
+          audience: string
+          body: string
+          code: string | null
+          created_by: string | null
+          deadline: string | null
+          form_label: string | null
+          form_url: string | null
+          group_id: number
+          id: number
+          kind: string
+          links: Json
+          min_level: number
+          pinned: boolean
+          priority: Database["public"]["Enums"]["announce_priority"]
+          published_at: string
+          rejection_reason: string | null
+          title: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "announcements"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       reject_completed_work_request: {
         Args: { p_note: string; p_request_id: number }
         Returns: {
@@ -3819,6 +4005,39 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "completed_work_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      reject_event: {
+        Args: { p_id: number; p_reason: string }
+        Returns: {
+          announce_on_approval: boolean
+          approval_decided_at: string | null
+          approval_decided_by: string | null
+          approval_status: string
+          campaign_id: number | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          capacity: number | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          ends_at: string | null
+          group_id: number
+          has_qr: boolean | null
+          id: number
+          location: string | null
+          min_level: number
+          rejection_reason: string | null
+          starts_at: string
+          title: string
+          type: Database["public"]["Enums"]["event_type"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "events"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -4394,6 +4613,10 @@ export type Database = {
           p_type: string
         }
         Returns: {
+          announce_on_approval: boolean
+          approval_decided_at: string | null
+          approval_decided_by: string | null
+          approval_status: string
           campaign_id: number | null
           cancel_reason: string | null
           cancelled_at: string | null
@@ -4407,6 +4630,7 @@ export type Database = {
           id: number
           location: string | null
           min_level: number
+          rejection_reason: string | null
           starts_at: string
           title: string
           type: Database["public"]["Enums"]["event_type"]

@@ -10,7 +10,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(32);
+select plan(74);
 
 create function pg_temp.u47(n integer) returns uuid language sql immutable as $$
   select ('47000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -149,6 +149,106 @@ select pg_temp.test_login_leadership(pg_temp.u47(1));
 select lives_ok($$select public.cancel_event((pg_temp.ev('Ev to cancel #4700')).id, 'Nu mai e nevoie')$$, 'the author cancels it');
 reset role;
 select is((pg_temp.ev('Ev to cancel #4700')).approval_status, 'approved', 'a cancellation is not a content edit: no re-entry');
+
+
+-- ==================== 5. decisions ====================
+select pg_temp.test_login_leadership(pg_temp.u47(4));
+select throws_ok($$select public.approve_announcement((pg_temp.ann('Ann pending #4700')).id)$$, '42501', 'approval_forbidden',
+  'a Member below BC cannot approve');
+select throws_ok($$select public.reject_event((pg_temp.ev('Ev pending #4700')).id, 'x')$$, '42501', 'approval_forbidden', 'nor reject');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.u47(2));
+select throws_ok($$select public.reject_announcement((pg_temp.ann('Ann pending #4700')).id, '  ')$$, 'PT400', 'rejection_reason_required',
+  'a rejection needs its reason');
+select throws_ok($$select public.reject_announcement((pg_temp.ann('Ann pending #4700')).id, repeat('x', 1001))$$, 'PT400', 'rejection_reason_too_long',
+  'of at most 1000 characters');
+select throws_ok($$select public.approve_announcement((pg_temp.ann('Ann by BC #4700')).id)$$, 'PT409', 'not_pending',
+  'an approved Announcement is not decided again');
+select throws_ok($$select public.approve_announcement(0)$$, 'PT404', 'announcement_not_found', 'an unknown id');
+select lives_ok($$select public.reject_announcement((pg_temp.ann('Ann pending #4700')).id, 'Lipsesc detaliile.')$$, 'BC rejects with a reason');
+reset role;
+select is((pg_temp.ann('Ann pending #4700')).approval_status, 'rejected', 'the Announcement is rejected');
+select is((pg_temp.ann('Ann pending #4700')).rejection_reason, 'Lipsesc detaliile.', 'with the reason');
+select results_eq($$select * from pg_temp.told('Anunțul tău a fost respins: Ann pending #4700')$$, $$values (1)$$, 'the author is told');
+select is((select body from notifications where title = 'Anunțul tău a fost respins: Ann pending #4700' limit 1), 'Lipsesc detaliile.',
+  'with the reason as the body');
+select pg_temp.test_login_leadership(pg_temp.u47(4));
+select is((select count(*) from announcements where title = 'Ann pending #4700'), 0::bigint, 'a rejected Announcement stays invisible to others');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.u47(1));
+update announcements set body = 'now with details' where title = 'Ann pending #4700';
+reset role;
+select is((pg_temp.ann('Ann pending #4700')).approval_status, 'pending', 'the author''s edit re-submits a rejected Announcement');
+select is((pg_temp.ann('Ann pending #4700')).rejection_reason, null, 'and clears the reason');
+select pg_temp.test_login_leadership(pg_temp.u47(3));
+update announcements set body = 'tidied by the Moderator' where title = 'Ann pending #4700';
+select lives_ok($$select public.approve_announcement((pg_temp.ann('Ann pending #4700')).id)$$, 'the Moderator edits and approves it');
+reset role;
+select is((pg_temp.ann('Ann pending #4700')).approval_status, 'approved', 'approved');
+select is((pg_temp.ann('Ann pending #4700')).approval_decided_by, pg_temp.u47(3), 'by the Moderator');
+select is((pg_temp.ann('Ann pending #4700')).created_by, pg_temp.u47(1), 'still posted by its author');
+select is((pg_temp.ann('Ann pending #4700')).body, 'tidied by the Moderator', 'with the Moderator''s edit');
+select results_eq($$select * from pg_temp.told('Anunț nou: Ann pending #4700')$$, $$values (4), (5)$$,
+  'the fan-out runs once, on approval, and never to the author');
+select results_eq($$select * from pg_temp.told('Anunțul tău a fost aprobat: Ann pending #4700')$$, $$values (1)$$, 'the author is told');
+select pg_temp.test_login_leadership(pg_temp.u47(4));
+select is((select count(*) from announcements where title = 'Ann pending #4700'), 1::bigint, 'and everyone reads it now');
+reset role;
+
+-- ==================== 6. Events: approval and the Announcement on behalf ====================
+select pg_temp.test_login_leadership(pg_temp.u47(3));
+select lives_ok($$select public.approve_event((pg_temp.ev('Ev pending #4700')).id)$$, 'the Moderator approves the Event');
+select lives_ok($$select public.approve_event((pg_temp.ev('Ev announced #4700')).id)$$, 'and the announced one');
+select throws_ok($$select public.approve_event((pg_temp.ev('Ev pending #4700')).id)$$, 'PT409', 'not_pending', 'not twice');
+select throws_ok($$select public.reject_event((pg_temp.ev('Ev by BC #4700')).id, 'x')$$, 'PT409', 'not_pending', 'nor an approved one rejected');
+reset role;
+select results_eq($$select * from pg_temp.told('Eveniment nou: Ev pending #4700')$$, $$values (4), (5)$$,
+  'the audience hears of the approved Event once, the author not');
+select is((select count(*) from pg_temp.told('Eveniment nou: Ev announced #4700'))::int, 0,
+  'an announced Event tells through its Announcement only');
+select is((pg_temp.ann('Ev announced #4700')).created_by, pg_temp.u47(1), 'the Announcement is written as the Event''s author');
+select is((pg_temp.ann('Ev announced #4700')).approval_status, 'approved', 'approved');
+select is((pg_temp.ev('Ev announced #4700')).announce_on_approval, false, 'and the flag is spent');
+select results_eq($$select * from pg_temp.told('Anunț nou: Ev announced #4700')$$, $$values (4), (5)$$, 'its fan-out ran, never to the author');
+select results_eq($$select * from pg_temp.told('Evenimentul tău a fost aprobat: Ev pending #4700')$$, $$values (1)$$, 'the author is told');
+select pg_temp.test_login_leadership(pg_temp.u47(4));
+select is((select count(*) from events where title = 'Ev pending #4700'), 1::bigint, 'and reads the Event now');
+reset role;
+
+-- ==================== 7. the requests read ====================
+select pg_temp.test_login_leadership(pg_temp.u47(1));
+insert into announcements (title, body, group_id, audience) select 'Ann listed #4700', 'x', org, 'org' from fx47;
+select lives_ok($$select public.create_event('Ev listed #4700', 'activitate', (select org from fx47), '2031-06-01 10:00+00')$$,
+  'one more of each, pending');
+select is((select count(*) from public.approval_requests()), 0::bigint, 'the read answers nothing below BC');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.u47(2));
+select set_eq($$select kind, title from public.approval_requests() where title like '%#4700'$$,
+  $$values ('event', 'Ev listed #4700'), ('announcement', 'Ann listed #4700'), ('announcement', 'Ann approved later #4700')$$,
+  'BC lists the pending rows of both kinds');
+reset role;
+select pg_temp.test_clear_jwt(); set local role authenticated;
+select throws_ok($$select public.approve_announcement(1)$$, '42501', null, 'no claims, no decision');
+reset role;
+
+-- ==================== 8. the review's two gaps ====================
+-- An Announcement with the organisation Audience from a local Group reaches the
+-- whole OSUBB: it waits like one on the Organization Group.
+select pg_temp.test_login_leadership(pg_temp.u47(1));
+insert into announcements (title, body, group_id, audience) select 'Ann org audience #4700', 'x', dept, 'org' from fx47;
+reset role;
+select is((pg_temp.ann('Ann org audience #4700')).approval_status, 'pending',
+  'an organisation-Audience Announcement from a Department waits for approval');
+select results_eq($$select * from pg_temp.told('Cerere de aprobare: Ann org audience #4700')$$, $$values (2), (3)$$,
+  'and BC and the Moderator are asked');
+-- An edit of a pending Event tells no audience.
+select pg_temp.test_login_leadership(pg_temp.u47(1));
+select lives_ok($$select public.update_event((pg_temp.ev('Ev listed #4700')).id, 'Ev listed edited #4700', 'activitate',
+  (select org from fx47), '2031-06-01 10:00+00', null, null, null, null, 0, null)$$,
+  'the author edits their pending Event');
+reset role;
+select is((select count(*) from pg_temp.told('Eveniment actualizat: Ev listed edited #4700'))::int, 0,
+  'nobody hears of a change to a pending Event');
 
 select * from finish();
 rollback;

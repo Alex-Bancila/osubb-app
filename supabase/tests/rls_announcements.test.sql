@@ -89,6 +89,9 @@ update announcements set pinned=true where title='Responsible EDU #581';
 select is((select pinned from announcements where title='Responsible EDU #581'),true,'Responsible edits own Group announcement');
 update announcements set pinned=true where title='PR #581';
 reset role;
+-- Spec 2026-10-11: the Responsible's organisation-Audience Announcement is a request
+-- until published; by hand here, as the reach below is the subject.
+select pg_temp.test_publish_announcement('Responsible org audience #581');
 select is((select pinned from announcements where title='PR #581'),false,'Responsible cannot edit unrelated Group announcement');
 
 select pg_temp.test_login_leadership('f6000000-0000-0000-0000-0000000000f6');
