@@ -377,10 +377,19 @@ export function countUnreadAnnouncements(
   ).length;
 }
 
+/**
+ * The critical Announcement the banner shows: unread and published — never
+ * a request BC or its author can read before it is approved (spec 2026-10-11).
+ */
 export function getUnreadCriticalAnnouncement(
   items: AnnouncementPresentation[],
 ): AnnouncementPresentation | null {
   return (
-    items.find((item) => item.priority === 'critical' && !item.isRead) ?? null
+    items.find(
+      (item) =>
+        item.priority === 'critical' &&
+        !item.isRead &&
+        item.approvalStatus === 'approved',
+    ) ?? null
   );
 }

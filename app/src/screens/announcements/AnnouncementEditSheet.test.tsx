@@ -199,7 +199,7 @@ describe('AnnouncementEditSheet in review mode (spec 2026-10-11)', () => {
     const onDecided = vi.fn();
     supabaseMock.rpc.mockResolvedValueOnce({
       data: null,
-      error: { code: 'PT409', message: 'not_pending' },
+      error: { code: 'PT409', message: 'announcement_not_pending' },
     });
     renderSheet(
       <AnnouncementEditSheet

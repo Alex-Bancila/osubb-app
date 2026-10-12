@@ -26,7 +26,8 @@ const REASON_COPY = new Map<string, string>([
   ['too_many_copies', 'Cel mult 100 de exemplare odată.'],
   // Cereri de aprobare (spec 2026-10-11)
   ['approval_forbidden', 'Doar BC și Moderatorul aprobă sau resping.'],
-  ['not_pending', 'Cererea a fost deja decisă.'],
+  ['announcement_not_pending', 'Cererea a fost deja decisă.'],
+  ['event_not_pending', 'Cererea a fost deja decisă.'],
   ['rejection_reason_required', 'Scrie motivul respingerii.'],
   ['rejection_reason_too_long', 'Motivul are cel mult 1000 de caractere.'],
   ['announcement_not_found', 'Anunțul nu mai există.'],

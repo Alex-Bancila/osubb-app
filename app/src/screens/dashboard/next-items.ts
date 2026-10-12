@@ -56,7 +56,8 @@ export function ownTasksByDeadline<Row extends TaskPresentationRow>(
  * of the Organization Group, or of a Group whose Group Audience holds the
  * Member (`relevantGroupIds`). An Other OSUBB Event the Member said "Vin" to
  * is not promoted here: the glossary's relevance is the Audience. A cancelled
- * Event is not something to go to (#849).
+ * Event is not something to go to (#849), nor one BC has not published yet
+ * (spec 2026-10-11).
  */
 export function upcomingRelevantEvents(
   events: readonly EventPresentation[],
@@ -69,6 +70,7 @@ export function upcomingRelevantEvents(
       const at = Date.parse(event.startsAt);
       if (!Number.isFinite(at) || at < now) return [];
       if (event.cancelledAt !== null) return [];
+      if (event.approvalStatus !== 'approved') return [];
       if (eventRelevance(event, relevant, none) === 'other') return [];
       return [{ event, at }];
     })

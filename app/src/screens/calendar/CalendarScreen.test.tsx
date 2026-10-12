@@ -807,6 +807,32 @@ describe('CalendarScreen', () => {
   });
 
   describe('Lună', () => {
+    it('marks the chip of a pending or rejected Event (final review, 2026-10-13)', async () => {
+      const user = userEvent.setup();
+      stubStorage();
+      setEvents([
+        event({ id: 71, title: 'Gala', approvalStatus: 'pending' }),
+        event({
+          id: 72,
+          title: 'Bal',
+          approvalStatus: 'rejected',
+          rejectionReason: 'Se suprapune.',
+        }),
+        event({ id: 73, title: 'Ședință' }),
+      ]);
+      renderCalendar();
+      await user.click(screen.getByRole('button', { name: 'Lună' }));
+      const chips = Array.from(
+        document.querySelectorAll<HTMLElement>('.calendar-chip'),
+      );
+      const byTitle = (title: string) =>
+        chips.find((chip) => chip.textContent?.includes(title));
+      expect(byTitle('Gala')).toHaveClass('is-pending');
+      expect(byTitle('Bal')).toHaveClass('is-rejected');
+      expect(byTitle('Ședință')).not.toHaveClass('is-pending');
+      expect(byTitle('Ședință')).not.toHaveClass('is-rejected');
+    });
+
     it('remembers the view on this device across a reload', async () => {
       const user = userEvent.setup();
       const storage = stubStorage();

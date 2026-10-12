@@ -289,6 +289,29 @@ describe('announcements-presentation', () => {
   });
 
   describe('getUnreadCriticalAnnouncement', () => {
+    it('never offers a pending or rejected critical Announcement (final review, 2026-10-13)', () => {
+      const items = [
+        toAnnouncementPresentation(
+          rawRow({
+            id: 1,
+            priority: 'critical',
+            announcement_reads: [],
+            approval_status: 'pending',
+          }),
+        ),
+        toAnnouncementPresentation(
+          rawRow({
+            id: 2,
+            priority: 'critical',
+            announcement_reads: [],
+            approval_status: 'rejected',
+            rejection_reason: 'Lipsesc datele.',
+          }),
+        ),
+      ];
+      expect(getUnreadCriticalAnnouncement(items)).toBeNull();
+    });
+
     it('returns first unread critical announcement', () => {
       const normalUnread = toAnnouncementPresentation(
         rawRow({ id: 1, priority: 'normal', announcement_reads: [] }),

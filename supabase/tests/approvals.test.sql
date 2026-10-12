@@ -10,7 +10,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(77);
+select plan(97);
 
 create function pg_temp.u47(n integer) returns uuid language sql immutable as $$
   select ('47000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -162,7 +162,7 @@ select throws_ok($$select public.reject_announcement((pg_temp.ann('Ann pending #
   'a rejection needs its reason');
 select throws_ok($$select public.reject_announcement((pg_temp.ann('Ann pending #4700')).id, repeat('x', 1001))$$, 'PT400', 'rejection_reason_too_long',
   'of at most 1000 characters');
-select throws_ok($$select public.approve_announcement((pg_temp.ann('Ann by BC #4700')).id)$$, 'PT409', 'not_pending',
+select throws_ok($$select public.approve_announcement((pg_temp.ann('Ann by BC #4700')).id)$$, 'PT409', 'announcement_not_pending',
   'an approved Announcement is not decided again');
 select throws_ok($$select public.approve_announcement(0)$$, 'PT404', 'announcement_not_found', 'an unknown id');
 select lives_ok($$select public.reject_announcement((pg_temp.ann('Ann pending #4700')).id, 'Lipsesc detaliile.')$$, 'BC rejects with a reason');
@@ -199,8 +199,8 @@ reset role;
 select pg_temp.test_login_leadership(pg_temp.u47(3));
 select lives_ok($$select public.approve_event((pg_temp.ev('Ev pending #4700')).id)$$, 'the Moderator approves the Event');
 select lives_ok($$select public.approve_event((pg_temp.ev('Ev announced #4700')).id)$$, 'and the announced one');
-select throws_ok($$select public.approve_event((pg_temp.ev('Ev pending #4700')).id)$$, 'PT409', 'not_pending', 'not twice');
-select throws_ok($$select public.reject_event((pg_temp.ev('Ev by BC #4700')).id, 'x')$$, 'PT409', 'not_pending', 'nor an approved one rejected');
+select throws_ok($$select public.approve_event((pg_temp.ev('Ev pending #4700')).id)$$, 'PT409', 'event_not_pending', 'not twice');
+select throws_ok($$select public.reject_event((pg_temp.ev('Ev by BC #4700')).id, 'x')$$, 'PT409', 'event_not_pending', 'nor an approved one rejected');
 reset role;
 select results_eq($$select * from pg_temp.told('Eveniment nou: Ev pending #4700')$$, $$values (4), (5)$$,
   'the audience hears of the approved Event once, the author not');
@@ -261,6 +261,88 @@ select throws_ok($$select public.set_event_rsvp((pg_temp.ev('Ev listed edited #4
 select lives_ok($$select public.set_event_rsvp((pg_temp.ev('Ev pending #4700')).id, 'going')$$,
   'an approved Event takes the answer');
 reset role;
+
+-- ==================== 10. the final review's fixes (2026-10-13) ====================
+-- I1: a cancelled pending Event is no request, and BC cannot publish it.
+select pg_temp.test_login_leadership(pg_temp.u47(1));
+select lives_ok($$select public.create_event('Ev cancelled #4700', 'activitate', (select org from fx47), '2031-07-01 10:00+00')$$,
+  'a BCE asks for an OSUBB-wide Event');
+select lives_ok($$select public.cancel_event((pg_temp.ev('Ev cancelled #4700')).id, 'Nu mai are loc')$$,
+  'and cancels it while it waits');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.u47(2));
+select is((select count(*) from public.approval_requests() as r where r.kind = 'event' and r.id = (pg_temp.ev('Ev cancelled #4700')).id)::int, 0,
+  'a cancelled pending Event leaves the Cereri de aprobare');
+select throws_ok($$select public.approve_event((pg_temp.ev('Ev cancelled #4700')).id)$$, 'PT409', 'event_cancelled',
+  'and cannot be approved');
+select throws_ok($$select public.reject_event((pg_temp.ev('Ev cancelled #4700')).id, 'x')$$, 'PT409', 'event_cancelled',
+  'nor rejected');
+reset role;
+
+-- I1: an Event approved after it started gets no Announcement (its Termen
+-- would be in the past), only the notice.
+select pg_temp.test_login_leadership(pg_temp.u47(1));
+select lives_ok($$select public.create_event('Ev started #4700', 'activitate', (select org from fx47), '2031-07-02 10:00+00',
+  p_announce => true)$$, 'a BCE asks for an Event with its Announcement');
+reset role;
+select pg_temp.test_clear_jwt();
+update public.events set starts_at = now() - interval '1 hour', ends_at = null where title = 'Ev started #4700';
+select pg_temp.test_login_leadership(pg_temp.u47(2));
+select lives_ok($$select public.approve_event((pg_temp.ev('Ev started #4700')).id)$$, 'BC approves it after it has started');
+reset role;
+select is((select count(*) from public.announcements where title = 'Ev started #4700')::int, 0,
+  'no Announcement with a Termen in the past is written');
+select results_eq($$select * from pg_temp.told('Eveniment nou: Ev started #4700')$$, $$values (4), (5)$$,
+  'the audience hears of the Event itself');
+
+-- I2: a pending or rejected Event moved off the Organization Group needs no
+-- approval any more: the move publishes it to its new Group, as a new Event.
+select pg_temp.test_login_leadership(pg_temp.u47(1));
+select lives_ok($$select public.create_event('Ev move local #4700', 'activitate', (select org from fx47), '2031-07-03 10:00+00')$$,
+  'a BCE asks for an OSUBB-wide Event');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.u47(2));
+select lives_ok($$select public.reject_event((pg_temp.ev('Ev move local #4700')).id, 'Fă-l de departament')$$, 'BC rejects it');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.u47(1));
+select lives_ok($$select public.update_event((pg_temp.ev('Ev move local #4700')).id, 'Ev move local #4700', 'activitate',
+  (select dept from fx47), '2031-07-03 10:00+00', null, null, null, null, 0, null)$$,
+  'the author moves it to their Department');
+reset role;
+select is((pg_temp.ev('Ev move local #4700')).approval_status, 'approved',
+  'a local Event needs no approval: the move publishes it');
+select is((pg_temp.ev('Ev move local #4700')).rejection_reason, null::text, 'with the decision cleared');
+select results_eq($$select * from pg_temp.told('Eveniment nou: Ev move local #4700')$$, $$values (4)$$,
+  'the Department hears of it as a new Event');
+select is((select count(*) from pg_temp.told('Eveniment actualizat: Ev move local #4700'))::int, 0,
+  'and nobody hears of the move of an Event they never saw');
+
+-- M4: only the author's edit re-enters review.
+select pg_temp.test_login_leadership(pg_temp.u47(1));
+insert into announcements (title, body, group_id, audience) select 'Ann reentry #4700', 'x', org, 'local' from fx47;
+reset role;
+select pg_temp.test_login_leadership(pg_temp.u47(2));
+select lives_ok($$select public.approve_announcement((pg_temp.ann('Ann reentry #4700')).id)$$, 'BC approves it');
+reset role;
+-- Another Member below BC (claims kept, RLS off): the stamp sees them as the actor.
+select pg_temp.test_login_leadership(pg_temp.u47(5));
+reset role;
+update public.announcements set body = 'edited by another' where title = 'Ann reentry #4700';
+select is((pg_temp.ann('Ann reentry #4700')).approval_status, 'approved',
+  'a content change by someone other than the author is not the author''s edit');
+select pg_temp.test_login_leadership(pg_temp.u47(1));
+reset role;
+update public.announcements set body = 'edited by the author' where title = 'Ann reentry #4700';
+select is((pg_temp.ann('Ann reentry #4700')).approval_status, 'pending', 'the author''s edit asks again');
+select pg_temp.test_clear_jwt();
+
+-- M7: the decision flag covers no insert.
+select pg_temp.test_login_leadership(pg_temp.u47(1));
+select set_config('osubb.deciding_approval', 'on', true);
+insert into announcements (title, body, group_id, audience) select 'Ann flagged insert #4700', 'x', org, 'local' from fx47;
+select set_config('osubb.deciding_approval', 'off', true);
+reset role;
+select is((pg_temp.ann('Ann flagged insert #4700')).approval_status, 'pending', 'the decision flag covers no insert');
 
 select * from finish();
 rollback;

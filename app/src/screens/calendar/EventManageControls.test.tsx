@@ -657,7 +657,7 @@ describe('EditEventSheet in review mode (spec 2026-10-11)', () => {
   it('shows the refusal when the request was already decided', async () => {
     state.approveAsync.mockRejectedValueOnce(
       new CommandError(
-        { code: 'PT409', message: 'not_pending' },
+        { code: 'PT409', message: 'event_not_pending' },
         'Nu am putut salva decizia. Încearcă din nou.',
       ),
     );

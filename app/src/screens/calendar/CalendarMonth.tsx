@@ -276,6 +276,10 @@ export function CalendarMonth({
                         ),
                         other: relevanceOf(event) === 'other',
                         cancelled: event.cancelledAt !== null,
+                        // A request BC or its author reads before it is
+                        // published (spec 2026-10-11): marked, not hidden.
+                        pending: event.approvalStatus === 'pending',
+                        rejected: event.approvalStatus === 'rejected',
                       })),
                       ...(items?.tasks ?? []).map((task) => ({
                         key: `t${task.id}`,
@@ -284,6 +288,8 @@ export function CalendarMonth({
                         color: task.color,
                         other: false,
                         cancelled: false,
+                        pending: false,
+                        rejected: false,
                       })),
                     ];
                     const overflow = chips.length - CHIPS_PER_DAY;
@@ -314,6 +320,8 @@ export function CalendarMonth({
                                   chip.kind === 'task' && 'is-task',
                                   chip.other && 'is-other',
                                   chip.cancelled && 'is-cancelled',
+                                  chip.pending && 'is-pending',
+                                  chip.rejected && 'is-rejected',
                                 )}
                                 style={
                                   {

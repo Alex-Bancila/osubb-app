@@ -224,6 +224,22 @@
   text-decoration: line-through;
 }
 
+/* A request (spec 2026-10-11): pending is an outline waiting to be filled,
+   rejected is struck through like a cancellation. */
+.calendar-chip.is-pending {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--chip-color, currentColor);
+  color: var(--text-muted);
+}
+
+.calendar-chip.is-rejected {
+  color: var(--text-muted);
+}
+
+.calendar-chip.is-rejected .calendar-chip-text {
+  text-decoration: line-through;
+}
+
 .calendar-chip-icon {
   width: 11px;
   height: 11px;
