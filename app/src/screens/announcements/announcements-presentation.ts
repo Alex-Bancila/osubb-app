@@ -364,10 +364,17 @@ export function readersSummary(readers: readonly AnnouncementReader[]): {
   };
 }
 
+/**
+ * The unread Announcements of a list: as the server badge
+ * (`my_unread_announcements_count`), never the author's own pending or
+ * rejected requests (spec 2026-10-11).
+ */
 export function countUnreadAnnouncements(
   items: AnnouncementPresentation[],
 ): number {
-  return items.filter((item) => !item.isRead).length;
+  return items.filter(
+    (item) => !item.isRead && item.approvalStatus === 'approved',
+  ).length;
 }
 
 export function getUnreadCriticalAnnouncement(

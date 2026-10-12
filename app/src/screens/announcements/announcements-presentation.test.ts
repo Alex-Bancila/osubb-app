@@ -267,6 +267,25 @@ describe('announcements-presentation', () => {
 
       expect(countUnreadAnnouncements(items)).toBe(2);
     });
+
+    it("leaves out the author's own pending and rejected requests, as the server badge does (spec 2026-10-11)", () => {
+      const items = [
+        toAnnouncementPresentation(rawRow({ id: 1, announcement_reads: [] })),
+        toAnnouncementPresentation(
+          rawRow({ id: 2, announcement_reads: [], approval_status: 'pending' }),
+        ),
+        toAnnouncementPresentation(
+          rawRow({
+            id: 3,
+            announcement_reads: [],
+            approval_status: 'rejected',
+            rejection_reason: 'Lipsesc datele.',
+          }),
+        ),
+      ];
+
+      expect(countUnreadAnnouncements(items)).toBe(1);
+    });
   });
 
   describe('getUnreadCriticalAnnouncement', () => {
