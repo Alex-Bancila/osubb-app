@@ -110,7 +110,7 @@ it('reports every missing field at once, not only after the text is fixed', () =
 });
 
 it('puts a refusal about a fixed volunteer under Grup, a chosen one under Voluntar', () => {
-  expect(completedTaskFieldForReason('groupId').executor_not_group_member).toBe(
+  expect(completedTaskFieldForReason('groupId').executor_role_excluded).toBe(
     'groupId',
   );
   expect(

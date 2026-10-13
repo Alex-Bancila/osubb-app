@@ -138,7 +138,9 @@ it('lists the volunteers of the chosen Group and re-filters them when the Group 
   ).not.toBeNull();
   expect(dialog).not.toHaveTextContent('(obligatoriu)');
   expect(
-    within(dialog).getByText('Alege întâi grupul: lista arată membrii lui.'),
+    within(dialog).getByText(
+      'Alege întâi grupul: lista arată pe cine poți credita acolo.',
+    ),
   ).toBeVisible();
   await pick(
     user,

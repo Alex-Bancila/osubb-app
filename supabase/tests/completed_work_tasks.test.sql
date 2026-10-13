@@ -26,7 +26,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(74);
+select plan(75);
 
 -- ==================== Fixtures ====================
 create function pg_temp.u915(n integer) returns uuid language sql immutable as $$
@@ -147,27 +147,31 @@ $q$, pg_temp.g915('Echipa A1 #915'), pg_temp.u915(7)),
 
 -- ==================== 3. The pickers ====================
 select pg_temp.test_login_leadership(pg_temp.u915(2));
-select set_eq(format($q$ select member_id::text from public.completed_task_executors(%s) $q$, pg_temp.g915('Dept A #915')),
-  array[pg_temp.u915(3)::text, pg_temp.u915(4)::text, pg_temp.u915(7)::text, pg_temp.u915(11)::text],
-  'Dept A offers every active member of its subtree -- never the Manager themselves, BC, the Moderator or a deactivated member');
-select set_eq(format($q$ select member_id::text from public.completed_task_executors(%s) $q$, pg_temp.g915('Echipa A1 #915')),
-  array[pg_temp.u915(3)::text, pg_temp.u915(4)::text, pg_temp.u915(7)::text],
-  'Echipa A1 leaves out the member under its Minimum Level');
+-- Ruling R51 (2026-10-13): membership is not required -- every active Member
+-- at or above the Minimum Level, never the Manager themselves, BC, the
+-- Moderator or a deactivated Member.
+select set_eq(format($q$ select member_id::text from public.completed_task_executors(%s) where member_id::text like '91500000-%%' $q$, pg_temp.g915('Dept A #915')),
+  array[pg_temp.u915(3)::text, pg_temp.u915(4)::text, pg_temp.u915(5)::text, pg_temp.u915(6)::text, pg_temp.u915(7)::text, pg_temp.u915(11)::text],
+  'Dept A offers every active Member, inside its subtree or not (R51) -- never the Manager themselves, BC, the Moderator or a deactivated Member');
+select set_eq(format($q$ select member_id::text from public.completed_task_executors(%s) where member_id::text like '91500000-%%' $q$, pg_temp.g915('Echipa A1 #915')),
+  array[pg_temp.u915(3)::text, pg_temp.u915(4)::text, pg_temp.u915(5)::text, pg_temp.u915(7)::text],
+  'Echipa A1 leaves out the Members under its Minimum Level, member (the Recrut) or not (the Voluntar)');
 select is((select count(*) from public.completed_task_executors(pg_temp.g915('Dept B #915'))), 0::bigint,
   'a Group the caller does not manage offers nobody');
 select set_eq(format($q$ select id::text from public.completed_task_groups(%L) $q$, pg_temp.u915(4)),
   array[pg_temp.g915('Dept A #915')::text, pg_temp.g915('Echipa A1 #915')::text, pg_temp.g915('Sub A1 #915')::text],
   'the Manager may credit V1 in every Group of their subtree V1 belongs to -- not the archived one, not Dept B');
-select is((select count(*) from public.completed_task_groups(pg_temp.u915(6))), 0::bigint,
-  'no Group is offered for a volunteer outside the Manager''s Groups');
+-- Ruling R51 (2026-10-13): any active Member may be credited, member of the Group or not.
+select ok(pg_temp.g915('Dept A #915') = any(array(select id from public.completed_task_groups(pg_temp.u915(6)))),
+  'the Manager''s Groups are offered for a volunteer outside them too (R51)');
 select is((select count(*) from public.completed_task_groups(pg_temp.u915(8))), 0::bigint,
   'no Group is offered for BC, although BC is on Dept A''s roster');
 reset role;
 
 select pg_temp.test_login_leadership(pg_temp.u915(3));
-select set_eq(format($q$ select member_id::text from public.completed_task_executors(%s) $q$, pg_temp.g915('Echipa A1 #915')),
-  array[pg_temp.u915(4)::text],
-  'a Responsible is offered only the ordinary members: not themselves, not the other Responsible');
+select set_eq(format($q$ select member_id::text from public.completed_task_executors(%s) where member_id::text like '91500000-%%' $q$, pg_temp.g915('Echipa A1 #915')),
+  array[pg_temp.u915(4)::text, pg_temp.u915(5)::text],
+  'a Responsible is offered only ordinary Members at the Minimum Level: not themselves, not the other Responsible, not the Manager above (R51: an outsider counts)');
 select set_eq(format($q$ select id::text from public.completed_task_groups(%L) $q$, pg_temp.u915(4)),
   array[pg_temp.g915('Echipa A1 #915')::text],
   'a Responsible is not offered the Child Group where V1 is a Responsible');
@@ -175,8 +179,9 @@ reset role;
 
 select pg_temp.test_login_leadership(pg_temp.u915(1));
 select set_eq(format($q$ select id::text from public.completed_task_groups(%L) where name like '%% #915' $q$, pg_temp.u915(4)),
-  array[pg_temp.g915('Dept A #915')::text, pg_temp.g915('Echipa A1 #915')::text, pg_temp.g915('Sub A1 #915')::text],
-  'BC is offered every active Group V1 belongs to, never an archived one');
+  array[pg_temp.g915('Dept A #915')::text, pg_temp.g915('Echipa A1 #915')::text, pg_temp.g915('Sub A1 #915')::text,
+        pg_temp.g915('Dept B #915')::text, pg_temp.g915('Echipa B1 #915')::text],
+  'BC is offered every active Group whose Minimum Level V1 meets, member or not (R51), never an archived one');
 select is((select count(*) from public.completed_task_executors(pg_temp.g915('Arhivat #915'))), 0::bigint,
   'nor anybody to credit in an archived Group, although BC decides there');
 reset role;
@@ -239,10 +244,10 @@ select throws_ok(format($q$
   select public.create_completed_task(%L, %s, 'Refuz grup strain #915', null, null, null, null, 3, 3, 'n')
 $q$, pg_temp.u915(6), pg_temp.g915('Dept B #915')),
   '42501', 'task_manage_forbidden', 'a Group the caller does not manage is refused');
-select throws_ok(format($q$
-  select public.create_completed_task(%L, %s, 'Refuz nemembru #915', null, null, null, null, 3, 3, 'n')
+select lives_ok(format($q$
+  select public.create_completed_task(%L, %s, 'Din afara grupului #915', null, null, null, null, 3, 3, 'n')
 $q$, pg_temp.u915(6), pg_temp.g915('Dept A #915')),
-  'PT409', 'executor_not_group_member', 'a volunteer outside the Group''s subtree is refused');
+  'a volunteer outside the Group''s subtree is credited (R51: any active Member)');
 select throws_ok(format($q$
   select public.create_completed_task(%L, %s, 'Refuz sub nivel #915', null, null, null, null, 3, 3, 'n')
 $q$, pg_temp.u915(11), pg_temp.g915('Echipa A1 #915')),
@@ -402,11 +407,13 @@ select throws_ok(format($q$ select public.approve_completed_work_request(%s, 3, 
 reset role;
 
 select pg_temp.test_login_leadership(pg_temp.u915(5));
-select throws_ok(format($q$
+select lives_ok(format($q$
   select public.approve_completed_work_request(%s, 3, 3, 'n', p_group_id => %s)
 $q$, pg_temp.q915('Q3'), pg_temp.g915('Echipa B1 #915')),
-  'PT409', 'executor_not_group_member', 'a Group the requester does not belong to is refused');
+  'a Group the requester does not belong to takes the work (R51)');
 reset role;
+select ok((select task_id is not null from public.completed_work_requests where id = pg_temp.q915('Q3')),
+  'and the Request is recognised there');
 
 select pg_temp.test_login_leadership(pg_temp.u915(1));
 select throws_ok(format($q$
@@ -427,9 +434,9 @@ select lives_ok(format($q$ select public.approve_completed_work_request(%s, 3, 3
 reset role;
 
 select is((select count(*) from public.completed_work_requests
-            where id in (pg_temp.q915('Q2'), pg_temp.q915('Q3'), pg_temp.q915('Q4'), pg_temp.q915('Q5'),
+            where id in (pg_temp.q915('Q2'), pg_temp.q915('Q4'), pg_temp.q915('Q5'),
                          pg_temp.q915('Q7'), pg_temp.q915('Q8'), pg_temp.q915('Q10'))
-              and status = 'pending' and task_id is null), 7::bigint,
+              and status = 'pending' and task_id is null), 6::bigint,
   'every refused approval left its Request pending, with no Task');
 
 -- ==================== 8. Points are written in one place ====================

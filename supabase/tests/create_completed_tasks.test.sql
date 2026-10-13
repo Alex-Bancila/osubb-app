@@ -104,18 +104,19 @@ select is((select count(*) from public.notifications as notification
 
 -- ==================== Atomicity ====================
 select pg_temp.test_login_leadership(pg_temp.u947(1));
-select throws_ok($$select count(*) from public.create_completed_tasks(array[pg_temp.u947(2), pg_temp.u947(4)], pg_temp.g947('Dept E #947'),
-  'Unul din afara #947', 'd', p_difficulty => 4, p_rating => 5, p_note => 'Bine', p_copies => 2)$$,
-  'PT409', 'executor_not_group_member', 'a volunteer outside the Group refuses the whole call');
+-- Ruling R51 (2026-10-13): a volunteer outside the Group is credited like any other.
+select is((select count(*) from public.create_completed_tasks(array[pg_temp.u947(2), pg_temp.u947(4)], pg_temp.g947('Dept E #947'),
+  'Unul din afara #947', 'd', p_difficulty => 4, p_rating => 5, p_note => 'Bine', p_copies => 2))::int, 2,
+  'a volunteer outside the Group is credited with the rest (R51)');
 select throws_ok($$select count(*) from public.create_completed_tasks(array[pg_temp.u947(2), pg_temp.u947(5)], pg_temp.g947('Dept E #947'),
   'Un BC #947', 'd', p_difficulty => 4, p_rating => 5, p_note => 'Bine', p_copies => 2)$$,
   'PT409', 'executor_role_excluded', 'a BC member among the volunteers refuses the whole call');
 reset role;
-select is((select count(*) from public.tasks where title in ('Unul din afara #947', 'Un BC #947'))::int, 0,
+select is((select count(*) from public.tasks where title = 'Un BC #947')::int, 0,
   'nothing of a refused batch exists');
 select is((select count(*) from public.points_ledger as ledger
              join public.tasks as task on task.id = ledger.task_id
-            where task.title in ('Unul din afara #947', 'Un BC #947'))::int, 0,
+            where task.title = 'Un BC #947')::int, 0,
   'and no points were written');
 
 select * from finish();

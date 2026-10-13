@@ -119,7 +119,6 @@ const EXECUTOR_REASONS = [
   'executor_required',
   'invalid_executor',
   'invalid_executors',
-  'executor_not_group_member',
   'executor_below_min_level',
   'executor_role_excluded',
 ] as const;

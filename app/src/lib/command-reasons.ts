@@ -366,10 +366,6 @@ const REASON_COPY = new Map<string, string>([
     'Nu poți evalua munca acestui membru în grupul ales și nici să-i retragi punctele.',
   ],
   [
-    'executor_not_group_member',
-    'Voluntarul nu face parte din grupul ales sau din subgrupurile lui. Alege alt grup.',
-  ],
-  [
     'executor_below_min_level',
     'Voluntarul nu are nivelul minim al grupului ales. Alege alt grup.',
   ],

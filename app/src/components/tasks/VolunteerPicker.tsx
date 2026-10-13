@@ -17,8 +17,9 @@ import {
 } from '../../queries/completed-tasks';
 
 /**
- * Voluntar: the members the chosen Group may credit
- * (`completed_task_executors`), re-read when the Group changes. A volunteer
+ * Voluntar: the Members the caller may credit in the chosen Group
+ * (`completed_task_executors`: any active Member at or above its Minimum
+ * Level, member or not -- ruling R51), re-read when the Group changes. A volunteer
  * the new Group does not offer is cleared once that read succeeds. One
  * picker on the completed-Task form; one per copy in the executors dialog of
  * n finished Tasks (spec 2026-10-11, Part E), labelled "Exemplarul i" there.
@@ -66,15 +67,15 @@ export function VolunteerPicker({
       </span>
       {groupId === null ? (
         <p className="m-0 text-sm text-muted-foreground">
-          Alege întâi grupul: lista arată membrii lui.
+          Alege întâi grupul: lista arată pe cine poți credita acolo.
         </p>
       ) : query.isPending ? (
         <p role="status" className="m-0 text-sm">
-          Se încarcă membrii grupului…
+          Se încarcă voluntarii…
         </p>
       ) : query.isError ? (
         <div role="alert" className="space-y-2 text-sm">
-          <p className="m-0">Nu am putut încărca membrii grupului.</p>
+          <p className="m-0">Nu am putut încărca voluntarii.</p>
           <Button
             type="button"
             variant="outline"
