@@ -45,7 +45,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(77);
+select plan(78);
 
 create function pg_temp.uli(n integer) returns uuid language sql immutable as $$
   select ('10490000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -264,6 +264,11 @@ select throws_ok(format($$select public.import_legacy_tasks(%L, %L::jsonb)$$, pg
 select throws_ok(format($$select public.import_legacy_tasks(%L, %L::jsonb)$$, pg_temp.uli(1),
     jsonb_build_array(pg_temp.rli(10), pg_temp.rli(10))),
   'PT400', 'duplicate_row', 'the same sheet row twice in one call is malformed');
+select is(
+  pg_temp.detail_li(format($$select public.import_legacy_tasks(%L, %L::jsonb)$$, pg_temp.uli(1),
+    jsonb_build_array(pg_temp.rli(10), pg_temp.rli(11), pg_temp.rli(10)))),
+  'row 3 (legacyImportTrackerLI0001, sheet row 10)',
+  'a repeated sheet row is named where it appears again');
 select throws_ok(format($$select public.import_legacy_tasks(%L, %L::jsonb)$$, pg_temp.uli(2),
     jsonb_build_array(pg_temp.rli(10, '{"rating": 6}'))),
   'PT400', 'invalid_rating', 'malformed input is judged before the gate');

@@ -209,9 +209,20 @@ begin
     end if;
   end loop;
 
-  if (select count(*) <> count(distinct (entry.value ->> 'tracker_id', entry.value ->> 'sheet_row'))
-        from jsonb_array_elements(p_rows) as entry) then
-    raise sqlstate 'PT400' using message = 'duplicate_row';
+  -- The same sheet row twice in one call: named where it appears again.
+  select format('row %s (%s, sheet row %s)', numbered.ordinality,
+                numbered.value ->> 'tracker_id', numbered.value ->> 'sheet_row')
+    into v_where
+    from (select entry.ordinality, entry.value,
+                 row_number() over (
+                   partition by entry.value ->> 'tracker_id', entry.value ->> 'sheet_row'
+                   order by entry.ordinality) as occurrence
+            from jsonb_array_elements(p_rows) with ordinality as entry) as numbered
+   where numbered.occurrence > 1
+   order by numbered.ordinality
+   limit 1;
+  if found then
+    raise sqlstate 'PT400' using message = 'duplicate_row', detail = v_where;
   end if;
 
   -- 2. The gate: a live activ Moderator, held FOR SHARE so a concurrent
