@@ -383,3 +383,12 @@ it('has Romanian copy for every delete-for-good refusal', () => {
   ])
     expect(reasonCopy(reason), reason).toBeDefined();
 });
+
+it('says why a Group outside the Department label stays out of the Cup (ADR-0009, amended 2026-10-13)', () => {
+  expect(
+    commandErrorMessage(
+      { code: 'PT409', message: 'cup_not_department' },
+      'fallback',
+    ),
+  ).toBe('Doar un departament poate concura în Cupa Departamentelor.');
+});

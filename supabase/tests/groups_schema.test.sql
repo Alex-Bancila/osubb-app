@@ -16,7 +16,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(66);
+select plan(67);
 
 -- ==================== 1. Shape ====================
 
@@ -79,11 +79,19 @@ select throws_ok($$ insert into public.groups (name, category)
   '23514', 'new row for relation "groups" violates check constraint "groups_category_ck"',
   'the presentation category vocabulary is closed to department/project/team/organization');
 
+-- CHECK constraints are evaluated in name order (conventions, Ruling 23), and
+-- groups_competes_department_ck sorts first: the child carries the Department
+-- label so this assertion keeps testing the top-level rule.
 select throws_ok($$ insert into public.groups (name, category, parent_id, competes_in_cup)
-    values ('Copil care concureaza #507', 'team',
+    values ('Copil care concureaza #507', 'department',
             (select grp.id from public.groups as grp where grp.name = 'Constrangeri #507'), true) $$,
   '23514', 'new row for relation "groups" violates check constraint "groups_competes_top_level_ck"',
   'only a top-level Group competes in the Department Cup (ADR-0009)');
+
+select throws_ok($$ insert into public.groups (name, category, competes_in_cup)
+    values ('Proiect care concureaza #507', 'project', true) $$,
+  '23514', 'new row for relation "groups" violates check constraint "groups_competes_department_ck"',
+  'and only a Group with the Department label (ADR-0009, amended 2026-10-13)');
 
 select throws_ok($$ insert into public.groups (name, category, min_level)
     values ('Nivel Patru #507', 'team', 4) $$,

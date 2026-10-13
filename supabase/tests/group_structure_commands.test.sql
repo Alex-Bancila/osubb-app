@@ -21,7 +21,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(87);
+select plan(94);
 
 -- ==================== Fixtures ====================
 
@@ -400,6 +400,49 @@ select throws_ok(
          pg_temp.g582_group('Altă rădăcină #582')),
   'PT400', 'group_min_level_above_actor',
   'update_group_structure: BC may not put a Group above BC''s own Level');
+
+-- ADR-0009, amended 2026-10-13 (Alex, 2026-10-11): the Department Cup is a
+-- Department's. A top-level Project or Team competes in nothing, and a Group
+-- that leaves the Department label leaves the Cup in the same command.
+reset role;
+insert into public.groups (name, category, min_level, created_by)
+values ('Proiect liber #582',       'project',    0, pg_temp.g582_uid(1)),
+       ('Echipă liberă #582',       'team',       0, pg_temp.g582_uid(1)),
+       ('Departament în cupă #582', 'department', 0, pg_temp.g582_uid(1));
+select pg_temp.g582_bc();
+select throws_ok(
+  format($$select public.update_group_structure(%s, 'project', true, true, false, 0, null, null, false, false)$$,
+         pg_temp.g582_group('Proiect liber #582')),
+  'PT409', 'cup_not_department',
+  'update_group_structure: a top-level Project does not compete in the Department Cup');
+select throws_ok(
+  format($$select public.update_group_structure(%s, 'team', true, true, false, 0, null, null, false, false)$$,
+         pg_temp.g582_group('Echipă liberă #582')),
+  'PT409', 'cup_not_department',
+  'update_group_structure: nor does a top-level Team');
+select lives_ok(
+  format($$select public.update_group_structure(%s, 'department', true, true, false, 0, null, null, false, false)$$,
+         pg_temp.g582_group('Departament în cupă #582')),
+  'update_group_structure: a top-level Department still enters the Cup');
+select throws_ok(
+  format($$select public.update_group_structure(%s, 'project', true, true, false, 0, null, null, false, false)$$,
+         pg_temp.g582_group('Departament în cupă #582')),
+  'PT409', 'cup_not_department',
+  'update_group_structure: a competing Department cannot take another label and keep competing');
+select lives_ok(
+  format($$select public.update_group_structure(%s, 'project', false, true, false, 0, null, null, false, false)$$,
+         pg_temp.g582_group('Departament în cupă #582')),
+  'update_group_structure: it changes label once the same command takes it out of the Cup');
+select is(
+  (select array[category, competes_in_cup::text]
+     from public.groups where id = pg_temp.g582_group('Departament în cupă #582')),
+  array['project', 'false'],
+  'and the Group that left the Department label is out of the Cup');
+reset role;
+select throws_ok(
+  $$update public.groups set competes_in_cup = true where name = 'Proiect liber #582'$$,
+  '23514', 'new row for relation "groups" violates check constraint "groups_competes_department_ck"',
+  'and the table itself refuses the flag outside the Department label, whoever writes it');
 
 reset role;
 select pg_temp.g582_moderator();

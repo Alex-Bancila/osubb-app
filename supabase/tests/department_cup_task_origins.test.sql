@@ -11,7 +11,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(52);
+select plan(53);
 
 -- ==================== 1. Surface, shape and grants ====================
 
@@ -226,10 +226,23 @@ select is((select points from public.department_cup(2590001) where group_id = pg
   'a competing Group keeps its own direct work regardless of its parent flag');
 update public.groups set counts_toward_parent_cup=true where name = 'Educațional';
 
+-- ADR-0009, amended 2026-10-13: only a Group with the Department label may
+-- HOLD the Cup setting (groups_competes_department_ck, and the refusal in
+-- update_group_structure). The STANDINGS still read the setting alone and
+-- never the label. Pin the constraint, then lift it inside this rolled-back
+-- transaction so the read rule is exercised rather than assumed.
+select ok(
+  exists (select 1 from pg_constraint
+           where conrelid = 'public.groups'::regclass
+             and conname = 'groups_competes_department_ck'),
+  'the Cup setting is a Department''s by constraint -- the label is checked where the setting is written');
+alter table public.groups drop constraint groups_competes_department_ck;
 update public.groups set competes_in_cup=true where id = pg_temp.project_group(2590003);
 select is((select points from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) where group_id=(select id from public.groups where id = pg_temp.project_group(2590003))),15,
-  'a Project presentation label never prevents a Group from competing');
+  'the standings read the setting alone: with the constraint lifted, a Project label keeps no flagged Group out');
 update public.groups set competes_in_cup=false where id = pg_temp.project_group(2590003);
+alter table public.groups add constraint groups_competes_department_ck
+  check (not competes_in_cup or category = 'department');
 select ok(exists(select 1 from public.department_cup(null::bigint, null::timestamptz, null::timestamptz) cup join public.groups grp on grp.id=cup.group_id where grp.name = 'Educațional'),
   'unfiltered Cup includes the actual Group identifier');
 select ok(exists(select 1 from public.department_cup(2590001) cup join public.groups grp on grp.id=cup.group_id where grp.name = 'Educațional'),
@@ -257,6 +270,9 @@ select ok(
 select is((select points from public.department_cup(2590002) where group_id = pg_temp.dept_group('edu')), 15,
   'with only the root competing, Campania B''s Task credits the root -- the "before" this mutation moves');
 alter table public.groups drop constraint groups_competes_top_level_ck;
+-- The fixture child carries the Team label, so the Department-only constraint
+-- is lifted with it for the length of this mutation.
+alter table public.groups drop constraint groups_competes_department_ck;
 update public.groups set competes_in_cup = true where name = 'Cup native child 523';
 select is((select points from public.department_cup(2590002)
             where group_id = (select id from public.groups where name = 'Cup native child 523')), 15,
@@ -266,6 +282,8 @@ select is((select points from public.department_cup(2590002) where group_id = pg
 update public.groups set competes_in_cup = false where name = 'Cup native child 523';
 alter table public.groups add constraint groups_competes_top_level_ck
   check (not competes_in_cup or parent_id is null);
+alter table public.groups add constraint groups_competes_department_ck
+  check (not competes_in_cup or category = 'department');
 
 -- ==================== 5b. The Work Filter date range (#677) ====================
 -- The Cup reads the award instant (task_evaluations.evaluated_at through

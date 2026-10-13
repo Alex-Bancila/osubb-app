@@ -106,8 +106,8 @@ select is(pg_temp.definers_without_empty_search_path() || pg_temp.anon_executabl
   'both sweeps are clean again once the probe is dropped');
 
 
--- ADR-0009 Groups: no authority, visibility, membership, notification or Cup rule may branch
--- on the Group's presentation label. #576's public.my_groups() only PROJECTS it for the pickers (R14): a
+-- ADR-0009 Groups: no authority, visibility, membership, notification or Cup rule that READS
+-- Groups may branch on the Group's presentation label. #576's public.my_groups() only PROJECTS it for the pickers (R14): a
 -- security-invoker read whose every row decision lives in private.my_groups_impl, which stays
 -- under this sweep.
 --
@@ -116,9 +116,13 @@ select is(pg_temp.definers_without_empty_search_path() || pg_temp.anon_executabl
 -- BC's editor for it. Their public wrappers are listed with them for a mechanical reason, not
 -- a second exemption: pg_get_functiondef renders a function's signature, and the wrapper's
 -- argument is named p_category because that is the name PostgREST publishes. Nothing else in
--- public or private may name the column, and neither of the two writers BRANCHES on it --
--- both only assign what the caller sent, and their own prose about it lives in
--- `comment on function`, which this sweep deliberately does not read.
+-- public or private may name the column. create_group_impl only assigns what the caller
+-- sent. update_group_structure_impl assigns it and, since #1047 (ADR-0009 amended
+-- 2026-10-13, ruling R52), reads the REQUESTED label for one rule: only a Department may
+-- be set to compete in the Cup (PT409 cup_not_department, backed by
+-- groups_competes_department_ck). That is where the Cup SETTING is written; every function
+-- that READS Groups -- department_cup among them -- stays under this sweep. Their own
+-- prose about it lives in `comment on function`, which this sweep deliberately does not read.
 create function pg_temp.category_branching_functions() returns text[]
 language sql as $$
   select coalesce(array_agg(n.nspname || '.' || p.proname order by n.nspname, p.proname), '{}')

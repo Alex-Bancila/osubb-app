@@ -65,7 +65,7 @@ A Group created inside a parent Group and overseen by the parent's Group Manager
 _Avoid_: Sub-team, child team, nested team
 
 **Group Category**:
-The presentation label chosen when a Group is created: Department, Project, or Team. It pre-fills the Group's settings and names it in the interface; no authority, visibility, or Cup rule depends on it.
+The presentation label chosen when a Group is created: Department, Project, or Team. It pre-fills the Group's settings and names it in the interface; no authority or visibility rule depends on it, and one setting does: only a Group in the Department category may be set to compete in the Department Cup (ruling R52, 2026-10-13).
 _Avoid_: Kind, type, group type
 
 **Minimum Level**:
@@ -257,7 +257,7 @@ The total visible to an individual Member from their own Points Ledger entries.
 A BCE/BC/Moderator view of Members ordered by Task Points only.
 
 **Department Cup**:
-A BCE/BC/Moderator comparison of Task Points earned in the top-level Groups set to compete and in every Group below them set to count toward them. Project and Independent-Team work never contributes.
+A BCE/BC/Moderator comparison of Task Points earned in the top-level Groups set to compete and in every Group below them set to count toward them. Only a top-level Department may be set to compete (ruling R52, 2026-10-13); Project and Independent-Team work never contributes.
 
 **Completed-work Request**:
 A Member’s request to recognize work already completed for one Origin. Approval creates the completed Task, Assignment, Evaluation, and Task Points together; the decider may first change the Task's title, details, Group, Attached Link and Campaign. A Group's managers can also add such a completed Task directly, without a Request, for any active Member at or above the Group's Minimum Level, member of the Group or not (ruling R51, 2026-10-13) — never for themselves, a BC member or the Moderator, and a Group Responsible never for a Member who holds a Manager or Responsible role on that Group's path; its points count for the Group the work was done for.

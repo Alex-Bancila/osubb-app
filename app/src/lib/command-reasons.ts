@@ -131,6 +131,12 @@ const REASON_COPY = new Map<string, string>([
     'cup_not_top_level',
     'Doar un grup fără grup părinte poate concura în Cupa Departamentelor.',
   ],
+  // ADR-0009, amended 2026-10-13: the settings form already hides the box
+  // outside a top-level Department; this is the server's refusal of the same.
+  [
+    'cup_not_department',
+    'Doar un departament poate concura în Cupa Departamentelor.',
+  ],
   ['organization_group_exists', 'Există deja un grup al organizației.'],
   // #756 (ruling R25): Private Groups.
   [
