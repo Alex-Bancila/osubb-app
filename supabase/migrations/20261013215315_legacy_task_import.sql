@@ -102,11 +102,11 @@ declare
   v_task_id     bigint;
   v_assignment  bigint;
   v_evaluation  bigint;
-  v_members     uuid[]        := '{}';
-  v_deltas      integer[]     := '{}';
-  v_tasks       bigint[]      := '{}';
-  v_evaluations bigint[]      := '{}';
-  v_instants    timestamptz[] := '{}';
+  v_members     uuid[]        := '{}'::uuid[];
+  v_deltas      integer[]     := '{}'::integer[];
+  v_tasks       bigint[]      := '{}'::bigint[];
+  v_evaluations bigint[]      := '{}'::bigint[];
+  v_instants    timestamptz[] := '{}'::timestamptz[];
 begin
   -- 1. Malformed for every caller (conventions section 2). Each refusal names
   --    the row in DETAIL: the operator has a file of thousands to fix.
