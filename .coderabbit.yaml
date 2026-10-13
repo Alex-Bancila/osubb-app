@@ -25,6 +25,12 @@ reviews:
     - "!**/*.lock"
     - "!app/package-lock.json"
     - "!package-lock.json"
+    # Temporary for #1044 (160 files, CodeRabbit reviews at most 100): the tests
+    # and docs are skipped so the production code is reviewed; removed before merge.
+    - "!**/*.test.ts"
+    - "!**/*.test.tsx"
+    - "!**/*.test.sql"
+    - "!**/*.md"
   path_instructions:
     - path: "supabase/migrations/**"
       instructions: |
