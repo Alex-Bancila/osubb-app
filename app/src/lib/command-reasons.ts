@@ -35,6 +35,11 @@ const REASON_COPY = new Map<string, string>([
   ['rejection_reason_required', 'Scrie motivul respingerii.'],
   ['rejection_reason_too_long', 'Motivul are cel mult 1000 de caractere.'],
   ['announcement_not_found', 'Anunțul nu mai există.'],
+  // Ruling R50 (2026-10-13)
+  [
+    'announcement_pin_forbidden',
+    'Doar BC și Moderatorul fixează un anunț pentru toată organizația.',
+  ],
   ['invalid_executors', 'Alege câte un executor pentru fiecare exemplar.'],
   /* ---- Grupuri preferate (R43) ---- */
   [

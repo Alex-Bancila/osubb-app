@@ -10,7 +10,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(100);
+select plan(101);
 
 create function pg_temp.u47(n integer) returns uuid language sql immutable as $$
   select ('47000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -98,10 +98,15 @@ update announcements set approval_status = 'approved', approval_decided_by = pg_
  where title = 'Ann approved later #4700';
 select set_config('osubb.deciding_approval', 'off', true);
 select is((pg_temp.ann('Ann approved later #4700')).approval_status, 'approved', 'precondition: approved by hand');
+-- R50 (2026-10-13): the author cannot pin an organisation-wide Announcement; BC's pin is no content edit.
 select pg_temp.test_login_leadership(pg_temp.u47(1));
+select throws_ok($$update announcements set pinned = true where title = 'Ann approved later #4700'$$,
+  '42501', 'announcement_pin_forbidden', 'the author cannot pin an organisation-wide Announcement (R50)');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.u47(2));
 update announcements set pinned = true where title = 'Ann approved later #4700';
 reset role;
-select is((pg_temp.ann('Ann approved later #4700')).approval_status, 'approved', 'pinning is not a content edit');
+select is((pg_temp.ann('Ann approved later #4700')).approval_status, 'approved', 'a pin by BC is not a content edit');
 select pg_temp.test_login_leadership(pg_temp.u47(1));
 update announcements set body = 'edited by the author' where title = 'Ann approved later #4700';
 reset role;

@@ -82,6 +82,13 @@ export default function AnnouncementComposeSheet() {
     myGroups.data ?? [],
     capabilities.data?.createTopLevelGroups === true,
   );
+  // R50: below BC, a pin is offered only on a local Announcement of a Group;
+  // an organisation-wide one (the Organization Group, or the organisation
+  // Audience) is pinned by BC and the Moderator alone.
+  const chosenOrigin = origins.find((group) => String(group.id) === originId);
+  const mayPin =
+    capabilities.data?.manageRoles === true ||
+    !(chosenOrigin?.is_organization === true || audience === 'org');
 
   if (capabilities.data?.managesAnyGroup !== true) return null;
 
@@ -112,7 +119,7 @@ export default function AnnouncementComposeSheet() {
         group_id: selected.id,
         audience,
         priority: draft.priority,
-        pinned,
+        pinned: mayPin && pinned,
         links: values.links,
         deadline: values.deadline,
         min_level: draft.minLevel,
@@ -229,13 +236,15 @@ export default function AnnouncementComposeSheet() {
               </>
             }
             extra={
-              <ChoiceRow className="font-medium">
-                <Checkbox
-                  checked={pinned}
-                  onCheckedChange={(next) => setPinned(next === true)}
-                />
-                Fixează anunțul
-              </ChoiceRow>
+              mayPin ? (
+                <ChoiceRow className="font-medium">
+                  <Checkbox
+                    checked={pinned}
+                    onCheckedChange={(next) => setPinned(next === true)}
+                  />
+                  Fixează anunțul
+                </ChoiceRow>
+              ) : undefined
             }
           />
           <FieldError>{form.formError}</FieldError>
