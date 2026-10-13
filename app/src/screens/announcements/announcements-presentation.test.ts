@@ -8,6 +8,7 @@ import {
   getUnreadCriticalAnnouncement,
   mayAskForReaders,
   mayManageAnnouncement,
+  mayPinAnnouncement,
   originLabel,
   priorityMeta,
   readersSummary,
@@ -734,5 +735,61 @@ describe('minLevelLabel (#909)', () => {
     );
     expect(item.minLevel).toBe(3);
     expect(item.minLevelLabel).toBe('Nivel minim: Voluntar cu Drept de Vot');
+  });
+});
+
+describe('mayPinAnnouncement (ruling R50, 2026-10-13: only BC pins organisation-wide)', () => {
+  const me = 'me';
+  const local = {
+    groupId: 7,
+    group: { id: 7, name: 'Educațional', short: 'EDU', isOrganization: false },
+    audience: 'local' as const,
+    authorMember: { memberId: me, fullName: 'Eu' },
+  };
+  const organization = {
+    groupId: 1,
+    group: { id: 1, name: 'OSUBB', short: 'OSUBB', isOrganization: true },
+    audience: 'local' as const,
+    authorMember: { memberId: me, fullName: 'Eu' },
+  };
+  const responsible = [{ id: 7, group_role: 'responsible', status: 'active' }];
+
+  it('lets BC/Moderator pin anything', () => {
+    expect(
+      mayPinAnnouncement(organization, {
+        bcOrModerator: true,
+        memberId: 'bc',
+        groups: [],
+      }),
+    ).toBe(true);
+  });
+
+  it('lets a Responsible of the Origin pin a local Announcement, as they manage it', () => {
+    expect(
+      mayPinAnnouncement(local, {
+        bcOrModerator: false,
+        memberId: 'other',
+        groups: responsible,
+      }),
+    ).toBe(true);
+  });
+
+  it('never lets the author pin their own Organization Group Announcement', () => {
+    expect(
+      mayPinAnnouncement(organization, {
+        bcOrModerator: false,
+        memberId: me,
+        groups: responsible,
+      }),
+    ).toBe(false);
+  });
+
+  it('treats a local Announcement with the organisation Audience as organisation-wide', () => {
+    expect(
+      mayPinAnnouncement(
+        { ...local, audience: 'org' },
+        { bcOrModerator: false, memberId: 'other', groups: responsible },
+      ),
+    ).toBe(false);
   });
 });

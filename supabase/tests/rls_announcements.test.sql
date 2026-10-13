@@ -4,7 +4,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(37);
+select plan(41);
 truncate announcements, announcement_reads cascade;
 
 insert into auth.users(id,email) values
@@ -159,24 +159,40 @@ select is((select count(*) from announcements where title='Responsible Organizat
 'nor delete it');
 
 select pg_temp.test_login_leadership('f4000000-0000-0000-0000-0000000000f4');
-update announcements set pinned=true where title='Responsible Organization #581';
+update announcements set body='edited by its author' where title='Responsible Organization #581';
+-- Ruling R50 (2026-10-13): only BC and the Moderator pin an organisation-wide
+-- Announcement; its author edits and deletes it, never pins it.
+select throws_ok($$update announcements set pinned=true where title='Responsible Organization #581'$$,
+  '42501', 'announcement_pin_forbidden', 'but the author cannot pin it (R50)');
 delete from announcements where title='Responsible Organization 2 #581';
 reset role;
-select is((select pinned from announcements where title='Responsible Organization #581'),true,
+select is((select body from announcements where title='Responsible Organization #581'),'edited by its author',
 'the author edits their own organisation-wide Announcement');
 select is((select count(*) from announcements where title='Responsible Organization 2 #581'),0::bigint,
 'and deletes their own');
+-- The organisation Audience from a local Group is organisation-wide too.
+select pg_temp.test_login_leadership('f4000000-0000-0000-0000-0000000000f4');
+insert into announcements(title,body,group_id,audience)
+select 'Responsible EDU org #581','x',id,'org' from groups where name='Educațional';
+select throws_ok($$update announcements set pinned=true where title='Responsible EDU org #581'$$,
+  '42501', 'announcement_pin_forbidden', 'nor one with the organisation Audience from their own Group (R50)');
+select lives_ok($$update announcements set pinned=true where title='Responsible EDU #581'$$,
+  'while a local Announcement of their Group still takes their pin');
+select throws_ok($$insert into announcements(title,body,group_id,audience,pinned)
+  select 'Responsible org pinned #581','x',id,'local',true from groups where is_organization$$,
+  '42501', 'announcement_pin_forbidden', 'nor publish an organisation-wide Announcement already pinned (R50)');
+reset role;
 
 select pg_temp.test_login_leadership('f6000000-0000-0000-0000-0000000000f6');
-update announcements set pinned=false where title='Responsible Organization #581';
-reset role;
-select is((select pinned from announcements where title='Responsible Organization #581'),false,
-'BC still edits someone else''s organisation-wide Announcement');
-
-select pg_temp.test_login_leadership('f8000000-0000-0000-0000-0000000000f8');
 update announcements set pinned=true where title='Responsible Organization #581';
 reset role;
 select is((select pinned from announcements where title='Responsible Organization #581'),true,
+'BC pins someone else''s organisation-wide Announcement');
+
+select pg_temp.test_login_leadership('f8000000-0000-0000-0000-0000000000f8');
+update announcements set pinned=false where title='Responsible Organization #581';
+reset role;
+select is((select pinned from announcements where title='Responsible Organization #581'),false,
 'the Moderator edits it too');
 select pg_temp.test_login_leadership('f8000000-0000-0000-0000-0000000000f8');
 delete from announcements where title='Responsible Organization #581';

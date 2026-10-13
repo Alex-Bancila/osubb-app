@@ -346,6 +346,27 @@ export function mayManageAnnouncement(
   );
 }
 
+/**
+ * Fixează anunțul (ruling R50, 2026-10-13): BC and the Moderator pin anything;
+ * below them, only a local Announcement is pinned, by whoever manages it
+ * (`mayManageAnnouncement`). An organisation-wide Announcement -- the
+ * Organization Group's, or one with the organisation Audience -- takes no pin
+ * from its author (`announcements_guard_pin` refuses it too).
+ */
+export function mayPinAnnouncement(
+  announcement: Pick<
+    AnnouncementPresentation,
+    'groupId' | 'group' | 'authorMember' | 'audience'
+  >,
+  viewer: Parameters<typeof mayManageAnnouncement>[1],
+): boolean {
+  if (viewer.bcOrModerator) return true;
+  const organisationWide =
+    announcement.group.isOrganization === true ||
+    announcement.audience === 'org';
+  return !organisationWide && mayManageAnnouncement(announcement, viewer);
+}
+
 export type AnnouncementReader = {
   member: MemberIdentity;
   /** Null while the recipient has not opened the Announcement. */

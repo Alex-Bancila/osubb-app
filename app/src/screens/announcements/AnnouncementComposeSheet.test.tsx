@@ -235,6 +235,33 @@ describe('Announcement composer', () => {
     );
   });
 
+  it('offers Fixează anunțul below BC only for a local Announcement of a Group (R50)', async () => {
+    const user = userEvent.setup();
+    render(<AnnouncementComposeSheet />);
+    await user.click(screen.getByRole('button', { name: 'Anunț nou' }));
+    const dialog = screen.getByRole('dialog', { name: 'Anunț nou' });
+    const pin = () =>
+      within(dialog).queryByRole('checkbox', { name: 'Fixează anunțul' });
+    expect(pin()).toBeInTheDocument();
+
+    await user.click(
+      within(dialog).getByRole('combobox', { name: 'Grup de origine' }),
+    );
+    await user.click(await screen.findByRole('option', { name: 'OSUBB' }));
+    expect(pin()).toBeNull();
+
+    await user.click(
+      within(dialog).getByRole('combobox', { name: 'Grup de origine' }),
+    );
+    await user.click(await screen.findByRole('option', { name: 'Echipa A' }));
+    expect(pin()).toBeInTheDocument();
+
+    await user.click(
+      within(dialog).getByRole('radio', { name: 'Toată organizația' }),
+    );
+    expect(pin()).toBeNull();
+  });
+
   it('is a form sheet: segmented Audiență and Prioritate, the Termen picker, a pinned footer and no boxed links', async () => {
     const user = userEvent.setup();
     render(<AnnouncementComposeSheet />);
