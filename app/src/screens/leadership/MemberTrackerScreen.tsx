@@ -493,7 +493,11 @@ function MemberHistory({ memberId }: { memberId: string }) {
         {volunteer && (
           <AddCompletedTaskForMember
             volunteer={volunteer}
-            onAdded={({ id, title }) => setAdded({ id, title })}
+            onAdded={({ ids, title }) => {
+              // One copy on a Member's tracker; the first id is the one.
+              const [id] = ids;
+              if (id !== undefined) setAdded({ id, title });
+            }}
           />
         )}
         {added && (

@@ -82,6 +82,8 @@ function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
     createdBy: 'someone-else',
     cancelledAt: null,
     cancelReason: null,
+    approvalStatus: 'approved',
+    rejectionReason: null,
     ...overrides,
   };
 }

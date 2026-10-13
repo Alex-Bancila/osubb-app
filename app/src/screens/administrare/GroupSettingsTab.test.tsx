@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { MemoryRouter } from 'react-router';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { describe, beforeEach, expect, it, vi } from 'vitest';
 import { CommandError } from '../../lib/command-reasons';
 import type {
   AdminGroup,
@@ -706,4 +706,103 @@ it('renders nothing for a viewer who can change none of it', () => {
     </MemoryRouter>,
   );
   expect(container).toBeEmptyDOMElement();
+});
+
+/*
+ * Alex (2026-10-11): "this checkmark should exist only for departments" --
+ * the Department Cup box is a Department's; a top-level Team or Project gets
+ * neither it nor the Child Group's parent-cup box.
+ */
+function showStructure(stored: Partial<AdminGroup>) {
+  return render(
+    <MemoryRouter>
+      <GroupSettingsTab
+        group={group(stored)}
+        parent={undefined}
+        roster={[]}
+        authority={{ ...authority, editStructure: true }}
+        levels={[0, 1, 2, 3, 5, 6]}
+        actorLevel={6}
+        busy={false}
+        error={null}
+        lastReason={undefined}
+        onRun={run}
+      />
+    </MemoryRouter>,
+  );
+}
+
+it('offers "Concurează în Cupa Departamentelor" to a top-level Department only', () => {
+  const department = showStructure({
+    category: 'department',
+    parent_id: null,
+    path: [2],
+  });
+  expect(
+    screen.getByRole('checkbox', {
+      name: 'Concurează în Cupa Departamentelor',
+    }),
+  ).toBeInTheDocument();
+  department.unmount();
+
+  const project = showStructure({
+    category: 'project',
+    parent_id: null,
+    path: [2],
+  });
+  expect(
+    screen.queryByRole('checkbox', { name: /Cupa Departamentelor/ }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole('checkbox', { name: /cupa grupului părinte/ }),
+  ).toBeNull();
+  project.unmount();
+
+  // A Child Group keeps its own box: its points may count toward the parent's cup.
+  showStructure({ category: 'team' });
+  expect(
+    screen.queryByRole('checkbox', { name: /Cupa Departamentelor/ }),
+  ).toBeNull();
+  expect(
+    screen.getByRole('checkbox', {
+      name: 'Punctele merg și la cupa grupului părinte',
+    }),
+  ).toBeInTheDocument();
+});
+
+describe('Categorie (Alex, 2026-10-11; CodeRabbit on #1044)', () => {
+  it('offers a Subgrup only Echipă and Proiect, and a root Group every category', () => {
+    const child = showStructure({});
+    expect(screen.queryByRole('radio', { name: 'Departament' })).toBeNull();
+    expect(screen.getByRole('radio', { name: 'Echipă' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Proiect' })).toBeInTheDocument();
+    child.unmount();
+
+    showStructure({ parent_id: null, path: [2], category: 'department' });
+    expect(
+      screen.getByRole('radio', { name: 'Departament' }),
+    ).toBeInTheDocument();
+  });
+
+  it('sends no Cup entry for a root Group that stops being a Departament', async () => {
+    const user = userEvent.setup();
+    showStructure({
+      parent_id: null,
+      path: [2],
+      category: 'department',
+      competes_in_cup: true,
+    });
+    await user.click(screen.getByRole('radio', { name: 'Echipă' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Salvează structura' }),
+    );
+    expect(run).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        kind: 'structure',
+        category: 'team',
+        competesInCup: false,
+      }),
+      expect.any(Function),
+    );
+  });
 });

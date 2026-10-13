@@ -8,23 +8,29 @@ import {
   evaluationShape,
   fieldForReason as evaluationFields,
 } from './evaluation';
-import { taskDescription, taskTitle } from './task';
+import { MAX_TASK_COPIES, taskDescription, taskTitle } from './task';
 import { isId } from './text';
 
 /**
  * A completed Task (#915), as `approve_completed_work_request` (shaping a
- * Request's Task) and `create_completed_task` (adding one directly) accept
- * it: the Task's title, details, Group, Attached Links (up to five, R46) and Campaign — no
- * deadline, no Audience — then the Evaluation's Difficulty, Rating and note.
- * The commands stay authoritative; this keeps a draft they would refuse in
- * the browser.
+ * Request's Task), `create_completed_task` (adding one directly) and
+ * `create_completed_tasks` (adding it n times, spec 2026-10-11 Part E) accept
+ * it: the Task's title, details, Group, Attached Links (up to five, R46) and
+ * Campaign — no deadline, no Audience — the number of copies, then the
+ * Evaluation's Difficulty, Rating and note. The commands stay authoritative;
+ * this keeps a draft they would refuse in the browser.
  */
 export type CompletedTaskInput = {
   title: string;
   description: string;
   groupId: number | null;
-  /** The volunteer; always set when approving (the requester). */
+  /**
+   * The volunteer; always set when approving (the requester), and chosen in
+   * the next step instead when there are several copies.
+   */
   executorId: string | null;
+  /** The copies as typed; "1" everywhere the field is not offered. */
+  copies: string;
   /** The rows as typed; a blank row is dropped (R46). */
   links: AttachedLink[];
   campaignId: number | null;
@@ -33,14 +39,34 @@ export type CompletedTaskInput = {
   note: string;
 };
 
+/** The copies as typed: a whole number from 1 to `MAX_TASK_COPIES`. */
+const copiesCount = z.string().transform((value, ctx) => {
+  const number = value.trim() === '' ? Number.NaN : Number(value);
+  if (!Number.isInteger(number) || number < 1) {
+    ctx.addIssue({ code: 'custom', message: 'invalid_copies' });
+    return z.NEVER;
+  }
+  if (number > MAX_TASK_COPIES) {
+    ctx.addIssue({ code: 'custom', message: 'too_many_copies' });
+    return z.NEVER;
+  }
+  return number;
+});
+
 export function completedTaskSchema({
   groupIds,
   campaigns,
+  volunteerRequired = true,
 }: {
   /** The Groups the form offers; any other is no longer available. */
   groupIds: readonly number[];
   /** The Campaigns each offered Group may carry. */
   campaigns: (groupId: number) => readonly number[];
+  /**
+   * False while the form asks for several copies: the volunteers are chosen
+   * one per copy in the next step, so the form's own field may stay empty.
+   */
+  volunteerRequired?: boolean;
 }) {
   return z
     .object({
@@ -62,9 +88,10 @@ export function completedTaskSchema({
         .string()
         .nullable()
         .superRefine((executorId, ctx) => {
-          if (!executorId?.trim())
+          if (volunteerRequired && !executorId?.trim())
             ctx.addIssue({ code: 'custom', message: 'executor_required' });
         }),
+      copies: copiesCount,
       links: attachedLinksSchema,
       campaignId: z.number().nullable(),
       ...evaluationShape,
@@ -91,6 +118,7 @@ export type CompletedTaskValues = z.output<
 const EXECUTOR_REASONS = [
   'executor_required',
   'invalid_executor',
+  'invalid_executors',
   'executor_not_group_member',
   'executor_below_min_level',
   'executor_role_excluded',
@@ -115,6 +143,8 @@ export function completedTaskFieldForReason(
     ...Object.fromEntries(
       EXECUTOR_REASONS.map((reason) => [reason, volunteerField]),
     ),
+    invalid_copies: 'copies',
+    too_many_copies: 'copies',
     invalid_campaign: 'campaignId',
     ...linksFieldForReason('links'),
     ...evaluationFields,

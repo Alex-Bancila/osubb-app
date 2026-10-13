@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router';
 import { cn } from 'cn';
 import { SlidingThumb, useSlidingThumb } from '../ui/sliding-thumb';
+import { useScrollCurrentTabIntoView } from './tab-scroll';
 
 /**
  * The app's one tab look (DESIGN.md, Navigation): a pill track, the selected
@@ -13,11 +14,14 @@ import { SlidingThumb, useSlidingThumb } from '../ui/sliding-thumb';
  *
  * - The track is as wide as the content column and its tabs share it; it has
  *   no margin of its own (in a `Page` the 24 px gap spaces it).
- * - Nothing scrolls sideways. Tabs that cannot all spell their names give
- *   each an icon and let only the selected one spell its (`tabLabelsFrom`).
+ * - Tabs never shrink or truncate. When they do not fit, the track scrolls
+ *   sideways with no visible scrollbar and the current tab is brought into
+ *   view (`useScrollCurrentTabIntoView`). With `tabLabelsFrom`, narrower
+ *   screens still collapse the other tabs to icons first; the track scrolls
+ *   only when even those overflow.
  */
 export const tabListClass =
-  'relative flex w-full min-w-0 gap-0.5 rounded-lg border border-border bg-(--surface-3) p-[3px]';
+  'relative flex w-full min-w-0 gap-0.5 overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-lg border border-border bg-(--surface-3) p-[3px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
 /**
  * The thumb under the selected tab. For Base UI `Tabs`, put it on a
@@ -37,7 +41,7 @@ export const tabThumbClass =
 // The focus classes are `focusRingClass`, spelled out so this stays a
 // literal constant.
 export const tabClass =
-  'relative z-1 inline-flex min-h-[36px] min-w-11 flex-auto items-center justify-center gap-1.5 rounded-md px-4 text-sm font-bold whitespace-nowrap text-muted-foreground no-underline [transition:color_200ms] after:absolute after:inset-x-0 after:-inset-y-1 hover:text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring motion-reduce:transition-none [&_svg]:size-4 [&_svg]:shrink-0 data-active:bg-(--text) data-active:text-(--surface) data-active:[transition:color_200ms,background-color_0s_200ms] data-active:hover:text-(--surface) aria-[current=page]:bg-(--text) aria-[current=page]:text-(--surface) aria-[current=page]:[transition:color_200ms,background-color_0s_200ms] aria-[current=page]:hover:text-(--surface) aria-selected:bg-(--text) aria-selected:text-(--surface) aria-selected:[transition:color_200ms,background-color_0s_200ms] aria-selected:hover:text-(--surface)';
+  'relative z-1 inline-flex min-h-[36px] min-w-11 flex-auto shrink-0 items-center justify-center gap-1.5 rounded-md px-4 text-sm font-bold whitespace-nowrap text-muted-foreground no-underline [transition:color_200ms] after:absolute after:inset-x-0 after:-inset-y-1 hover:text-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring motion-reduce:transition-none [&_svg]:size-4 [&_svg]:shrink-0 data-active:bg-(--text) data-active:text-(--surface) data-active:[transition:color_200ms,background-color_0s_200ms] data-active:hover:text-(--surface) aria-[current=page]:bg-(--text) aria-[current=page]:text-(--surface) aria-[current=page]:[transition:color_200ms,background-color_0s_200ms] aria-[current=page]:hover:text-(--surface) aria-selected:bg-(--text) aria-selected:text-(--surface) aria-selected:[transition:color_200ms,background-color_0s_200ms] aria-selected:hover:text-(--surface)';
 
 export type TabLabelsFrom = 'always' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 
@@ -52,31 +56,31 @@ export const tabLabelsFrom: Record<
   TabLabelsFrom,
   { tab: string; label: string }
 > = {
-  always: { tab: '', label: 'min-w-0 truncate' },
+  always: { tab: '', label: 'min-w-0' },
   sm: {
-    tab: 'max-sm:flex-none max-sm:px-3 max-sm:aria-selected:flex-auto max-sm:aria-[current=page]:flex-auto max-sm:data-active:flex-auto',
+    tab: 'max-sm:flex-none max-sm:px-3 max-sm:aria-selected:grow max-sm:aria-[current=page]:grow max-sm:data-active:grow',
     label:
-      'min-w-0 truncate max-sm:sr-only max-sm:in-aria-selected:not-sr-only max-sm:in-aria-[current=page]:not-sr-only max-sm:in-data-active:not-sr-only',
+      'min-w-0 max-sm:sr-only max-sm:in-aria-selected:not-sr-only max-sm:in-aria-[current=page]:not-sr-only max-sm:in-data-active:not-sr-only',
   },
   md: {
-    tab: 'max-md:flex-none max-md:px-3 max-md:aria-selected:flex-auto max-md:aria-[current=page]:flex-auto max-md:data-active:flex-auto',
+    tab: 'max-md:flex-none max-md:px-3 max-md:aria-selected:grow max-md:aria-[current=page]:grow max-md:data-active:grow',
     label:
-      'min-w-0 truncate max-md:sr-only max-md:in-aria-selected:not-sr-only max-md:in-aria-[current=page]:not-sr-only max-md:in-data-active:not-sr-only',
+      'min-w-0 max-md:sr-only max-md:in-aria-selected:not-sr-only max-md:in-aria-[current=page]:not-sr-only max-md:in-data-active:not-sr-only',
   },
   lg: {
-    tab: 'max-lg:flex-none max-lg:px-3 max-lg:aria-selected:flex-auto max-lg:aria-[current=page]:flex-auto max-lg:data-active:flex-auto',
+    tab: 'max-lg:flex-none max-lg:px-3 max-lg:aria-selected:grow max-lg:aria-[current=page]:grow max-lg:data-active:grow',
     label:
-      'min-w-0 truncate max-lg:sr-only max-lg:in-aria-selected:not-sr-only max-lg:in-aria-[current=page]:not-sr-only max-lg:in-data-active:not-sr-only',
+      'min-w-0 max-lg:sr-only max-lg:in-aria-selected:not-sr-only max-lg:in-aria-[current=page]:not-sr-only max-lg:in-data-active:not-sr-only',
   },
   xl: {
-    tab: 'max-xl:flex-none max-xl:px-3 max-xl:aria-selected:flex-auto max-xl:aria-[current=page]:flex-auto max-xl:data-active:flex-auto',
+    tab: 'max-xl:flex-none max-xl:px-3 max-xl:aria-selected:grow max-xl:aria-[current=page]:grow max-xl:data-active:grow',
     label:
-      'min-w-0 truncate max-xl:sr-only max-xl:in-aria-selected:not-sr-only max-xl:in-aria-[current=page]:not-sr-only max-xl:in-data-active:not-sr-only',
+      'min-w-0 max-xl:sr-only max-xl:in-aria-selected:not-sr-only max-xl:in-aria-[current=page]:not-sr-only max-xl:in-data-active:not-sr-only',
   },
   '2xl': {
-    tab: 'max-2xl:flex-none max-2xl:px-3 max-2xl:aria-selected:flex-auto max-2xl:aria-[current=page]:flex-auto max-2xl:data-active:flex-auto',
+    tab: 'max-2xl:flex-none max-2xl:px-3 max-2xl:aria-selected:grow max-2xl:aria-[current=page]:grow max-2xl:data-active:grow',
     label:
-      'min-w-0 truncate max-2xl:sr-only max-2xl:in-aria-selected:not-sr-only max-2xl:in-aria-[current=page]:not-sr-only max-2xl:in-data-active:not-sr-only',
+      'min-w-0 max-2xl:sr-only max-2xl:in-aria-selected:not-sr-only max-2xl:in-aria-[current=page]:not-sr-only max-2xl:in-data-active:not-sr-only',
   },
 };
 
@@ -113,6 +117,8 @@ export function PageTabs({
   const { track: nav, thumb } = useSlidingThumb<HTMLElement>(
     '[aria-current="page"]',
   );
+  // A tab outside the scrolled part of the track comes into view by itself.
+  useScrollCurrentTabIntoView(nav, '[aria-current="page"]');
   const sizes = tabLabelsFrom[labelsFrom];
   return (
     <nav

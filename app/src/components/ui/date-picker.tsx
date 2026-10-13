@@ -206,11 +206,20 @@ export function DatePicker({
           align="start"
           sideOffset={6}
           collisionPadding={12}
+          // The popup is always its full height (spec 2026-10-11, Part D):
+          // it prefers opening under the field and, near the screen's edge,
+          // slides along the axis -- over the field if it must -- instead of
+          // flipping and being clamped to the room on one side.
+          collisionAvoidance={{
+            side: 'shift',
+            align: 'shift',
+            fallbackAxisSide: 'none',
+          }}
           className="z-80 outline-none"
         >
           <Popover.Popup
             aria-label={withTime ? 'Alege data și ora' : 'Alege data'}
-            className="max-h-(--available-height) w-[min(20rem,calc(100vw-1.5rem))] origin-(--transform-origin) overflow-y-auto overscroll-contain rounded-lg bg-popover p-3 text-popover-foreground shadow-md ring-1 ring-foreground/10 transition-[opacity,scale] outline-none motion-reduce:transition-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0"
+            className="max-h-[calc(100dvh-24px)] w-[min(20rem,calc(100vw-1.5rem))] origin-(--transform-origin) overflow-y-auto rounded-lg bg-popover p-3 text-popover-foreground shadow-md ring-1 ring-foreground/10 transition-[opacity,scale] outline-none motion-reduce:transition-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0"
           >
             <Calendar
               day={day}

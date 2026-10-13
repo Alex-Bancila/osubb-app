@@ -7,6 +7,8 @@ import {
   completeUmbrella,
   createTask,
   createTaskMutationOptions,
+  createTasks,
+  createTasksArgs,
 } from './task-umbrella';
 import type { TaskDraft } from '../screens/tracker/task-form-model';
 const draft: TaskDraft = {
@@ -21,6 +23,7 @@ const draft: TaskDraft = {
   executorId: null,
   campaignId: null,
   links: [],
+  copies: 1,
 };
 
 describe('Umbrella commands', () => {
@@ -120,4 +123,52 @@ it('refreshes Task reads even when Subtask creation is denied', async () => {
     .build(client, createTaskMutationOptions(client));
   await expect(mutation.execute(draft)).rejects.toEqual(failure);
   expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.tasks.all });
+});
+
+describe('create_tasks arguments', () => {
+  it('sends one Executor as a one-entry list for a single direct Task', () => {
+    expect(
+      createTasksArgs({
+        draft: {
+          ...draft,
+          parentTaskId: null,
+          assignmentMode: 'direct',
+          audience: 'local',
+          executorId: 'executor-1',
+        },
+      }),
+    ).toMatchObject({ p_executor_ids: ['executor-1'], p_copies: 1 });
+  });
+  it("sends the dialog's Executors, one per copy, for n direct copies", () => {
+    expect(
+      createTasksArgs({
+        draft: {
+          ...draft,
+          assignmentMode: 'direct',
+          audience: 'local',
+          copies: 3,
+        },
+        executorIds: ['a', 'b', 'c'],
+      }),
+    ).toMatchObject({ p_executor_ids: ['a', 'b', 'c'], p_copies: 3 });
+  });
+  it('sends no Executors for public copies, whatever the form held', () => {
+    expect(
+      createTasksArgs({ draft: { ...draft, copies: 4, executorId: 'stale' } }),
+    ).toMatchObject({
+      p_executor_ids: null,
+      p_copies: 4,
+      p_assignment_mode: 'public',
+    });
+  });
+  it('calls create_tasks and returns the rows', async () => {
+    rpc.mockResolvedValue({ data: [{ id: 1 }, { id: 2 }], error: null });
+    await expect(
+      createTasks({ draft: { ...draft, copies: 2 } }),
+    ).resolves.toEqual([{ id: 1 }, { id: 2 }]);
+    expect(rpc).toHaveBeenLastCalledWith(
+      'create_tasks',
+      expect.objectContaining({ p_copies: 2, p_executor_ids: null }),
+    );
+  });
 });

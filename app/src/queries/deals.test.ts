@@ -22,7 +22,6 @@ import {
   setDealsTeamMember,
   updateDeal,
 } from './deals';
-import { setBcAssignment } from './bc-assignments';
 
 beforeEach(() => resetSupabaseMock());
 
@@ -121,23 +120,20 @@ it("counts one tab of Anunțuri with the badge's own function", async () => {
   );
 });
 
-describe('the OSUBB Deals team (R44)', () => {
-  it('reads the holder and both places from the live tables', async () => {
-    supabaseMock.eq
-      .mockResolvedValueOnce({ data: [{ member_id: 'holder' }], error: null })
-      .mockResolvedValueOnce({
-        data: [
-          { team_role: 'responsible', member_id: 'resp' },
-          { team_role: 'coordinator', member_id: 'coord' },
-        ],
-        error: null,
-      });
+describe('the OSUBB Deals team (R47)', () => {
+  it('reads both places from the team table', async () => {
+    supabaseMock.eq.mockResolvedValueOnce({
+      data: [
+        { team_role: 'responsible', member_id: 'resp' },
+        { team_role: 'coordinator', member_id: 'coord' },
+      ],
+      error: null,
+    });
     await expect(fetchDealsTeam()).resolves.toEqual({
-      holderId: 'holder',
       coordinatorId: 'coord',
       responsibleId: 'resp',
     });
-    expect(supabaseMock.from).toHaveBeenCalledWith('bc_assignments');
+    expect(supabaseMock.from).not.toHaveBeenCalledWith('bc_assignments');
     expect(supabaseMock.from).toHaveBeenCalledWith('assignment_team');
     expect(supabaseMock.eq).toHaveBeenCalledWith('assignment', 'osubb_deals');
   });
@@ -153,44 +149,5 @@ describe('the OSUBB Deals team (R44)', () => {
         p_member_id: null,
       },
     );
-  });
-
-  it('gives, moves and takes back an Atribuție through one command', async () => {
-    supabaseMock.rpc.mockResolvedValue({ data: null, error: null });
-    await setBcAssignment({
-      assignment: 'osubb_deals',
-      memberId: 'bc',
-      granted: true,
-      move: true,
-    });
-    expect(supabaseMock.rpc).toHaveBeenCalledWith('set_bc_assignment', {
-      p_assignment: 'osubb_deals',
-      p_member_id: 'bc',
-      p_granted: true,
-      p_move: true,
-    });
-    await setBcAssignment({
-      assignment: 'osubb_deals',
-      memberId: 'bc',
-      granted: false,
-    });
-    expect(supabaseMock.rpc).toHaveBeenLastCalledWith('set_bc_assignment', {
-      p_assignment: 'osubb_deals',
-      p_member_id: 'bc',
-      p_granted: false,
-      p_move: false,
-    });
-  });
-
-  it('passes a refusal on with its reason', async () => {
-    const refusal = { code: 'PT409', message: 'bc_assignment_held' };
-    supabaseMock.rpc.mockResolvedValue({ data: null, error: refusal });
-    await expect(
-      setBcAssignment({
-        assignment: 'osubb_deals',
-        memberId: 'bc',
-        granted: true,
-      }),
-    ).rejects.toBe(refusal);
   });
 });

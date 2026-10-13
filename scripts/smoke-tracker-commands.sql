@@ -245,6 +245,24 @@ select pg_temp.smoke_assert(
      from public.tasks where id = :t_main),
   'step 1: create_task left a todo public Task with an open queue and the manager as creator');
 
+-- ==================== step 1b: two public copies at once ====================
+
+select pg_temp.test_login_leadership('d0000000-0000-0000-0000-000000000007');
+select count(*) as copies_made from public.create_tasks(
+  p_title           => 'SMOKE Exemplare publice',
+  p_description     => 'Doua copii create de smoke-test.sql',
+  p_deadline        => now() + interval '30 days',
+  p_group_id        => :edu_group,
+  p_audience        => 'local',
+  p_assignment_mode => 'public',
+  p_copies          => 2) \gset
+reset role;
+
+select pg_temp.smoke_assert(
+  (:copies_made = 2 and (select count(*) = 2 from public.tasks
+    where title = 'SMOKE Exemplare publice' and status = 'todo' and queue_opened_at is not null)),
+  'step 1b: create_tasks left two identical todo public Tasks with open queues');
+
 select pg_temp.smoke_assert(
   (select count(*) = 1 from public.task_activity
     where task_id = :t_main and kind = 'created' and to_status = 'todo'),

@@ -58,7 +58,10 @@ export default function AnnouncementComposeSheet() {
     GROUP_MINIMUM_LEVELS,
     (level) => actorLevel >= 9 || level <= actorLevel,
   );
-  const [published, setPublished] = useState(false);
+  // What the last post became: published, or a request (spec 2026-10-11).
+  const [published, setPublished] = useState<'published' | 'pending' | null>(
+    null,
+  );
   // Ruling R8: the same limits `announcements_guard_text` enforces, checked
   // on blur and on publish; the guard's 23514 reason lands under its field.
   const form = useFormValidation(
@@ -79,6 +82,13 @@ export default function AnnouncementComposeSheet() {
     myGroups.data ?? [],
     capabilities.data?.createTopLevelGroups === true,
   );
+  // R50: below BC, a pin is offered only on a local Announcement of a Group;
+  // an organisation-wide one (the Organization Group, or the organisation
+  // Audience) is pinned by BC and the Moderator alone.
+  const chosenOrigin = origins.find((group) => String(group.id) === originId);
+  const mayPin =
+    capabilities.data?.manageRoles === true ||
+    !(chosenOrigin?.is_organization === true || audience === 'org');
 
   if (capabilities.data?.managesAnyGroup !== true) return null;
 
@@ -109,12 +119,19 @@ export default function AnnouncementComposeSheet() {
         group_id: selected.id,
         audience,
         priority: draft.priority,
-        pinned,
+        pinned: mayPin && pinned,
         links: values.links,
         deadline: values.deadline,
         min_level: draft.minLevel,
       });
-      setPublished(true);
+      // The insert returns no row (a writer may post outside their own read
+      // audience), so the receipt follows the stamp's rule: OSUBB-wide by a
+      // writer below BC waits for approval (spec 2026-10-11).
+      setPublished(
+        actorLevel < 6 && (selected.is_organization || audience === 'org')
+          ? 'pending'
+          : 'published',
+      );
       setOpen(false);
       clear();
     } catch (cause) {
@@ -138,13 +155,15 @@ export default function AnnouncementComposeSheet() {
           icon={Plus}
           className="gap-2"
           onSelect={() => {
-            setPublished(false);
+            setPublished(null);
             setOpen(true);
           }}
         />
         {published && (
-          <Toast onClose={() => setPublished(false)}>
-            Anunțul a fost publicat.
+          <Toast onClose={() => setPublished(null)}>
+            {published === 'pending'
+              ? 'Anunțul așteaptă aprobarea BC.'
+              : 'Anunțul a fost publicat.'}
           </Toast>
         )}
       </div>
@@ -217,13 +236,15 @@ export default function AnnouncementComposeSheet() {
               </>
             }
             extra={
-              <ChoiceRow className="font-medium">
-                <Checkbox
-                  checked={pinned}
-                  onCheckedChange={(next) => setPinned(next === true)}
-                />
-                Fixează anunțul
-              </ChoiceRow>
+              mayPin ? (
+                <ChoiceRow className="font-medium">
+                  <Checkbox
+                    checked={pinned}
+                    onCheckedChange={(next) => setPinned(next === true)}
+                  />
+                  Fixează anunțul
+                </ChoiceRow>
+              ) : undefined
             }
           />
           <FieldError>{form.formError}</FieldError>

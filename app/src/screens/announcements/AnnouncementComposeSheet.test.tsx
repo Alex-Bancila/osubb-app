@@ -172,9 +172,94 @@ describe('Announcement composer', () => {
     // The server stamps the author and the date (security pass M1).
     expect(mutateAsync.mock.calls[0]?.[0]).not.toHaveProperty('created_by');
     expect(mutateAsync.mock.calls[0]?.[0]).not.toHaveProperty('published_at');
+    // A level-3 writer speaking to the whole organisation: the server leaves
+    // the row pending, and the receipt says so (spec 2026-10-11).
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Anunțul așteaptă aprobarea BC.',
+    );
+  });
+
+  it('says the Announcement is published when it stays in its own Group (spec 2026-10-11)', async () => {
+    const user = userEvent.setup();
+    render(<AnnouncementComposeSheet />);
+    await user.click(screen.getByRole('button', { name: 'Anunț nou' }));
+    const dialog = screen.getByRole('dialog', { name: 'Anunț nou' });
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'Titlu' }),
+      'Ședință',
+    );
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'Mesaj' }),
+      'Vineri la 18:00',
+    );
+    await user.click(
+      within(dialog).getByRole('combobox', { name: 'Grup de origine' }),
+    );
+    await user.click(await screen.findByRole('option', { name: 'Echipa A' }));
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Publică anunțul' }),
+    );
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ group_id: 2, audience: 'local' }),
+    );
     expect(await screen.findByRole('status')).toHaveTextContent(
       'Anunțul a fost publicat.',
     );
+  });
+
+  it('says the Announcement waits for BC when its Origin is the Organization Group (spec 2026-10-11)', async () => {
+    const user = userEvent.setup();
+    render(<AnnouncementComposeSheet />);
+    await user.click(screen.getByRole('button', { name: 'Anunț nou' }));
+    const dialog = screen.getByRole('dialog', { name: 'Anunț nou' });
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'Titlu' }),
+      'Ședință',
+    );
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'Mesaj' }),
+      'Vineri la 18:00',
+    );
+    await user.click(
+      within(dialog).getByRole('combobox', { name: 'Grup de origine' }),
+    );
+    await user.click(await screen.findByRole('option', { name: 'OSUBB' }));
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Publică anunțul' }),
+    );
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ group_id: 1 }),
+    );
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Anunțul așteaptă aprobarea BC.',
+    );
+  });
+
+  it('offers Fixează anunțul below BC only for a local Announcement of a Group (R50)', async () => {
+    const user = userEvent.setup();
+    render(<AnnouncementComposeSheet />);
+    await user.click(screen.getByRole('button', { name: 'Anunț nou' }));
+    const dialog = screen.getByRole('dialog', { name: 'Anunț nou' });
+    const pin = () =>
+      within(dialog).queryByRole('checkbox', { name: 'Fixează anunțul' });
+    expect(pin()).toBeInTheDocument();
+
+    await user.click(
+      within(dialog).getByRole('combobox', { name: 'Grup de origine' }),
+    );
+    await user.click(await screen.findByRole('option', { name: 'OSUBB' }));
+    expect(pin()).toBeNull();
+
+    await user.click(
+      within(dialog).getByRole('combobox', { name: 'Grup de origine' }),
+    );
+    await user.click(await screen.findByRole('option', { name: 'Echipa A' }));
+    expect(pin()).toBeInTheDocument();
+
+    await user.click(
+      within(dialog).getByRole('radio', { name: 'Toată organizația' }),
+    );
+    expect(pin()).toBeNull();
   });
 
   it('is a form sheet: segmented Audiență and Prioritate, the Termen picker, a pinned footer and no boxed links', async () => {

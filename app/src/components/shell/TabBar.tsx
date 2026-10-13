@@ -22,10 +22,13 @@ const tabClass =
 /**
  * The phone's navigation (2026-10-11): a capsule floating over the foot of
  * the page with the member's four places and **Mai mult**, which opens the
- * drawer of every other page (`MoreDrawer`). All five are icons, each with
- * its name for a screen reader; a tinted thumb slides to the current one —
- * or to Mai mult, on a page from its drawer. The page's plus button stands
- * beside the capsule (the shell's bottom bar), the one solid red thing here.
+ * drawer of every other page (`MoreDrawer`) — or, for a member with only one
+ * other page, that page itself as the fifth place (`navFor`). All five are
+ * icons, each with its name for a screen reader; a tinted thumb slides to the
+ * current one — or to Mai mult, on a page from its drawer. The page's plus
+ * button stands beside the capsule (the shell's bottom bar), the one solid
+ * red thing here; its place is kept on a page without one, so the five never
+ * move under the thumb. Five icons always fit, so the bar never scrolls.
  *
  * While a phone keyboard is open the bar steps aside (#1013). It floats over
  * the page: frosted, with the page scrolling under it; the shell leaves its

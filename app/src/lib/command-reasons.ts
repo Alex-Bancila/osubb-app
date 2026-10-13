@@ -21,6 +21,26 @@
 const REASON_COPY = new Map<string, string>([
   /* ---- Security pass L3: the per-Member daily cap on every notifying write ---- */
   ['rate_limited', 'Ai atins limita zilnică. Încearcă mâine.'],
+  /* ---- Task copies (spec 2026-10-11) ---- */
+  [
+    'invalid_copies',
+    'Numărul de exemplare nu e valid: cel puțin 1, iar un Task umbrelă are unul singur.',
+  ],
+  ['too_many_copies', 'Cel mult 100 de exemplare odată.'],
+  // Cereri de aprobare (spec 2026-10-11)
+  ['approval_forbidden', 'Doar BC și Moderatorul aprobă sau resping.'],
+  ['announcement_not_pending', 'Cererea a fost deja decisă.'],
+  ['event_not_pending', 'Cererea a fost deja decisă.'],
+  // Also the client-side rejection form's own reason (D-15).
+  ['rejection_reason_required', 'Scrie motivul respingerii.'],
+  ['rejection_reason_too_long', 'Motivul are cel mult 1000 de caractere.'],
+  ['announcement_not_found', 'Anunțul nu mai există.'],
+  // Ruling R50 (2026-10-13)
+  [
+    'announcement_pin_forbidden',
+    'Doar BC și Moderatorul fixează un anunț pentru toată organizația.',
+  ],
+  ['invalid_executors', 'Alege câte un executor pentru fiecare exemplar.'],
   /* ---- Grupuri preferate (R43) ---- */
   [
     'group_preference_forbidden',
@@ -31,11 +51,8 @@ const REASON_COPY = new Map<string, string>([
     'OSUBB, Adunarea Generală și Biroul de Conducere rămân mereu selectate.',
   ],
   ['invalid_group_ids', 'Lista de grupuri nu este validă. Reîncarcă pagina.'],
-  /* ---- Atribuții BC and OSUBB Deals (R44, R45) ---- */
-  ['bc_assignment_forbidden', 'Doar Moderatorul dă și retrage atribuțiile BC.'],
-  ['bc_assignment_not_bc', 'O atribuție se dă doar unui membru BC activ.'],
+  /* ---- The OSUBB Deals team and Deals (R44, R45, R47) ---- */
   ['invalid_assignment', 'Atribuția nu mai există. Reîncarcă pagina.'],
-  ['bc_assignment_held', 'Atribuția are deja un titular. Confirmă mutarea ei.'],
   ['assignment_team_forbidden', 'Nu poți schimba echipa OSUBB Deals.'],
   ['coordinator_not_bce', 'Coordonatorul trebuie să fie un membru BCE activ.'],
   [
@@ -208,8 +225,6 @@ const REASON_COPY = new Map<string, string>([
   ['body_required', 'Scrie mesajul.'],
   ['body_too_long', 'Mesajul are cel mult 2000 de caractere.'],
   ['note_required', 'Scrie o notă.'],
-  // Client-side only: the rejection form names what is missing (D-15).
-  ['rejection_reason_required', 'Scrie motivul respingerii.'],
   ['note_too_long', 'Nota are cel mult 1000 de caractere.'],
   ['reason_required', 'Scrie motivul.'],
   ['reason_too_long', 'Motivul are cel mult 1000 de caractere.'],
@@ -603,8 +618,12 @@ const REASON_COPY = new Map<string, string>([
     'Candidatul a fost deja decis. Pagina a fost actualizată.',
   ],
   ['invalid_rejection_reason', 'Scrie motivul respingerii.'],
-  // The browser's own limit for a rejection: 500, not the shared 1000.
-  ['rejection_reason_too_long', 'Motivul are cel mult 500 de caractere.'],
+  // The browser's own limit for a Promotion Candidate's rejection: 500, under
+  // its own code, so it never shadows the approval's 1000.
+  [
+    'candidate_rejection_reason_too_long',
+    'Motivul are cel mult 500 de caractere.',
+  ],
   // Still raised by the ranking a run reads (`private.role_evaluation_rows`).
   [
     'promotion_rule_not_found',

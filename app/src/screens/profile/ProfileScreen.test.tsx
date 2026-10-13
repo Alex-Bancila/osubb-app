@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { swipe } from '../../test/swipe';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
@@ -1642,4 +1643,13 @@ describe('ProfileScreen', () => {
       ).toBeNull();
     });
   });
+});
+
+it('moves between tabs with a finger swipe over the panel (2026-10-11)', async () => {
+  render(<ProfileScreen />, { wrapper: wrapper() });
+  swipe(await screen.findByRole('tabpanel'), 'left');
+  expect(screen.getByRole('tab', { name: 'Notificări' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
 });

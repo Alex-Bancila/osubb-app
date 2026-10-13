@@ -35,7 +35,6 @@ const EVERY_CAPABILITY = vi.hoisted(() => [
   'provisionMembers',
   'createTopLevelGroups',
   'administer',
-  'administerBc',
   'manageDeals',
   'manageDealsTeam',
   'pickDealsCoordinator',
@@ -97,9 +96,6 @@ vi.mock('./screens/administrare/AdminSettingsTab', () => ({
 }));
 vi.mock('./screens/deals/DealsAdminTab', () => ({
   default: () => <h2>OSUBB Deals tab</h2>,
-}));
-vi.mock('./screens/administrare/AdminBcTab', () => ({
-  default: () => <h2>Administrare BC tab</h2>,
 }));
 vi.mock('./screens/groups/GroupsScreen', () => ({
   default: () => <h1>Grupuri screen</h1>,
@@ -275,7 +271,13 @@ describe('route guards', () => {
     window.history.pushState({}, '', '/administrare');
     const view = render(<App />);
     expect(
-      await screen.findByRole('heading', { name: 'Administrare' }),
+      // The layout is the first lazy chunk this file loads: under a full
+      // parallel run it can take more than the default second to arrive.
+      await screen.findByRole(
+        'heading',
+        { name: 'Administrare' },
+        { timeout: 5000 },
+      ),
     ).toBeInTheDocument();
     // A Group Manager lands on the first tab they may open: Grupuri.
     expect(
@@ -419,25 +421,6 @@ describe('route guards', () => {
       await waitFor(() => expect(window.location.pathname).toBe('/'));
       expect(
         screen.queryByRole('heading', { name: 'OSUBB Deals tab' }),
-      ).toBeNull();
-    });
-
-    it('opens Administrare BC to the Moderator only, never to BC', async () => {
-      auth.useAuth.mockReturnValue(member);
-      grant(...EVERY_CAPABILITY);
-      window.history.pushState({}, '', '/administrare/bc');
-      const view = render(<App />);
-      expect(
-        await screen.findByRole('heading', { name: 'Administrare BC tab' }),
-      ).toBeVisible();
-      view.unmount();
-
-      grant(...EVERY_CAPABILITY.filter((name) => name !== 'administerBc'));
-      window.history.pushState({}, '', '/administrare/bc');
-      render(<App />);
-      await waitFor(() => expect(window.location.pathname).toBe('/'));
-      expect(
-        screen.queryByRole('heading', { name: 'Administrare BC tab' }),
       ).toBeNull();
     });
   });

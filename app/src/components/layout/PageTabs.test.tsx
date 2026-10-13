@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Users } from 'lucide-react';
 import { PageTabs, tabClass, tabLabelsFrom, tabListClass } from './PageTabs';
 
@@ -92,5 +92,59 @@ describe('PageTabs', () => {
       'max-lg:in-aria-[current=page]:not-sr-only',
     );
     expect(tabLabelsFrom.always.tab).toBe('');
+  });
+
+  it('scrolls sideways when its tabs do not fit, with no scrollbar and no shrinking tabs', () => {
+    render(
+      <MemoryRouter>
+        <PageTabs label="Secțiuni" tabs={tabs} />
+      </MemoryRouter>,
+    );
+    const nav = screen.getByRole('navigation', { name: 'Secțiuni' });
+    expect(nav).toHaveClass(
+      'overflow-x-auto',
+      'overflow-y-hidden',
+      '[scrollbar-width:none]',
+      '[&::-webkit-scrollbar]:hidden',
+    );
+    for (const link of screen.getAllByRole('link'))
+      expect(link).toHaveClass('shrink-0');
+    // Labels never truncate any more: the track scrolls instead.
+    for (const size of Object.values(tabLabelsFrom))
+      expect(size.label).not.toContain('truncate');
+    // Under a variant, `flex-auto` would set flex-shrink back to 1 and let
+    // the selected tab shrink below its name: it grows (`grow`) instead and
+    // keeps `shrink-0`.
+    for (const size of Object.values(tabLabelsFrom))
+      expect(size.tab).not.toMatch(/flex-auto/);
+    expect(tabLabelsFrom.sm.tab).toContain('max-sm:aria-selected:grow');
+  });
+
+  it("brings the current tab into the track's view by scrolling the track itself, never the page", () => {
+    // jsdom lays nothing out: the current tab is declared to sit at 500–600 px
+    // in a 300 px track, so only its right edge decides the scroll.
+    const offsetLeft = vi
+      .spyOn(HTMLElement.prototype, 'offsetLeft', 'get')
+      .mockReturnValue(500);
+    const offsetWidth = vi
+      .spyOn(HTMLElement.prototype, 'offsetWidth', 'get')
+      .mockReturnValue(100);
+    const clientWidth = vi
+      .spyOn(Element.prototype, 'clientWidth', 'get')
+      .mockReturnValue(300);
+    try {
+      render(
+        <MemoryRouter initialEntries={['/administrare/grupuri']}>
+          <PageTabs label="Secțiuni" tabs={tabs} />
+        </MemoryRouter>,
+      );
+      const nav = screen.getByRole('navigation', { name: 'Secțiuni' });
+      expect(nav.scrollLeft).toBe(300);
+      expect(window.scrollX).toBe(0);
+    } finally {
+      offsetLeft.mockRestore();
+      offsetWidth.mockRestore();
+      clientWidth.mockRestore();
+    }
   });
 });

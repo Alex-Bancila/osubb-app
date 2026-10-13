@@ -36,7 +36,6 @@ const NONE: Capabilities = {
   provisionMembers: false,
   createTopLevelGroups: false,
   administer: false,
-  administerBc: false,
   manageDeals: false,
   manageDealsTeam: false,
   pickDealsCoordinator: false,
@@ -50,13 +49,10 @@ const BC: Capabilities = {
   provisionMembers: true,
   createTopLevelGroups: true,
   administer: true,
-  administerBc: false,
   manageDeals: false,
   manageDealsTeam: false,
   pickDealsCoordinator: false,
 };
-/* R44: the Moderator alone holds administerBc. */
-const MODERATOR: Capabilities = { ...BC, administerBc: true };
 /* A Responsabil OSUBB Deals with no Group Role and no rank. */
 const DEALS_RESPONSABIL: Capabilities = {
   ...NONE,
@@ -68,7 +64,6 @@ const MANAGER: Capabilities = {
   managesAnyGroup: true,
   manageTasks: true,
   administer: true,
-  administerBc: false,
   manageDeals: false,
   manageDealsTeam: false,
   pickDealsCoordinator: false,
@@ -143,14 +138,6 @@ it('shows BC the seven tabs in the order Alex listed, then OSUBB Deals (R44)', a
     within(tabBar()).getByRole('link', { name: 'Evaluări de rol' }),
   ).toHaveAttribute('href', '/administrare/evaluari');
   expect((await axe.run(container)).violations).toEqual([]);
-});
-
-it('adds Administrare BC for the Moderator alone (R44)', () => {
-  show('/administrare/bc', MODERATOR);
-  expect(tabNames().slice(-2)).toEqual(['OSUBB Deals', 'Administrare BC']);
-  expect(
-    within(tabBar()).getByRole('link', { name: 'Administrare BC' }),
-  ).toHaveAttribute('aria-current', 'page');
 });
 
 it('shows a Responsabil OSUBB Deals with nothing else that one page, no tab strip (R44)', () => {
@@ -272,7 +259,7 @@ describe('on a phone', () => {
   it('shows /administrare as a menu of the sections the viewer may open', async () => {
     api.pending.mockReturnValue(3);
     const user = userEvent.setup();
-    const { container } = show('/administrare', MODERATOR);
+    const { container } = show('/administrare', BC);
     expect(window.matchMedia).toHaveBeenCalledWith('(min-width: 64rem)');
     expect(
       screen.getByRole('heading', { level: 1, name: 'Administrare' }),
@@ -289,7 +276,6 @@ describe('on a phone', () => {
       '/administrare/confidentialitate',
       '/administrare/setari',
       '/administrare/deals',
-      '/administrare/bc',
     ]);
     // Each tile: an icon, the section's name, and a count where one is read.
     for (const tile of tiles) expect(tile.querySelector('svg')).not.toBeNull();

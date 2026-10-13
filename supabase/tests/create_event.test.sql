@@ -188,6 +188,13 @@ select pg_temp.login(5);
 select throws_ok($$select public.create_event('above','sedinta',(select id from fx where name='project'),now(),p_min_level:=3)$$,'PT400','event_min_level_above_actor','live level overrides inflated token');
 select is((select count(*) from public.events where title='leaders only'),0::bigint,'level1 cannot read newly created level5 Event');
 reset role;
+-- Spec 2026-10-11: a BCE's Organization Event waits for BC's approval, so it is
+-- approved here by hand (the owner, claims cleared, the decision flag on): the
+-- Minimum Level read below is what this test is about.
+select pg_temp.test_clear_jwt();
+select set_config('osubb.deciding_approval', 'on', true);
+update public.events set approval_status = 'approved' where title = 'leaders only';
+select set_config('osubb.deciding_approval', 'off', true);
 select pg_temp.login(3);
 select is((select count(*) from public.events where title='leaders only'),1::bigint,'eligible unrelated BCE reads new level5 Event');
 reset role;

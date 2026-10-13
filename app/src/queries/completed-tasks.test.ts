@@ -3,6 +3,7 @@ const api = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
 vi.mock('../lib/supabase', () => ({ supabase: api }));
 import {
   createCompletedTask,
+  createCompletedTasks,
   fetchCompletedTaskExecutors,
   fetchCompletedTaskGroups,
   fetchCompletedTaskOptions,
@@ -102,6 +103,7 @@ it('adds a completed Task through the one command, named arguments only', async 
     difficulty: 4,
     rating: 5,
     note: 'Excelent',
+    copies: 1,
   });
   expect(api.rpc).toHaveBeenCalledWith('create_completed_task', {
     p_executor_id: 'ana',
@@ -131,10 +133,75 @@ it('turns a refusal into its Romanian copy, keeping the reason', async () => {
     difficulty: 4,
     rating: 5,
     note: 'Excelent',
+    copies: 1,
   });
   await expect(failure).rejects.toMatchObject({
     reason: 'executor_not_group_member',
     message:
       'Voluntarul nu face parte din grupul ales sau din subgrupurile lui. Alege alt grup.',
+  });
+});
+
+const batch = {
+  executorId: null,
+  groupId: 9,
+  title: 'Atelier',
+  description: null,
+  links: [],
+  campaignId: null,
+  difficulty: 4,
+  rating: 5,
+  note: 'Excelent',
+  copies: 3,
+};
+
+it('adds n finished Tasks through create_completed_tasks: the volunteers in order, repeats allowed, and the count (Part E)', async () => {
+  api.rpc.mockResolvedValue({
+    data: [{ id: 71 }, { id: 72 }, { id: 73 }],
+    error: null,
+  });
+  const rows = await createCompletedTasks({
+    draft: batch,
+    executorIds: ['ana', 'ana', 'bogdan'],
+  });
+  expect(rows.map((row) => row.id)).toEqual([71, 72, 73]);
+  expect(api.rpc).toHaveBeenCalledWith('create_completed_tasks', {
+    p_executor_ids: ['ana', 'ana', 'bogdan'],
+    p_group_id: 9,
+    p_title: 'Atelier',
+    p_description: null,
+    p_links: [],
+    p_campaign_id: null,
+    p_difficulty: 4,
+    p_rating: 5,
+    p_note: 'Excelent',
+    p_copies: 3,
+  });
+});
+
+it('sends one copy the same way, with the form’s volunteer as the one entry', async () => {
+  api.rpc.mockResolvedValue({ data: [{ id: 51 }], error: null });
+  await createCompletedTasks({
+    draft: { ...batch, executorId: 'ana', copies: 1 },
+  });
+  expect(api.rpc).toHaveBeenCalledWith(
+    'create_completed_tasks',
+    expect.objectContaining({ p_executor_ids: ['ana'], p_copies: 1 }),
+  );
+});
+
+it('turns a refusal of the batch into its Romanian copy', async () => {
+  api.rpc.mockResolvedValue({
+    data: null,
+    error: { code: 'PT400', message: 'too_many_copies' },
+  });
+  await expect(
+    createCompletedTasks({
+      draft: { ...batch, copies: 101 },
+      executorIds: [],
+    }),
+  ).rejects.toMatchObject({
+    reason: 'too_many_copies',
+    message: 'Cel mult 100 de exemplare odată.',
   });
 });

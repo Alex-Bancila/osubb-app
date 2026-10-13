@@ -270,3 +270,21 @@ it('derives Automatic Membership by level and accepts a readable archived Origin
       .map((o) => o.textContent),
   ).toEqual(['MPMihai Pop']);
 });
+
+it('takes a label of its own and keeps Members chosen elsewhere out of the list', async () => {
+  const user = userEvent.setup();
+  render(
+    <DirectExecutorSelector
+      originGroupId={1}
+      value={null}
+      onChange={vi.fn()}
+      label="Exemplarul 2"
+      excludeIds={['mihai']}
+    />,
+  );
+  await user.click(screen.getByRole('combobox', { name: 'Exemplarul 2' }));
+  await screen.findByRole('listbox');
+  const names = optionNames().join(' | ');
+  expect(names).toContain('Ana Șerban');
+  expect(names).not.toContain('Mihai Pop');
+});

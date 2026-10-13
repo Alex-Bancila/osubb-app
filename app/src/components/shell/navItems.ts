@@ -128,7 +128,6 @@ export const NAV_ITEMS: NavItem[] = [
       '/administrare/confidentialitate',
       '/administrare/setari',
       '/administrare/deals',
-      '/administrare/bc',
     ],
   },
 ];
@@ -158,9 +157,11 @@ export const TAB_ORDER = ['/', TRACKER_PATH, '/calendar', ANNOUNCEMENTS_PATH];
 /**
  * What one viewer's navigation holds, decided once so the bar and its drawer
  * cannot disagree: `visible`, every entry they may open (the desktop
- * sidebar); `tabs`, the phone bar's four; and `more`, the entries a phone
+ * sidebar); `tabs`, the phone bar's places; and `more`, the entries a phone
  * shows on neither the bar nor the top bar — the Mai mult drawer lists them,
- * everyone's page (Grupuri) before the ones a capability gives.
+ * everyone's page (Grupuri) before the ones a capability gives. A drawer of
+ * one page is no drawer: that page (Grupuri, for a volunteer) is the bar's
+ * fifth place instead, and `more` is empty.
  */
 export function navFor(capabilities: Capabilities | undefined): {
   visible: NavItem[];
@@ -183,5 +184,6 @@ export function navFor(capabilities: Capabilities | undefined): {
     ...rest.filter((item) => !item.capability),
     ...rest.filter((item) => item.capability),
   ];
+  if (more.length === 1) return { visible, tabs: [...tabs, ...more], more: [] };
   return { visible, tabs, more };
 }

@@ -37,6 +37,7 @@ vi.mock('../../lib/capabilities', () => ({
 const completed = vi.hoisted(() => ({
   groups: vi.fn(),
   create: vi.fn(),
+  createMany: vi.fn(),
   scale: {
     isPending: false,
     isError: false,
@@ -60,6 +61,10 @@ vi.mock('../../queries/completed-tasks', () => ({
   useCompletedTaskOptions: () => ({ isPending: true }),
   useCreateCompletedTask: () => ({
     mutateAsync: completed.create,
+    isPending: false,
+  }),
+  useCreateCompletedTasks: () => ({
+    mutateAsync: completed.createMany,
     isPending: false,
   }),
 }));
@@ -671,7 +676,9 @@ it('adds a completed Task for the tracked Member, preselected, and says so (#915
     isPending: false,
     isError: false,
   });
-  completed.create.mockResolvedValue({ id: 77, title: 'Atelier de vară' });
+  completed.createMany.mockResolvedValue([
+    { id: 77, title: 'Atelier de vară' },
+  ]);
   view();
   await user.click(
     screen.getByRole('button', { name: 'Adaugă task finalizat' }),
@@ -711,16 +718,19 @@ it('adds a completed Task for the tracked Member, preselected, and says so (#915
   await user.click(
     within(dialog).getByRole('button', { name: 'Adaugă și acordă punctele' }),
   );
-  expect(completed.create).toHaveBeenCalledWith({
-    executorId: uid,
-    groupId: 9,
-    title: 'Atelier de vară',
-    description: null,
-    links: [],
-    campaignId: null,
-    difficulty: 3,
-    rating: 4,
-    note: 'Foarte bine',
+  expect(completed.createMany).toHaveBeenCalledWith({
+    draft: {
+      executorId: uid,
+      groupId: 9,
+      title: 'Atelier de vară',
+      description: null,
+      links: [],
+      campaignId: null,
+      difficulty: 3,
+      rating: 4,
+      note: 'Foarte bine',
+      copies: 1,
+    },
   });
   expect(
     await screen.findByText(

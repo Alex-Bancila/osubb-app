@@ -49,19 +49,35 @@ export function DirectExecutorSelector({
   value,
   onChange,
   disabled = false,
+  label = 'Executor',
+  excludeIds = [],
 }: {
   originGroupId: number;
   value: string | null;
   onChange: (memberId: string | null) => void;
   disabled?: boolean;
+  /** The field's label; "Exemplarul 2" in the executors dialog. */
+  label?: string;
+  /** Members already chosen for another copy: not offered here. */
+  excludeIds?: readonly string[];
 }) {
   const query = useDirectExecutors();
   const id = useId();
   const [groupId, setGroupId] = useState<number | null>(null);
   const data = query.data;
+  const excludedKey = excludeIds.join(',');
+  const excluded = useMemo(
+    () => new Set(excludedKey ? excludedKey.split(',') : []),
+    [excludedKey],
+  );
   const eligible = useMemo(
-    () => (data ? eligibleExecutors(data, originGroupId) : []),
-    [data, originGroupId],
+    () =>
+      data
+        ? eligibleExecutors(data, originGroupId).filter(
+            (member) => member.id === value || !excluded.has(member.id),
+          )
+        : [],
+    [data, originGroupId, excluded, value],
   );
   const valid =
     value === null || eligible.some((member) => member.id === value);
@@ -93,7 +109,9 @@ export function DirectExecutorSelector({
       </div>
     );
 
-  const filtered = filterExecutors(data, originGroupId, groupId);
+  const filtered = filterExecutors(data, originGroupId, groupId).filter(
+    (member) => member.id === value || !excluded.has(member.id),
+  );
   const selected = eligible.find((member) => member.id === value) ?? null;
   // A chosen member stays in the list when the Group filter hides them, so
   // the dropdown and the submitted ID never disagree.
@@ -107,7 +125,7 @@ export function DirectExecutorSelector({
     <fieldset disabled={disabled} className="grid min-w-0 gap-3">
       <div className="grid gap-1.5">
         <label id={`${id}-member`} className="text-sm font-medium">
-          Executor
+          {label}
         </label>
         <Combobox<DirectExecutor>
           items={options}

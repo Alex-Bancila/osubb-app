@@ -37,6 +37,9 @@ select 'Future #M1','Forward-dated.',id,'org','2099-01-01 00:00+00'
   from groups where name='Educațional'$$,
 'a Manager''s forward-dated insert is accepted -- and restamped');
 reset role;
+-- Spec 2026-10-11: an organisation-Audience Announcement by a Manager waits for
+-- approval; published by hand so the read receipts below are about reading.
+select pg_temp.test_publish_announcement('Future #M1');
 
 select is((select created_by from announcements where title='Forged #M1'),
   'a1000000-0000-0000-0000-000000000001'::uuid,

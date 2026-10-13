@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { swipe } from '../../test/swipe';
 import type { ReactNode } from 'react';
 import { Link, MemoryRouter, useLocation, useNavigate } from 'react-router';
 import userEvent from '@testing-library/user-event';
@@ -127,8 +128,12 @@ vi.mock('../../lib/auth', () => ({
 }));
 // "Task nou" has its own suite; here it only reports a created Task.
 vi.mock('./NewTaskControl', () => ({
-  NewTaskControl: ({ onCreated }: { onCreated: (id: number) => void }) => (
-    <button type="button" onClick={() => onCreated(42)}>
+  NewTaskControl: ({
+    onCreated,
+  }: {
+    onCreated: (created: { ids: number[] }) => void;
+  }) => (
+    <button type="button" onClick={() => onCreated({ ids: [42] })}>
       Task nou
     </button>
   ),
@@ -138,14 +143,22 @@ vi.mock('./AddCompletedTaskControl', () => ({
   AddCompletedTaskControl: ({
     onAdded,
   }: {
-    onAdded: (task: { id: number; title: string }) => void;
+    onAdded: (added: { ids: number[]; title: string }) => void;
   }) => (
-    <button
-      type="button"
-      onClick={() => onAdded({ id: 43, title: 'Stand la târg' })}
-    >
-      Adaugă task finalizat
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={() => onAdded({ ids: [43], title: 'Stand la târg' })}
+      >
+        Adaugă task finalizat
+      </button>
+      <button
+        type="button"
+        onClick={() => onAdded({ ids: [43, 44, 45], title: 'Stand la târg' })}
+      >
+        Adaugă 3 taskuri finalizate
+      </button>
+    </>
   ),
 }));
 vi.mock('./TaskDetailsSheet', () => ({
@@ -505,6 +518,19 @@ describe('My tasks screen', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'Taskul finalizat a fost adăugat. Punctele au fost acordate.',
     );
+  });
+
+  it('reports several finished Tasks added at once and opens no details (Part E)', async () => {
+    const user = userEvent.setup();
+    query();
+    render(<TrackerScreen />, { wrapper: Router });
+    await user.click(
+      screen.getByRole('button', { name: 'Adaugă 3 taskuri finalizate' }),
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '3 taskuri finalizate adăugate. Punctele au fost acordate.',
+    );
+    expect(screen.queryByRole('dialog', { name: 'Detalii task' })).toBeNull();
   });
 
   it('uses live server capability to show All despite stale advisory claims', async () => {
@@ -1426,8 +1452,9 @@ describe('My tasks screen', () => {
         'bg-(--surface-3)',
         'p-[3px]',
       );
-      // Nothing scrolls sideways: the strip's scroller and fade are gone.
-      expect(list).not.toHaveClass('overflow-x-auto');
+      // The track scrolls sideways only when its tabs overflow (Part C,
+      // spec 2026-10-11); there is no fade and no visible scrollbar.
+      expect(list).toHaveClass('overflow-x-auto', '[scrollbar-width:none]');
       const mine = screen.getByRole('tab', { name: 'Taskurile mele' });
       for (const tab of screen.getAllByRole('tab'))
         expect(tab).toHaveClass(
@@ -1440,12 +1467,17 @@ describe('My tasks screen', () => {
         );
       expect(mine).toHaveAttribute('aria-selected', 'true');
       // On a phone only the chosen tab spells its name; the others keep
-      // theirs for a screen reader.
-      expect(within(mine).getByText('Taskurile mele')).toHaveClass(
+      // theirs for a screen reader. The name is never cut short: when the
+      // tabs do not fit, the track scrolls (Part C, spec 2026-10-11).
+      const mineLabel = within(mine).getByText('Taskurile mele');
+      expect(mineLabel).toHaveClass(
         'max-sm:in-[[aria-selected=false]]:sr-only',
-        'truncate',
       );
-      expect(mine).toHaveClass('max-sm:aria-selected:flex-1');
+      expect(mineLabel).not.toHaveClass('truncate');
+      expect(mine).toHaveClass('shrink-0', 'max-sm:aria-selected:grow');
+      // `flex-auto` would set flex-shrink back to 1 and let the tab shrink.
+      expect(mine.className).not.toMatch(/:flex-auto/);
+      expect(mine).not.toHaveClass('max-sm:aria-selected:flex-1');
       expect(screen.getByRole('tab', { name: 'Cereri' })).toHaveClass(
         'max-sm:flex-none',
       );
@@ -1961,4 +1993,19 @@ describe('My tasks screen', () => {
       expect(taskToolbar()).toBeNull();
     });
   });
+});
+
+it('moves between tabs with a finger swipe over the panel (2026-10-11)', () => {
+  query();
+  render(<TrackerScreen />, { wrapper: Router });
+  swipe(screen.getByRole('tabpanel'), 'left');
+  expect(screen.getByRole('tab', { name: 'Disponibile' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  swipe(screen.getByRole('tabpanel'), 'right');
+  expect(screen.getByRole('tab', { name: 'Taskurile mele' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
 });

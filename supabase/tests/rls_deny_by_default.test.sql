@@ -191,12 +191,10 @@ insert into promotion_candidates (role_evaluation_id, member_id, task_points, te
 insert into member_imports (member_id, sheet_email, sheet_row, imported_by) values
   ('ffffffff-0000-0000-0000-000000000006', 'rls-import-991@test.local', 2, null),
   ('eeeeeeee-0000-0000-0000-000000000156', 'rls-import-claimless-991@test.local', 3, null);
--- R44/R45: the Atribuție, its team and the Deal Code reveals. The seed may
--- already hold the Atribuție; these rows stand on their own. The reveal owned by
--- the claimless uid exercises the own-row limb of deal_code_reveals_read_self.
-delete from bc_assignments;
-insert into bc_assignments (assignment, member_id) values
-  ('osubb_deals', 'ffffffff-0000-0000-0000-000000000006');
+-- R44/R45/R47: the OSUBB Deals team and the Deal Code reveals. These rows
+-- stand on their own. The reveal owned by the claimless uid exercises the
+-- own-row limb of deal_code_reveals_read_self.
+delete from assignment_team where assignment = 'osubb_deals';
 insert into assignment_team (assignment, team_role, member_id) values
   ('osubb_deals', 'responsible', 'eeeeeeee-0000-0000-0000-000000000156');
 insert into announcements (kind, title, body, group_id, audience)

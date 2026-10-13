@@ -378,15 +378,20 @@ export default function AppShell() {
 
       {/* The foot of the content area. On a phone: the floating tab bar and,
           beside it, the page's create button (`FabActions` draws it into the
-          slot). From `lg` the bar is gone and the button keeps the bottom
-          right corner, clear of the sidebar. All of it steps aside for a
-          phone keyboard. */}
+          slot). The slot keeps the button's place on a page without one, so
+          the bar stands in the same spot on every page. From `lg` the bar is
+          gone and the button keeps the bottom right corner, clear of the
+          sidebar. All of it steps aside for a phone keyboard. */}
       <div
         data-slot="bottom-bar"
         className="pointer-events-none z-10 flex items-end justify-center gap-2 self-end px-3 pt-2 pb-[calc(.75rem+env(safe-area-inset-bottom))] [grid-area:main] *:pointer-events-auto lg:justify-end lg:p-6 keyboard:hidden"
       >
         <TabBar tabs={tabs} more={more} badges={badges} />
-        <div ref={setFabSlot} data-slot="fab-slot" className="empty:hidden" />
+        <div
+          ref={setFabSlot}
+          data-slot="fab-slot"
+          className="empty:invisible max-lg:size-14 max-lg:shrink-0 lg:empty:hidden"
+        />
       </div>
     </div>
   );

@@ -77,16 +77,15 @@ const FAMILIES_BY_TABLE: ReadonlyMap<string, readonly Prefix[]> = new Map<
       CAPABILITIES,
     ],
   ],
-  ['events', [keys.events.all]],
+  ['events', [keys.events.all, keys.approvals.all]],
   ['event_attendance', [keys.events.all]],
-  ['announcements', [keys.announcements.all]],
+  ['announcements', [keys.announcements.all, keys.approvals.all]],
   // Reads are not a change to the Announcement: only its readers list. The
   // reader's own feed and badge on their other devices follow anyway: #861
   // marks their "Anunț nou" Notification read, and that UPDATE reaches them
   // on the member-filtered notifications channel, which refreshes both.
   ['announcement_reads', [ANNOUNCEMENT_READERS]],
-  // R44: an Atribuție or a team place changes who may do what.
-  ['bc_assignments', [keys.assignments.all, CAPABILITIES]],
+  // R47: a team place changes who may do what.
   ['assignment_team', [keys.assignments.all, CAPABILITIES]],
   // deal_code_reveals broadcasts nothing (a Member's own rows, R45): the
   // revealer's cache is refreshed by the reveal itself.

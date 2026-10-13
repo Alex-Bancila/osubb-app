@@ -41,6 +41,8 @@ function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
     createdBy: 'someone-else',
     cancelledAt: null,
     cancelReason: null,
+    approvalStatus: 'approved',
+    rejectionReason: null,
     ...overrides,
   };
 }
@@ -80,5 +82,44 @@ describe('EventCard — the meta line', () => {
       'aria-hidden',
       'true',
     );
+  });
+});
+
+describe('EventCard — approval (spec 2026-10-11)', () => {
+  it('marks a pending OSUBB-wide Event and says it waits for BC', () => {
+    render(<EventCard event={event({ approvalStatus: 'pending' })} />);
+    const card = screen.getByRole('article', { name: 'Ședință Educațional' });
+    expect(within(card).getByText('În așteptare')).toHaveClass(
+      'event-pending-badge',
+    );
+    expect(within(card).getByText('Așteaptă aprobarea BC.')).toBeVisible();
+    expect(within(card).queryByText('Motivul respingerii')).toBeNull();
+  });
+
+  it('marks a rejected Event and shows its reason, as a cancellation shows its', () => {
+    render(
+      <EventCard
+        event={event({
+          approvalStatus: 'rejected',
+          rejectionReason: 'Se suprapune cu Adunarea Generală.',
+        })}
+      />,
+    );
+    const card = screen.getByRole('article', { name: 'Ședință Educațional' });
+    expect(within(card).getByText('Respins')).toHaveClass(
+      'event-rejected-badge',
+    );
+    expect(within(card).getByText('Motivul respingerii')).toBeVisible();
+    expect(
+      within(card).getByText('Se suprapune cu Adunarea Generală.'),
+    ).toBeVisible();
+  });
+
+  it('shows neither on an approved Event', () => {
+    render(<EventCard event={event()} />);
+    const card = screen.getByRole('article', { name: 'Ședință Educațional' });
+    expect(within(card).queryByText('În așteptare')).toBeNull();
+    expect(within(card).queryByText('Respins')).toBeNull();
+    expect(within(card).queryByText('Așteaptă aprobarea BC.')).toBeNull();
   });
 });

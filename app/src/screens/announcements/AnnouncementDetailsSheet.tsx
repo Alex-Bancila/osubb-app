@@ -21,6 +21,7 @@ import {
   SheetPortal,
   SheetTitle,
 } from '../../components/ui/sheet';
+import { useAuth } from '../../lib/auth';
 import { useCapability } from '../../lib/capabilities';
 import {
   isAnnouncementRefusal,
@@ -33,6 +34,7 @@ import { AnnouncementMeta } from './AnnouncementMeta';
 import { AnnouncementTermen } from './AnnouncementTermen';
 import {
   mayManageAnnouncement,
+  mayPinAnnouncement,
   type AnnouncementPresentation,
 } from './announcements-presentation';
 import AnnouncementReaders from './AnnouncementReaders';
@@ -137,6 +139,17 @@ function AnnouncementDetails({
         </div>
       </SheetHeader>
 
+      {/* Spec 2026-10-11: a rejected request tells its author why, as a
+          cancelled Event does; Editează stays, and an edit asks again. */}
+      {announcement.approvalStatus === 'rejected' && (
+        <p className="m-0 grid gap-1 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm wrap-anywhere">
+          <span className="text-xs font-bold tracking-wide text-destructive uppercase">
+            Motivul respingerii
+          </span>
+          <span>{announcement.rejectionReason}</span>
+        </p>
+      )}
+
       <div className="text-sm leading-relaxed whitespace-pre-line text-foreground/90">
         {announcement.body}
       </div>
@@ -177,7 +190,7 @@ function AnnouncementManageActions({
   onDeleted: () => void;
 }) {
   const bcOrModerator = useCapability('manageRoles').data === true;
-  const managesAnyGroup = useCapability('managesAnyGroup').data === true;
+  const memberId = useAuth().session?.user.id ?? null;
   const myGroups = useMyGroupRoles();
   const setPinned = useSetAnnouncementPinned();
   const remove = useDeleteAnnouncement();
@@ -188,14 +201,10 @@ function AnnouncementManageActions({
   const [confirming, setConfirming] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  if (
-    !mayManageAnnouncement(announcement, {
-      bcOrModerator,
-      managesAnyGroup,
-      groups: myGroups.data,
-    })
-  )
-    return null;
+  const viewer = { bcOrModerator, memberId, groups: myGroups.data };
+  if (!mayManageAnnouncement(announcement, viewer)) return null;
+  // R50: the pin is BC's on an organisation-wide Announcement.
+  const mayPin = mayPinAnnouncement(announcement, viewer);
 
   const pinned = announcement.pinned;
   const busy = setPinned.isPending || remove.isPending;
@@ -258,22 +267,24 @@ function AnnouncementManageActions({
           <Pencil className="size-4" aria-hidden="true" />
           Editează
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="min-w-0 gap-2"
-          disabled={busy}
-          onClick={toggle}
-        >
-          {pinned ? (
-            <PinOff className="size-4" aria-hidden="true" />
-          ) : (
-            <Pin className="size-4" aria-hidden="true" />
-          )}
-          <span className="min-w-0 truncate">
-            {pinned ? 'Anulează fixarea' : 'Fixează anunțul'}
-          </span>
-        </Button>
+        {mayPin && (
+          <Button
+            type="button"
+            variant="outline"
+            className="min-w-0 gap-2"
+            disabled={busy}
+            onClick={toggle}
+          >
+            {pinned ? (
+              <PinOff className="size-4" aria-hidden="true" />
+            ) : (
+              <Pin className="size-4" aria-hidden="true" />
+            )}
+            <span className="min-w-0 truncate">
+              {pinned ? 'Anulează fixarea' : 'Fixează anunțul'}
+            </span>
+          </Button>
+        )}
         <Button
           type="button"
           variant="destructive"

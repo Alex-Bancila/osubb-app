@@ -9,6 +9,7 @@ import {
   issues,
 } from '../../test/schema-issues';
 import {
+  MAX_TASK_COPIES,
   fieldForReason,
   taskDraftSchema,
   taskDuplicateSchema,
@@ -41,6 +42,7 @@ const draft: TaskDraftInput = {
   executorId: null,
   campaignId: null,
   links: [],
+  copies: 1,
 };
 const schema = taskDraftSchema(options, { now });
 const check = (patch: Partial<TaskDraftInput>) => {
@@ -54,6 +56,15 @@ describe('taskDraftSchema', () => {
     expect(
       schema.parse({ ...draft, title: '  Titlu  ', description: '   ' }),
     ).toMatchObject({ title: 'Titlu', description: null });
+  });
+
+  it('allows up to 100 copies (2026-10-11) and refuses 0, a fraction and 101', () => {
+    expect(MAX_TASK_COPIES).toBe(100);
+    expect(check({ copies: 21 })).toEqual([]);
+    expect(check({ copies: 100 })).toEqual([]);
+    expect(check({ copies: 0 })).toEqual(['copies: invalid_copies']);
+    expect(check({ copies: 2.5 })).toEqual(['copies: invalid_copies']);
+    expect(check({ copies: 101 })).toEqual(['copies: too_many_copies']);
   });
 
   it.each([
@@ -358,6 +369,7 @@ it('maps every reason a Task command raises to a Task field', () => {
       'executorId',
       'campaignId',
       'links',
+      'copies',
     ],
     [
       // #673
@@ -383,6 +395,10 @@ it('maps every reason a Task command raises to a Task field', () => {
       'parent_terminal',
       'subtask_origin_mismatch',
       'subtask_cannot_be_umbrella',
+      // Task copies (spec 2026-10-11)
+      'invalid_copies',
+      'too_many_copies',
+      'invalid_executors',
       // #627: update_task moving a Task
       'invalid_group',
       'subtask_origin_immutable',

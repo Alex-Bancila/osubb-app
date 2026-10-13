@@ -85,7 +85,7 @@ it('requires a rejection reason of at most 500 characters', () => {
   ]);
   expect(
     issues(rejectionSchema.safeParse({ reason: 'r'.repeat(501) })),
-  ).toEqual(['reason:rejection_reason_too_long']);
+  ).toEqual(['reason:candidate_rejection_reason_too_long']);
   expect(
     rejectionSchema.parse({ reason: ' Puncte din alt semestru ' }),
   ).toEqual({ reason: 'Puncte din alt semestru' });

@@ -38,6 +38,11 @@ const eduGroup = {
 function eventRow(overrides: Partial<EventRow> = {}): EventRow {
   return {
     id: 42,
+    approval_status: 'approved',
+    approval_decided_by: null,
+    approval_decided_at: null,
+    rejection_reason: null,
+    announce_on_approval: false,
     title: 'Ședință Educațional',
     type: 'sedinta',
     starts_at: '2026-08-29T21:30:00.000Z',
@@ -81,6 +86,8 @@ describe('event presentation', () => {
       createdBy: null,
       cancelledAt: null,
       cancelReason: null,
+      approvalStatus: 'approved',
+      rejectionReason: null,
     });
   });
 
@@ -98,6 +105,8 @@ describe('event presentation', () => {
       minLevel: 3,
       cancelledAt: '2026-08-21T10:00:00.000Z',
       cancelReason: 'Sala nu mai este disponibilă.',
+      approvalStatus: 'approved',
+      rejectionReason: null,
     });
   });
 
@@ -129,7 +138,7 @@ describe('events range query', () => {
 
     expect(supabaseMock.from).toHaveBeenCalledWith('events');
     expect(supabaseMock.select).toHaveBeenCalledWith(
-      'id, title, type, group_id, campaign_id, starts_at, ends_at, location, capacity, description, min_level, created_by, cancelled_at, cancel_reason, group:groups(name, short, color, category, path, is_organization)',
+      'id, title, type, group_id, campaign_id, starts_at, ends_at, location, capacity, description, min_level, created_by, cancelled_at, cancel_reason, approval_status, rejection_reason, group:groups(name, short, color, category, path, is_organization)',
     );
     expect(supabaseMock.gte).toHaveBeenCalledWith('starts_at', range.from);
     expect(supabaseMock.lt).toHaveBeenCalledWith('starts_at', range.to);

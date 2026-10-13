@@ -67,7 +67,6 @@ function capabilities(overrides: Partial<Capabilities> = {}): Capabilities {
     provisionMembers: false,
     createTopLevelGroups: false,
     administer: false,
-    administerBc: false,
     manageDeals: false,
     manageDealsTeam: false,
     pickDealsCoordinator: false,
@@ -117,6 +116,8 @@ function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
     createdBy: 'someone-else',
     cancelledAt: null,
     cancelReason: null,
+    approvalStatus: 'approved',
+    rejectionReason: null,
     ...overrides,
   };
 }

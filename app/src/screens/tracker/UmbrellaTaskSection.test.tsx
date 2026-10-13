@@ -12,7 +12,7 @@ vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../queries/task-umbrella', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../queries/task-umbrella')>()),
   useCompleteUmbrella: () => ({ mutateAsync: complete }),
-  useCreateTask: () => ({ mutateAsync: create, isPending: false }),
+  useCreateTasks: () => ({ mutateAsync: create, isPending: false }),
 }));
 vi.mock('./ManagedTaskForm', () => ({
   ManagedTaskForm: ({
@@ -29,7 +29,16 @@ vi.mock('./ManagedTaskForm', () => ({
     form.onDraft = onDraft;
     return (
       <>
-        <button onClick={() => onDraft({ parentTaskId, title: 'Copil nou' })}>
+        <button
+          onClick={() =>
+            onDraft({
+              parentTaskId,
+              title: 'Copil nou',
+              copies: 1,
+              assignmentMode: 'public',
+            })
+          }
+        >
           Trimite subtask pentru #{parentTaskId}
         </button>
         {onCancel && (
@@ -161,7 +170,7 @@ describe('Umbrella progress and actions', () => {
     expect(screen.getByRole('status')).toBeVisible();
   });
   it('passes the fixed parent to the shared form, creates and opens the child', async () => {
-    create.mockResolvedValueOnce({ id: 27 });
+    create.mockResolvedValueOnce([{ id: 27 }]);
     const user = userEvent.setup();
     render(<UmbrellaTaskSection {...common} subtasks={[]} />);
     await user.click(screen.getByRole('button', { name: 'Adaugă subtask' }));
@@ -174,8 +183,12 @@ describe('Umbrella progress and actions', () => {
       }),
     );
     expect(create).toHaveBeenCalledWith({
-      parentTaskId: 10,
-      title: 'Copil nou',
+      draft: {
+        parentTaskId: 10,
+        title: 'Copil nou',
+        copies: 1,
+        assignmentMode: 'public',
+      },
     });
     expect(common.onNavigate).toHaveBeenCalledWith(27);
   });
@@ -210,4 +223,27 @@ describe('Umbrella progress and actions', () => {
     await act(async () => resolve({ id: 27 }));
     expect(common.onNavigate).not.toHaveBeenCalled();
   });
+});
+
+it('reports several Subtasks on the Umbrella instead of opening one (spec 2026-10-11)', async () => {
+  create.mockResolvedValueOnce([{ id: 1 }, { id: 2 }]);
+  const onNavigate = vi.fn();
+  render(
+    <UmbrellaTaskSection {...common} onNavigate={onNavigate} subtasks={[]} />,
+  );
+  await userEvent
+    .setup()
+    .click(screen.getByRole('button', { name: 'Adaugă subtask' }));
+  await act(async () => {
+    form.onDraft({
+      parentTaskId: 10,
+      title: 'Copil nou',
+      copies: 2,
+      assignmentMode: 'public',
+    });
+  });
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    '2 subtaskuri create.',
+  );
+  expect(onNavigate).not.toHaveBeenCalled();
 });

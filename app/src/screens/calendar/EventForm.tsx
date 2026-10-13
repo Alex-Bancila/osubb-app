@@ -1,4 +1,11 @@
-import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
+import {
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
@@ -62,6 +69,14 @@ const COPY = {
     // What a save sets off: read before pressing it, so it stays on the form.
     note: 'O schimbare de oră, loc, grup sau vizibilitate îi anunță pe membrii grupului și pe cei care au răspuns „Particip”.',
   },
+  // BC's review of a pending OSUBB-wide Event (spec 2026-10-11).
+  review: {
+    label: 'Revizuiește evenimentul',
+    submit: 'Aprobă și publică',
+    pending: 'Se trimite…',
+    failed: 'Nu am putut salva decizia. Încearcă din nou.',
+    note: 'Modificările se salvează înainte de publicare; evenimentul rămâne al autorului, iar organizația află de el la aprobare.',
+  },
 } as const;
 
 /**
@@ -79,17 +94,20 @@ export function EventForm({
   pending,
   onCancel,
   onSubmit,
+  secondary,
 }: {
-  mode?: 'create' | 'edit';
+  mode?: 'create' | 'edit' | 'review';
   initialValues?: EventFormValues;
   options: EventFormOptions;
   actorLevel: number;
   pending: boolean;
   onCancel: () => void;
   onSubmit: (draft: EventDraft, values: EventFormValues) => Promise<void>;
+  /** In place of Renunță: a review's Respinge (spec 2026-10-11). */
+  secondary?: ReactNode;
 }) {
   const copy = COPY[mode];
-  const note = mode === 'edit' ? COPY.edit.note : null;
+  const note = 'note' in copy ? copy.note : null;
   const id = useId();
   const [values, setValues] = useState<EventFormValues>(initialValues);
   const schema = useMemo(
@@ -389,14 +407,16 @@ export function EventForm({
         <FieldError>{form.formError}</FieldError>
 
         <FormSheetFooter>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={pending}
-            onClick={onCancel}
-          >
-            Renunță
-          </Button>
+          {secondary ?? (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={pending}
+              onClick={onCancel}
+            >
+              Renunță
+            </Button>
+          )}
           <Button type="submit" disabled={pending}>
             {pending ? copy.pending : copy.submit}
           </Button>

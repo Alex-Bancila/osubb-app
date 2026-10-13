@@ -3,6 +3,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Flag } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router';
 
 import { EmptyState, Panel } from '../../components/layout';
+import { ApprovalRequestsButton } from '../../components/approvals/ApprovalRequestsButton';
 import { ErrorState, Loading } from '../../components/states';
 import { Button } from '../../components/ui/button';
 import { cn } from '../../lib/utils';
@@ -210,19 +211,24 @@ export function CalendarMonth({
             </Button>
           )}
         </div>
-        {managesTasks && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="calendar-managed-toggle"
-            aria-pressed={showManaged ? 'true' : 'false'}
-            onClick={() => setShowManaged(!showManaged)}
-          >
-            <span className="calendar-switch" aria-hidden="true" />
-            Taskurile gestionate
-          </Button>
-        )}
+        {/* The toggle and the Cereri de aprobare icon (spec 2026-10-11) share
+            the row's right end, so the bar keeps its two sides. */}
+        <div className="flex items-center gap-2 empty:hidden">
+          {managesTasks && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="calendar-managed-toggle"
+              aria-pressed={showManaged ? 'true' : 'false'}
+              onClick={() => setShowManaged(!showManaged)}
+            >
+              <span className="calendar-switch" aria-hidden="true" />
+              Taskurile gestionate
+            </Button>
+          )}
+          <ApprovalRequestsButton kind="event" />
+        </div>
       </div>
 
       {!filter.params ? (
@@ -270,6 +276,10 @@ export function CalendarMonth({
                         ),
                         other: relevanceOf(event) === 'other',
                         cancelled: event.cancelledAt !== null,
+                        // A request BC or its author reads before it is
+                        // published (spec 2026-10-11): marked, not hidden.
+                        pending: event.approvalStatus === 'pending',
+                        rejected: event.approvalStatus === 'rejected',
                       })),
                       ...(items?.tasks ?? []).map((task) => ({
                         key: `t${task.id}`,
@@ -278,6 +288,8 @@ export function CalendarMonth({
                         color: task.color,
                         other: false,
                         cancelled: false,
+                        pending: false,
+                        rejected: false,
                       })),
                     ];
                     const overflow = chips.length - CHIPS_PER_DAY;
@@ -308,6 +320,8 @@ export function CalendarMonth({
                                   chip.kind === 'task' && 'is-task',
                                   chip.other && 'is-other',
                                   chip.cancelled && 'is-cancelled',
+                                  chip.pending && 'is-pending',
+                                  chip.rejected && 'is-rejected',
                                 )}
                                 style={
                                   {

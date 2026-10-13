@@ -47,6 +47,16 @@ const hooks = vi.hoisted(() => ({
 // The membership rule (isMemberOf) lives beside the my_groups() read; no
 // request is made, but the module loads the client.
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+// The requests sheet names each author; the Calendar host has no viewer here.
+vi.mock('../../queries/member-identities', () => ({
+  useMemberIdentities: () => ({ data: undefined }),
+}));
+// Spec 2026-10-11: the Cereri de aprobare icon, read through one hook.
+const approvals = vi.hoisted(() => ({ data: [] as unknown[] }));
+vi.mock('../../queries/approvals', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../queries/approvals')>()),
+  useApprovalRequests: () => ({ data: approvals.data }),
+}));
 vi.mock('../../queries/events', () => ({
   useEventsInRange: hooks.useEventsInRange,
   useEvent: hooks.useEvent,
@@ -203,6 +213,8 @@ function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
     createdBy: null,
     cancelledAt: null,
     cancelReason: null,
+    approvalStatus: 'approved',
+    rejectionReason: null,
     ...overrides,
   };
 }
@@ -491,6 +503,8 @@ describe('CalendarScreen', () => {
           title: 'Ședință anulată',
           cancelledAt: '2026-10-19T10:00:00.000Z',
           cancelReason: 'Sala nu mai este disponibilă.',
+          approvalStatus: 'approved',
+          rejectionReason: null,
         }),
       ]);
       renderCalendar();
@@ -532,6 +546,8 @@ describe('CalendarScreen', () => {
           title: 'Ședință anulată',
           cancelledAt: '2026-10-19T10:00:00.000Z',
           cancelReason: 'Sala nu mai este disponibilă.',
+          approvalStatus: 'approved',
+          rejectionReason: null,
         }),
       ]);
       renderCalendar();
@@ -791,6 +807,32 @@ describe('CalendarScreen', () => {
   });
 
   describe('Lună', () => {
+    it('marks the chip of a pending or rejected Event (final review, 2026-10-13)', async () => {
+      const user = userEvent.setup();
+      stubStorage();
+      setEvents([
+        event({ id: 71, title: 'Gala', approvalStatus: 'pending' }),
+        event({
+          id: 72,
+          title: 'Bal',
+          approvalStatus: 'rejected',
+          rejectionReason: 'Se suprapune.',
+        }),
+        event({ id: 73, title: 'Ședință' }),
+      ]);
+      renderCalendar();
+      await user.click(screen.getByRole('button', { name: 'Lună' }));
+      const chips = Array.from(
+        document.querySelectorAll<HTMLElement>('.calendar-chip'),
+      );
+      const byTitle = (title: string) =>
+        chips.find((chip) => chip.textContent?.includes(title));
+      expect(byTitle('Gala')).toHaveClass('is-pending');
+      expect(byTitle('Bal')).toHaveClass('is-rejected');
+      expect(byTitle('Ședință')).not.toHaveClass('is-pending');
+      expect(byTitle('Ședință')).not.toHaveClass('is-rejected');
+    });
+
     it('remembers the view on this device across a reload', async () => {
       const user = userEvent.setup();
       const storage = stubStorage();
@@ -1169,4 +1211,28 @@ describe('CalendarScreen', () => {
       ).toBeInTheDocument();
     });
   });
+});
+
+it('shows the request icon in both views only while OSUBB-wide Events wait (spec 2026-10-11)', async () => {
+  approvals.data = [
+    {
+      kind: 'event',
+      id: 7,
+      title: 'Gala',
+      groupId: 1,
+      createdBy: null,
+      createdAt: '2026-10-11T10:00:00Z',
+      startsAt: '2026-11-01T18:00:00Z',
+    },
+  ];
+  const user = userEvent.setup();
+  renderCalendar();
+  expect(
+    screen.getByRole('button', { name: '1 cerere de aprobare' }),
+  ).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Lună' }));
+  expect(
+    screen.getByRole('button', { name: '1 cerere de aprobare' }),
+  ).toBeVisible();
+  approvals.data = [];
 });

@@ -1,9 +1,28 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState } from 'react';
+import { useState, type ComponentType } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { clearDate, pickDate } from '../../test/date-picker';
 import { DatePicker, DateTimePicker, formatPickerValue } from './date-picker';
+
+// The positioner's props, captured so the test can pin how the popup avoids
+// the screen's edges (Part D, spec 2026-10-11).
+const positionerProps = vi.hoisted(() => [] as Record<string, unknown>[]);
+vi.mock('@base-ui/react/popover', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@base-ui/react/popover')>();
+  const Original = actual.Popover.Positioner as ComponentType<
+    Record<string, unknown>
+  >;
+  const Positioner = (props: Record<string, unknown>) => {
+    positionerProps.push(props);
+    return <Original {...props} />;
+  };
+  return {
+    ...actual,
+    Popover: Object.assign({}, actual.Popover, { Positioner }),
+  };
+});
 
 function Field({
   initial = '',
@@ -183,5 +202,28 @@ describe('DatePicker', () => {
     expect(screen.getByLabelText('Termen')).toHaveTextContent(
       'mar., 20 oct. 2026',
     );
+  });
+});
+
+it('is always its full height: nothing scrolls inside the popup (spec 2026-10-11, Part D)', async () => {
+  const user = userEvent.setup();
+  render(<Field />);
+  await user.click(screen.getByLabelText('Termen'));
+  const popup = await screen.findByRole('dialog', {
+    name: 'Alege data și ora',
+  });
+  // No clamp to the room on one side of the field: the whole calendar shows.
+  expect(popup.className).not.toContain('--available-height');
+  // Only the viewport itself bounds it, so a phone in landscape can still
+  // reach Gata by scrolling inside; on any screen that fits, nothing scrolls.
+  expect(popup.className).toContain('max-h-[calc(100dvh-24px)]');
+  expect(popup.className).toContain('overflow-y-auto');
+  // And the popup shifts along the field's side instead of flipping.
+  expect(positionerProps.at(-1)).toMatchObject({
+    collisionAvoidance: {
+      side: 'shift',
+      align: 'shift',
+      fallbackAxisSide: 'none',
+    },
   });
 });

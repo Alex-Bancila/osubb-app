@@ -83,7 +83,6 @@ function capabilities(granted: Partial<Capabilities> = {}): Capabilities {
     provisionMembers: false,
     createTopLevelGroups: false,
     administer: false,
-    administerBc: false,
     manageDeals: false,
     manageDealsTeam: false,
     pickDealsCoordinator: false,
@@ -159,7 +158,7 @@ describe('AppShell', () => {
     ).toBeNull();
 
     const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
-    expect(within(quick).getAllByRole('link')).toHaveLength(4);
+    expect(within(quick).getAllByRole('link')).toHaveLength(5);
     expect(
       within(primary).getByRole('link', { name: 'Calendar' }),
     ).toHaveAttribute('aria-current', 'page');
@@ -246,7 +245,15 @@ describe('AppShell', () => {
     });
     expect(tab).toHaveAttribute('href', '/anunturi');
     expect(tab).toHaveTextContent('2');
-    // Mai mult counts only the pages behind it.
+  });
+
+  it('counts on Mai mult only the pages behind it', () => {
+    queries.useUnreadAnnouncementsCount.mockReturnValue({ data: 2 });
+    queries.useCapabilities.mockReturnValue({
+      data: capabilities({ seeLeadership: true }),
+    });
+    renderShell();
+    const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
     expect(
       within(quick).getByRole('button', { name: 'Mai mult' }),
     ).toHaveTextContent(/^Mai mult$/);
@@ -392,7 +399,6 @@ describe('AppShell', () => {
         provisionMembers: true,
         createTopLevelGroups: true,
         administer: true,
-        administerBc: false,
         manageDeals: false,
         manageDealsTeam: false,
         pickDealsCoordinator: false,
@@ -425,7 +431,6 @@ describe('AppShell', () => {
         provisionMembers: true,
         createTopLevelGroups: true,
         administer: true,
-        administerBc: false,
         manageDeals: false,
         manageDealsTeam: false,
         pickDealsCoordinator: false,
@@ -487,7 +492,6 @@ describe('AppShell', () => {
           provisionMembers: true,
           createTopLevelGroups: true,
           administer: true,
-          administerBc: false,
           manageDeals: false,
           manageDealsTeam: false,
           pickDealsCoordinator: false,
@@ -513,7 +517,6 @@ describe('AppShell', () => {
         managesAnyGroup: true,
         manageTasks: true,
         administer: true,
-        administerBc: false,
         manageDeals: false,
         manageDealsTeam: false,
         pickDealsCoordinator: false,
@@ -611,14 +614,25 @@ describe('AppShell', () => {
         item.label,
       ).toBe(true);
 
-    // A volunteer's drawer holds the one page everyone has off the bar.
-    expect(navFor(capabilities()).more.map((item) => item.label)).toEqual([
+    // A volunteer has one page off the bar: it is the fifth place, and
+    // there is no drawer of one.
+    const volunteer = navFor(capabilities());
+    expect(volunteer.tabs.map((item) => item.label)).toEqual([
+      'Acasă',
+      'Taskuri',
+      'Calendar',
+      'Anunțuri',
       'Grupuri',
     ]);
+    expect(volunteer.more).toEqual([]);
     // Before the capabilities arrive, nothing gated is offered.
-    expect(navFor(undefined).more.map((item) => item.label)).toEqual([
-      'Grupuri',
-    ]);
+    expect(navFor(undefined).more).toEqual([]);
+    // Two pages off the bar are a drawer again.
+    expect(
+      navFor(capabilities({ seeLeadership: true })).more.map(
+        (item) => item.label,
+      ),
+    ).toEqual(['Grupuri', 'Clasament']);
   });
 
   it('names the Role in the sidebar footer, never its level (#844, B44)', () => {
@@ -772,6 +786,9 @@ describe('phone navigation (#972)', () => {
       .map((link) => link.textContent?.replace(/\d+$/, '').trim());
 
   it('orders the bar Acasă, Taskuri, Calendar, Anunțuri, then Mai mult', () => {
+    queries.useCapabilities.mockReturnValue({
+      data: capabilities({ seeLeadership: true }),
+    });
     renderShell('/');
     const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
     expect(captions(quick)).toEqual([
@@ -791,6 +808,37 @@ describe('phone navigation (#972)', () => {
     );
     expect(within(quick).queryByRole('link', { name: 'Profil' })).toBeNull();
     expect(within(quick).queryByRole('link', { name: 'Grupuri' })).toBeNull();
+  });
+
+  it('gives a member with one other page that page as the fifth place, not a drawer of one', () => {
+    renderShell('/grupuri');
+    const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
+    expect(captions(quick)).toEqual([
+      'Acasă',
+      'Taskuri',
+      'Calendar',
+      'Anunțuri',
+      'Grupuri',
+    ]);
+    expect(
+      within(quick).getByRole('link', { name: 'Grupuri', current: 'page' }),
+    ).toHaveAttribute('href', '/grupuri');
+    expect(
+      within(quick).queryByRole('button', { name: /Mai mult/ }),
+    ).toBeNull();
+  });
+
+  it('keeps the plus button’s place beside the bar on a page without one', () => {
+    renderShell('/');
+    const slot = document.querySelector('[data-slot="fab-slot"]');
+    expect(slot).toBeEmptyDOMElement();
+    // As wide as the button and unseen on a phone; gone from `lg`.
+    expect(slot).toHaveClass(
+      'max-lg:size-14',
+      'max-lg:shrink-0',
+      'empty:invisible',
+      'lg:empty:hidden',
+    );
   });
 
   it('reaches Profil only from the avatar in the top bar on a phone', () => {
@@ -853,6 +901,9 @@ describe('phone navigation (#972)', () => {
   });
 
   it('keeps every bar control 44 px and an icon: each has its name for a screen reader only', () => {
+    queries.useCapabilities.mockReturnValue({
+      data: capabilities({ seeLeadership: true }),
+    });
     renderShell('/calendar');
     const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
     const controls = [
@@ -874,6 +925,9 @@ describe('phone navigation (#972)', () => {
 
   it('opens Mai mult as a drawer of the other pages, and closes it on the way to one', async () => {
     const user = userEvent.setup();
+    queries.useCapabilities.mockReturnValue({
+      data: capabilities({ seeLeadership: true }),
+    });
     renderShell('/calendar');
     const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -886,7 +940,10 @@ describe('phone navigation (#972)', () => {
         link.textContent?.replace(/\d.*$/, ''),
         link.getAttribute('href'),
       ]),
-    ).toEqual([['Grupuri', '/grupuri']]);
+    ).toEqual([
+      ['Grupuri', '/grupuri'],
+      ['Clasament', '/clasament'],
+    ]);
     for (const link of links) expect(link.className).toMatch(/\bmin-h-12\b/);
 
     await user.click(within(drawer).getByRole('link', { name: 'Grupuri' }));

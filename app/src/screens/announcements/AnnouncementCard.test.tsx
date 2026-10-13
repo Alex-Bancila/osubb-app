@@ -28,6 +28,8 @@ function presentation(
     links: [],
     publishedAt: '2026-09-18T15:00:00.000Z',
     publishedLabel: '18 sept. · 18:00',
+    approvalStatus: 'approved',
+    rejectionReason: null,
     deadline: null,
     minLevel: 0,
     minLevelLabel: null,
@@ -477,5 +479,34 @@ describe('the Minimum Level on the card (#909)', () => {
     unmount();
     render(<AnnouncementCard announcement={presentation()} onOpen={vi.fn()} />);
     expect(screen.queryByText(/Nivel minim/)).toBeNull();
+  });
+});
+
+describe('AnnouncementCard — approval (spec 2026-10-11)', () => {
+  it('says În așteptare on a pending Announcement, Respins on a rejected one, nothing once approved', () => {
+    const pending = render(
+      <AnnouncementCard
+        announcement={presentation({ approvalStatus: 'pending' })}
+        onOpen={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('În așteptare')).toBeInTheDocument();
+    pending.unmount();
+
+    const rejected = render(
+      <AnnouncementCard
+        announcement={presentation({
+          approvalStatus: 'rejected',
+          rejectionReason: 'Lipsesc datele de contact.',
+        })}
+        onOpen={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Respins')).toBeInTheDocument();
+    rejected.unmount();
+
+    render(<AnnouncementCard announcement={presentation()} onOpen={vi.fn()} />);
+    expect(screen.queryByText('În așteptare')).toBeNull();
+    expect(screen.queryByText('Respins')).toBeNull();
   });
 });

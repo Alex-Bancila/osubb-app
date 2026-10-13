@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   groups: new Map<number, unknown>() as Map<number, never>,
   manage: { data: true as boolean | undefined },
   create: vi.fn(),
+  createMany: vi.fn(),
   executors: vi.fn(),
   scale: {
     isPending: false,
@@ -61,6 +62,10 @@ vi.mock('../../queries/completed-tasks', () => ({
     mutateAsync: state.create,
     isPending: false,
   }),
+  useCreateCompletedTasks: () => ({
+    mutateAsync: state.createMany,
+    isPending: false,
+  }),
 }));
 import { AddCompletedTaskControl } from './AddCompletedTaskControl';
 
@@ -80,6 +85,7 @@ beforeEach(() => {
           : undefined,
   }));
   state.create.mockResolvedValue({ id: 51, title: 'Atelier' });
+  state.createMany.mockResolvedValue([{ id: 51, title: 'Atelier' }]);
 });
 
 type User = ReturnType<typeof userEvent.setup>;
@@ -209,18 +215,21 @@ it('adds the completed Task with every chosen field and reports it (#915)', asyn
   await user.click(
     within(dialog).getByRole('button', { name: 'Adaugă și acordă punctele' }),
   );
-  expect(state.create).toHaveBeenCalledWith({
-    executorId: 'ana',
-    groupId: 9,
-    title: 'Atelier',
-    description: 'Sala 2',
-    links: [{ label: 'Poze', url: 'https://example.org' }],
-    campaignId: 3,
-    difficulty: 4,
-    rating: 5,
-    note: 'Excelent',
+  expect(state.createMany).toHaveBeenCalledWith({
+    draft: {
+      executorId: 'ana',
+      groupId: 9,
+      title: 'Atelier',
+      description: 'Sala 2',
+      links: [{ label: 'Poze', url: 'https://example.org' }],
+      campaignId: 3,
+      difficulty: 4,
+      rating: 5,
+      note: 'Excelent',
+      copies: 1,
+    },
   });
-  expect(onAdded).toHaveBeenCalledWith({ id: 51, title: 'Atelier' });
+  expect(onAdded).toHaveBeenCalledWith({ ids: [51], title: 'Atelier' });
   await waitFor(() =>
     expect(
       screen.queryByRole('dialog', { name: 'Adaugă task finalizat' }),
@@ -235,7 +244,7 @@ it('asks for the Group, the volunteer, the title and the scores before sending',
   await user.click(
     within(dialog).getByRole('button', { name: 'Adaugă și acordă punctele' }),
   );
-  expect(state.create).not.toHaveBeenCalled();
+  expect(state.createMany).not.toHaveBeenCalled();
   expect(
     within(dialog).getByText('Alege exact un grup de origine.'),
   ).toBeVisible();
@@ -249,7 +258,7 @@ it('asks for the Group, the volunteer, the title and the scores before sending',
 
 it('puts a server refusal under the field it names, in Romanian', async () => {
   const user = userEvent.setup();
-  state.create.mockRejectedValue(
+  state.createMany.mockRejectedValue(
     new CommandError(
       { code: 'PT409', message: 'executor_role_excluded' },
       'fallback',
@@ -349,3 +358,146 @@ it('sets the Evaluation from the guide of the chosen Group (#986)', async () => 
   expect(within(dialog).getByText(/Previzualizare: 12 puncte/)).toBeVisible();
   state.groups = new Map() as never;
 });
+
+it('adds the same finished Task for three volunteers at once, the same person allowed twice (Part E)', async () => {
+  state.createMany.mockResolvedValue([
+    { id: 71, title: 'Atelier' },
+    { id: 72, title: 'Atelier' },
+    { id: 73, title: 'Atelier' },
+  ]);
+  const user = userEvent.setup();
+  const dialog = await open(user);
+  await pick(
+    user,
+    within(dialog).getByRole('combobox', { name: 'Grup principal' }),
+    /^Educație/,
+  );
+  const copies = within(dialog).getByLabelText('Exemplare');
+  expect(copies).toHaveValue(1);
+  expect(copies).toHaveAttribute('max', '100');
+  await user.clear(copies);
+  await user.type(copies, '3');
+  // The volunteers come in the next step; the picker gives way.
+  expect(
+    within(dialog).queryByRole('combobox', { name: 'Voluntar' }),
+  ).toBeNull();
+  expect(
+    within(dialog).getByText(
+      'Voluntarii se aleg la pasul următor, câte unul pentru fiecare exemplar.',
+    ),
+  ).toBeVisible();
+  expect(
+    within(dialog).queryByRole('button', { name: 'Adaugă și acordă punctele' }),
+  ).toBeNull();
+  await user.type(within(dialog).getByLabelText('Titlu'), 'Atelier');
+  await evaluate(user, dialog);
+  await user.click(within(dialog).getByRole('button', { name: 'Continuă' }));
+  const step = await screen.findByRole('dialog', {
+    name: 'Voluntarii celor 3 taskuri finalizate',
+  });
+  expect(step).toHaveAccessibleDescription(
+    'Alege câte un voluntar pentru fiecare exemplar.',
+  );
+  await pick(
+    user,
+    within(step).getByRole('combobox', { name: 'Exemplarul 1' }),
+    'Ana',
+  );
+  // Ana again: a repeat is allowed here.
+  await pick(
+    user,
+    within(step).getByRole('combobox', { name: 'Exemplarul 2' }),
+    'Ana',
+  );
+  await pick(
+    user,
+    within(step).getByRole('combobox', { name: 'Exemplarul 3' }),
+    'Bogdan',
+  );
+  await user.click(
+    within(step).getByRole('button', {
+      name: 'Adaugă 3 taskuri și acordă punctele',
+    }),
+  );
+  await waitFor(() =>
+    expect(onAdded).toHaveBeenCalledWith({
+      ids: [71, 72, 73],
+      title: 'Atelier',
+    }),
+  );
+  expect(state.createMany).toHaveBeenCalledWith({
+    draft: expect.objectContaining({
+      copies: 3,
+      groupId: 7,
+      title: 'Atelier',
+      executorId: null,
+    }),
+    executorIds: ['ana', 'ana', 'bogdan'],
+  });
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Adaugă task finalizat' }),
+    ).toBeNull(),
+  );
+  // Two dialogs and six picks: slow under the full parallel run.
+}, 20_000);
+
+it('keeps the draft when the second step goes back, and shows a batch refusal there', async () => {
+  state.createMany.mockRejectedValue(
+    new CommandError(
+      { code: 'PT409', message: 'executor_role_excluded' },
+      'fallback',
+    ),
+  );
+  const user = userEvent.setup();
+  const dialog = await open(user);
+  await pick(
+    user,
+    within(dialog).getByRole('combobox', { name: 'Grup principal' }),
+    /^Educație/,
+  );
+  const copies = within(dialog).getByLabelText('Exemplare');
+  await user.clear(copies);
+  await user.type(copies, '2');
+  await user.type(within(dialog).getByLabelText('Titlu'), 'Stand');
+  await evaluate(user, dialog);
+  await user.click(within(dialog).getByRole('button', { name: 'Continuă' }));
+  let step = await screen.findByRole('dialog', {
+    name: 'Voluntarii celor 2 taskuri finalizate',
+  });
+  await user.click(within(step).getByRole('button', { name: 'Înapoi' }));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', {
+        name: 'Voluntarii celor 2 taskuri finalizate',
+      }),
+    ).toBeNull(),
+  );
+  expect(within(dialog).getByLabelText('Titlu')).toHaveValue('Stand');
+  expect(state.createMany).not.toHaveBeenCalled();
+  await user.click(within(dialog).getByRole('button', { name: 'Continuă' }));
+  step = await screen.findByRole('dialog', {
+    name: 'Voluntarii celor 2 taskuri finalizate',
+  });
+  await pick(
+    user,
+    within(step).getByRole('combobox', { name: 'Exemplarul 1' }),
+    'Ana',
+  );
+  await pick(
+    user,
+    within(step).getByRole('combobox', { name: 'Exemplarul 2' }),
+    'Bogdan',
+  );
+  await user.click(
+    within(step).getByRole('button', {
+      name: 'Adaugă 2 taskuri și acordă punctele',
+    }),
+  );
+  expect(
+    await within(step).findByText(
+      'BC și Moderatorul nu primesc taskuri. Alege alt voluntar.',
+    ),
+  ).toBeVisible();
+  expect(onAdded).not.toHaveBeenCalled();
+}, 20_000);
