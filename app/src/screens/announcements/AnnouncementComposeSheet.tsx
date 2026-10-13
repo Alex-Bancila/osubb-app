@@ -87,7 +87,7 @@ export default function AnnouncementComposeSheet() {
   // Audience) is pinned by BC and the Moderator alone.
   const chosenOrigin = origins.find((group) => String(group.id) === originId);
   const mayPin =
-    actorLevel >= 6 ||
+    capabilities.data?.manageRoles === true ||
     !(chosenOrigin?.is_organization === true || audience === 'org');
 
   if (capabilities.data?.managesAnyGroup !== true) return null;
