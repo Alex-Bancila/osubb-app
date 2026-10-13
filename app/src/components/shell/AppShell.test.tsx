@@ -828,17 +828,23 @@ describe('phone navigation (#972)', () => {
     ).toBeNull();
   });
 
-  it('keeps the plus button’s place beside the bar on a page without one', () => {
+  it('centres the bar with the plus button’s room kept on both sides, on a page without one too', () => {
     renderShell('/');
-    const slot = document.querySelector('[data-slot="fab-slot"]');
-    expect(slot).toBeEmptyDOMElement();
-    // As wide as the button and unseen on a phone; gone from `lg`.
-    expect(slot).toHaveClass(
-      'max-lg:size-14',
-      'max-lg:shrink-0',
-      'empty:invisible',
-      'lg:empty:hidden',
+    const quick = screen.getByRole('navigation', { name: 'Navigare rapidă' });
+    const [left, bar, side] = [
+      ...(quick.closest('[data-slot="bottom-bar"]') as HTMLElement).children,
+    ] as HTMLElement[];
+    expect(bar).toBe(quick);
+    // Its width leaves 2 × (8 px edge + 56 px button + 8 px gap) free.
+    expect(quick).toHaveClass(
+      'w-[clamp(14.375rem,calc(100vw-9rem),20rem)]',
+      'shrink-0',
     );
+    // Both sides grow alike; the button's never drops under its 64 px.
+    expect(left).toHaveClass('flex-1', 'min-w-0');
+    expect(side).toHaveClass('flex-1', 'min-w-16');
+    const slot = side?.querySelector('[data-slot="fab-slot"]');
+    expect(slot).toBeEmptyDOMElement();
   });
 
   it('reaches Profil only from the avatar in the top bar on a phone', () => {

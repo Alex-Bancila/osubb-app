@@ -376,22 +376,31 @@ export default function AppShell() {
         </>
       </main>
 
-      {/* The foot of the content area. On a phone: the floating tab bar and,
-          beside it, the page's create button (`FabActions` draws it into the
-          slot). The slot keeps the button's place on a page without one, so
-          the bar stands in the same spot on every page. From `lg` the bar is
-          gone and the button keeps the bottom right corner, clear of the
-          sidebar. All of it steps aside for a phone keyboard. */}
+      {/* The foot of the content area. On a phone: the floating tab bar in
+          the middle of the screen and, on its right, the page's create button
+          (`FabActions` draws it into the slot). Equal room is kept on both
+          sides of the bar, so it is centred and stands in the same spot
+          whether or not the page has a button. Under 375 px the left side
+          gives way first and the bar sits a little left of centre. From `lg`
+          the bar is gone and the button keeps the bottom right corner, clear
+          of the sidebar. All of it steps aside for a phone keyboard. */}
       <div
         data-slot="bottom-bar"
-        className="pointer-events-none z-10 flex items-end justify-center gap-2 self-end px-3 pt-2 pb-[calc(.75rem+env(safe-area-inset-bottom))] [grid-area:main] *:pointer-events-auto lg:justify-end lg:p-6 keyboard:hidden"
+        className="pointer-events-none z-10 flex items-end self-end px-2 pt-2 pb-[calc(.75rem+env(safe-area-inset-bottom))] [grid-area:main] lg:p-6 keyboard:hidden"
       >
+        <div aria-hidden="true" className="min-w-0 flex-1 lg:hidden" />
         <TabBar tabs={tabs} more={more} badges={badges} />
+        {/* The button's side: never narrower than the button and its gap. */}
         <div
-          ref={setFabSlot}
-          data-slot="fab-slot"
-          className="empty:invisible max-lg:size-14 max-lg:shrink-0 lg:empty:hidden"
-        />
+          data-slot="fab-side"
+          className="flex min-w-16 flex-1 justify-start lg:justify-end"
+        >
+          <div
+            ref={setFabSlot}
+            data-slot="fab-slot"
+            className="pointer-events-auto max-lg:ml-2"
+          />
+        </div>
       </div>
     </div>
   );

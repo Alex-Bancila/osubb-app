@@ -188,8 +188,8 @@ dates in a column) use tabular figures. Uppercase micro-labels are not used.
 - **Touch targets** are 44 px. A control may look smaller; its hit area may not.
 - **The plus button** is the page's create action. On a phone it stands
   beside the tab bar, a rounded square as tall as the bar, and is there only
-  on a page where the member can create something; its place is kept empty
-  on the others, so the bar never moves. From 1024 px it is round,
+  on a page where the member can create something. The bar is centred
+  with the button's room kept on both sides, so it never moves. From 1024 px it is round,
   in the content area's bottom-right corner. One create action: the plus is
   that action. Several: it opens them, the first nearest the thumb. A page
   ends with room to scroll clear of it.

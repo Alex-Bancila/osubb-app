@@ -27,8 +27,8 @@ const tabClass =
  * icons, each with its name for a screen reader; a tinted thumb slides to the
  * current one — or to Mai mult, on a page from its drawer. The page's plus
  * button stands beside the capsule (the shell's bottom bar), the one solid
- * red thing here; its place is kept on a page without one, so the five never
- * move under the thumb. Five icons always fit, so the bar never scrolls.
+ * red thing here; the capsule is centred with that button's room kept on
+ * both sides, so the five never move under the thumb. Five icons always fit, so the bar never scrolls.
  *
  * While a phone keyboard is open the bar steps aside (#1013). It floats over
  * the page: frosted, with the page scrolling under it; the shell leaves its
@@ -95,12 +95,14 @@ export function TabBar({
     <nav
       aria-label="Navigare rapidă"
       data-slot="tab-bar"
-      className="max-w-80 min-w-0 flex-1 lg:hidden"
+      // As wide as the screen leaves between the plus button's place and
+      // its mirror on the left; never narrower than five 44 px places.
+      className="pointer-events-auto w-[clamp(14.375rem,calc(100vw-9rem),20rem)] shrink-0 lg:hidden"
     >
       <div
         ref={bar}
         // No gap: five 44 px places and the plus just fit a 320 px phone.
-        className="relative flex rounded-full border border-border bg-card/80 p-[5px] shadow-(--sh-md) backdrop-blur-md"
+        className="relative flex rounded-full border border-border bg-card/80 px-1 py-[5px] shadow-(--sh-md) backdrop-blur-md"
       >
         {thumb && (
           <span
