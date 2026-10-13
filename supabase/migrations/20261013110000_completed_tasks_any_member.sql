@@ -1,5 +1,5 @@
--- Ruling R51 (Alex, 2026-10-13): a finished Task may be credited to any
--- active Member, member of the Group or not. ADR-0007 already lets a manager
+-- #1046: a finished Task may be credited to any active Member, member of the Group or not (ruling R51).
+-- Ruling R51 (Alex, 2026-10-13). ADR-0007 already lets a manager
 -- choose any active Member as the Executor of a direct Task; the completed-work
 -- gate of #915 was stricter (PT409 executor_not_group_member outside the Group
 -- Audience). That one rule goes, in the gate and in the two pickers; the

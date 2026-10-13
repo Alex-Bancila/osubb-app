@@ -10,6 +10,7 @@
 - **Amended:** 2026-09-29 — #936: `update_task_content` and `convert_task_mode` are dropped; `update_task` (with `preview_task_update`) is the one Task edit command in the server-command boundary
 - **Amended:** 2026-10-02 — #985 (ruling R34): Difficulty has ten levels — five stars, the Bronz/Argint/Aur medals and Responsabil/Coordonator — each with base points (1–5, 6, 7, 8, 15, 20); Task Points are base points × the Rating multiplier
 - **Amended:** 2026-10-05 — #1017 (ruling R38): a Task Manager may delete a Task for good; a Task that still holds Task Points goes only with its points, reversed through the ledger first; a Campaign may be deleted, leaving its Tasks unlabelled
+- **Amended:** 2026-10-13 — #1046 (ruling R51): a finished Task added directly (`create_completed_task`, `create_completed_tasks`) may be credited to any active Member at or above the Group's Minimum Level, member of the Group or not; BC and the Moderator stay excluded, the decider rule stays, and the points land on the Task's Group
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -107,7 +108,7 @@ Browsers do not directly change Task state. Public commands derive the actor fro
 ```text
 create_task
 create_tasks         (n identical copies, or n Subtasks of one Umbrella, in one transaction; one Executor per direct copy; spec 2026-10-11)
-create_completed_task (one finished Task, its Evaluation and points, for one volunteer — any active Member at or above the Group's Minimum Level, member of the Group or not, ruling R51; #915)
+create_completed_task (one finished Task, its Evaluation and points, for one volunteer — any active Member at or above the Group's Minimum Level, member of the Group or not, ruling R51; never the caller, BC or the Moderator, and only one the caller decides for; #915)
 create_completed_tasks (n finished Tasks for n volunteers, repeats allowed, in one transaction; spec 2026-10-11 Part E)
 update_task          (full-state edit; replaced update_task_content and convert_task_mode, both dropped by #936)
 preview_task_update

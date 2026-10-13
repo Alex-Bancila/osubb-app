@@ -71,11 +71,11 @@ export function VolunteerPicker({
         </p>
       ) : query.isPending ? (
         <p role="status" className="m-0 text-sm">
-          Se încarcă voluntarii…
+          Se încarcă membrii…
         </p>
       ) : query.isError ? (
         <div role="alert" className="space-y-2 text-sm">
-          <p className="m-0">Nu am putut încărca voluntarii.</p>
+          <p className="m-0">Nu am putut încărca membrii.</p>
           <Button
             type="button"
             variant="outline"
