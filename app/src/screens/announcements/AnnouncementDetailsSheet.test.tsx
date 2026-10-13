@@ -420,7 +420,7 @@ describe('AnnouncementDetailsSheet', () => {
       expect(pinButton()).not.toBeInTheDocument();
     });
 
-    it("offers it to a Responsible of the Origin; on the Organization Group's only to its author, besides BC/Moderator (#1042)", () => {
+    it("offers it to a Responsible of the Origin; on the Organization Group's to nobody below BC, its author included (#1042, R50)", () => {
       viewer.groups = [{ id: 7, group_role: 'responsible', status: 'active' }];
       const origin = renderSheet(
         <AnnouncementDetailsSheet announcement={local()} onClose={vi.fn()} />,
@@ -436,6 +436,8 @@ describe('AnnouncementDetailsSheet', () => {
       expect(pinButton()).not.toBeInTheDocument();
       other.unmount();
 
+      // The author still edits and deletes their own (R48), but only BC and
+      // the Moderator pin an organisation-wide Announcement (R50).
       viewer.groups = [];
       renderSheet(
         <AnnouncementDetailsSheet
@@ -445,7 +447,9 @@ describe('AnnouncementDetailsSheet', () => {
           onClose={vi.fn()}
         />,
       );
-      expect(pinButton()).toBeInTheDocument();
+      expect(pinButton()).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Editează' })).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Șterge' })).toBeVisible();
     });
 
     it('offers BC/Moderator "Anulează fixarea" on a pinned Announcement of any Group', () => {

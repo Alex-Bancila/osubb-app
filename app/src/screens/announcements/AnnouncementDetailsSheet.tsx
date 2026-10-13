@@ -34,6 +34,7 @@ import { AnnouncementMeta } from './AnnouncementMeta';
 import { AnnouncementTermen } from './AnnouncementTermen';
 import {
   mayManageAnnouncement,
+  mayPinAnnouncement,
   type AnnouncementPresentation,
 } from './announcements-presentation';
 import AnnouncementReaders from './AnnouncementReaders';
@@ -200,14 +201,10 @@ function AnnouncementManageActions({
   const [confirming, setConfirming] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  if (
-    !mayManageAnnouncement(announcement, {
-      bcOrModerator,
-      memberId,
-      groups: myGroups.data,
-    })
-  )
-    return null;
+  const viewer = { bcOrModerator, memberId, groups: myGroups.data };
+  if (!mayManageAnnouncement(announcement, viewer)) return null;
+  // R50: the pin is BC's on an organisation-wide Announcement.
+  const mayPin = mayPinAnnouncement(announcement, viewer);
 
   const pinned = announcement.pinned;
   const busy = setPinned.isPending || remove.isPending;
@@ -270,22 +267,24 @@ function AnnouncementManageActions({
           <Pencil className="size-4" aria-hidden="true" />
           Editează
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="min-w-0 gap-2"
-          disabled={busy}
-          onClick={toggle}
-        >
-          {pinned ? (
-            <PinOff className="size-4" aria-hidden="true" />
-          ) : (
-            <Pin className="size-4" aria-hidden="true" />
-          )}
-          <span className="min-w-0 truncate">
-            {pinned ? 'Anulează fixarea' : 'Fixează anunțul'}
-          </span>
-        </Button>
+        {mayPin && (
+          <Button
+            type="button"
+            variant="outline"
+            className="min-w-0 gap-2"
+            disabled={busy}
+            onClick={toggle}
+          >
+            {pinned ? (
+              <PinOff className="size-4" aria-hidden="true" />
+            ) : (
+              <Pin className="size-4" aria-hidden="true" />
+            )}
+            <span className="min-w-0 truncate">
+              {pinned ? 'Anulează fixarea' : 'Fixează anunțul'}
+            </span>
+          </Button>
+        )}
         <Button
           type="button"
           variant="destructive"
