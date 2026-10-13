@@ -92,3 +92,245 @@ comment on function private.task_list_scope(text) is
   'The Tasks of a leadership list for the caller, authority decided once per Group: ''managed'' is exactly public.my_managed_task_ids() (private.can_manage_task, which implies tasks_read), ''all'' is exactly what tasks_read returns from level 5 up and nothing below. A Group is judged by the existing helpers; private.can_manage_task and private.can_read_task remain the per-Task fallback for the rows a Group cannot decide (a Responsible looking at an executed Task; a Private Group''s Task read through one''s own Assignment or Candidature). No rows without org claims or a live activ Profile, or for any other list.';
 
 revoke execute on function private.task_list_scope(text) from public, anon, authenticated, service_role;
+
+-- ==================== 3. task_list: a page of ready rows ====================
+
+create function private.require_task_list_args(
+  p_list text,
+  p_state text,
+  p_sort text,
+  p_limit integer,
+  p_offset integer)
+returns void
+language plpgsql
+immutable
+set search_path = ''
+as $$
+begin
+  if p_list is null or p_list not in ('managed', 'all') then
+    raise sqlstate 'PT400' using message = 'invalid_list';
+  end if;
+  if p_state is not null and p_state not in ('completed', 'unfulfilled', 'cancelled', 'late') then
+    raise sqlstate 'PT400' using message = 'invalid_state';
+  end if;
+  if p_sort is null or p_sort not in ('deadline', 'title') then
+    raise sqlstate 'PT400' using message = 'invalid_sort';
+  end if;
+  if p_limit is null or p_limit < 1 or p_limit > 500 or p_offset is null or p_offset < 0 then
+    raise sqlstate 'PT400' using message = 'invalid_page';
+  end if;
+end;
+$$;
+
+comment on function private.require_task_list_args(text, text, text, integer, integer) is
+  'The malformed-call refusals of public.task_list, all PT400: invalid_list (not managed or all), invalid_state (not completed, unfulfilled, cancelled or late), invalid_sort (not deadline or title), invalid_page (p_limit outside 1..500 or p_offset below 0).';
+
+revoke execute on function private.require_task_list_args(text, text, text, integer, integer)
+  from public, anon, authenticated, service_role;
+
+create function private.task_list_impl(
+  p_list text,
+  p_finished boolean,
+  p_group_id bigint,
+  p_campaign_id bigint,
+  p_from timestamptz,
+  p_to timestamptz,
+  p_state text,
+  p_search text,
+  p_preferred boolean,
+  p_sort text,
+  p_limit integer,
+  p_offset integer)
+returns table(
+  id bigint,
+  group_id bigint,
+  title text,
+  description text,
+  status public.task_status,
+  deadline timestamptz,
+  completed_at timestamptz,
+  review_round integer,
+  assignment_mode text,
+  audience text,
+  kind text,
+  parent_task_id bigint,
+  campaign_id bigint,
+  duplicated_from_task_id bigint,
+  queue_closed_at timestamptz,
+  links jsonb,
+  assignments jsonb,
+  evaluations jsonb,
+  submission jsonb,
+  executor jsonb,
+  total bigint)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select private.require_task_list_args(p_list, p_state, p_sort, p_limit, p_offset);
+  select private.require_date_range(p_from, p_to);
+
+  with muted as (
+    -- R43: the Groups the caller unselected that private.group_muted_for
+    -- still honours, for the preferred view only.
+    select unselected.group_id
+      from public.member_group_unselected as unselected
+     where coalesce(p_preferred, false)
+       and unselected.member_id = (select auth.uid())
+       and private.group_muted_for(unselected.group_id, unselected.member_id)
+  ),
+  needle as (
+    select private.fold_search(btrim(coalesce(p_search, ''))) as value
+  ),
+  matched as (
+    select task.id, task.group_id, task.title, task.description, task.status, task.deadline,
+           task.completed_at, task.review_round, task.assignment_mode, task.audience, task.kind,
+           task.parent_task_id, task.campaign_id, task.duplicated_from_task_id,
+           task.queue_closed_at, task.links,
+           task.status in ('completed', 'unfulfilled', 'cancelled') as finished
+      from private.task_list_scope(p_list) as scope
+      join public.tasks as task on task.id = scope.task_id
+      join public.groups as task_group on task_group.id = task.group_id
+     cross join needle
+     where (p_finished is null
+            or (task.status in ('completed', 'unfulfilled', 'cancelled')) = p_finished)
+       -- The Work Filter (#677): the Group subtree, the exact Campaign, and
+       -- the deadline in [p_from, p_to), so an undated Task is outside any range.
+       and (p_group_id is null or task_group.path @> array[p_group_id])
+       and (p_campaign_id is null or task.campaign_id = p_campaign_id)
+       and (p_from is null or task.deadline >= p_from)
+       and (p_to is null or task.deadline < p_to)
+       and (p_state is null
+            or case p_state
+                 when 'late' then task.status = 'completed' and task.completed_at > task.deadline
+                 else task.status::text = p_state
+               end)
+       and (needle.value = '' or strpos(private.fold_search(task.title), needle.value) > 0)
+       and task.group_id not in (select muted.group_id from muted)
+  ),
+  page as (
+    select matched.*, count(*) over () as total
+      from matched
+     -- Open Tasks first, soonest deadline first; then finished ones, newest
+     -- deadline first; undated last in both. A title sort leads inside each
+     -- part. The id ends every tie, so a page boundary never wobbles.
+     order by matched.finished,
+              (case when p_sort = 'title' then matched.title end) collate pg_catalog."ro-x-icu",
+              (case when not matched.finished then matched.deadline end) asc nulls last,
+              (case when matched.finished then matched.deadline end) desc nulls last,
+              (case when matched.finished then -matched.id else matched.id end)
+     limit p_limit offset p_offset
+  )
+  select page.id, page.group_id, page.title, page.description, page.status, page.deadline,
+         page.completed_at, page.review_round, page.assignment_mode, page.audience, page.kind,
+         page.parent_task_id, page.campaign_id, page.duplicated_from_task_id,
+         page.queue_closed_at, page.links,
+         coalesce((
+           select jsonb_agg(jsonb_build_object(
+                    'id', held.id, 'member_id', held.member_id, 'ended_at', held.ended_at)
+                    order by held.id)
+             from public.task_assignments as held
+            where held.task_id = page.id), '[]'::jsonb),
+         coalesce((
+           select jsonb_agg(jsonb_build_object(
+                    'id', evaluation.id, 'difficulty', evaluation.difficulty,
+                    'rating', evaluation.rating, 'points', evaluation.points,
+                    'reversed_at', evaluation.reversed_at)
+                    order by evaluation.id)
+             from public.task_evaluations as evaluation
+            where evaluation.task_id = page.id), '[]'::jsonb),
+         -- The latest `submitted` history row: the Submission Note (#685).
+         coalesce((
+           select jsonb_build_array(jsonb_build_object(
+                    'id', event.id, 'kind', event.kind, 'note', event.note,
+                    'details', event.details, 'occurred_at', event.occurred_at))
+             from public.task_activity as event
+            where event.task_id = page.id
+              and event.kind = 'submitted'
+            order by event.id desc
+            limit 1), '[]'::jsonb),
+         -- The Executor, by the rule of private.visible_task_executors (#499,
+         -- #861): the open Assignment of an open Task, or the latest Assignment
+         -- the Evaluation of a completed or unfulfilled Task ended; none otherwise.
+         (select jsonb_build_object(
+                   'member_id', executor.member_id, 'full_name', profile.full_name,
+                   'nickname', profile.nickname, 'is_current', executor.is_current)
+            from (select held.member_id, held.ended_at is null as is_current
+                    from public.task_assignments as held
+                   where held.task_id = page.id
+                     and ((held.ended_at is null
+                           and page.status not in ('completed', 'unfulfilled', 'cancelled'))
+                          or (page.status in ('completed', 'unfulfilled')
+                              and held.end_reason in ('completed', 'failed')))
+                   order by held.ended_at desc nulls first, held.id desc
+                   limit 1) as executor
+            left join public.profiles as profile on profile.id = executor.member_id),
+         page.total
+    from page
+   order by page.finished,
+            (case when p_sort = 'title' then page.title end) collate pg_catalog."ro-x-icu",
+            (case when not page.finished then page.deadline end) asc nulls last,
+            (case when page.finished then page.deadline end) desc nulls last,
+            (case when page.finished then -page.id else page.id end);
+$$;
+
+comment on function private.task_list_impl(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer) is
+  'Body of public.task_list. The rows are private.task_list_scope(p_list), narrowed by the Work Filter on the Task itself (Group subtree, Campaign, deadline in [p_from, p_to)), a finished state, the folded title search and -- p_preferred, R43 -- the Groups the caller keeps selected; ordered open first then finished newest first; cut by p_limit and p_offset with the unpaged count in total. Each row carries its whole Assignment History, its Evaluations, its latest submission and its Executor, which is what the read policies of those tables give the only callers either list has (a Task Manager; level 5 and above).';
+
+create function public.task_list(
+  p_list text,
+  p_finished boolean default null,
+  p_group_id bigint default null,
+  p_campaign_id bigint default null,
+  p_from timestamptz default null,
+  p_to timestamptz default null,
+  p_state text default null,
+  p_search text default null,
+  p_preferred boolean default false,
+  p_sort text default 'deadline',
+  p_limit integer default 500,
+  p_offset integer default 0)
+returns table(
+  id bigint,
+  group_id bigint,
+  title text,
+  description text,
+  status public.task_status,
+  deadline timestamptz,
+  completed_at timestamptz,
+  review_round integer,
+  assignment_mode text,
+  audience text,
+  kind text,
+  parent_task_id bigint,
+  campaign_id bigint,
+  duplicated_from_task_id bigint,
+  queue_closed_at timestamptz,
+  links jsonb,
+  assignments jsonb,
+  evaluations jsonb,
+  submission jsonb,
+  executor jsonb,
+  total bigint)
+language sql
+stable
+set search_path = ''
+as $$
+  select *
+    from private.task_list_impl(
+           p_list, p_finished, p_group_id, p_campaign_id, p_from, p_to,
+           p_state, p_search, p_preferred, p_sort, p_limit, p_offset);
+$$;
+
+comment on function public.task_list(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer) is
+  'A page of a leadership Task list, ready to draw, in one request. p_list: managed (the Tasks the caller manages, exactly my_managed_task_ids()) or all (every Task the caller reads, from level 5 up). p_finished: true the finished Tasks, false the open ones, null both. The Work Filter reads the Task: p_group_id that Group and every Group below it, p_campaign_id exact, the deadline in [p_from, p_to). p_state: completed, unfulfilled, cancelled, or late (completed after its deadline). p_search: the title contains it, case and diacritics ignored. p_preferred (R43): without the Groups the caller unselected. Order: open first by deadline ascending, then finished by deadline descending, undated last; p_sort title leads with the title inside each part. p_limit 1..500 and p_offset cut the page; total is the count before the cut. PT400 invalid_list, invalid_state, invalid_sort, invalid_page, invalid_date_range. No rows without org claims or a live activ Profile.';
+
+revoke execute on function private.task_list_impl(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer)
+  from public, anon, authenticated, service_role;
+revoke execute on function public.task_list(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer)
+  from public, anon, authenticated, service_role;
+grant execute on function private.task_list_impl(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer)
+  to authenticated;
+grant execute on function public.task_list(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer)
+  to authenticated;

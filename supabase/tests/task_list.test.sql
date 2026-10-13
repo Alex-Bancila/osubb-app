@@ -12,7 +12,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(13);
+select plan(33);
 
 \ir _group_task_fixtures.psql
 reset role;
@@ -61,6 +61,84 @@ select id, pg_temp.g521_uid(9), pg_temp.g521_uid(1) from g521_tasks where name =
 insert into public.task_candidates(task_id, member_id)
 select id, pg_temp.g521_uid(9) from g521_tasks where name = 'pv_candidate';
 
+-- The filter fixtures: a Group and a Child Group of their own, managed by
+-- BCE #9, so every filter, order and page below is asked of exactly these
+-- seven Tasks.
+insert into public.groups(name, category, application_level) values ('TL Root', 'department', 0);
+insert into public.groups(name, category, parent_id, application_level)
+select 'TL Child', 'team', id, 0 from public.groups where name = 'TL Root';
+insert into public.group_members(group_id, member_id, group_role)
+select id, pg_temp.g521_uid(9), 'manager' from public.groups where name = 'TL Root';
+insert into public.campaigns(name, group_id, created_by)
+select 'Campanie TL', id, pg_temp.g521_uid(1) from public.groups where name = 'TL Root';
+
+create function pg_temp.gid_tl(p_name text) returns bigint
+language sql stable security definer set search_path = '' as $$
+  select id from public.groups where name = p_name
+$$;
+create function pg_temp.at_tl(p_day text) returns timestamptz language sql immutable as $$
+  select (p_day || ' 12:00')::timestamp at time zone 'Europe/Bucharest'
+$$;
+create function pg_temp.task_tl(
+  p_title text, p_group text, p_status public.task_status,
+  p_deadline timestamptz default null, p_done timestamptz default null, p_campaign boolean default false)
+returns bigint language sql as $$
+  insert into public.tasks(title, group_id, created_by, created_at, status, audience, assignment_mode, kind,
+                           deadline, completed_at, unfulfilled_at, cancelled_at, cancel_reason,
+                           difficulty, rating, campaign_id)
+  values (p_title, pg_temp.gid_tl(p_group), pg_temp.g521_uid(1), pg_temp.at_tl('2026-01-01'), p_status,
+          'local', 'direct', 'task', p_deadline,
+          case when p_status = 'completed' then p_done end,
+          case when p_status = 'unfulfilled' then p_done end,
+          case when p_status = 'cancelled' then p_done end,
+          case when p_status = 'cancelled' then 'fixture' end,
+          case when p_status in ('completed', 'unfulfilled') then 3 end,
+          case when p_status in ('completed', 'unfulfilled') then 3 end,
+          case when p_campaign then (select id from public.campaigns where name = 'Campanie TL') end)
+  returning id
+$$;
+create function pg_temp.tid_tl(p_title text) returns bigint
+language sql stable security definer set search_path = '' as $$
+  select id from public.tasks where title = p_title
+$$;
+grant execute on function pg_temp.gid_tl(text) to authenticated;
+grant execute on function pg_temp.at_tl(text) to authenticated;
+grant execute on function pg_temp.tid_tl(text) to authenticated;
+
+-- In id order: the finished ones' undated pair ends as (Ziar, Banner).
+select pg_temp.task_tl('TL Ședință generală', 'TL Child', 'completed', pg_temp.at_tl('2026-03-10'), pg_temp.at_tl('2026-03-09'), true);
+select pg_temp.task_tl('TL sedinta de lucru', 'TL Child', 'completed', pg_temp.at_tl('2026-03-12'), pg_temp.at_tl('2026-03-13'));
+select pg_temp.task_tl('TL Afiș', 'TL Root', 'unfulfilled', pg_temp.at_tl('2026-04-01'), pg_temp.at_tl('2026-04-02'));
+select pg_temp.task_tl('TL Banner', 'TL Root', 'cancelled', null, pg_temp.at_tl('2026-04-03'));
+select pg_temp.task_tl('TL Ziar', 'TL Root', 'completed', null, pg_temp.at_tl('2026-04-04'));
+select pg_temp.task_tl('TL Atelier', 'TL Child', 'in_progress', pg_temp.at_tl('2026-05-01'));
+select pg_temp.task_tl('TL Zid', 'TL Root', 'todo');
+
+-- Assignment History: an open Executor, the Member who finished, a Member
+-- who gave up before the one who failed, a cancelled Task's last holder.
+insert into public.task_assignments(task_id, member_id, assigned_by, assigned_at, ended_at, end_reason)
+values
+  (pg_temp.tid_tl('TL Atelier'), pg_temp.g521_uid(8), pg_temp.g521_uid(9), pg_temp.at_tl('2026-02-01'), null, null),
+  (pg_temp.tid_tl('TL Ședință generală'), pg_temp.g521_uid(5), pg_temp.g521_uid(9), pg_temp.at_tl('2026-02-01'), pg_temp.at_tl('2026-03-09'), 'completed'),
+  (pg_temp.tid_tl('TL sedinta de lucru'), pg_temp.g521_uid(5), pg_temp.g521_uid(9), pg_temp.at_tl('2026-02-01'), pg_temp.at_tl('2026-03-13'), 'completed'),
+  (pg_temp.tid_tl('TL Afiș'), pg_temp.g521_uid(8), pg_temp.g521_uid(9), pg_temp.at_tl('2026-02-01'), pg_temp.at_tl('2026-02-10'), 'gave_up'),
+  (pg_temp.tid_tl('TL Afiș'), pg_temp.g521_uid(5), pg_temp.g521_uid(9), pg_temp.at_tl('2026-02-11'), pg_temp.at_tl('2026-04-02'), 'failed'),
+  (pg_temp.tid_tl('TL Banner'), pg_temp.g521_uid(5), pg_temp.g521_uid(9), pg_temp.at_tl('2026-02-01'), pg_temp.at_tl('2026-04-03'), 'cancelled');
+-- Evaluations: one standing, one reversed.
+select pg_temp.test_credit_task(pg_temp.tid_tl('TL Ședință generală'), pg_temp.g521_uid(5), pg_temp.g521_uid(9));
+select pg_temp.test_credit_task(pg_temp.tid_tl('TL sedinta de lucru'), pg_temp.g521_uid(5), pg_temp.g521_uid(9));
+select pg_temp.test_reverse_award(pg_temp.tid_tl('TL sedinta de lucru'), pg_temp.g521_uid(5), now());
+-- Two submissions: only the later one is the Submission Note.
+insert into public.task_activity(task_id, kind, actor_id, note, details, occurred_at)
+values
+  (pg_temp.tid_tl('TL Atelier'), 'submitted', pg_temp.g521_uid(8), 'prima predare', '{}', pg_temp.at_tl('2026-04-10')),
+  (pg_temp.tid_tl('TL Atelier'), 'submitted', pg_temp.g521_uid(8), 'a doua predare',
+   '{"link_label": "Dosar", "link_url": "https://example.test/dosar"}', pg_temp.at_tl('2026-04-12'));
+-- Grupuri preferate: BC #1 unselected the Child Group; BCE #9 did too, but
+-- holds a position above it, so that row is never read.
+insert into public.member_group_unselected(member_id, group_id)
+values (pg_temp.g521_uid(1), pg_temp.gid_tl('TL Child')), (pg_temp.g521_uid(9), pg_temp.gid_tl('TL Child'));
+
 -- The scope, read as the caller. It is private; a definer wrapper is the
 -- only way a test under `authenticated` reaches it.
 create function pg_temp.scope_tl(p_list text) returns table(task_id bigint)
@@ -85,6 +163,57 @@ begin
   perform set_config('role', 'none', true);
   perform pg_temp.test_clear_jwt();
   return v_ids;
+end;
+$$;
+
+-- A count a statement returns to a caller.
+create function pg_temp.count_as(p_uid uuid, p_sql text) returns bigint language plpgsql as $$
+declare
+  v_count bigint;
+begin
+  perform pg_temp.test_login_leadership(p_uid);
+  execute p_sql into v_count;
+  perform set_config('role', 'none', true);
+  perform pg_temp.test_clear_jwt();
+  return v_count;
+end;
+$$;
+-- The texts a statement returns to a caller, in the statement's own order.
+create function pg_temp.texts_as(p_uid uuid, p_sql text) returns text[] language plpgsql as $$
+declare
+  v_texts text[];
+begin
+  perform pg_temp.test_login_leadership(p_uid);
+  execute format(
+    'select coalesce(array_agg(x order by n), ''{}'') from (select x, row_number() over () as n from (%s) as q(x)) as numbered',
+    p_sql) into v_texts;
+  perform set_config('role', 'none', true);
+  perform pg_temp.test_clear_jwt();
+  return v_texts;
+end;
+$$;
+-- The filter fixtures' titles a task_list call returns to BCE #9, without
+-- their "TL " prefix. `p_args` are the call's named arguments after p_list.
+create function pg_temp.listed_tl(p_args text default '') returns text[] language sql as $$
+  select pg_temp.texts_as(pg_temp.g521_uid(9), format(
+    'select substr(title, 4) from public.task_list(p_list => ''managed'', p_group_id => %s%s)',
+    pg_temp.gid_tl('TL Root'), case when p_args = '' then '' else ', ' || p_args end))
+$$;
+-- The reason a statement is refused with, as BCE #9 (null when it is not).
+create function pg_temp.reason_tl(p_sql text) returns text language plpgsql as $$
+declare
+  v_state text;
+  v_message text;
+begin
+  perform pg_temp.test_login_leadership(pg_temp.g521_uid(9));
+  begin
+    execute p_sql;
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate, v_message = message_text;
+  end;
+  perform set_config('role', 'none', true);
+  perform pg_temp.test_clear_jwt();
+  return v_state || ' ' || v_message;
 end;
 $$;
 
@@ -170,6 +299,183 @@ select is(
   pg_temp.ids_as(pg_temp.g521_uid(1), $$select task_id from pg_temp.scope_tl('mine')$$),
   '{}'::bigint[],
   'an unknown list is empty');
+
+-- ==================== task_list: shape and refusals ====================
+
+select ok(not (select prosecdef from pg_proc where proname = 'task_list' and pronamespace = 'public'::regnamespace)
+      and (select prosecdef from pg_proc where proname = 'task_list_impl' and pronamespace = 'private'::regnamespace),
+  'task_list is an invoker wrapper over a definer body');
+select ok(has_function_privilege('authenticated', 'public.task_list(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer)', 'execute')
+      and not has_function_privilege('anon', 'public.task_list(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer)', 'execute')
+      and not has_function_privilege('service_role', 'public.task_list(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer)', 'execute')
+      and not has_function_privilege('anon', 'private.task_list_impl(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer)', 'execute')
+      and not has_function_privilege('authenticated', 'private.require_task_list_args(text, text, text, integer, integer)', 'execute'),
+  'only a signed-in Member calls task_list');
+select is(
+  array[
+    pg_temp.reason_tl($$select * from public.task_list('mine')$$),
+    pg_temp.reason_tl($$select * from public.task_list(null)$$),
+    pg_temp.reason_tl($$select * from public.task_list('managed', p_state => 'todo')$$),
+    pg_temp.reason_tl($$select * from public.task_list('managed', p_sort => 'points')$$),
+    pg_temp.reason_tl($$select * from public.task_list('managed', p_sort => null)$$),
+    pg_temp.reason_tl($$select * from public.task_list('managed', p_limit => 0)$$),
+    pg_temp.reason_tl($$select * from public.task_list('managed', p_limit => 501)$$),
+    pg_temp.reason_tl($$select * from public.task_list('managed', p_limit => null)$$),
+    pg_temp.reason_tl($$select * from public.task_list('managed', p_offset => -1)$$),
+    pg_temp.reason_tl($$select * from public.task_list('managed', p_from => now(), p_to => now() - interval '1 day')$$)],
+  array['PT400 invalid_list', 'PT400 invalid_list', 'PT400 invalid_state', 'PT400 invalid_sort', 'PT400 invalid_sort',
+        'PT400 invalid_page', 'PT400 invalid_page', 'PT400 invalid_page', 'PT400 invalid_page',
+        'PT400 invalid_date_range'],
+  'a malformed call is refused with its reason');
+
+-- ==================== task_list: the rows ====================
+
+select is(
+  (select count(*) from callers_tl as caller
+    where pg_temp.ids_as(caller.id, $$select id from public.task_list('managed')$$)
+          is distinct from pg_temp.ids_as(caller.id, $$select task_id from pg_temp.scope_tl('managed')$$)
+       or pg_temp.ids_as(caller.id, $$select id from public.task_list('all')$$)
+          is distinct from pg_temp.ids_as(caller.id, $$select task_id from pg_temp.scope_tl('all')$$)),
+  0::bigint,
+  'for every caller task_list returns the scope, each Task once');
+select is(
+  pg_temp.ids_as('52100000-0000-0000-0000-000000000099', $$select id from public.task_list('managed')
+      union all select id from public.task_list('all')$$)
+  || pg_temp.ids_as(pg_temp.g521_uid(1), $$select id from public.task_list('managed')$$, '{}'::jsonb),
+  '{}'::bigint[],
+  'an inactive or claimless caller gets no rows and no error');
+select is(
+  pg_temp.count_as(pg_temp.g521_uid(1), $$
+    select count(*) from public.task_list('managed') as listed
+      join public.tasks as task on task.id = listed.id
+     where (listed.group_id, listed.title, listed.description, listed.status, listed.deadline, listed.completed_at,
+            listed.review_round, listed.assignment_mode, listed.audience, listed.kind, listed.parent_task_id,
+            listed.campaign_id, listed.duplicated_from_task_id, listed.queue_closed_at, listed.links)
+           is not distinct from
+           (task.group_id, task.title, task.description, task.status, task.deadline, task.completed_at,
+            task.review_round, task.assignment_mode, task.audience, task.kind, task.parent_task_id,
+            task.campaign_id, task.duplicated_from_task_id, task.queue_closed_at, task.links)$$),
+  (select count(*) from public.tasks),
+  'BC is listed every Task, each row carrying its own columns');
+
+-- The history a row carries is what RLS gives that caller, and its Executor
+-- is visible_task_executors' answer. Counted over every row of every list a
+-- Manager, a Responsible, a BCE, BC and the Moderator have.
+create function pg_temp.embed_differences_tl(p_uid uuid, p_list text) returns bigint language sql as $$
+  select pg_temp.count_as(p_uid, format($sql$
+    select count(*) from public.task_list(%1$L) as listed
+     where listed.assignments is distinct from coalesce((
+             select jsonb_agg(jsonb_build_object('id', held.id, 'member_id', held.member_id, 'ended_at', held.ended_at) order by held.id)
+               from public.task_assignments as held where held.task_id = listed.id), '[]'::jsonb)
+        or listed.evaluations is distinct from coalesce((
+             select jsonb_agg(jsonb_build_object('id', evaluation.id, 'difficulty', evaluation.difficulty, 'rating', evaluation.rating,
+                                                 'points', evaluation.points, 'reversed_at', evaluation.reversed_at) order by evaluation.id)
+               from public.task_evaluations as evaluation where evaluation.task_id = listed.id), '[]'::jsonb)
+        or listed.submission is distinct from coalesce((
+             select jsonb_build_array(jsonb_build_object('id', event.id, 'kind', event.kind, 'note', event.note,
+                                                         'details', event.details, 'occurred_at', event.occurred_at))
+               from public.task_activity as event
+              where event.task_id = listed.id and event.kind = 'submitted'
+              order by event.id desc limit 1), '[]'::jsonb)
+        or listed.executor is distinct from (
+             select jsonb_build_object('member_id', executor.member_id, 'full_name', executor.full_name,
+                                       'nickname', executor.nickname, 'is_current', executor.is_current)
+               from public.visible_task_executors((select array_agg(every.id) from public.task_list(%1$L) as every)) as executor
+              where executor.task_id = listed.id)
+  $sql$, p_list))
+$$;
+select is(
+  array[pg_temp.embed_differences_tl(pg_temp.g521_uid(1), 'managed'),
+        pg_temp.embed_differences_tl(pg_temp.g521_uid(2), 'managed'),
+        pg_temp.embed_differences_tl(pg_temp.g521_uid(3), 'managed'),
+        pg_temp.embed_differences_tl(pg_temp.g521_uid(9), 'managed'),
+        pg_temp.embed_differences_tl(pg_temp.g521_uid(9), 'all'),
+        pg_temp.embed_differences_tl((select id from public.profiles where email = 'moderator@demo.osubb'), 'managed')],
+  array[0, 0, 0, 0, 0, 0]::bigint[],
+  'a row''s Assignments, Evaluations, Submission Note and Executor are what RLS and visible_task_executors give the caller');
+select is(
+  pg_temp.texts_as(pg_temp.g521_uid(9), format($$
+    select concat_ws(' | ', substr(title, 4),
+             jsonb_array_length(assignments), jsonb_array_length(evaluations),
+             coalesce(submission -> 0 ->> 'note', '-'),
+             coalesce(executor ->> 'member_id', '-'), coalesce(executor ->> 'is_current', '-'),
+             coalesce((select count(*) from jsonb_array_elements(evaluations) as item
+                        where item ->> 'reversed_at' is not null)::text, '0'))
+      from public.task_list('managed', p_group_id => %s, p_sort => 'title')$$, pg_temp.gid_tl('TL Root'))),
+  array[
+    'Atelier | 1 | 0 | a doua predare | ' || pg_temp.g521_uid(8) || ' | true | 0',
+    'Zid | 0 | 0 | - | - | - | 0',
+    'Afiș | 2 | 0 | - | ' || pg_temp.g521_uid(5) || ' | false | 0',
+    'Banner | 1 | 0 | - | - | - | 0',
+    'sedinta de lucru | 1 | 1 | - | ' || pg_temp.g521_uid(5) || ' | false | 1',
+    'Ședință generală | 1 | 1 | - | ' || pg_temp.g521_uid(5) || ' | false | 0',
+    'Ziar | 0 | 0 | - | - | - | 0'],
+  'the latest submission, the Member who finished, no Executor for a cancelled Task, a reversed Evaluation kept');
+
+-- ==================== task_list: filters, order, pages ====================
+
+select is(pg_temp.listed_tl(),
+  array['Atelier', 'Zid', 'Afiș', 'sedinta de lucru', 'Ședință generală', 'Ziar', 'Banner'],
+  'open Tasks first by deadline, then finished ones newest deadline first, undated last');
+select is(pg_temp.listed_tl($$p_sort => 'title'$$),
+  array['Atelier', 'Zid', 'Afiș', 'Banner', 'sedinta de lucru', 'Ședință generală', 'Ziar'],
+  'by title inside each part, in Romanian order');
+select is(
+  array[pg_temp.listed_tl('p_finished => false') = array['Atelier', 'Zid'],
+        pg_temp.listed_tl('p_finished => true') = array['Afiș', 'sedinta de lucru', 'Ședință generală', 'Ziar', 'Banner']],
+  array[true, true],
+  'p_finished keeps the open part or the finished part');
+select is(
+  pg_temp.texts_as(pg_temp.g521_uid(9), format(
+    $$select substr(title, 4) from public.task_list('managed', p_group_id => %s)$$, pg_temp.gid_tl('TL Child'))),
+  array['Atelier', 'sedinta de lucru', 'Ședință generală'],
+  'a Group means that Group and the Groups below it: the Child Group alone leaves the parent''s Tasks out');
+select is(pg_temp.listed_tl(format('p_campaign_id => %s', (select id from public.campaigns where name = 'Campanie TL'))),
+  array['Ședință generală'],
+  'the Campaign is exact');
+select is(pg_temp.listed_tl(format('p_from => %L, p_to => %L', pg_temp.at_tl('2026-03-10'), pg_temp.at_tl('2026-03-12'))),
+  array['Ședință generală'],
+  'the range reads the deadline, its start inside and its end outside');
+select is(pg_temp.listed_tl(format('p_from => %L', pg_temp.at_tl('2026-04-01'))),
+  array['Atelier', 'Afiș'],
+  'one bound is enough, and an undated Task is outside any range');
+select is(
+  array[pg_temp.listed_tl($$p_state => 'completed'$$) = array['sedinta de lucru', 'Ședință generală', 'Ziar'],
+        pg_temp.listed_tl($$p_state => 'late'$$) = array['sedinta de lucru'],
+        pg_temp.listed_tl($$p_state => 'unfulfilled'$$) = array['Afiș'],
+        pg_temp.listed_tl($$p_state => 'cancelled'$$) = array['Banner']],
+  array[true, true, true, true],
+  'each finished state, and late as completed after the deadline');
+select is(
+  array[pg_temp.listed_tl($$p_search => 'SEDINTA'$$) = array['sedinta de lucru', 'Ședință generală'],
+        pg_temp.listed_tl($$p_search => ' afiș '$$) = array['Afiș'],
+        pg_temp.listed_tl($$p_search => 'xyz'$$) = '{}'::text[],
+        cardinality(pg_temp.listed_tl($$p_search => '   '$$)) = 7],
+  array[true, true, true, true],
+  'the search ignores case, diacritics and the spaces around it; a blank one matches all');
+select is(
+  array[
+    cardinality(pg_temp.listed_tl('p_preferred => true')) = 7,
+    pg_temp.texts_as(pg_temp.g521_uid(1), format(
+      $$select substr(title, 4) from public.task_list('managed', p_group_id => %s, p_preferred => true)$$, pg_temp.gid_tl('TL Root')))
+      = array['Zid', 'Afiș', 'Ziar', 'Banner'],
+    cardinality(pg_temp.texts_as(pg_temp.g521_uid(1), format(
+      $$select substr(title, 4) from public.task_list('managed', p_group_id => %s)$$, pg_temp.gid_tl('TL Root')))) = 7],
+  array[true, true, true],
+  'Grupuri preferate leaves out an unselected Group, never one the caller holds a position above, and only when asked');
+select is(
+  array[pg_temp.listed_tl('p_finished => true, p_limit => 2') = array['Afiș', 'sedinta de lucru'],
+        pg_temp.listed_tl('p_finished => true, p_limit => 2, p_offset => 2') = array['Ședință generală', 'Ziar'],
+        pg_temp.listed_tl('p_finished => true, p_limit => 2, p_offset => 4') = array['Banner'],
+        pg_temp.listed_tl('p_finished => true, p_limit => 2, p_offset => 6') = '{}'::text[]],
+  array[true, true, true, true],
+  'pages are disjoint, in order, and cover the list');
+select is(
+  pg_temp.texts_as(pg_temp.g521_uid(9), format($$
+    select distinct total::text from public.task_list('managed', p_group_id => %1$s, p_finished => true, p_limit => 2, p_offset => 2)
+    union all select distinct total::text from public.task_list('managed', p_group_id => %1$s)$$, pg_temp.gid_tl('TL Root'))),
+  array['5', '7'],
+  'total counts what the filters match, whatever the page');
 
 -- ==================== The search key ====================
 
