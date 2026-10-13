@@ -377,7 +377,7 @@ it('shows a refusal about the requester under Grup, in Romanian (#915)', async (
   const user = userEvent.setup();
   state.mutate.mockRejectedValue(
     new CommandError(
-      { code: 'PT409', message: 'executor_not_group_member' },
+      { code: 'PT409', message: 'executor_below_min_level' },
       'fallback',
     ),
   );
@@ -392,7 +392,7 @@ it('shows a refusal about the requester under Grup, in Romanian (#915)', async (
   });
   await waitFor(() =>
     expect(group).toHaveAccessibleDescription(
-      'Voluntarul nu face parte din grupul ales sau din subgrupurile lui. Alege alt grup.',
+      'Voluntarul nu are nivelul minim al grupului ales. Alege alt grup.',
     ),
   );
 });
