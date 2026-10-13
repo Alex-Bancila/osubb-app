@@ -1,5 +1,7 @@
 -- Task lists that stay fast (spec 2026-10-14): private.task_list_scope decides
--- a list's authority once per Group, with the per-Task rules as its fallback.
+-- a list's authority once per Group, with the per-Task rules as its fallback;
+-- public.task_list, task_list_summary, leadership_filter_work and
+-- can_manage_task read through it.
 --
 -- The oracle of every equality below is the rule that already exists:
 -- public.my_managed_task_ids() for 'managed' (tasks_read and
@@ -7,12 +9,36 @@
 -- the caller's own RLS for 'all'. Every caller of the #521 Group matrix, the
 -- demo seed's Members, an inactive Member and a claimless one are swept over
 -- every Task in the database, the seed's included.
+--
+-- Mutation record (2026-10-14, each applied to the live database, the suite
+-- run, the function restored). Every one fails the assertion named:
+--   scope, managed: a listed Group decides every Task; the unassigned
+--     shortcut answers for an executed Task; every Group is listed
+--     -> "the managed list is exactly my_managed_task_ids()", "a Responsible
+--     under a Manager manages ...".
+--   scope, all: no per-Task fallback; every Group listed from level 5;
+--     offered below level 5 -> "the all list is the Tasks RLS returns ...",
+--     "a Private Group's Tasks reach a BCE only through ...".
+--   scope: claims not asked -> "a caller without org claims is listed nothing".
+--   task_list: p_finished ignored; the Group exact, not the subtree; the
+--     Campaign ignored; the range's end inside; an undated Task inside a
+--     range; late as any completed Task; raw titles compared; Grupuri
+--     preferate ignored; every unselected row muting; finished Tasks oldest
+--     first; the Executor of a finished Task its latest Assignment whatever
+--     ended it; the earliest submission; total counting the page -> each
+--     fails the assertion of its own filter, order, page or embed.
+--   summary counting every Task; filter work with unevaluated Tasks;
+--     can_manage_task true for any readable Task -> their sweeps.
+--   scope asked per Task again (managed, all) -> the guard's four timings.
+-- One mutation is equivalent by construction and is not a gap: dropping a
+-- limb of `whole` (no Manager on the path, the caller a Manager, level 6)
+-- changes nothing but speed, because the per-Task fallback answers the same.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(42);
+select plan(47);
 
 \ir _group_task_fixtures.psql
 reset role;
@@ -115,7 +141,8 @@ select pg_temp.task_tl('TL Atelier', 'TL Child', 'in_progress', pg_temp.at_tl('2
 select pg_temp.task_tl('TL Zid', 'TL Root', 'todo');
 
 -- Assignment History: an open Executor, the Member who finished, a Member
--- who gave up before the one who failed, a cancelled Task's last holder.
+-- who gave up before the one who failed, a cancelled Task's last holder, a
+-- row that ended after the completing one.
 insert into public.task_assignments(task_id, member_id, assigned_by, assigned_at, ended_at, end_reason)
 values
   (pg_temp.tid_tl('TL Atelier'), pg_temp.g521_uid(8), pg_temp.g521_uid(9), pg_temp.at_tl('2026-02-01'), null, null),
@@ -123,7 +150,10 @@ values
   (pg_temp.tid_tl('TL sedinta de lucru'), pg_temp.g521_uid(5), pg_temp.g521_uid(9), pg_temp.at_tl('2026-02-01'), pg_temp.at_tl('2026-03-13'), 'completed'),
   (pg_temp.tid_tl('TL Afiș'), pg_temp.g521_uid(8), pg_temp.g521_uid(9), pg_temp.at_tl('2026-02-01'), pg_temp.at_tl('2026-02-10'), 'gave_up'),
   (pg_temp.tid_tl('TL Afiș'), pg_temp.g521_uid(5), pg_temp.g521_uid(9), pg_temp.at_tl('2026-02-11'), pg_temp.at_tl('2026-04-02'), 'failed'),
-  (pg_temp.tid_tl('TL Banner'), pg_temp.g521_uid(5), pg_temp.g521_uid(9), pg_temp.at_tl('2026-02-01'), pg_temp.at_tl('2026-04-03'), 'cancelled');
+  (pg_temp.tid_tl('TL Banner'), pg_temp.g521_uid(5), pg_temp.g521_uid(9), pg_temp.at_tl('2026-02-01'), pg_temp.at_tl('2026-04-03'), 'cancelled'),
+  -- The Member who finished is not the last row of the history.
+  (pg_temp.tid_tl('TL Ziar'), pg_temp.g521_uid(5), pg_temp.g521_uid(9), pg_temp.at_tl('2026-02-01'), pg_temp.at_tl('2026-04-04'), 'completed'),
+  (pg_temp.tid_tl('TL Ziar'), pg_temp.g521_uid(8), pg_temp.g521_uid(9), pg_temp.at_tl('2026-04-04'), pg_temp.at_tl('2026-04-05'), 'task_updated');
 -- Evaluations: one standing, one reversed.
 select pg_temp.test_credit_task(pg_temp.tid_tl('TL Ședință generală'), pg_temp.g521_uid(5), pg_temp.g521_uid(9));
 select pg_temp.test_credit_task(pg_temp.tid_tl('TL sedinta de lucru'), pg_temp.g521_uid(5), pg_temp.g521_uid(9));
@@ -409,7 +439,7 @@ select is(
     'Banner | 1 | 0 | - | - | - | 0',
     'sedinta de lucru | 1 | 1 | - | ' || pg_temp.g521_uid(5) || ' | false | 1',
     'Ședință generală | 1 | 1 | - | ' || pg_temp.g521_uid(5) || ' | false | 0',
-    'Ziar | 0 | 0 | - | - | - | 0'],
+    'Ziar | 2 | 0 | - | ' || pg_temp.g521_uid(5) || ' | false | 0'],
   'the latest submission, the Member who finished, no Executor for a cancelled Task, a reversed Evaluation kept');
 
 -- ==================== task_list: filters, order, pages ====================
@@ -583,6 +613,51 @@ select is(
         private.fold_search('  Înscrieri la Târg '), private.fold_search(null)],
   array['sedinta', 'sedinta', '  inscrieri la targ ', ''],
   'the search key drops case and diacritics, comma-below and cedilla alike');
+
+-- ==================== The guard: a list never asks per Task ====================
+--
+-- 6 000 finished Tasks in the Group where #3 is a Responsible under a Manager
+-- -- the caller the shortcuts cannot decide by level. Measured locally: a page
+-- 40 ms, the summary 15 ms, the filter work 12 ms; the per-Task rule they
+-- replace, my_managed_task_ids(), 7.8 s on the same rows. The bound sits
+-- between the two with room on both sides for a slower machine.
+
+reset role;
+with made as (
+  insert into public.tasks(title, group_id, created_by, created_at, status, audience, assignment_mode, kind,
+                           deadline, completed_at, difficulty, rating)
+  select 'Guard TL ' || n, pg_temp.gid_tl('Project #521'), pg_temp.g521_uid(1),
+         pg_temp.at_tl('2026-01-01'), 'completed', 'local', 'direct', 'task',
+         pg_temp.at_tl('2026-02-01') + n * interval '1 hour', pg_temp.at_tl('2026-02-01') + n * interval '1 hour', 3, 3
+    from generate_series(1, 6000) as n
+  returning id, completed_at
+),
+held as (
+  insert into public.task_assignments(task_id, member_id, assigned_by, assigned_at, ended_at, end_reason)
+  select made.id, pg_temp.g521_uid(5), pg_temp.g521_uid(1), pg_temp.at_tl('2026-01-02'), made.completed_at, 'completed'
+    from made
+  returning id, task_id, ended_at
+)
+insert into public.task_evaluations(task_id, assignment_id, evaluated_by, outcome, difficulty, rating, points, note, evaluated_at)
+select held.task_id, held.id, pg_temp.g521_uid(1), 'completed', 3, 3, 3, 'guard', held.ended_at from held;
+analyze public.tasks;
+analyze public.task_assignments;
+analyze public.task_evaluations;
+
+select pg_temp.test_login_leadership(pg_temp.g521_uid(3));
+select cmp_ok((select max(total) from public.task_list('managed', p_finished => true, p_limit => 50)), '>=', 6000::bigint,
+  'the guard''s Tasks are in the Responsible''s list');
+select performs_ok($$select * from public.task_list('managed', p_finished => true, p_limit => 50, p_offset => 3000)$$, 750,
+  'a page of 6 000 managed Tasks answers without asking per Task');
+select performs_ok($$select * from public.task_list_summary('managed')$$, 750,
+  'the summary of 6 000 managed Tasks answers without asking per Task');
+reset role;
+select pg_temp.test_login_leadership(pg_temp.g521_uid(9));
+select performs_ok($$select * from public.task_list('all', p_finished => true, p_limit => 50)$$, 750,
+  'a page of every Task answers without asking per Task');
+select performs_ok($$select * from public.leadership_filter_work()$$, 750,
+  'the leadership filter work answers without reading every evaluated Task through RLS');
+reset role;
 
 select * from finish();
 rollback;

@@ -209,18 +209,22 @@ as $$
        and (needle.value = '' or strpos(private.fold_search(task.title), needle.value) > 0)
        and task.group_id not in (select muted.group_id from muted)
   ),
-  page as (
-    select matched.*, count(*) over () as total
+  placed as (
+    -- Open Tasks first, soonest deadline first; then finished ones, newest
+    -- deadline first; undated last in both. A title sort leads inside each
+    -- part. The id ends every tie, so a page boundary never wobbles.
+    select matched.*,
+           count(*) over () as total,
+           row_number() over (
+             order by matched.finished,
+                      (case when p_sort = 'title' then matched.title end) collate pg_catalog."ro-x-icu",
+                      (case when not matched.finished then matched.deadline end) asc nulls last,
+                      (case when matched.finished then matched.deadline end) desc nulls last,
+                      (case when matched.finished then -matched.id else matched.id end)) as place
       from matched
-     -- Open Tasks first, soonest deadline first; then finished ones, newest
-     -- deadline first; undated last in both. A title sort leads inside each
-     -- part. The id ends every tie, so a page boundary never wobbles.
-     order by matched.finished,
-              (case when p_sort = 'title' then matched.title end) collate pg_catalog."ro-x-icu",
-              (case when not matched.finished then matched.deadline end) asc nulls last,
-              (case when matched.finished then matched.deadline end) desc nulls last,
-              (case when matched.finished then -matched.id else matched.id end)
-     limit p_limit offset p_offset
+  ),
+  page as (
+    select placed.* from placed order by placed.place limit p_limit offset p_offset
   )
   select page.id, page.group_id, page.title, page.description, page.status, page.deadline,
          page.completed_at, page.review_round, page.assignment_mode, page.audience, page.kind,
@@ -268,11 +272,7 @@ as $$
             left join public.profiles as profile on profile.id = executor.member_id),
          page.total
     from page
-   order by page.finished,
-            (case when p_sort = 'title' then page.title end) collate pg_catalog."ro-x-icu",
-            (case when not page.finished then page.deadline end) asc nulls last,
-            (case when page.finished then page.deadline end) desc nulls last,
-            (case when page.finished then -page.id else page.id end);
+   order by page.place;
 $$;
 
 comment on function private.task_list_impl(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer) is

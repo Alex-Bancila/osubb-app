@@ -2903,6 +2903,7 @@ export type Database = {
         }[]
       }
       can_evaluate_task: { Args: { p_task_id: number }; Returns: boolean }
+      can_manage_task: { Args: { p_task_id: number }; Returns: boolean }
       can_manage_tasks: { Args: never; Returns: boolean }
       can_read_all_tasks: { Args: never; Returns: boolean }
       cancel_event: {
@@ -3669,6 +3670,13 @@ export type Database = {
           imported: boolean
           member_id: string
           orphan_user_id: string
+        }[]
+      }
+      leadership_filter_work: {
+        Args: never
+        Returns: {
+          campaign_id: number
+          group_id: number
         }[]
       }
       leadership_leaderboard: {
@@ -4562,6 +4570,56 @@ export type Database = {
         }
       }
       task_delete_preview: { Args: { p_task_id: number }; Returns: Json }
+      task_list: {
+        Args: {
+          p_campaign_id?: number
+          p_finished?: boolean
+          p_from?: string
+          p_group_id?: number
+          p_limit?: number
+          p_list: string
+          p_offset?: number
+          p_preferred?: boolean
+          p_search?: string
+          p_sort?: string
+          p_state?: string
+          p_to?: string
+        }
+        Returns: {
+          assignment_mode: string
+          assignments: Json
+          audience: string
+          campaign_id: number
+          completed_at: string
+          deadline: string
+          description: string
+          duplicated_from_task_id: number
+          evaluations: Json
+          executor: Json
+          group_id: number
+          id: number
+          kind: string
+          links: Json
+          parent_task_id: number
+          queue_closed_at: string
+          review_round: number
+          status: Database["public"]["Enums"]["task_status"]
+          submission: Json
+          title: string
+          total: number
+        }[]
+      }
+      task_list_summary: {
+        Args: { p_list: string }
+        Returns: {
+          campaign_id: number
+          dated: boolean
+          group_id: number
+          late: boolean
+          status: Database["public"]["Enums"]["task_status"]
+          tasks: number
+        }[]
+      }
       uninvited_members: {
         Args: never
         Returns: {
