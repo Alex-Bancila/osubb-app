@@ -356,13 +356,14 @@ it('shows a Manager the operational settings and BC the structural ones', async 
   expect(
     await screen.findByRole('heading', { name: 'Structura grupului' }),
   ).toBeVisible();
-  // Three categories are one segmented choice, not a select.
+  // The categories are one segmented choice, not a select -- and a Subgrup
+  // (this Group has a parent) is never a Departament (Alex, 2026-10-11).
   const category = screen.getByRole('radiogroup', { name: 'Categorie' });
   expect(
     within(category)
       .getAllByRole('radio')
       .map((radio) => radio.textContent),
-  ).toEqual(['Departament', 'Echipă', 'Proiect']);
+  ).toEqual(['Echipă', 'Proiect']);
   // Only the optional fields say so, on the kit's field.
   expect(screen.getByLabelText('Numele grupului')).toHaveAttribute(
     'data-slot',
