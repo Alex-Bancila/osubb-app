@@ -1676,3 +1676,39 @@ it('moves between tabs with a finger swipe over the panel (2026-10-11)', async (
   swipe(await screen.findByRole('region', { name: 'Setări' }), 'left');
   expect(tab('Membri')).toHaveAttribute('aria-current', 'page');
 });
+
+it('offers the parent-Cup box only where a Group above competes in the Cup', async () => {
+  const child = group(2, 'Logistică', [1, 2], 1);
+  api.groups.mockReturnValue({
+    data: [
+      group(1, 'Educațional', [1], null, {
+        category: 'department',
+        competes_in_cup: true,
+      }),
+      child,
+    ],
+    isPending: false,
+    isError: false,
+  });
+  const competing = show();
+  expect(
+    await screen.findByRole('checkbox', {
+      name: 'Punctele merg și la cupa grupului părinte',
+    }),
+  ).toBeInTheDocument();
+  competing.unmount();
+
+  // The same Child Group under a top-level Project: no Cup above, no box.
+  api.groups.mockReturnValue({
+    data: [group(1, 'Proiect', [1], null, { category: 'project' }), child],
+    isPending: false,
+    isError: false,
+  });
+  show();
+  expect(
+    await screen.findByRole('heading', { name: 'Structura grupului' }),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole('checkbox', { name: /cupa grupului părinte/ }),
+  ).toBeNull();
+});

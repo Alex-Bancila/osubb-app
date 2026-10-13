@@ -318,6 +318,7 @@ function ArchiveGroupDialog({
 export function GroupSettingsTab({
   group,
   parent,
+  cupAbove = false,
   subtree = [],
   roster,
   authority,
@@ -331,6 +332,12 @@ export function GroupSettingsTab({
 }: {
   group: AdminGroup;
   parent: AdminGroup | undefined;
+  /**
+   * A Group above this one competes in the Department Cup
+   * (`competesAbove`): the only case where a Child Group's parent-Cup box
+   * moves any points, so the only one where it shows.
+   */
+  cupAbove?: boolean;
   /** Every Group below this one: what turning it private also hides. */
   subtree?: AdminGroup[];
   roster: RosterEntry[];
@@ -831,8 +838,10 @@ export function GroupSettingsTab({
 
         <div className={choicesClass}>
           {/* The Department Cup is a Department's (Alex, 2026-10-11): a top-level
-              Team or Project competes in nothing, and a Child Group's points
-              may count toward its parent's. */}
+              Team or Project competes in nothing. A Child Group's points may
+              count toward the Cup of a competing Group above it; with none
+              above, the box would change nothing and is not shown -- the
+              stored setting is still sent back as it is. */}
           {root && group.category === 'department' && (
             <Check
               label="Concurează în Cupa Departamentelor"
@@ -841,7 +850,7 @@ export function GroupSettingsTab({
               onChange={setCompetes}
             />
           )}
-          {!root && (
+          {!root && cupAbove && (
             <Check
               label="Punctele merg și la cupa grupului părinte"
               checked={countsToward}

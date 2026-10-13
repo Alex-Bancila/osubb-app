@@ -39,6 +39,24 @@ export function categoryLabel(category: string): string {
   return CATEGORY_LABELS[category] ?? category;
 }
 
+/**
+ * Whether a Group above this one competes in the Department Cup. A Child
+ * Group's Task Points reach the nearest competing Group above it (ADR-0009),
+ * so its "counts toward the parent's Cup" setting moves points only then:
+ * under a top-level Project or Team, or a Department whose Cup setting is
+ * off, it changes nothing. A Group above that the list does not hold counts
+ * as not competing.
+ */
+export function competesAbove(
+  group: Pick<AdminGroup, 'id' | 'path'>,
+  groups: readonly Pick<AdminGroup, 'id' | 'competes_in_cup'>[],
+): boolean {
+  return groups.some(
+    (row) =>
+      row.id !== group.id && row.competes_in_cup && group.path.includes(row.id),
+  );
+}
+
 export function groupStatusLabel(status: string): string {
   return status === 'active'
     ? 'Activ'

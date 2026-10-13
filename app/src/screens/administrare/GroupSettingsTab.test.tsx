@@ -713,12 +713,13 @@ it('renders nothing for a viewer who can change none of it', () => {
  * the Department Cup box is a Department's; a top-level Team or Project gets
  * neither it nor the Child Group's parent-cup box.
  */
-function showStructure(stored: Partial<AdminGroup>) {
+function showStructure(stored: Partial<AdminGroup>, cupAbove = false) {
   return render(
     <MemoryRouter>
       <GroupSettingsTab
         group={group(stored)}
         parent={undefined}
+        cupAbove={cupAbove}
         roster={[]}
         authority={{ ...authority, editStructure: true }}
         levels={[0, 1, 2, 3, 5, 6]}
@@ -758,8 +759,9 @@ it('offers "Concurează în Cupa Departamentelor" to a top-level Department only
   ).toBeNull();
   project.unmount();
 
-  // A Child Group keeps its own box: its points may count toward the parent's cup.
-  showStructure({ category: 'team' });
+  // A Child Group under a competing Group has its own box: its points may
+  // count toward that Cup.
+  showStructure({ category: 'team' }, true);
   expect(
     screen.queryByRole('checkbox', { name: /Cupa Departamentelor/ }),
   ).toBeNull();
@@ -768,6 +770,28 @@ it('offers "Concurează în Cupa Departamentelor" to a top-level Department only
       name: 'Punctele merg și la cupa grupului părinte',
     }),
   ).toBeInTheDocument();
+});
+
+it('offers no Cup box at all to a Child Group with nothing competing above it', () => {
+  // Under a top-level Project or Team, or a Department whose Cup setting is
+  // off, the points reach no Cup: the box would change nothing.
+  showStructure({ category: 'team' }, false);
+  expect(screen.queryByRole('checkbox', { name: /cupa|Cupa/ })).toBeNull();
+});
+
+it('keeps the stored parent-Cup setting when its box is hidden', async () => {
+  const user = userEvent.setup();
+  showStructure({ category: 'team', counts_toward_parent_cup: false }, false);
+  await user.click(screen.getByRole('radio', { name: 'Proiect' }));
+  await user.click(screen.getByRole('button', { name: 'Salvează structura' }));
+  expect(run).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      kind: 'structure',
+      category: 'project',
+      countsTowardParentCup: false,
+    }),
+    expect.any(Function),
+  );
 });
 
 describe('Categorie (Alex, 2026-10-11; CodeRabbit on #1044)', () => {

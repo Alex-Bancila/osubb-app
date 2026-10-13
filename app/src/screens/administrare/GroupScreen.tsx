@@ -64,6 +64,7 @@ import { GroupRosterTab } from './GroupRosterTab';
 import { GroupSettingsTab } from './GroupSettingsTab';
 import {
   categoryLabel,
+  competesAbove,
   currentGroupTab,
   createdGroupManager,
   groupPathNames,
@@ -233,6 +234,11 @@ export default function GroupScreen() {
         .filter((row) => row.parent_id === id)
         .sort((left, right) => left.name.localeCompare(right.name, 'ro')),
     [groups, id],
+  );
+  // A competing Group above this one: where the parent-Cup box means something.
+  const cupAbove = useMemo(
+    () => group !== undefined && competesAbove(group, groups),
+    [group, groups],
   );
   // Every Group below this one, at any depth: what turning it private hides.
   const subtree = useMemo(
@@ -430,6 +436,7 @@ export default function GroupScreen() {
               key={group.id}
               group={group}
               parent={parent}
+              cupAbove={cupAbove}
               subtree={subtree}
               roster={roster}
               authority={authority}
