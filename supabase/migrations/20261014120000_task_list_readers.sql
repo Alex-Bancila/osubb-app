@@ -334,3 +334,124 @@ grant execute on function private.task_list_impl(text, boolean, bigint, bigint, 
   to authenticated;
 grant execute on function public.task_list(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer)
   to authenticated;
+
+-- ==================== 4. task_list_summary: what a list holds ====================
+
+create function private.task_list_summary_impl(p_list text)
+returns table(
+  group_id bigint,
+  campaign_id bigint,
+  status public.task_status,
+  late boolean,
+  dated boolean,
+  tasks bigint)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select private.require_task_list_args(p_list, null, 'deadline', 1, 0);
+
+  select task.group_id,
+         task.campaign_id,
+         task.status,
+         coalesce(task.status = 'completed' and task.completed_at > task.deadline, false),
+         task.deadline is not null,
+         count(*)
+    from private.task_list_scope(p_list) as scope
+    join public.tasks as task on task.id = scope.task_id
+   group by 1, 2, 3, 4, 5
+   order by 1, 2, 3, 4, 5;
+$$;
+
+comment on function private.task_list_summary_impl(text) is
+  'Body of public.task_list_summary: private.task_list_scope(p_list) counted by the Task''s Group, Campaign, status, whether it was completed after its deadline, and whether it carries a deadline.';
+
+create function public.task_list_summary(p_list text)
+returns table(
+  group_id bigint,
+  campaign_id bigint,
+  status public.task_status,
+  late boolean,
+  dated boolean,
+  tasks bigint)
+language sql
+stable
+set search_path = ''
+as $$
+  select * from private.task_list_summary_impl(p_list);
+$$;
+
+comment on function public.task_list_summary(text) is
+  'What a leadership Task list (managed or all, as public.task_list) holds, without reading a Task: its Tasks counted by Group, Campaign, status, late (completed after the deadline) and dated (a deadline is set). The page takes from it the Groups and Campaigns the Work Filter offers (Rule W), the states Stare offers and how many finished Tasks there are. PT400 invalid_list. No rows without org claims or a live activ Profile.';
+
+revoke execute on function private.task_list_summary_impl(text) from public, anon, authenticated, service_role;
+revoke execute on function public.task_list_summary(text) from public, anon, authenticated, service_role;
+grant execute on function private.task_list_summary_impl(text) to authenticated;
+grant execute on function public.task_list_summary(text) to authenticated;
+
+-- ==================== 5. leadership_filter_work: where Task Points were earned ====================
+
+create function private.leadership_filter_work_impl()
+returns table(group_id bigint, campaign_id bigint)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select distinct task.group_id, task.campaign_id
+    from private.task_list_scope('all') as scope
+    join public.tasks as task on task.id = scope.task_id
+   where task.kind = 'task'
+     -- An Evaluation, through its Assignment: a reopened Task keeps its
+     -- Evaluation and its reversal on the board, so it counts too.
+     and exists (
+       select 1
+         from public.task_assignments as held
+         join public.task_evaluations as evaluation on evaluation.assignment_id = held.id
+        where held.task_id = task.id)
+   order by 1, 2;
+$$;
+
+comment on function private.leadership_filter_work_impl() is
+  'Body of public.leadership_filter_work: the distinct Group and Campaign of every Task of kind task in private.task_list_scope(''all'') that has an Evaluation through one of its Assignments.';
+
+create function public.leadership_filter_work()
+returns table(group_id bigint, campaign_id bigint)
+language sql
+stable
+set search_path = ''
+as $$
+  select * from private.leadership_filter_work_impl();
+$$;
+
+comment on function public.leadership_filter_work() is
+  'The Group and Campaign of every evaluated Task the caller reads, each pair once: the Work Filter choices of Clasament and Tracker membru (Rule W, #845), which carry Task Points. From level 5 up; no rows below, without org claims or without a live activ Profile.';
+
+revoke execute on function private.leadership_filter_work_impl() from public, anon, authenticated, service_role;
+revoke execute on function public.leadership_filter_work() from public, anon, authenticated, service_role;
+grant execute on function private.leadership_filter_work_impl() to authenticated;
+grant execute on function public.leadership_filter_work() to authenticated;
+
+-- ==================== 6. can_manage_task: one Task ====================
+
+create function public.can_manage_task(p_task_id bigint)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  -- The twin of public.can_evaluate_task (#189): the Task through its own
+  -- RLS, and private.can_manage_task as the only gate. No new authority.
+  select coalesce(public.auth_is_member(), false) and exists (
+    select 1 from public.tasks as task
+     where task.id = p_task_id
+       and private.can_manage_task(task.id)
+  );
+$$;
+
+comment on function public.can_manage_task(bigint) is
+  'Read-only capability for one Task''s manager controls and for where a Task link lands; commands revalidate authority under lock.';
+
+revoke execute on function public.can_manage_task(bigint) from public, anon, authenticated, service_role;
+grant execute on function public.can_manage_task(bigint) to authenticated;

@@ -12,7 +12,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(33);
+select plan(42);
 
 \ir _group_task_fixtures.psql
 reset role;
@@ -476,6 +476,105 @@ select is(
     union all select distinct total::text from public.task_list('managed', p_group_id => %1$s)$$, pg_temp.gid_tl('TL Root'))),
   array['5', '7'],
   'total counts what the filters match, whatever the page');
+
+-- ==================== task_list_summary ====================
+
+select ok(not (select prosecdef from pg_proc where oid = 'public.task_list_summary(text)'::regprocedure)
+      and not (select prosecdef from pg_proc where oid = 'public.leadership_filter_work()'::regprocedure)
+      and not (select prosecdef from pg_proc where oid = 'public.can_manage_task(bigint)'::regprocedure)
+      and has_function_privilege('authenticated', 'public.task_list_summary(text)', 'execute')
+      and has_function_privilege('authenticated', 'public.leadership_filter_work()', 'execute')
+      and has_function_privilege('authenticated', 'public.can_manage_task(bigint)', 'execute')
+      and not has_function_privilege('anon', 'public.task_list_summary(text)', 'execute')
+      and not has_function_privilege('anon', 'public.leadership_filter_work()', 'execute')
+      and not has_function_privilege('anon', 'public.can_manage_task(bigint)', 'execute')
+      and not has_function_privilege('service_role', 'public.task_list_summary(text)', 'execute')
+      and not has_function_privilege('service_role', 'public.leadership_filter_work()', 'execute')
+      and not has_function_privilege('service_role', 'public.can_manage_task(bigint)', 'execute'),
+  'the summary, the leadership filter work and the per-Task capability are invoker reads for a signed-in Member');
+select is(
+  pg_temp.texts_as(pg_temp.g521_uid(9), format($$
+    select line from (
+      select concat_ws(' | ', grp.name, coalesce(campaign.name, '-'), summary.status, summary.late::text, summary.dated::text, summary.tasks) as line
+        from public.task_list_summary('managed') as summary
+        join public.groups as grp on grp.id = summary.group_id
+        left join public.campaigns as campaign on campaign.id = summary.campaign_id
+       where grp.name like 'TL %%') as lines
+     order by line collate "C"$$)),
+  array['TL Child | - | completed | true | true | 1',
+        'TL Child | - | in_progress | false | true | 1',
+        'TL Child | Campanie TL | completed | false | true | 1',
+        'TL Root | - | cancelled | false | false | 1',
+        'TL Root | - | completed | false | false | 1',
+        'TL Root | - | todo | false | false | 1',
+        'TL Root | - | unfulfilled | false | true | 1'],
+  'the summary counts a list by Group, Campaign, status, lateness and whether a deadline is set');
+select is(
+  (select count(*) from callers_tl as caller
+    where pg_temp.count_as(caller.id, $$select coalesce(sum(tasks), 0)::bigint from public.task_list_summary('managed')$$)
+          is distinct from cardinality(pg_temp.ids_as(caller.id, $$select task_id from pg_temp.scope_tl('managed')$$))
+       or pg_temp.count_as(caller.id, $$select coalesce(sum(tasks), 0)::bigint from public.task_list_summary('all')$$)
+          is distinct from cardinality(pg_temp.ids_as(caller.id, $$select task_id from pg_temp.scope_tl('all')$$))),
+  0::bigint,
+  'for every caller the summary counts exactly the list');
+select is(pg_temp.reason_tl($$select * from public.task_list_summary('mine')$$), 'PT400 invalid_list',
+  'the summary refuses an unknown list');
+
+-- ==================== leadership_filter_work ====================
+
+-- An evaluated Task inside the Private Group: BC reads it, BCE #9 does not.
+select pg_temp.task_tl('TL secret', 'Private #TL', 'completed', pg_temp.at_tl('2026-03-20'), pg_temp.at_tl('2026-03-19'));
+insert into public.task_assignments(task_id, member_id, assigned_by, assigned_at, ended_at, end_reason)
+values (pg_temp.tid_tl('TL secret'), pg_temp.g521_uid(10), pg_temp.g521_uid(1), pg_temp.at_tl('2026-02-01'), pg_temp.at_tl('2026-03-19'), 'completed');
+select pg_temp.test_credit_task(pg_temp.tid_tl('TL secret'), pg_temp.g521_uid(10), pg_temp.g521_uid(1));
+
+select is(
+  (select count(*) from callers_tl as caller
+    where pg_temp.texts_as(caller.id, $$select group_id || '/' || coalesce(campaign_id::text, '-')
+                                          from public.leadership_filter_work() order by 1$$)
+          is distinct from
+          case when caller.level >= 5 then
+            pg_temp.texts_as(caller.id, $$
+              select pair from (
+                select distinct task.group_id || '/' || coalesce(task.campaign_id::text, '-') as pair
+                  from public.tasks as task
+                 where task.kind = 'task'
+                   and exists (select 1 from public.task_assignments as held
+                                 join public.task_evaluations as evaluation on evaluation.assignment_id = held.id
+                                where held.task_id = task.id)) as pairs
+               order by 1$$)
+          else '{}'::text[] end),
+  0::bigint,
+  'for every caller the leadership filter work is the Group and Campaign of the evaluated Tasks RLS returns, from level 5 up');
+select is(
+  array[
+    pg_temp.gid_tl('Private #TL') || '/-' = any(pg_temp.texts_as(pg_temp.g521_uid(1),
+      $$select group_id || '/' || coalesce(campaign_id::text, '-') from public.leadership_filter_work()$$)),
+    pg_temp.gid_tl('Private #TL') || '/-' = any(pg_temp.texts_as(pg_temp.g521_uid(9),
+      $$select group_id || '/' || coalesce(campaign_id::text, '-') from public.leadership_filter_work()$$)),
+    pg_temp.gid_tl('TL Child') || '/' || (select id from public.campaigns where name = 'Campanie TL') = any(pg_temp.texts_as(pg_temp.g521_uid(9),
+      $$select group_id || '/' || coalesce(campaign_id::text, '-') from public.leadership_filter_work()$$)),
+    pg_temp.gid_tl('TL Root') || '/-' = any(pg_temp.texts_as(pg_temp.g521_uid(9),
+      $$select group_id || '/' || coalesce(campaign_id::text, '-') from public.leadership_filter_work()$$))],
+  array[true, false, true, false],
+  'a Private Group''s evaluated Task is offered to BC and not to an outsider; a Group with no evaluated Task is not offered');
+
+-- ==================== can_manage_task ====================
+
+select is(
+  (select count(*) from callers_tl as caller
+    where pg_temp.count_as(caller.id, $$
+      select count(*) from g521_tasks as fixture
+       where public.can_manage_task(fixture.id)
+             is distinct from exists (select 1 from public.my_managed_task_ids() as managed
+                                       where managed.task_id = fixture.id)$$) <> 0),
+  0::bigint,
+  'for every caller can_manage_task says of one Task what the managed list says');
+select is(pg_temp.count_as(pg_temp.g521_uid(1), $$select count(*) from (select public.can_manage_task(-1) as yes) as answer where yes$$),
+  0::bigint, 'an unknown Task is not manageable');
+set local role anon;
+select throws_ok('select public.can_manage_task(1)', '42501', null, 'anon cannot ask the capability');
+reset role;
 
 -- ==================== The search key ====================
 
