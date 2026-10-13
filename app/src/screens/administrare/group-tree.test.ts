@@ -3,6 +3,7 @@ import type { AdminGroup, AppointableMember } from '../../queries/groups-admin';
 import {
   buildTree,
   categoryLabel,
+  competesAbove,
   expandableIds,
   groupPathNames,
   groupRoleLabel,
@@ -508,4 +509,31 @@ it('names the direct Manager in the receipt only when one was chosen (#951)', ()
   expect(
     createdGroupManager({ category: 'project', managerId: 'ana' }, members),
   ).toEqual({ member: members[0], title: 'Coordonator Principal' });
+});
+
+// ADR-0009: a Child Group's Task Points reach the nearest competing Group
+// above it, so "counts toward the parent's Cup" means something only there.
+it('says whether a Group above this one competes in the Department Cup', () => {
+  const department = group(10, 'Educațional', [10], null, {
+    category: 'department',
+    competes_in_cup: true,
+  });
+  const team = group(11, 'Echipa A', [10, 11], 10);
+  const squad = group(12, 'Sub-echipa A', [10, 11, 12], 11);
+  const quiet = group(20, 'Diverse', [20], null, { category: 'department' });
+  const quietTeam = group(21, 'IT', [20, 21], 20);
+  const project = group(30, 'Proiect', [30], null, { category: 'project' });
+  const projectTeam = group(31, 'Logistică', [30, 31], 30);
+  const all = [department, team, squad, quiet, quietTeam, project, projectTeam];
+
+  expect(competesAbove(team, all)).toBe(true);
+  // To any depth: the competing Group need not be the direct parent.
+  expect(competesAbove(squad, all)).toBe(true);
+  // A Department whose Cup setting is off, and a top-level Project.
+  expect(competesAbove(quietTeam, all)).toBe(false);
+  expect(competesAbove(projectTeam, all)).toBe(false);
+  // A competing Group is not above itself.
+  expect(competesAbove(department, all)).toBe(false);
+  // A Group above that the list does not hold counts as not competing.
+  expect(competesAbove(team, [team, squad])).toBe(false);
 });
