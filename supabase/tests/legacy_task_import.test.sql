@@ -35,7 +35,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(60);
+select plan(68);
 
 create function pg_temp.uli(n integer) returns uuid language sql immutable as $$
   select ('10490000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -419,6 +419,43 @@ reset role;
 select is((select count(*) from public.promotion_candidates
             where member_id = pg_temp.uli(7) and decision is null), 1::bigint,
   'a Voluntar the history carries over the threshold is listed as a promotion candidate');
+
+-- ==================== The totals the script reads back ====================
+
+select ok(has_function_privilege('service_role', 'public.legacy_task_import_totals()', 'execute')
+          and not has_function_privilege('authenticated', 'public.legacy_task_import_totals()', 'execute')
+          and not has_function_privilege('anon', 'public.legacy_task_import_totals()', 'execute'),
+  'the totals read is service role only');
+set local role service_role;
+insert into rli select 'totals', public.legacy_task_import_totals();
+reset role;
+select is((select (result ->> 'rows')::integer from rli where name = 'totals'), 54,
+  'the totals count every imported Task: 2 + 1 + 50 + 1');
+select is((select result -> 'members' -> pg_temp.uli(4)::text from rli where name = 'totals'),
+  '{"rows": 1, "points": 9}'::jsonb,
+  'the totals are per Member');
+select is((select (result -> 'groups' -> pg_temp.gli('Dept LI')::text ->> 'rows')::integer from rli where name = 'totals'), 54,
+  'and per Group');
+
+-- ==================== Reopen is refused; delete for good works ====================
+
+select pg_temp.test_login_leadership(pg_temp.uli(1));
+select throws_ok(
+  $$select public.reopen_task(pg_temp.tli(10), 'Motiv de redeschidere pentru test')$$,
+  'PT409', 'evaluation_not_found',
+  'an imported Task cannot be reopened: reopen reverses a command Evaluation only');
+select lives_ok(
+  $$select public.delete_task(pg_temp.tli(10), true)$$,
+  'an imported Task can be deleted for good with its points');
+select pg_temp.test_clear_jwt();
+reset role;
+select is((select coalesce(sum(delta), 0) from public.points_ledger where member_id = pg_temp.uli(4)), 0::bigint,
+  'deleting it reversed its points through the ledger');
+set local role service_role;
+insert into rli select 'after-delete', public.import_legacy_tasks(pg_temp.uli(1), jsonb_build_array(pg_temp.rli(10)));
+reset role;
+select is((select result ->> 'already_imported' from rli where name = 'after-delete'), '1',
+  'the deleted Task''s sheet row stays claimed: a later call still skips it');
 
 select * from finish();
 rollback;

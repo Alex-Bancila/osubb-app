@@ -114,10 +114,11 @@ select is(
     'private.email_digests:RESTRICTIVE:ALL:false:false',
     'private.invitation_requests:RESTRICTIVE:ALL:false:false',
     'private.resend_webhook_deliveries:RESTRICTIVE:ALL:false:false',
+    'public.legacy_task_imports:RESTRICTIVE:ALL:false:false',
     'public.member_imports:RESTRICTIVE:ALL:false:false',
     'public.push_deliveries:RESTRICTIVE:ALL:false:false'
   ],
-  'the five service- and definer-only tables each carry one restrictive deny-all policy');
+  'the six service- and definer-only tables each carry one restrictive deny-all policy');
 -- Per policy, not the union: a policy that loses either role fails here.
 select is(
   (select array_agg(format('%s.%s:%s', schemaname, tablename,
@@ -129,6 +130,7 @@ select is(
     'private.email_digests:anon,authenticated',
     'private.invitation_requests:anon,authenticated',
     'private.resend_webhook_deliveries:anon,authenticated',
+    'public.legacy_task_imports:anon,authenticated',
     'public.member_imports:anon,authenticated',
     'public.push_deliveries:anon,authenticated'
   ],

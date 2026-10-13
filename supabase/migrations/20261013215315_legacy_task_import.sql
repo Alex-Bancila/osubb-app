@@ -35,11 +35,18 @@ create table public.legacy_task_imports (
   constraint legacy_task_imports_sheet_id_ck check (sheet_id is null or char_length(sheet_id) between 1 and 40)
 );
 
+-- imported_by is a foreign key: its index keeps a Profile's removal from scanning the registry.
+create index legacy_task_imports_imported_by_idx on public.legacy_task_imports (imported_by);
+
 alter table public.legacy_task_imports enable row level security;
 revoke all on table public.legacy_task_imports from public, anon, authenticated, service_role;
+-- A service- and definer-only table says so in a policy as well (#775's idiom):
+-- deny-all for both client roles, so RLS on never reads as "policy forgotten".
+create policy legacy_task_imports_manage_no_client on public.legacy_task_imports
+  as restrictive for all to authenticated, anon using (false) with check (false);
 
 comment on table public.legacy_task_imports is
-  '#1049: one row per row of a legacy Google Sheets Task Tracker that the Legacy Import turned into a Task -- the Drive file id of the tracker, the row number in its Tasks tab (header = 1), the sheet''s own Id (not unique there) and the Task. A Task later deleted for good keeps its row with task_id null, so the key stays claimed and a later call still skips the row. RLS on with no policy and no grant to any role: public.import_legacy_tasks writes it and public.legacy_task_import_totals reads it, both as definer. Excluded from the live change broadcast.';
+  '#1049: one row per row of a legacy Google Sheets Task Tracker that the Legacy Import turned into a Task -- the Drive file id of the tracker, the row number in its Tasks tab (header = 1), the sheet''s own Id (not unique there) and the Task. A Task later deleted for good keeps its row with task_id null, so the key stays claimed and a later call still skips the row. RLS on with one restrictive deny-all policy for the client roles and no grant to any role: public.import_legacy_tasks writes it and public.legacy_task_import_totals reads it, both as definer. Excluded from the live change broadcast.';
 
 -- ---------------------------------------------------------------------------
 -- 2. The legacy source, closed except for a registered Task
@@ -386,3 +393,43 @@ grant execute on function public.import_legacy_tasks(uuid, jsonb, boolean) to se
 
 comment on function public.import_legacy_tasks(uuid, jsonb, boolean) is
   '#1049 (spec 2026-10-13, ruling R53): the one-time Legacy Import -- up to 200 rows of the legacy Google Sheets Task Tracker per call, each written as a terminal Task with its Assignment, a legacy_migration Evaluation (evaluated_by null), its Task Points ledger row and the three activity rows of create_completed_task, all dated at 12:00 Europe/Bucharest on the completion day; the deadline is the sheet''s day at that hour, else the completion instant. Points are the level''s base points times rating_mult, as in private.evaluate_task; this is the second and last writer of Task Points. Step 1, malformed for everyone, each with the row in DETAIL: PT400 invalid_actor, invalid_rows, too_many_rows, invalid_tracker_id, invalid_sheet_row, invalid_sheet_id, title_required, title_too_short, title_too_long, description_too_long, task_group_required, invalid_origin, invalid_executor, invalid_difficulty, invalid_rating, invalid_outcome, invalid_completed_on (not a date, or after today in Bucharest), invalid_deadline, evaluation_note_required, note_too_long, duplicate_row. Step 2: 42501 legacy_import_forbidden unless p_actor is a live activ Moderator. Step 3: PT400 invalid_executor (not a live activ Member), PT400 invalid_origin (unknown Group), PT409 group_archived. A row whose (tracker_id, sheet_row) is already in public.legacy_task_imports is skipped and counted, so a re-run completes an interrupted import and never doubles it. No Notification, no daily cap, no activity actor; BC, the Moderator and Members below the Group''s Minimum Level are credited like anyone (the Evaluation was made in the sheet). p_dry_run does everything but write. One invalid row fails the whole call. Service role only, like import_member (#991); dropped by #1050 after the verified production run.';
+
+-- ---------------------------------------------------------------------------
+-- 4. The totals the import script compares its file with
+-- ---------------------------------------------------------------------------
+create function public.legacy_task_import_totals()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with imported as (
+    select task.group_id, assignment.member_id, evaluation.points
+      from public.legacy_task_imports as registry
+      join public.tasks as task on task.id = registry.task_id
+      join public.task_evaluations as evaluation
+        on evaluation.task_id = task.id
+       and evaluation.source = 'legacy_migration'
+       and evaluation.reversed_at is null
+      join public.task_assignments as assignment on assignment.id = evaluation.assignment_id
+  )
+  select jsonb_build_object(
+    'rows',   (select count(*) from imported),
+    'points', (select coalesce(sum(points), 0) from imported),
+    'groups', coalesce((select jsonb_object_agg(by_group.group_id::text,
+                                 jsonb_build_object('rows', by_group.row_count, 'points', by_group.points))
+                          from (select group_id, count(*) as row_count, sum(points) as points
+                                  from imported group by group_id) as by_group), '{}'::jsonb),
+    'members', coalesce((select jsonb_object_agg(by_member.member_id::text,
+                                  jsonb_build_object('rows', by_member.row_count, 'points', by_member.points))
+                           from (select member_id, count(*) as row_count, sum(points) as points
+                                   from imported group by member_id) as by_member), '{}'::jsonb));
+$$;
+
+revoke execute on function public.legacy_task_import_totals()
+  from public, anon, authenticated, service_role;
+grant execute on function public.legacy_task_import_totals() to service_role;
+
+comment on function public.legacy_task_import_totals() is
+  '#1049: what the Legacy Import has written and still stands -- rows and Task Points in total, per Group and per Member -- for scripts/import-legacy-tasks.mjs to compare with its file after a run. Counts an imported Task only while it exists with an unreversed legacy_migration Evaluation. Service role only; dropped by #1050 with the command.';
