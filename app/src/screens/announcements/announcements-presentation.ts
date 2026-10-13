@@ -12,7 +12,10 @@ import {
 } from '../../lib/schemas/attached-link';
 import type { MemberIdentity } from '../../components/member/member-identity';
 import type { Group } from '../../queries/reference';
-import { approvalStatusOf, type ApprovalStatus } from '../../queries/approvals';
+import {
+  approvalStatusOf,
+  type ApprovalStatus,
+} from '../../lib/approval-status';
 
 export type AnnouncementPriority =
   Database['public']['Enums']['announce_priority'];

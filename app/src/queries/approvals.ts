@@ -4,6 +4,11 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import {
+  approvalStatusOf,
+  type ApprovalStatus,
+  type ReviewOutcome,
+} from '../lib/approval-status';
 import { useAuth } from '../lib/auth';
 import { useCapability } from '../lib/capabilities';
 import { CommandError } from '../lib/command-reasons';
@@ -18,17 +23,10 @@ import { keys } from './keys';
  * rows behind the request icons in Calendar and Anunțuri come from one read.
  */
 
-export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
-/** What BC's review of one request ends in. */
-export type ReviewOutcome = Exclude<ApprovalStatus, 'pending'>;
+// The status and its reader live in lib/approval-status, so a presentation
+// module never imports the Supabase client through this file.
+export { approvalStatusOf, type ApprovalStatus, type ReviewOutcome };
 export type ApprovalKind = 'announcement' | 'event';
-
-/** The stored status as the presentations carry it; a row read before the flow is approved. */
-export function approvalStatusOf(
-  value: string | null | undefined,
-): ApprovalStatus {
-  return value === 'pending' || value === 'rejected' ? value : 'approved';
-}
 
 export type ApprovalRequest = {
   kind: ApprovalKind;

@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { EventPresentation } from '../../queries/events';
+
+// The relevance rule reaches the query layer; this suite never touches it.
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+
 import { upcomingRelevantEvents } from './next-items';
 
 function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
