@@ -1,10 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from 'react';
 import { CalendarX, Pencil } from 'lucide-react';
 
 import { Button } from '../../components/ui/button';
 import { FormSheet } from '../../components/ui/form-sheet';
 import { useAuth } from '../../lib/auth';
 import { useCapabilities } from '../../lib/capabilities';
+import {
+  useApproveEvent,
+  useRejectEvent,
+  type ReviewOutcome,
+} from '../../queries/approvals';
 import { useCampaigns } from '../../queries/campaigns';
 import { useEventFormOptions } from '../../queries/event-creation';
 import {
@@ -29,6 +41,7 @@ import {
   groupsAvailableAtLevel,
   type EventDraft,
   type EventFormOptions,
+  type EventFormValues,
 } from './event-form-model';
 
 /**
@@ -127,7 +140,6 @@ function EditEventDialog({
   options: EventFormOptions;
   onSaved: () => void;
 }) {
-  const update = useUpdateEvent();
   const [open, setOpen] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const saved = useRef(false);
@@ -148,31 +160,123 @@ function EditEventDialog({
         <Pencil aria-hidden="true" />
         Editează
       </Button>
-      {/* After a save the receipt takes focus; otherwise back to Editează. */}
-      <FormSheet
+      {/* Keyed by the opening, so every Editează starts from the stored row.
+          After a save the receipt takes focus; otherwise back to Editează. */}
+      <EditEventSheet
+        key={attempt}
+        event={event}
+        groups={groups}
+        options={options}
         open={open}
         onOpenChange={setOpen}
-        title="Editează evenimentul"
-        busy={update.isPending}
-        className="sm:max-w-2xl"
         finalFocus={() => !saved.current}
-      >
-        <EditEventForm
-          key={attempt}
-          event={event}
-          groups={groups}
-          options={options}
-          pending={update.isPending}
-          onCancel={() => setOpen(false)}
-          onSubmit={async (draft) => {
-            await update.mutateAsync({ eventId: event.id, draft });
-            saved.current = true;
-            setOpen(false);
-            onSaved();
-          }}
-        />
-      </FormSheet>
+        onSaved={() => {
+          saved.current = true;
+          setOpen(false);
+          onSaved();
+        }}
+      />
     </>
+  );
+}
+
+/**
+ * BC's review of a pending OSUBB-wide Event (spec 2026-10-11): `onDecided`
+ * runs after the command succeeds; the caller closes the sheet and shows the
+ * receipt.
+ */
+export type EventReview = {
+  onDecided: (outcome: ReviewOutcome) => void;
+};
+
+const DECISION_FAILED = 'Nu am putut salva decizia. Încearcă din nou.';
+
+/**
+ * "Editează evenimentul" (#849) as a sheet: the Eveniment nou form prefilled,
+ * a save sending every field. In review mode (`review`, spec 2026-10-11) it
+ * is "Revizuiește evenimentul": **Aprobă și publică** saves BC's edits, if
+ * any, then approves — the Event stays the author's — and **Respinge** asks
+ * for the reason the author is told.
+ */
+export function EditEventSheet({
+  event,
+  groups,
+  options,
+  open,
+  onOpenChange,
+  onSaved,
+  review,
+  finalFocus,
+}: {
+  event: EventPresentation;
+  groups: ReadonlyMap<number, Group> | undefined;
+  options: EventFormOptions;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+  review?: EventReview;
+  finalFocus?: ComponentProps<typeof FormSheet>['finalFocus'];
+}) {
+  const update = useUpdateEvent();
+  const approve = useApproveEvent();
+  const reject = useRejectEvent();
+  const busy = update.isPending || approve.isPending || reject.isPending;
+
+  return (
+    <FormSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={review ? 'Revizuiește evenimentul' : 'Editează evenimentul'}
+      busy={busy}
+      className="sm:max-w-2xl"
+      finalFocus={finalFocus}
+    >
+      <EditEventForm
+        event={event}
+        groups={groups}
+        options={options}
+        mode={review ? 'review' : 'edit'}
+        pending={busy}
+        secondary={
+          review ? (
+            <TaskReasonDialog
+              triggerLabel="Respinge"
+              title="Respinge evenimentul"
+              description="Autorul este anunțat și vede motivul pe evenimentul său; îl poate corecta și trimite din nou."
+              field="rejection"
+              fieldLabel="Motivul respingerii"
+              confirmLabel="Respinge"
+              failureMessage={DECISION_FAILED}
+              isPending={reject.isPending}
+              onConfirm={(reason) =>
+                reject.mutateAsync({ id: event.id, reason })
+              }
+              onSuccess={() => review.onDecided('rejected')}
+            />
+          ) : undefined
+        }
+        onCancel={() => onOpenChange(false)}
+        onSubmit={async (draft, changed) => {
+          if (review) {
+            // The edit lands first, so the organisation hears of the Event as
+            // BC corrected it; an untouched form approves it as it stands.
+            if (changed) await update.mutateAsync({ eventId: event.id, draft });
+            await approve.mutateAsync({ id: event.id });
+            review.onDecided('approved');
+          } else {
+            await update.mutateAsync({ eventId: event.id, draft });
+            onSaved();
+          }
+        }}
+      />
+    </FormSheet>
+  );
+}
+
+/** Whether the form still shows what it opened with; every value is a primitive. */
+function sameValues(a: EventFormValues, b: EventFormValues): boolean {
+  return (Object.keys(a) as (keyof EventFormValues)[]).every(
+    (key) => a[key] === b[key],
   );
 }
 
@@ -180,16 +284,21 @@ function EditEventForm({
   event,
   groups,
   options,
+  mode,
   pending,
+  secondary,
   onCancel,
   onSubmit,
 }: {
   event: EventPresentation;
   groups: ReadonlyMap<number, Group> | undefined;
   options: EventFormOptions;
+  mode: 'edit' | 'review';
   pending: boolean;
+  secondary?: ReactNode;
   onCancel: () => void;
-  onSubmit: (draft: EventDraft) => Promise<void>;
+  /** `changed`: whether any field differs from the stored Event. */
+  onSubmit: (draft: EventDraft, changed: boolean) => Promise<void>;
 }) {
   const { claims } = useAuth();
   const actorLevel = claims?.member_level ?? 0;
@@ -207,14 +316,18 @@ function EditEventForm({
 
   return (
     <EventForm
-      mode="edit"
+      mode={mode}
       initialValues={initialValues}
       options={formOptions}
       actorLevel={actorLevel}
       pending={pending}
+      secondary={secondary}
       onCancel={onCancel}
       onSubmit={(draft, values) =>
-        onSubmit(keepUntouchedTimes(draft, values, initialValues, event))
+        onSubmit(
+          keepUntouchedTimes(draft, values, initialValues, event),
+          !sameValues(values, initialValues),
+        )
       }
     />
   );

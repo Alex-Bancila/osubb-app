@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 
+import { ApprovalRequestsButton } from '../../components/approvals/ApprovalRequestsButton';
 import { Empty, ErrorState, Loading } from '../../components/states';
 import type { WorkFilterState } from '../../lib/use-work-filter';
 import { chosenGroupId } from '../../lib/work-filter';
@@ -125,6 +126,11 @@ export function CalendarAgenda({
 
   return (
     <div className="calendar-agenda-view">
+      {/* The Cereri de aprobare (spec 2026-10-11): the month view's icon, at
+          the head of the list. */}
+      <div className="mb-3 flex justify-end empty:hidden">
+        <ApprovalRequestsButton kind="event" />
+      </div>
       {linkedId !== null && !linked.isPending && !linkedEvent && (
         <p className="calendar-notice" role="alert">
           {linked.isError

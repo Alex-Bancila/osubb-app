@@ -4,7 +4,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(37);
 truncate announcements, announcement_reads cascade;
 
 insert into auth.users(id,email) values
@@ -89,6 +89,9 @@ update announcements set pinned=true where title='Responsible EDU #581';
 select is((select pinned from announcements where title='Responsible EDU #581'),true,'Responsible edits own Group announcement');
 update announcements set pinned=true where title='PR #581';
 reset role;
+-- Spec 2026-10-11: the Responsible's organisation-Audience Announcement is a request
+-- until published; by hand here, as the reach below is the subject.
+select pg_temp.test_publish_announcement('Responsible org audience #581');
 select is((select pinned from announcements where title='PR #581'),false,'Responsible cannot edit unrelated Group announcement');
 
 select pg_temp.test_login_leadership('f6000000-0000-0000-0000-0000000000f6');
@@ -123,6 +126,63 @@ where name='Child #581'$$,
 select is((select count(*) from announcements where title='Manager child #581'),1::bigint,
 'ancestor Manager insert actually created a Child Group announcement');
 reset role;
+
+-- ==================== #1042: who manages an organisation-wide Announcement ====================
+-- Option 2 (Alex, 2026-10-11): BC/Moderator manage every Organization Group
+-- Announcement; a Group Role holder still publishes there but edits, pins and
+-- deletes only their own. 'Responsible Organization #581' above was written
+-- by f4, the Responsible of Educațional.
+-- No caller: the authorship trigger keeps the fixture author (it stamps auth.uid() when there is one).
+select pg_temp.test_clear_jwt();
+insert into auth.users(id,email) values ('f8000000-0000-0000-0000-0000000000f8','ann581-moderator@test.local');
+insert into profiles(id,full_name,email,role,status) values
+('f8000000-0000-0000-0000-0000000000f8','Moderator','ann581-moderator@test.local','moderator','activ');
+insert into announcements(title,body,group_id,created_by)
+select 'Responsible Organization 2 #581','x',id,'f4000000-0000-0000-0000-0000000000f4' from groups where is_organization;
+
+select pg_temp.test_login_leadership('f5000000-0000-0000-0000-0000000000f5');
+update announcements set pinned=true where title='Responsible Organization #581';
+delete from announcements where title='Responsible Organization #581';
+reset role;
+select is((select pinned from announcements where title='Responsible Organization #581'),false,
+'a Group Role holder who is not the author cannot edit an organisation-wide Announcement (#1042)');
+select is((select count(*) from announcements where title='Responsible Organization #581'),1::bigint,
+'nor delete it');
+
+select pg_temp.test_login_leadership('f1000000-0000-0000-0000-0000000000f1');
+update announcements set pinned=true where title='Responsible Organization #581';
+delete from announcements where title='Responsible Organization #581';
+reset role;
+select is((select pinned from announcements where title='Responsible Organization #581'),false,
+'a plain Member cannot edit an organisation-wide Announcement');
+select is((select count(*) from announcements where title='Responsible Organization #581'),1::bigint,
+'nor delete it');
+
+select pg_temp.test_login_leadership('f4000000-0000-0000-0000-0000000000f4');
+update announcements set pinned=true where title='Responsible Organization #581';
+delete from announcements where title='Responsible Organization 2 #581';
+reset role;
+select is((select pinned from announcements where title='Responsible Organization #581'),true,
+'the author edits their own organisation-wide Announcement');
+select is((select count(*) from announcements where title='Responsible Organization 2 #581'),0::bigint,
+'and deletes their own');
+
+select pg_temp.test_login_leadership('f6000000-0000-0000-0000-0000000000f6');
+update announcements set pinned=false where title='Responsible Organization #581';
+reset role;
+select is((select pinned from announcements where title='Responsible Organization #581'),false,
+'BC still edits someone else''s organisation-wide Announcement');
+
+select pg_temp.test_login_leadership('f8000000-0000-0000-0000-0000000000f8');
+update announcements set pinned=true where title='Responsible Organization #581';
+reset role;
+select is((select pinned from announcements where title='Responsible Organization #581'),true,
+'the Moderator edits it too');
+select pg_temp.test_login_leadership('f8000000-0000-0000-0000-0000000000f8');
+delete from announcements where title='Responsible Organization #581';
+reset role;
+select is((select count(*) from announcements where title='Responsible Organization #581'),0::bigint,
+'and deletes it');
 
 create temp table ann_org_fx as select id from groups where is_organization;
 grant select on ann_org_fx to authenticated;

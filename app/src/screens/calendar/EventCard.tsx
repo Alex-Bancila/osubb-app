@@ -60,6 +60,10 @@ export default function EventCard({
   const takesRsvp = event.type !== 'deadline';
   // A cancelled Event stays readable history (ADR-0008): no RSVP, its reason.
   const cancelled = event.cancelledAt !== null;
+  // A request (spec 2026-10-11): its author and BC read it before it is
+  // published; nobody answers it until then.
+  const pending = event.approvalStatus === 'pending';
+  const rejected = event.approvalStatus === 'rejected';
 
   return (
     <article
@@ -78,6 +82,8 @@ export default function EventCard({
       <header className="event-card-head">
         <span className="event-type">{eventTypeLabel(event.type)}</span>
         {cancelled && <span className="event-cancelled-badge">Anulat</span>}
+        {pending && <span className="event-pending-badge">În așteptare</span>}
+        {rejected && <span className="event-rejected-badge">Respins</span>}
         {/* The Group's name, never a category (ruling of 2026-09-28): it is
             also what tells an Other OSUBB Event apart besides its grey. */}
         <span className="event-scope">
@@ -145,6 +151,13 @@ export default function EventCard({
           <span className="event-cancelled-label">Motivul anulării</span>
           <span className="event-cancelled-reason">{event.cancelReason}</span>
         </p>
+      ) : rejected ? (
+        <p className="event-rejected">
+          <span className="event-rejected-label">Motivul respingerii</span>
+          <span className="event-rejected-reason">{event.rejectionReason}</span>
+        </p>
+      ) : pending ? (
+        <p className="event-pending">Așteaptă aprobarea BC.</p>
       ) : (
         takesRsvp &&
         (past ? (

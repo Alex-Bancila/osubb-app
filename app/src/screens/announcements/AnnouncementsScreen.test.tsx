@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { swipe } from '../../test/swipe';
 import type { ReactNode } from 'react';
 import { MemoryRouter, useLocation } from 'react-router';
 import userEvent from '@testing-library/user-event';
@@ -33,6 +34,12 @@ vi.mock('../../lib/auth', () => ({
   }),
 }));
 
+// Spec 2026-10-11: the Cereri de aprobare icon, read through one hook.
+const approvals = vi.hoisted(() => ({ data: [] as unknown[] }));
+vi.mock('../../queries/approvals', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../queries/approvals')>()),
+  useApprovalRequests: () => ({ data: approvals.data }),
+}));
 vi.mock('../../queries/announcements', () => ({
   useAnnouncementsFeed: hooks.useAnnouncementsFeed,
   useMarkAnnouncementRead: hooks.useMarkAnnouncementRead,
@@ -109,6 +116,10 @@ function createRow(
 ): AnnouncementFeedRow {
   return {
     id: 1,
+    approval_status: 'approved',
+    approval_decided_by: null,
+    approval_decided_at: null,
+    rejection_reason: null,
     title: 'Anunț test',
     body: 'Conținut detaliat anunț.',
     priority: 'normal',
@@ -777,4 +788,32 @@ describe('AnnouncementsScreen', () => {
       ).not.toBeInTheDocument();
     });
   });
+});
+
+it('moves between Anunțuri and OSUBB Deals with a finger swipe over the panel (2026-10-11)', async () => {
+  renderAt('/anunturi/deals');
+  swipe(await screen.findByText('Conținutul tabului OSUBB Deals'), 'right');
+  expect(
+    await screen.findByRole('link', { name: /^Anunțuri/ }),
+  ).toHaveAttribute('aria-current', 'page');
+});
+
+it('shows the request icon beside Filtrează only while OSUBB-wide Announcements wait (spec 2026-10-11)', () => {
+  approvals.data = [
+    {
+      kind: 'announcement',
+      id: 3,
+      title: 'Burse',
+      groupId: 10,
+      createdBy: null,
+      createdAt: '2026-10-11T09:00:00Z',
+      startsAt: null,
+    },
+  ];
+  renderAt('/anunturi');
+  const icon = screen.getByRole('button', { name: '1 cerere de aprobare' });
+  expect(icon.closest('[data-slot="page-actions"]')).toContainElement(
+    screen.getByRole('button', { name: 'Filtrează' }),
+  );
+  approvals.data = [];
 });

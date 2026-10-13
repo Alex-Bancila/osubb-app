@@ -25,6 +25,7 @@ import { MemberPicker } from './MemberPicker';
 import {
   createdGroupManager,
   directManagerCandidates,
+  CHILD_GROUP_CATEGORIES,
   GROUP_CATEGORIES,
   managerTitleFor,
   minLevelChoices,
@@ -239,7 +240,9 @@ export function GroupCreateDialog({
               aria-describedby={
                 form.error('category') ? form.errorId('category') : undefined
               }
-              options={GROUP_CATEGORIES}
+              options={
+                effectiveParent ? CHILD_GROUP_CATEGORIES : GROUP_CATEGORIES
+              }
               value={category}
               onValueChange={setCategory}
               disabled={disabled}
@@ -268,6 +271,8 @@ export function GroupCreateDialog({
                 value={chosenParent}
                 onValueChange={(next) => {
                   setChosenParent(next);
+                  // Under a parent the Group is an Echipă or a Proiect.
+                  if (next && category === 'department') setCategory('team');
                   dropIneligibleManager(minLevelOf(minLevel, next));
                 }}
                 placeholder="Fără grup părinte"

@@ -29,6 +29,8 @@ const ANNOUNCEMENT_FIELDS = `
   deadline,
   min_level,
   created_by,
+  approval_status,
+  rejection_reason,
   announcement_reads (
     read_at
   )

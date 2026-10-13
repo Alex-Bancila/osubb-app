@@ -77,7 +77,6 @@ const AdminSettingsTab = lazy(
   () => import('./screens/administrare/AdminSettingsTab'),
 );
 const AdminDealsTab = lazy(() => import('./screens/deals/DealsAdminTab'));
-const AdminBcTab = lazy(() => import('./screens/administrare/AdminBcTab'));
 const MemberScreen = lazy(() => import('./screens/administrare/MemberScreen'));
 const GroupScreen = lazy(() => import('./screens/administrare/GroupScreen'));
 
@@ -492,14 +491,6 @@ export default function App() {
               element={
                 <AdministrareTabRoute path="/administrare/deals">
                   <AdminDealsTab />
-                </AdministrareTabRoute>
-              }
-            />
-            <Route
-              path="bc"
-              element={
-                <AdministrareTabRoute path="/administrare/bc">
-                  <AdminBcTab />
                 </AdministrareTabRoute>
               }
             />

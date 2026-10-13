@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { swipe } from '../../test/swipe';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -974,4 +975,13 @@ it('offers a viewer below BC no edit at all (#944)', () => {
   ).toBeNull();
   expect(screen.queryByText(/^Retrimitere /)).toBeNull();
   expect(screen.queryByText(/^Editor rol /)).toBeNull();
+});
+
+it('moves between tabs with a finger swipe over the panel (2026-10-11)', async () => {
+  show();
+  swipe(await screen.findByRole('tabpanel'), 'left');
+  expect(screen.getByRole('tab', { name: 'Grupuri' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
 });

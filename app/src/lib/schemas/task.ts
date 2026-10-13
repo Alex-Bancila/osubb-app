@@ -7,6 +7,9 @@ import type {
 import { attachedLinksSchema, linksFieldForReason } from './attached-link';
 import { isId, optionalText, requiredText } from './text';
 
+/** How many identical copies one create may ask for (spec 2026-10-11). */
+export const MAX_TASK_COPIES = 100;
+
 /**
  * A Task, as `create_task` / `update_task` accept it (#673, ruling R8): title
  * 3–120 characters, description at most 2000, a deadline not in the past on
@@ -77,6 +80,7 @@ export function taskDraftSchema(options: TaskFormOptions, when: When = {}) {
       assignmentMode: z.enum(['direct', 'public']).nullable(),
       executorId: z.string().nullable(),
       campaignId: z.number().nullable(),
+      copies: z.number({ error: 'invalid_copies' }),
       links: attachedLinksSchema,
     })
     .superRefine((draft, ctx) => {
@@ -90,6 +94,14 @@ export function taskDraftSchema(options: TaskFormOptions, when: When = {}) {
 
       const deadline = deadlineIssue(draft.deadline, when);
       if (deadline) issue('deadline', deadline);
+
+      // Task copies (spec 2026-10-11): 1 to 100; an Umbrella has exactly one.
+      if (!Number.isInteger(draft.copies) || draft.copies < 1)
+        issue('copies', 'invalid_copies');
+      else if (draft.copies > MAX_TASK_COPIES)
+        issue('copies', 'too_many_copies');
+      else if (draft.kind === 'umbrella' && draft.copies !== 1)
+        issue('copies', 'invalid_copies');
 
       const umbrella = draft.kind === 'umbrella';
       if (draft.kind === 'subtask' && draft.parentTaskId === null)
@@ -273,5 +285,9 @@ export const fieldForReason: Readonly<Record<string, string>> = {
   executor_not_allowed_for_public: 'executorId',
   invalid_campaign: 'campaignId',
   umbrella_has_no_campaign: 'campaignId',
+  // Task copies (spec 2026-10-11).
+  invalid_copies: 'copies',
+  too_many_copies: 'copies',
+  invalid_executors: 'executorId',
   ...linksFieldForReason('links'),
 };

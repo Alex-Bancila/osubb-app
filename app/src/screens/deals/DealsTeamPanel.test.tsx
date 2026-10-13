@@ -1,12 +1,11 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppointableMember } from '../../queries/groups-admin';
 
 const state = vi.hoisted(() => ({
-  caps: {} as Record<string, boolean>,
+  caps: undefined as Record<string, boolean> | undefined,
   team: {
-    holderId: 'holder' as string | null,
     coordinatorId: null as string | null,
     responsibleId: null as string | null,
   },
@@ -17,7 +16,7 @@ const state = vi.hoisted(() => ({
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../lib/capabilities', () => ({
   useCapabilities: () => ({ data: state.caps }),
-  useCapability: (name: string) => ({ data: state.caps[name] === true }),
+  useCapability: (name: string) => ({ data: state.caps?.[name] === true }),
 }));
 vi.mock('../../queries/deals', () => ({
   useDealsTeam: () => ({
@@ -60,164 +59,106 @@ function member(memberId: string, name: string, level: number) {
   } satisfies AppointableMember;
 }
 
+/* R47: a BC member's capability row -- every Deals power, no place needed. */
+const BC = {
+  manageRoles: true,
+  administer: true,
+  manageDeals: true,
+  manageDealsTeam: true,
+  pickDealsCoordinator: true,
+};
+
 beforeEach(() => {
   state.members = [
-    member('holder', 'Ana Titulara', 6),
+    member('bc', 'Bogdan BC', 6),
     member('bce', 'Carmen BCE', 5),
     member('vol', 'Victor Voluntar', 2),
   ];
-  state.team = { holderId: 'holder', coordinatorId: null, responsibleId: null };
+  state.team = { coordinatorId: null, responsibleId: null };
+  state.caps = BC;
   state.mutate.mockReset();
 });
 
 const pickers = () => screen.queryAllByRole('combobox');
 
-describe('the OSUBB Deals team, per persona (R44)', () => {
-  it('lets the holder pick both places', () => {
-    state.caps = {
-      manageDeals: true,
-      manageDealsTeam: true,
-      pickDealsCoordinator: true,
-    };
+describe('the OSUBB Deals team, per persona (R47)', () => {
+  it('shows two places on one row, Coordonator and Responsabil, without hints', () => {
     render(<DealsTeamPanel />);
-    expect(screen.getByText('Ana Titulara')).toBeVisible();
-    expect(pickers()).toHaveLength(2);
+    const terms = screen.getAllByRole('term').map((term) => term.textContent);
+    expect(terms).toEqual(['Coordonator', 'Responsabil']);
+    expect(screen.queryByText(/Membru BCE/)).toBeNull();
+    expect(screen.queryByText(/Orice membru activ/)).toBeNull();
+    expect(screen.queryByText(/Atribuție BC/)).toBeNull();
+    expect(screen.queryByText(/Responsabil OSUBB Deals/)).toBeNull();
+    expect(document.querySelector('dl')).toHaveClass('sm:grid-cols-2');
   });
 
-  it('never shows an occupied place as free when its holder is not a candidate', () => {
-    state.caps = {
-      manageDeals: true,
-      manageDealsTeam: true,
-      pickDealsCoordinator: true,
-    };
-    state.team = { ...state.team, coordinatorId: 'bce' };
-    // No longer a candidate (here: no longer BCE); the place is still taken.
-    state.members = state.members.map((m) =>
-      m.memberId === 'bce' ? { ...m, level: 4 } : m,
+  it('lets a BC member pick both places and offers BCE members alone as Coordonator', async () => {
+    const user = userEvent.setup();
+    state.mutate.mockImplementation(
+      (_input: unknown, options?: { onSuccess?: () => void }) =>
+        options?.onSuccess?.(),
     );
-    render(<DealsTeamPanel />);
-    expect(pickers()[0]).toHaveTextContent('Carmen BCE');
-    expect(screen.queryByText('Fără coordonator')).toBeNull();
-  });
-
-  it('lets the Coordonator pick the Responsabil only', () => {
-    state.caps = { manageDeals: true, manageDealsTeam: true };
-    state.team = { ...state.team, coordinatorId: 'bce' };
-    render(<DealsTeamPanel />);
-    expect(pickers()).toHaveLength(1);
-    expect(screen.getByText('Carmen BCE')).toBeVisible();
-  });
-
-  it('shows the Responsabil names only, and the holder too', () => {
-    state.caps = { manageDeals: true };
-    state.team = {
-      holderId: 'holder',
-      coordinatorId: 'bce',
-      responsibleId: 'vol',
-    };
-    render(<DealsTeamPanel />);
-    expect(pickers()).toHaveLength(0);
-    expect(screen.getByText('Ana Titulara')).toBeVisible();
-    expect(screen.getByText('Carmen BCE')).toBeVisible();
-    expect(screen.getByText('Victor Voluntar')).toBeVisible();
-  });
-
-  it('shows BC names only', () => {
-    state.caps = { manageRoles: true, administer: true };
-    render(<DealsTeamPanel />);
-    expect(pickers()).toHaveLength(0);
-    expect(screen.getAllByText('Neales')).toHaveLength(2);
-  });
-
-  // R44 amended 2026-10-08 — Alex: "I am a superuser as a moderator, so i
-  // should be able to do anything a BC member could do". The Moderator's
-  // capability row: every Atribuție's powers, without holding it.
-  const MODERATOR = {
-    manageRoles: true,
-    administer: true,
-    administerBc: true,
-    manageDeals: true,
-    manageDealsTeam: true,
-    pickDealsCoordinator: true,
-  };
-
-  it('lets the Moderator pick both places without being on the team', () => {
-    state.caps = MODERATOR;
-    state.team = { ...state.team, coordinatorId: 'bce' };
     render(<DealsTeamPanel />);
     const [coordinator, responsible] = pickers();
     expect(pickers()).toHaveLength(2);
-    expect(coordinator).toBeEnabled();
-    expect(coordinator).toHaveTextContent('Carmen BCE');
-    expect(responsible).toBeEnabled();
-    expect(responsible).toHaveTextContent('Fără responsabil');
-  });
-
-  it('sets the Responsabil the Moderator picks', async () => {
-    const user = userEvent.setup();
-    state.caps = MODERATOR;
-    state.mutate.mockImplementation(
-      (_input: unknown, options?: { onSuccess?: () => void }) =>
-        options?.onSuccess?.(),
-    );
-    render(<DealsTeamPanel />);
-    const responsible = pickers()[1];
-    if (!responsible) throw new Error('no Responsabil picker');
-    await user.click(responsible);
+    if (!coordinator || !responsible) throw new Error('two pickers expected');
+    await user.click(coordinator);
     await screen.findByPlaceholderText('Caută un membru');
-    await user.click(screen.getByRole('option', { name: /Victor Voluntar/ }));
-    expect(state.mutate).toHaveBeenCalledWith(
-      { role: 'responsible', memberId: 'vol' },
-      expect.anything(),
-    );
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Victor Voluntar este acum Responsabil OSUBB Deals.',
-    );
-  });
-
-  it('gives the Moderator no pickers while nobody holds the Atribuție', () => {
-    state.caps = MODERATOR;
-    state.team = { holderId: null, coordinatorId: null, responsibleId: null };
-    render(<DealsTeamPanel />);
-    expect(pickers()).toHaveLength(0);
-    expect(screen.getByText('Fără titular')).toBeVisible();
-  });
-
-  it('offers BCE members alone as Coordonator and sets the one picked', async () => {
-    const user = userEvent.setup();
-    state.caps = {
-      manageDeals: true,
-      manageDealsTeam: true,
-      pickDealsCoordinator: true,
-    };
-    state.mutate.mockImplementation(
-      (_input: unknown, options?: { onSuccess?: () => void }) =>
-        options?.onSuccess?.(),
-    );
-    render(<DealsTeamPanel />);
-    const [coordinatorPicker] = pickers();
-    if (!coordinatorPicker) throw new Error('no Coordonator picker');
-    await user.click(coordinatorPicker);
-    await screen.findByPlaceholderText('Caută un membru');
-    const options = screen.getAllByRole('option').map((o) => o.textContent);
-    expect(options.some((text) => text?.includes('Carmen BCE'))).toBe(true);
-    expect(options.some((text) => text?.includes('Victor Voluntar'))).toBe(
-      false,
-    );
-    expect(options.some((text) => text?.includes('Ana Titulara'))).toBe(false);
+    expect(
+      screen.getAllByRole('option').map((option) => option.textContent),
+    ).toEqual(['Fără coordonator', expect.stringContaining('Carmen BCE')]);
     await user.click(screen.getByRole('option', { name: /Carmen BCE/ }));
     expect(state.mutate).toHaveBeenCalledWith(
       { role: 'coordinator', memberId: 'bce' },
       expect.anything(),
     );
-    const receipt = screen.getByRole('status');
-    expect(receipt).toHaveTextContent(
+    expect(screen.getByRole('status')).toHaveTextContent(
       'Carmen BCE este acum Coordonator OSUBB Deals.',
     );
+  });
+
+  it('lets the Coordonator pick the Responsabil only', () => {
+    state.caps = { manageDeals: true, manageDealsTeam: true, administer: true };
+    state.team = { coordinatorId: 'bce', responsibleId: null };
+    render(<DealsTeamPanel />);
+    expect(pickers()).toHaveLength(1);
+    expect(screen.getByText('Carmen BCE')).toBeVisible();
+    expect(pickers()[0]).toHaveTextContent('Fără responsabil');
+  });
+
+  it('shows the Responsabil names only', () => {
+    state.caps = { manageDeals: true, administer: true };
+    state.team = { coordinatorId: 'bce', responsibleId: 'vol' };
+    render(<DealsTeamPanel />);
+    expect(pickers()).toHaveLength(0);
+    expect(screen.getByText('Carmen BCE')).toBeVisible();
+    expect(screen.getByText('Victor Voluntar')).toBeVisible();
+  });
+
+  it('shows names only while the capability row is still loading', () => {
+    state.caps = undefined;
+    state.team = { coordinatorId: 'bce', responsibleId: null };
+    render(<DealsTeamPanel />);
+    expect(pickers()).toHaveLength(0);
+    expect(screen.getByText('Carmen BCE')).toBeVisible();
+    expect(screen.getByText('Neales')).toBeVisible();
+  });
+
+  it('keeps the other place out of a picker: the Coordonator is not offered as Responsabil', async () => {
+    const user = userEvent.setup();
+    state.team = { coordinatorId: 'bce', responsibleId: null };
+    render(<DealsTeamPanel />);
+    const responsible = pickers()[1];
+    if (!responsible) throw new Error('no Responsabil picker');
+    await user.click(responsible);
+    await screen.findByPlaceholderText('Caută un membru');
     expect(
-      within(receipt).getByRole('button', {
-        name: 'Profilul membrului Carmen BCE',
-      }),
-    ).toBeVisible();
+      screen.getAllByRole('option').map((option) => option.textContent),
+    ).toEqual([
+      'Fără responsabil',
+      expect.stringContaining('Bogdan BC'),
+      expect.stringContaining('Victor Voluntar'),
+    ]);
   });
 });

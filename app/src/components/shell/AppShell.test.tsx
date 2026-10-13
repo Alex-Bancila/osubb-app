@@ -82,7 +82,6 @@ function capabilities(granted: Partial<Capabilities> = {}): Capabilities {
     provisionMembers: false,
     createTopLevelGroups: false,
     administer: false,
-    administerBc: false,
     manageDeals: false,
     manageDealsTeam: false,
     pickDealsCoordinator: false,
@@ -385,7 +384,6 @@ describe('AppShell', () => {
         provisionMembers: true,
         createTopLevelGroups: true,
         administer: true,
-        administerBc: false,
         manageDeals: false,
         manageDealsTeam: false,
         pickDealsCoordinator: false,
@@ -418,7 +416,6 @@ describe('AppShell', () => {
         provisionMembers: true,
         createTopLevelGroups: true,
         administer: true,
-        administerBc: false,
         manageDeals: false,
         manageDealsTeam: false,
         pickDealsCoordinator: false,
@@ -480,7 +477,6 @@ describe('AppShell', () => {
           provisionMembers: true,
           createTopLevelGroups: true,
           administer: true,
-          administerBc: false,
           manageDeals: false,
           manageDealsTeam: false,
           pickDealsCoordinator: false,
@@ -506,7 +502,6 @@ describe('AppShell', () => {
         managesAnyGroup: true,
         manageTasks: true,
         administer: true,
-        administerBc: false,
         manageDeals: false,
         manageDealsTeam: false,
         pickDealsCoordinator: false,
@@ -852,7 +847,9 @@ describe('phone navigation (#972)', () => {
       // Every tab keeps its name; only the current one draws it.
       expect(label?.textContent).not.toBe('');
       expect(label?.classList.contains('sr-only')).toBe(!current);
-      expect(link.className.includes('flex-1')).toBe(current);
+      // Fit first, scroll last: the current tab grows to its share and never
+      // shrinks below its name (Part C, spec 2026-10-11).
+      expect(link.className.includes('flex-auto shrink-0')).toBe(current);
     }
     expect(
       within(quick).getByRole('link', { name: 'Calendar', current: 'page' }),

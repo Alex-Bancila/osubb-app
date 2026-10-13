@@ -105,7 +105,7 @@ describe('Administrare › OSUBB Deals (R44)', () => {
     expect(screen.getByText('1 active · 1 expirate')).toBeVisible();
   });
 
-  it('lets the holder and the Coordonator edit and delete every Deal', async () => {
+  it('lets BC and the Coordonator edit and delete every Deal', async () => {
     viewer.caps = { manageDeals: true, manageDealsTeam: true };
     renderTab();
     const other = await card('Expirat de la Coordonator');
@@ -132,17 +132,6 @@ describe('Administrare › OSUBB Deals (R44)', () => {
     expect(within(other).queryByRole('button', { name: /Șterge/ })).toBeNull();
   });
 
-  it('gives BC and the Moderator Șterge only, and no Deal nou', async () => {
-    viewer.caps = { manageRoles: true };
-    renderTab();
-    const other = await card('Expirat de la Coordonator');
-    expect(within(other).getByRole('button', { name: /Șterge/ })).toBeVisible();
-    expect(
-      within(other).queryByRole('button', { name: /Editează/ }),
-    ).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Deal nou' })).toBeNull();
-  });
-
   it('offers Deal nou to the team', async () => {
     viewer.caps = {
       manageDeals: true,
@@ -163,12 +152,11 @@ describe('Administrare › OSUBB Deals (R44)', () => {
     );
   });
 
-  it('gives the Moderator, with every Atribuție power, Deal nou, Editează and Șterge (R44 amended)', async () => {
+  it('gives the Moderator Deal nou, Editează and Șterge (R47)', async () => {
     // The Moderator's live capability row: the holder's powers, not the holder.
     viewer.caps = {
       manageRoles: true,
       administer: true,
-      administerBc: true,
       manageDeals: true,
       manageDealsTeam: true,
       pickDealsCoordinator: true,
@@ -197,15 +185,21 @@ describe('Administrare › OSUBB Deals (R44)', () => {
     ).toBeVisible();
   });
 
-  it('keeps a BC member who does not hold it to Șterge, with no Deal nou', async () => {
-    viewer.caps = { manageRoles: true, administer: true };
+  it('gives a BC member Deal nou, Editează and Șterge on any Deal (R47)', async () => {
+    viewer.caps = {
+      manageRoles: true,
+      administer: true,
+      manageDeals: true,
+      manageDealsTeam: true,
+      pickDealsCoordinator: true,
+    };
     renderTab();
     const other = await card('Expirat de la Coordonator');
-    expect(within(other).getByRole('button', { name: /Șterge/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Deal nou' })).toBeVisible();
     expect(
-      within(other).queryByRole('button', { name: /Editează/ }),
-    ).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Deal nou' })).toBeNull();
+      within(other).getByRole('button', { name: /Editează/ }),
+    ).toBeVisible();
+    expect(within(other).getByRole('button', { name: /Șterge/ })).toBeVisible();
   });
 
   it('shows the team how many members opened a code', async () => {

@@ -1,5 +1,5 @@
 -- Ruling R45 (2026-10-07): OSUBB Deals. A Deal is an Announcement of kind deal,
--- posted by the OSUBB Deals team (R44: holder, Coordonator, Responsabil) from the
+-- posted by the OSUBB Deals team (R47: any BC member or the Moderator, the Coordonator, the Responsabil) from the
 -- Organization Group to every active Member -- Audience org, Minimum Level 0,
 -- normal, never pinned -- with an optional Deal Code. Edit/delete: holder and
 -- Coordonator any Deal, the Responsabil their own, BC and the Moderator any.
@@ -12,7 +12,7 @@
 -- Mutation proofs: see docs/backend/deals.md and the PR body.
 --
 -- Personas (prefix 4545):
---   1 moderator  2 bc (holder)  3 bce (Coordonator)  4 voluntar (Responsabil)
+--   1 moderator  2 bc  3 bce (Coordonator)  4 voluntar (Responsabil)
 --   5 voluntar   6 bc, not in the team  7 recrut  8 vot, Manager of a Group
 --   (so holds a Group Role: may post an organization-wide Announcement)
 begin;
@@ -37,8 +37,7 @@ insert into public.groups(name, category, min_level) values ('Dept R45', 'depart
 insert into public.group_members(group_id, member_id, group_role)
 select id, pg_temp.u45(8), 'manager' from public.groups where name = 'Dept R45';
 
-delete from public.bc_assignments;
-insert into public.bc_assignments(assignment, member_id, granted_by) values ('osubb_deals', pg_temp.u45(2), pg_temp.u45(1));
+delete from public.assignment_team where assignment = 'osubb_deals';
 insert into public.assignment_team(assignment, team_role, member_id, set_by) values
   ('osubb_deals', 'coordinator', pg_temp.u45(3), pg_temp.u45(2)),
   ('osubb_deals', 'responsible', pg_temp.u45(4), pg_temp.u45(2));
@@ -85,7 +84,7 @@ select is((select code from public.announcements where title = 'Deal R45 nou'), 
   'the Deal Code is stored trimmed');
 select pg_temp.test_login_leadership(pg_temp.u45(2));
 select lives_ok($$insert into public.announcements(kind, title, body, group_id, audience)
-  values ('deal', 'Deal R45 holder', 'Corp.', pg_temp.org(), 'org')$$, 'the holder publishes a Deal');
+  values ('deal', 'Deal R45 holder', 'Corp.', pg_temp.org(), 'org')$$, 'a BC member publishes a Deal');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.u45(3));
 select lives_ok($$insert into public.announcements(kind, title, body, code, group_id, audience)
@@ -99,22 +98,23 @@ select throws_ok($$insert into public.announcements(kind, title, body, group_id,
   '42501', null, 'a Voluntar outside the team cannot publish a Deal');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.u45(6));
-select throws_ok($$insert into public.announcements(kind, title, body, group_id, audience)
+select lives_ok($$insert into public.announcements(kind, title, body, group_id, audience)
   values ('deal', 'Deal R45 x6', 'Corp.', pg_temp.org(), 'org')$$,
-  '42501', null, 'a BC member outside the team cannot publish a Deal');
+  'a BC member publishes a Deal without a place in the team (R47)');
 reset role;
+delete from public.announcements where title = 'Deal R45 x6';
 select pg_temp.test_login_leadership(pg_temp.u45(1));
 select lives_ok($$insert into public.announcements(kind, title, body, group_id, audience)
   values ('deal', 'Deal R45 mod', 'Corp.', pg_temp.org(), 'org')$$,
-  'the Moderator publishes a Deal without holding the Atribuție (R44 amended: every Atribuție''s powers)');
+  'the Moderator publishes a Deal (R47: every Atribuție''s powers)');
 reset role;
--- Live rows, not the token: a Moderator demoted to BC keeps the token but not the power.
-update public.profiles set role = 'bc' where id = pg_temp.u45(1);
+-- Live rows, not the token: a Moderator demoted below BC (R47: BC keeps every power) keeps the token but not the power.
+update public.profiles set role = 'bce' where id = pg_temp.u45(1);
 select pg_temp.test_login('45450000-0000-0000-0000-000000000001',
   '{"member_role":"moderator","member_level":9,"group_ids":[]}'::jsonb);
 select throws_ok($$insert into public.announcements(kind, title, body, group_id, audience)
   values ('deal', 'Deal R45 x1', 'Corp.', pg_temp.org(), 'org')$$,
-  '42501', null, 'a Moderator demoted to BC cannot publish a Deal, whatever the token says');
+  '42501', null, 'a Moderator demoted to BCE cannot publish a Deal, whatever the token says');
 reset role;
 update public.profiles set role = 'moderator' where id = pg_temp.u45(1);
 select pg_temp.test_login_leadership(pg_temp.u45(8));
@@ -180,7 +180,7 @@ end $$;
 select is(pg_temp.edits(4, 'Deal R45 resp'), 1, 'the Responsabil edits their own Deal');
 select is(pg_temp.edits(4, 'Deal R45 coord'), 0, 'the Responsabil cannot edit another''s Deal');
 select is(pg_temp.edits(3, 'Deal R45 resp'), 1, 'the Coordonator edits any Deal');
-select is(pg_temp.edits(2, 'Deal R45 coord'), 1, 'the holder edits any Deal');
+select is(pg_temp.edits(2, 'Deal R45 coord'), 1, 'a BC member edits any Deal');
 select is(pg_temp.edits(6, 'Deal R45 resp'), 1, 'a BC member outside the team edits any Deal');
 select is(pg_temp.edits(1, 'Deal R45 resp'), 1, 'the Moderator edits any Deal');
 select is(pg_temp.edits(5, 'Deal R45 resp'), 0, 'a Voluntar cannot edit a Deal');
@@ -201,7 +201,7 @@ select is(pg_temp.deletes(5, 'Deal R45 coord'), 0, 'a Voluntar cannot delete a D
 select is(pg_temp.deletes(8, 'Deal R45 coord'), 0, 'a Group Manager cannot delete a Deal');
 select is(pg_temp.deletes(4, 'Deal R45 nou'), 1, 'the Responsabil deletes their own Deal');
 select is(pg_temp.deletes(3, 'Deal R45 holder'), 1, 'the Coordonator deletes another''s Deal');
-select is(pg_temp.deletes(6, 'Deal R45 c2'), 1, 'a BC member outside the team deletes a Deal (a leftover after the team dissolves)');
+select is(pg_temp.deletes(6, 'Deal R45 c2'), 1, 'a BC member deletes any Deal');
 
 -- ==================== Read: expiry ====================
 create function pg_temp.reads(p_member integer, p_title text) returns integer language plpgsql as $$
@@ -218,7 +218,7 @@ select is(pg_temp.reads(5, 'Deal R45 expirat'), 0, 'a Voluntar does not read a D
 select is(pg_temp.reads(8, 'Deal R45 expirat'), 0, 'nor does a Group Manager outside the team');
 select is(pg_temp.reads(4, 'Deal R45 expirat'), 1, 'the Responsabil still reads it');
 select is(pg_temp.reads(3, 'Deal R45 expirat'), 1, 'the Coordonator still reads it');
-select is(pg_temp.reads(2, 'Deal R45 expirat'), 1, 'the holder still reads it');
+select is(pg_temp.reads(2, 'Deal R45 expirat'), 1, 'a BC member still reads it');
 select is(pg_temp.reads(6, 'Deal R45 expirat'), 1, 'a BC member outside the team reads an expired Deal');
 select is(pg_temp.reads(1, 'Deal R45 expirat'), 1, 'the Moderator reads an expired Deal');
 select pg_temp.test_login_leadership(pg_temp.u45(5));
@@ -330,9 +330,9 @@ select throws_ok($$insert into public.announcements(kind, title, body, group_id,
   'PT409', 'rate_limited', 'Deals count against the Announcement daily cap');
 reset role;
 
--- ==================== The team dissolves, the Deals stay ====================
-delete from public.bc_assignments;
-select is(pg_temp.reads(4, 'Deal R45 expirat'), 0, 'once the team dissolves, the former Responsabil no longer reads an expired Deal');
+-- ==================== The Responsabil is cleared, the Deals stay ====================
+delete from public.assignment_team where assignment = 'osubb_deals' and team_role = 'responsible';
+select is(pg_temp.reads(4, 'Deal R45 expirat'), 0, 'once the Responsabil is cleared, the former Responsabil no longer reads an expired Deal');
 select is(pg_temp.edits(4, 'Deal R45 resp'), 0, 'nor edits their own Deal');
 select is(pg_temp.deletes(1, 'Deal R45 resp'), 1, 'the Moderator removes a leftover Deal');
 

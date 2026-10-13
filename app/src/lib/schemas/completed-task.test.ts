@@ -14,6 +14,7 @@ const valid: CompletedTaskInput = {
   description: '   ',
   groupId: 9,
   executorId: 'ana',
+  copies: '1',
   links: [{ label: '', url: '' }],
   campaignId: 3,
   difficulty: '4',
@@ -33,6 +34,7 @@ it('parses a completed Task: trimmed text, blank details as none, scores as numb
     description: null,
     groupId: 9,
     executorId: 'ana',
+    copies: 1,
     links: [],
     campaignId: 3,
     difficulty: 4,
@@ -62,6 +64,43 @@ it('mirrors the server: the constraints kit, an offered Group, a volunteer, a Ca
     'invalid_rating',
     'evaluation_note_required',
   ]);
+});
+
+it('counts the copies like Task nou (Part E): 1 to 100, whole, and the volunteer only at one', () => {
+  expect(reasons({ copies: '' })).toEqual(['invalid_copies']);
+  expect(reasons({ copies: 'abc' })).toEqual(['invalid_copies']);
+  expect(reasons({ copies: '0' })).toEqual(['invalid_copies']);
+  expect(reasons({ copies: '2.5' })).toEqual(['invalid_copies']);
+  expect(reasons({ copies: '101' })).toEqual(['too_many_copies']);
+  expect(reasons({ copies: '21' })).toEqual([]);
+  // At several copies the volunteers come in the next step, so the form
+  // builds the schema without the volunteer; everywhere else it is asked.
+  const later = completedTaskSchema({
+    groupIds: [7, 9],
+    campaigns: (groupId) => (groupId === 9 ? [3] : []),
+    volunteerRequired: false,
+  });
+  expect(
+    later.safeParse({ ...valid, copies: '2', executorId: null }).success,
+  ).toBe(true);
+  expect(
+    later.parse({ ...valid, copies: '3', executorId: null }),
+  ).toMatchObject({ copies: 3, executorId: null });
+  expect(reasons({ copies: '2', executorId: null })).toEqual([
+    'executor_required',
+  ]);
+  expect(completedTaskFieldForReason('executorId').invalid_copies).toBe(
+    'copies',
+  );
+  expect(completedTaskFieldForReason('executorId').too_many_copies).toBe(
+    'copies',
+  );
+  expect(completedTaskFieldForReason('executorId').invalid_executors).toBe(
+    'executorId',
+  );
+  expect(completedTaskFieldForReason('groupId').invalid_executors).toBe(
+    'groupId',
+  );
 });
 
 it('reports every missing field at once, not only after the text is fixed', () => {

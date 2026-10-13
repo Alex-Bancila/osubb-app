@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useSwipeTabs } from '../../lib/swipe-tabs';
 import { useSearchParams } from 'react-router';
 import { Tabs } from '@base-ui/react/tabs';
 import type { UseQueryResult } from '@tanstack/react-query';
@@ -121,26 +122,27 @@ const navThumbClass = tabThumbClass;
  * the first paint, a hidden page, jsdom.
  */
 const navTabClass = cn(
-  'relative z-1 inline-flex min-h-[36px] min-w-11 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-bold whitespace-nowrap text-muted-foreground [transition:color_200ms] after:absolute after:inset-x-0 after:-inset-y-1 hover:text-foreground motion-reduce:transition-none aria-selected:bg-(--text) aria-selected:text-(--surface) aria-selected:[transition:color_200ms,background-color_0s_200ms] aria-selected:hover:text-(--surface) motion-reduce:aria-selected:transition-none [&_svg]:size-4 [&_svg]:shrink-0',
+  'relative z-1 inline-flex min-h-[36px] min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-bold whitespace-nowrap text-muted-foreground [transition:color_200ms] after:absolute after:inset-x-0 after:-inset-y-1 hover:text-foreground motion-reduce:transition-none aria-selected:bg-(--text) aria-selected:text-(--surface) aria-selected:[transition:color_200ms,background-color_0s_200ms] aria-selected:hover:text-(--surface) motion-reduce:aria-selected:transition-none [&_svg]:size-4 [&_svg]:shrink-0',
   focusRingClass,
 );
 
 /**
  * Where the segments spell their names. Below it only the chosen one does,
- * taking the width the others leave — they are their icons, 44 px each, the
- * name kept for a screen reader — so five fit at 360 px without scrolling
- * sideways, and a count rides its icon's corner. From it up every segment is
- * icon and name, as wide as its name needs. Five names need `md`.
+ * as wide as its name needs and never cut short; the others are their icons,
+ * 44 px each, the name kept for a screen reader, and a count rides its icon's
+ * corner. Five fit at 360 px; narrower, the track scrolls sideways (Part C,
+ * spec 2026-10-11). From it up every segment is icon and name, as wide as
+ * its name needs. Five names need `md`.
  */
 const NAV_LABELS_FROM = {
   sm: {
-    tab: 'max-sm:flex-none max-sm:aria-selected:flex-1 sm:flex-auto sm:px-4',
+    tab: 'max-sm:flex-none max-sm:aria-selected:grow sm:grow sm:px-4',
     label: 'max-sm:in-[[aria-selected=false]]:sr-only',
     badge:
       'max-sm:in-[[aria-selected=false]]:absolute max-sm:in-[[aria-selected=false]]:top-0 max-sm:in-[[aria-selected=false]]:right-0.5 max-sm:in-[[aria-selected=false]]:h-4 max-sm:in-[[aria-selected=false]]:min-w-4 max-sm:in-[[aria-selected=false]]:px-1 max-sm:in-[[aria-selected=false]]:text-[10px] max-sm:in-[[aria-selected=false]]:ring-2 max-sm:in-[[aria-selected=false]]:ring-(--surface-3)',
   },
   md: {
-    tab: 'max-md:flex-none max-md:aria-selected:flex-1 md:flex-auto md:px-4',
+    tab: 'max-md:flex-none max-md:aria-selected:grow md:grow md:px-4',
     label: 'max-md:in-[[aria-selected=false]]:sr-only',
     badge:
       'max-md:in-[[aria-selected=false]]:absolute max-md:in-[[aria-selected=false]]:top-0 max-md:in-[[aria-selected=false]]:right-0.5 max-md:in-[[aria-selected=false]]:h-4 max-md:in-[[aria-selected=false]]:min-w-4 max-md:in-[[aria-selected=false]]:px-1 max-md:in-[[aria-selected=false]]:text-[10px] max-md:in-[[aria-selected=false]]:ring-2 max-md:in-[[aria-selected=false]]:ring-(--surface-3)',
@@ -261,6 +263,12 @@ function TrackerContent() {
   // A Task deleted for good (#1017): its sheet closes, the list says so.
   const [deleted, setDeleted] = useState<{
     id: number;
+    receipt: string;
+  } | null>(null);
+  // Several Tasks created at once (spec 2026-10-11): the list says so; no
+  // details sheet opens. Keyed so a second batch announces itself afresh.
+  const [createdMany, setCreatedMany] = useState<{
+    key: number;
     receipt: string;
   } | null>(null);
   // `null` until the page has chosen its opening tab; a click sets it.
@@ -422,7 +430,28 @@ function TrackerContent() {
       3 + Number(Boolean(management.data)) + Number(showAll) >= 5 ? 'md' : 'sm'
     ];
   const tabClass = cn(navTabClass, nav.tab);
-  const labelClass = cn('min-w-0 truncate', nav.label);
+  const labelClass = cn('min-w-0', nav.label);
+  // A tap on a tab, or a swipe over its panel (2026-10-11): the same choice.
+  function chooseTab(value: unknown) {
+    if (value === REQUESTS_TAB) chooseView('cereri');
+    else if (isTrackerTab(value)) {
+      setTab(value);
+      if (view === 'cereri') chooseView('taskuri');
+    }
+    setGaveUp(null);
+    setDeleted(null);
+  }
+  const swipe = useSwipeTabs<string>({
+    order: [
+      'mine',
+      'available',
+      ...(management.data ? ['managed'] : []),
+      ...(showAll ? ['all'] : []),
+      REQUESTS_TAB,
+    ],
+    current: view === 'cereri' ? REQUESTS_TAB : selected,
+    onSelect: chooseTab,
+  });
   // Between the toolbar and the cards of Taskurile mele, loading or loaded.
   const mineHeader = (
     <>
@@ -441,19 +470,36 @@ function TrackerContent() {
             view === 'taskuri' && (
               <>
                 <NewTaskControl
-                  onCreated={(id) => {
-                    setCreated({ id, notice: 'Taskul a fost creat.' });
-                    setDetailId(id);
+                  onCreated={({ ids }) => {
+                    const [only] = ids;
+                    if (ids.length === 1 && only !== undefined) {
+                      setCreated({ id: only, notice: 'Taskul a fost creat.' });
+                      setDetailId(only);
+                      return;
+                    }
+                    setCreatedMany({
+                      key: Date.now(),
+                      receipt: `${ids.length} taskuri create.`,
+                    });
                   }}
                 />
                 <AddCompletedTaskControl
-                  onAdded={({ id }) => {
-                    setCreated({
-                      id,
-                      notice:
-                        'Taskul finalizat a fost adăugat. Punctele au fost acordate.',
+                  onAdded={({ ids }) => {
+                    const [only] = ids;
+                    if (ids.length === 1 && only !== undefined) {
+                      setCreated({
+                        id: only,
+                        notice:
+                          'Taskul finalizat a fost adăugat. Punctele au fost acordate.',
+                      });
+                      setDetailId(only);
+                      return;
+                    }
+                    // Several at once (Part E): the list says so; no details.
+                    setCreatedMany({
+                      key: Date.now(),
+                      receipt: `${ids.length} taskuri finalizate adăugate. Punctele au fost acordate.`,
                     });
-                    setDetailId(id);
                   }}
                 />
               </>
@@ -492,19 +538,16 @@ function TrackerContent() {
             {deleted.receipt}
           </TaskActionSuccess>
         )}
+        {view === 'taskuri' && createdMany !== null && (
+          <TaskActionSuccess key={createdMany.key}>
+            {createdMany.receipt}
+          </TaskActionSuccess>
+        )}
         <Tabs.Root
           // The nav has no margin of its own: this stack spaces it (#841).
           className="flex flex-col gap-4"
           value={view === 'cereri' ? REQUESTS_TAB : selected}
-          onValueChange={(value) => {
-            if (value === REQUESTS_TAB) chooseView('cereri');
-            else if (isTrackerTab(value)) {
-              setTab(value);
-              if (view === 'cereri') chooseView('taskuri');
-            }
-            setGaveUp(null);
-            setDeleted(null);
-          }}
+          onValueChange={chooseTab}
         >
           <Tabs.List aria-label="Taskuri și cereri" className={navListClass}>
             <Tabs.Indicator
@@ -550,76 +593,78 @@ function TrackerContent() {
               )}
             </Tabs.Tab>
           </Tabs.List>
-          <Tabs.Panel value="mine" className="motion-enter">
-            <TaskQueryStates
-              query={mine}
-              search={search}
-              preferredNotice={false}
-              header={mineHeader}
+          <div {...swipe} className="min-w-0">
+            <Tabs.Panel value="mine" className="motion-enter">
+              <TaskQueryStates
+                query={mine}
+                search={search}
+                preferredNotice={false}
+                header={mineHeader}
+              >
+                {(rows) => (
+                  <MyTaskList
+                    rows={rows}
+                    now={now}
+                    search={search}
+                    header={mineHeader}
+                    onOpenTask={setDetailId}
+                    linkedId={highlightTarget}
+                    highlightedId={highlightedId}
+                    onGaveUp={(id, receipt) => setGaveUp({ id, receipt })}
+                  />
+                )}
+              </TaskQueryStates>
+            </Tabs.Panel>
+            <Tabs.Panel value="available" className="motion-enter">
+              <TaskQueryStates query={available} search={search}>
+                {(opportunities) => (
+                  <AvailableOpportunities
+                    opportunities={opportunities}
+                    now={now}
+                    search={search}
+                    onOpenTask={setDetailId}
+                  />
+                )}
+              </TaskQueryStates>
+            </Tabs.Panel>
+            {management.data && (
+              <Tabs.Panel value="managed" className="motion-enter">
+                <TaskQueryStates query={managed} search={search}>
+                  {(rows) => (
+                    <ManagerTaskList
+                      rows={rows}
+                      now={now}
+                      search={search}
+                      empty="Nu ai taskuri de gestionat acum."
+                      onOpenTask={setDetailId}
+                    />
+                  )}
+                </TaskQueryStates>
+              </Tabs.Panel>
+            )}
+            {showAll && (
+              <Tabs.Panel value="all" className="motion-enter">
+                <TaskQueryStates query={all} search={search}>
+                  {(rows) => (
+                    <ManagerTaskList
+                      rows={rows}
+                      now={now}
+                      search={search}
+                      empty="Nu există taskuri vizibile."
+                      onOpenTask={setDetailId}
+                    />
+                  )}
+                </TaskQueryStates>
+              </Tabs.Panel>
+            )}
+            {/* Cereri is other content: no toolbar, its own blocks 24 px apart. */}
+            <Tabs.Panel
+              value={REQUESTS_TAB}
+              className="flex motion-enter flex-col gap-6"
             >
-              {(rows) => (
-                <MyTaskList
-                  rows={rows}
-                  now={now}
-                  search={search}
-                  header={mineHeader}
-                  onOpenTask={setDetailId}
-                  linkedId={highlightTarget}
-                  highlightedId={highlightedId}
-                  onGaveUp={(id, receipt) => setGaveUp({ id, receipt })}
-                />
-              )}
-            </TaskQueryStates>
-          </Tabs.Panel>
-          <Tabs.Panel value="available" className="motion-enter">
-            <TaskQueryStates query={available} search={search}>
-              {(opportunities) => (
-                <AvailableOpportunities
-                  opportunities={opportunities}
-                  now={now}
-                  search={search}
-                  onOpenTask={setDetailId}
-                />
-              )}
-            </TaskQueryStates>
-          </Tabs.Panel>
-          {management.data && (
-            <Tabs.Panel value="managed" className="motion-enter">
-              <TaskQueryStates query={managed} search={search}>
-                {(rows) => (
-                  <ManagerTaskList
-                    rows={rows}
-                    now={now}
-                    search={search}
-                    empty="Nu ai taskuri de gestionat acum."
-                    onOpenTask={setDetailId}
-                  />
-                )}
-              </TaskQueryStates>
+              <RequestsView />
             </Tabs.Panel>
-          )}
-          {showAll && (
-            <Tabs.Panel value="all" className="motion-enter">
-              <TaskQueryStates query={all} search={search}>
-                {(rows) => (
-                  <ManagerTaskList
-                    rows={rows}
-                    now={now}
-                    search={search}
-                    empty="Nu există taskuri vizibile."
-                    onOpenTask={setDetailId}
-                  />
-                )}
-              </TaskQueryStates>
-            </Tabs.Panel>
-          )}
-          {/* Cereri is other content: no toolbar, its own blocks 24 px apart. */}
-          <Tabs.Panel
-            value={REQUESTS_TAB}
-            className="flex motion-enter flex-col gap-6"
-          >
-            <RequestsView />
-          </Tabs.Panel>
+          </div>
         </Tabs.Root>
         <TaskDetailsSheet
           key={detailId}

@@ -66,3 +66,62 @@ export function useCompleteUmbrella() {
     onSettled: () => client.invalidateQueries({ queryKey: keys.tasks.all }),
   });
 }
+
+/** What the Tracker sends `create_tasks`: the draft, plus the dialog's Executors for n direct copies. */
+export type CreateTasksInput = {
+  draft: TaskDraft;
+  /** One Executor per copy, from the executors dialog; only for direct copies above one. */
+  executorIds?: readonly string[];
+};
+
+/**
+ * `create_tasks`' arguments (spec 2026-10-11): a single direct Task sends its
+ * one Executor as a one-entry list, n direct copies send the dialog's list,
+ * anything public or an Umbrella sends none.
+ */
+export function createTasksArgs({ draft, executorIds }: CreateTasksInput) {
+  const direct = draft.assignmentMode === 'direct';
+  const executors = !direct
+    ? null
+    : draft.copies > 1
+      ? [...(executorIds ?? [])]
+      : draft.executorId
+        ? [draft.executorId]
+        : null;
+  return {
+    p_group_id: draft.groupId,
+    p_kind: draft.kind,
+    p_parent_task_id: draft.parentTaskId,
+    p_executor_ids: executors,
+    p_campaign_id: draft.campaignId,
+    p_audience: draft.audience,
+    p_assignment_mode: draft.assignmentMode,
+    p_title: draft.title,
+    p_description: draft.description,
+    p_deadline: draft.deadline,
+    p_links: draft.links,
+    p_copies: draft.copies,
+  };
+}
+
+/** The Tracker's one create path: n copies (n = 1 included) in one transaction. */
+export async function createTasks(input: CreateTasksInput) {
+  if (input.draft.kind === 'umbrella' && input.draft.parentTaskId !== null)
+    throw new Error('An Umbrella cannot be a Subtask');
+  const { data, error } = await supabase.rpc(
+    'create_tasks',
+    createTasksArgs(
+      input,
+    ) as unknown as Database['public']['Functions']['create_tasks']['Args'],
+  );
+  if (error) throw error;
+  return data;
+}
+
+export function useCreateTasks() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: createTasks,
+    onSettled: () => client.invalidateQueries({ queryKey: keys.tasks.all }),
+  });
+}

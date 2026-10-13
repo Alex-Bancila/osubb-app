@@ -106,6 +106,9 @@ Browsers do not directly change Task state. Public commands derive the actor fro
 
 ```text
 create_task
+create_tasks         (n identical copies, or n Subtasks of one Umbrella, in one transaction; one Executor per direct copy; spec 2026-10-11)
+create_completed_task (one finished Task, its Evaluation and points, for one volunteer; #915)
+create_completed_tasks (n finished Tasks for n volunteers, repeats allowed, in one transaction; spec 2026-10-11 Part E)
 update_task          (full-state edit; replaced update_task_content and convert_task_mode, both dropped by #936)
 preview_task_update
 assign_task_executor

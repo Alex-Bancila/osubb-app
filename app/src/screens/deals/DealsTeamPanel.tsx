@@ -36,22 +36,17 @@ type Outcome = {
 };
 
 /**
- * The OSUBB Deals team (ruling R44): the Atribuție's holder, then the
- * Coordonator — a BCE member, picked by the holder — and the Responsabil —
- * any active Member, picked by the holder or the Coordonator. The Moderator
- * holds the holder's powers without being the holder (R44 amended
- * 2026-10-08), so picks both. Whoever may not pick a place sees its name, and
- * nobody picks while nobody holds the Atribuție. Each pick takes effect at
- * once: the server tells the person set and the one replaced, and a receipt
- * says it here.
+ * The OSUBB Deals team (ruling R47): a Coordonator — a BCE member — and a
+ * Responsabil — any active Member. Any BC member or the Moderator picks both;
+ * the Coordonator picks the Responsabil. Whoever may not pick a place sees
+ * its name. Each pick takes effect at once: the server tells the person set
+ * and the one replaced, and a receipt says it here.
  */
 export function DealsTeamPanel() {
   const capabilities = useCapabilities().data;
   const team = useDealsTeam();
-  // An Atribuție nobody holds has no team to pick (the server refuses too).
-  const held = Boolean(team.data?.holderId);
-  const pickCoordinator = held && capabilities?.pickDealsCoordinator === true;
-  const pickResponsible = held && capabilities?.manageDealsTeam === true;
+  const pickCoordinator = capabilities?.pickDealsCoordinator === true;
+  const pickResponsible = capabilities?.manageDealsTeam === true;
   const members = useAppointableMembers(pickCoordinator || pickResponsible);
   const names = useMemberIdentities(teamMemberIds(team.data));
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -73,11 +68,8 @@ export function DealsTeamPanel() {
 
   return (
     <Panel title="Echipa" stack={3}>
-      <dl className="m-0 grid gap-x-6 gap-y-4 sm:grid-cols-3">
-        <TeamPlace label="Responsabil OSUBB Deals" hint="Atribuție BC">
-          <PlaceName member={nameOf(team.data.holderId)} empty="Fără titular" />
-        </TeamPlace>
-        <TeamPlace label="Coordonator" hint="Membru BCE">
+      <dl className="m-0 grid gap-x-6 gap-y-4 sm:grid-cols-2">
+        <TeamPlace label="Coordonator">
           {pickCoordinator ? (
             <TeamPicker
               role="coordinator"
@@ -94,7 +86,7 @@ export function DealsTeamPanel() {
             />
           )}
         </TeamPlace>
-        <TeamPlace label="Responsabil" hint="Orice membru activ">
+        <TeamPlace label="Responsabil">
           {pickResponsible ? (
             <TeamPicker
               role="responsible"
@@ -139,18 +131,14 @@ export function DealsTeamPanel() {
 
 function TeamPlace({
   label,
-  hint,
   children,
 }: {
   label: string;
-  hint: string;
   children: ReactNode;
 }) {
   return (
     <div className="min-w-0 space-y-1.5">
-      <dt className="text-xs text-muted-foreground">
-        <span className="font-semibold text-foreground">{label}</span> · {hint}
-      </dt>
+      <dt className="text-xs font-semibold text-foreground">{label}</dt>
       <dd className="m-0 min-w-0">{children}</dd>
     </div>
   );

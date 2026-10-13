@@ -110,20 +110,17 @@ export function dealCodeMask(seed: number, length: number): string {
 
 export type DealsViewer = {
   memberId: string | undefined;
-  /** Holder, Coordonator or the Moderator (`my_capabilities().manage_deals_team`). */
+  /** BC, the Moderator or the Coordonator (`my_capabilities().manage_deals_team`). */
   manageDealsTeam: boolean;
-  /** On the team at all, or the Moderator (`manage_deals`). */
+  /** Any Deals power: BC, the Moderator, the Coordonator or the Responsabil (`manage_deals`). */
   manageDeals: boolean;
   /** BC or the Moderator by live rank (`manage_roles`, level ≥ 6). */
   bcOrModerator: boolean;
 };
 
 /**
- * Editează (R44): the holder and the Coordonator on every Deal, the
- * Responsabil on their own. The Moderator holds the holder's powers (R44
- * amended 2026-10-08), so edits every Deal too; BC members who do not hold
- * the Atribuție delete leftovers but do not edit. Presentation only: the
- * policies decide.
+ * Editează (R47): BC, the Moderator and the Coordonator on every Deal, the
+ * Responsabil on their own. Presentation only: the policies decide.
  */
 export function mayEditDeal(
   deal: Pick<DealPresentation, 'authorId'>,
@@ -153,7 +150,7 @@ export function seesRevealCount(viewer: DealsViewer): boolean {
 /** The team's members, for the names a header lists. */
 export function teamMemberIds(team: DealsTeam | undefined): string[] {
   if (!team) return [];
-  return [team.holderId, team.coordinatorId, team.responsibleId].filter(
+  return [team.coordinatorId, team.responsibleId].filter(
     (id): id is string => id !== null,
   );
 }
@@ -162,17 +159,13 @@ export function teamMemberIds(team: DealsTeam | undefined): string[] {
 type Candidate = { memberId: string; level: number; status: string };
 
 function notOnTeam(team: DealsTeam | undefined, memberId: string): boolean {
-  return (
-    team?.holderId !== memberId &&
-    team?.coordinatorId !== memberId &&
-    team?.responsibleId !== memberId
-  );
+  return team?.coordinatorId !== memberId && team?.responsibleId !== memberId;
 }
 
 /**
- * The Coordonator picker's choices (R44): active BCE members (level 5), never
- * the holder or the Responsabil. The current Coordonator stays listed, so the
- * picker can show who it is.
+ * The Coordonator picker's choices (R47): active BCE members (level 5), never
+ * the Responsabil. The current Coordonator stays listed, so the picker can
+ * show who it is.
  */
 export function coordinatorCandidates<T extends Candidate>(
   members: readonly T[],
@@ -187,7 +180,7 @@ export function coordinatorCandidates<T extends Candidate>(
   );
 }
 
-/** The Responsabil picker's choices (R44): any active Member not on the team. */
+/** The Responsabil picker's choices (R47): any active Member not already the Coordonator. */
 export function responsibleCandidates<T extends Candidate>(
   members: readonly T[],
   team: DealsTeam | undefined,

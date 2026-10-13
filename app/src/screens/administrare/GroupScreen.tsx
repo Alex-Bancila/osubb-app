@@ -1,5 +1,12 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useLocation, useParams, useSearchParams } from 'react-router';
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from 'react-router';
+import { useSwipeTabs } from '../../lib/swipe-tabs';
 import {
   Network,
   Settings,
@@ -204,6 +211,8 @@ export default function GroupScreen() {
   const command = useGroupCommand();
   const actorLevel = useAuth().claims?.member_level ?? 0;
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const here = useLocation();
   const applicationsQuery = useGroupApplications(id);
   const [message, setMessage] = useState<ReactNode>(null);
   const [error, setError] = useState<string | null>(null);
@@ -266,6 +275,20 @@ export default function GroupScreen() {
     pendingApplications: applicationsQuery.data?.length ?? 0,
   });
   const tab = currentGroupTab(searchParams.get(TAB_KEY), tabs);
+  // A swipe over the panel opens the neighbouring tab as its link would
+  // (2026-10-11): the same replace, the same `state`.
+  const swipe = useSwipeTabs<GroupTabId>({
+    order: tabs.map((item) => item.id),
+    current: tab,
+    onSelect: (next) => {
+      const params = new URLSearchParams(here.search);
+      params.set(TAB_KEY, next);
+      void navigate(
+        { search: `?${params.toString()}` },
+        { replace: true, state: here.state },
+      );
+    },
+  });
 
   async function run(
     next: GroupCommand,
@@ -399,6 +422,7 @@ export default function GroupScreen() {
           role="region"
           aria-label={activeLabel}
           className="min-w-0 motion-enter"
+          {...swipe}
         >
           {tab === 'setari' && (
             <GroupSettingsTab

@@ -76,6 +76,8 @@ function presentation(
     links: [],
     publishedAt: '2026-09-18T15:00:00.000Z',
     publishedLabel: '18 septembrie 2026, 18:00',
+    approvalStatus: 'approved',
+    rejectionReason: null,
     deadline: null,
     minLevel: 0,
     minLevelLabel: null,
@@ -418,18 +420,30 @@ describe('AnnouncementDetailsSheet', () => {
       expect(pinButton()).not.toBeInTheDocument();
     });
 
-    it("offers it to a Responsible of the Origin, and to any Group Role holder on the Organization Group's", () => {
-      viewer.managesAnyGroup = true;
+    it("offers it to a Responsible of the Origin; on the Organization Group's only to its author, besides BC/Moderator (#1042)", () => {
       viewer.groups = [{ id: 7, group_role: 'responsible', status: 'active' }];
-      const { unmount } = renderSheet(
+      const origin = renderSheet(
         <AnnouncementDetailsSheet announcement={local()} onClose={vi.fn()} />,
       );
       expect(pinButton()).toBeInTheDocument();
-      unmount();
+      origin.unmount();
 
+      // A Group Role holder elsewhere may publish there, but manages only their own.
       viewer.groups = [{ id: 9, group_role: 'manager', status: 'active' }];
-      renderSheet(
+      const other = renderSheet(
         <AnnouncementDetailsSheet announcement={org()} onClose={vi.fn()} />,
+      );
+      expect(pinButton()).not.toBeInTheDocument();
+      other.unmount();
+
+      viewer.groups = [];
+      renderSheet(
+        <AnnouncementDetailsSheet
+          announcement={org({
+            authorMember: { memberId: viewer.id, fullName: 'Eu' },
+          })}
+          onClose={vi.fn()}
+        />,
       );
       expect(pinButton()).toBeInTheDocument();
     });
@@ -686,5 +700,33 @@ describe('AnnouncementDetailsSheet', () => {
       );
       expect(supabaseMock.delete).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('AnnouncementDetailsSheet — approval (spec 2026-10-11)', () => {
+  it('shows the reason a rejected Announcement was refused', () => {
+    renderSheet(
+      <AnnouncementDetailsSheet
+        announcement={presentation({
+          approvalStatus: 'rejected',
+          rejectionReason: 'Lipsesc datele de contact.',
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Respins')).toBeInTheDocument();
+    expect(screen.getByText('Motivul respingerii')).toBeInTheDocument();
+    expect(screen.getByText('Lipsesc datele de contact.')).toBeInTheDocument();
+  });
+
+  it('shows the pending badge and no reason block while BC decides', () => {
+    renderSheet(
+      <AnnouncementDetailsSheet
+        announcement={presentation({ approvalStatus: 'pending' })}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('În așteptare')).toBeInTheDocument();
+    expect(screen.queryByText('Motivul respingerii')).toBeNull();
   });
 });

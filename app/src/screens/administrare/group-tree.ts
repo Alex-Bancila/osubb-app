@@ -23,6 +23,11 @@ export const GROUP_CATEGORIES = [
   { value: 'project', label: 'Proiect' },
 ] as const;
 
+/** What a Child Group may be: an Echipă or a Proiect, never a Departament (Alex, 2026-10-11). */
+export const CHILD_GROUP_CATEGORIES = GROUP_CATEGORIES.filter(
+  (category) => category.value !== 'department',
+);
+
 const CATEGORY_LABELS: Record<string, string> = {
   department: 'Departament',
   team: 'Echipă',

@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { swipe } from '../../test/swipe';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -355,13 +356,14 @@ it('shows a Manager the operational settings and BC the structural ones', async 
   expect(
     await screen.findByRole('heading', { name: 'Structura grupului' }),
   ).toBeVisible();
-  // Three categories are one segmented choice, not a select.
+  // The categories are one segmented choice, not a select -- and a Subgrup
+  // (this Group has a parent) is never a Departament (Alex, 2026-10-11).
   const category = screen.getByRole('radiogroup', { name: 'Categorie' });
   expect(
     within(category)
       .getAllByRole('radio')
       .map((radio) => radio.textContent),
-  ).toEqual(['Departament', 'Echipă', 'Proiect']);
+  ).toEqual(['Echipă', 'Proiect']);
   // Only the optional fields say so, on the kit's field.
   expect(screen.getByLabelText('Numele grupului')).toHaveAttribute(
     'data-slot',
@@ -1010,6 +1012,12 @@ it('creates a Child Group under this Group and archives one, in pop-ups', async 
   });
   // The parent is fixed at creation — there is no picker and no "Mută grupul".
   expect(within(create).queryByLabelText(/Grup părinte/)).toBeNull();
+  // A Subgrup is an Echipă or a Proiect, never a Departament (Alex, 2026-10-11).
+  expect(
+    within(within(create).getByRole('radiogroup', { name: 'Categorie' }))
+      .getAllByRole('radio')
+      .map((radio) => radio.textContent),
+  ).toEqual(['Echipă', 'Proiect']);
   expect(
     within(create).getByLabelText('Numele grupului'),
   ).toHaveAccessibleDescription(
@@ -1474,9 +1482,10 @@ it('links a top-level Group’s unfinished work without a Subgrup', async () => 
   ).toHaveAttribute('href', '/tracker?lista=gestionat&grup=1');
 });
 
-it('puts the Group tabs on one pill track that neither wraps nor scrolls: icons, the current tab spelling its name under 768 px', () => {
+it('puts the Group tabs on one pill track that never wraps and scrolls only when they overflow: icons, the current tab spelling its name under 768 px', () => {
   show();
-  expect(tabBar().className).not.toContain('overflow-x-auto');
+  // Part C (spec 2026-10-11): the track scrolls sideways, with no scrollbar, when its tabs overflow.
+  expect(tabBar()).toHaveClass('overflow-x-auto', '[scrollbar-width:none]');
   expect(tabBar().className).not.toContain('flex-wrap');
   expect(tabBar()).toHaveClass('rounded-lg', 'p-[3px]');
   for (const link of within(tabBar()).getAllByRole('link')) {
@@ -1660,4 +1669,10 @@ it('offers BC only Șterge definitiv on an archived Group', () => {
   expect(
     screen.queryByRole('region', { name: 'Setările grupului' }),
   ).toBeNull();
+});
+
+it('moves between tabs with a finger swipe over the panel (2026-10-11)', async () => {
+  show();
+  swipe(await screen.findByRole('region', { name: 'Setări' }), 'left');
+  expect(tab('Membri')).toHaveAttribute('aria-current', 'page');
 });

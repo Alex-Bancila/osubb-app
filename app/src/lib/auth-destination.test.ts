@@ -47,7 +47,6 @@ describe('safe authentication destinations', () => {
     '/anunturi',
     '/anunturi/deals?deal=4',
     '/administrare/deals',
-    '/administrare/bc',
     '/notificari',
     '/voluntari',
     '/clasament',

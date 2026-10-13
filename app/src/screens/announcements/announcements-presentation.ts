@@ -12,6 +12,10 @@ import {
 } from '../../lib/schemas/attached-link';
 import type { MemberIdentity } from '../../components/member/member-identity';
 import type { Group } from '../../queries/reference';
+import {
+  approvalStatusOf,
+  type ApprovalStatus,
+} from '../../lib/approval-status';
 
 export type AnnouncementPriority =
   Database['public']['Enums']['announce_priority'];
@@ -63,6 +67,12 @@ export type AnnouncementPresentation = {
   deadline: string | null;
   /** The Minimum Level (#909); 0 is everyone in the Audience. */
   minLevel: number;
+  /**
+   * A Cerere de aprobare (spec 2026-10-11): pending or rejected until BC
+   * publishes it; approved for every row anyone else can read.
+   */
+  approvalStatus: ApprovalStatus;
+  rejectionReason: string | null;
   /** "Nivel minim: Voluntar Activ", or null at 0 (it says nothing then). */
   minLevelLabel: string | null;
   isRead: boolean;
@@ -233,6 +243,8 @@ export function toAnnouncementPresentation(
     deadline: row.deadline ?? null,
     minLevel: row.min_level ?? 0,
     minLevelLabel: minLevelLabel(row.min_level ?? 0),
+    approvalStatus: approvalStatusOf(row.approval_status),
+    rejectionReason: row.rejection_reason ?? null,
     isRead,
   };
 }
@@ -295,29 +307,36 @@ export function mayAskForReaders(
 
 /**
  * Whether to offer Editează, "Fixează anunțul" / "Anulează fixarea" and
- * Șterge (#857, #930): the client copy of `announcements_update` and
+ * Șterge (#857, #930, #1042): the client copy of `announcements_update` and
  * `announcements_delete`, whose predicates are the same. BC/Moderator
  * (`private.can_manage_group_work`'s level ≥ 6 arm, any Group status); a
  * Manager or Responsible on the Origin's path while the Origin is active (the
  * same function's other arm — `my_groups()` carries the Roles inherited from a
- * Group above); and, for an Organization Group Announcement, anyone holding a
- * Group Role anywhere (`private.holds_any_group_role()`, i.e.
- * `my_capabilities().manages_any_group`). Being the author grants nothing by
- * itself. Presentation only: the policies decide.
+ * Group above); and, for an Organization Group Announcement, its author
+ * (ruling R48: a Group Role holder may publish there, but manages only their
+ * own). Being the author of a local Announcement grants nothing by itself.
+ * Presentation only: the policies decide.
  */
 export function mayManageAnnouncement(
-  announcement: Pick<AnnouncementPresentation, 'groupId' | 'group'>,
+  announcement: Pick<
+    AnnouncementPresentation,
+    'groupId' | 'group' | 'authorMember'
+  >,
   viewer: {
     /** BC/Moderator by live rank (`useCapability('manageRoles')`). */
     bcOrModerator: boolean;
-    /** Holds a Group Role anywhere (`useCapability('managesAnyGroup')`). */
-    managesAnyGroup: boolean;
+    /** The signed-in Member; null while unknown. */
+    memberId: string | null;
     groups:
       readonly { id: number; group_role: string; status: string }[] | undefined;
   },
 ): boolean {
   if (viewer.bcOrModerator) return true;
-  if (announcement.group.isOrganization === true && viewer.managesAnyGroup)
+  if (
+    announcement.group.isOrganization === true &&
+    viewer.memberId !== null &&
+    announcement.authorMember?.memberId === viewer.memberId
+  )
     return true;
   return (viewer.groups ?? []).some(
     (group) =>
@@ -348,16 +367,32 @@ export function readersSummary(readers: readonly AnnouncementReader[]): {
   };
 }
 
+/**
+ * The unread Announcements of a list: as the server badge
+ * (`my_unread_announcements_count`), never the author's own pending or
+ * rejected requests (spec 2026-10-11).
+ */
 export function countUnreadAnnouncements(
   items: AnnouncementPresentation[],
 ): number {
-  return items.filter((item) => !item.isRead).length;
+  return items.filter(
+    (item) => !item.isRead && item.approvalStatus === 'approved',
+  ).length;
 }
 
+/**
+ * The critical Announcement the banner shows: unread and published — never
+ * a request BC or its author can read before it is approved (spec 2026-10-11).
+ */
 export function getUnreadCriticalAnnouncement(
   items: AnnouncementPresentation[],
 ): AnnouncementPresentation | null {
   return (
-    items.find((item) => item.priority === 'critical' && !item.isRead) ?? null
+    items.find(
+      (item) =>
+        item.priority === 'critical' &&
+        !item.isRead &&
+        item.approvalStatus === 'approved',
+    ) ?? null
   );
 }

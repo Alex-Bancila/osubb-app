@@ -277,7 +277,10 @@ it.each([
     'Candidatul a fost deja decis. Pagina a fost actualizată.',
   ],
   ['invalid_rejection_reason', 'Scrie motivul respingerii.'],
-  ['rejection_reason_too_long', 'Motivul are cel mult 500 de caractere.'],
+  [
+    'candidate_rejection_reason_too_long',
+    'Motivul are cel mult 500 de caractere.',
+  ],
   ['date_required', 'Alege data.'],
 ])(
   "has the issue's Romanian copy for the Evaluări de rol reason %s",

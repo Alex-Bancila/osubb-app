@@ -21,6 +21,7 @@ import {
   SheetPortal,
   SheetTitle,
 } from '../../components/ui/sheet';
+import { useAuth } from '../../lib/auth';
 import { useCapability } from '../../lib/capabilities';
 import {
   isAnnouncementRefusal,
@@ -137,6 +138,17 @@ function AnnouncementDetails({
         </div>
       </SheetHeader>
 
+      {/* Spec 2026-10-11: a rejected request tells its author why, as a
+          cancelled Event does; Editează stays, and an edit asks again. */}
+      {announcement.approvalStatus === 'rejected' && (
+        <p className="m-0 grid gap-1 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm wrap-anywhere">
+          <span className="text-xs font-bold tracking-wide text-destructive uppercase">
+            Motivul respingerii
+          </span>
+          <span>{announcement.rejectionReason}</span>
+        </p>
+      )}
+
       <div className="text-sm leading-relaxed whitespace-pre-line text-foreground/90">
         {announcement.body}
       </div>
@@ -177,7 +189,7 @@ function AnnouncementManageActions({
   onDeleted: () => void;
 }) {
   const bcOrModerator = useCapability('manageRoles').data === true;
-  const managesAnyGroup = useCapability('managesAnyGroup').data === true;
+  const memberId = useAuth().session?.user.id ?? null;
   const myGroups = useMyGroupRoles();
   const setPinned = useSetAnnouncementPinned();
   const remove = useDeleteAnnouncement();
@@ -191,7 +203,7 @@ function AnnouncementManageActions({
   if (
     !mayManageAnnouncement(announcement, {
       bcOrModerator,
-      managesAnyGroup,
+      memberId,
       groups: myGroups.data,
     })
   )

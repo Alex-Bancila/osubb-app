@@ -1,28 +1,11 @@
-import {
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type FormEvent,
-} from 'react';
+import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { AttachedLinksFields } from '../attached-link/AttachedLinksFields';
 import { SubHeading } from '../layout';
 import { MemberName } from '../member/MemberName';
 import { Button } from '../ui/button';
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxTrigger,
-  ComboboxValue,
-  MemberOption,
-} from '../ui/combobox';
 import { FieldError } from '../ui/field';
 import { FormSheetFooter } from '../ui/form-sheet';
+import { InfoHint } from '../ui/info-hint';
 import { Input, Textarea } from '../ui/input';
 import { Select } from '../ui/select';
 import {
@@ -30,12 +13,11 @@ import {
   completedTaskSchema,
   type CompletedTaskInput,
 } from '../../lib/schemas/completed-task';
+import { MAX_TASK_COPIES } from '../../lib/schemas/task';
 import { useFormValidation } from '../../lib/use-form-validation';
-import {
-  useCompletedTaskExecutors,
-  type CompletedTaskDraft,
-  type CompletedTaskOptions,
-  type CompletedTaskVolunteer,
+import type {
+  CompletedTaskDraft,
+  CompletedTaskOptions,
 } from '../../queries/completed-tasks';
 import { previewPoints } from '../../lib/difficulty-levels';
 import { useEvaluationScale } from '../../queries/reference';
@@ -47,6 +29,10 @@ import {
   type ManagedWorkGroup,
 } from '../../screens/tracker/task-form-model';
 import { EvaluationInputs } from './EvaluationInputs';
+import { VolunteerPicker } from './VolunteerPicker';
+
+const COPIES_INFO =
+  'Adaugă același task finalizat pentru mai mulți voluntari odată, până la 100. Alegi voluntarii la pasul următor; aceeași persoană poate fi aleasă de mai multe ori.';
 
 /** A volunteer already decided by where the form opened: the requester, or the tracked Member. */
 export type FixedVolunteer = {
@@ -63,7 +49,10 @@ export type FixedVolunteer = {
  *   Request's text and Group come prefilled, and the decider may change them;
  * - "Adaugă task finalizat" — the manager picks the Group and then the
  *   volunteer among the members that Group may credit (or the volunteer is
- *   fixed, on Trackerul membrului).
+ *   fixed, on Trackerul membrului) — and, with `copies`, how many times:
+ *   at several copies the volunteers are chosen one per copy in a second
+ *   step, so the form hands over a draft with no volunteer and the count
+ *   (spec 2026-10-11, Part E).
  *
  * The Task first (Grup, Voluntar, Titlu, Detalii, Campanie, Link atașat — no
  * deadline, no Audience: a completed Task is no Opportunity), then the
@@ -78,6 +67,7 @@ export function CompletedTaskForm({
   options,
   volunteer,
   volunteerLabel = 'Voluntar',
+  copies = false,
   initial,
   submitLabel,
   isPending,
@@ -92,6 +82,8 @@ export function CompletedTaskForm({
    * them (an approval's Request summary names the requester).
    */
   volunteerLabel?: string | null;
+  /** Offer the Exemplare count (Part E); above 1 the volunteers come in the next step. */
+  copies?: boolean;
   initial?: { title?: string; description?: string; groupId?: number | null };
   submitLabel: string;
   isPending: boolean;
@@ -109,6 +101,7 @@ export function CompletedTaskForm({
         initial?.groupId ??
         (options.groups.length === 1 && roots[0] ? roots[0].id : null),
       executorId: volunteer?.id ?? null,
+      copies: '1',
       links: [],
       campaignId: null,
       difficulty: '',
@@ -118,6 +111,8 @@ export function CompletedTaskForm({
   });
   const origin = options.groups.find((group) => group.id === values.groupId);
   const campaigns = campaignsFor(origin, options);
+  // Several copies: the volunteers are chosen in the next step, one per copy.
+  const manyCopies = copies && !volunteer && Number(values.copies) > 1;
   const schema = useMemo(
     () =>
       completedTaskSchema({
@@ -127,8 +122,9 @@ export function CompletedTaskForm({
             options.groups.find((group) => group.id === groupId),
             options,
           ).map((campaign) => campaign.id),
+        volunteerRequired: !manyCopies,
       }),
-    [options],
+    [options, manyCopies],
   );
   const form = useFormValidation(
     schema,
@@ -156,12 +152,12 @@ export function CompletedTaskForm({
     event.preventDefault();
     if (submitting.current) return;
     const parsed = form.validate();
-    if (!parsed || parsed.groupId === null || parsed.executorId === null)
-      return;
+    if (!parsed || parsed.groupId === null) return;
+    if (!manyCopies && parsed.executorId === null) return;
     submitting.current = true;
     try {
       await onSubmit({
-        executorId: parsed.executorId,
+        executorId: manyCopies ? null : parsed.executorId,
         groupId: parsed.groupId,
         title: parsed.title,
         description: parsed.description,
@@ -170,6 +166,7 @@ export function CompletedTaskForm({
         difficulty: parsed.difficulty,
         rating: parsed.rating,
         note: parsed.note,
+        copies: parsed.copies,
       });
     } catch (failure) {
       form.fail(
@@ -228,7 +225,41 @@ export function CompletedTaskForm({
           />
           <FieldError {...form.errorProps('groupId')} />
         </div>
-        {!volunteer && (
+        {copies && !volunteer && (
+          <div className="grid gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor={`${id}-copies`} className="text-sm font-medium">
+                Exemplare
+              </label>
+              <InfoHint label="Despre exemplare" id={`${id}-copies-info`}>
+                {COPIES_INFO}
+              </InfoHint>
+            </div>
+            <Input
+              id={`${id}-copies`}
+              type="number"
+              min="1"
+              max={MAX_TASK_COPIES}
+              step="1"
+              inputMode="numeric"
+              className="w-28"
+              value={values.copies}
+              onChange={(event) => update({ copies: event.target.value })}
+              {...form.field('copies', `${id}-copies-info`)}
+            />
+            <FieldError {...form.errorProps('copies')} />
+          </div>
+        )}
+        {!volunteer && manyCopies && (
+          <div className="grid gap-1.5">
+            <span className="text-sm font-medium">Voluntari</span>
+            <p className="m-0 text-sm text-muted-foreground">
+              Voluntarii se aleg la pasul următor, câte unul pentru fiecare
+              exemplar.
+            </p>
+          </div>
+        )}
+        {!volunteer && !manyCopies && (
           <div className="grid gap-1.5" {...form.slot('executorId')}>
             <VolunteerPicker
               groupId={values.groupId}
@@ -371,120 +402,9 @@ export function CompletedTaskForm({
           Renunță
         </Button>
         <Button type="submit" disabled={isPending || !scale.data}>
-          {isPending ? 'Se salvează…' : submitLabel}
+          {isPending ? 'Se salvează…' : manyCopies ? 'Continuă' : submitLabel}
         </Button>
       </FormSheetFooter>
     </form>
-  );
-}
-
-/**
- * Voluntar: the members the chosen Group may credit
- * (`completed_task_executors`), re-read when the Group changes. A volunteer
- * the new Group does not offer is cleared once that read succeeds.
- */
-function VolunteerPicker({
-  groupId,
-  value,
-  onChange,
-  disabled,
-  invalid,
-  errorId,
-}: {
-  groupId: number | null;
-  value: string | null;
-  onChange: (memberId: string | null) => void;
-  disabled: boolean;
-  invalid: boolean;
-  errorId: string;
-}) {
-  const id = useId();
-  const query = useCompletedTaskExecutors(groupId);
-  const members = useMemo(() => query.data ?? [], [query.data]);
-  const selected = members.find((member) => member.id === value) ?? null;
-  const offered = value === null || selected !== null;
-  useEffect(() => {
-    if (query.isSuccess && !offered) onChange(null);
-  }, [query.isSuccess, offered, onChange]);
-  return (
-    <>
-      <span id={`${id}-label`} className="text-sm font-medium">
-        Voluntar
-      </span>
-      {groupId === null ? (
-        <p className="m-0 text-sm text-muted-foreground">
-          Alege întâi grupul: lista arată membrii lui.
-        </p>
-      ) : query.isPending ? (
-        <p role="status" className="m-0 text-sm">
-          Se încarcă membrii grupului…
-        </p>
-      ) : query.isError ? (
-        <div role="alert" className="space-y-2 text-sm">
-          <p className="m-0">Nu am putut încărca membrii grupului.</p>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void query.refetch()}
-          >
-            Reîncarcă lista
-          </Button>
-        </div>
-      ) : (
-        <Combobox<CompletedTaskVolunteer>
-          items={members}
-          value={selected}
-          onValueChange={(member) => onChange(member?.id ?? null)}
-          itemToStringLabel={(member) => member.name}
-          isItemEqualToValue={(a, b) => a.id === b.id}
-          disabled={disabled || !members.length}
-        >
-          <ComboboxTrigger
-            aria-labelledby={`${id}-label`}
-            aria-required="true"
-            aria-invalid={invalid || undefined}
-            aria-describedby={invalid ? errorId : undefined}
-          >
-            <ComboboxValue
-              placeholder={
-                members.length
-                  ? 'Alege un membru'
-                  : 'Niciun membru eligibil în acest grup'
-              }
-            >
-              {(member: CompletedTaskVolunteer | null) =>
-                member ? (
-                  <MemberOption
-                    name={member.name}
-                    avatarColor={member.avatarColor}
-                  />
-                ) : members.length ? (
-                  'Alege un membru'
-                ) : (
-                  'Niciun membru eligibil în acest grup'
-                )
-              }
-            </ComboboxValue>
-          </ComboboxTrigger>
-          <ComboboxContent>
-            <ComboboxInput
-              aria-label="Caută un membru"
-              placeholder="Caută după nume"
-            />
-            <ComboboxEmpty>Niciun membru găsit.</ComboboxEmpty>
-            <ComboboxList>
-              {(member: CompletedTaskVolunteer) => (
-                <ComboboxItem key={member.id} value={member}>
-                  <MemberOption
-                    name={member.name}
-                    avatarColor={member.avatarColor}
-                  />
-                </ComboboxItem>
-              )}
-            </ComboboxList>
-          </ComboboxContent>
-        </Combobox>
-      )}
-    </>
   );
 }

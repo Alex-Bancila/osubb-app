@@ -27,17 +27,14 @@ export type Capabilities = {
   createTopLevelGroups: boolean;
   /** Opens Administrare: a Group Role anywhere, BC+, or a place in the OSUBB Deals team (R44). */
   administer: boolean;
-  /** The Moderator: Administrare › Administrare BC, where Atribuții are given (R44). */
-  administerBc: boolean;
   /**
-   * Holder, Coordonator or Responsabil of OSUBB Deals: Administrare › OSUBB
-   * Deals (R44/R45). The Moderator holds every Atribuție's powers (R44
-   * amended 2026-10-08), so has this and the two below as the holder does.
+   * Any Deals power (R47): BC, the Moderator, the Coordonator or the
+   * Responsabil. Opens Administrare › OSUBB Deals.
    */
   manageDeals: boolean;
-  /** Holder or Coordonator (and the Moderator): picks the Responsabil, manages every Deal. */
+  /** BC, the Moderator or the Coordonator: picks the Responsabil, manages every Deal. */
   manageDealsTeam: boolean;
-  /** Holder only (and the Moderator): picks the Coordonator. */
+  /** BC or the Moderator: picks the Coordonator. */
   pickDealsCoordinator: boolean;
 };
 
@@ -55,7 +52,6 @@ export async function fetchCapabilities(): Promise<Capabilities> {
     provisionMembers: data.provision_members,
     createTopLevelGroups: data.create_top_level_groups,
     administer: data.administer,
-    administerBc: data.administer_bc,
     manageDeals: data.manage_deals,
     manageDealsTeam: data.manage_deals_team,
     pickDealsCoordinator: data.pick_deals_coordinator,

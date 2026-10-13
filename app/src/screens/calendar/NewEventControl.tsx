@@ -83,11 +83,17 @@ function NewEventDialog({
             setOpen(false);
             // The create receipt sits on the new card, as #849's edit and
             // cancel receipts do (Audit D-11).
+            // An OSUBB-wide Event by a writer below BC is a request (spec
+            // 2026-10-11): its Announcement, if asked for, follows the approval.
             setEventReceipt(
               created.id,
-              draft.announce
-                ? 'Evenimentul și anunțul au fost create.'
-                : 'Evenimentul a fost creat.',
+              created.approval_status === 'pending'
+                ? draft.announce
+                  ? 'Evenimentul așteaptă aprobarea BC. Anunțul lui va fi publicat odată cu el.'
+                  : 'Evenimentul așteaptă aprobarea BC.'
+                : draft.announce
+                  ? 'Evenimentul și anunțul au fost create.'
+                  : 'Evenimentul a fost creat.',
             );
             onCreated?.(created.id);
           }}

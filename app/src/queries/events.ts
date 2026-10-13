@@ -7,6 +7,7 @@ import {
 } from '../lib/calendar-time';
 import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
+import { approvalStatusOf, type ApprovalStatus } from './approvals';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 
@@ -19,7 +20,7 @@ import { keys } from './keys';
 // One string literal, not a concatenation: supabase-js parses this at the type
 // level to give `data` its shape, and a `+` defeats that.
 const EVENT_FIELDS =
-  'id, title, type, group_id, campaign_id, starts_at, ends_at, location, capacity, description, min_level, created_by, cancelled_at, cancel_reason, group:groups(name, short, color, category, path, is_organization)';
+  'id, title, type, group_id, campaign_id, starts_at, ends_at, location, capacity, description, min_level, created_by, cancelled_at, cancel_reason, approval_status, rejection_reason, group:groups(name, short, color, category, path, is_organization)';
 
 type EventTableRow = Database['public']['Tables']['events']['Row'];
 type GroupRow = Database['public']['Tables']['groups']['Row'];
@@ -48,6 +49,9 @@ type EventRow = Pick<
 > & {
   /** Optional so a row read before #691 still maps; absent means none. */
   campaign_id?: EventTableRow['campaign_id'];
+  /** Optional so a row read before the approval flow still maps: approved. */
+  approval_status?: EventTableRow['approval_status'];
+  rejection_reason?: EventTableRow['rejection_reason'];
   group: EventGroup | null;
 };
 
@@ -76,6 +80,12 @@ export type EventPresentation = {
   /** Set once the Event is cancelled (ADR-0008): the card says so, no RSVP. */
   cancelledAt: string | null;
   cancelReason: string | null;
+  /**
+   * A Cerere de aprobare (spec 2026-10-11): pending or rejected until BC
+   * publishes it; approved for every row anyone else can read.
+   */
+  approvalStatus: ApprovalStatus;
+  rejectionReason: string | null;
 };
 
 /** Convert database naming and instants once, before any calendar UI sees it. */
@@ -105,6 +115,8 @@ export function toEventPresentation(row: EventRow): EventPresentation | null {
     createdBy: row.created_by,
     cancelledAt: row.cancelled_at,
     cancelReason: row.cancel_reason,
+    approvalStatus: approvalStatusOf(row.approval_status),
+    rejectionReason: row.rejection_reason ?? null,
   };
 }
 

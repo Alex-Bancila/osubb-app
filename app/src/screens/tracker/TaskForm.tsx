@@ -25,7 +25,11 @@ import {
 } from '../../components/ui/combobox';
 import { SegmentedRadio } from '../../components/ui/segmented-radio';
 import { AssignmentModeField, AudienceField } from './TaskModeFields';
-import { fieldForReason, taskDraftSchema } from '../../lib/schemas/task';
+import {
+  MAX_TASK_COPIES,
+  fieldForReason,
+  taskDraftSchema,
+} from '../../lib/schemas/task';
 import { useFormValidation } from '../../lib/use-form-validation';
 import { DirectExecutorSelector } from './DirectExecutorSelector';
 import { TaskGroupCascade } from './TaskGroupCascade';
@@ -58,6 +62,9 @@ const KINDS_INFO =
 const CAMPAIGN_INFO =
   'O etichetă pentru raportare: campania arată punctele obținute și cine a lucrat. Nu schimbă cine poate lucra la task.';
 
+const COPIES_INFO =
+  'Creează mai multe taskuri identice odată, până la 100. Pentru un task direct alegi câte un executor pentru fiecare exemplar la pasul următor.';
+
 /**
  * Draft-only form; its caller owns the eventual atomic create command. When
  * that command refuses, `onDraft` rejects and the reason lands under the
@@ -80,6 +87,7 @@ export function TaskForm({
   onCancel,
   cancelLabel = 'Renunță',
   status,
+  plural = 'taskuri',
 }: {
   options: TaskFormOptions;
   onDraft: (draft: TaskDraft) => void | Promise<void>;
@@ -93,6 +101,8 @@ export function TaskForm({
   onCancel?: () => void;
   cancelLabel?: string;
   status?: ReactNode;
+  /** The noun the button counts: "subtaskuri" under an Umbrella. */
+  plural?: 'taskuri' | 'subtaskuri';
 }) {
   const id = useId();
   const [values, setValues] = useState<TaskFormValues>(() => {
@@ -110,6 +120,7 @@ export function TaskForm({
       executorId: null,
       campaignId: null,
       links: [],
+      copies: '1',
     };
   });
   const schema = useMemo(() => taskDraftSchema(options), [options]);
@@ -129,6 +140,15 @@ export function TaskForm({
   const umbrella = values.kind === 'umbrella';
   const subtask = values.kind === 'subtask';
   const lockedToParent = parentTaskId !== null;
+  const copies = Number(values.copies);
+  // Above one copy the Executors are chosen at the next step, one per copy.
+  const manyCopies = Number.isInteger(copies) && copies > 1;
+  const label =
+    !umbrella && manyCopies
+      ? values.assignmentMode === 'direct'
+        ? 'Continuă'
+        : `Creează ${copies} ${plural}`
+      : submitLabel;
   function update(patch: Partial<TaskFormValues>) {
     setValues((current) => ({ ...current, ...patch }));
   }
@@ -336,6 +356,29 @@ export function TaskForm({
             }
             form={form}
           />
+          <div className="grid gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor={`${id}-copies`} className="text-sm font-medium">
+                Exemplare
+              </label>
+              <InfoHint label="Despre exemplare" id={`${id}-copies-info`}>
+                {COPIES_INFO}
+              </InfoHint>
+            </div>
+            <Input
+              id={`${id}-copies`}
+              type="number"
+              min="1"
+              max={MAX_TASK_COPIES}
+              step="1"
+              inputMode="numeric"
+              className="w-28"
+              value={values.copies}
+              onChange={(event) => update({ copies: event.target.value })}
+              {...form.field('copies', `${id}-copies-info`)}
+            />
+            <FieldError {...form.errorProps('copies')} />
+          </div>
           {/* A direct Task is local only (R26); `values.audience` keeps the
               choice for when the mode goes back to Public. */}
           {values.assignmentMode === 'public' && (
@@ -347,7 +390,7 @@ export function TaskForm({
               form={form}
             />
           )}
-          {values.assignmentMode === 'direct' && origin && (
+          {values.assignmentMode === 'direct' && origin && !manyCopies && (
             <div className="grid gap-1.5" {...form.slot('executorId')}>
               <DirectExecutorSelector
                 originGroupId={origin.id}
@@ -356,6 +399,15 @@ export function TaskForm({
               />
               <FieldError {...form.errorProps('executorId')} />
             </div>
+          )}
+          {values.assignmentMode === 'direct' && manyCopies && (
+            <p
+              className="text-sm text-muted-foreground"
+              {...form.slot('executorId')}
+            >
+              Executorii se aleg la pasul următor, câte unul pentru fiecare
+              exemplar.
+            </p>
           )}
           <div className="grid gap-1.5">
             <div className="flex items-center justify-between gap-2">
@@ -419,7 +471,7 @@ export function TaskForm({
             {cancelLabel}
           </Button>
         )}
-        <Button type="submit">{submitLabel}</Button>
+        <Button type="submit">{label}</Button>
       </FormSheetFooter>
     </form>
   );

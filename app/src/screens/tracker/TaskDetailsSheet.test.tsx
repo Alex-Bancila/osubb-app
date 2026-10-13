@@ -1,5 +1,6 @@
 vi.mock('../../queries/task-umbrella', () => ({
   useCreateTask: () => ({ mutateAsync: vi.fn() }),
+  useCreateTasks: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useCompleteUmbrella: () => ({ mutateAsync: vi.fn() }),
 }));
 vi.mock('./TaskEditControl', () => ({ TaskEditControl: () => null }));

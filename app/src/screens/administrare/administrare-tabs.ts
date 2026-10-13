@@ -1,6 +1,5 @@
 import {
   ClipboardCheck,
-  Crown,
   Lock,
   Network,
   Settings,
@@ -35,7 +34,7 @@ export const APPLICATIONS_TAB_PATH = '/administrare/cereri';
 /** OSUBB Deals' page in Administrare (R44); notifications link here. */
 export const DEALS_TAB_PATH = '/administrare/deals';
 
-/** The tabs, in the order Alex listed them (R27), then R44's two. */
+/** The tabs, in the order Alex listed them (R27), then R44's OSUBB Deals. */
 export const ADMINISTRARE_TABS = [
   {
     path: '/administrare/membri',
@@ -91,13 +90,6 @@ export const ADMINISTRARE_TABS = [
     icon: Ticket,
     label: 'OSUBB Deals',
     capabilities: ['manageDeals', 'manageRoles'],
-  },
-  {
-    // R44: the Moderator's Atribuții, never shown to BC.
-    path: '/administrare/bc',
-    icon: Crown,
-    label: 'Administrare BC',
-    capabilities: ['administerBc'],
   },
 ] as const satisfies readonly AdministrareTab[];
 

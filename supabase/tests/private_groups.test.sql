@@ -349,6 +349,9 @@ select is(pg_temp.visible_my_groups(), 'Private #756', 'my_groups(): and it is l
 reset role;
 insert into public.announcements (title, body, group_id, audience, created_by)
 values ('Org news in private #756', 'Doar pentru noi.', pg_temp.g756('Private #756'), 'org', pg_temp.u756(11));
+-- Spec 2026-10-11: organisation-Audience, written while a Member's claims are set: a
+-- request until published; by hand here, with its fan-out, as the subject is reach.
+select pg_temp.test_publish_announcement('Org news in private #756');
 select is(
   (select array_agg(member_id order by member_id) from public.notifications
     where title = 'Anunț nou: Org news in private #756'

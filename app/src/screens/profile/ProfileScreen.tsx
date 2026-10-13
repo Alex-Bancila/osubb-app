@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
+import { useSwipeTabs } from '../../lib/swipe-tabs';
 import { Tabs } from '@base-ui/react/tabs';
 import {
   Bell,
@@ -152,6 +153,12 @@ export default function ProfileScreen() {
     : (TAB_OF_ANCHOR[hash] ?? 'cont');
   const tabStrip = useRef<HTMLDivElement>(null);
   useActiveTabInView(tabStrip, tab);
+  // A swipe over the panel moves between the tabs as a tap would (2026-10-11).
+  const swipe = useSwipeTabs<ProfileTab>({
+    order: PROFILE_TABS,
+    current: tab,
+    onSelect: (value) => setParams({ [TAB_KEY]: value }, { replace: true }),
+  });
 
   const isPending =
     profileQuery.isPending ||
@@ -351,138 +358,141 @@ export default function ProfileScreen() {
           </Tabs.Tab>
         </Tabs.List>
 
-        <Tabs.Panel value="cont" className="motion-enter outline-none">
-          <PageGrid columns={2}>
-            <div className={stackClass}>
-              <Panel
-                title="Date de contact"
-                control={
-                  // A pencil fits beside the title at every width; the
-                  // labelled button it replaces took a row of the box.
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={openEdit}
-                    aria-label="Editează datele de contact"
-                    title="Editează datele de contact"
-                  >
-                    <Pencil aria-hidden="true" />
-                  </Button>
-                }
-                stack={2}
-              >
-                <ul className={rowListClass}>
-                  <SettingRow label="E-mail">
-                    {profile.email ? (
-                      <span className="break-all">{profile.email}</span>
+        <div {...swipe} className="min-w-0">
+          <Tabs.Panel value="cont" className="motion-enter outline-none">
+            <PageGrid columns={2}>
+              <div className={stackClass}>
+                <Panel
+                  title="Date de contact"
+                  control={
+                    // A pencil fits beside the title at every width; the
+                    // labelled button it replaces took a row of the box.
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={openEdit}
+                      aria-label="Editează datele de contact"
+                      title="Editează datele de contact"
+                    >
+                      <Pencil aria-hidden="true" />
+                    </Button>
+                  }
+                  stack={2}
+                >
+                  <ul className={rowListClass}>
+                    <SettingRow label="E-mail">
+                      {profile.email ? (
+                        <span className="break-all">{profile.email}</span>
+                      ) : (
+                        <span className="text-muted-foreground italic">
+                          Indisponibil
+                        </span>
+                      )}
+                    </SettingRow>
+                    <SettingRow
+                      label="Telefon"
+                      hint={
+                        <InfoHint label="Despre numărul de telefon">
+                          {PHONE_HINT}
+                        </InfoHint>
+                      }
+                    >
+                      {profile.phone ? (
+                        profile.phone
+                      ) : (
+                        <span className="text-muted-foreground italic">
+                          Necompletat
+                        </span>
+                      )}
+                    </SettingRow>
+                  </ul>
+                </Panel>
+                {(bceGroups || !onBoard) && groupsPanel}
+              </div>
+              <div className={stackClass}>
+                {onBoard ? (
+                  <Panel title="Funcția în OSUBB">
+                    {isModerator ? (
+                      <p
+                        data-testid="board-title"
+                        className="text-[length:var(--fs-xl)] leading-tight font-extrabold wrap-anywhere text-foreground"
+                      >
+                        {roleLabel}
+                      </p>
                     ) : (
-                      <span className="text-muted-foreground italic">
-                        Indisponibil
-                      </span>
+                      <BoardTitle
+                        roleLabel={roleLabel}
+                        board={
+                          profile.role === 'bce'
+                            ? 'Biroul de Conducere Extins'
+                            : 'Biroul de Conducere'
+                        }
+                        settings={settingsQuery}
+                        membershipRows={groupsQuery.membershipRows}
+                      />
                     )}
-                  </SettingRow>
-                  <SettingRow
-                    label="Telefon"
-                    hint={
-                      <InfoHint label="Despre numărul de telefon">
-                        {PHONE_HINT}
-                      </InfoHint>
+                  </Panel>
+                ) : promotion.kind === 'hidden' ? (
+                  <Panel title="Punctaj personal">
+                    <div data-testid="personal-points-card">
+                      <PointsTotal points={pointsQuery.data ?? 0} />
+                    </div>
+                  </Panel>
+                ) : (
+                  <PromotionPanel
+                    state={promotion}
+                    totalPoints={pointsQuery.data}
+                  />
+                )}
+                {timelineShown && (
+                  <Panel title="Parcursul organizațional">
+                    <RoleTimeline profile={profile} />
+                  </Panel>
+                )}
+              </div>
+            </PageGrid>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="notificari" className="motion-enter outline-none">
+            <Panel title="Notificări pe acest dispozitiv">
+              <PushDeviceCard />
+            </Panel>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="preferinte" className="motion-enter outline-none">
+            <div className={stackClass}>
+              {/* R43: BCE, BC and the Moderator only -- nothing for anyone else. */}
+              <PreferredGroupsCard />
+              {/* The Privacy Notice (#771): always one tap away. */}
+              <Panel title="Confidențialitate" flush>
+                <ul className={rowListClass}>
+                  <ListRow
+                    className="relative has-[a:hover]:bg-muted"
+                    action={
+                      <ChevronRight
+                        aria-hidden="true"
+                        className="size-4 shrink-0 text-muted-foreground"
+                      />
                     }
                   >
-                    {profile.phone ? (
-                      profile.phone
-                    ) : (
-                      <span className="text-muted-foreground italic">
-                        Necompletat
-                      </span>
-                    )}
-                  </SettingRow>
+                    <Link
+                      to="/confidentialitate"
+                      className={`block text-sm font-semibold text-foreground underline-offset-4 after:absolute after:inset-0 hover:underline ${focusRingAfterClass}`}
+                    >
+                      Politica de confidențialitate
+                    </Link>
+                    <p className="m-0 text-sm text-muted-foreground">
+                      Ce date folosește aplicația, cine le vede și ce drepturi
+                      ai.
+                    </p>
+                  </ListRow>
                 </ul>
               </Panel>
-              {(bceGroups || !onBoard) && groupsPanel}
+              {/* R41: the one way out, last and quiet, after everything else. */}
+              <SignOutDeviceLink />
             </div>
-            <div className={stackClass}>
-              {onBoard ? (
-                <Panel title="Funcția în OSUBB">
-                  {isModerator ? (
-                    <p
-                      data-testid="board-title"
-                      className="text-[length:var(--fs-xl)] leading-tight font-extrabold wrap-anywhere text-foreground"
-                    >
-                      {roleLabel}
-                    </p>
-                  ) : (
-                    <BoardTitle
-                      roleLabel={roleLabel}
-                      board={
-                        profile.role === 'bce'
-                          ? 'Biroul de Conducere Extins'
-                          : 'Biroul de Conducere'
-                      }
-                      settings={settingsQuery}
-                      membershipRows={groupsQuery.membershipRows}
-                    />
-                  )}
-                </Panel>
-              ) : promotion.kind === 'hidden' ? (
-                <Panel title="Punctaj personal">
-                  <div data-testid="personal-points-card">
-                    <PointsTotal points={pointsQuery.data ?? 0} />
-                  </div>
-                </Panel>
-              ) : (
-                <PromotionPanel
-                  state={promotion}
-                  totalPoints={pointsQuery.data}
-                />
-              )}
-              {timelineShown && (
-                <Panel title="Parcursul organizațional">
-                  <RoleTimeline profile={profile} />
-                </Panel>
-              )}
-            </div>
-          </PageGrid>
-        </Tabs.Panel>
-
-        <Tabs.Panel value="notificari" className="motion-enter outline-none">
-          <Panel title="Notificări pe acest dispozitiv">
-            <PushDeviceCard />
-          </Panel>
-        </Tabs.Panel>
-
-        <Tabs.Panel value="preferinte" className="motion-enter outline-none">
-          <div className={stackClass}>
-            {/* R43: BCE, BC and the Moderator only -- nothing for anyone else. */}
-            <PreferredGroupsCard />
-            {/* The Privacy Notice (#771): always one tap away. */}
-            <Panel title="Confidențialitate" flush>
-              <ul className={rowListClass}>
-                <ListRow
-                  className="relative has-[a:hover]:bg-muted"
-                  action={
-                    <ChevronRight
-                      aria-hidden="true"
-                      className="size-4 shrink-0 text-muted-foreground"
-                    />
-                  }
-                >
-                  <Link
-                    to="/confidentialitate"
-                    className={`block text-sm font-semibold text-foreground underline-offset-4 after:absolute after:inset-0 hover:underline ${focusRingAfterClass}`}
-                  >
-                    Politica de confidențialitate
-                  </Link>
-                  <p className="m-0 text-sm text-muted-foreground">
-                    Ce date folosește aplicația, cine le vede și ce drepturi ai.
-                  </p>
-                </ListRow>
-              </ul>
-            </Panel>
-            {/* R41: the one way out, last and quiet, after everything else. */}
-            <SignOutDeviceLink />
-          </div>
-        </Tabs.Panel>
+          </Tabs.Panel>
+        </div>
       </Tabs.Root>
 
       <EditProfileSheet

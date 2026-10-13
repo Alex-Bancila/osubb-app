@@ -422,6 +422,49 @@ begin
 end;
 $$;
 
+-- Spec 2026-10-11 (Cerere de aprobare): an OSUBB-wide Announcement or Event by a
+-- writer below BC is pending until approved. A suite whose subject is what
+-- happens after publication publishes the row by hand, as the approve
+-- commands would: the status under the decision flag, then the notice. Run
+-- as the suite's owner, after `reset role`.
+create or replace function pg_temp.test_publish_announcement(p_title text)
+returns void
+language plpgsql
+as $$
+declare
+  v_row public.announcements%rowtype;
+begin
+  perform set_config('osubb.deciding_approval', 'on', true);
+  update public.announcements
+     set approval_status = 'approved', approval_decided_at = now()
+   where title = p_title and approval_status = 'pending'
+   returning * into v_row;
+  perform set_config('osubb.deciding_approval', 'off', true);
+  if v_row.id is not null then
+    perform private.fan_out_announcement_row(v_row, v_row.created_by);
+  end if;
+end;
+$$;
+
+create or replace function pg_temp.test_publish_event(p_title text)
+returns void
+language plpgsql
+as $$
+declare
+  v_row public.events%rowtype;
+begin
+  perform set_config('osubb.deciding_approval', 'on', true);
+  update public.events
+     set approval_status = 'approved', approval_decided_at = now()
+   where title = p_title and approval_status = 'pending'
+   returning * into v_row;
+  perform set_config('osubb.deciding_approval', 'off', true);
+  if v_row.id is not null then
+    perform private.notify_event_created(v_row, v_row.created_by);
+  end if;
+end;
+$$;
+
 \if :{?osubb_test_suite}
 \else
 select plan(26);
@@ -592,3 +635,4 @@ select is(
 select * from finish();
 rollback;
 \endif
+
