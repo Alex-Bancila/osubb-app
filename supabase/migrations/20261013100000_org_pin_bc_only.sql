@@ -16,8 +16,17 @@ declare
   v_actor uuid := (select auth.uid());
   v_org boolean;
 begin
-  if new.pinned is not distinct from old.pinned or v_actor is null then
-    return new;  -- not a pin, or a migration / seed / job
+  if v_actor is null or new.kind = 'deal' then
+    return new;  -- a migration / seed / job; a Deal is never pinned by R45's own constraint
+  end if;
+  -- A pin: pinned changing on an update, or a row written already pinned
+  -- (security review of 2026-10-13: the compose sheet offers the pin at
+  -- creation).
+  if tg_op = 'UPDATE' and new.pinned is not distinct from old.pinned then
+    return new;
+  end if;
+  if tg_op = 'INSERT' and not coalesce(new.pinned, false) then
+    return new;
   end if;
   select grp.is_organization into v_org from public.groups as grp where grp.id = new.group_id;
   v_org := coalesce(v_org, false) or new.audience = 'org';
@@ -28,9 +37,9 @@ begin
 end;
 $$;
 comment on function private.guard_announcement_pin() is
-  'announcements_guard_pin (before update of pinned; ruling R50, 2026-10-13): a change of pinned on an organisation-wide Announcement -- the Organization Group, or the organisation Audience from any Group -- by a signed-in writer below level 6 is 42501 announcement_pin_forbidden; BC and the Moderator pin it, its author edits and deletes it (R48), and a local Announcement is pinned by whoever manages it. A write with no auth.uid() passes.';
+  'announcements_guard_pin (before insert, and before update of pinned; ruling R50, 2026-10-13): a pin -- pinned changing, or a row inserted already pinned -- on an organisation-wide Announcement -- the Organization Group, or the organisation Audience from any Group -- by a signed-in writer below level 6 is 42501 announcement_pin_forbidden; BC and the Moderator pin it, its author edits and deletes it (R48), and a local Announcement is pinned by whoever manages it. A write with no auth.uid() passes; a Deal (kind deal) is left to R45''s own constraint.';
 revoke execute on function private.guard_announcement_pin() from public, anon, authenticated, service_role;
 
 create trigger announcements_guard_pin
-  before update of pinned on public.announcements
+  before insert or update of pinned on public.announcements
   for each row execute function private.guard_announcement_pin();

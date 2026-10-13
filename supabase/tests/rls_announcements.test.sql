@@ -4,7 +4,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(40);
+select plan(41);
 truncate announcements, announcement_reads cascade;
 
 insert into auth.users(id,email) values
@@ -178,6 +178,9 @@ select throws_ok($$update announcements set pinned=true where title='Responsible
   '42501', 'announcement_pin_forbidden', 'nor one with the organisation Audience from their own Group (R50)');
 select lives_ok($$update announcements set pinned=true where title='Responsible EDU #581'$$,
   'while a local Announcement of their Group still takes their pin');
+select throws_ok($$insert into announcements(title,body,group_id,audience,pinned)
+  select 'Responsible org pinned #581','x',id,'local',true from groups where is_organization$$,
+  '42501', 'announcement_pin_forbidden', 'nor publish an organisation-wide Announcement already pinned (R50)');
 reset role;
 
 select pg_temp.test_login_leadership('f6000000-0000-0000-0000-0000000000f6');
