@@ -48,13 +48,6 @@ export default function AnnouncementComposeSheet() {
   const [originId, setOriginId] = useState('');
   const [audience, setAudience] = useState<'local' | 'org'>('local');
   const [pinned, setPinned] = useState(false);
-  // R50: below BC, a pin is offered only on a local Announcement of a Group;
-  // an organisation-wide one (the Organization Group, or the organisation
-  // Audience) is pinned by BC and the Moderator alone.
-  const chosenOrigin = origins.find((group) => String(group.id) === originId);
-  const mayPin =
-    actorLevel >= 6 ||
-    !(chosenOrigin?.is_organization === true || audience === 'org');
   // The draft as its inputs hold it: the Termen read in Romania (#909), who
   // reads it by the Role names of ruling R29b (everyone by default).
   const [draft, setDraft] = useState<AnnouncementDraft>(
@@ -89,6 +82,13 @@ export default function AnnouncementComposeSheet() {
     myGroups.data ?? [],
     capabilities.data?.createTopLevelGroups === true,
   );
+  // R50: below BC, a pin is offered only on a local Announcement of a Group;
+  // an organisation-wide one (the Organization Group, or the organisation
+  // Audience) is pinned by BC and the Moderator alone.
+  const chosenOrigin = origins.find((group) => String(group.id) === originId);
+  const mayPin =
+    actorLevel >= 6 ||
+    !(chosenOrigin?.is_organization === true || audience === 'org');
 
   if (capabilities.data?.managesAnyGroup !== true) return null;
 
