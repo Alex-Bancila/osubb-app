@@ -405,7 +405,8 @@ security definer
 set search_path = ''
 as $$
   with imported as (
-    select task.group_id, assignment.member_id, evaluation.points
+    select task.group_id, assignment.member_id, evaluation.id as evaluation_id, evaluation.points,
+           (evaluation.evaluated_at at time zone 'Europe/Bucharest')::date as completed_on
       from public.legacy_task_imports as registry
       join public.tasks as task on task.id = registry.task_id
       join public.task_evaluations as evaluation
@@ -413,10 +414,22 @@ as $$
        and evaluation.source = 'legacy_migration'
        and evaluation.reversed_at is null
       join public.task_assignments as assignment on assignment.id = evaluation.assignment_id
+  ),
+  -- What Personal Scores, Clasament and the Cup actually read: the ledger.
+  paid as (
+    select entry.delta
+      from imported
+      join public.points_ledger as entry
+        on entry.evaluation_id = imported.evaluation_id
+       and entry.reason = 'task'
   )
   select jsonb_build_object(
     'rows',   (select count(*) from imported),
     'points', (select coalesce(sum(points), 0) from imported),
+    'ledger_rows',   (select count(*) from paid),
+    'ledger_points', (select coalesce(sum(delta), 0) from paid),
+    'from', (select min(completed_on) from imported),
+    'to',   (select max(completed_on) from imported),
     'groups', coalesce((select jsonb_object_agg(by_group.group_id::text,
                                  jsonb_build_object('rows', by_group.row_count, 'points', by_group.points))
                           from (select group_id, count(*) as row_count, sum(points) as points
@@ -432,4 +445,4 @@ revoke execute on function public.legacy_task_import_totals()
 grant execute on function public.legacy_task_import_totals() to service_role;
 
 comment on function public.legacy_task_import_totals() is
-  '#1049: what the Legacy Import has written and still stands -- rows and Task Points in total, per Group and per Member -- for scripts/import-legacy-tasks.mjs to compare with its file after a run. Counts an imported Task only while it exists with an unreversed legacy_migration Evaluation. Service role only; dropped by #1050 with the command.';
+  '#1049: what the Legacy Import has written and still stands -- rows and Task Points of the Evaluations in total, per Group and per Member; the `task` ledger rows those Evaluations paid and their sum; and the first and last completion day in Europe/Bucharest -- for scripts/import-legacy-tasks.mjs to compare with its file after a run. Counts an imported Task only while it exists with an unreversed legacy_migration Evaluation. Service role only; dropped by #1050 with the command.';

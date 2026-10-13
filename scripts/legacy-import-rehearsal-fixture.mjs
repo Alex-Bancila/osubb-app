@@ -2,16 +2,45 @@
 //
 // Reads the import file and prints SQL that provisions one placeholder Member
 // per profile_id and one placeholder Group per group_id, carrying the file's
-// ids, plus the rehearsal Moderator. No name from the file is read or printed.
+// ids. No name from the file is read or printed.
+//
+// The placeholders are deliberately not uniform, so the rehearsal imports the
+// rows a finished Task added in the app would refuse:
+//   * the first Member of the file is the rehearsal Moderator -- the acting
+//     Member is then credited by their own run;
+//   * the others rotate through bc, bce, vot and voluntar;
+//   * every third Group carries a Minimum Level above a Voluntar.
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
-export const REHEARSAL_MODERATOR = {
-  id: "facade00-0000-4000-8000-000000000001",
-  email: "rehearsal-moderator@test.local",
-};
+export const REHEARSAL_MODERATOR_EMAIL = "rehearsal-moderator@test.local";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function placeholder(id, n) {
+  if (n === 0) {
+    return {
+      id,
+      name: "Moderator repetiție",
+      email: REHEARSAL_MODERATOR_EMAIL,
+      role: "moderator",
+    };
+  }
+  const role =
+    n % 12 === 3
+      ? "bc"
+      : n % 12 === 7
+        ? "bce"
+        : n % 4 === 1
+          ? "vot"
+          : "voluntar";
+  return {
+    id,
+    name: `Membru repetiție ${n}`,
+    email: `rehearsal-${n}@test.local`,
+    role,
+  };
+}
 
 export function fixtureSql(rows) {
   const members = [...new Set(rows.map((row) => row.profile_id))].sort();
@@ -22,25 +51,21 @@ export function fixtureSql(rows) {
     if (!UUID.test(id)) throw new Error(`not a uuid: ${id}`);
   for (const id of groups)
     if (!Number.isInteger(id)) throw new Error(`not a Group id: ${id}`);
+  const people = members.map(placeholder);
   const lines = ["begin;"];
-  const users = [
-    [REHEARSAL_MODERATOR.id, REHEARSAL_MODERATOR.email],
-    ...members.map((id, n) => [id, `rehearsal-${n + 1}@test.local`]),
-  ];
   lines.push(
     "insert into auth.users (id, email) values",
-    users.map(([id, email]) => `  ('${id}', '${email}')`).join(",\n"),
+    people.map((person) => `  ('${person.id}', '${person.email}')`).join(",\n"),
     "on conflict (id) do nothing;",
   );
   lines.push(
     "insert into public.profiles (id, full_name, email, role, status, joined_at) values",
-    [
-      `  ('${REHEARSAL_MODERATOR.id}', 'Moderator repetiție', '${REHEARSAL_MODERATOR.email}', 'moderator', 'activ', '2025-01-01')`,
-      ...members.map(
-        (id, n) =>
-          `  ('${id}', 'Membru repetiție ${n + 1}', 'rehearsal-${n + 1}@test.local', 'voluntar', 'activ', '2025-01-01')`,
-      ),
-    ].join(",\n"),
+    people
+      .map(
+        (person) =>
+          `  ('${person.id}', '${person.name}', '${person.email}', '${person.role}', 'activ', '2025-01-01')`,
+      )
+      .join(",\n"),
     "on conflict (id) do nothing;",
   );
   lines.push(
@@ -53,6 +78,15 @@ export function fixtureSql(rows) {
     "update public.groups set status = 'active' where id in (" +
       groups.join(", ") +
       ");",
+    // Every third Group gets a Minimum Level above a Voluntar. A Group that
+    // accepts Applications keeps its application level at or above it
+    // (groups_application_level_ck), and a Group with Child Groups is left
+    // alone (its level may not rise above theirs).
+    "update public.groups as grp set min_level = 3, " +
+      "application_level = case when grp.application_level is not null then greatest(grp.application_level, 3) end " +
+      "where grp.id in (" +
+      (groups.filter((id) => id % 3 === 0).join(", ") || "null") +
+      ") and not exists (select 1 from public.groups as child where child.parent_id = grp.id);",
   );
   lines.push("commit;");
   return lines.join("\n") + "\n";

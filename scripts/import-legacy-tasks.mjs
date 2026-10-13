@@ -25,6 +25,7 @@ export const BASE_POINTS = {
 };
 const DEFAULT_NOTE = "Importat din Task Tracker.";
 
+/** The command said no (a 4xx answer): nothing of that call was written. */
 export class RefusedError extends Error {
   constructor(status, code, message, details) {
     super(message);
@@ -33,6 +34,9 @@ export class RefusedError extends Error {
     this.details = details;
   }
 }
+
+/** The statement was cancelled (57014): the call rolled back, nothing of it was written. */
+export class TimedOutError extends Error {}
 
 /** A sheet date as the trackers hold it: M/D/YYYY, or D.M.YYYY where someone typed it. */
 export function parseSheetDate(text) {
@@ -156,12 +160,21 @@ export function createClient({ url, secretKey, fetchImpl }) {
       }
     }
     if (!response.ok) {
-      throw new RefusedError(
-        response.status,
-        String(data?.code ?? ""),
-        String(data?.message ?? text),
-        String(data?.details ?? ""),
-      );
+      const code = String(data?.code ?? "");
+      // Three different things, and the operator does three different things
+      // about them. A 4xx is the command (or PostgREST) saying no: nothing was
+      // written. A cancelled statement rolled back. Anything else -- a 5xx, a
+      // gateway page -- says nothing about whether the call committed.
+      if (code === "57014") throw new TimedOutError("57014");
+      if (response.status >= 400 && response.status < 500) {
+        throw new RefusedError(
+          response.status,
+          code,
+          String(data?.message ?? text),
+          String(data?.details ?? ""),
+        );
+      }
+      throw new Error(`HTTP ${response.status}`);
     }
     return data;
   };
@@ -183,10 +196,19 @@ export function createClient({ url, secretKey, fetchImpl }) {
 
 function compareTotals(plan, actual) {
   const mismatches = [];
-  for (const key of ["rows", "points"]) {
-    if (plan[key] !== actual[key]) {
+  // The Evaluations, then what totals and Clasament actually read -- the
+  // ledger -- then the days the work is dated on.
+  for (const [label, expected, found] of [
+    ["rows", plan.rows, actual.rows],
+    ["points", plan.points, actual.points],
+    ["ledger rows", plan.rows, actual.ledger_rows],
+    ["ledger points", plan.points, actual.ledger_points],
+    ["first completion day", plan.from, actual.from],
+    ["last completion day", plan.to, actual.to],
+  ]) {
+    if (expected !== found) {
       mismatches.push(
-        `MISMATCH ${key}: the file has ${plan[key]}, the database has ${actual[key]}`,
+        `MISMATCH ${label}: the file has ${expected}, the database has ${found}`,
       );
     }
   }
@@ -300,6 +322,16 @@ export async function main(argv, { env, fetchImpl, log, readFile }) {
     if (!Array.isArray(fileRows) || fileRows.length === 0)
       throw new Error("the file holds no rows");
     commandRows = fileRows.map(toCommandRow);
+    // The command refuses a repeated key inside one call; two calls would
+    // silently import the first and skip the second.
+    const seen = new Set();
+    for (const row of commandRows) {
+      const key = `${row.tracker_id}#${row.sheet_row}`;
+      if (seen.has(key)) {
+        throw new Error(`${where(row)} appears twice in the file`);
+      }
+      seen.add(key);
+    }
   } catch (error) {
     log(`${options.file} cannot be imported: ${error.message}`);
     return 1;
@@ -351,11 +383,34 @@ export async function main(argv, { env, fetchImpl, log, readFile }) {
       const result = await client.importBatch(actor.id, batch, dryRun);
       imported += result.imported;
       already += result.already_imported;
+      // With nothing skipped, the command scored exactly these rows: its
+      // points must be the file's. A difference means the scoring guide in
+      // the database is not the one this script (and the import set) assumes.
+      const planned = batch.reduce(
+        (sum, row) => sum + BASE_POINTS[row.difficulty] * (row.rating - 2),
+        0,
+      );
+      if (result.already_imported === 0 && result.points !== planned) {
+        log(
+          `${label}: the database scores it at ${result.points} points, the file at ${planned}.`,
+        );
+        log(
+          dryRun
+            ? "The scoring guide in the database differs from the import set's. Nothing was written."
+            : "The scoring guide in the database differs from the import set's. This batch IS written: stop and see docs/backend/legacy-task-import.md.",
+        );
+        return 1;
+      }
       log(
         `${label}: ${result.imported} imported, ${result.already_imported} already imported`,
       );
     } catch (error) {
-      if (error instanceof RefusedError) {
+      if (error instanceof TimedOutError) {
+        log(`${label} timed out (57014). Nothing of this batch was written.`);
+        log(
+          "Run again with --batch-size 50: rows already imported are skipped.",
+        );
+      } else if (error instanceof RefusedError) {
         log(
           `${label} was refused: ${error.code} ${error.message}${error.details ? ` — ${error.details}` : ""}`,
         );

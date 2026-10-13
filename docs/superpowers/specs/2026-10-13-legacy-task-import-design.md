@@ -90,7 +90,9 @@ node scripts/import-legacy-tasks.mjs --file <import-set.json> --actor <the Moder
 - Resolves `--actor` to a Profile id; refuses a file with a row whose `group_id` is not a number (a Group still pending).
 - `--dry-run` sends every batch with `p_dry_run => true` and prints the plan: rows and points per Group, the number of Members, the date range. It writes nothing and is safe against production.
 - `--execute` sends batches of 100 rows (the roles' 8 s statement timeout is the bound), stops at the first refusal naming the row, and on a call that got no answer says so instead of guessing; re-running is the recovery, because registered rows are skipped.
-- After the last batch it reads the totals back — rows and points per Group and per Member from `legacy_task_imports` ⨝ `task_evaluations` — and compares them with the file. Any difference is printed and the run exits non-zero.
+- A batch in which nothing was skipped must be scored by the database exactly as the file scores it; a difference stops the run (in a dry run, before anything is written). The same sheet row twice in the file is refused before any call.
+- A 4xx answer is a refusal (nothing written); a cancelled statement (`57014`) is a timeout (nothing written, retry smaller); anything else is "no answer" (it may have been written; re-run).
+- After the last batch it reads the totals back through `public.legacy_task_import_totals()` — rows and points of the Evaluations, the `task` ledger rows they paid and their sum, the first and last completion day, and rows and points per Group and per Member — and compares all of it with the file. Any difference is printed and the run exits non-zero.
 - The secret key is read from the environment only; the import file is never copied into the repository.
 
 ## Accepted consequences
@@ -124,6 +126,7 @@ pgTAP (`supabase/tests/legacy_task_import.test.sql`):
 - one invalid row rolls the whole call back;
 - a direct `legacy_migration` insert for an unregistered Task is still refused (`throws_ok` naming the reason);
 - `authenticated` and `anon` cannot execute the command; the registry is unreadable to both;
+- a BC member, the acting Moderator and a Voluntar in a Group above their level are all credited;
 - reopen of an imported Task is refused with `PT409 evaluation_not_found`; delete-for-good reverses its points and leaves its key claimed, so a later call still skips the row;
 - the acting Member has no `created` activity row, so their `task_create` cap is untouched;
 - the promotion-candidate refresh lists a Voluntar the import carries over the threshold.

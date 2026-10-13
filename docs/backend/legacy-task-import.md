@@ -45,11 +45,14 @@ It must end with `Dry run: 5270 would be imported, 0 already imported. Nothing w
 
 ## When something goes wrong
 
-- **A batch was refused.** The line names the row. Nothing of that batch was written; the batches before it are in. Fix the row in `../osubb-legacy-import` (or the Member or Group in the app), rebuild the file and run the same command again: registered rows are skipped.
-- **A batch got no answer.** It may or may not have been written. Run the same command again; the registry decides.
-- **A timeout** (`57014`). Run again with `--batch-size 50`.
-- **The totals do not match.** Do not close the import. The mismatch lines name the Group or Member; compare with `import-set.csv`. A Task deleted for good since the run explains a lower total.
+- **A batch was refused** (a 4xx answer from the command). The line names the row. Nothing of that batch was written; the batches before it are in. Fix the row in `../osubb-legacy-import` (or the Member or Group in the app), rebuild the file and run the same command again: registered rows are skipped.
+- **A batch got no answer** (a dropped connection, a 5xx, a gateway page). It may or may not have been written. Run the same command again; the registry decides.
+- **A batch timed out** (`57014`). The statement was cancelled, so nothing of that batch was written. Run again with `--batch-size 50`.
+- **The database scores a batch differently from the file.** The scoring guide in the database is not the one the import set assumes. In a dry run nothing was written; in the real run that one batch is in. Stop, and settle which guide is right before going on.
+- **The totals do not match.** Do not close the import. The read-back compares the Evaluations, the ledger rows they paid, the first and last completion day, and every Group and Member; the mismatch lines name what differs. Compare with `import-set.csv`. A Task deleted for good since the run explains a lower total.
 - **The data itself is wrong.** One Task: delete it for good in the app, which reverses its points. Many: restore the backup of step 1.
+
+**Look before closing.** An imported Task cannot be edited or reopened, like any finished Task that has no `command` Evaluation. Once #1050 has dropped the command, a wrong one can only be deleted for good: adding the work again in the app dates it today and cannot credit a BC member or the Moderator, and its sheet row stays claimed. Whatever needs correcting is corrected in the import set, before the real run.
 
 ## Closing
 

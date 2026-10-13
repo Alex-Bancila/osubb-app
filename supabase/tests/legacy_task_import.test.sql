@@ -29,13 +29,23 @@
 --     day, written now" and both period reads;
 --   * the `created` activity row given the acting Member -> "no activity row
 --     names the acting Member, so their task_create cap is untouched".
+--   Final review, 2026-10-14:
+--   * BC and the Moderator excluded from the Executor check -> the "Leaders,
+--     the importer and the Minimum Level" call dies on invalid_executor;
+--   * the instant moved to 11:00 -> "a row completed on the day the clocks
+--     change is dated 12:00 in Bucharest, summer time (09:00 UTC)" and every
+--     dated row beside it;
+--   * the description and sheet-Id limits removed, and the DETAIL dropped
+--     from one step-1 refusal -> "a description above 2000 characters is
+--     malformed", "a sheet Id above 40 characters is malformed", "a malformed
+--     row is named too".
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(68);
+select plan(77);
 
 create function pg_temp.uli(n integer) returns uuid language sql immutable as $$
   select ('10490000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -59,6 +69,7 @@ insert into public.profiles (id, full_name, email, role, status, joined_at) valu
   (pg_temp.uli(7), 'Voluntar prag LI',     'li7@test.local', 'voluntar',  'activ',   '2025-01-01');
 insert into public.groups (name, category, min_level) values ('Dept LI', 'department', 0);
 insert into public.groups (name, category, min_level, status) values ('Arhivat LI', 'department', 0, 'archived');
+insert into public.groups (name, category, min_level) values ('Board LI', 'department', 5);
 
 -- An ordinary Task with an ended Assignment, for the closed-source probe.
 insert into public.tasks (title, group_id, audience, assignment_mode, kind, status, created_by)
@@ -234,6 +245,20 @@ select throws_ok(format($$select public.import_legacy_tasks(%L, %L::jsonb)$$, pg
     jsonb_build_array(pg_temp.rli(10, '{"note": " "}'))),
   'PT400', 'evaluation_note_required', 'a blank Evaluation note is malformed');
 select throws_ok(format($$select public.import_legacy_tasks(%L, %L::jsonb)$$, pg_temp.uli(1),
+    jsonb_build_array(pg_temp.rli(10, jsonb_build_object('description', repeat('d', 2001))))),
+  'PT400', 'description_too_long', 'a description above 2000 characters is malformed');
+select throws_ok(format($$select public.import_legacy_tasks(%L, %L::jsonb)$$, pg_temp.uli(1),
+    jsonb_build_array(pg_temp.rli(10, jsonb_build_object('sheet_id', repeat('9', 41))))),
+  'PT400', 'invalid_sheet_id', 'a sheet Id above 40 characters is malformed');
+select throws_ok(format($$select public.import_legacy_tasks(%L, %L::jsonb)$$, pg_temp.uli(1),
+    jsonb_build_array(pg_temp.rli(10, '{"group_id": "dept"}'))),
+  'PT400', 'invalid_origin', 'a Group that is no id is malformed');
+select is(
+  pg_temp.detail_li(format($$select public.import_legacy_tasks(%L, %L::jsonb)$$, pg_temp.uli(1),
+    jsonb_build_array(pg_temp.rli(10), pg_temp.rli(11, '{"rating": 6}')))),
+  'row 2 (legacyImportTrackerLI0001, sheet row 11)',
+  'a malformed row is named too');
+select throws_ok(format($$select public.import_legacy_tasks(%L, %L::jsonb)$$, pg_temp.uli(1),
     jsonb_build_array(pg_temp.rli(10, jsonb_build_object('note', repeat('n', 1001))))),
   'PT400', 'note_too_long', 'an Evaluation note above 1000 characters is malformed');
 select throws_ok(format($$select public.import_legacy_tasks(%L, %L::jsonb)$$, pg_temp.uli(1),
@@ -372,9 +397,12 @@ select is((select count(*) from public.points_ledger where member_id = pg_temp.u
 select is((select result from rli where name = 'mixed'),
   '{"received": 2, "imported": 1, "already_imported": 1, "points": 9, "dry_run": false}'::jsonb,
   'a call mixing imported and new rows imports only the new ones');
-select is((select (task.completed_at at time zone 'Europe/Bucharest')::date from public.tasks as task
-            where task.id = pg_temp.tli(12)), '2026-03-29'::date,
-  'a row completed on the day the clocks change keeps its day in Bucharest');
+select is((select task.completed_at from public.tasks as task where task.id = pg_temp.tli(12)),
+  '2026-03-29 09:00:00+00'::timestamptz,
+  'a row completed on the day the clocks change is dated 12:00 in Bucharest, summer time (09:00 UTC)');
+select is((select task.completed_at from public.tasks as task where task.id = pg_temp.tli(10)),
+  '2026-03-10 10:00:00+00'::timestamptz,
+  'a winter row is dated 12:00 in Bucharest, winter time (10:00 UTC)');
 
 -- ==================== The scoring guide ====================
 
@@ -436,6 +464,15 @@ select is((select result -> 'members' -> pg_temp.uli(4)::text from rli where nam
   'the totals are per Member');
 select is((select (result -> 'groups' -> pg_temp.gli('Dept LI')::text ->> 'rows')::integer from rli where name = 'totals'), 54,
   'and per Group');
+select is((select jsonb_build_object('ledger_rows', result -> 'ledger_rows', 'ledger_points', result -> 'ledger_points',
+                                     'points', result -> 'points') from rli where name = 'totals'),
+  (select jsonb_build_object('ledger_rows', 54, 'ledger_points', sum(entry.delta), 'points', sum(entry.delta))
+     from public.points_ledger as entry
+     join public.legacy_task_imports as registry on registry.task_id = entry.task_id),
+  'the totals count the ledger rows the import paid, and their sum is the Evaluations'' sum');
+select is((select jsonb_build_object('from', result -> 'from', 'to', result -> 'to') from rli where name = 'totals'),
+  '{"from": "2026-03-10", "to": "2026-06-01"}'::jsonb,
+  'the totals name the first and last completion day, in Bucharest');
 
 -- ==================== Reopen is refused; delete for good works ====================
 
@@ -456,6 +493,27 @@ insert into rli select 'after-delete', public.import_legacy_tasks(pg_temp.uli(1)
 reset role;
 select is((select result ->> 'already_imported' from rli where name = 'after-delete'), '1',
   'the deleted Task''s sheet row stays claimed: a later call still skips it');
+
+-- ==================== Leaders, the importer and the Minimum Level ====================
+
+set local role service_role;
+insert into rli select 'leaders', public.import_legacy_tasks(pg_temp.uli(1), jsonb_build_array(
+  pg_temp.rli(30, jsonb_build_object('executor_id', pg_temp.uli(2))),
+  pg_temp.rli(31, jsonb_build_object('executor_id', pg_temp.uli(1))),
+  pg_temp.rli(32, jsonb_build_object('group_id', pg_temp.gli('Board LI')))));
+reset role;
+select is((select result from rli where name = 'leaders'),
+  '{"received": 3, "imported": 3, "already_imported": 0, "points": 27, "dry_run": false}'::jsonb,
+  'a BC Executor, the acting Moderator as Executor and a Group above the Executor''s level are all imported');
+select results_eq(
+  $$select registry.sheet_row, entry.member_id, entry.delta, origin.name
+      from public.legacy_task_imports as registry
+      join public.points_ledger as entry on entry.task_id = registry.task_id
+      join public.tasks as task on task.id = registry.task_id
+      join public.groups as origin on origin.id = task.group_id
+     where registry.sheet_row in (30, 31, 32) order by 1$$,
+  $$values (30, pg_temp.uli(2), 9, 'Dept LI'), (31, pg_temp.uli(1), 9, 'Dept LI'), (32, pg_temp.uli(4), 9, 'Board LI')$$,
+  'each is credited like anyone: the grading was the sheet''s, not the importer''s');
 
 select * from finish();
 rollback;

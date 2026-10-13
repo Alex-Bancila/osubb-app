@@ -49,7 +49,12 @@ function fakeProject({
   profiles = [MODERATOR, BC],
   refuseAtCall = null,
   dropAtCall = null,
+  timeoutAtCall = null,
+  gatewayAtCall = null,
+  pointsOffset = 0,
   tamperTotals = false,
+  tamperLedger = false,
+  tamperRange = false,
 } = {}) {
   const registry = new Map();
   const calls = [];
@@ -83,6 +88,18 @@ function fakeProject({
           details: "row 2 (trackerFileIdForTests0001, sheet row 3)",
         });
       }
+      if (timeoutAtCall === calls.length) {
+        return json(500, {
+          code: "57014",
+          message: "canceling statement due to statement timeout",
+        });
+      }
+      if (gatewayAtCall === calls.length) {
+        return new Response("<html><body>504 Gateway Time-out</body></html>", {
+          status: 504,
+          headers: { "Content-Type": "text/html" },
+        });
+      }
       let imported = 0;
       let already = 0;
       let points = 0;
@@ -100,16 +117,31 @@ function fakeProject({
         received: body.p_rows.length,
         imported,
         already_imported: already,
-        points,
+        points: points + pointsOffset,
         dry_run: body.p_dry_run,
       });
     }
     if (pathname === "/rest/v1/rpc/legacy_task_import_totals") {
-      const totals = { rows: 0, points: 0, groups: {}, members: {} };
+      const totals = {
+        rows: 0,
+        points: 0,
+        ledger_rows: 0,
+        ledger_points: 0,
+        from: null,
+        to: null,
+        groups: {},
+        members: {},
+      };
       for (const row of registry.values()) {
         const points = BASE_POINTS[row.difficulty] * (row.rating - 2);
         totals.rows += 1;
         totals.points += points;
+        totals.ledger_rows += 1;
+        totals.ledger_points += points;
+        if (totals.from === null || row.completed_on < totals.from)
+          totals.from = row.completed_on;
+        if (totals.to === null || row.completed_on > totals.to)
+          totals.to = row.completed_on;
         for (const [bucket, id] of [
           ["groups", String(row.group_id)],
           ["members", row.executor_id],
@@ -120,6 +152,8 @@ function fakeProject({
         }
       }
       if (tamperTotals) totals.points += 1;
+      if (tamperLedger) totals.ledger_rows -= 1;
+      if (tamperRange) totals.to = "2026-10-13";
       return json(200, totals);
     }
     return json(404, { message: `unexpected ${pathname}` });
@@ -463,4 +497,143 @@ test("a plain-http URL is accepted for the local stack only", async () => {
   );
   assert.equal(code, 2);
   assert.match(lines.join("\n"), /SUPABASE_URL must be https/);
+});
+
+// ---- Final review, fix pass (2026-10-14) ----
+
+test("a statement timeout is not a refusal: nothing of that batch was written", async () => {
+  const project = fakeProject({ timeoutAtCall: 2 });
+  const { code, output } = await run(
+    ["--file", "f.json", "--actor", "mod@example.com", "--execute"],
+    project,
+    rows250,
+  );
+  assert.equal(code, 1);
+  assert.doesNotMatch(output, /was refused/);
+  assert.match(
+    output,
+    /Batch 2\/3 \(rows 101–200\) timed out \(57014\)\. Nothing of this batch was written\./,
+  );
+  assert.match(output, /Run again with --batch-size 50/);
+});
+
+test("a gateway error is not a refusal: the batch may have been written", async () => {
+  const project = fakeProject({ gatewayAtCall: 2 });
+  const { code, output } = await run(
+    ["--file", "f.json", "--actor", "mod@example.com", "--execute"],
+    project,
+    rows250,
+  );
+  assert.equal(code, 1);
+  assert.doesNotMatch(output, /was refused/);
+  assert.match(
+    output,
+    /Batch 2\/3 \(rows 101–200\) got no answer \(HTTP 504\)\. It may or may not have been written\./,
+  );
+});
+
+test("a dry run fails when the database scores a batch differently from the file", async () => {
+  const project = fakeProject({ pointsOffset: 7 });
+  const { code, output } = await run(
+    ["--file", "f.json", "--actor", "mod@example.com", "--dry-run"],
+    project,
+    rows250,
+  );
+  assert.equal(code, 1);
+  assert.match(
+    output,
+    /Batch 1\/3 \(rows 1–100\): the database scores it at 207 points, the file at 200\./,
+  );
+  assert.equal(
+    project.calls.length,
+    1,
+    "the run stops at the first difference",
+  );
+  assert.equal(project.registry.size, 0);
+});
+
+test("the same sheet row twice in the file is refused before any call", async () => {
+  const project = fakeProject();
+  const { code, output } = await run(
+    ["--file", "f.json", "--actor", "mod@example.com", "--dry-run"],
+    project,
+    [...rows250, fileRow(7)],
+  );
+  assert.equal(code, 1);
+  assert.match(
+    output,
+    /trackerFileIdForTests0001 row 8 appears twice in the file/,
+  );
+  assert.equal(project.calls.length, 0);
+});
+
+test("an empty or unreadable completion date stops the file before any call", async () => {
+  const project = fakeProject();
+  for (const completed of ["", null, "3/10/2026", "2026-3-10"]) {
+    const { code, output } = await run(
+      ["--file", "f.json", "--actor", "mod@example.com", "--dry-run"],
+      project,
+      [fileRow(1), fileRow(2, { completed_on: completed })],
+    );
+    assert.equal(code, 1, `completed_on ${JSON.stringify(completed)}`);
+    assert.match(
+      output,
+      /trackerFileIdForTests0001 row 3: unreadable completion date/,
+    );
+  }
+  assert.equal(project.calls.length, 0);
+});
+
+test("a ledger that does not match the Evaluations fails the run", async () => {
+  const project = fakeProject({ tamperLedger: true });
+  const { code, output } = await run(
+    ["--file", "f.json", "--actor", "mod@example.com", "--execute"],
+    project,
+    rows250,
+  );
+  assert.equal(code, 1);
+  assert.match(
+    output,
+    /MISMATCH ledger rows: the file has 250, the database has 249/,
+  );
+});
+
+test("completion dates that differ from the file fail the run", async () => {
+  const project = fakeProject({ tamperRange: true });
+  const { code, output } = await run(
+    ["--file", "f.json", "--actor", "mod@example.com", "--execute"],
+    project,
+    rows250,
+  );
+  assert.equal(code, 1);
+  assert.match(
+    output,
+    /MISMATCH last completion day: the file has 2026-03-10, the database has 2026-10-13/,
+  );
+});
+
+test("the rehearsal fixture covers leaders, the importer as an Executor and a Minimum Level", async () => {
+  const { fixtureSql } = await import("./legacy-import-rehearsal-fixture.mjs");
+  const rows = Array.from({ length: 40 }, (_, index) =>
+    fileRow(index + 1, {
+      profile_id: `00000000-0000-4000-8000-${String(200 + index).padStart(12, "0")}`,
+      group_id: 60 + (index % 6),
+    }),
+  );
+  const sql = fixtureSql(rows);
+  // The acting Moderator is one of the file's own Members, so the rehearsal
+  // imports rows the Moderator is credited with by their own run.
+  assert.match(
+    sql,
+    /\('00000000-0000-4000-8000-000000000200', 'Moderator repetiție', 'rehearsal-moderator@test\.local', 'moderator', 'activ'/,
+  );
+  for (const role of ["bc", "bce", "vot", "voluntar"]) {
+    assert.match(sql, new RegExp(`'${role}', 'activ'`), `a ${role} Executor`);
+  }
+  assert.match(
+    sql,
+    /set min_level = 3, .* where grp\.id in \(60, 63\) and not exists/,
+    "some Groups carry a Minimum Level above a Voluntar",
+  );
+  assert.doesNotMatch(sql, /Ședință/, "no title from the file reaches the SQL");
 });
