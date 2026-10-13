@@ -30,7 +30,7 @@ export type TaskDraft = {
   assignmentMode: 'direct' | 'public' | null;
   executorId: string | null;
   campaignId: number | null;
-  /** How many identical Tasks to create at once (1–20; 1 for an Umbrella). */
+  /** How many identical Tasks to create at once (1 to `MAX_TASK_COPIES`; 1 for an Umbrella). */
   copies: number;
   /** The Attached Links (ruling R46): complete rows only, at most five. */
   links: AttachedLink[];

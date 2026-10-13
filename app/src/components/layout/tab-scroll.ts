@@ -27,18 +27,20 @@ export function scrollTabIntoView(
 }
 
 /**
- * After every route change, the tab matching `selector` (the current one) is
- * scrolled into the track's view, smoothly unless the member prefers reduced
- * motion. Both tab tracks use it (DESIGN.md, Navigation).
+ * After every route change -- the path or the query string, which a Group's
+ * tabs use -- the tab matching `selector` (the current one) is scrolled into
+ * the track's view, smoothly unless the member prefers reduced motion. Both
+ * tab tracks use it (DESIGN.md, Navigation).
  */
 export function useScrollCurrentTabIntoView(
   track: RefObject<HTMLElement | null>,
   selector: string,
 ) {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  const route = pathname + search;
   useEffect(() => {
     // The route decides which tab is current: that is what this follows.
-    if (!pathname) return;
+    if (!route) return;
     const root = track.current;
     const current = root?.querySelector<HTMLElement>(selector);
     if (!root || !current) return;
@@ -46,5 +48,5 @@ export function useScrollCurrentTabIntoView(
       typeof window.matchMedia === 'function' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     scrollTabIntoView(root, current, !reduce);
-  }, [track, selector, pathname]);
+  }, [track, selector, route]);
 }

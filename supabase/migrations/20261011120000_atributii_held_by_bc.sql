@@ -102,7 +102,7 @@ begin
   select team.member_id into v_old
     from public.assignment_team as team
    where team.assignment = p_assignment and team.team_role = p_team_role
-   for update;
+   for no key update;
   select team.member_id into v_other
     from public.assignment_team as team
    where team.assignment = p_assignment and team.team_role <> p_team_role;
@@ -158,7 +158,7 @@ end;
 $$;
 
 comment on function private.set_assignment_team_member_impl(text, text, uuid) is
-  'R47: body of public.set_assignment_team_member. Step 1: PT400 invalid_assignment, invalid_team_role. Then 42501 assignment_team_forbidden unless the live caller is BC or the Moderator (either place) or the Coordonator (the responsible place only), judged by private.assignment_team_role under a transaction advisory lock per Atribuție. The place is locked FOR UPDATE. A null member clears it. Otherwise PT400 coordinator_not_bce (a Coordonator is live bce, level 5), invalid_team_member (a Responsabil is a live activ Member), assignment_team_duplicate (the member of the other place); the same member again changes nothing. Notifies the member set ("Ești acum Coordonator/Responsabil OSUBB Deals", link /administrare/deals) and the one replaced or cleared ("Nu mai ești ..."), kind system. Returns the row, or null when cleared.';
+  'R47: body of public.set_assignment_team_member. Step 1: PT400 invalid_assignment, invalid_team_role. Then 42501 assignment_team_forbidden unless the live caller is BC or the Moderator (either place) or the Coordonator (the responsible place only), judged by private.assignment_team_role under a transaction advisory lock per Atribuție. The place is locked FOR NO KEY UPDATE (conventions: never FOR UPDATE). A null member clears it. Otherwise PT400 coordinator_not_bce (a Coordonator is live bce, level 5), invalid_team_member (a Responsabil is a live activ Member), assignment_team_duplicate (the member of the other place); the same member again changes nothing. Notifies the member set ("Ești acum Coordonator/Responsabil OSUBB Deals", link /administrare/deals) and the one replaced or cleared ("Nu mai ești ..."), kind system. Returns the row, or null when cleared.';
 
 comment on function public.set_assignment_team_member(text, text, uuid) is
   'R47: BC, the Moderator or (the Responsabil only) the Coordonator fill or clear a place in an Atribuție''s team. Reasons: PT400 invalid_assignment / invalid_team_role / coordinator_not_bce / invalid_team_member / assignment_team_duplicate, 42501 assignment_team_forbidden.';

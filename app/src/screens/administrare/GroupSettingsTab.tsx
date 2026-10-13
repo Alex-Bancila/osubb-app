@@ -35,6 +35,7 @@ import type {
   RunGroupCommand,
 } from '../../queries/groups-admin';
 import {
+  CHILD_GROUP_CATEGORIES,
   GROUP_CATEGORIES,
   membersBelowLevel,
   minLevelChoices,
@@ -504,7 +505,9 @@ export function GroupSettingsTab({
         kind: 'structure',
         groupId: group.id,
         category,
-        competesInCup: competes,
+        // Only a root Departament competes (Alex, 2026-10-11): a Group that
+        // leaves the category leaves the Cup with it.
+        competesInCup: root && category === 'department' ? competes : false,
         countsTowardParentCup: countsToward,
         automaticMembership: automatic,
         minLevel: chosenStructureMinLevel,
@@ -797,7 +800,7 @@ export function GroupSettingsTab({
             </span>
             <SegmentedRadio<string>
               aria-labelledby={categoryId}
-              options={GROUP_CATEGORIES}
+              options={root ? GROUP_CATEGORIES : CHILD_GROUP_CATEGORIES}
               value={category}
               onValueChange={setCategory}
               disabled={busy}

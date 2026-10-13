@@ -163,12 +163,12 @@ export const rejectionSchema = z.object({
   reason: requiredText({
     required: 'invalid_rejection_reason',
     max: 500,
-    tooLong: 'rejection_reason_too_long',
+    tooLong: 'candidate_rejection_reason_too_long',
   }),
 });
 
 export const rejectionFieldForReason: Readonly<Record<string, 'reason'>> = {
   invalid_rejection_reason: 'reason',
-  rejection_reason_too_long: 'reason',
+  candidate_rejection_reason_too_long: 'reason',
   reason_too_long: 'reason',
 };
