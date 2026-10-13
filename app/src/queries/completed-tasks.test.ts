@@ -121,7 +121,7 @@ it('adds a completed Task through the one command, named arguments only', async 
 it('turns a refusal into its Romanian copy, keeping the reason', async () => {
   api.rpc.mockResolvedValue({
     data: null,
-    error: { code: 'PT409', message: 'executor_not_group_member' },
+    error: { code: 'PT409', message: 'executor_below_min_level' },
   });
   const failure = createCompletedTask({
     executorId: 'ana',
@@ -136,9 +136,9 @@ it('turns a refusal into its Romanian copy, keeping the reason', async () => {
     copies: 1,
   });
   await expect(failure).rejects.toMatchObject({
-    reason: 'executor_not_group_member',
+    reason: 'executor_below_min_level',
     message:
-      'Voluntarul nu face parte din grupul ales sau din subgrupurile lui. Alege alt grup.',
+      'Voluntarul nu are nivelul minim al grupului ales. Alege alt grup.',
   });
 });
 

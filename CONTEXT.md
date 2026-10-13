@@ -260,7 +260,7 @@ A BCE/BC/Moderator view of Members ordered by Task Points only.
 A BCE/BC/Moderator comparison of Task Points earned in the top-level Groups set to compete and in every Group below them set to count toward them. Project and Independent-Team work never contributes.
 
 **Completed-work Request**:
-A Member’s request to recognize work already completed for one Origin. Approval creates the completed Task, Assignment, Evaluation, and Task Points together; the decider may first change the Task's title, details, Group, Attached Link and Campaign. A Group's managers can also add such a completed Task for one of its members directly, without a Request.
+A Member’s request to recognize work already completed for one Origin. Approval creates the completed Task, Assignment, Evaluation, and Task Points together; the decider may first change the Task's title, details, Group, Attached Link and Campaign. A Group's managers can also add such a completed Task directly, without a Request, for any active Member at or above the Group's Minimum Level, member of the Group or not (ruling R51, 2026-10-13) — never for themselves, a BC member or the Moderator, and a Group Responsible never for a Member who holds a Manager or Responsible role on that Group's path; its points count for the Group the work was done for.
 In the app the Requests are **Cereri**: a view of Taskuri, not a page of its own, reached with the Taskuri · Cereri toggle by every Member: a volunteer files there, leadership and the Group Managers decide there. Administrare → Cereri is a different thing: Group Applications.
 _Avoid_: Award request, new-task request, `task_requests`
 
