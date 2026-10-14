@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSwipeTabs } from '../../lib/swipe-tabs';
 import { useSearchParams } from 'react-router';
 import { Tabs } from '@base-ui/react/tabs';
-import type { UseQueryResult } from '@tanstack/react-query';
 import {
   ClipboardList,
   ClipboardPlus,
@@ -19,6 +18,12 @@ import {
   useManagedTasks,
   useAllTasks,
 } from '../../queries/task-tabs';
+import {
+  useTaskListSummary,
+  useTaskManageCapability,
+  useTaskReadable,
+  type ListRead,
+} from '../../queries/task-lists';
 import { usePendingDecisions } from '../../queries/request-decisions';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -61,13 +66,14 @@ function TaskQueryStates<Row>({
   header,
   children,
 }: {
-  query: UseQueryResult<Row[], Error>;
+  query: ListRead<Row>;
   search: TitleSearch;
   preferredNotice?: boolean;
   header?: ReactNode;
   children: (rows: Row[]) => ReactNode;
 }) {
-  if (query.isPending || query.isError)
+  const { data } = query;
+  if (data === undefined || query.isPending || query.isError)
     return (
       <div className={trackerListClass}>
         <TrackerWorkFilter
@@ -77,18 +83,18 @@ function TaskQueryStates<Row>({
           preferredNotice={preferredNotice}
         />
         {header}
-        {query.isPending ? (
-          <Loading label="Se încarcă taskurile…" />
-        ) : (
+        {query.isError ? (
           <ErrorState
             error={query.error}
             text="Nu am putut încărca taskurile."
             onRetry={() => void query.refetch()}
           />
+        ) : (
+          <Loading label="Se încarcă taskurile…" />
         )}
       </div>
     );
-  return children(query.data);
+  return children(data);
 }
 
 /** `?task=<id>`: a positive whole Task id, or nothing. */
@@ -192,6 +198,21 @@ function ask(
 
 const nonEmpty = (rows: readonly { id: number }[]) => rows.length > 0;
 
+/**
+ * An answer the open rows could not give, asked of the server about one
+ * Task (#1053): `known` when the rows already said yes or the question does
+ * not apply; otherwise the server's answer, `undefined` while it is on its
+ * way and `false` if it cannot be had.
+ */
+function orAsked(
+  known: boolean | undefined,
+  asked: { data?: boolean | undefined; isError: boolean },
+  applies: boolean,
+): boolean | undefined {
+  if (known !== false || !applies) return known;
+  return asked.isError ? false : asked.data;
+}
+
 const HIGHLIGHT_MS = 4000;
 
 /**
@@ -233,6 +254,11 @@ function TrackerContent() {
   const available = useTaskOpportunities();
   const management = useTaskManagement();
   const managed = useManagedTasks(management.data === true);
+  // What De gestionat holds beyond its open Tasks (the list reads it too).
+  const managedSummary = useTaskListSummary(
+    'managed',
+    management.data === true,
+  );
   const leadership = useTaskLeadership();
   const { claims } = useAuth();
   const level = claims?.member_level ?? 0;
@@ -249,6 +275,8 @@ function TrackerContent() {
   // One search text for the four lists: it stays when the tab changes.
   const search = useTitleSearch();
   const [detailId, setDetailId] = useState<number | null>(null);
+  // The Task last opened from De gestionat: managed, whatever page it was on.
+  const [openedManaged, setOpenedManaged] = useState<number | null>(null);
   // The Task this page just created or added, and what its details say (#915).
   const [created, setCreated] = useState<{
     id: number;
@@ -318,13 +346,23 @@ function TrackerContent() {
   // details sheet on De gestionat, else Toate, else Disponibile — whichever
   // holds it (D2) — or on the opening tab with the sheet's unavailable state.
   // A failed Taskurile mele read never routes a Task of mine elsewhere.
+  // De gestionat and Toate hold their finished Tasks by the page (#1053), so
+  // a Task their open rows do not hold is asked of the server, alone.
   const holdsLinked = (rows: readonly { id: number }[]) =>
     rows.some((task) => task.id === linkedId);
+  const inOpenManaged =
+    linkedId === null ? false : ask(managed, managedShown, holdsLinked);
+  const inOpenAll = linkedId === null ? false : ask(all, allShown, holdsLinked);
+  const askManaged =
+    linkedId !== null && managedShown === true && inOpenManaged === false;
+  const askAll = linkedId !== null && allShown === true && inOpenAll === false;
+  const linkedManaged = useTaskManageCapability(linkedId, askManaged);
+  const linkedReadable = useTaskReadable(linkedId, askAll);
   let landing: { tab: TrackerTab | null; open: boolean } | undefined;
   if (linkedId !== null) {
     const inMine = mine.isError ? true : ask(mine, true, holdsLinked);
-    const inManaged = ask(managed, managedShown, holdsLinked);
-    const inAll = ask(all, allShown, holdsLinked);
+    const inManaged = orAsked(inOpenManaged, linkedManaged, askManaged);
+    const inAll = orAsked(inOpenAll, linkedReadable, askAll);
     const inAvailable = ask(available, true, holdsLinked);
     if (inMine) landing = { tab: 'mine', open: false };
     else if (inMine === false && inManaged)
@@ -351,15 +389,23 @@ function TrackerContent() {
   // first list with something in it — Taskurile mele, De gestionat,
   // Disponibile — else Taskurile mele. A failed Taskurile mele read opens it,
   // so its retry is what the Member sees.
+  // De gestionat has something when it has an open Task, or the server's
+  // summary says it holds a finished one.
+  const managedHasOpen = ask(managed, managedShown, nonEmpty);
+  const managedHas =
+    managedHasOpen !== false || managedShown !== true || managed.isError
+      ? managedHasOpen
+      : managedSummary.isError
+        ? false
+        : managedSummary.data && managedSummary.data.length > 0;
   const firstNonEmpty = (): TrackerTab | undefined => {
     if (mine.isError) return 'mine';
-    const order: [TrackerTab, TaskList, boolean | undefined][] = [
-      ['mine', mine, true],
-      ['managed', managed, managedShown],
-      ['available', available, true],
+    const order: [TrackerTab, boolean | undefined][] = [
+      ['mine', ask(mine, true, nonEmpty)],
+      ['managed', managedHas],
+      ['available', ask(available, true, nonEmpty)],
     ];
-    for (const [value, list, shown] of order) {
-      const has = ask(list, shown, nonEmpty);
+    for (const [value, has] of order) {
       if (has === undefined) return undefined;
       if (has) return value;
     }
@@ -418,7 +464,10 @@ function TrackerContent() {
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
+  // The Tasks known to be managed without asking: the open ones, and the
+  // one opened from De gestionat. The sheet asks the server about any other.
   const managedTaskIds = new Set((managed.data ?? []).map((task) => task.id));
+  if (openedManaged !== null) managedTaskIds.add(openedManaged);
   const current = tab ?? 'mine';
   const selected =
     (current === 'managed' && !management.data) ||
@@ -632,11 +681,15 @@ function TrackerContent() {
                 <TaskQueryStates query={managed} search={search}>
                   {(rows) => (
                     <ManagerTaskList
+                      list="managed"
                       rows={rows}
                       now={now}
                       search={search}
                       empty="Nu ai taskuri de gestionat acum."
-                      onOpenTask={setDetailId}
+                      onOpenTask={(id) => {
+                        setOpenedManaged(id);
+                        setDetailId(id);
+                      }}
                     />
                   )}
                 </TaskQueryStates>
@@ -647,6 +700,7 @@ function TrackerContent() {
                 <TaskQueryStates query={all} search={search}>
                   {(rows) => (
                     <ManagerTaskList
+                      list="all"
                       rows={rows}
                       now={now}
                       search={search}
@@ -670,6 +724,7 @@ function TrackerContent() {
           key={detailId}
           taskId={detailId}
           managedTaskIds={managedTaskIds}
+          askManage
           notice={
             detailId !== null && detailId === created?.id
               ? created.notice

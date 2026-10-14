@@ -152,13 +152,35 @@ export const keys = {
     /* #1017: what "Șterge definitiv" would take back, read as the dialog opens. */
     deletePreview: (taskId: number, memberId: string | undefined) =>
       ['tasks', 'delete-preview', { taskId, memberId }] as const,
+    /* The OPEN Tasks I manage (#1053): De gestionat, Acasă's De evaluat. */
     managed: (memberId: string | undefined) =>
       ['tasks', 'managed', { memberId }] as const,
+    /* The finished Tasks of a leadership list, by the page, under its filters. */
+    finished: (
+      memberId: string | undefined,
+      list: 'managed' | 'all',
+      filters: Record<string, unknown>,
+    ) => ['tasks', 'finished', { memberId, list }, filters] as const,
+    /* What a leadership list holds: Groups, Campaigns, states, counts. */
+    summary: (memberId: string | undefined, list: 'managed' | 'all') =>
+      ['tasks', 'summary', { memberId, list }] as const,
+    /* The managed Tasks whose deadline is in a range: the Calendar's month. */
+    managedRange: (
+      memberId: string | undefined,
+      range: { from: string; to: string } | null,
+    ) => ['tasks', 'managed-range', { memberId }, range] as const,
+    /* `can_manage_task` for one Task, as the viewer. */
+    manageCapability: (taskId: number | null, memberId: string | undefined) =>
+      ['tasks', 'manage-capability', { taskId, memberId }] as const,
+    /* Whether RLS lets the viewer read one Task. */
+    readable: (taskId: number | null, memberId: string | undefined) =>
+      ['tasks', 'readable', { taskId, memberId }] as const,
     /* Tasks where I hold a pending candidature (the Calendar's chips, #692). */
     candidatures: (memberId: string | undefined) =>
       ['tasks', 'candidatures', { memberId }] as const,
     leadershipCapability: (memberId: string | undefined) =>
       ['tasks', 'leadership-capability', { memberId }] as const,
+    /* The OPEN Tasks I read as leadership (Toate). */
     leadership: (memberId: string | undefined) =>
       ['tasks', 'all', { memberId }] as const,
     byDept: (dept: string) => ['tasks', { dept }] as const,
