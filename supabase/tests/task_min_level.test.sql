@@ -7,7 +7,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(18);
+select plan(34);
 
 create function pg_temp.m(n integer) returns uuid language sql immutable as $$
   select ('57100000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -98,6 +98,57 @@ select is(pg_temp.reads(1, 'Org V #57'), 1, 'a past Candidate below the Role sti
 select throws_ok($$insert into tasks (title, group_id, deadline, status, kind, audience, assignment_mode, min_level)
   values ('Direct #57', (select id from groups where name = 'Min #57'), '2030-11-20 18:00+02', 'todo', 'task', 'local', 'direct', 1)$$,
   '23514', null, 'a direct Task carries no Minimum Level (tasks_min_level_public_ck)');
+
+-- ==================== Joining ====================
+select pg_temp.test_login_leadership(pg_temp.m(6));
+select throws_ok($$select public.express_task_interest((select id from tasks where title = 'Org V #57'))$$,
+  '42501', 'task_level_forbidden', 'a reader below the Role (a Group Responsible) cannot join');
+select pg_temp.test_login_leadership(pg_temp.m(1));
+select throws_ok($$select public.express_task_interest((select id from tasks where title = 'Org V #57'))$$,
+  '42501', 'task_level_forbidden', 'nor can a withdrawn Candidate below the Role, who still reads it');
+select pg_temp.test_login_leadership(pg_temp.m(9));
+select throws_ok($$select public.express_task_interest(pg_temp.t('Org V #57'))$$,
+  'PT404', 'task_not_found', 'anyone else does not even see it');
+select pg_temp.test_login_leadership(pg_temp.m(2));
+select lives_ok($$select public.express_task_interest((select id from tasks where title = 'Org V #57'))$$,
+  'a Voluntar joins it');
+
+-- ==================== Creating ====================
+select pg_temp.test_login_leadership(pg_temp.m(5));
+select lives_ok($$select public.create_task(p_title := 'Made A #57', p_description := null,
+  p_deadline := '2030-11-20 18:00+02', p_audience := 'org', p_assignment_mode := 'public',
+  p_group_id := (select id from groups where name = 'Min #57'), p_min_level := 2)$$,
+  'a Manager makes a Task for Voluntar Activ and up');
+select throws_ok($$select public.create_task(p_title := 'Too high #57', p_description := null,
+  p_deadline := '2030-11-20 18:00+02', p_audience := 'org', p_assignment_mode := 'public',
+  p_group_id := (select id from groups where name = 'Min #57'), p_min_level := 3)$$,
+  'PT400', 'task_min_level_above_actor', 'never above the creator''s own Level');
+select throws_ok($$select public.create_task(p_title := 'Off #57', p_description := null,
+  p_deadline := '2030-11-20 18:00+02', p_audience := 'org', p_assignment_mode := 'public',
+  p_group_id := (select id from groups where name = 'Min #57'), p_min_level := 4)$$,
+  'PT400', 'invalid_task_min_level', 'only the ladder');
+select lives_ok($$select public.create_task(p_title := 'Made D #57', p_description := null,
+  p_deadline := '2030-11-20 18:00+02', p_audience := 'local', p_assignment_mode := 'direct',
+  p_group_id := (select id from groups where name = 'Min #57'), p_min_level := 2)$$,
+  'a direct Task ignores the Role sent');
+select lives_ok($$select public.create_task(p_title := 'Made U #57', p_description := null,
+  p_deadline := null, p_audience := null, p_assignment_mode := null, p_kind := 'umbrella',
+  p_group_id := (select id from groups where name = 'Min #57'), p_min_level := 2)$$,
+  'so does an Umbrella');
+select lives_ok($$select public.create_tasks(p_title := 'Copies #57', p_description := null,
+  p_deadline := '2030-11-20 18:00+02', p_audience := 'org', p_assignment_mode := 'public',
+  p_group_id := (select id from groups where name = 'Min #57'), p_copies := 3, p_min_level := 1)$$,
+  'copies made in one go');
+select lives_ok($$select public.duplicate_task((select id from tasks where title = 'Made A #57'), '2030-11-27 18:00+02')$$,
+  'a duplicate');
+reset role;
+select pg_temp.test_clear_jwt();
+select is((select min_level from tasks where title = 'Made A #57' and duplicated_from_task_id is null), 2, 'stored at Voluntar Activ');
+select is((select min_level from tasks where title = 'Made D #57'), 0, 'the direct Task is stored at 0');
+select is((select min_level from tasks where title = 'Made U #57'), 0, 'the Umbrella is stored at 0');
+select is((select array_agg(min_level order by id) from tasks where title = 'Copies #57'), array[1, 1, 1], 'every copy carries it');
+select is((select min_level from tasks where duplicated_from_task_id = (select id from tasks where title = 'Made A #57' and duplicated_from_task_id is null)), 2,
+  'the duplicate copies it');
 
 select * from finish();
 rollback;

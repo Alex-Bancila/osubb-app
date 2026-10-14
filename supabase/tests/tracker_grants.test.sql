@@ -274,10 +274,10 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   ('set_member_status',  'p_member_id uuid, p_status member_status, p_reason text, p_replacement_id uuid', false, true,  false, false),
   -- #327: the first Task command wrapper. Every later wrapper (#328-#345)
   -- adds its own row here the same way.
-  ('create_task',        'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_link_label text, p_link_url text, p_links jsonb',
+  ('create_task',        'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_link_label text, p_link_url text, p_links jsonb, p_min_level integer',
                                                                      false, true,  false, false),
   -- Task copies (spec 2026-10-11): n copies in one transaction, same wrapper shape.
-  ('create_tasks',       'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_ids uuid[], p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_links jsonb, p_copies integer',
+  ('create_tasks',       'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_ids uuid[], p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_links jsonb, p_copies integer, p_min_level integer',
                                                                      false, true,  false, false),
   -- #328 (update_task_content) and #329 (convert_task_mode) were retired by #936.
   -- #330: the Candidate Queue pair, added the same way.
@@ -517,8 +517,8 @@ insert into pinned_private_functions (proname, args, category) values
   ('create_campaign_impl',                        'p_group_id bigint, p_name text',                                                                                  'impl'),
   -- #344: filing a Completed-work Request -- membership, not management.
   ('create_completed_work_request_impl',          'p_description text, p_group_id bigint',                                            'impl'),
-  ('create_task_impl',                            'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_link_label text, p_link_url text, p_links jsonb', 'impl'),
-  ('create_tasks_impl',                           'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_ids uuid[], p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_links jsonb, p_copies integer', 'impl'),
+  ('create_task_impl',                            'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_link_label text, p_link_url text, p_links jsonb, p_min_level integer', 'impl'),
+  ('create_tasks_impl',                           'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_ids uuid[], p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_links jsonb, p_copies integer, p_min_level integer', 'impl'),
   -- #259: the Department Cup body (#936 dropped the legacy `dept_cup` view) behind
   -- the filtered `public.department_cup(p_campaign_id)` wrapper.
   ('department_cup_rows',                         'p_campaign_id bigint, p_from timestamp with time zone, p_to timestamp with time zone',                                                                                               'authenticated_only'),

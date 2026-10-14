@@ -18,10 +18,10 @@ grant execute on function pg_temp.project() to authenticated;
 
 -- ==================== API surface ====================
 select ok(not has_function_privilege('anon',
-  'public.create_tasks(text, text, timestamptz, text, text, uuid[], bigint, bigint, text, bigint, jsonb, integer)', 'execute'),
+  'public.create_tasks(text, text, timestamptz, text, text, uuid[], bigint, bigint, text, bigint, jsonb, integer, integer)', 'execute'),
   'anon cannot execute create_tasks');
 select ok(has_function_privilege('authenticated',
-  'public.create_tasks(text, text, timestamptz, text, text, uuid[], bigint, bigint, text, bigint, jsonb, integer)', 'execute'),
+  'public.create_tasks(text, text, timestamptz, text, text, uuid[], bigint, bigint, text, bigint, jsonb, integer, integer)', 'execute'),
   'authenticated executes create_tasks; the gate is inside');
 select is((select prosecdef from pg_proc where proname = 'create_tasks'
             and pronamespace = 'public'::regnamespace), false,
@@ -35,7 +35,7 @@ select ok((select proconfig @> array['search_path=""'] from pg_proc where pronam
 select is((select proretset from pg_proc where proname = 'create_tasks'
             and pronamespace = 'public'::regnamespace), true,
   'create_tasks returns a set: the created rows');
-select ok(pg_get_functiondef('private.create_tasks_impl(text, text, timestamptz, text, text, uuid[], bigint, bigint, text, bigint, jsonb, integer)'::regprocedure)
+select ok(pg_get_functiondef('private.create_tasks_impl(text, text, timestamptz, text, text, uuid[], bigint, bigint, text, bigint, jsonb, integer, integer)'::regprocedure)
           !~* 'for update',
   'create_tasks_impl takes no row lock of its own: the Umbrella lock is create_task_impl''s For No Key Update');
 
