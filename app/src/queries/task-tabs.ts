@@ -3,34 +3,14 @@ import { useAuth } from '../lib/auth';
 import { useCapability } from '../lib/capabilities';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
-import { latestSubmissionOnly, TASK_PRESENTATION_FIELDS } from './tasks';
-import { attachVisibleTaskExecutors } from './task-executors';
-import type { TaskPresentationRow } from '../screens/tracker/task-presentation';
 
-export async function fetchManagedTasks(): Promise<TaskPresentationRow[]> {
-  const data: { task_id: number }[] = [];
-  for (let offset = 0; ; offset += 500) {
-    const page = await supabase
-      .rpc('my_managed_task_ids')
-      .range(offset, offset + 499);
-    if (page.error) throw page.error;
-    data.push(...page.data);
-    if (page.data.length < 500) break;
-  }
-  if (!data.length) return [];
-  const rows: TaskPresentationRow[] = [];
-  for (let offset = 0; offset < data.length; offset += 100) {
-    const result = await latestSubmissionOnly(
-      supabase.from('tasks').select(TASK_PRESENTATION_FIELDS),
-    ).in(
-      'id',
-      data.slice(offset, offset + 100).map((item) => item.task_id),
-    );
-    if (result.error) throw result.error;
-    rows.push(...result.data);
-  }
-  return attachVisibleTaskExecutors(rows);
-}
+/**
+ * The two leadership Task lists read their open Tasks through `task_list`
+ * (#1053, `task-lists.ts`); every reader of the managed list imports them
+ * from here, as before.
+ */
+export { useAllTasks, useManagedTasks } from './task-lists';
+
 /**
  * `manage_tasks` from the one capability row (`my_capabilities()`, which is
  * exactly `can_manage_tasks()`), so the Tracker, the nav and the Campaigns
@@ -49,34 +29,5 @@ export function useTaskLeadership() {
   return useQuery({
     queryKey: keys.tasks.leadershipCapability(memberId),
     queryFn: memberId ? fetchTaskLeadership : skipToken,
-  });
-}
-export function useManagedTasks(enabled: boolean) {
-  const memberId = useAuth().session?.user.id;
-  return useQuery({
-    queryKey: keys.tasks.managed(memberId),
-    queryFn: memberId && enabled ? fetchManagedTasks : skipToken,
-  });
-}
-export function useAllTasks(enabled: boolean) {
-  const session = useAuth().session;
-  return useQuery({
-    queryKey: keys.tasks.leadership(session?.user.id),
-    queryFn:
-      session && enabled
-        ? async (): Promise<TaskPresentationRow[]> => {
-            const rows: TaskPresentationRow[] = [];
-            for (let offset = 0; ; offset += 500) {
-              const { data, error } = await latestSubmissionOnly(
-                supabase.from('tasks').select(TASK_PRESENTATION_FIELDS),
-              )
-                .order('id')
-                .range(offset, offset + 499);
-              if (error) throw error;
-              rows.push(...data);
-              if (data.length < 500) return attachVisibleTaskExecutors(rows);
-            }
-          }
-        : skipToken,
   });
 }

@@ -9,7 +9,8 @@ import type {
 } from '../lib/work-filter';
 import { usePendingCandidatureTasks } from './calendar-tasks';
 import { keys } from './keys';
-import { useManagedTasks, useTaskManagement } from './task-tabs';
+import { summaryWork, useTaskListSummary } from './task-lists';
+import { useTaskManagement } from './task-tabs';
 import { useMyTasks } from './tasks';
 
 export type WorkFilterOptions = {
@@ -91,7 +92,8 @@ export function useEventWork() {
 /**
  * The items the Calendar can show (Rule W, #845): every readable Event, the
  * member's own and pending-candidature Task deadlines, and — while
- * **Taskurile gestionate** is on — the managed Tasks' deadlines. Not `ready`
+ * **Taskurile gestionate** is on — the managed Tasks' deadlines, taken from
+ * the server's summary of that list (#1053), never from its rows. Not `ready`
  * until every read in use has settled, so the filter never offers a partial list;
  * when one of them failed, `failed` says so, `error` is the first failure and
  * `retry` asks again for what failed, so the filter shows its retry.
@@ -108,7 +110,7 @@ export function useCalendarWork(showManaged: boolean): {
   const candidatures = usePendingCandidatureTasks();
   const management = useTaskManagement();
   const withManaged = showManaged && management.data === true;
-  const managed = useManagedTasks(withManaged);
+  const managed = useTaskListSummary('managed', withManaged);
   const reads = [events, mine, candidatures, ...(withManaged ? [managed] : [])];
   const ready = reads.every((read) => !read.isPending);
   const failed = reads.some((read) => read.isError);
@@ -118,11 +120,11 @@ export function useCalendarWork(showManaged: boolean): {
         ? undefined
         : calendarWorkItems({
             events: events.data,
-            tasks: [
-              mine.data,
-              candidatures.data,
-              withManaged ? managed.data : undefined,
-            ],
+            tasks: [mine.data, candidatures.data],
+            // Only a dated Task draws a chip, so only those own anything.
+            managed: withManaged
+              ? summaryWork(managed.data ?? [], (row) => row.dated)
+              : [],
           }),
     [
       failed,
@@ -141,20 +143,24 @@ export function useCalendarWork(showManaged: boolean): {
 }
 
 /**
- * The Calendar's Rule W items: every Event, and each Task that has a
- * deadline — a Task without one draws no chip, so it owns nothing there.
+ * The Calendar's Rule W items: every Event, each Task that has a
+ * deadline — a Task without one draws no chip, so it owns nothing there —
+ * and `managed`, the Groups and Campaigns of the managed Tasks that have one.
  */
 export function calendarWorkItems({
   events,
   tasks,
+  managed = [],
 }: {
   events: readonly WorkItem[];
   tasks: readonly (
     readonly (WorkItem & { deadline: string | null })[] | undefined
   )[];
+  managed?: readonly WorkItem[];
 }): WorkItem[] {
   return [
     ...events,
     ...tasks.flatMap((rows) => (rows ?? []).filter((task) => task.deadline)),
+    ...managed,
   ];
 }

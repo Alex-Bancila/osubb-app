@@ -12,6 +12,7 @@
 - **Amended:** 2026-10-05 — #1017 (ruling R38): a Task Manager may delete a Task for good; a Task that still holds Task Points goes only with its points, reversed through the ledger first; a Campaign may be deleted, leaving its Tasks unlabelled
 - **Amended:** 2026-10-13 — #1046 (ruling R51): a finished Task added directly (`create_completed_task`, `create_completed_tasks`) may be credited to any active Member at or above the Group's Minimum Level, member of the Group or not; BC and the Moderator stay excluded, the decider rule stays, and the points land on the Task's Group
 - **Amended:** 2026-10-14 — #1049 (ruling R53): the Legacy Import writes the pre-app Task Tracker history once, as terminal Tasks dated on their completion day with `legacy_migration` Evaluations; it is the second and last writer of Task Points and is closed after the run
+- **Amended:** 2026-10-14 — #1052, #1053 (ruling R54): a leadership Task list shows open work first and finished work after it, newest first and by the page; a list decides authority per Group and no page reads the finished Tasks whole
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -189,3 +190,16 @@ One sheet row becomes one terminal Task (`completed`, or `unfulfilled` for a row
 The Evaluation carries the reserved source `legacy_migration` and no evaluator: the people who graded the work in the sheet are not recorded. That source stays closed to everything else — a trigger refuses it for any Task the import did not register in `public.legacy_task_imports` — and the import command is dropped after the verified run (#1050), which closes it for good.
 
 What differs from a finished Task added in the application, deliberately: BC members and the Moderator are credited like anyone, and the Group's Minimum Level is not applied (the grading was not the importer's and predates both rules); no Notification is sent; the activity trail has no actor; the Moderator who ran the import is the Task's creator. An imported Task cannot be reopened — reopen reverses a `command` Evaluation only — and is corrected by deleting it for good, which reverses its points through the ledger as for any Task.
+
+## Amendment (2026-10-14) — leadership lists by the page (ruling R54)
+
+Ruling R10 ordered **De gestionat** and **Toate** as one list: overdue first, then deadline ascending (or title). That order assumed a list a manager could read to its end. The Legacy Import (ruling R53) brings some 5 300 finished Tasks, and the archive grows by every Task the organization finishes; by deadline ascending they would stand above every open Task that is not overdue.
+
+A leadership Task list therefore has two parts (#1052, #1053, spec `docs/superpowers/specs/2026-10-14-fast-task-lists-design.md`):
+
+- **Open Tasks** (De făcut, În lucru, În verificare) first, in ruling R10's order: overdue first, then deadline ascending with undated last, or title.
+- **Finished Tasks** (Finalizat, Nerealizat, Anulat) after them, under **Taskuri încheiate**, newest deadline first with undated last, or by title. They are read 50 at a time — the next page when the end of the list comes into view, or from **Încarcă mai multe**.
+
+The title search, the Work Filter, **Stare**, Grupuri preferate and **Ordonează după** narrow both parts. **Stare** still offers only the states the list holds, and the Work Filter only the Groups and Campaigns with work (Rule W): both read the open Tasks and the server's summary of the finished ones.
+
+Nothing about authority changes. `private.can_manage_task` and `private.can_read_task` remain the rules; a list decides them once per Group (`private.task_list_scope`) and falls back to them for the rows a Group cannot decide. `docs/backend/conventions.md` §4 makes that the way any list of Tasks is read.

@@ -3,7 +3,7 @@ import type { ComponentProps } from 'react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { MemoryRouter } from 'react-router';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { chooseOption } from '../../test/select';
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 // R43: Grupuri preferate, read by the page's scope.
@@ -32,6 +32,17 @@ vi.mock('../../queries/work-filter-options', () => ({
     },
   }),
 }));
+// #1053: the finished Tasks and what the list holds come from the server.
+const lists = vi.hoisted(() => ({ finished: vi.fn(), summary: vi.fn() }));
+vi.mock('../../queries/task-lists', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../queries/task-lists')>()),
+  useFinishedTasks: (...args: unknown[]) => lists.finished(...args),
+  useTaskListSummary: (...args: unknown[]) => lists.summary(...args),
+}));
+import type {
+  FinishedTasks,
+  TaskListSummaryRow,
+} from '../../queries/task-lists';
 import { closeFilters, filterButton, openFilters } from '../../test/filters';
 import { taskRow } from '../../test/task-fixtures';
 import { PreferredGroupsScope } from '../../components/preferred-groups/PreferredGroupsScope';
@@ -39,6 +50,42 @@ import { ManagerTaskList as SearchedManagerTaskList } from './ManagerTaskList';
 import { useTitleSearch } from './use-title-search';
 import { compareManagedTasks } from './manager-task-list';
 import { toTaskPresentation } from './task-presentation';
+
+/** The finished part as the list reads it; nothing unless a test says so. */
+function finishedRead(overrides: Partial<FinishedTasks> = {}): FinishedTasks {
+  return {
+    rows: [],
+    total: 0,
+    isPending: false,
+    isError: false,
+    error: null,
+    hasMore: false,
+    isLoadingMore: false,
+    moreFailed: false,
+    loadMore: vi.fn(),
+    refetch: vi.fn(),
+    ...overrides,
+  };
+}
+function summaryRow(
+  overrides: Partial<TaskListSummaryRow>,
+): TaskListSummaryRow {
+  return {
+    group_id: 1,
+    campaign_id: null,
+    status: 'completed',
+    late: false,
+    dated: true,
+    tasks: 1,
+    ...overrides,
+  };
+}
+beforeEach(() => {
+  lists.finished.mockReset();
+  lists.finished.mockReturnValue(finishedRead());
+  lists.summary.mockReset();
+  lists.summary.mockReturnValue({ data: [] });
+});
 
 const now = new Date('2026-09-15T12:00:00Z');
 const edu = {
@@ -121,6 +168,7 @@ function ManagerTaskList(
   return (
     <SearchedManagerTaskList
       {...props}
+      list="managed"
       search={search}
       empty="Nu ai taskuri de gestionat acum."
     />
@@ -564,5 +612,415 @@ describe('ManagerTaskList under Grupuri preferate (R43)', () => {
     renderList('', vi.fn(), preferredRows);
     expect(titles()).toHaveLength(4);
     preferences.muted = new Set();
+  });
+});
+
+describe('ManagerTaskList, the finished Tasks (#1053)', () => {
+  const done = [
+    taskRow({
+      id: 71,
+      title: 'Raport de martie',
+      status: 'completed',
+      deadline: '2026-03-31T10:00:00Z',
+      completed_at: '2026-03-30T10:00:00Z',
+      assignments: [],
+      group: edu,
+    }),
+    taskRow({
+      id: 72,
+      title: 'Afiș vechi',
+      status: 'cancelled',
+      deadline: '2026-02-10T10:00:00Z',
+      assignments: [],
+      group: edu,
+    }),
+  ];
+  /** What the server holds beside the open rows: three finished Tasks. */
+  const held = [
+    summaryRow({ group_id: 1, status: 'completed', tasks: 1 }),
+    summaryRow({ group_id: 1, status: 'completed', late: true, tasks: 1 }),
+    summaryRow({ group_id: 30, campaign_id: 8, status: 'cancelled', tasks: 1 }),
+  ];
+  const lastFinishedCall = () => lists.finished.mock.calls.at(-1) ?? [];
+
+  it('draws them after the open Tasks, under their heading, and counts both', () => {
+    lists.finished.mockReturnValue(finishedRead({ rows: done, total: 2 }));
+    lists.summary.mockReturnValue({ data: held });
+    renderList();
+    expect(titles()).toEqual([
+      'Z urgent',
+      'Bilanț vechi',
+      'Afișe pentru gală',
+      'Ședință de mentorat',
+      'Viitor fără termen',
+      'Raport de martie',
+      'Afiș vechi',
+    ]);
+    const finished = screen.getByRole('region', { name: 'Taskuri încheiate' });
+    expect(
+      within(finished)
+        .getAllByRole('article')
+        .map((row) => row.querySelector('h3')?.textContent),
+    ).toEqual(['Raport de martie', 'Afiș vechi']);
+    expect(within(finished).getByText('2 taskuri')).toBeVisible();
+    expect(
+      screen.getByRole('searchbox', { name: 'Caută după titlu' }),
+    ).toHaveAttribute('placeholder', 'Caută în 7 taskuri');
+    // The list is asked by name, with no filter chosen.
+    expect(lastFinishedCall()).toEqual(['managed', {}, true]);
+    expect(lists.summary).toHaveBeenLastCalledWith('managed', true);
+  });
+
+  it('sends the Work Filter, the search, the state and the order to the server', async () => {
+    const user = userEvent.setup();
+    lists.summary.mockReturnValue({ data: held });
+    renderList(
+      '?grup=1&subgrup=2&campanie=7&de_la=2026-09-14&pana_la=2026-09-18',
+    );
+    expect(lastFinishedCall()[1]).toEqual({
+      p_group_id: 2,
+      p_campaign_id: 7,
+      p_from: '2026-09-13T21:00:00.000Z',
+      p_to: '2026-09-18T21:00:00.000Z',
+    });
+    await user.type(
+      screen.getByRole('searchbox', { name: 'Caută după titlu' }),
+      'ȘEDINȚĂ ',
+    );
+    await waitFor(() =>
+      expect(lastFinishedCall()[1]).toMatchObject({ p_search: 'sedinta' }),
+    );
+    await openFilters(user);
+    await chooseOption(
+      user,
+      screen.getByLabelText('Stare'),
+      'Finalizat cu întârziere',
+    );
+    await user.click(
+      within(
+        screen.getByRole('radiogroup', { name: 'Ordonează după' }),
+      ).getByRole('radio', { name: 'Titlu' }),
+    );
+    await closeFilters(user);
+    expect(lastFinishedCall()[1]).toEqual({
+      p_group_id: 2,
+      p_campaign_id: 7,
+      p_from: '2026-09-13T21:00:00.000Z',
+      p_to: '2026-09-18T21:00:00.000Z',
+      p_search: 'sedinta',
+      p_state: 'late',
+      p_sort: 'title',
+    });
+  });
+
+  it('asks for no finished Task while Stare names an open state', async () => {
+    const user = userEvent.setup();
+    lists.finished.mockReturnValue(finishedRead({ rows: done, total: 2 }));
+    lists.summary.mockReturnValue({ data: held });
+    renderList();
+    await openFilters(user);
+    await chooseOption(user, screen.getByLabelText('Stare'), 'De făcut');
+    await closeFilters(user);
+    expect(lastFinishedCall()[1]).toBeNull();
+  });
+
+  it('asks nothing while the dates are inverted', () => {
+    lists.summary.mockReturnValue({ data: held });
+    renderList('?de_la=2026-09-20&pana_la=2026-09-01');
+    expect(lastFinishedCall()[1]).toBeNull();
+  });
+
+  it('asks for the preferred Groups only on a page that follows them', () => {
+    preferences.muted = new Set([30]);
+    render(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <PreferredGroupsScope>
+          <ManagerTaskList rows={rows} now={now} />
+        </PreferredGroupsScope>
+      </MemoryRouter>,
+    );
+    expect(lastFinishedCall()[1]).toEqual({ p_preferred: true });
+    preferences.muted = new Set();
+  });
+
+  it('offers in Stare the finished states the list holds, though no open row has them', async () => {
+    const user = userEvent.setup();
+    lists.summary.mockReturnValue({ data: held });
+    const open = rows.filter((row) => row.status !== 'completed');
+    renderList('', vi.fn(), open);
+    await openFilters(user);
+    await user.click(screen.getByLabelText('Stare'));
+    expect(
+      (await screen.findAllByRole('option')).map(
+        (option) => option.textContent,
+      ),
+    ).toEqual([
+      'Toate stările',
+      'De făcut',
+      'În lucru',
+      'Finalizat',
+      'Anulat',
+      'Termen depășit',
+      'Modificări cerute',
+      'Finalizat cu întârziere',
+    ]);
+  });
+
+  it('drops a finished Stare the server no longer holds, and stops sending it', async () => {
+    const user = userEvent.setup();
+    lists.summary.mockReturnValue({
+      data: [
+        ...held,
+        summaryRow({ group_id: 1, status: 'unfulfilled', tasks: 1 }),
+      ],
+    });
+    const open = rows.filter((row) => row.status !== 'completed');
+    const view = renderList('', vi.fn(), open);
+    await openFilters(user);
+    await chooseOption(user, screen.getByLabelText('Stare'), 'Nerealizat');
+    await closeFilters(user);
+    expect(lastFinishedCall()[1]).toEqual({ p_state: 'unfulfilled' });
+    expect(filterButton()).toHaveAccessibleName('Filtrează, 1 filtru activ');
+    // The one unfulfilled Task was reopened: the summary comes back without it.
+    lists.summary.mockReturnValue({ data: held });
+    view.rerender(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList rows={open} now={now} />
+      </MemoryRouter>,
+    );
+    expect(filterButton()).toHaveAccessibleName('Filtrează');
+    expect(lastFinishedCall()[1]).toEqual({});
+    expect(titles()).toHaveLength(open.length);
+  });
+
+  it('offers the Groups and Campaigns of the finished Tasks too (Rule W)', async () => {
+    const user = userEvent.setup();
+    lists.summary.mockReturnValue({ data: held });
+    const onlyEdu = rows.filter((row) => row.group_id === 1);
+    renderList('', vi.fn(), onlyEdu);
+    await openFilters(user);
+    await user.click(screen.getByRole('combobox', { name: 'Grup principal' }));
+    expect(
+      (await screen.findAllByRole('option')).map((o) => o.textContent),
+    ).toEqual(['Educațional', 'Gala']);
+    // Toamnă labels an open Task, Primăvară a finished one: two choices.
+    expect(screen.getByRole('combobox', { name: 'Campanie' })).toBeVisible();
+  });
+
+  it('shows the list controls when the finished Tasks alone pass six', async () => {
+    const user = userEvent.setup();
+    lists.summary.mockReturnValue({
+      data: [summaryRow({ group_id: 1, status: 'completed', tasks: 40 })],
+    });
+    renderList('', vi.fn(), []);
+    await openFilters(user);
+    expect(screen.getByLabelText('Stare')).toBeVisible();
+  });
+
+  it('loads the next page from the button', async () => {
+    const user = userEvent.setup();
+    const loadMore = vi.fn();
+    lists.finished.mockReturnValue(
+      finishedRead({ rows: done, total: 120, hasMore: true, loadMore }),
+    );
+    lists.summary.mockReturnValue({ data: held });
+    renderList();
+    await user.click(screen.getByRole('button', { name: 'Încarcă mai multe' }));
+    expect(loadMore).toHaveBeenCalledTimes(1);
+  });
+
+  it('says a page is on its way and takes no second request for it', () => {
+    lists.finished.mockReturnValue(
+      finishedRead({
+        rows: done,
+        total: 120,
+        hasMore: true,
+        isLoadingMore: true,
+      }),
+    );
+    lists.summary.mockReturnValue({ data: held });
+    renderList();
+    expect(screen.getByRole('button', { name: 'Se încarcă…' })).toBeDisabled();
+  });
+
+  it('loads the next page when the end of the list comes into view', () => {
+    const observed: Element[] = [];
+    let enter: (entries: { isIntersecting: boolean }[]) => void = () => {};
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(callback: typeof enter) {
+          enter = callback;
+        }
+        observe(element: Element) {
+          observed.push(element);
+        }
+        disconnect() {}
+      },
+    );
+    const loadMore = vi.fn();
+    lists.finished.mockReturnValue(
+      finishedRead({ rows: done, total: 120, hasMore: true, loadMore }),
+    );
+    lists.summary.mockReturnValue({ data: held });
+    renderList();
+    expect(observed).toHaveLength(1);
+    expect(observed[0]).toContainElement(
+      screen.getByRole('button', { name: 'Încarcă mai multe' }),
+    );
+    enter([{ isIntersecting: false }]);
+    expect(loadMore).not.toHaveBeenCalled();
+    enter([{ isIntersecting: true }]);
+    expect(loadMore).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it('watches the end of the list only while a next page can be asked for', () => {
+    let watching = 0;
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        observe() {
+          watching += 1;
+        }
+        disconnect() {
+          watching -= 1;
+        }
+      },
+    );
+    lists.summary.mockReturnValue({ data: held });
+    const page = (overrides: Partial<FinishedTasks>) =>
+      finishedRead({ rows: done, total: 120, hasMore: true, ...overrides });
+    lists.finished.mockReturnValue(page({ isLoadingMore: true }));
+    const view = renderList();
+    const again = () =>
+      view.rerender(
+        <MemoryRouter initialEntries={['/tracker']}>
+          <ManagerTaskList rows={rows} now={now} />
+        </MemoryRouter>,
+      );
+    // A page is on its way: nothing is watched, so it is not asked twice.
+    expect(watching).toBe(0);
+    // It landed: the end is watched again, in view or not.
+    lists.finished.mockReturnValue(page({}));
+    again();
+    expect(watching).toBe(1);
+    // A failed page waits for the Member's retry.
+    lists.finished.mockReturnValue(page({ moreFailed: true }));
+    again();
+    expect(watching).toBe(0);
+    // The last page: nothing left to watch for.
+    lists.finished.mockReturnValue(page({ hasMore: false }));
+    again();
+    expect(watching).toBe(0);
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps what is loaded and offers a retry when a later page fails', async () => {
+    const user = userEvent.setup();
+    const loadMore = vi.fn();
+    lists.finished.mockReturnValue(
+      finishedRead({
+        rows: done,
+        total: 120,
+        hasMore: true,
+        moreFailed: true,
+        loadMore,
+      }),
+    );
+    lists.summary.mockReturnValue({ data: held });
+    renderList();
+    expect(titles()).toContain('Raport de martie');
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Nu am putut încărca mai multe taskuri.');
+    await user.click(
+      within(alert).getByRole('button', { name: 'Încearcă din nou' }),
+    );
+    expect(loadMore).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole('button', { name: 'Încarcă mai multe' }),
+    ).toBeNull();
+  });
+
+  it('shows the open Tasks and a retry when the finished ones cannot be read', async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn();
+    lists.finished.mockReturnValue(
+      finishedRead({ isError: true, error: new Error('boom'), refetch }),
+    );
+    lists.summary.mockReturnValue({ data: held });
+    renderList();
+    expect(titles()).toHaveLength(rows.length);
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Nu am putut încărca taskurile încheiate.');
+    await user.click(
+      within(alert).getByRole('button', { name: 'Încearcă din nou' }),
+    );
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds the place of the finished Tasks while the first page is on its way, and never calls that empty', () => {
+    lists.finished.mockReturnValue(
+      finishedRead({ isPending: true, total: undefined }),
+    );
+    lists.summary.mockReturnValue({ data: held });
+    renderList('', vi.fn(), []);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Se încarcă taskurile încheiate…',
+    );
+    expect(screen.queryByText('Nu ai taskuri de gestionat acum.')).toBeNull();
+    // The count waits for both parts.
+    expect(
+      screen.getByRole('searchbox', { name: 'Caută după titlu' }),
+    ).toHaveAttribute('placeholder', 'Caută după titlu');
+  });
+
+  it('says the filters match nothing only when neither part has a Task', () => {
+    lists.summary.mockReturnValue({ data: held });
+    renderList('?de_la=2030-01-01&pana_la=2030-01-02');
+    expect(
+      screen.getByText('Niciun task nu corespunde filtrelor.'),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('region', { name: 'Taskuri încheiate' }),
+    ).toBeNull();
+  });
+
+  it('never draws a Task twice while the open read still holds one that just finished', () => {
+    lists.finished.mockReturnValue(
+      finishedRead({
+        rows: [taskRow({ ...rows[4], id: 5, title: 'Bilanț vechi' }), ...done],
+        total: 3,
+      }),
+    );
+    lists.summary.mockReturnValue({ data: held });
+    renderList();
+    expect(titles().filter((title) => title === 'Bilanț vechi')).toHaveLength(
+      1,
+    );
+  });
+
+  it('opens the details sheet from a finished row', async () => {
+    const user = userEvent.setup();
+    lists.finished.mockReturnValue(finishedRead({ rows: done, total: 2 }));
+    lists.summary.mockReturnValue({ data: held });
+    const { onOpenTask } = renderList();
+    await user.click(screen.getByRole('button', { name: 'Raport de martie' }));
+    expect(onOpenTask).toHaveBeenLastCalledWith(71);
+  });
+
+  it('has no axe violations with both parts drawn', async () => {
+    lists.finished.mockReturnValue(
+      finishedRead({ rows: done, total: 120, hasMore: true }),
+    );
+    lists.summary.mockReturnValue({ data: held });
+    const { container } = renderList();
+    expect(
+      (
+        await axe.run(container, {
+          rules: { 'color-contrast': { enabled: false } },
+        })
+      ).violations,
+    ).toEqual([]);
   });
 });

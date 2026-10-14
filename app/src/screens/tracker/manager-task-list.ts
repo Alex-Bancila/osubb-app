@@ -15,6 +15,53 @@ export const MANAGER_TASK_STATES = [
 
 export type ManagerTaskSort = 'deadline' | 'title';
 
+/** The states only a finished Task has: what the server filters by (#1053). */
+export const FINISHED_STATES = [
+  'completed',
+  'unfulfilled',
+  'cancelled',
+  'late',
+] as const;
+export type FinishedState = (typeof FINISHED_STATES)[number];
+
+export function isFinishedState(state: string): state is FinishedState {
+  return (FINISHED_STATES as readonly string[]).includes(state);
+}
+
+/** A state only an open Task has: no finished Task can match it. */
+export function isOpenState(state: string): boolean {
+  return state !== '' && !isFinishedState(state);
+}
+
+/**
+ * How many finished Tasks a list holds in each state, from its summary rows
+ * (`task_list_summary`): `late` counts the completed ones that were late,
+ * `total` every finished Task.
+ */
+export function finishedStateCounts(
+  rows: readonly { status: string; late: boolean; tasks: number }[],
+): Record<FinishedState, number> & { total: number } {
+  const counts = {
+    completed: 0,
+    unfulfilled: 0,
+    cancelled: 0,
+    late: 0,
+    total: 0,
+  };
+  for (const row of rows) {
+    if (
+      row.status !== 'completed' &&
+      row.status !== 'unfulfilled' &&
+      row.status !== 'cancelled'
+    )
+      continue;
+    counts[row.status] += row.tasks;
+    counts.total += row.tasks;
+    if (row.late) counts.late += row.tasks;
+  }
+  return counts;
+}
+
 export function matchesTaskState(
   task: TaskPresentation,
   state: string,

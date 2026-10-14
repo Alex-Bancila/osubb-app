@@ -4,7 +4,13 @@ import { TaskDeleteControl } from './TaskDeleteControl';
 import { TaskReopenControl } from './TaskReopenControl';
 import { TaskFeedbackControl } from './TaskFeedbackControl';
 import { TaskReviewCapabilityNotice } from './TaskReviewCapabilityNotice';
-import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+  useRef,
+  useState,
+  type ComponentProps,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import {
   ArrowLeft,
   Award,
@@ -46,6 +52,7 @@ import {
   useReadNotificationsAbout,
 } from '../../queries/notifications';
 import { useTaskDetails } from '../../queries/task-details';
+import { useTaskManageCapability } from '../../queries/task-lists';
 import { useTaskProgress } from '../../queries/task-progress';
 import { TaskDuplicateControl } from './TaskDuplicateControl';
 import { TaskActionSuccess } from './TaskActionSuccess';
@@ -596,15 +603,43 @@ function SheetNotice({ children }: { children: string }) {
   ) : null;
 }
 
+/**
+ * The details of the shown Task with its manager controls decided: the
+ * Tasks the opener knows to be managed need no question; with `ask`, any
+ * other is asked of the server (`can_manage_task`), and the controls arrive
+ * with its answer.
+ */
+function ManagedTaskDetails({
+  known,
+  ask,
+  ...details
+}: Omit<ComponentProps<typeof TaskDetails>, 'canManage'> & {
+  known: boolean;
+  ask: boolean;
+}) {
+  const capability = useTaskManageCapability(details.taskId, ask && !known);
+  return (
+    <TaskDetails {...details} canManage={known || capability.data === true} />
+  );
+}
+
 export function TaskDetailsSheet({
   taskId,
   managedTaskIds = new Set<number>(),
+  askManage = false,
   notice = null,
   onClose,
   onDeleted,
 }: {
   taskId: number | null;
+  /** The Tasks the opener knows the viewer manages. */
   managedTaskIds?: ReadonlySet<number>;
+  /**
+   * Ask the server about a Task outside `managedTaskIds` (#1053): the
+   * Tracker, whose lists hold their finished Tasks by the page and whose
+   * links open any Task. Without it only the known ones have the controls.
+   */
+  askManage?: boolean;
   /** A confirmation for the opened Task, e.g. after it was just created. */
   notice?: string | null;
   onClose: () => void;
@@ -681,9 +716,10 @@ export function TaskDetailsSheet({
               <SheetNotice>{notice}</SheetNotice>
             )}
             {current && shownId !== null && (
-              <TaskDetails
+              <ManagedTaskDetails
                 taskId={shownId}
-                canManage={managedTaskIds.has(shownId)}
+                known={managedTaskIds.has(shownId)}
+                ask={askManage}
                 onNavigate={(id) => go(sheetTrailPush(current, id))}
                 onDeleted={(receipt) => {
                   setTrail(null);

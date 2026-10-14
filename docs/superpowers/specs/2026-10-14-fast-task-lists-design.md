@@ -1,6 +1,6 @@
 # Task lists that stay fast — design
 
-**Date:** 2026-10-14 · **Status:** approach delegated by Alex ("i trust you to find the best approach", 2026-10-14); the visible changes of §2 were announced to him in the session.
+**Date:** 2026-10-14 · **Issues:** #1052 (the readers), #1053 (the page) · **Status:** approach delegated by Alex ("i trust you to find the best approach", 2026-10-14); the visible changes of §2 were announced to him in the session.
 
 ## 1. Problem
 
