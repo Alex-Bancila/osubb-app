@@ -7,7 +7,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(34);
+select plan(55);
 
 create function pg_temp.m(n integer) returns uuid language sql immutable as $$
   select ('57100000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -149,6 +149,107 @@ select is((select min_level from tasks where title = 'Made U #57'), 0, 'the Umbr
 select is((select array_agg(min_level order by id) from tasks where title = 'Copies #57'), array[1, 1, 1], 'every copy carries it');
 select is((select min_level from tasks where duplicated_from_task_id = (select id from tasks where title = 'Made A #57' and duplicated_from_task_id is null)), 2,
   'the duplicate copies it');
+
+-- ==================== Editing ====================
+create function pg_temp.edit(p_title text, p_min integer, p_accept boolean,
+                             p_mode text default 'public', p_audience text default 'org',
+                             p_group text default null, p_new_title text default null)
+returns public.tasks language sql as $$
+  select public.update_task(p_task_id := task.id,
+           p_group_id := coalesce((select id from public.groups where name = p_group), task.group_id),
+           p_title := coalesce(p_new_title, task.title), p_description := task.description,
+           p_deadline := task.deadline, p_campaign_id := task.campaign_id,
+           p_assignment_mode := p_mode, p_audience := p_audience,
+           p_accept_consequences := p_accept, p_links := task.links, p_min_level := p_min)
+    from public.tasks as task where task.title = p_title
+$$;
+create function pg_temp.preview(p_title text, p_min integer, p_group text default null)
+returns text[] language sql as $$
+  select array_agg(c.consequence || ':' || c.member_id::text order by c.consequence, c.member_id::text)
+    from public.tasks as task
+   cross join lateral public.preview_task_update(p_task_id := task.id,
+           p_group_id := coalesce((select id from public.groups where name = p_group), task.group_id),
+           p_title := task.title, p_description := task.description, p_deadline := task.deadline,
+           p_campaign_id := task.campaign_id, p_assignment_mode := task.assignment_mode,
+           p_audience := task.audience, p_links := task.links, p_min_level := p_min) as c
+   where task.title = p_title
+$$;
+insert into tasks (title, group_id, deadline, status, kind, audience, assignment_mode, queue_opened_at, min_level) values
+  ('Edit #57', pg_temp.g('Min #57'), '2030-11-20 18:00+02', 'todo', 'task', 'org', 'public', now(), 0),
+  ('High #57', pg_temp.g('Min #57'), '2030-11-20 18:00+02', 'todo', 'task', 'org', 'public', now(), 0),
+  ('Move #57', pg_temp.g('Min #57'), '2030-11-20 18:00+02', 'todo', 'task', 'org', 'public', now(), 0);
+-- The queue of Edit #57: a Recrut and a Voluntar Activ wait; a Voluntar executes.
+select pg_temp.test_login_leadership(pg_temp.m(1));
+select public.express_task_interest(pg_temp.t('Edit #57'));
+select pg_temp.test_login_leadership(pg_temp.m(2));
+select public.express_task_interest(pg_temp.t('Edit #57'));
+select pg_temp.test_login_leadership(pg_temp.m(3));
+select public.express_task_interest(pg_temp.t('Edit #57'));
+select pg_temp.test_login_leadership(pg_temp.m(7));
+select public.express_task_interest(pg_temp.t('Move #57'));
+select pg_temp.test_login_leadership(pg_temp.m(5));
+select public.select_task_candidate(pg_temp.t('Edit #57'),
+  (select id from task_candidates where task_id = pg_temp.t('Edit #57') and member_id = pg_temp.m(2)), false);
+select public.select_task_candidate(pg_temp.t('Move #57'),
+  (select id from task_candidates where task_id = pg_temp.t('Move #57') and member_id = pg_temp.m(7)), false);
+
+select is(pg_temp.preview('Edit #57', 2),
+  array['candidate_removed:' || pg_temp.m(1), 'executor_removed:' || pg_temp.m(2)],
+  'raising it removes the waiting Recrut and the Voluntar Executor, nobody at the Role');
+select throws_ok($$select pg_temp.edit('Edit #57', 2, false)$$, 'PT409', 'task_update_needs_confirmation',
+  'not without confirmation');
+select lives_ok($$select pg_temp.edit('Edit #57', 2, true)$$, 'confirmed, it applies');
+reset role;
+select pg_temp.test_clear_jwt();
+select is((select min_level from tasks where title = 'Edit #57'), 2, 'stored at Voluntar Activ');
+select is((select status from task_candidates where task_id = pg_temp.t('Edit #57') and member_id = pg_temp.m(1)), 'closed',
+  'the Recrut''s Candidature is closed');
+select is((select count(*)::int from task_assignments where task_id = pg_temp.t('Edit #57')
+            and member_id = pg_temp.m(2) and ended_at is null), 0, 'the Voluntar is no longer the Executor');
+select is((select count(*)::int from notifications where member_id = pg_temp.m(2)
+            and title = 'Task actualizat: Edit #57'
+            and body = 'Nu mai ești executorul acestui task: e acum doar pentru Voluntar Activ și peste.'), 1,
+  'the removed Executor is told why');
+select is((select status from task_candidates where task_id = pg_temp.t('Edit #57') and member_id = pg_temp.m(3)), 'pending',
+  'the Voluntar Activ still waits');
+
+select pg_temp.test_login_leadership(pg_temp.m(5));
+select is(pg_temp.preview('Edit #57', 0), null::text[], 'lowering it removes nobody');
+select public.select_task_candidate(pg_temp.t('Edit #57'),
+  (select id from task_candidates where task_id = pg_temp.t('Edit #57') and member_id = pg_temp.m(3)), false);
+select lives_ok($$select pg_temp.edit('Edit #57', 1, false)$$, 'lowered to Voluntar, nothing to confirm');
+select lives_ok($$select pg_temp.edit('Edit #57', null, false, p_new_title := 'Edit 2 #57')$$,
+  'an edit that does not send the Role');
+reset role;
+select pg_temp.test_clear_jwt();
+select is((select min_level from tasks where title = 'Edit 2 #57'), 1, 'null keeps it (an older app changes nothing)');
+select is((select count(*)::int from notifications where member_id = pg_temp.m(3)
+            and title = 'Task actualizat: Edit #57' and body = 'Modificat: cine îl vede.'), 1,
+  'the Executor''s edit notice names the Role');
+
+-- An unchanged Role above the editor's Level is never judged; a changed one is.
+select pg_temp.test_login_leadership(pg_temp.m(4));
+select lives_ok($$select pg_temp.edit('High #57', 6, false)$$, 'BC sets it to BC');
+select pg_temp.test_login_leadership(pg_temp.m(5));
+select lives_ok($$select pg_temp.edit('High #57', 6, false, p_new_title := 'High 2 #57')$$,
+  'a Manager below it still edits the rest');
+select throws_ok($$select pg_temp.edit('High 2 #57', 5, false)$$, 'PT400', 'task_min_level_above_actor',
+  'but cannot choose another Role above their own');
+select throws_ok($$select pg_temp.edit('High 2 #57', 4, false)$$, 'PT400', 'invalid_task_min_level',
+  'an edit takes only the ladder');
+select lives_ok($$select pg_temp.edit('High 2 #57', 6, false, p_mode := 'direct', p_audience := 'local')$$,
+  'made Direct with the Role still sent');
+reset role;
+select pg_temp.test_clear_jwt();
+select is((select min_level from tasks where title = 'High 2 #57'), 0, 'a direct Task is stored at 0');
+
+-- Moving and raising at once: one consequence for the Executor.
+select pg_temp.test_login_leadership(pg_temp.m(5));
+select is(pg_temp.preview('Move #57', 2, 'Floor #57'), array['executor_removed:' || pg_temp.m(7)],
+  'a Voluntar Executor moved into a Voluntar Group but below the new Role is only removed');
+reset role;
+select pg_temp.test_clear_jwt();
+select is(private.task_field_labels(array['min_level']), 'cine îl vede', 'the change has a Romanian label');
 
 select * from finish();
 rollback;

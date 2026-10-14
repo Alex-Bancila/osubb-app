@@ -345,9 +345,9 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   ('campaign_report',                'p_campaign_id bigint, p_from timestamp with time zone, p_to timestamp with time zone',         false, true,  false, false),
   ('campaign_totals',                'p_campaign_id bigint, p_from timestamp with time zone, p_to timestamp with time zone',         false, true,  false, false),
   -- #626: the full-state Task edit and its read-only consequence preview.
-  ('update_task',            'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_accept_consequences boolean, p_links jsonb',
+  ('update_task',            'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_accept_consequences boolean, p_links jsonb, p_min_level integer',
                                                                      false, true,  false, false),
-  ('preview_task_update',    'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_links jsonb',
+  ('preview_task_update',    'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_links jsonb, p_min_level integer',
                                                                      false, true,  false, false),
   -- #576: the capability row and the caller's effective Groups. Read-only
   -- wrappers with the same grant shape as every other wrapper.
@@ -617,10 +617,10 @@ insert into pinned_private_functions (proname, args, category) values
   -- #626: the full-state Task edit body, its preview body, and the two shared
   -- helpers both bodies read (validation/diff and the one consequence
   -- definition) -- callable only from inside those definer bodies.
-  ('update_task_impl',                            'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_accept_consequences boolean, p_links jsonb', 'impl'),
-  ('preview_task_update_impl',                    'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_links jsonb', 'impl'),
-  ('plan_task_update',                            'p_task tasks, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_links jsonb', 'none'),
-  ('task_update_consequences',                    'p_task_id bigint, p_group_id bigint, p_campaign_id bigint, p_assignment_mode text, p_audience text', 'none'),
+  ('update_task_impl',                            'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_accept_consequences boolean, p_links jsonb, p_min_level integer', 'impl'),
+  ('preview_task_update_impl',                    'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_links jsonb, p_min_level integer', 'impl'),
+  ('plan_task_update',                            'p_task tasks, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_links jsonb, p_min_level integer', 'none'),
+  ('task_update_consequences',                    'p_task_id bigint, p_group_id bigint, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_min_level integer', 'none'),
   -- #936 retired update_task_content_impl and convert_task_mode_impl. It made
   -- set_event_rsvp a command (this body) and froze an Announcement's Group and
   -- Audience with a row guard (granted to nobody).

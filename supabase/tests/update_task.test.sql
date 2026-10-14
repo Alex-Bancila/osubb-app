@@ -187,37 +187,37 @@ grant select, insert on previews to authenticated;
 
 -- ==================== 1. API shape and privileges ====================
 select has_function('public', 'update_task',
-  array['bigint', 'bigint', 'text', 'text', 'timestamp with time zone', 'bigint', 'text', 'text', 'text', 'text', 'boolean', 'jsonb'],
-  'public.update_task exists with the full-state signature (the #684 Attached Link pair, R46 p_links) plus p_accept_consequences');
+  array['bigint', 'bigint', 'text', 'text', 'timestamp with time zone', 'bigint', 'text', 'text', 'text', 'text', 'boolean', 'jsonb', 'integer'],
+  'public.update_task exists with the full-state signature (the #684 Attached Link pair, R46 p_links, R57 p_min_level) plus p_accept_consequences');
 select is(pg_get_function_arguments(
-    'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean,jsonb)'::regprocedure),
-  'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text DEFAULT NULL::text, p_link_url text DEFAULT NULL::text, p_accept_consequences boolean DEFAULT false, p_links jsonb DEFAULT NULL::jsonb',
-  'update_task takes no actor parameter; R46: the legacy link pair and p_links default to null (p_links not sent takes the pair; neither sent, or a sent [], clears the links -- full state, OD5), and p_accept_consequences defaults to false');
+    'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean,jsonb,integer)'::regprocedure),
+  'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text DEFAULT NULL::text, p_link_url text DEFAULT NULL::text, p_accept_consequences boolean DEFAULT false, p_links jsonb DEFAULT NULL::jsonb, p_min_level integer DEFAULT NULL::integer',
+  'update_task takes no actor parameter; R57: p_min_level defaults to null, which keeps the stored Role; R46: the legacy link pair and p_links default to null (p_links not sent takes the pair; neither sent, or a sent [], clears the links -- full state, OD5), and p_accept_consequences defaults to false');
 select is(pg_get_function_result(
-    'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb)'::regprocedure),
+    'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb,integer)'::regprocedure),
   'TABLE(consequence text, member_id uuid)',
   'preview_task_update takes the same value arguments and returns (consequence, member_id) rows');
 select is((select provolatile::text from pg_proc
-            where oid = 'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb)'::regprocedure),
+            where oid = 'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb,integer)'::regprocedure),
   's', 'preview_task_update is stable');
 select ok(not (select prosecdef from pg_proc
-                where oid = 'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean,jsonb)'::regprocedure)
+                where oid = 'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean,jsonb,integer)'::regprocedure)
           and not (select prosecdef from pg_proc
-                    where oid = 'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb)'::regprocedure),
+                    where oid = 'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb,integer)'::regprocedure),
   'both public functions are security invoker wrappers');
 select ok(has_function_privilege('authenticated',
-            'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean,jsonb)', 'execute')
+            'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean,jsonb,integer)', 'execute')
           and has_function_privilege('authenticated',
-            'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb)', 'execute')
+            'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb,integer)', 'execute')
           and not has_function_privilege('anon',
-            'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean,jsonb)', 'execute')
+            'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean,jsonb,integer)', 'execute')
           and not has_function_privilege('anon',
-            'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb)', 'execute'),
+            'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb,integer)', 'execute'),
   'authenticated may call both, anon neither');
 select ok(not has_function_privilege('authenticated',
-            'private.task_update_consequences(bigint,bigint,bigint,text,text)', 'execute')
+            'private.task_update_consequences(bigint,bigint,bigint,text,text,integer)', 'execute')
           and not has_function_privilege('authenticated',
-            'private.plan_task_update(public.tasks,bigint,text,text,timestamptz,bigint,text,text,jsonb)', 'execute'),
+            'private.plan_task_update(public.tasks,bigint,text,text,timestamptz,bigint,text,text,jsonb,integer)', 'execute'),
   'the two shared helpers are callable only from inside the definer bodies');
 
 -- ==================== 2. Every field, in todo / in_progress / Feedback pending ====================
@@ -596,8 +596,8 @@ select is((select array_agg(distinct field.name order by field.name)
   '#891: every field name plan_task_update can emit has a Romanian label');
 select ok((select count(distinct m[1]) from pg_proc as proc
             cross join lateral regexp_matches(proc.prosrc, 'array_append\(v_changed, ''([a-z_]+)''\)', 'g') as m
-            where proc.pronamespace = 'private'::regnamespace and proc.proname = 'plan_task_update') = 8,
-  '#891, R46: the source probe above finds all eight changeable fields, the Attached Links one of them (it is not vacuous)');
+            where proc.pronamespace = 'private'::regnamespace and proc.proname = 'plan_task_update') = 9,
+  '#891, R46, R57: the source probe above finds all nine changeable fields, the Attached Links and the Role among them (it is not vacuous)');
 select is((select count(*) from public.notifications as n
             where n.title like 'Task actualizat:%' and n.body ~ '[a-z]+_[a-z]+'), 0::bigint,
   '#891: no Task edit notification in this suite carries a raw column name');

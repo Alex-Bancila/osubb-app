@@ -657,3 +657,581 @@ comment on function private.express_task_interest_impl(bigint) is
   'A Member joins a public Task''s Candidate Queue; the actor is auth.uid(), never a parameter. Every accepted call inserts a pending Candidate at the end of the arrival order, logs interest_expressed with details.position and details.candidate_id, and coalesces the managers'' "Coadă" notification under task:<id>:queue -- nobody becomes Executor by arriving first (#682, ruling R9); the Task Manager selects with select_task_candidate. The tasks row is locked FOR UPDATE before any Assignment or Candidature is read, so concurrent callers serialize. Refusals in order: task_is_umbrella, task_not_public, task_terminal, task_queue_closed, already_executor, already_candidate. An organization-wide Opportunity admits every active Member who can read it -- since #794 (ruling R26) every one at or above the Task''s Minimum Level (R57; below it 42501 task_level_forbidden, judged under the Task lock, also for a reader through a Group Role on the path or their own past Candidature). A local Opportunity admits only members of the Task''s own Group (private.is_group_member, 42501 task_audience_forbidden, the caller''s roster row held FOR SHARE); a non-member cannot read it at all (PT404 task_not_found) unless they read it as leadership -- a BCE, or a Group Manager or Responsible on the path -- who gets the 42501.';
 comment on function public.express_task_interest(bigint) is
   'Express interest in a public Task: the caller joins the end of its ordered Candidate Queue as a pending Candidate, and the Task Manager chooses the Executor from the queue (#682). An organization-wide Opportunity is open to every live active Member at or above the Task''s Minimum Level (#794, ruling R26; R57); a local-Audience Opportunity only to the members of its Group.';
+
+-- ==================== 7 · the shared edit definitions ====================
+drop function public.update_task(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, boolean, jsonb);
+drop function private.update_task_impl(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, boolean, jsonb);
+drop function public.preview_task_update(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, jsonb);
+drop function private.preview_task_update_impl(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, jsonb);
+drop function private.plan_task_update(public.tasks, bigint, text, text, timestamptz, bigint, text, text, jsonb);
+drop function private.task_update_consequences(bigint, bigint, bigint, text, text);
+
+create function private.plan_task_update(p_task public.tasks, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_links jsonb, p_min_level integer)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_title text;
+  v_description text;
+  v_changed text[] := '{}'::text[];
+  v_before jsonb := '{}'::jsonb;
+  v_after jsonb := '{}'::jsonb;
+  v_campaign_id bigint := p_campaign_id;
+  v_campaign_group bigint;
+  v_target_path bigint[];
+begin
+  -- 5. Input validation (PT400).
+  if p_group_id is null or (p_group_id is distinct from p_task.group_id
+    and not exists (select 1 from public.groups where id = p_group_id and status = 'active')) then
+    raise sqlstate 'PT400' using message = 'invalid_group';
+  end if;
+  if p_group_id is distinct from p_task.group_id then
+    if p_task.parent_task_id is not null then
+      raise sqlstate 'PT409' using message = 'subtask_origin_immutable';
+    end if;
+    if p_task.kind = 'umbrella' and exists (select 1 from public.tasks where parent_task_id = p_task.id) then
+      raise sqlstate 'PT409' using message = 'umbrella_has_subtasks';
+    end if;
+  end if;
+  if p_title is null or p_title !~ '[^[:space:]]' then
+    raise sqlstate 'PT400' using message = 'title_required';
+  end if;
+  v_title := regexp_replace(p_title, '^[[:space:]]+|[[:space:]]+$', '', 'g');
+  v_description := nullif(regexp_replace(coalesce(p_description, ''), '^[[:space:]]+|[[:space:]]+$', '', 'g'), '');
+  if p_task.kind = 'task' then
+    if p_deadline is null then
+      raise sqlstate 'PT400' using message = 'deadline_required';
+    end if;
+    if p_audience is null or p_audience not in ('local', 'org') then
+      raise sqlstate 'PT400' using message = 'invalid_audience';
+    end if;
+    if p_assignment_mode is null or p_assignment_mode not in ('direct', 'public') then
+      raise sqlstate 'PT400' using message = 'invalid_assignment_mode';
+    end if;
+    -- #794 (ruling R26): a directly assigned Task carries the local Audience,
+    -- whichever of the two fields the edit changes.
+    if p_assignment_mode = 'direct' and p_audience = 'org' then
+      raise sqlstate 'PT400' using message = 'direct_task_local_only';
+    end if;
+    -- #756 (ruling R25): the Group the edit leaves the Task in -- the current
+    -- one or a new one -- decides; a Private Group's Tasks are local only.
+    if p_audience = 'org'
+       and exists (select 1 from public.groups as origin
+                    where origin.id = p_group_id and origin.is_private) then
+      raise sqlstate 'PT400' using message = 'private_group_local_only';
+    end if;
+  elsif p_campaign_id is not null then
+    raise sqlstate 'PT400' using message = 'umbrella_has_no_campaign';
+  end if;
+  -- R57: p_min_level is the resolved value (the caller's step 4). A changed
+  -- one is never above the actor's own Level; an unchanged one is not judged,
+  -- so a Manager below a Role BC chose can still edit everything else.
+  if p_min_level is distinct from p_task.min_level
+     and coalesce(private.actor_level(), -1) < 9
+     and p_min_level > coalesce(private.actor_level(), -1) then
+    raise sqlstate 'PT400' using message = 'task_min_level_above_actor';
+  end if;
+  -- 6. State preconditions (PT409): umbrella shape, then the edit window.
+  if p_task.kind = 'umbrella' and (p_audience is not null or p_assignment_mode is not null) then
+    raise sqlstate 'PT409' using message = 'task_is_umbrella';
+  end if;
+  if p_task.status = 'in_review' then
+    raise sqlstate 'PT409' using message = 'task_in_review';
+  end if;
+  if p_task.status in ('completed', 'unfulfilled', 'cancelled') then
+    raise sqlstate 'PT409' using message = 'task_terminal';
+  end if;
+  if v_title is distinct from p_task.title then
+    v_changed := array_append(v_changed, 'title');
+    v_before := v_before || jsonb_build_object('title', p_task.title);
+    v_after := v_after || jsonb_build_object('title', v_title);
+  end if;
+  if v_description is distinct from p_task.description then
+    v_changed := array_append(v_changed, 'description');
+    v_before := v_before || jsonb_build_object('description', p_task.description);
+    v_after := v_after || jsonb_build_object('description', v_description);
+  end if;
+  if p_deadline is distinct from p_task.deadline then
+    v_changed := array_append(v_changed, 'deadline');
+    v_before := v_before || jsonb_build_object('deadline', p_task.deadline);
+    v_after := v_after || jsonb_build_object('deadline', p_deadline);
+  end if;
+  if p_group_id is distinct from p_task.group_id then
+    v_changed := array_append(v_changed, 'group_id');
+    v_before := v_before || jsonb_build_object('group_id', p_task.group_id);
+    v_after := v_after || jsonb_build_object('group_id', p_group_id);
+  end if;
+  if p_group_id is distinct from p_task.group_id and p_campaign_id = p_task.campaign_id and p_campaign_id is not null then
+    select grp.path into v_target_path from public.groups grp where grp.id = p_group_id;
+    select campaign.group_id into v_campaign_group from public.campaigns campaign where campaign.id = p_campaign_id;
+    if v_campaign_group is not null and not v_target_path @> array[v_campaign_group] then
+      v_campaign_id := null;
+    end if;
+  end if;
+  if v_campaign_id is distinct from p_task.campaign_id then
+    v_changed := array_append(v_changed, 'campaign_id');
+    v_before := v_before || jsonb_build_object('campaign_id', p_task.campaign_id);
+    v_after := v_after || jsonb_build_object('campaign_id', v_campaign_id);
+  end if;
+  if p_audience is distinct from p_task.audience then
+    v_changed := array_append(v_changed, 'audience');
+    v_before := v_before || jsonb_build_object('audience', p_task.audience);
+    v_after := v_after || jsonb_build_object('audience', p_audience);
+  end if;
+  if p_assignment_mode is distinct from p_task.assignment_mode then
+    v_changed := array_append(v_changed, 'assignment_mode');
+    v_before := v_before || jsonb_build_object('assignment_mode', p_task.assignment_mode);
+    v_after := v_after || jsonb_build_object('assignment_mode', p_assignment_mode);
+  end if;
+  if p_min_level is distinct from p_task.min_level then
+    v_changed := array_append(v_changed, 'min_level');
+    v_before := v_before || jsonb_build_object('min_level', p_task.min_level);
+    v_after := v_after || jsonb_build_object('min_level', p_min_level);
+  end if;
+  -- R46: the Attached Links, already normalized by the caller's step 1, are one
+  -- field of the full state.
+  if p_links is distinct from p_task.links then
+    v_changed := array_append(v_changed, 'links');
+    v_before := v_before || jsonb_build_object('links', p_task.links);
+    v_after := v_after || jsonb_build_object('links', p_links);
+  end if;
+  if array_length(v_changed, 1) is null then
+    raise sqlstate 'PT409' using message = 'nothing_to_update';
+  end if;
+  return jsonb_build_object('title', v_title, 'description', v_description,
+    'campaign_id', v_campaign_id, 'links', p_links, 'min_level', p_min_level,
+    'changed', to_jsonb(v_changed), 'before', v_before, 'after', v_after);
+end;
+$function$;
+
+comment on function private.plan_task_update(public.tasks, bigint, text, text, timestamptz, bigint, text, text, jsonb, integer) is
+  'Shared #627 full-state validator and audit diff. A real Group move needs an active target; same-Group edits retain the prior edit window even on archived Groups. Subtasks cannot move and Umbrellas with Subtasks cannot move. An existing Campaign incompatible with the target Group is normalized to null and included in the changed/before/after diff. R46: the Attached Links (p_links, normalized by private.require_attached_links at the caller''s step 1; an empty list clears them) are one field of the full state, named links in changed/before/after when they differ, and returned for the command to store. R57 (2026-10-14): p_min_level is the resolved Minimum Level (the caller''s step 4); a changed one above the actor''s own Level is PT400 task_min_level_above_actor, an unchanged one is never judged; a change is the field min_level ("cine îl vede").';
+revoke execute on function private.plan_task_update(public.tasks, bigint, text, text, timestamptz, bigint, text, text, jsonb, integer)
+  from public, anon, authenticated, service_role;
+
+create function private.task_update_consequences(p_task_id bigint, p_group_id bigint, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_min_level integer)
+ RETURNS TABLE(consequence text, member_id uuid)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  with task as (
+    select target.id, target.group_id, target.audience, target.assignment_mode,
+           target.campaign_id, grp.min_level, grp.path, target.min_level as task_min_level
+      from public.tasks as target
+      join public.groups as grp on grp.id = p_group_id
+     where target.id = p_task_id and target.kind = 'task'
+  ),
+  narrowed as (
+    select task.* from task
+     where p_assignment_mode = 'public' and p_audience = 'local'
+       and task.audience is distinct from 'local'
+  ),
+  moving as (select * from task where group_id is distinct from p_group_id),
+  -- R57: a raised Minimum Level (p_min_level is the resolved value).
+  raised as (select * from task where p_min_level > task.task_min_level),
+  removed_candidates as (
+    select candidate.id, candidate.member_id, candidate.joined_at
+      from task
+      join public.task_candidates as candidate
+        on candidate.task_id = task.id and candidate.status = 'pending'
+     where (task.assignment_mode = 'public' and p_assignment_mode = 'direct')
+        or (exists (select 1 from narrowed)
+            and not private.is_group_member(p_group_id, candidate.member_id))
+        or (exists (select 1 from moving)
+            and coalesce(private.actor_level(candidate.member_id), -1) < task.min_level)
+        or (exists (select 1 from raised)
+            and coalesce(private.actor_level(candidate.member_id), -1) < p_min_level)
+  ),
+  active_executor as (
+    select assignment.member_id, task.min_level
+      from task join public.task_assignments as assignment
+        on assignment.task_id = task.id and assignment.ended_at is null
+  ),
+  removed_executor as (
+    select executor.member_id from active_executor executor
+     where (exists (select 1 from moving)
+            and coalesce(private.actor_level(executor.member_id), -1) < executor.min_level)
+        or (not exists (select 1 from moving) and exists (select 1 from narrowed)
+            and not private.is_group_member(p_group_id, executor.member_id))
+        or (exists (select 1 from raised)
+            and coalesce(private.actor_level(executor.member_id), -1) < p_min_level)
+  ),
+  added_executor as (
+    select executor.member_id from active_executor executor
+     where exists (select 1 from moving)
+       and coalesce(private.actor_level(executor.member_id), -1) >= executor.min_level
+       and not private.is_group_member(p_group_id, executor.member_id)
+       and not (exists (select 1 from raised)
+                and coalesce(private.actor_level(executor.member_id), -1) < p_min_level)
+  ),
+  cleared_campaign as (
+    select null::uuid as member_id from moving
+      join public.campaigns campaign on campaign.id = moving.campaign_id
+     where p_campaign_id = moving.campaign_id
+       and not moving.path @> array[campaign.group_id]
+  ),
+  consequences as (
+    select 1 as rank, 'executor_added_to_group'::text as consequence,
+           added_executor.member_id, null::timestamptz as joined_at, null::bigint as candidate_id
+      from added_executor
+    union all select 2, 'executor_removed', removed_executor.member_id, null, null from removed_executor
+    union all select 3, 'candidate_removed', removed_candidates.member_id,
+                     removed_candidates.joined_at, removed_candidates.id from removed_candidates
+    union all select 4, 'campaign_cleared', cleared_campaign.member_id, null, null from cleared_campaign
+  )
+  select consequences.consequence, consequences.member_id from consequences
+   order by consequences.rank, consequences.joined_at, consequences.candidate_id;
+$function$;
+
+comment on function private.task_update_consequences(bigint, bigint, bigint, text, text, integer) is
+  'One shared #627 preview/command consequence definition. On a move: an eligible Executor outside the target roster is appointed; one below target Minimum Level loses the Assignment; pending Candidates below target Minimum Level leave the queue; an incompatible existing Campaign is cleared. Explicit Audience narrowing removes a non-member Executor and non-member Candidates; Public -> Direct closes every pending Candidature. No Candidate is ever promoted (#682): a removed Executor leaves the Task todo with its remaining queue intact for the manager to select from. Stable; no writes or locks. R57 (2026-10-14): p_min_level is the resolved Minimum Level; a raised one removes the pending Candidates and the active Executor below it, and an Executor it removes is not also appointed to a target Group.';
+revoke execute on function private.task_update_consequences(bigint, bigint, bigint, text, text, integer)
+  from public, anon, authenticated, service_role;
+
+create or replace function private.task_field_labels(p_fields text[])
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE PARALLEL SAFE
+ SET search_path TO ''
+AS $function$
+  select coalesce(pg_catalog.string_agg(labelled.label, ', ' order by labelled.ord), 'detalii')
+    from (
+      select field.ord,
+             case field.name
+               when 'title'           then 'titlu'
+               when 'description'     then 'descriere'
+               when 'deadline'        then 'termen'
+               when 'group_id'        then 'grup'
+               when 'campaign_id'     then 'campanie'
+               when 'audience'        then 'audiență'
+               when 'assignment_mode' then 'atribuire'
+               when 'link_label'      then 'etichetă link'
+               when 'link_url'        then 'adresă link'
+               when 'links'           then 'linkuri'
+               when 'min_level'       then 'cine îl vede'
+             end as label
+        from pg_catalog.unnest(p_fields) with ordinality as field(name, ord)
+    ) as labelled
+   where labelled.label is not null;
+$function$;
+
+
+-- ==================== 8 · the edit commands ====================
+create function private.preview_task_update_impl(p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_links jsonb, p_min_level integer)
+ RETURNS TABLE(consequence text, member_id uuid)
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_task public.tasks%rowtype;
+  v_links jsonb;
+  v_min_level integer;
+begin
+  -- R57: the ladder, malformed for every caller (the command's step 1 too).
+  if p_min_level is not null and p_min_level not in (0, 1, 2, 3, 5, 6) then
+    raise sqlstate 'PT400' using message = 'invalid_task_min_level';
+  end if;
+  -- #673 (R8) and #684 (R7), R46: the command's step 1, so preview and command agree.
+  perform private.require_text_length('title',
+    regexp_replace(p_title, '^[[:space:]]+|[[:space:]]+$', '', 'g'), 3, 120);
+  perform private.require_text_length('description',
+    regexp_replace(p_description, '^[[:space:]]+|[[:space:]]+$', '', 'g'), null, 2000);
+  v_links := private.require_attached_links(p_links, p_link_label, p_link_url);
+  -- The command's gate, without its locks: a stable function takes none.
+  perform private.require_task_visible(p_task_id);
+  select * into v_task from public.tasks where id = p_task_id;
+  if not found then
+    raise sqlstate 'PT404' using message = 'task_not_found';
+  end if;
+  if not coalesce(private.can_manage_task(p_task_id), false) then
+    raise exception using errcode = '42501', message = 'task_manage_forbidden';
+  end if;
+  if p_group_id is distinct from v_task.group_id and not coalesce(private.can_manage_group_work(p_group_id), false) then
+    raise exception using errcode = '42501', message = 'group_manage_forbidden';
+  end if;
+  -- R46: an app version from before R46 sends only the pair (p_links not sent):
+  -- it edits the first link it shows and keeps the others it cannot show.
+  if p_links is null then
+    v_links := v_links || case when jsonb_array_length(v_task.links) > 1
+                               then v_task.links - 0 else '[]'::jsonb end;
+  end if;
+  -- R57: null keeps the stored Role; a direct Task or an Umbrella has none.
+  v_min_level := case when v_task.kind = 'task' and p_assignment_mode = 'public'
+                      then coalesce(p_min_level, v_task.min_level) else 0 end;
+  perform private.plan_task_update(v_task, p_group_id, p_title, p_description, p_deadline,
+    p_campaign_id, p_assignment_mode, p_audience, v_links, v_min_level);
+  return query
+    select c.consequence, c.member_id
+      from private.task_update_consequences(p_task_id, p_group_id, p_campaign_id, p_assignment_mode, p_audience, v_min_level) as c;
+end;
+$function$;
+
+comment on function private.preview_task_update_impl(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, jsonb, integer) is
+  'Body behind public.preview_task_update (#626): the same step-1 checks as update_task (#673 lengths, R46 Attached Links), the same gate (PT404 task_not_found for an invisible Task, 42501 task_manage_forbidden for a non-manager), the same validation and refusals (private.plan_task_update), then the rows of private.task_update_consequences -- the one definition the command applies. Stable; writes and locks nothing. R57 (2026-10-14): p_min_level, the Task''s Minimum Level (null keeps it; a direct Task or an Umbrella is stored at 0; PT400 invalid_task_min_level off the ladder, task_min_level_above_actor for a changed value above the editor''s own Level). Raising it removes the waiting Candidates and the Executor below it, as consequences to confirm (task_update_needs_confirmation).';
+
+create function public.preview_task_update(p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text DEFAULT NULL::text, p_link_url text DEFAULT NULL::text, p_links jsonb DEFAULT NULL::jsonb, p_min_level integer DEFAULT NULL::integer)
+ RETURNS TABLE(consequence text, member_id uuid)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO ''
+AS $function$
+  select * from private.preview_task_update_impl(p_task_id, p_group_id, p_title, p_description, p_deadline,
+    p_campaign_id, p_assignment_mode, p_audience, p_link_label, p_link_url, p_links, p_min_level);
+$function$;
+
+comment on function public.preview_task_update(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, jsonb, integer) is
+  'Lists public.update_task consequences for the same full state -- the Attached Links included (R46: p_links, or the legacy pair) -- without writes: executor_added_to_group, executor_removed, candidate_removed, and campaign_cleared (null member_id). No edit promotes a Candidate (#682). Refuses the same invalid state or authority. R57 (2026-10-14): p_min_level, the Task''s Minimum Level (null keeps it; a direct Task or an Umbrella is stored at 0; PT400 invalid_task_min_level off the ladder, task_min_level_above_actor for a changed value above the editor''s own Level). Raising it removes the waiting Candidates and the Executor below it, as consequences to confirm (task_update_needs_confirmation).';
+
+create function private.update_task_impl(p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text, p_link_url text, p_accept_consequences boolean, p_links jsonb, p_min_level integer)
+ RETURNS public.tasks
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_actor uuid;
+  v_parent_id bigint;
+  v_task public.tasks%rowtype;
+  v_plan jsonb;
+  v_links jsonb;
+  v_consequences jsonb;
+  v_removed_candidates uuid[];
+  v_removed_executor uuid;
+  v_added_executor uuid;
+  v_campaign_id bigint;
+  v_closed uuid[] := '{}'::uuid[];
+  v_assignment_id bigint;
+  v_executor uuid;
+  v_mode_changed boolean;
+  v_group_changed boolean;
+  v_from public.task_status;
+  v_to public.task_status;
+  v_details jsonb;
+  v_constraint text;
+  v_min_level integer;
+  v_old_min_level integer;
+begin
+  -- R57: the ladder, malformed for every caller.
+  if p_min_level is not null and p_min_level not in (0, 1, 2, 3, 5, 6) then
+    raise sqlstate 'PT400' using message = 'invalid_task_min_level';
+  end if;
+  -- 1. #673 (R8): malformed for every caller, measured as stored (trimmed).
+  --    No deadline_in_past here: R8 judges the deadline only at creation.
+  perform private.require_text_length('title',
+    regexp_replace(p_title, '^[[:space:]]+|[[:space:]]+$', '', 'g'), 3, 120);
+  perform private.require_text_length('description',
+    regexp_replace(p_description, '^[[:space:]]+|[[:space:]]+$', '', 'g'), null, 2000);
+  -- #684 (R7), R46: the Attached Links, normalized.
+  v_links := private.require_attached_links(p_links, p_link_label, p_link_url);
+  -- 2. Gate + visibility.
+  v_actor := private.require_task_visible(p_task_id);
+  -- 3. The locks. This unlocked read only learns WHICH parent to lock first;
+  --    every decision below is made from the locked rows. Both rows FOR NO
+  --    KEY UPDATE, never FOR UPDATE (conventions section 2).
+  select parent_task_id into v_parent_id from public.tasks where id = p_task_id;
+  if not found then
+    raise sqlstate 'PT404' using message = 'task_not_found';
+  end if;
+  if v_parent_id is not null then
+    perform 1 from public.tasks where id = v_parent_id for no key update;
+    if not found then
+      raise sqlstate 'PT404' using message = 'task_not_found';
+    end if;
+  end if;
+  select * into v_task from public.tasks where id = p_task_id for no key update;
+  if not found then
+    raise sqlstate 'PT404' using message = 'task_not_found';
+  end if;
+  -- 4. Authority under lock.
+  perform private.require_task_manager(p_task_id);
+  -- R46: an app version from before R46 sends only the pair (p_links not sent):
+  -- it edits the first link it shows and keeps the others it cannot show.
+  if p_links is null then
+    v_links := v_links || case when jsonb_array_length(v_task.links) > 1
+                               then v_task.links - 0 else '[]'::jsonb end;
+  end if;
+  -- R57: null keeps the stored Role; a direct Task or an Umbrella has none.
+  v_old_min_level := v_task.min_level;
+  v_min_level := case when v_task.kind = 'task' and p_assignment_mode = 'public'
+                      then coalesce(p_min_level, v_task.min_level) else 0 end;
+  if v_task.parent_task_id is distinct from v_parent_id then
+    raise sqlstate 'PT409' using message = 'task_parent_changed';
+  end if;
+  if p_group_id is distinct from v_task.group_id then
+    perform private.require_group_work_manager(p_group_id);
+    perform 1 from public.groups grp
+      where grp.id in (v_task.group_id, p_group_id)
+      order by grp.id for no key update;
+    perform private.require_group_work_manager(v_task.group_id);
+    perform private.require_group_work_manager(p_group_id);
+  end if;
+  -- A move or a raised Role judges the queue's live Levels: hold them.
+  if p_group_id is distinct from v_task.group_id or v_min_level > v_old_min_level then
+    perform 1 from public.profiles profile
+     where profile.id in (
+       select assignment.member_id from public.task_assignments assignment
+        where assignment.task_id = p_task_id and assignment.ended_at is null
+       union
+       select candidate.member_id from public.task_candidates candidate
+        where candidate.task_id = p_task_id and candidate.status = 'pending')
+     order by profile.id for share of profile;
+  end if;
+  -- 5 + 6. Input validation and state preconditions, shared with the preview.
+  v_plan := private.plan_task_update(v_task, p_group_id, p_title, p_description, p_deadline,
+    p_campaign_id, p_assignment_mode, p_audience, v_links, v_min_level);
+  -- Consequences, shared with the preview; none may apply unaccepted.
+  select coalesce(jsonb_agg(jsonb_build_object('consequence', c.consequence, 'member_id', c.member_id)
+                            order by c.ord), '[]'::jsonb)
+    into v_consequences
+    from private.task_update_consequences(p_task_id, p_group_id, p_campaign_id, p_assignment_mode, p_audience, v_min_level)
+         with ordinality as c (consequence, member_id, ord);
+  if jsonb_array_length(v_consequences) > 0 and not coalesce(p_accept_consequences, false) then
+    raise sqlstate 'PT409' using message = 'task_update_needs_confirmation';
+  end if;
+  select coalesce(array_agg((e ->> 'member_id')::uuid) filter (where e ->> 'consequence' = 'candidate_removed'), '{}'::uuid[]),
+         (array_agg((e ->> 'member_id')::uuid) filter (where e ->> 'consequence' = 'executor_removed'))[1],
+         (array_agg((e ->> 'member_id')::uuid) filter (where e ->> 'consequence' = 'executor_added_to_group'))[1]
+    into v_removed_candidates, v_removed_executor, v_added_executor
+    from jsonb_array_elements(v_consequences) as e;
+  v_campaign_id := (v_plan ->> 'campaign_id')::bigint;
+  v_mode_changed := p_assignment_mode is distinct from v_task.assignment_mode;
+  v_group_changed := p_group_id is distinct from v_task.group_id;
+
+  if v_added_executor is not null then
+    perform private.appoint_group_member(p_group_id, v_added_executor, v_actor);
+  end if;
+  -- 7. Mutate. Candidatures first: close_task_queue must run while the Task
+  --    is still public (it is a no-op otherwise).
+  if v_task.assignment_mode = 'public' and p_assignment_mode = 'direct' then
+    v_closed := private.close_task_queue(p_task_id, v_actor);
+  elsif cardinality(v_removed_candidates) > 0 then
+    with closed as (
+      update public.task_candidates as candidate
+         set status = 'closed', decided_at = now(), decided_by = v_actor
+       where candidate.task_id = p_task_id
+         and candidate.status = 'pending'
+         and candidate.member_id = any (v_removed_candidates)
+      returning candidate.member_id)
+    select coalesce(array_agg(closed.member_id), '{}'::uuid[]) into v_closed from closed;
+  end if;
+  -- A removed Executor leaves the Task todo; the remaining queue is left
+  -- exactly as it is for the manager to select from (#682, R9).
+  if v_removed_executor is not null then
+    select assignment.id into v_assignment_id
+      from public.task_assignments as assignment
+     where assignment.task_id = p_task_id and assignment.ended_at is null
+       and assignment.member_id = v_removed_executor
+     for update;
+    perform private.end_task_assignment(v_assignment_id,
+      case when v_group_changed then 'group_changed' else 'task_updated' end, null);
+    if v_task.status <> 'todo' then
+      v_from := v_task.status;
+      v_to := 'todo';
+    end if;
+  end if;
+  begin
+    update public.tasks
+       set title = v_plan ->> 'title',
+           description = v_plan ->> 'description',
+           deadline = p_deadline,
+           campaign_id = v_campaign_id,
+           group_id = p_group_id,
+           audience = p_audience,
+           assignment_mode = p_assignment_mode,
+           links = v_plan -> 'links',
+           min_level = v_min_level,
+           queue_opened_at = case
+             when v_mode_changed then case when p_assignment_mode = 'public' then now() end
+             else queue_opened_at
+           end,
+           queue_closed_at = case when v_mode_changed then null else queue_closed_at end,
+           status = case when v_removed_executor is not null then 'todo'::public.task_status else status end,
+           started_at = case when v_removed_executor is not null then null else started_at end
+     where id = p_task_id
+    returning * into v_task;
+  exception
+    when foreign_key_violation then
+      get stacked diagnostics v_constraint = constraint_name;
+      if v_constraint = 'tasks_campaign_id_fkey' then
+        raise sqlstate 'PT400' using message = 'invalid_campaign';
+      end if;
+      raise;
+    when check_violation then
+      -- private.validate_task_campaign raises 23514 with exactly these two
+      -- reasons (update_task_content precedent); any other 23514 propagates.
+      if sqlerrm in ('task_campaign_origin_mismatch', 'task_campaign_inactive') then
+        raise sqlstate 'PT400' using message = 'invalid_campaign';
+      end if;
+      raise;
+  end;
+  v_details := jsonb_build_object('changed', v_plan -> 'changed', 'before', v_plan -> 'before',
+    'after', v_plan -> 'after', 'consequences', v_consequences);
+  if v_assignment_id is not null then
+    v_details := v_details || jsonb_build_object('ended_assignment_id', v_assignment_id);
+  end if;
+  perform private.log_task_activity(p_task_id, 'task_updated', v_actor, null, v_from, v_to, null, v_details);
+
+  -- Notifications.
+  perform private.notify(v_closed, 'task'::public.noti_kind,
+    'Coadă închisă: ' || v_task.title,
+    'Nu mai poți fi selectat pentru acest task.',
+    p_task_id, null, v_actor);
+  if v_removed_executor is not null then
+    perform private.notify(array[v_removed_executor], 'task'::public.noti_kind,
+      'Task actualizat: ' || v_task.title,
+      case when v_group_changed
+        then 'Taskul a fost mutat într-un grup pentru care nu ești eligibil.'
+        when v_min_level > v_old_min_level
+        then 'Nu mai ești executorul acestui task: e acum doar pentru '
+             || (select role.name from public.roles as role where role.level = v_min_level)
+             || ' și peste.'
+        else 'Nu mai ești executorul acestui task: audiența lui s-a schimbat.' end,
+      p_task_id, null, v_actor);
+  end if;
+  select assignment.member_id into v_executor
+    from public.task_assignments as assignment
+   where assignment.task_id = p_task_id and assignment.ended_at is null;
+  -- R53: a Campaign is a label; a change of the Campaign alone tells nobody.
+  if v_executor is not null
+     and exists (select 1 from jsonb_array_elements_text(v_plan -> 'changed') as field(name)
+                  where field.name <> 'campaign_id') then
+    perform private.notify(array[v_executor], 'task'::public.noti_kind,
+      'Task actualizat: ' || v_task.title,
+      'Modificat: ' || private.task_field_labels(array(select jsonb_array_elements_text(v_plan -> 'changed'))) || '.',
+      p_task_id, null, v_actor);
+  end if;
+  return v_task;
+end;
+$function$;
+
+comment on function private.update_task_impl(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, boolean, jsonb, integer) is
+  'Atomic #627 full-state Task update. Locks Umbrella then Task FOR NO KEY UPDATE; for a move, authorizes both Groups, locks both Groups in ID order, rechecks authority, and holds Executor/Candidate Profiles FOR SHARE before applying the shared consequence plan. PT409 task_update_needs_confirmation protects every listed consequence. Uses the #583 Appointment core, ends an ineligible Assignment (group_changed on a move, task_updated on Audience narrowing) and returns the Task to todo, closes ineligible Candidatures, clears an incompatible Campaign, and logs one task_updated activity with the accepted consequences and field diff. No Candidate is ever promoted (#682): the remaining queue stays pending for the manager to select from. R46: the Attached Links are part of the full state (p_links, a sent empty list clears them), judged at step 1 by private.require_attached_links. From an app version before R46, which sends only the pair p_link_label + p_link_url (p_links null), the pair replaces the first link and the others are kept, so an old app never deletes links it cannot show. R57 (2026-10-14): p_min_level, the Task''s Minimum Level (null keeps it; a direct Task or an Umbrella is stored at 0; PT400 invalid_task_min_level off the ladder, task_min_level_above_actor for a changed value above the editor''s own Level). Raising it removes the waiting Candidates and the Executor below it, as consequences to confirm (task_update_needs_confirmation).';
+
+create function public.update_task(p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text DEFAULT NULL::text, p_link_url text DEFAULT NULL::text, p_accept_consequences boolean DEFAULT false, p_links jsonb DEFAULT NULL::jsonb, p_min_level integer DEFAULT NULL::integer)
+ RETURNS public.tasks
+ LANGUAGE sql
+ SET search_path TO ''
+AS $function$
+  select private.update_task_impl(p_task_id, p_group_id, p_title, p_description, p_deadline,
+    p_campaign_id, p_assignment_mode, p_audience, p_link_label, p_link_url, p_accept_consequences, p_links, p_min_level);
+$function$;
+
+comment on function public.update_task(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, boolean, jsonb, integer) is
+  'Sets every editable field, including Group and the Attached Links (R46: p_links, up to five, full state -- a sent empty list clears them; p_links not sent (null) is an app version from before R46: p_link_label + p_link_url, kept for one release, replace the first link and the others are kept), at once while todo or in_progress. A real Group move requires authority over source and target. Consequences require explicit acceptance after public.preview_task_update. R57 (2026-10-14): p_min_level, the Task''s Minimum Level (null keeps it; a direct Task or an Umbrella is stored at 0; PT400 invalid_task_min_level off the ladder, task_min_level_above_actor for a changed value above the editor''s own Level). Raising it removes the waiting Candidates and the Executor below it, as consequences to confirm (task_update_needs_confirmation).';
+
+revoke execute on function private.preview_task_update_impl(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, jsonb, integer)
+  from public, anon, authenticated, service_role;
+revoke execute on function public.preview_task_update(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, jsonb, integer)
+  from public, anon, authenticated, service_role;
+revoke execute on function private.update_task_impl(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, boolean, jsonb, integer)
+  from public, anon, authenticated, service_role;
+revoke execute on function public.update_task(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, boolean, jsonb, integer)
+  from public, anon, authenticated, service_role;
+grant execute on function private.preview_task_update_impl(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, jsonb, integer) to authenticated;
+grant execute on function public.preview_task_update(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, jsonb, integer) to authenticated;
+grant execute on function private.update_task_impl(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, boolean, jsonb, integer) to authenticated;
+grant execute on function public.update_task(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, boolean, jsonb, integer) to authenticated;
