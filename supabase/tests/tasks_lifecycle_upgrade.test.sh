@@ -81,6 +81,12 @@ drop function private.log_task_activity(bigint, text, uuid, bigint, public.task_
 -- scratch transaction rolls back, so they are never recreated here.
 drop function public.leadership_member_tasks(uuid, timestamptz, timestamptz);
 drop function private.leadership_member_tasks_impl(uuid, timestamptz, timestamptz);
+-- #1052: public.task_list and public.task_list_summary return the status as
+-- the enum too; their wrappers and bodies go the same way.
+drop function public.task_list(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer);
+drop function private.task_list_impl(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer);
+drop function public.task_list_summary(text);
+drop function private.task_list_summary_impl(text);
 drop type public.task_status;
 create type public.task_status as enum ('todo', 'progress', 'done', 'overdue', 'open');
 alter table public.tasks
