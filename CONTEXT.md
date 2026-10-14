@@ -69,7 +69,7 @@ The presentation label chosen when a Group is created: Department, Project, or T
 _Avoid_: Kind, type, group type
 
 **Minimum Level**:
-The lowest Level allowed to join a Group or to discover it and what it publishes, such as its Events. A Child Group's Minimum Level is at least its parent's, an Event may raise it but never lower it, and a creator cannot set it above their own Level.
+The lowest Level allowed to join a Group or to discover it and what it publishes, such as its Events. A Child Group's Minimum Level is at least its parent's, an Event may raise it to any Role but never lower it (ruling R57), and a creator cannot set it above their own Level.
 _Avoid_: Min level, access level, role gate
 
 **Group Role**:

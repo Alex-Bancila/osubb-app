@@ -22,8 +22,8 @@ export const GROUP_MINIMUM_LEVELS: readonly number[] = MINIMUM_LEVEL_LADDER.map(
   (rung) => rung.level,
 );
 
-/** An Event's Minimum Level: the ladder levels `events_min_level_ck` accepts. */
-export const EVENT_MINIMUM_LEVELS: readonly number[] = [0, 3, 5, 6];
+/** An Event's Minimum Level: the whole ladder since R57 (`events_min_level_ck`). */
+export const EVENT_MINIMUM_LEVELS: readonly number[] = GROUP_MINIMUM_LEVELS;
 
 /** The Role name for a ladder level; `undefined` off the ladder (4, 9). */
 export function minimumLevelLabel(level: number): string | undefined {
