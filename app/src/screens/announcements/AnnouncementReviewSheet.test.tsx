@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RawAnnouncementRow } from '../../queries/announcements';
 
@@ -78,27 +79,73 @@ describe('AnnouncementReviewSheet (spec 2026-10-11)', () => {
     );
   });
 
-  it('draws nothing until the row is read, or when it cannot be', () => {
-    reads.useAnnouncement.mockReturnValue({ data: undefined });
-    const { rerender } = render(
-      <AnnouncementReviewSheet
-        id={3}
-        open
-        onOpenChange={vi.fn()}
-        onDecided={vi.fn()}
-      />,
-    );
-    expect(screen.queryByRole('dialog')).toBeNull();
+  const sheet = () => (
+    <AnnouncementReviewSheet
+      id={3}
+      open
+      onOpenChange={vi.fn()}
+      onDecided={vi.fn()}
+    />
+  );
 
-    reads.useAnnouncement.mockReturnValue({ data: null });
-    rerender(
-      <AnnouncementReviewSheet
-        id={3}
-        open
-        onOpenChange={vi.fn()}
-        onDecided={vi.fn()}
-      />,
+  // Fails if the sheet waits for its row unseen: the click on a request
+  // would seem to do nothing.
+  it('opens at once and holds the place of the form while the row is read', () => {
+    reads.useAnnouncement.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isError: false,
+      isFetching: true,
+      refetch: vi.fn(),
+    });
+
+    render(sheet());
+
+    const dialog = screen.getByRole('dialog', { name: 'Revizuiește anunțul' });
+    expect(within(dialog).getByRole('status')).toHaveTextContent(
+      'Se încarcă anunțul…',
     );
-    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  // Fails if a failed read draws nothing, or offers no way to try again.
+  it('says a failed read failed and reads it again on Reîncearcă', async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn();
+    reads.useAnnouncement.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      isFetching: false,
+      refetch,
+    });
+
+    render(sheet());
+
+    const dialog = screen.getByRole('dialog', { name: 'Revizuiește anunțul' });
+    expect(
+      within(dialog).getByText('Nu am putut încărca anunțul.'),
+    ).toBeInTheDocument();
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Reîncearcă' }),
+    );
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so when the row is gone', () => {
+    reads.useAnnouncement.mockReturnValue({
+      data: null,
+      isPending: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    render(sheet());
+
+    expect(
+      within(
+        screen.getByRole('dialog', { name: 'Revizuiește anunțul' }),
+      ).getByText('Acest anunț nu mai există.'),
+    ).toBeInTheDocument();
   });
 });
