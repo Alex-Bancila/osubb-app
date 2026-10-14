@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-14
 - **Decided by:** Alex Băncilă, in the session of 2026-10-14 (ruling R53)
-- **Status:** approved for implementation ("you can start implementing the notification"). Edit notices: #1061. Reminders: the PR that follows it.
+- **Status:** approved for implementation ("you can start implementing the notification"). Edit notices: #1061. Reminders: #1062.
 
 ## Decisions
 
@@ -53,7 +53,7 @@ A per-item "already announced" flag was rejected: it would tell a moved Event's 
 
 Unchanged, except that a change of the Campaign alone no longer notifies the Executor.
 
-### 5. Reminders (the next PR)
+### 5. Reminders (#1062)
 
 One job, `private.send_reminders(p_now timestamptz default now())`, scheduled every hour (`osubb-reminders`, minute 5). It acts only when `p_now` falls in the 09:00 hour in Europe/Bucharest, so daylight saving needs nothing. Days are counted between local calendar dates. Each reminder is sent at most once per member per day (an advisory lock and a check for any notification with the day's key, read or not). It replaces `private.remind_deadlines()` and its cron job.
 
@@ -66,7 +66,7 @@ One job, `private.send_reminders(p_now timestamptz default now())`, scheduled ev
 
 - A Task that gets its Executor with fewer than three days left only gets the day-before reminder, because the morning of the third day before has passed. A Task handed in for review gets none.
 - Someone assigned, answering Particip or posting after 09:00 on the day before gets no reminder: they just acted. A Member whose latest notice about the Announcement arrived that same day gets no Termen reminder: it is still fresh.
-- **An Event's Announcement gets no Termen reminder.** `create_event` and `approve_event` write an Announcement whose Termen is the Event's start; reminding its whole audience would contradict decision 3. `announcements.event_id` (nullable, `on delete set null`) records the Event that wrote it; existing ones are matched by Group, title, author and Termen = start. The approval stamp treats `event_id` as bookkeeping, never content.
+- **An Event's Announcement gets no Termen reminder.** `create_event` and `approve_event` write an Announcement whose Termen is the Event's start; reminding its whole audience would contradict decision 3. `announcements.event_id` (nullable, `on delete set null`) records the Event that wrote it, and `announcements.from_event` marks it for good, so it gets no reminder even once the Event is deleted; existing ones are matched by Group, title, author and Termen = start. Only the commands set either (`private.guard_announcement_event`), and the approval stamp treats both as bookkeeping, never content.
 - A critical Announcement's reminder is critical. Opening the Announcement clears its reminder too.
 
 ### Existing rules that still apply
@@ -79,7 +79,7 @@ One job, `private.send_reminders(p_now timestamptz default now())`, scheduled ev
 
 - `edit_notices.test.sql`: an Announcement edited while published, a refreshed unread notice, a pin, a system write, a lowered Minimum Level (new for some, changed for others), a reader without a notice, a request, an edit sent back for approval and its approval, a Deal; an Event title change, a second edit, a Campaign-only change, a move to another Group, an attendee without a notice, an edit sent back for approval and its approval.
 - `update_event.test.sql`, `update_task.test.sql`, `approvals.test.sql`, `private_groups.test.sql` restate their notice expectations under R53; `tracker_grants.test.sql` lists the five new private functions.
-- The reminders PR: `send_reminders` takes the time as an input, so its suite replays the days before a deadline, an Event and a Termen, including the late-October daylight-saving change.
+- `reminders.test.sql` (replacing #69's `deadline_reminders.test.sql`): `send_reminders` takes the time as an input, so the suite replays 10 November 2026 and the end of daylight saving on 25 October 2026 — the 09:00-only rule, three days and the day before, review, nobody and inactive Executors, a past Executor, going / declined / unanswered, cancelled Events, the author, a notice from that same day, critical, a Deal, an Event's Announcement, clearing on opening, the once-a-day rule, the advisory lock, the cron job and the Event link guard.
 
 ## Out of scope
 
