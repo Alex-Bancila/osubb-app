@@ -10,12 +10,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const preferences = vi.hoisted(() => ({
   muted: new Set<number>() as ReadonlySet<number>,
   memberId: undefined as string | undefined,
+  /** The member's preference is still being read. */
+  pending: false,
 }));
 vi.mock('../../queries/group-preferences', () => ({
   usePreferredGroupsData: () => ({
     muted: preferences.muted,
     memberId: preferences.memberId,
   }),
+  useGroupPreferences: () => ({ isPending: preferences.pending }),
 }));
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 import { taskRow } from '../../test/task-fixtures';
@@ -114,6 +117,7 @@ vi.mock('../../queries/task-tabs', () => ({
 // the two one-Task questions a link asks. Nothing unless a test says so.
 const listReads = vi.hoisted(() => ({
   finished: vi.fn(),
+  prefetch: vi.fn(),
   summary: vi.fn(),
   capability: vi.fn(),
   readable: vi.fn(),
@@ -121,6 +125,7 @@ const listReads = vi.hoisted(() => ({
 vi.mock('../../queries/task-lists', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../queries/task-lists')>()),
   useFinishedTasks: (...args: unknown[]) => listReads.finished(...args),
+  usePrefetchFinishedTasks: (...args: unknown[]) => listReads.prefetch(...args),
   useTaskListSummary: (...args: unknown[]) => listReads.summary(...args),
   useTaskManageCapability: (...args: unknown[]) =>
     listReads.capability(...args),
@@ -226,6 +231,7 @@ function noFinished() {
     error: null,
     hasMore: false,
     isLoadingMore: false,
+    isFetching: false,
     moreFailed: false,
     loadMore: vi.fn(),
     refetch: vi.fn(),
@@ -234,6 +240,7 @@ function noFinished() {
 beforeEach(() => {
   listReads.finished.mockReset();
   listReads.finished.mockReturnValue(noFinished());
+  listReads.prefetch.mockReset();
   listReads.summary.mockReset();
   listReads.summary.mockReturnValue({ data: [], isError: false });
   listReads.capability.mockReset();
@@ -2197,6 +2204,153 @@ describe('Taskuri over the paged lists (#1053)', () => {
   it('asks for no summary from a Member who manages nothing', () => {
     renderAt('/tracker');
     expect(listReads.summary).toHaveBeenCalledWith('managed', false);
+  });
+
+  // Fails if De gestionat draws its list, and so asks for its finished
+  // part, only once its open Tasks have arrived.
+  it('asks for De gestionat’s finished Tasks beside its open ones, not after them', () => {
+    manages();
+    hooks.useManagedTasks.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isError: false,
+    });
+    renderAt('/tracker?lista=gestionat');
+    expect(selected()).toBe('De gestionat');
+    expect(listReads.finished).toHaveBeenCalledWith('managed', {}, true);
+    // The open Tasks hold the list's place meanwhile, and nothing finished
+    // is drawn above them.
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Se încarcă taskurile…',
+    );
+    expect(
+      screen.getByRole('searchbox', { name: 'Caută după titlu' }),
+    ).toBeDisabled();
+  });
+
+  // The same for Toate, whose summary is asked only by its list.
+  it('asks for Toate’s finished Tasks and summary beside its open ones', () => {
+    hooks.level = 5;
+    hooks.useTaskLeadership.mockReturnValue({
+      data: true,
+      ...settled,
+      refetch: vi.fn(),
+    });
+    hooks.useAllTasks.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isError: false,
+    });
+    renderAt('/tracker?lista=toate');
+    expect(selected()).toBe('Toate');
+    expect(listReads.finished).toHaveBeenCalledWith('all', {}, true);
+    expect(listReads.summary).toHaveBeenCalledWith('all', true);
+  });
+
+  it('offers the retry of De gestionat’s open Tasks while its finished part is read', async () => {
+    const user = userEvent.setup();
+    manages();
+    const refetch = vi.fn();
+    hooks.useManagedTasks.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new Error('boom'),
+      refetch,
+    });
+    renderAt('/tracker?lista=gestionat');
+    expect(listReads.finished).toHaveBeenCalledWith('managed', {}, true);
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Nu am putut încărca taskurile.');
+    await user.click(
+      within(alert).getByRole('button', { name: 'Încearcă din nou' }),
+    );
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  describe('a leader landing on Taskuri with nothing of their own', () => {
+    const askedEarly = () =>
+      listReads.prefetch.mock.calls.filter(([, , enabled]) => enabled);
+    /** De gestionat holds finished Tasks only, so it opens once known. */
+    function holdsFinished() {
+      listReads.summary.mockReturnValue({
+        data: [
+          {
+            group_id: 10,
+            campaign_id: null,
+            status: 'completed',
+            late: false,
+            dated: true,
+            tasks: 3,
+          },
+        ],
+        isError: false,
+      });
+    }
+    afterEach(() => {
+      preferences.pending = false;
+      preferences.muted = new Set();
+    });
+
+    // Fails if the page leaves De gestionat's finished read to the list: on
+    // a plain /tracker the list is drawn only once the open Tasks have
+    // landed and chosen the tab, so that read would start after them.
+    it('asks for De gestionat’s first finished page before its open Tasks land, as the list will', () => {
+      manages();
+      holdsFinished();
+      hooks.useManagedTasks.mockReturnValue({
+        data: undefined,
+        isPending: true,
+        isError: false,
+      });
+      const { rerender } = renderAt('/tracker');
+      // The tab waits for the open Tasks; the list is not drawn yet.
+      expect(selected()).toBe('Taskurile mele');
+      expect(listReads.finished).not.toHaveBeenCalledWith(
+        'managed',
+        expect.anything(),
+        true,
+      );
+      expect(askedEarly()).toContainEqual(['managed', {}, true]);
+      // They land: De gestionat opens, and its list asks for the very read
+      // already asked for, so it finds that page read.
+      hooks.useManagedTasks.mockReturnValue({ data: [], ...settled });
+      rerender(tree('/tracker'));
+      expect(selected()).toBe('De gestionat');
+      expect(listReads.finished).toHaveBeenLastCalledWith(
+        'managed',
+        askedEarly().at(-1)?.[1],
+        true,
+      );
+    });
+
+    it('waits for Grupuri preferate, so it asks what the list will ask', () => {
+      manages();
+      holdsFinished();
+      preferences.pending = true;
+      const { rerender } = renderAt('/tracker');
+      expect(askedEarly()).toEqual([]);
+      // Known: a BC member who unselected a Group opens on the others.
+      preferences.pending = false;
+      preferences.muted = new Set([20]);
+      rerender(tree('/tracker'));
+      expect(askedEarly().at(-1)).toEqual([
+        'managed',
+        { p_preferred: true },
+        true,
+      ]);
+      expect(selected()).toBe('De gestionat');
+      expect(listReads.finished).toHaveBeenLastCalledWith(
+        'managed',
+        { p_preferred: true },
+        true,
+      );
+    });
+
+    it('asks nothing early of a Member who manages nothing', () => {
+      renderAt('/tracker');
+      expect(askedEarly()).toEqual([]);
+    });
   });
 
   it('tells the sheet a Task opened from De gestionat is managed, and to ask about any other', async () => {

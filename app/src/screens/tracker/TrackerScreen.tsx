@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSwipeTabs } from '../../lib/swipe-tabs';
 import { useSearchParams } from 'react-router';
 import { Tabs } from '@base-ui/react/tabs';
@@ -19,11 +19,12 @@ import {
   useAllTasks,
 } from '../../queries/task-tabs';
 import {
+  usePrefetchFinishedTasks,
   useTaskListSummary,
   useTaskManageCapability,
   useTaskReadable,
-  type ListRead,
 } from '../../queries/task-lists';
+import { useGroupPreferences } from '../../queries/group-preferences';
 import { usePendingDecisions } from '../../queries/request-decisions';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -37,65 +38,22 @@ import {
 } from '../../components/layout';
 import { useAuth } from '../../lib/auth';
 import { useCapability } from '../../lib/capabilities';
-import { ErrorState, Loading } from '../../components/states';
 import { parsePositiveInt } from '../../lib/ids';
+import { useWorkFilter } from '../../lib/use-work-filter';
+import { usePreferredGroups } from '../../components/preferred-groups/preferred-groups';
 import { RequestsView } from '../requests/RequestsView';
 import { AvailableOpportunities } from './AvailableOpportunities';
 import { TaskDetailsSheet } from './TaskDetailsSheet';
 import { ManagerTaskList } from './ManagerTaskList';
+import { finishedListFilters } from './manager-task-list';
 import { AddCompletedTaskControl } from './AddCompletedTaskControl';
 import { NewTaskControl } from './NewTaskControl';
 import { MyTaskList } from './MyTaskList';
-import { trackerListClass, TrackerWorkFilter } from './TrackerWorkFilter';
-import { useTitleSearch, type TitleSearch } from './use-title-search';
+import { TaskQueryStates } from './TaskQueryStates';
+import { useTitleSearch } from './use-title-search';
 import { PersonalScoreHeader } from './PersonalScoreHeader';
 import { PreferredGroupsScope } from '../../components/preferred-groups/PreferredGroupsScope';
 import { TaskActionSuccess } from './TaskActionSuccess';
-
-const NO_ROWS: readonly never[] = [];
-
-/**
- * The loading and retry states every Tracker list shares. The toolbar keeps
- * its row meanwhile, its search disabled, so nothing moves when the list
- * lands; `header` is what a list shows between the toolbar and its Tasks.
- */
-function TaskQueryStates<Row>({
-  query,
-  search,
-  preferredNotice,
-  header,
-  children,
-}: {
-  query: ListRead<Row>;
-  search: TitleSearch;
-  preferredNotice?: boolean;
-  header?: ReactNode;
-  children: (rows: Row[]) => ReactNode;
-}) {
-  const { data } = query;
-  if (data === undefined || query.isPending || query.isError)
-    return (
-      <div className={trackerListClass}>
-        <TrackerWorkFilter
-          rows={NO_ROWS}
-          search={search}
-          disabled
-          preferredNotice={preferredNotice}
-        />
-        {header}
-        {query.isError ? (
-          <ErrorState
-            error={query.error}
-            text="Nu am putut încărca taskurile."
-            onRetry={() => void query.refetch()}
-          />
-        ) : (
-          <Loading label="Se încarcă taskurile…" />
-        )}
-      </div>
-    );
-  return children(data);
-}
 
 /** `?task=<id>`: a positive whole Task id, or nothing. */
 function linkedTaskId(value: string | null): number | null {
@@ -274,6 +232,28 @@ function TrackerContent() {
   const toDecide = decisions.data?.length ?? 0;
   // One search text for the four lists: it stays when the tab changes.
   const search = useTitleSearch();
+  // De gestionat's first finished page, asked beside its open Tasks
+  // (#1053): on a plain visit its tab is chosen, and its list drawn, only
+  // once those land. Asked once, with what the list opens with — the Work
+  // Filter, the search, and Grupuri preferate once the preference is
+  // known — so the list finds it under the same key.
+  const { params: workParams } = useWorkFilter();
+  const preferred = usePreferredGroups();
+  const preferenceKnown = !useGroupPreferences().isPending;
+  const openingFinished = useMemo(
+    () =>
+      finishedListFilters({
+        params: workParams,
+        needle: search.needle,
+        preferred: preferred.active,
+      }),
+    [workParams, search.needle, preferred.active],
+  );
+  usePrefetchFinishedTasks(
+    'managed',
+    openingFinished,
+    management.data === true && preferenceKnown,
+  );
   const [detailId, setDetailId] = useState<number | null>(null);
   // The Task opened from De gestionat, while its sheet is open: managed,
   // whatever page it was on.
@@ -677,39 +657,33 @@ function TrackerContent() {
                 )}
               </TaskQueryStates>
             </Tabs.Panel>
+            {/* De gestionat and Toate take their open read whole: the list
+                asks for its finished part beside it, not once it lands. */}
             {management.data && (
               <Tabs.Panel value="managed" className="motion-enter">
-                <TaskQueryStates query={managed} search={search}>
-                  {(rows) => (
-                    <ManagerTaskList
-                      list="managed"
-                      rows={rows}
-                      now={now}
-                      search={search}
-                      empty="Nu ai taskuri de gestionat acum."
-                      onOpenTask={(id) => {
-                        setOpenedManaged(id);
-                        setDetailId(id);
-                      }}
-                    />
-                  )}
-                </TaskQueryStates>
+                <ManagerTaskList
+                  list="managed"
+                  open={managed}
+                  now={now}
+                  search={search}
+                  empty="Nu ai taskuri de gestionat acum."
+                  onOpenTask={(id) => {
+                    setOpenedManaged(id);
+                    setDetailId(id);
+                  }}
+                />
               </Tabs.Panel>
             )}
             {showAll && (
               <Tabs.Panel value="all" className="motion-enter">
-                <TaskQueryStates query={all} search={search}>
-                  {(rows) => (
-                    <ManagerTaskList
-                      list="all"
-                      rows={rows}
-                      now={now}
-                      search={search}
-                      empty="Nu există taskuri vizibile."
-                      onOpenTask={setDetailId}
-                    />
-                  )}
-                </TaskQueryStates>
+                <ManagerTaskList
+                  list="all"
+                  open={all}
+                  now={now}
+                  search={search}
+                  empty="Nu există taskuri vizibile."
+                  onOpenTask={setDetailId}
+                />
               </Tabs.Panel>
             )}
             {/* Cereri is other content: no toolbar, its own blocks 24 px apart. */}
