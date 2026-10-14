@@ -349,7 +349,7 @@ select is(
   '{}'::bigint[],
   'a caller without org claims is listed nothing');
 select is(
-  pg_temp.ids_as(pg_temp.g521_uid(1), $$select task_id from pg_temp.scope_tl('mine')$$),
+  pg_temp.ids_as(pg_temp.g521_uid(1), $$select task_id from pg_temp.scope_tl('nope')$$),
   '{}'::bigint[],
   'an unknown list is empty');
 
@@ -362,11 +362,11 @@ select ok(has_function_privilege('authenticated', 'public.task_list(text, boolea
       and not has_function_privilege('anon', 'public.task_list(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer)', 'execute')
       and not has_function_privilege('service_role', 'public.task_list(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer)', 'execute')
       and not has_function_privilege('anon', 'private.task_list_impl(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer)', 'execute')
-      and not has_function_privilege('authenticated', 'private.require_task_list_args(text, text, text, integer, integer)', 'execute'),
+      and not has_function_privilege('authenticated', 'private.require_task_list_args(text, boolean, text, text, integer, integer)', 'execute'),
   'only a signed-in Member calls task_list');
 select is(
   array[
-    pg_temp.reason_tl($$select * from public.task_list('mine')$$),
+    pg_temp.reason_tl($$select * from public.task_list('nope')$$),
     pg_temp.reason_tl($$select * from public.task_list(null)$$),
     pg_temp.reason_tl($$select * from public.task_list('managed', p_state => 'todo')$$),
     pg_temp.reason_tl($$select * from public.task_list('managed', p_sort => 'points')$$),
@@ -573,7 +573,7 @@ select is(
           is distinct from cardinality(pg_temp.ids_as(caller.id, $$select task_id from pg_temp.scope_tl('all')$$))),
   0::bigint,
   'for every caller the summary counts exactly the list');
-select is(pg_temp.reason_tl($$select * from public.task_list_summary('mine')$$), 'PT400 invalid_list',
+select is(pg_temp.reason_tl($$select * from public.task_list_summary('nope')$$), 'PT400 invalid_list',
   'the summary refuses an unknown list');
 
 -- ==================== leadership_filter_work ====================
