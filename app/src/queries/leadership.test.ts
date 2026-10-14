@@ -80,19 +80,28 @@ it('Cup takes the Campaign and range but never the Group; member history takes t
   });
   expect(order).toHaveBeenCalledWith('assignment_id');
 });
-it('reads paged Group and Campaign options without category exclusions, and the scored Tasks for Rule W', async () => {
-  await fetchLeadershipFilters();
-  expect(api.from.mock.calls).toEqual([['groups'], ['campaigns'], ['tasks']]);
+it('reads paged Group and Campaign options without category exclusions, and asks the server where Task Points were earned (#1053)', async () => {
+  const pairs = [
+    { group_id: 3, campaign_id: null },
+    { group_id: 3, campaign_id: 7 },
+  ];
+  range
+    .mockResolvedValueOnce({ data: [], error: null })
+    .mockResolvedValueOnce({ data: [], error: null })
+    .mockResolvedValueOnce({ data: pairs, error: null });
+  const filters = await fetchLeadershipFilters();
+  expect(api.from.mock.calls).toEqual([['groups'], ['campaigns']]);
   expect(builder.select.mock.calls).toEqual([
     ['id,name,path,status,is_organization,parent_id,color,category'],
     ['id,name,group_id'],
-    ['group_id,campaign_id,task_assignments!inner(task_evaluations!inner(id))'],
   ]);
-  // Only Tasks that carry Task Points: evaluated (a reopened one too), never
-  // an Umbrella — by the Evaluation, not by status.
-  expect(builder.in).not.toHaveBeenCalled();
-  expect(builder.eq).toHaveBeenCalledWith('kind', 'task');
+  // The scored Tasks are never read: the server answers with each Group and
+  // Campaign once (evaluated Tasks, a reopened one too, never an Umbrella).
+  expect(api.rpc.mock.calls).toEqual([['leadership_filter_work']]);
+  expect(order).toHaveBeenCalledWith('group_id');
+  expect(order).toHaveBeenCalledWith('campaign_id');
   expect(range).toHaveBeenCalledTimes(3);
+  expect(filters.work).toEqual(pairs);
 });
 
 it('batches the row identities by member id: avatar colour, first top-level Group, +n', async () => {
