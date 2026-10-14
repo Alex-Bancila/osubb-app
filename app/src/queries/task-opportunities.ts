@@ -1,6 +1,7 @@
 import { skipToken, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
+import { readAllRows } from './read-all';
 import { keys } from './keys';
 import { fetchMyGroups, memberGroupIds } from './my-groups';
 import { latestSubmissionOnly, TASK_PRESENTATION_FIELDS } from './tasks';
@@ -122,27 +123,32 @@ export async function fetchTaskOpportunities(
 ): Promise<Opportunity[]> {
   const [scopes, candidatures] = await Promise.all([
     fetchTaskMemberships(),
-    supabase
-      .from('task_candidates')
-      .select('task_id, status')
-      .eq('member_id', memberId),
+    // The pending ones only: a Member's every Candidature passes 500.
+    readAllRows((from, to) =>
+      supabase
+        .from('task_candidates')
+        .select('task_id')
+        .eq('member_id', memberId)
+        .eq('status', 'pending')
+        .order('id')
+        .range(from, to),
+    ),
   ]);
-  if (candidatures.error) throw candidatures.error;
 
   const pendingTaskIds = new Set(
-    (candidatures.data ?? [])
-      .filter((candidate) => candidate.status === 'pending')
-      .map((candidate) => candidate.task_id),
+    candidatures.map((candidate) => candidate.task_id),
   );
-  const openTasks = latestSubmissionOnly(
-    supabase.from('tasks').select(TASK_PRESENTATION_FIELDS),
-  )
-    .eq('kind', 'task')
-    .eq('assignment_mode', 'public')
-    .is('queue_closed_at', null)
-    .in('status', [...OPEN_TASK_STATUSES]);
-  const openResult = await openTasks;
-  if (openResult.error) throw openResult.error;
+  const openTasks = await readAllRows((from, to) =>
+    latestSubmissionOnly(
+      supabase.from('tasks').select(TASK_PRESENTATION_FIELDS),
+    )
+      .eq('kind', 'task')
+      .eq('assignment_mode', 'public')
+      .is('queue_closed_at', null)
+      .in('status', [...OPEN_TASK_STATUSES])
+      .order('id')
+      .range(from, to),
+  );
   const pendingIds = [...pendingTaskIds];
   const batches: number[][] = [];
   for (let offset = 0; offset < pendingIds.length; offset += 100)
@@ -166,8 +172,7 @@ export async function fetchTaskOpportunities(
   // The server remains authoritative for both sets. The second query keeps a
   // pending Candidate's Task after its queue closes, so they can withdraw.
   const tasks = new Map<number, TaskPresentationRow>();
-  for (const task of [...openResult.data, ...queuedTasks])
-    tasks.set(task.id, task);
+  for (const task of [...openTasks, ...queuedTasks]) tasks.set(task.id, task);
   return attachVisibleTaskExecutors(
     orderOpportunities([...tasks.values()], scopes, {
       pending: pendingTaskIds,

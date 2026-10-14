@@ -9,6 +9,7 @@ import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
 import { approvalStatusOf, type ApprovalStatus } from './approvals';
 import { supabase } from '../lib/supabase';
+import { readAllRows } from './read-all';
 import { keys } from './keys';
 
 /**
@@ -139,13 +140,15 @@ export type EventRange = { from?: string; to?: string };
 export async function fetchEventsInRange(
   range: EventRange,
 ): Promise<EventPresentation[]> {
-  let query = supabase.from('events').select(EVENT_FIELDS);
-  if (range.from) query = query.gte('starts_at', range.from);
-  if (range.to) query = query.lt('starts_at', range.to);
-  const { data, error } = await query.order('starts_at', { ascending: true });
-  if (error) throw error;
-
-  const rows: EventRow[] = data ?? [];
+  const rows: EventRow[] = await readAllRows((from, to) => {
+    let query = supabase.from('events').select(EVENT_FIELDS);
+    if (range.from) query = query.gte('starts_at', range.from);
+    if (range.to) query = query.lt('starts_at', range.to);
+    return query
+      .order('starts_at', { ascending: true })
+      .order('id')
+      .range(from, to);
+  });
   return rows
     .map(toEventPresentation)
     .filter((event): event is EventPresentation => event !== null);

@@ -11,7 +11,7 @@ const db = vi.hoisted(() => ({
 function builder(name: string) {
   const result = () => db.results.get(name) ?? { data: null, error: null };
   const chain: Record<string, unknown> = {};
-  for (const method of ['select', 'is', 'eq', 'order']) {
+  for (const method of ['select', 'is', 'eq', 'order', 'range']) {
     chain[method] = (...args: unknown[]) => {
       db.calls.push([name, method, ...args]);
       return chain;

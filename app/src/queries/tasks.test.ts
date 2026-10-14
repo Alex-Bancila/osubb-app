@@ -1,3 +1,4 @@
+import { answered } from '../test/postgrest-fake';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({
@@ -33,15 +34,17 @@ describe('normalized My tasks reads', () => {
   it('reads current and past own Assignments, deduplicates Tasks, and sorts exact instants', async () => {
     const later = taskRow({ id: 2, deadline: '2026-09-16T08:00:00Z' });
     const earlier = taskRow({ id: 1, deadline: '2026-09-16T10:00:00+03:00' });
-    api.orderId.mockResolvedValue({
-      data: [
-        { task: later },
-        { task: earlier },
-        { task: later },
-        { task: null },
-      ],
-      error: null,
-    });
+    api.orderId.mockReturnValue(
+      answered({
+        data: [
+          { task: later },
+          { task: earlier },
+          { task: later },
+          { task: null },
+        ],
+        error: null,
+      }),
+    );
     api.rpc.mockResolvedValue({
       data: [
         { task_id: 1, member_id: 'member', full_name: 'Executor Vizibil' },
@@ -83,14 +86,16 @@ describe('normalized My tasks reads', () => {
      list must keep terminal Tasks — this fails the moment that filter comes
      back. */
   it('keeps completed, unfulfilled and cancelled Tasks in the list', async () => {
-    api.orderId.mockResolvedValue({
-      data: [
-        { task: taskRow({ id: 1, status: 'completed', deadline: null }) },
-        { task: taskRow({ id: 2, status: 'unfulfilled', deadline: null }) },
-        { task: taskRow({ id: 3, status: 'cancelled', deadline: null }) },
-      ],
-      error: null,
-    });
+    api.orderId.mockReturnValue(
+      answered({
+        data: [
+          { task: taskRow({ id: 1, status: 'completed', deadline: null }) },
+          { task: taskRow({ id: 2, status: 'unfulfilled', deadline: null }) },
+          { task: taskRow({ id: 3, status: 'cancelled', deadline: null }) },
+        ],
+        error: null,
+      }),
+    );
 
     const result = await fetchMyTasks('member');
 
@@ -106,13 +111,15 @@ describe('normalized My tasks reads', () => {
      deterministic: newest-first ordering means the first row seen for a Task
      id is its most recent Assignment. */
   it('collapses a reopened Task’s Assignments into one row, newest first', async () => {
-    api.orderId.mockResolvedValue({
-      data: [
-        { task: taskRow({ id: 5, status: 'in_progress', deadline: null }) },
-        { task: taskRow({ id: 5, status: 'completed', deadline: null }) },
-      ],
-      error: null,
-    });
+    api.orderId.mockReturnValue(
+      answered({
+        data: [
+          { task: taskRow({ id: 5, status: 'in_progress', deadline: null }) },
+          { task: taskRow({ id: 5, status: 'completed', deadline: null }) },
+        ],
+        error: null,
+      }),
+    );
 
     const result = await fetchMyTasks('member');
 
@@ -129,29 +136,31 @@ describe('normalized My tasks reads', () => {
      Member's, while evaluated and cancelled work stays. The latest own
      Assignment decides: a rejoin after a give-up brings the Task back. */
   it('drops a Task whose latest own Assignment was given up or replaced', async () => {
-    api.orderId.mockResolvedValue({
-      data: [
-        { end_reason: 'gave_up', task: taskRow({ id: 1, deadline: null }) },
-        { end_reason: 'replaced', task: taskRow({ id: 2, deadline: null }) },
-        {
-          end_reason: 'completed',
-          task: taskRow({ id: 3, status: 'completed', deadline: null }),
-        },
-        {
-          end_reason: 'failed',
-          task: taskRow({ id: 4, status: 'unfulfilled', deadline: null }),
-        },
-        {
-          end_reason: 'cancelled',
-          task: taskRow({ id: 5, status: 'cancelled', deadline: null }),
-        },
-        { end_reason: null, task: taskRow({ id: 6, deadline: null }) },
-        { end_reason: 'gave_up', task: taskRow({ id: 6, deadline: null }) },
-        { end_reason: 'gave_up', task: taskRow({ id: 7, deadline: null }) },
-        { end_reason: null, task: taskRow({ id: 7, deadline: null }) },
-      ],
-      error: null,
-    });
+    api.orderId.mockReturnValue(
+      answered({
+        data: [
+          { end_reason: 'gave_up', task: taskRow({ id: 1, deadline: null }) },
+          { end_reason: 'replaced', task: taskRow({ id: 2, deadline: null }) },
+          {
+            end_reason: 'completed',
+            task: taskRow({ id: 3, status: 'completed', deadline: null }),
+          },
+          {
+            end_reason: 'failed',
+            task: taskRow({ id: 4, status: 'unfulfilled', deadline: null }),
+          },
+          {
+            end_reason: 'cancelled',
+            task: taskRow({ id: 5, status: 'cancelled', deadline: null }),
+          },
+          { end_reason: null, task: taskRow({ id: 6, deadline: null }) },
+          { end_reason: 'gave_up', task: taskRow({ id: 6, deadline: null }) },
+          { end_reason: 'gave_up', task: taskRow({ id: 7, deadline: null }) },
+          { end_reason: null, task: taskRow({ id: 7, deadline: null }) },
+        ],
+        error: null,
+      }),
+    );
 
     const result = await fetchMyTasks('member');
 
@@ -169,10 +178,12 @@ describe('normalized My tasks reads', () => {
     api.select
       .mockReturnValueOnce(afterSubmissionFilter({ eq: api.byMember }))
       .mockReturnValueOnce({ in: parents });
-    api.orderId.mockResolvedValue({
-      data: [{ task: child }, { task: hiddenChild }],
-      error: null,
-    });
+    api.orderId.mockReturnValue(
+      answered({
+        data: [{ task: child }, { task: hiddenChild }],
+        error: null,
+      }),
+    );
 
     const tasks = await fetchMyTasks('member');
 
@@ -185,13 +196,15 @@ describe('normalized My tasks reads', () => {
   });
 
   it('drops rows whose embedded Task did not come back (e.g. hidden by RLS)', async () => {
-    api.orderId.mockResolvedValue({ data: [{ task: null }], error: null });
+    api.orderId.mockReturnValue(
+      answered({ data: [{ task: null }], error: null }),
+    );
     await expect(fetchMyTasks('member')).resolves.toEqual([]);
   });
 
   it('surfaces failures without returning a misleading empty list', async () => {
     const error = { code: '42501', message: 'denied' };
-    api.orderId.mockResolvedValue({ data: null, error });
+    api.orderId.mockReturnValue(answered({ data: null, error }));
     await expect(fetchMyTasks('member')).rejects.toBe(error);
   });
 });

@@ -1,3 +1,4 @@
+import { answered } from '../test/postgrest-fake';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -292,10 +293,12 @@ describe('the Events I said Vin to', () => {
   // this catches: dropping the self-filter, which would colour the Events
   // other members answered for a manager who may read their rows.
   it('reads only my going answers', async () => {
-    supabaseMock.eq.mockReturnValueOnce(supabaseMock).mockResolvedValueOnce({
-      data: [{ event_id: 4 }, { event_id: 9 }],
-      error: null,
-    });
+    supabaseMock.eq.mockReturnValueOnce(supabaseMock).mockReturnValueOnce(
+      answered({
+        data: [{ event_id: 4 }, { event_id: 9 }],
+        error: null,
+      }),
+    );
 
     await expect(fetchGoingEventIds(memberId)).resolves.toEqual([4, 9]);
     expect(supabaseMock.from).toHaveBeenCalledWith('event_attendance');

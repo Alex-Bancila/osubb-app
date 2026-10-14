@@ -3,6 +3,7 @@ import { skipToken, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
+import { readAllRows } from './read-all';
 import { useDifficultyLevels } from './difficulty-levels';
 import { keys } from './keys';
 import { useMyGroupRoles } from './my-groups';
@@ -66,15 +67,17 @@ export function useGroups() {
     // Groups are editable at runtime (Administrare), so not `Infinity`; five
     // minutes is long enough that every card on a screen shares one request.
     staleTime: 5 * 60_000,
-    queryFn: async (): Promise<Map<number, Group>> => {
-      const { data, error } = await supabase
-        .from('groups')
-        .select(GROUP_FIELDS);
-      if (error) throw error;
-      // A Map because every caller looks a Group up by id.
-      return new Map(data.map((group) => [group.id, group as Group]));
-    },
+    queryFn: fetchGroups,
   });
+}
+
+/** Every Group `groups_read` admits, by id. */
+export async function fetchGroups(): Promise<Map<number, Group>> {
+  const rows = await readAllRows((from, to) =>
+    supabase.from('groups').select(GROUP_FIELDS).order('id').range(from, to),
+  );
+  // A Map because every caller looks a Group up by id.
+  return new Map(rows.map((group) => [group.id, group as Group]));
 }
 
 export type GroupMemberRow = {

@@ -1,5 +1,6 @@
 import { skipToken, useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { readAllRows } from './read-all';
 import { useAuth } from '../lib/auth';
 import { keys } from './keys';
 import { attachVisibleTaskExecutors } from './task-executors';
@@ -97,21 +98,26 @@ const LEFT_ASSIGNMENT: ReadonlySet<string> = new Set([
   'group_changed',
 ]);
 
+/** Parent titles asked per request: each answer stays far below 500 rows. */
+const PARENT_BATCH = 100;
+
 export async function fetchMyTasks(
   memberId: string,
 ): Promise<TaskPresentationRow[]> {
-  const { data, error } = await latestSubmissionOnly(
-    supabase
-      .from('task_assignments')
-      .select(
-        `end_reason, task:tasks!task_assignments_task_id_fkey(${TASK_PRESENTATION_FIELDS})`,
-      ),
-    'task.submission',
-  )
-    .eq('member_id', memberId)
-    .order('assigned_at', { ascending: false })
-    .order('id', { ascending: false });
-  if (error) throw error;
+  const data = await readAllRows((from, to) =>
+    latestSubmissionOnly(
+      supabase
+        .from('task_assignments')
+        .select(
+          `end_reason, task:tasks!task_assignments_task_id_fkey(${TASK_PRESENTATION_FIELDS})`,
+        ),
+      'task.submission',
+    )
+      .eq('member_id', memberId)
+      .order('assigned_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to),
+  );
 
   // A Member can have several Assignments on the same Task after a reopen or a
   // rejoin. Ordered newest-first above, so the FIRST row seen for a Task id is
@@ -126,7 +132,7 @@ export async function fetchMyTasks(
     if (!LEFT_ASSIGNMENT.has(row.end_reason ?? ''))
       tasks.set(row.task.id, row.task);
   }
-  // Fetch parent titles in one batch. Keep them behind their own Task RLS;
+  // Fetch parent titles in batches. Keep them behind their own Task RLS;
   // the self-referencing embed is ambiguous to the generated client types.
   const parentIds = [
     ...new Set(
@@ -136,12 +142,19 @@ export async function fetchMyTasks(
     ),
   ];
   if (parentIds.length) {
-    const { data: parents, error: parentError } = await supabase
-      .from('tasks')
-      .select('id, title')
-      .in('id', parentIds);
-    if (parentError) throw parentError;
-    const titles = new Map(parents.map((parent) => [parent.id, parent]));
+    const batches: number[][] = [];
+    for (let offset = 0; offset < parentIds.length; offset += PARENT_BATCH)
+      batches.push(parentIds.slice(offset, offset + PARENT_BATCH));
+    const answers = await Promise.all(
+      batches.map((ids) =>
+        supabase.from('tasks').select('id, title').in('id', ids),
+      ),
+    );
+    const titles = new Map<number, { id: number; title: string }>();
+    for (const { data: parents, error: parentError } of answers) {
+      if (parentError) throw parentError;
+      for (const parent of parents) titles.set(parent.id, parent);
+    }
     for (const task of tasks.values()) {
       if (task.parent_task_id !== null)
         task.parent = titles.get(task.parent_task_id) ?? null;

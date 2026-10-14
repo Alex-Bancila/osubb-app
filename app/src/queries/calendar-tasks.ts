@@ -2,6 +2,7 @@ import { skipToken, useQuery } from '@tanstack/react-query';
 
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
+import { readAllRows } from './read-all';
 import type { TaskPresentationRow } from '../screens/tracker/task-presentation';
 import { keys } from './keys';
 
@@ -21,16 +22,19 @@ export type CalendarTaskRow = Pick<
 export async function fetchPendingCandidatureTasks(
   memberId: string,
 ): Promise<CalendarTaskRow[]> {
-  const { data, error } = await supabase
-    .from('task_candidates')
-    .select(
-      'task:tasks!task_candidates_task_id_fkey(id, title, status, deadline, group_id, campaign_id, group:groups!tasks_group_id_fkey(name, short, color, category, path, is_organization))',
-    )
-    .eq('member_id', memberId)
-    .eq('status', 'pending');
-  if (error) throw error;
+  const rows = await readAllRows((from, to) =>
+    supabase
+      .from('task_candidates')
+      .select(
+        'task:tasks!task_candidates_task_id_fkey(id, title, status, deadline, group_id, campaign_id, group:groups!tasks_group_id_fkey(name, short, color, category, path, is_organization))',
+      )
+      .eq('member_id', memberId)
+      .eq('status', 'pending')
+      .order('id')
+      .range(from, to),
+  );
   const tasks = new Map<number, CalendarTaskRow>();
-  for (const row of (data ?? []) as { task: CalendarTaskRow | null }[])
+  for (const row of rows as { task: CalendarTaskRow | null }[])
     if (row.task && !tasks.has(row.task.id)) tasks.set(row.task.id, row.task);
   return [...tasks.values()];
 }

@@ -16,6 +16,7 @@ import {
   withoutNotificationParam,
 } from '../lib/notification-param';
 import { supabase } from '../lib/supabase';
+import { readAllRows } from './read-all';
 import { keys } from './keys';
 
 export type NotificationRow =
@@ -180,17 +181,19 @@ export function useMarkNotificationRead(memberId?: string) {
 export async function fetchUnreadNotificationSubjects(
   memberId: string,
 ): Promise<string[]> {
-  const { data, error } = await supabase
-    .from('notifications')
-    .select('subject')
-    .eq('member_id', memberId)
-    .eq('read', false)
-    .not('subject', 'is', null);
-
-  if (error) throw error;
+  const rows = await readAllRows((from, to) =>
+    supabase
+      .from('notifications')
+      .select('subject')
+      .eq('member_id', memberId)
+      .eq('read', false)
+      .not('subject', 'is', null)
+      .order('id')
+      .range(from, to),
+  );
   return [
     ...new Set(
-      ((data ?? []) as { subject: string | null }[]).flatMap((row) =>
+      (rows as { subject: string | null }[]).flatMap((row) =>
         row.subject ? [row.subject] : [],
       ),
     ),
