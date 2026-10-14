@@ -7,6 +7,7 @@ import {
   fetchFinishedPage,
   fetchOpenTasks,
   fetchTaskListSummary,
+  fetchTaskIsMine,
   fetchTaskManageCapability,
   fetchTaskReadable,
   fetchTasksInRange,
@@ -49,6 +50,7 @@ function rpcRow(overrides: Partial<TaskListRpcRow> = {}): TaskListRpcRow {
       nickname: null,
       is_current: false,
     },
+    my_candidature: 'selected',
     total: 1,
     ...overrides,
   };
@@ -57,6 +59,8 @@ function rpcRow(overrides: Partial<TaskListRpcRow> = {}): TaskListRpcRow {
 beforeEach(() => vi.clearAllMocks());
 
 describe('taskListRow', () => {
+  // Fails if `my_candidature` (Disponibile's, read before the rows are
+  // mapped) leaks onto the rows every card reads.
   it('keeps the Task and its history, and names the Executor as the cards read it', () => {
     expect(taskListRow(rpcRow())).toEqual({
       id: 1,
@@ -145,6 +149,18 @@ describe('withLabels', () => {
       campaigns,
     );
     expect(row?.campaign).toBeNull();
+  });
+
+  it('keeps what a row carries beyond the Task, such as an Opportunity’s flags', () => {
+    const [row] = withLabels(
+      [{ ...taskListRow(rpcRow()), relevant: true, joinable: false }],
+      groups,
+      campaigns,
+    );
+    // Typed too: the row type goes through (`Opportunity` stays one).
+    const flags: { relevant: boolean; joinable: boolean } | undefined = row;
+    expect(flags).toMatchObject({ relevant: true, joinable: false });
+    expect(row?.group?.name).toBe('Educațional');
   });
 });
 
@@ -377,5 +393,61 @@ describe('fetchTaskReadable', () => {
     const error = new Error('offline');
     reading({ data: null, error });
     await expect(fetchTaskReadable(7)).rejects.toBe(error);
+  });
+});
+
+describe('fetchTaskIsMine', () => {
+  /** The one Assignment row the read gets back, recording how it asked. */
+  function newest(result: { data: unknown; error: unknown }) {
+    const asked: unknown[][] = [];
+    const chain = {
+      select: (...args: unknown[]) => (asked.push(['select', ...args]), chain),
+      eq: (...args: unknown[]) => (asked.push(['eq', ...args]), chain),
+      order: (...args: unknown[]) => (asked.push(['order', ...args]), chain),
+      limit: (...args: unknown[]) => (asked.push(['limit', ...args]), chain),
+      maybeSingle: () => Promise.resolve(result),
+    };
+    mocks.from.mockReturnValue(chain);
+    return asked;
+  }
+
+  // Fails if the read takes any Assignment but the Member's newest on the
+  // Task: an old completed one would call a Task given up since "mine".
+  it('reads the Member’s newest own Assignment on the Task, through RLS', async () => {
+    const asked = newest({ data: { end_reason: 'completed' }, error: null });
+    await expect(fetchTaskIsMine(7, 'me')).resolves.toBe(true);
+    expect(mocks.from).toHaveBeenCalledWith('task_assignments');
+    expect(asked).toEqual([
+      ['select', 'end_reason'],
+      ['eq', 'task_id', 7],
+      ['eq', 'member_id', 'me'],
+      ['order', 'assigned_at', { ascending: false }],
+      ['order', 'id', { ascending: false }],
+      ['limit', 1],
+    ]);
+  });
+
+  it('is mine while held, or held to the end; not once left, nor never held', async () => {
+    for (const [endReason, mine] of [
+      [null, true],
+      ['completed', true],
+      ['failed', true],
+      ['cancelled', true],
+      ['gave_up', false],
+      ['replaced', false],
+      ['task_updated', false],
+      ['group_changed', false],
+    ] as const) {
+      newest({ data: { end_reason: endReason }, error: null });
+      await expect(fetchTaskIsMine(7, 'me')).resolves.toBe(mine);
+    }
+    newest({ data: null, error: null });
+    await expect(fetchTaskIsMine(7, 'me')).resolves.toBe(false);
+  });
+
+  it('propagates a failure instead of calling the Task someone else’s', async () => {
+    const error = new Error('offline');
+    newest({ data: null, error });
+    await expect(fetchTaskIsMine(7, 'me')).rejects.toBe(error);
   });
 });
