@@ -398,7 +398,8 @@ export default function AppShell() {
           <div
             ref={setFabSlot}
             data-slot="fab-slot"
-            className="pointer-events-auto max-lg:ml-2"
+            // `relative`: a button that has gone pops out over its own spot.
+            className="pointer-events-auto relative max-lg:ml-2"
           />
         </div>
       </div>
