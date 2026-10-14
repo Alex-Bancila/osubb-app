@@ -448,6 +448,42 @@ describe('AnnouncementsScreen', () => {
     expect(mutate).toHaveBeenCalledTimes(1);
   });
 
+  // Fails if the sheet falls back to what was opened whatever the read by
+  // id answers: it would stay open on an Announcement deleted elsewhere.
+  it('keeps the open sheet while its row is read by its id, and closes it when that read finds none', async () => {
+    const user = userEvent.setup();
+    showFeed([
+      createRow({ id: 42, title: 'Ședință Generală' }),
+      createRow({ id: 43, title: 'Altul' }),
+    ]);
+    const view = renderAt('/anunturi');
+    await user.click(
+      within(
+        screen.getByRole('article', { name: 'Ședință Generală' }),
+      ).getByRole('button', { name: /Citește/ }),
+    );
+    expect(
+      screen.getByRole('dialog', { name: 'Ședință Generală' }),
+    ).toBeInTheDocument();
+
+    // The feed is read again without it: the sheet holds on while the row
+    // is read by its id…
+    showFeed([createRow({ id: 43, title: 'Altul' })]);
+    readableById({});
+    view.rerender(<AnnouncementsScreen />);
+    expect(hooks.useAnnouncement).toHaveBeenCalledWith(42);
+    expect(
+      screen.getByRole('dialog', { name: 'Ședință Generală' }),
+    ).toBeInTheDocument();
+
+    // …and closes once that read finds none: it was deleted elsewhere.
+    readableById({ 42: null });
+    view.rerender(<AnnouncementsScreen />);
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+  });
+
   it('allows retrying markRead if previous mutation failed', async () => {
     const user = userEvent.setup();
     showFeed([

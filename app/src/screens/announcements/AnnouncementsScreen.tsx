@@ -268,10 +268,14 @@ function AnnouncementsContent({
   const showCriticalBanner =
     unreadCritical !== null && announcements[0]?.id !== unreadCritical.id;
 
+  // What was opened stands in only while its row is being read by its id;
+  // a read that finds none (deleted elsewhere) closes the sheet.
   const selectedAnnouncement =
     selected === null
       ? null
-      : (loaded.get(selected.id) ?? selectedFound ?? selected);
+      : (loaded.get(selected.id) ??
+        selectedFound ??
+        (selectedRead.data === undefined ? selected : null));
 
   function markAsRead(announcement: AnnouncementPresentation) {
     if (
