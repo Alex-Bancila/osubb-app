@@ -136,6 +136,7 @@ function createRow(
     published_at: '2026-09-18T10:00:00Z',
     deadline: null,
     event_id: null,
+    from_event: false,
     min_level: 0,
     created_by: null,
     form_label: null,

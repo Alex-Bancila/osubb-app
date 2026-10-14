@@ -38,7 +38,7 @@ declare
                                   -- R53: the Event an Announcement was written for is
                                   -- bookkeeping, never content -- its link being written or
                                   -- cleared (the Event deleted) asks nobody again.
-                                  'event_id'];
+                                  'event_id', 'from_event'];
   v_was_org boolean;
   v_changed boolean;
 begin
@@ -138,9 +138,16 @@ alter table public.announcements
 create index announcements_event_id_idx on public.announcements (event_id) where event_id is not null;
 comment on column public.announcements.event_id is
   'R53: the Event this Announcement was written for by create_event or approve_event (its Termen is the Event''s start); null for every other Announcement and once the Event is deleted. Set by private.guard_announcement_event from osubb.announcement_event, never by a client.';
+-- Whether it was ever written for an Event: kept when the Event is deleted
+-- (event_id is then cleared), so such an Announcement never reminds its
+-- whole audience of an Event that is gone (review of #1062).
+alter table public.announcements
+  add column from_event boolean not null default false;
+comment on column public.announcements.from_event is
+  'R53: true when create_event or approve_event wrote this Announcement for an Event; kept after the Event is deleted, so it never gets a Termen reminder. Set with event_id by private.guard_announcement_event, never by a client, never cleared.';
 -- Those written before today: the same Group, title, author and Termen = start.
 update public.announcements as announcement
-   set event_id = event.id
+   set event_id = event.id, from_event = true
   from public.events as event
  where announcement.event_id is null
    and announcement.group_id = event.group_id
@@ -156,23 +163,28 @@ as $$
 begin
   -- A signed-in writer never chooses the link: on insert it is the Event the
   -- command writing the Announcement named (osubb.announcement_event); on an
-  -- update it only ever clears, as deleting the Event does.
+  -- update it only ever clears, as deleting the Event does. from_event
+  -- follows the insert and is never changed after.
   if (select auth.uid()) is null then
     return new;
   end if;
   if tg_op = 'INSERT' then
     new.event_id := nullif(current_setting('osubb.announcement_event', true), '')::bigint;
-  elsif new.event_id is not null and new.event_id is distinct from old.event_id then
-    new.event_id := old.event_id;
+    new.from_event := new.event_id is not null;
+  else
+    if new.event_id is not null and new.event_id is distinct from old.event_id then
+      new.event_id := old.event_id;
+    end if;
+    new.from_event := old.from_event;
   end if;
   return new;
 end;
 $$;
 revoke execute on function private.guard_announcement_event() from public, anon, authenticated, service_role;
 comment on function private.guard_announcement_event() is
-  'R53: announcements.event_id is the command''s, never a writer''s -- on insert by a signed-in writer it is osubb.announcement_event (set by create_event_impl and approve_event_impl around their insert), on update it may only be cleared. System writes pass. Granted to nobody.';
+  'R53: announcements.event_id is the command''s, never a writer''s -- on insert by a signed-in writer it is osubb.announcement_event (set by create_event_impl and approve_event_impl around their insert), on update it may only be cleared; from_event follows the insert and never changes. System writes pass. Granted to nobody.';
 create trigger announcements_guard_event
-  before insert or update of event_id on public.announcements
+  before insert or update of event_id, from_event on public.announcements
   for each row execute function private.guard_announcement_event();
 
 -- 3. An Event edit: whoever was told of the Event through its Announcement
@@ -292,7 +304,7 @@ begin
     select * from public.announcements as announcement
      where announcement.approval_status = 'approved'
        and announcement.deadline is not null
-       and announcement.event_id is null
+       and not announcement.from_event
        and (announcement.deadline at time zone 'Europe/Bucharest')::date = v_today + 1
   loop
     v_key := 'announcement:' || v_announcement.id::text;
@@ -322,7 +334,7 @@ end;
 $$;
 revoke execute on function private.send_reminders(timestamptz) from public, anon, authenticated, service_role;
 comment on function private.send_reminders(timestamptz) is
-  'R53: the hourly reminder job, acting only in the 09:00 hour in Europe/Bucharest (p_now, for tests). A Task''s current Executor three days and one day before its deadline (To do, In progress); everyone going to an approved, uncancelled Event the day before it starts; everyone private.announcement_recipients reaches, never the author, the day before an approved Announcement''s Termen (not an Event''s Announcement, not a Member told of it that day). Once per Member per day; advisory lock (69, 1). Returns how many Notifications it wrote. Granted to nobody.';
+  'R53: the hourly reminder job, acting only in the 09:00 hour in Europe/Bucharest (p_now, for tests). A Task''s current Executor three days and one day before its deadline (To do, In progress); everyone going to an approved, uncancelled Event the day before it starts; everyone private.announcement_recipients reaches, never the author, the day before an approved Announcement''s Termen (not one written for an Event, even once the Event is deleted; not a Member told of it that day). Once per Member per day; advisory lock (69, 1). Returns how many Notifications it wrote. Granted to nobody.';
 
 select cron.unschedule('osubb-daily-deadline-reminders');
 drop function private.remind_deadlines();
@@ -615,3 +627,9 @@ AS $function$
     end
   );
 $function$;
+
+-- 7. Descriptions brought up to the change.
+comment on function private.stamp_approval() is
+  'announcements_stamp_approval / events_stamp_approval (before insert or update; spec 2026-10-11): on insert the status is pending for a row on the Organization Group -- or an Announcement with the organisation Audience from any Group -- by a signed-in writer below level 6 and approved otherwise (a client value is ignored; a write with no auth.uid() publishes); on update the approval columns are kept, except that a writer below level 6 changing the content of a decided OSUBB-wide row (anything but the approval columns, updated_at, pinned, cancelled_at, cancel_reason, announce_on_approval and campaign_id -- a Campaign is a label) sends it back to pending with the decision cleared, that a row which becomes OSUBB-wide by an update below level 6 (a move onto the Organization Group, an Audience widened) is pending whoever made the change, and that a pending or rejected row which stops being OSUBB-wide (moved to a local Group, or its Audience narrowed) is published by that change, its announce_on_approval dropped (final review of 2026-10-13). A Deal (kind deal, R45) is never pending: the OSUBB Deals team publishes it at once. The decision commands set osubb.deciding_approval = on for their own update; an insert is always judged. R53 (2026-10-14): announcements.event_id and from_event -- the Event an Announcement was written for -- are bookkeeping too, so writing or clearing them (the Event deleted) asks nobody again.';
+comment on function private.notify_event(public.events, uuid, uuid[], text) is
+  'R53: tells p_members of the Event, never p_actor -- "Eveniment nou" (event:<id>:created) to whoever does not know it, "Eveniment actualizat" (event:<id>:changed, refreshed while unread) to whoever does, with p_changed or, for an approval, its schedule. Whoever knows it: holds a notice about the Event (private.told_of) or about the Announcement written for it (announcements.event_id), or answered it. Granted to nobody.';

@@ -66,7 +66,7 @@ One job, `private.send_reminders(p_now timestamptz default now())`, scheduled ev
 
 - A Task that gets its Executor with fewer than three days left only gets the day-before reminder, because the morning of the third day before has passed. A Task handed in for review gets none.
 - Someone assigned, answering Particip or posting after 09:00 on the day before gets no reminder: they just acted. A Member whose latest notice about the Announcement arrived that same day gets no Termen reminder: it is still fresh.
-- **An Event's Announcement gets no Termen reminder.** `create_event` and `approve_event` write an Announcement whose Termen is the Event's start; reminding its whole audience would contradict decision 3. `announcements.event_id` (nullable, `on delete set null`) records the Event that wrote it; existing ones are matched by Group, title, author and Termen = start. The approval stamp treats `event_id` as bookkeeping, never content.
+- **An Event's Announcement gets no Termen reminder.** `create_event` and `approve_event` write an Announcement whose Termen is the Event's start; reminding its whole audience would contradict decision 3. `announcements.event_id` (nullable, `on delete set null`) records the Event that wrote it, and `announcements.from_event` marks it for good, so it gets no reminder even once the Event is deleted; existing ones are matched by Group, title, author and Termen = start. Only the commands set either (`private.guard_announcement_event`), and the approval stamp treats both as bookkeeping, never content.
 - A critical Announcement's reminder is critical. Opening the Announcement clears its reminder too.
 
 ### Existing rules that still apply

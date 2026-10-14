@@ -6,15 +6,15 @@
 -- Spec docs/superpowers/specs/2026-10-14-edit-notices-and-reminders-design.md.
 --
 -- The job takes the time as an input, so this suite replays fixed days:
--- Tuesday 10 November 2026 (EET, UTC+2), and the end of daylight saving on
--- Sunday 25 October 2026 (EEST UTC+3 until then).
+-- Tuesday 12 November 2030 (EET, UTC+2), and the end of daylight saving on
+-- Sunday 27 October 2030 (EEST UTC+3 until then).
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
-select plan(44);
+select plan(51);
 
 -- #69: a second scheduler session waits for the same advisory lock before it
 -- reads anything; both remote transactions roll back.
@@ -27,7 +27,7 @@ select extensions.dblink_exec('reminder_lock',
 select extensions.dblink_exec('reminder_retry', 'begin; set local lock_timeout = ''250ms'';');
 select throws_ok(
   $$select * from extensions.dblink('reminder_retry',
-      'select private.send_reminders(''2026-11-10 07:30+00'')') as result(notifications integer)$$,
+      'select private.send_reminders(''2030-11-12 07:30+00'')') as result(notifications integer)$$,
   '55P03', 'canceling statement due to lock timeout',
   'concurrent runs serialize on the advisory lock');
 select extensions.dblink_exec('reminder_retry', 'rollback;');
@@ -62,21 +62,21 @@ create function pg_temp.got_any(p_title text) returns integer language sql stabl
   select count(*)::int from notifications where member_id::text like '62000000-%' and title = p_title
 $$;
 
--- 10 November 2026, 09:30 in Bucharest (EET): 07:30 UTC.
-create function pg_temp.at9() returns timestamptz language sql immutable as $$ select '2026-11-10 07:30+00'::timestamptz $$;
+-- 12 November 2030, 09:30 in Bucharest (EET): 07:30 UTC.
+create function pg_temp.at9() returns timestamptz language sql immutable as $$ select '2030-11-12 07:30+00'::timestamptz $$;
 
 -- ==================== Tasks ====================
 insert into tasks (title, group_id, deadline, status, kind) values
-  ('Three days #62',    pg_temp.rem(), '2026-11-13 18:00+02', 'todo',        'task'),
-  ('Tomorrow #62',      pg_temp.rem(), '2026-11-11 10:00+02', 'in_progress', 'task'),
-  ('Two days #62',      pg_temp.rem(), '2026-11-12 12:00+02', 'todo',        'task'),
-  ('Today #62',         pg_temp.rem(), '2026-11-10 20:00+02', 'todo',        'task'),
-  ('Review #62',        pg_temp.rem(), '2026-11-11 10:00+02', 'todo',        'task'),
-  ('Nobody #62',        pg_temp.rem(), '2026-11-11 10:00+02', 'todo',        'task'),
-  ('Inactive #62',      pg_temp.rem(), '2026-11-11 10:00+02', 'todo',        'task'),
-  ('Past executor #62', pg_temp.rem(), '2026-11-11 10:00+02', 'todo',        'task'),
-  ('Summer #62',        pg_temp.rem(), '2026-10-25 12:00+02', 'todo',        'task'),
-  ('Winter #62',        pg_temp.rem(), '2026-10-27 12:00+02', 'todo',        'task');
+  ('Three days #62',    pg_temp.rem(), '2030-11-15 18:00+02', 'todo',        'task'),
+  ('Tomorrow #62',      pg_temp.rem(), '2030-11-13 10:00+02', 'in_progress', 'task'),
+  ('Two days #62',      pg_temp.rem(), '2030-11-14 12:00+02', 'todo',        'task'),
+  ('Today #62',         pg_temp.rem(), '2030-11-12 20:00+02', 'todo',        'task'),
+  ('Review #62',        pg_temp.rem(), '2030-11-13 10:00+02', 'todo',        'task'),
+  ('Nobody #62',        pg_temp.rem(), '2030-11-13 10:00+02', 'todo',        'task'),
+  ('Inactive #62',      pg_temp.rem(), '2030-11-13 10:00+02', 'todo',        'task'),
+  ('Past executor #62', pg_temp.rem(), '2030-11-13 10:00+02', 'todo',        'task'),
+  ('Summer #62',        pg_temp.rem(), '2030-10-27 12:00+02', 'todo',        'task'),
+  ('Winter #62',        pg_temp.rem(), '2030-10-29 12:00+02', 'todo',        'task');
 update tasks set status = 'in_review', submitted_at = now() where title = 'Review #62';
 insert into task_assignments (task_id, member_id)
 select id, case title when 'Inactive #62' then pg_temp.u62(6)
@@ -88,9 +88,9 @@ select id, pg_temp.u62(2), now(), 'gave_up', 'Reassigned' from tasks where title
 
 -- ==================== Events ====================
 insert into events (title, type, group_id, starts_at, location, created_by) values
-  ('Event tomorrow #62',  'sedinta', pg_temp.rem(), '2026-11-11 18:00+02', 'Sala A', pg_temp.u62(5)),
-  ('Event cancelled #62', 'sedinta', pg_temp.rem(), '2026-11-11 18:00+02', null,     pg_temp.u62(5)),
-  ('Event later #62',     'sedinta', pg_temp.rem(), '2026-11-12 18:00+02', null,     pg_temp.u62(5));
+  ('Event tomorrow #62',  'sedinta', pg_temp.rem(), '2030-11-13 18:00+02', 'Sala A', pg_temp.u62(5)),
+  ('Event cancelled #62', 'sedinta', pg_temp.rem(), '2030-11-13 18:00+02', null,     pg_temp.u62(5)),
+  ('Event later #62',     'sedinta', pg_temp.rem(), '2030-11-14 18:00+02', null,     pg_temp.u62(5));
 update events set cancelled_at = now(), cancel_reason = 'Nu mai are loc' where title = 'Event cancelled #62';
 insert into event_attendance (event_id, member_id, status)
 select event.id, pg_temp.u62(answer.n), answer.status
@@ -100,32 +100,66 @@ select event.id, pg_temp.u62(answer.n), answer.status
 
 -- ==================== Announcements ====================
 insert into announcements (title, body, group_id, audience, deadline, priority, created_by) values
-  ('Termen #62',   'Body', pg_temp.rem(), 'local', '2026-11-11 12:00+02', 'normal',   pg_temp.u62(5)),
-  ('Critical #62', 'Body', pg_temp.rem(), 'local', '2026-11-11 12:00+02', 'critical', pg_temp.u62(5)),
-  ('Later #62',    'Body', pg_temp.rem(), 'local', '2026-11-12 12:00+02', 'normal',   pg_temp.u62(5));
+  ('Termen #62',   'Body', pg_temp.rem(), 'local', '2030-11-13 12:00+02', 'normal',   pg_temp.u62(5)),
+  ('Critical #62', 'Body', pg_temp.rem(), 'local', '2030-11-13 12:00+02', 'critical', pg_temp.u62(5)),
+  ('Later #62',    'Body', pg_temp.rem(), 'local', '2030-11-14 12:00+02', 'normal',   pg_temp.u62(5));
 insert into announcements (title, body, group_id, audience, kind, deadline, created_by)
-select 'Deal #62', 'Body', id, 'org', 'deal', '2026-11-11 23:00+02', pg_temp.u62(4) from groups where is_organization;
+select 'Deal #62', 'Body', id, 'org', 'deal', '2030-11-13 23:00+02', pg_temp.u62(4) from groups where is_organization;
 -- Member 3 was told of the Termen announcement on the very day (its notice
 -- is still fresh then).
-update notifications set created_at = '2026-11-10 08:00+02'
+update notifications set created_at = '2030-11-12 08:00+02'
  where member_id = pg_temp.u62(3) and title = 'Anunț nou: Termen #62';
 -- An Event's own Announcement, written by create_event.
 select pg_temp.test_login_leadership(pg_temp.u62(5));
-select public.create_event('Event announced #62', 'sedinta', pg_temp.rem(), '2026-11-11 17:00+02',
+select public.create_event('Event announced #62', 'sedinta', pg_temp.rem(), '2030-11-13 17:00+02',
   null, null, null, null, 0, null, true);
 reset role;
 select is((select event_id from announcements where title = 'Event announced #62'),
           (select id from events where title = 'Event announced #62'),
   'create_event''s Announcement records the Event it was written for');
 
+-- BC's approval writes the Announcement an OSUBB-wide Event asked for, and
+-- names the Event too.
+select pg_temp.test_login_leadership(pg_temp.u62(5));
+select public.create_event('Org event #62', 'sedinta', (select id from groups where is_organization),
+  '2030-11-13 18:00+02', null, null, null, null, 0, null, true);
+reset role;
+select is((select approval_status from events where title = 'Org event #62'), 'pending',
+  'fixture: below BC, an OSUBB-wide Event waits for BC');
+select pg_temp.test_login_leadership(pg_temp.u62(4));
+select public.approve_event((select id from events where title = 'Org event #62'));
+reset role;
+select ok((select event_id = (select id from events where title = 'Org event #62') and from_event
+             from announcements where title = 'Org event #62'),
+  'approve_event''s Announcement records the Event it was written for');
+-- Its creator, below BC, clears the link -- as deleting the Event does.
+select pg_temp.test_login_leadership(pg_temp.u62(5));
+reset role;
+update announcements set event_id = null where title = 'Org event #62';
+select ok((select approval_status = 'approved' and event_id is null and from_event
+             from announcements where title = 'Org event #62'),
+  'clearing the link below BC asks nobody again, and it stays an Event''s Announcement');
+-- A writer cannot point an Announcement at another Event.
+update announcements set event_id = (select id from events where title = 'Event tomorrow #62')
+ where title = 'Event announced #62';
+select is((select event_id from announcements where title = 'Event announced #62'),
+          (select id from events where title = 'Event announced #62'),
+  'a writer cannot re-point an Announcement at another Event');
+-- Below BC, an OSUBB-wide Announcement with a Termen tomorrow is a request.
+insert into announcements (title, body, group_id, audience, deadline, created_by)
+values ('Pending #62', 'Body', pg_temp.rem(), 'org', '2030-11-13 12:00+02', pg_temp.u62(5));
+select is((select approval_status from announcements where title = 'Pending #62'), 'pending',
+  'fixture: a request waiting for BC');
+select pg_temp.test_clear_jwt();
+
 -- ==================== The job ====================
-select is(private.send_reminders('2026-11-10 06:30+00'), 0, '08:30 in Bucharest: nothing yet');
-select is(private.send_reminders('2026-11-10 08:30+00'), 0, '10:30 in Bucharest: the hour has passed');
+select is(private.send_reminders('2030-11-12 06:30+00'), 0, '08:30 in Bucharest: nothing yet');
+select is(private.send_reminders('2030-11-12 08:30+00'), 0, '10:30 in Bucharest: the hour has passed');
 select cmp_ok(private.send_reminders(pg_temp.at9()), '>', 0, '09:30 in Bucharest: the reminders go out');
 
 select is(pg_temp.got(1, 'Mai sunt 3 zile: Three days #62'), 1, 'the Executor hears three days before the deadline');
 select is(pg_temp.got(1, 'Termenul e mâine: Tomorrow #62'), 1, 'and the day before');
-select ok((select bool_and(kind = 'deadline' and body = 'Termen: 11.11.2026 10:00'
+select ok((select bool_and(kind = 'deadline' and body = 'Termen: 13.11.2030 10:00'
                            and link = '/tracker?task=' || task_id::text)
              from notifications where title = 'Termenul e mâine: Tomorrow #62'),
   'a Task reminder is a deadline notice with the deadline in Bucharest time, opening the Task');
@@ -153,7 +187,7 @@ select is(pg_temp.got(1, 'Termen mâine: Termen #62') + pg_temp.got(2, 'Termen m
   'everyone the Announcement reached hears the day before its Termen');
 select is(pg_temp.got(5, 'Termen mâine: Termen #62'), 0, 'never its author');
 select is(pg_temp.got(3, 'Termen mâine: Termen #62'), 0, 'nor a Member told of it that same day');
-select ok((select bool_and(kind = 'announce' and body = 'Termen: 11.11.2026 12:00' and not critical
+select ok((select bool_and(kind = 'announce' and body = 'Termen: 13.11.2030 12:00' and not critical
                            and link = '/anunturi?anunt=' || (select id from announcements where title = 'Termen #62'))
              from notifications where title = 'Termen mâine: Termen #62'),
   'an announce notice with the Termen in Bucharest time, opening the Announcement');
@@ -161,6 +195,10 @@ select ok((select bool_and(critical) from notifications where title = 'Termen m�
   'a critical Announcement''s reminder is critical');
 select is(pg_temp.got_any('Termen mâine: Later #62'), 0, 'two days before a Termen, nothing');
 select is(pg_temp.got(1, 'Oferta se încheie mâine: Deal #62'), 1, 'a Deal says the offer ends tomorrow');
+select is(pg_temp.got_any('Termen mâine: Org event #62'), 0,
+  'nor one whose Event is gone: it was written for an Event');
+select is(pg_temp.got_any('Termen mâine: Pending #62'), 0,
+  'a request waiting for BC reminds nobody');
 select is(pg_temp.got_any('Termen mâine: Event announced #62'), 0,
   'an Event''s Announcement gets no Termen reminder: the Event reminds those going');
 
@@ -170,7 +208,7 @@ select id, pg_temp.u62(1) from announcements where title = 'Deal #62';
 select ok((select read from notifications
             where member_id = pg_temp.u62(1) and title = 'Oferta se încheie mâine: Deal #62'),
   'opening the Announcement clears its reminder, a Deal''s included');
-select is(private.notification_subject(null, 'announcement:3:termen:2026-11-10', '/anunturi/deals?deal=3'),
+select is(private.notification_subject(null, 'announcement:3:termen:2030-11-12', '/anunturi/deals?deal=3'),
   'announcement:3', 'a Termen reminder is about its Announcement, whatever its link');
 select is((select subject from notifications
             where member_id = pg_temp.u62(1) and title = 'Oferta se încheie mâine: Deal #62'),
@@ -182,13 +220,13 @@ select is(private.send_reminders(pg_temp.at9() + interval '20 minutes'), 0,
   'a second run the same day sends nothing again, read or not');
 
 -- ==================== Daylight saving ====================
--- Saturday 24 October 2026, still EEST (UTC+3): 06:30 UTC is 09:30.
-select cmp_ok(private.send_reminders('2026-10-24 06:30+00'), '>', 0, 'summer time: 06:30 UTC is 09:30 in Bucharest');
+-- Saturday 26 October 2030, still EEST (UTC+3): 06:30 UTC is 09:30.
+select cmp_ok(private.send_reminders('2030-10-26 06:30+00'), '>', 0, 'summer time: 06:30 UTC is 09:30 in Bucharest');
 select is(pg_temp.got(1, 'Termenul e mâine: Summer #62'), 1, 'and the day-before reminder goes out');
--- Monday 26 October 2026, EET (UTC+2): 06:30 UTC is only 08:30.
-select is(private.send_reminders('2026-10-26 06:30+00'), 0, 'winter time: 06:30 UTC is 08:30, nothing yet');
+-- Monday 28 October 2030, EET (UTC+2): 06:30 UTC is only 08:30.
+select is(private.send_reminders('2030-10-28 06:30+00'), 0, 'winter time: 06:30 UTC is 08:30, nothing yet');
 select is(pg_temp.got(1, 'Termenul e mâine: Winter #62'), 0, 'fixture: not yet sent');
-select cmp_ok(private.send_reminders('2026-10-26 07:30+00'), '>', 0, 'winter time: 07:30 UTC is 09:30');
+select cmp_ok(private.send_reminders('2030-10-28 07:30+00'), '>', 0, 'winter time: 07:30 UTC is 09:30');
 select is(pg_temp.got(1, 'Termenul e mâine: Winter #62'), 1, 'and the day-before reminder goes out');
 
 -- ==================== The schedule ====================
@@ -207,11 +245,11 @@ select ok(not has_function_privilege('authenticated', 'private.send_reminders(ti
 -- ==================== The Event link is the command's ====================
 select pg_temp.test_login_leadership(pg_temp.u62(5));
 reset role;
-insert into announcements (title, body, group_id, audience, created_by, event_id)
+insert into announcements (title, body, group_id, audience, created_by, event_id, from_event)
 values ('Forged link #62', 'Body', pg_temp.rem(), 'local', pg_temp.u62(5),
-        (select id from events where title = 'Event tomorrow #62'));
-select ok((select event_id is null from announcements where title = 'Forged link #62'),
-  'a writer cannot link an Announcement to an Event');
+        (select id from events where title = 'Event tomorrow #62'), true);
+select ok((select event_id is null and not from_event from announcements where title = 'Forged link #62'),
+  'a writer cannot link an Announcement to an Event, nor mark it as one');
 
 select * from finish();
 rollback;

@@ -69,6 +69,7 @@ export type Database = {
           event_id: number | null
           form_label: string | null
           form_url: string | null
+          from_event: boolean
           group_id: number
           id: number
           kind: string
@@ -92,6 +93,7 @@ export type Database = {
           event_id?: number | null
           form_label?: string | null
           form_url?: string | null
+          from_event?: boolean
           group_id: number
           id?: never
           kind?: string
@@ -115,6 +117,7 @@ export type Database = {
           event_id?: number | null
           form_label?: string | null
           form_url?: string | null
+          from_event?: boolean
           group_id?: number
           id?: never
           kind?: string
@@ -2791,6 +2794,7 @@ export type Database = {
           event_id: number | null
           form_label: string | null
           form_url: string | null
+          from_event: boolean
           group_id: number
           id: number
           kind: string
@@ -4058,6 +4062,7 @@ export type Database = {
           event_id: number | null
           form_label: string | null
           form_url: string | null
+          from_event: boolean
           group_id: number
           id: number
           kind: string
