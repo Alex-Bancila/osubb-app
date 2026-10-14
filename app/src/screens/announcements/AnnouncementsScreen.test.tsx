@@ -27,6 +27,13 @@ const hooks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+// The details sheet reads its Notifications by subject (R53); this screen's
+// queries are all mocked, so that read is too (AnnouncementDetailsSheet.test
+// pins what it asks for).
+vi.mock('../../queries/notifications', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../queries/notifications')>()),
+  useReadNotificationsAbout: () => {},
+}));
 
 vi.mock('../../lib/auth', () => ({
   useAuth: () => ({

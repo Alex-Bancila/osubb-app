@@ -261,10 +261,10 @@ select lives_ok(
 reset role;
 select is(
   (select array_agg(member_id order by member_id) from public.notifications
-    where title = 'Eveniment actualizat: Moving meeting #756' and body = 'Noul grup: Private #756'
+    where dedupe_key like 'event:' || pg_temp.e756('Moving meeting #756') || ':%'
       and member_id in (pg_temp.u756(4), pg_temp.u756(6))),
   array[pg_temp.u756(4)],
-  'update_event: the move reaches the Private Group''s member, not the old Group''s outsider');
+  'update_event: the move reaches the Private Group''s member (as a new Event: R53, never told of it), not the old Group''s outsider');
 
 -- ==================== 5 · the local-only Audience ====================
 

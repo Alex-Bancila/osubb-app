@@ -170,6 +170,8 @@ select set_eq(
   $q$select p.id from public.profiles as p join public.roles as r on r.id = p.role where p.status = 'activ' and r.level < 6$q$,
   'an Organization Group Event''s recipient set is every active Member except BC and the Moderator (R32)');
 
+-- R53 (2026-10-14): one notice per edit -- "new" or "changed" per Member --
+-- under event:<id>:..., so the recipient sets below match any key of the Event.
 select pg_temp.test_login_leadership(pg_temp.u601(1));
 select lives_ok(
   $q$select public.update_event((select id from e601 where name = 'org'), 'Audience org #601', 'sedinta',
@@ -178,7 +180,7 @@ select lives_ok(
 reset role;
 select set_eq(
   $q$select member_id from public.notifications
-      where dedupe_key = 'event:' || (select id from e601 where name = 'org') || ':location'$q$,
+      where dedupe_key like 'event:' || (select id from e601 where name = 'org') || ':%'$q$,
   $q$select p.id from public.profiles as p join public.roles as r on r.id = p.role where p.status = 'activ' and r.level < 6 and p.id <> pg_temp.u601(1)$q$,
   'an important change to an Organization Group Event notifies every active Member except the actor, BC and the Moderator (R32)');
 
@@ -201,7 +203,7 @@ select lives_ok(
 reset role;
 select set_eq(
   $q$select member_id from public.notifications
-      where dedupe_key = 'event:' || (select id from e601 where name = 'move') || ':group'
+      where dedupe_key like 'event:' || (select id from e601 where name = 'move') || ':%'
         and member_id::text like '60100000-%'$q$,
   $q$select pg_temp.u601(n) from unnest(array[2, 4, 6]) n$q$,
   'moving an Event away notifies the old Group''s whole audience, sub-Groups included');

@@ -41,6 +41,15 @@ vi.mock(
   () => import('../../test/member-card-mock'),
 );
 
+// R53: opening reads its Notifications by subject, so an "actualizat" notice
+// is read even for a Member who had opened the item before (the read row
+// already exists, so its trigger does not fire again).
+const readAbout = vi.hoisted(() => vi.fn());
+vi.mock('../../queries/notifications', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../queries/notifications')>()),
+  useReadNotificationsAbout: readAbout,
+}));
+
 import AnnouncementDetailsSheet from './AnnouncementDetailsSheet';
 
 function renderSheet(ui: ReactElement) {
@@ -88,6 +97,23 @@ function presentation(
 }
 
 describe('AnnouncementDetailsSheet', () => {
+  it("reads the Announcement's notifications when it opens, even one read before (R53)", () => {
+    renderSheet(
+      <AnnouncementDetailsSheet
+        announcement={presentation({ id: 7, isRead: true })}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(readAbout).toHaveBeenLastCalledWith(['announcement:7']);
+  });
+
+  it('reads nothing while it is closed', () => {
+    renderSheet(
+      <AnnouncementDetailsSheet announcement={null} onClose={vi.fn()} />,
+    );
+    expect(readAbout).toHaveBeenLastCalledWith([]);
+  });
+
   it('renders nothing when announcement is null', () => {
     const { container } = renderSheet(
       <AnnouncementDetailsSheet announcement={null} onClose={vi.fn()} />,
