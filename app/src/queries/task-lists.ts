@@ -20,19 +20,25 @@ import { keys } from './keys';
 import { useGroups } from './reference';
 
 /**
- * Leadership's Task lists (#1053, spec 2026-10-14). The server decides a
- * list's authority once per Group (`private.task_list_scope`) and
- * `task_list` returns a page of ready rows in one request, so nothing here
- * reads an archive whole:
+ * The Tracker's Task lists (#1053, spec 2026-10-14; the Member's own since
+ * ruling R55): De gestionat (`managed`), Toate (`all`), Taskurile mele
+ * (`mine`) and Disponibile (`available`). The server decides a list's
+ * authority once per Group (`private.task_list_scope`) and `task_list`
+ * returns a page of ready rows in one request, so nothing here reads an
+ * archive whole:
  *
  * - the **open** Tasks of a list (De făcut, În lucru, În verificare) are read
  *   whole — they are bounded by what the organization is doing now;
  * - the **finished** ones are read 50 at a time, with the Work Filter, the
  *   state, the title search and Grupuri preferate applied by the server;
+ *   Disponibile has none;
  * - what the list holds (which Groups, Campaigns and states) comes from
  *   `task_list_summary`, never from the rows.
  */
-export type TaskListName = 'managed' | 'all';
+export type TaskListName = 'managed' | 'all' | 'mine' | 'available';
+
+/** The lists with a finished part: every one but Disponibile. */
+export type FinishedListName = Exclude<TaskListName, 'available'>;
 
 export type { FinishedState };
 
@@ -83,6 +89,8 @@ export type TaskListRpcRow = {
     nickname: string | null;
     is_current: boolean;
   } | null;
+  /** The status of the caller's newest Candidature on the Task, or null. */
+  my_candidature: string | null;
   total: number;
 };
 
@@ -101,10 +109,16 @@ export type TaskListSummaryRow = {
 /**
  * A server row as the Tracker's cards read a Task: the Task, its history, and
  * its Executor under `visibleExecutor`. The Group and Campaign labels are
- * joined by `withLabels`.
+ * joined by `withLabels`; the caller's Candidature is Disponibile's to read
+ * before the rows are mapped.
  */
 export function taskListRow(row: TaskListRpcRow): TaskPresentationRow {
-  const { executor, total: _total, ...task } = row;
+  const {
+    executor,
+    total: _total,
+    my_candidature: _candidature,
+    ...task
+  } = row;
   return {
     ...task,
     visibleExecutor: executor
@@ -124,13 +138,14 @@ type GroupLabel = NonNullable<TaskPresentationRow['group']> & { id: number };
 /**
  * Joins the Group and the Campaign of each row from the reads the Member
  * already has through RLS. A Group or Campaign they may not read stays
- * `null`, exactly as a PostgREST embed would leave it — never an id.
+ * `null`, exactly as a PostgREST embed would leave it — never an id. What a
+ * row carries beyond the Task (an Opportunity's flags) goes through.
  */
-export function withLabels(
-  rows: readonly TaskPresentationRow[],
+export function withLabels<Row extends TaskPresentationRow>(
+  rows: readonly Row[],
   groups: ReadonlyMap<number, GroupLabel> | undefined,
   campaigns: readonly { id: number; name: string }[] | undefined,
-): TaskPresentationRow[] {
+): Row[] {
   const campaignNames = new Map(
     (campaigns ?? []).map((campaign) => [campaign.id, campaign.name]),
   );
@@ -164,20 +179,30 @@ async function readTaskList(args: TaskListArgs): Promise<TaskListRpcRow[]> {
   return (data ?? []) as unknown as TaskListRpcRow[];
 }
 
-/** Every row the arguments match, 500 a request until a short page. */
-async function readWholeTaskList(
+/**
+ * Every server row the arguments match, 500 a request until a short page,
+ * as sent: what Disponibile reads its Candidatures from.
+ */
+export async function readWholeTaskRows(
   args: Omit<TaskListArgs, 'p_limit' | 'p_offset'>,
-): Promise<TaskPresentationRow[]> {
-  const rows: TaskPresentationRow[] = [];
+): Promise<TaskListRpcRow[]> {
+  const rows: TaskListRpcRow[] = [];
   for (let offset = 0; ; offset += WHOLE_PAGE) {
     const page = await readTaskList({
       ...args,
       p_limit: WHOLE_PAGE,
       p_offset: offset,
     });
-    rows.push(...page.map(taskListRow));
+    rows.push(...page);
     if (page.length < WHOLE_PAGE) return rows;
   }
+}
+
+/** Every row the arguments match, as the cards read them. */
+async function readWholeTaskList(
+  args: Omit<TaskListArgs, 'p_limit' | 'p_offset'>,
+): Promise<TaskPresentationRow[]> {
+  return (await readWholeTaskRows(args)).map(taskListRow);
 }
 
 /** The open Tasks of a list, whole: one request unless there are over 500. */
@@ -192,7 +217,7 @@ export function fetchOpenTasks(
  * `[from, to)`: the Calendar's month.
  */
 export function fetchTasksInRange(
-  list: TaskListName,
+  list: FinishedListName,
   range: { from: string; to: string },
 ): Promise<TaskPresentationRow[]> {
   return readWholeTaskList({
@@ -206,7 +231,7 @@ export type FinishedTasksPage = { rows: TaskPresentationRow[]; total: number };
 
 /** One page of a list's finished Tasks, and how many the filters match. */
 export async function fetchFinishedPage(
-  list: TaskListName,
+  list: FinishedListName,
   filters: FinishedFilters,
   offset: number,
 ): Promise<FinishedTasksPage> {
@@ -279,6 +304,40 @@ export async function fetchTaskReadable(taskId: number): Promise<boolean> {
 }
 
 /**
+ * How an Assignment ends when its Member stops holding the Task without the
+ * work being decided: the Task is no longer theirs (Audit D-3), exactly as
+ * the `mine` list leaves it out.
+ */
+const LEFT_ASSIGNMENT: ReadonlySet<string> = new Set([
+  'gave_up',
+  'replaced',
+  'task_updated',
+  'group_changed',
+]);
+
+/**
+ * Whether one Task is in Taskurile mele, open or finished: the Member's
+ * newest own Assignment on it, through RLS, did not end in leaving it. Where
+ * a `?task=` link lands when the open rows do not hold the Task.
+ */
+export async function fetchTaskIsMine(
+  taskId: number,
+  memberId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('task_assignments')
+    .select('end_reason')
+    .eq('task_id', taskId)
+    .eq('member_id', memberId)
+    .order('assigned_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data !== null && !LEFT_ASSIGNMENT.has(data.end_reason ?? '');
+}
+
+/**
  * What a list read answers with: the part of a query result every reader of
  * these lists uses, so a read joined from two requests can stand in for one.
  */
@@ -300,9 +359,9 @@ export type ListRead<Row> = {
  * has neither data nor an error while it runs; the rows already on screen
  * stay, unlabelled, until it lands, instead of going back to loading.
  */
-function useLabelled(
-  rows: readonly TaskPresentationRow[] | undefined,
-): TaskPresentationRow[] | undefined {
+function useLabelled<Row extends TaskPresentationRow>(
+  rows: readonly Row[] | undefined,
+): Row[] | undefined {
   const groups = useGroups();
   const campaigns = useCampaigns();
   const answered =
@@ -318,18 +377,17 @@ function useLabelled(
   );
 }
 
-function useOpenTasks(
-  list: TaskListName,
-  enabled: boolean,
-): ListRead<TaskPresentationRow> {
-  const memberId = useAuth().session?.user.id;
-  const query = useQuery({
-    queryKey:
-      list === 'managed'
-        ? keys.tasks.managed(memberId)
-        : keys.tasks.leadership(memberId),
-    queryFn: memberId && enabled ? () => fetchOpenTasks(list) : skipToken,
-  });
+/**
+ * A whole-list query as every reader of these lists takes it: labelled
+ * (`useLabelled`), and pending until the labels first answer too.
+ */
+export function useLabelledRead<Row extends TaskPresentationRow>(query: {
+  data: readonly Row[] | undefined;
+  isPending: boolean;
+  isError: boolean;
+  error: Error | null;
+  refetch: () => unknown;
+}): ListRead<Row> {
   const data = useLabelled(query.data);
   return {
     data,
@@ -338,6 +396,25 @@ function useOpenTasks(
     error: query.error,
     refetch: query.refetch,
   };
+}
+
+/** Where each list's open Tasks are cached. */
+const OPEN_KEYS = {
+  managed: keys.tasks.managed,
+  all: keys.tasks.leadership,
+  mine: keys.tasks.mine,
+} as const;
+
+function useOpenTasks(
+  list: FinishedListName,
+  enabled: boolean,
+): ListRead<TaskPresentationRow> {
+  const memberId = useAuth().session?.user.id;
+  const query = useQuery({
+    queryKey: OPEN_KEYS[list](memberId),
+    queryFn: memberId && enabled ? () => fetchOpenTasks(list) : skipToken,
+  });
+  return useLabelledRead(query);
 }
 
 /** The open Tasks the Member manages (De gestionat, Acasă's De evaluat). */
@@ -351,12 +428,22 @@ export function useAllTasks(enabled: boolean) {
 }
 
 /**
+ * Taskurile mele's open Tasks (ruling R55): the Tasks the Member holds now,
+ * whole and labelled. That is all Acasă's tiles and **Urmează** need; the
+ * finished ones are read by the page (`useFinishedTasks('mine', …)`), and
+ * what the list holds by `useTaskListSummary('mine', …)`.
+ */
+export function useMyTasks() {
+  return useOpenTasks('mine', true);
+}
+
+/**
  * The infinite query of a list's finished Tasks. The next page starts after
  * the rows already read, and there is none once they reach `total` or a page
  * comes back empty.
  */
 export function finishedTasksQueryOptions(
-  list: TaskListName,
+  list: FinishedListName,
   filters: FinishedFilters,
   memberId: string | undefined,
 ) {
@@ -408,7 +495,7 @@ export type FinishedTasks = {
  * nothing and answer an empty, settled list.
  */
 export function useFinishedTasks(
-  list: TaskListName,
+  list: FinishedListName,
   filters: FinishedFilters | null,
   enabled: boolean,
 ): FinishedTasks {
@@ -466,7 +553,7 @@ export function useFinishedTasks(
  * is the list's own read, never asked here.
  */
 export function usePrefetchFinishedTasks(
-  list: TaskListName,
+  list: FinishedListName,
   filters: FinishedFilters | null,
   enabled: boolean,
 ): void {
@@ -509,14 +596,40 @@ export function useManagedTasksInRange(
         ? () => fetchTasksInRange('managed', range)
         : skipToken,
   });
-  const data = useLabelled(query.data);
-  return {
-    data,
-    isPending: query.isPending || (!query.isError && data === undefined),
-    isError: query.isError,
-    error: query.error,
-    refetch: query.refetch,
-  };
+  return useLabelledRead(query);
+}
+
+/**
+ * The Member's own Tasks (Taskurile mele's), open or finished, with a
+ * deadline in the range: the Calendar's month, never the whole list
+ * (ruling R55). A `null` range asks nothing.
+ */
+export function useMyTasksInRange(
+  range: { from: string; to: string } | null,
+): ListRead<TaskPresentationRow> {
+  const memberId = useAuth().session?.user.id;
+  const query = useQuery({
+    queryKey: keys.tasks.mineRange(memberId, range),
+    queryFn:
+      memberId && range ? () => fetchTasksInRange('mine', range) : skipToken,
+  });
+  return useLabelledRead(query);
+}
+
+/**
+ * Whether one Task is the Member's, finished or not (`fetchTaskIsMine`):
+ * where a `?task=` link lands when Taskurile mele's open rows do not hold
+ * it. Nothing is asked for a `null` Task or while `enabled` is false.
+ */
+export function useTaskIsMine(taskId: number | null, enabled = true) {
+  const memberId = useAuth().session?.user.id;
+  return useQuery({
+    queryKey: keys.tasks.isMine(taskId, memberId),
+    queryFn:
+      memberId && enabled && taskId !== null
+        ? () => fetchTaskIsMine(taskId, memberId)
+        : skipToken,
+  });
 }
 
 /**

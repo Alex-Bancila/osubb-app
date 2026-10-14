@@ -14,10 +14,10 @@ function inWork(status: TaskStatus): boolean {
  * The Tasks the Member still has to work on (ruling R4, #859 B1): De făcut or
  * În lucru — which includes a Task returned for changes — whose current
  * Executor is this Member. A Task În verificare waits on its reviewer, not on
- * them, so it is not counted. `useMyTasks()` keeps every Assignment the
- * Member ever held, so "current Executor" is read from the Assignment rows:
- * one of theirs that has not ended. A Task they gave up (or were replaced on)
- * is skipped.
+ * them, so it is not counted. `useMyTasks()` holds Taskurile mele's open
+ * Tasks (ruling R55), which is all this needs; "current Executor" is read
+ * from their Assignment rows: one of theirs that has not ended. A Task they
+ * gave up (or were replaced on) is skipped.
  */
 export function ownTasksInWork<Row extends TaskPresentationRow>(
   rows: readonly Row[],

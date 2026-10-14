@@ -1,12 +1,16 @@
-import { skipToken, useQuery } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
-import { readAllRows } from './read-all';
-import { useAuth } from '../lib/auth';
-import { keys } from './keys';
-import { attachVisibleTaskExecutors } from './task-executors';
-import type { TaskPresentationRow } from '../screens/tracker/task-presentation';
+/**
+ * Taskurile mele's open Tasks (ruling R55) read through the list reader in
+ * `task-lists.ts`; Acasă, the Calendar and the Tracker import them from
+ * here, as before.
+ */
+export { useMyTasks } from './task-lists';
 
-/** Tasks from this Member's current and historical Assignments, through RLS. */
+/**
+ * A Task as a card reads it, through RLS, from a PostgREST read of `tasks`
+ * (the details sheet's): its fields, Group, Campaign, Assignment History,
+ * Evaluations and Submission Note. The Tracker's lists read the same through
+ * `task_list`.
+ */
 export const TASK_PRESENTATION_FIELDS = `
   id, group_id, title, description, status, deadline, completed_at, review_round,
   assignment_mode, audience, kind,
@@ -33,7 +37,7 @@ type EmbedFilterable<Q> = {
  * Narrows `TASK_PRESENTATION_FIELDS`' `submission` embed to the latest
  * `submitted` history row (#685): kind `submitted`, newest id first, one row.
  * Every query selecting those fields applies it right after `select`, so a
- * list reads each card's Submission Note in the same request, through
+ * read gets each card's Submission Note in the same request, through
  * `task_activity`'s own RLS. `path` is the embed's dotted path when the Tasks
  * are themselves embedded (`task.submission` from `task_assignments`).
  */
@@ -45,137 +49,4 @@ export function latestSubmissionOnly<Q extends EmbedFilterable<Q>>(
     .eq(`${path}.kind`, 'submitted')
     .order('id', { ascending: false, referencedTable: path })
     .limit(1, { referencedTable: path });
-}
-
-/**
- * Every Task I have ever been the Executor of — in progress and decided
- * alike. Points come from completed work (ADR-0007: an ordinary member's own
- * points are exactly the sum of their Evaluations), so a "my tasks" view
- * that stopped showing a Task the moment it was finished would hide the very
- * thing it exists to show. `completed`, `unfulfilled` and `cancelled` Tasks
- * stay in this list; #164's presentation model is what gives them their tab.
- *
- * Asked from `task_assignments` inwards rather than from `tasks` outwards,
- * because "assigned to me" is a fact about the Assignment row. PostgREST
- * embeds the task and its authorized relations through the foreign keys, so
- * this is one request, not one plus N.
- *
- * A reopened Task produces two Assignment rows for the same member — Task
- * History is append-only, so nothing ever deletes the first one — and both
- * would otherwise render as separate list items and collide on
- * `key={task.id}`. The fix is structural, not a filter that hides finished
- * work: order by `assigned_at, id` descending and keep only the *first* row
- * seen for each Task id, i.e. its most recent Assignment. One row per Task id
- * is then true by construction, and *which* Assignment represents the Task is
- * deterministic rather than whichever row the server happened to return last.
- *
- * #345 retired the multi-assignee join table this used to read; the read
- * policy on `task_assignments` already admits a member their own rows.
- *
- * Note what is *not* here: no filter on Group or role. RLS already
- * returned exactly the tasks this member may see — filtering again in
- * TypeScript would be a second, weaker copy of a rule that already exists
- * (mini-spec §1).
- */
-export function useMyTasks() {
-  const { session } = useAuth();
-  const id = session?.user.id;
-
-  return useQuery({
-    queryKey: keys.tasks.mine(id),
-    queryFn: id ? () => fetchMyTasks(id) : skipToken,
-  });
-}
-
-/**
- * How an Assignment ends when its Member stops holding the Task without the
- * work being decided: the Task is no longer theirs (Audit D-3).
- */
-const LEFT_ASSIGNMENT: ReadonlySet<string> = new Set([
-  'gave_up',
-  'replaced',
-  'task_updated',
-  'group_changed',
-]);
-
-/** Parent titles asked per request: each answer stays far below 500 rows. */
-const PARENT_BATCH = 100;
-
-export async function fetchMyTasks(
-  memberId: string,
-): Promise<TaskPresentationRow[]> {
-  const data = await readAllRows((from, to) =>
-    latestSubmissionOnly(
-      supabase
-        .from('task_assignments')
-        .select(
-          `end_reason, task:tasks!task_assignments_task_id_fkey(${TASK_PRESENTATION_FIELDS})`,
-        ),
-      'task.submission',
-    )
-      .eq('member_id', memberId)
-      .order('assigned_at', { ascending: false })
-      .order('id', { ascending: false })
-      .range(from, to),
-  );
-
-  // A Member can have several Assignments on the same Task after a reopen or a
-  // rejoin. Ordered newest-first above, so the FIRST row seen for a Task id is
-  // its most recent Assignment — that one decides. Evaluated work stays
-  // (completed, failed, cancelled belong in My tasks); a Task the Member no
-  // longer holds — given up, replaced, taken off by an edit — leaves (D-3).
-  const tasks = new Map<number, TaskPresentationRow>();
-  const seen = new Set<number>();
-  for (const row of data) {
-    if (!row.task || seen.has(row.task.id)) continue;
-    seen.add(row.task.id);
-    if (!LEFT_ASSIGNMENT.has(row.end_reason ?? ''))
-      tasks.set(row.task.id, row.task);
-  }
-  // Fetch parent titles in batches. Keep them behind their own Task RLS;
-  // the self-referencing embed is ambiguous to the generated client types.
-  const parentIds = [
-    ...new Set(
-      [...tasks.values()].flatMap((task) =>
-        task.parent_task_id === null ? [] : [task.parent_task_id],
-      ),
-    ),
-  ];
-  if (parentIds.length) {
-    const batches: number[][] = [];
-    for (let offset = 0; offset < parentIds.length; offset += PARENT_BATCH)
-      batches.push(parentIds.slice(offset, offset + PARENT_BATCH));
-    const answers = await Promise.all(
-      batches.map((ids) =>
-        supabase.from('tasks').select('id, title').in('id', ids),
-      ),
-    );
-    const titles = new Map<number, { id: number; title: string }>();
-    for (const { data: parents, error: parentError } of answers) {
-      if (parentError) throw parentError;
-      for (const parent of parents) titles.set(parent.id, parent);
-    }
-    for (const task of tasks.values()) {
-      if (task.parent_task_id !== null)
-        task.parent = titles.get(task.parent_task_id) ?? null;
-    }
-  }
-  return attachVisibleTaskExecutors(
-    [...tasks.values()].sort(byDeadlineThenTitle),
-  );
-}
-
-/* Soonest deadline first, undated last — a list of work should open on what is
-   most urgent. Title breaks the tie so the order never wobbles between renders. */
-function byDeadlineThenTitle(
-  a: { deadline: string | null; title: string },
-  b: { deadline: string | null; title: string },
-) {
-  if (a.deadline !== b.deadline) {
-    if (!a.deadline) return 1;
-    if (!b.deadline) return -1;
-    const difference = Date.parse(a.deadline) - Date.parse(b.deadline);
-    if (difference) return difference;
-  }
-  return a.title.localeCompare(b.title, 'ro');
 }

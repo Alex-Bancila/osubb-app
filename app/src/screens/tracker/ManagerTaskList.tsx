@@ -16,8 +16,8 @@ import {
   summaryWork,
   useFinishedTasks,
   useTaskListSummary,
+  type FinishedListName,
   type ListRead,
-  type TaskListName,
 } from '../../queries/task-lists';
 import { TaskQueryStates } from './TaskQueryStates';
 import {
@@ -87,7 +87,7 @@ export function ManagerTaskList({
   onOpenTask,
 }: {
   /** Which list this is; names the finished part's read. */
-  list: TaskListName;
+  list: FinishedListName;
   /** The read of the list's open Tasks. */
   open: ListRead<TaskPresentationRow>;
   now: Date;

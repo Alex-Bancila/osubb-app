@@ -7,7 +7,7 @@ import {
   orderOpportunities,
 } from './task-opportunities';
 import { memberGroupIds, type MyGroup } from './my-groups';
-import { answered } from '../test/postgrest-fake';
+import type { TaskListRpcRow } from './task-lists';
 import { taskRow } from '../test/task-fixtures';
 
 function myGroup(overrides: Partial<MyGroup> = {}): MyGroup {
@@ -208,209 +208,172 @@ describe('Available work ordering (ruling R26)', () => {
   });
 });
 
-function mockTaskReads(
-  openTasks: ReturnType<typeof taskRow>[],
-  participated: ReturnType<typeof taskRow>[],
-  candidatures: { task_id: number; status?: string }[],
-) {
-  const openQuery = {
-    select: vi.fn(),
-    eq: vi.fn(),
-    order: vi.fn(),
-    limit: vi.fn(),
-    is: vi.fn(),
-    in: vi.fn(),
-  };
-  openQuery.select.mockReturnValue(openQuery);
-  openQuery.order.mockReturnValue(openQuery);
-  openQuery.limit.mockReturnValue(openQuery);
-  openQuery.eq.mockReturnValue(openQuery);
-  openQuery.is.mockReturnValue(openQuery);
-  openQuery.in.mockReturnValue(answered({ data: openTasks, error: null }));
-  const participatedQuery = {
-    select: vi.fn(),
-    eq: vi.fn(),
-    order: vi.fn(),
-    limit: vi.fn(),
-    in: vi.fn().mockResolvedValue({ data: participated, error: null }),
-  };
-  participatedQuery.select.mockReturnValue(participatedQuery);
-  participatedQuery.order.mockReturnValue(participatedQuery);
-  participatedQuery.limit.mockReturnValue(participatedQuery);
-  participatedQuery.eq.mockReturnValue(participatedQuery);
-  let taskQueryCount = 0;
-  api.from.mockImplementation((table: string) => {
-    if (table === 'tasks')
-      return taskQueryCount++ === 0 ? openQuery : participatedQuery;
-    if (table === 'task_candidates') {
-      // Answers as the server would: only the rows its `.eq` filters keep.
-      const wanted: [string, unknown][] = [];
-      const query = {
-        select: () => query,
-        eq: (column: string, value: unknown) => {
-          if (column !== 'member_id') wanted.push([column, value]);
-          return query;
-        },
-        order: () => query,
-        range: () => query,
-        then: (resolve: (value: unknown) => unknown) =>
-          resolve({
-            data: candidatures.filter((row) =>
-              wanted.every(
-                ([column, value]) =>
-                  (row as Record<string, unknown>)[column] === value,
-              ),
-            ),
-            error: null,
-          }),
-      };
-      return query;
-    }
-    throw new Error(`unexpected table ${table}`);
-  });
-  return { openQuery, participatedQuery };
-}
-
-it('keeps a pending Candidature after its queue closes and drops a finished one', async () => {
-  const openTask = taskRow({
+/** One `task_list('available')` row as the server sends it. */
+function available(overrides: Partial<TaskListRpcRow> = {}): TaskListRpcRow {
+  return {
     id: 1,
     group_id: 99,
+    title: 'Distribuie afisul',
+    description: null,
+    status: 'todo',
+    deadline: null,
+    completed_at: null,
+    review_round: 0,
+    assignment_mode: 'public',
     audience: 'org',
-    assignment_mode: 'public',
+    kind: 'task',
+    parent_task_id: null,
+    campaign_id: null,
+    duplicated_from_task_id: null,
+    queue_closed_at: null,
+    links: [],
     assignments: [],
+    evaluations: [],
+    submission: [],
+    executor: null,
+    my_candidature: null,
+    total: 1,
+    ...overrides,
+  };
+}
+
+/** A request the test answers when it chooses to. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
   });
-  const queued = taskRow({
-    id: 2,
-    group_id: 99,
-    audience: 'local',
-    assignment_mode: 'public',
-    queue_closed_at: '2026-09-20T10:00:00Z',
-    assignments: [],
-  });
-  const { openQuery, participatedQuery } = mockTaskReads(
-    [openTask],
-    [queued],
-    [
-      { task_id: 2, status: 'pending' },
-      // A Task the Member was selected on and finished is Taskurile mele's.
-      { task_id: 3, status: 'selected' },
-    ],
-  );
+  return { promise, resolve };
+}
+
+/** The server: `my_groups` and `task_list` answer `groups` and `rows`. */
+function serve(groups: MyGroup[], rows: TaskListRpcRow[]) {
   api.rpc.mockImplementation((name: string) =>
     Promise.resolve(
       name === 'my_groups'
-        ? { data: [], error: null }
-        : {
-            data: [
-              {
-                task_id: 1,
-                member_id: 'executor',
-                full_name: 'Executor Disponibil',
-              },
-            ],
-            error: null,
-          },
+        ? { data: groups, error: null }
+        : name === 'task_list'
+          ? { data: rows, error: null }
+          : { data: null, error: new Error(`unexpected ${name}`) },
     ),
   );
+}
 
-  await expect(fetchTaskOpportunities('member')).resolves.toMatchObject([
-    {
-      id: 1,
-      relevant: false,
-      joinable: true,
-      visibleExecutor: {
-        memberId: 'executor',
-        fullName: 'Executor Disponibil',
-      },
-    },
-    // Another Group's local Task stays listed only through the Candidature.
-    { id: 2, relevant: false, joinable: true, visibleExecutor: null },
-  ]);
-  // Each card's latest Submission Note comes in the same request (#685).
-  for (const query of [openQuery, participatedQuery]) {
-    expect(query.eq).toHaveBeenCalledWith('submission.kind', 'submitted');
-    expect(query.limit).toHaveBeenCalledWith(1, {
-      referencedTable: 'submission',
+describe('fetchTaskOpportunities (spec 2026-10-14, part 3)', () => {
+  // Fails if Disponibile goes back to reading its Tasks once the Member's
+  // Groups have landed (one round trip after another), or reads them
+  // through more than the one list request.
+  it('reads the available list beside the Member’s Groups, one request each', async () => {
+    api.rpc.mockReset();
+    api.from.mockReset();
+    const groups = deferred<{ data: MyGroup[]; error: null }>();
+    api.rpc.mockImplementation((name: string) =>
+      name === 'my_groups'
+        ? groups.promise
+        : Promise.resolve({ data: [available()], error: null }),
+    );
+    const read = fetchTaskOpportunities('member');
+    // The Groups have not answered, and the list is already asked.
+    expect(api.rpc).toHaveBeenCalledWith('task_list', {
+      p_list: 'available',
+      p_finished: false,
+      p_limit: 500,
+      p_offset: 0,
     });
-  }
-  expect(openQuery.is).toHaveBeenCalledWith('queue_closed_at', null);
-  expect(openQuery.in).toHaveBeenCalledWith('status', [
-    'todo',
-    'in_progress',
-    'in_review',
-  ]);
-  // Only the pending Candidature is read back; the finished one is not.
-  expect(participatedQuery.in).toHaveBeenCalledWith('id', [2]);
-  expect(api.rpc).toHaveBeenCalledWith('visible_task_executors', {
-    p_task_ids: [1, 2],
+    groups.resolve({ data: [], error: null });
+    await expect(read).resolves.toHaveLength(1);
+    expect(api.rpc.mock.calls.map(([name]) => name).sort()).toEqual([
+      'my_groups',
+      'task_list',
+    ]);
+    expect(api.from).not.toHaveBeenCalled();
   });
-});
 
-it('reads membership live from my_groups(), so a new Appointment counts on the next refetch', async () => {
-  const local = taskRow({
-    id: 3,
-    group_id: 40,
-    audience: 'local',
-    assignments: [],
+  // Fails if a pending Candidature stops coming from the row's own
+  // `my_candidature`: another Group's local Task the Member is queued on
+  // would lose its controls, and a withdrawn one would keep them.
+  it('keeps the Tasks of pending Candidatures, and names the Executor from the row', async () => {
+    api.rpc.mockReset();
+    serve(
+      [],
+      [
+        available({
+          id: 1,
+          executor: {
+            member_id: 'executor',
+            full_name: ' Executor Disponibil ',
+            nickname: null,
+            is_current: true,
+          },
+        }),
+        // Another Group's local Task, its queue since closed: queued on.
+        available({
+          id: 2,
+          audience: 'local',
+          queue_closed_at: '2026-09-20T10:00:00Z',
+          my_candidature: 'pending',
+        }),
+        // Withdrawn: nothing to act on, and not the Member's to join.
+        available({ id: 3, audience: 'local', my_candidature: 'withdrawn' }),
+      ],
+    );
+    await expect(fetchTaskOpportunities('member')).resolves.toMatchObject([
+      {
+        id: 1,
+        relevant: false,
+        joinable: true,
+        visibleExecutor: {
+          memberId: 'executor',
+          fullName: 'Executor Disponibil',
+          isCurrent: true,
+        },
+      },
+      { id: 2, relevant: false, joinable: true, visibleExecutor: null },
+    ]);
+    const asked = api.rpc.mock.calls.map(([name]) => name);
+    expect(asked).not.toContain('visible_task_executors');
   });
-  let appointed = false;
-  api.rpc.mockImplementation((name: string) =>
-    Promise.resolve(
-      name === 'my_groups'
-        ? {
-            data: appointed ? [myGroup({ id: 40, path: [40] })] : [],
-            error: null,
-          }
-        : { data: [], error: null },
-    ),
-  );
 
-  // Another Group's local Task the Member never joined is not listed (R26).
-  mockTaskReads([local], [], []);
-  await expect(fetchTaskOpportunities('member')).resolves.toEqual([]);
+  it('reads membership live from my_groups(), so a new Appointment counts on the next read', async () => {
+    api.rpc.mockReset();
+    const local = available({ id: 3, group_id: 40, audience: 'local' });
+    // Another Group's local Task the Member never joined is not listed (R26).
+    serve([], [local]);
+    await expect(fetchTaskOpportunities('member')).resolves.toEqual([]);
+    serve([myGroup({ id: 40, path: [40] })], [local]);
+    await expect(fetchTaskOpportunities('member')).resolves.toMatchObject([
+      { id: 3, relevant: true, joinable: true },
+    ]);
+  });
 
-  appointed = true;
-  mockTaskReads([local], [], []);
-  await expect(fetchTaskOpportunities('member')).resolves.toMatchObject([
-    { id: 3, relevant: true, joinable: true },
-  ]);
-  expect(api.rpc).toHaveBeenCalledWith('my_groups');
-  expect(api.from).not.toHaveBeenCalledWith('member_departments');
-  expect(api.from).not.toHaveBeenCalledWith('team_members');
-  expect(api.from).not.toHaveBeenCalledWith('project_members');
-});
+  it('lists no Task the Member executes now, and orders by deadline', async () => {
+    api.rpc.mockReset();
+    serve(
+      [],
+      [
+        available({ id: 5, deadline: '2026-10-20T10:00:00Z' }),
+        available({
+          id: 6,
+          status: 'in_progress',
+          assignments: [{ id: 9, member_id: 'member', ended_at: null }],
+        }),
+        available({ id: 7, deadline: '2026-10-18T10:00:00Z' }),
+      ],
+    );
+    const offered = await fetchTaskOpportunities('member');
+    expect(offered.map((task) => task.id)).toEqual([7, 5]);
+  });
 
-it('keeps the controls on another Group’s local row the Member is still queued on, so they can withdraw', async () => {
-  const local = taskRow({
-    id: 6,
-    group_id: 40,
-    audience: 'local',
-    assignments: [],
+  it('propagates a refusal of either read', async () => {
+    api.rpc.mockReset();
+    const error = new Error('offline');
+    api.rpc.mockImplementation((name: string) =>
+      Promise.resolve(
+        name === 'task_list'
+          ? { data: null, error }
+          : { data: [], error: null },
+      ),
+    );
+    await expect(fetchTaskOpportunities('member')).rejects.toBe(error);
   });
-  // A withdrawn Candidature leaves nothing to act on: not listed.
-  const withdrawn = taskRow({
-    id: 7,
-    group_id: 40,
-    audience: 'local',
-    assignments: [],
-  });
-  // Readable through leadership only (R1/R3), with no Candidature: dropped.
-  const managed = taskRow({
-    id: 8,
-    group_id: 40,
-    audience: 'local',
-    assignments: [],
-  });
-  api.rpc.mockImplementation(() => Promise.resolve({ data: [], error: null }));
-  mockTaskReads(
-    [local, withdrawn, managed],
-    [local],
-    [
-      { task_id: 6, status: 'pending' },
-      { task_id: 7, status: 'withdrawn' },
-    ],
-  );
-  await expect(fetchTaskOpportunities('member')).resolves.toMatchObject([
-    { id: 6, relevant: false, joinable: true },
-  ]);
 });
