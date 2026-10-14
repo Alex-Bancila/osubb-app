@@ -10,7 +10,7 @@ import { CommandError } from '../lib/command-reasons';
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
-import { readAllRows } from './groups-admin';
+import { readAllRows } from './read-all';
 
 export type GroupApplication =
   Database['public']['Tables']['group_applications']['Row'] & {

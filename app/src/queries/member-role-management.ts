@@ -8,7 +8,7 @@ import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
-import { readAllRows } from './groups-admin';
+import { readAllRows } from './read-all';
 
 type MemberRole = Database['public']['Enums']['member_role'];
 type MemberStatus = Database['public']['Enums']['member_status'];

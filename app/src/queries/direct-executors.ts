@@ -2,23 +2,7 @@ import { skipToken, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
-
-// Keep each request below PostgREST's row cap. Every caller supplies a stable,
-// unique order, including the composite Group membership key.
-async function allPages<T>(
-  read: (
-    from: number,
-    to: number,
-  ) => PromiseLike<{ data: T[] | null; error: unknown }>,
-): Promise<T[]> {
-  const rows: T[] = [];
-  for (let offset = 0; ; offset += 500) {
-    const { data, error } = await read(offset, offset + 499);
-    if (error) throw error;
-    rows.push(...(data ?? []));
-    if (!data || data.length < 500) return rows;
-  }
-}
+import { readAllRows } from './read-all';
 
 /**
  * Roles never offered as a direct Task's Executor (F-27, Alex 2026-09-29):
@@ -32,7 +16,7 @@ const ROLES_WITHOUT_TASK_WORK: ReadonlySet<string> = new Set([
 
 export async function fetchDirectExecutors() {
   const [profiles, roles, groups, memberships] = await Promise.all([
-    allPages((from, to) =>
+    readAllRows((from, to) =>
       supabase
         .from('profiles_directory')
         .select('id, full_name, role, status, avatar_color')
@@ -40,17 +24,17 @@ export async function fetchDirectExecutors() {
         .order('id')
         .range(from, to),
     ),
-    allPages((from, to) =>
+    readAllRows((from, to) =>
       supabase.from('roles').select('id, level').order('id').range(from, to),
     ),
-    allPages((from, to) =>
+    readAllRows((from, to) =>
       supabase
         .from('groups')
         .select('id, name, path, min_level, automatic_membership, status')
         .order('id')
         .range(from, to),
     ),
-    allPages((from, to) =>
+    readAllRows((from, to) =>
       supabase
         .from('group_members')
         .select('group_id, member_id')

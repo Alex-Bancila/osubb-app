@@ -11,6 +11,7 @@ import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import { fetchMyGroups, type MyGroup } from './my-groups';
 import { keys } from './keys';
+import { readAllRows } from './read-all';
 
 /**
  * The reads and the commands behind Administrare.
@@ -56,25 +57,6 @@ export type AdminGroup = Pick<
 
 const GROUP_FIELDS =
   'id, name, short, color, category, path, parent_id, min_level, status, is_organization, is_private, manager_title, responsible_title, automatic_membership, accepts_applications, application_level, competes_in_cup, counts_toward_parent_cup, shared_work_visibility, application_form_label, application_form_url';
-
-/* Supabase caps a response at 1,000 rows; rosters pass that before the Group
-   tree does, so every projection here is read in stable pages. */
-export async function readAllRows<T>(
-  readPage: (
-    from: number,
-    to: number,
-  ) => PromiseLike<{ data: T[] | null; error: unknown }>,
-): Promise<T[]> {
-  const rows: T[] = [];
-  const pageSize = 500;
-  for (let from = 0; ; from += pageSize) {
-    const { data, error } = await readPage(from, from + pageSize - 1);
-    if (error) throw error;
-    const page = data ?? [];
-    rows.push(...page);
-    if (page.length < pageSize) return rows;
-  }
-}
 
 export async function fetchAdminGroups(): Promise<AdminGroup[]> {
   const [groups, memberships] = await Promise.all([

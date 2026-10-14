@@ -12,21 +12,7 @@ import { supabase } from '../lib/supabase';
 import type { ManagedWorkGroup } from '../screens/tracker/task-form-model';
 import { fetchCampaigns } from './campaigns';
 import { keys } from './keys';
-
-async function pages<T>(
-  read: (
-    from: number,
-    to: number,
-  ) => PromiseLike<{ data: T[] | null; error: unknown }>,
-) {
-  const rows: T[] = [];
-  for (let offset = 0; ; offset += 500) {
-    const { data, error } = await read(offset, offset + 499);
-    if (error) throw error;
-    rows.push(...(data ?? []));
-    if (!data || data.length < 500) return rows;
-  }
-}
+import { readAllRows } from './read-all';
 
 /** A Campaign a completed Task may carry: one owned on its Group's path. */
 export type CompletedTaskCampaign = {
@@ -47,7 +33,7 @@ export type CompletedTaskOptions = {
 
 async function readNamesAndCampaigns() {
   const [names, campaigns] = await Promise.all([
-    pages((from, to) =>
+    readAllRows((from, to) =>
       supabase
         .from('groups')
         .select('id,name,status')
@@ -67,7 +53,7 @@ async function readNamesAndCampaigns() {
  */
 export async function fetchCompletedTaskOptions(): Promise<CompletedTaskOptions> {
   const [managed, { names, campaigns }] = await Promise.all([
-    pages((from, to) =>
+    readAllRows((from, to) =>
       supabase
         .rpc('managed_work_groups')
         .order('path')
@@ -104,7 +90,7 @@ export async function fetchCompletedTaskGroups(
   executorId: string,
 ): Promise<CompletedTaskOptions> {
   const [groups, { names, campaigns }] = await Promise.all([
-    pages((from, to) =>
+    readAllRows((from, to) =>
       supabase
         .rpc('completed_task_groups', { p_executor_id: executorId })
         .order('path')
@@ -142,7 +128,7 @@ export type CompletedTaskVolunteer = {
 export async function fetchCompletedTaskExecutors(
   groupId: number,
 ): Promise<CompletedTaskVolunteer[]> {
-  const rows = await pages((from, to) =>
+  const rows = await readAllRows((from, to) =>
     supabase
       .rpc('completed_task_executors', { p_group_id: groupId })
       .order('full_name')

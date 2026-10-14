@@ -8,7 +8,7 @@ import {
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
-import { readAllRows } from './groups-admin';
+import { readAllRows } from './read-all';
 import {
   fetchMemberCardRows,
   toMemberCardData,
