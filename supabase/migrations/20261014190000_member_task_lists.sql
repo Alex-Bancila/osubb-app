@@ -451,3 +451,6 @@ $$;
 
 comment on function private.task_list_summary_impl(text) is
   'Body of public.task_list_summary: private.task_list_scope(p_list) -- managed, all, mine or available -- counted by the Task''s Group, Campaign, status, whether it was completed after its deadline, and whether it carries a deadline.';
+
+comment on function public.task_list_summary(text) is
+  'What a Task list (managed, all, mine or available, as public.task_list) holds, without reading a Task: its Tasks counted by Group, Campaign, status, late (completed after the deadline) and dated (a deadline is set). The page takes from it the Groups and Campaigns the Work Filter offers (Rule W), the states Stare offers and how many finished Tasks there are. PT400 invalid_list. No rows without org claims or a live activ Profile.';
