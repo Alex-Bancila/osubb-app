@@ -882,6 +882,69 @@ export type Database = {
           },
         ]
       }
+      legacy_task_imports: {
+        Row: {
+          created_at: string
+          imported_by: string | null
+          sheet_id: string | null
+          sheet_row: number
+          task_id: number | null
+          tracker_id: string
+        }
+        Insert: {
+          created_at?: string
+          imported_by?: string | null
+          sheet_id?: string | null
+          sheet_row: number
+          task_id?: number | null
+          tracker_id: string
+        }
+        Update: {
+          created_at?: string
+          imported_by?: string | null
+          sheet_id?: string | null
+          sheet_row?: number
+          task_id?: number | null
+          tracker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legacy_task_imports_imported_by_fkey"
+            columns: ["imported_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "legacy_task_imports_imported_by_fkey"
+            columns: ["imported_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "legacy_task_imports_imported_by_fkey"
+            columns: ["imported_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "legacy_task_imports_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: true
+            referencedRelation: "task_queue_summary"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "legacy_task_imports_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: true
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_group_unselected: {
         Row: {
           created_at: string
@@ -3647,6 +3710,10 @@ export type Database = {
           source: string
         }[]
       }
+      import_legacy_tasks: {
+        Args: { p_actor: string; p_dry_run?: boolean; p_rows: Json }
+        Returns: Json
+      }
       import_member: {
         Args: {
           p_email: string
@@ -3735,6 +3802,7 @@ export type Database = {
           unfulfilled_at: string
         }[]
       }
+      legacy_task_import_totals: { Args: never; Returns: Json }
       managed_work_groups: {
         Args: never
         Returns: {

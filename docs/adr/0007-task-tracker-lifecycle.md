@@ -11,6 +11,7 @@
 - **Amended:** 2026-10-02 — #985 (ruling R34): Difficulty has ten levels — five stars, the Bronz/Argint/Aur medals and Responsabil/Coordonator — each with base points (1–5, 6, 7, 8, 15, 20); Task Points are base points × the Rating multiplier
 - **Amended:** 2026-10-05 — #1017 (ruling R38): a Task Manager may delete a Task for good; a Task that still holds Task Points goes only with its points, reversed through the ledger first; a Campaign may be deleted, leaving its Tasks unlabelled
 - **Amended:** 2026-10-13 — #1046 (ruling R51): a finished Task added directly (`create_completed_task`, `create_completed_tasks`) may be credited to any active Member at or above the Group's Minimum Level, member of the Group or not; BC and the Moderator stay excluded, the decider rule stays, and the points land on the Task's Group
+- **Amended:** 2026-10-14 — #1049 (ruling R53): the Legacy Import writes the pre-app Task Tracker history once, as terminal Tasks dated on their completion day with `legacy_migration` Evaluations; it is the second and last writer of Task Points and is closed after the run
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -178,3 +179,13 @@ This supersedes the 2026-09-23 amendment "every open Opportunity is visible at i
 ## Amendment (2026-10-05) — delete for good
 
 Cancelling still never deletes anything. Deleting is a separate, deliberate act (ruling R38, #1017): the Task Manager — the authority that may edit or cancel the Task — removes the Task for good, with its Subtasks if it is an Umbrella, and its Assignments, Candidatures, Activity, Evaluations and Notifications. A Task that has awarded Task Points is never removed silently: the command refuses, naming the points and the Members, until the manager chooses to delete the Task and its points. Each award is then reversed exactly as a reopen reverses it (a `task_reversal` ledger row, under reopen's evaluator rule), each Member is notified once, and only then does the Task go. The ledger stays append-only: both rows remain, their Task reference nulled together and the Task's title kept. A Campaign may likewise be deleted by whoever manages it; being a label, it takes nothing with it — its Tasks and Events stay, unlabelled. The trade-off: history a manager deletes is gone for everyone, so the app asks first and says what goes with the object.
+
+## Amendment (2026-10-14) — the Legacy Import (ruling R53)
+
+`private.evaluate_task` stays the one place a live Evaluation computes and writes Task Points. Beside it there is exactly one other writer, used once: the **Legacy Import** (#1049, spec `docs/superpowers/specs/2026-10-13-legacy-task-import-design.md`), which copies OSUBB's pre-app Google Sheets Task Tracker — rows completed on or after 2026-02-01 — into the application.
+
+One sheet row becomes one terminal Task (`completed`, or `unfulfilled` for a row marked "Nerealizat"), one ended Assignment of its Executor, one Evaluation and one `task` ledger row, all dated at 12:00 Europe/Bucharest on the day the sheet says the work was completed, so that every period read — Clasament, the Department Cup, Evaluation rankings — places the work where it happened. The points are the application's own formula applied to the sheet's Difficulty and Rating; the sheet's Mark is ignored.
+
+The Evaluation carries the reserved source `legacy_migration` and no evaluator: the people who graded the work in the sheet are not recorded. That source stays closed to everything else — a trigger refuses it for any Task the import did not register in `public.legacy_task_imports` — and the import command is dropped after the verified run (#1050), which closes it for good.
+
+What differs from a finished Task added in the application, deliberately: BC members and the Moderator are credited like anyone, and the Group's Minimum Level is not applied (the grading was not the importer's and predates both rules); no Notification is sent; the activity trail has no actor; the Moderator who ran the import is the Task's creator. An imported Task cannot be reopened — reopen reverses a `command` Evaluation only — and is corrected by deleting it for good, which reverses its points through the ledger as for any Task.

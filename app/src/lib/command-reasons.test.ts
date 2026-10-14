@@ -392,3 +392,14 @@ it('says why a Group outside the Department label stays out of the Cup (ADR-0009
     ),
   ).toBe('Doar un departament poate concura în Cupa Departamentelor.');
 });
+
+it('says an imported Task cannot be reopened and what to do instead (Legacy Import, spec 2026-10-13)', () => {
+  expect(
+    commandErrorMessage(
+      { code: 'PT409', message: 'evaluation_not_found' },
+      'fallback',
+    ),
+  ).toBe(
+    'Taskul vine din importul vechiului Task Tracker și nu poate fi redeschis. Îl poți șterge definitiv, cu punctele lui.',
+  );
+});
