@@ -20,6 +20,7 @@ import {
 } from '../../queries/task-tabs';
 import {
   usePrefetchFinishedTasks,
+  useTaskIsMine,
   useTaskListSummary,
   useTaskManageCapability,
   useTaskReadable,
@@ -208,7 +209,11 @@ export default function TrackerScreen() {
 }
 
 function TrackerContent() {
+  // Taskurile mele's open Tasks; its finished ones are its list's own read
+  // (ruling R55).
   const mine = useMyTasks();
+  // What Taskurile mele holds beyond its open Tasks (the list reads it too).
+  const mineSummary = useTaskListSummary('mine', true);
   const available = useTaskOpportunities();
   const management = useTaskManagement();
   const managed = useManagedTasks(management.data === true);
@@ -323,14 +328,23 @@ function TrackerContent() {
         : showAll;
 
   // Where `?task=` lands, once every list that could hold it has answered:
-  // a Task of mine is highlighted on Taskurile mele; any other Task opens its
-  // details sheet on De gestionat, else Toate, else Disponibile — whichever
-  // holds it (D2) — or on the opening tab with the sheet's unavailable state.
-  // A failed Taskurile mele read never routes a Task of mine elsewhere.
-  // De gestionat and Toate hold their finished Tasks by the page (#1053), so
-  // a Task their open rows do not hold is asked of the server, alone.
+  // an open Task of mine is highlighted on Taskurile mele, a finished one
+  // opens its details sheet there; any other Task opens its details sheet on
+  // De gestionat, else Toate, else Disponibile — whichever holds it (D2) — or
+  // on the opening tab with the sheet's unavailable state. A failed
+  // Taskurile mele read never routes a Task of mine elsewhere. The lists
+  // hold their finished Tasks by the page (#1053, R55), so a Task their open
+  // rows do not hold is asked of the server, alone.
   const holdsLinked = (rows: readonly { id: number }[]) =>
     rows.some((task) => task.id === linkedId);
+  const inOpenMine =
+    linkedId === null
+      ? false
+      : mine.isError
+        ? true
+        : ask(mine, true, holdsLinked);
+  const askMine = linkedId !== null && inOpenMine === false;
+  const linkedMine = useTaskIsMine(linkedId, askMine);
   const inOpenManaged =
     linkedId === null ? false : ask(managed, managedShown, holdsLinked);
   const inOpenAll = linkedId === null ? false : ask(all, allShown, holdsLinked);
@@ -341,11 +355,12 @@ function TrackerContent() {
   const linkedReadable = useTaskReadable(linkedId, askAll);
   let landing: { tab: TrackerTab | null; open: boolean } | undefined;
   if (linkedId !== null) {
-    const inMine = mine.isError ? true : ask(mine, true, holdsLinked);
+    const inMine = orAsked(inOpenMine, linkedMine, askMine);
     const inManaged = orAsked(inOpenManaged, linkedManaged, askManaged);
     const inAll = orAsked(inOpenAll, linkedReadable, askAll);
     const inAvailable = ask(available, true, holdsLinked);
-    if (inMine) landing = { tab: 'mine', open: false };
+    if (inOpenMine) landing = { tab: 'mine', open: false };
+    else if (inMine) landing = { tab: 'mine', open: true };
     else if (inMine === false && inManaged)
       landing = { tab: 'managed', open: true };
     else if (
@@ -370,8 +385,15 @@ function TrackerContent() {
   // first list with something in it — Taskurile mele, De gestionat,
   // Disponibile — else Taskurile mele. A failed Taskurile mele read opens it,
   // so its retry is what the Member sees.
-  // De gestionat has something when it has an open Task, or the server's
-  // summary says it holds a finished one.
+  // Taskurile mele and De gestionat have something when they have an open
+  // Task, or the server's summary says they hold a finished one.
+  const mineHasOpen = ask(mine, true, nonEmpty);
+  const mineHas =
+    mineHasOpen !== false
+      ? mineHasOpen
+      : mineSummary.isError
+        ? false
+        : mineSummary.data && mineSummary.data.length > 0;
   const managedHasOpen = ask(managed, managedShown, nonEmpty);
   const managedHas =
     managedHasOpen !== false || managedShown !== true || managed.isError
@@ -382,7 +404,7 @@ function TrackerContent() {
   const firstNonEmpty = (): TrackerTab | undefined => {
     if (mine.isError) return 'mine';
     const order: [TrackerTab, boolean | undefined][] = [
-      ['mine', ask(mine, true, nonEmpty)],
+      ['mine', mineHas],
       ['managed', managedHas],
       ['available', ask(available, true, nonEmpty)],
     ];
@@ -624,26 +646,19 @@ function TrackerContent() {
             </Tabs.Tab>
           </Tabs.List>
           <div {...swipe} className="min-w-0">
+            {/* Taskurile mele takes its open read whole too: the list asks
+                for its finished part beside it (R55). */}
             <Tabs.Panel value="mine" className="motion-enter">
-              <TaskQueryStates
-                query={mine}
+              <MyTaskList
+                open={mine}
+                now={now}
                 search={search}
-                preferredNotice={false}
                 header={mineHeader}
-              >
-                {(rows) => (
-                  <MyTaskList
-                    rows={rows}
-                    now={now}
-                    search={search}
-                    header={mineHeader}
-                    onOpenTask={setDetailId}
-                    linkedId={highlightTarget}
-                    highlightedId={highlightedId}
-                    onGaveUp={(id, receipt) => setGaveUp({ id, receipt })}
-                  />
-                )}
-              </TaskQueryStates>
+                onOpenTask={setDetailId}
+                linkedId={highlightTarget}
+                highlightedId={highlightedId}
+                onGaveUp={(id, receipt) => setGaveUp({ id, receipt })}
+              />
             </Tabs.Panel>
             <Tabs.Panel value="available" className="motion-enter">
               <TaskQueryStates query={available} search={search}>
