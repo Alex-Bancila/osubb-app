@@ -1,4 +1,8 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  useInfiniteQuery,
+} from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,6 +17,7 @@ vi.mock('../lib/supabase', async () => {
 });
 
 import { useLiveChanges } from './live-changes';
+import { FINISHED_PAGE, finishedTasksQueryOptions } from './task-lists';
 
 const memberId = 'a1000000-0000-0000-0000-000000000604';
 
@@ -109,6 +114,85 @@ describe('live change signals (#961)', () => {
     act(() => onStatus('CHANNEL_ERROR'));
     act(() => onStatus('SUBSCRIBED'));
     expect(invalidate).toHaveBeenCalledWith();
+  });
+
+  describe('the finished part of a Task list, read by the page (#1053)', () => {
+    /** The `p_offset` of every `task_list` request, in order. */
+    const taskListOffsets = () =>
+      supabaseMock.rpc.mock.calls
+        .filter(([name]) => name === 'task_list')
+        .map(([, args]) => (args as { p_offset: number }).p_offset);
+
+    /** De gestionat's finished part with three of its four pages loaded. */
+    async function threePagesLoaded() {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      );
+      // 200 finished Tasks, 50 a page.
+      supabaseMock.rpc.mockImplementation(
+        (_name: string, args: { p_offset: number }) =>
+          Promise.resolve({
+            data: Array.from({ length: FINISHED_PAGE }, (_, index) => ({
+              id: args.p_offset + index + 1,
+              executor: null,
+              total: 200,
+            })),
+            error: null,
+          }),
+      );
+      const { result } = renderHook(
+        () => {
+          useLiveChanges(memberId);
+          return useInfiniteQuery(
+            finishedTasksQueryOptions('managed', {}, memberId),
+          );
+        },
+        { wrapper },
+      );
+      await waitFor(() => expect(result.current.data?.pages).toHaveLength(1));
+      await act(() => result.current.fetchNextPage());
+      await waitFor(() => expect(result.current.data?.pages).toHaveLength(2));
+      await act(() => result.current.fetchNextPage());
+      await waitFor(() => expect(result.current.data?.pages).toHaveLength(3));
+      expect(taskListOffsets()).toEqual([0, 50, 100]);
+      return result;
+    }
+
+    // Fails if a change only invalidates `['tasks']`: the infinite query
+    // then refetches every page it has loaded, one after another.
+    it('re-reads only the first page after a change and drops the others', async () => {
+      const result = await threePagesLoaded();
+      const { onChange } = await joined();
+
+      act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
+
+      await waitFor(() => expect(taskListOffsets()).toHaveLength(4));
+      await waitFor(() => expect(result.current.isFetching).toBe(false));
+      // One request, for the first page; the pages after it are dropped.
+      expect(taskListOffsets()).toEqual([0, 50, 100, 0]);
+      expect(result.current.data?.pages).toHaveLength(1);
+      expect(result.current.hasNextPage).toBe(true);
+    });
+
+    // Fails if a reconnect invalidates everything without trimming first.
+    it('re-reads only the first page after a reconnect too', async () => {
+      const result = await threePagesLoaded();
+      const { onStatus } = await joined();
+
+      act(() => onStatus('SUBSCRIBED'));
+      act(() => onStatus('CHANNEL_ERROR'));
+      act(() => onStatus('SUBSCRIBED'));
+
+      await waitFor(() => expect(taskListOffsets()).toHaveLength(4));
+      await waitFor(() => expect(result.current.isFetching).toBe(false));
+      expect(taskListOffsets()).toEqual([0, 50, 100, 0]);
+      expect(result.current.data?.pages).toHaveLength(1);
+    });
   });
 
   it('leaves the topic on sign-out and never joins without a member', async () => {
