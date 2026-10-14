@@ -4,7 +4,7 @@ Date: 2026-10-14 · Status: proposed · Follows: [the fast Task lists](2026-10-1
 
 ## Why
 
-Alex, 2026-10-14: *"do every improvement you said … i want everything"*, and *"when a page takes longer to load add a skeleton loading to don't appear as the app just froze"*. The improvements named were:
+Alex, 2026-10-14: _"do every improvement you said … i want everything"_, and _"when a page takes longer to load add a skeleton loading to don't appear as the app just froze"_. The improvements named were:
 
 1. the Task read rule costs about 0.5 ms per Task on every read of Tasks;
 2. Taskurile mele and Disponibile still read through that rule in several requests one after another;
@@ -15,13 +15,13 @@ Alex, 2026-10-14: *"do every improvement you said … i want everything"*, and *
 
 Production-shaped data: the Legacy Import command run with a synthetic file (5 300 finished Tasks over 13 Groups, 300 of them on the demo Volunteer), plus 120 open public Tasks created through `create_task` and 25 pending Candidatures of the Volunteer through `express_task_interest`. 5 445 Tasks in all. Signed in as the demo Volunteer.
 
-| What | Time | Notes |
-| --- | --- | --- |
-| Every Task the Volunteer may read (`select count(*) from tasks` through RLS) | **2.77 s** server | 5 445 rows × the per-Task rule; 381 readable |
-| Taskurile mele, data | 240–490 ms | 4–6 requests, 3 of them one after another; the slowest (Assignments with their Tasks) 200–250 ms |
-| Taskurile mele, until every card is drawn | **0.77 s** | 306 cards, 10 617 DOM nodes |
-| Disponibile, data | 160–220 ms | 5 requests, 4 steps one after another |
-| Disponibile, until every card is drawn | 0.4 s | 74 cards, 2 239 DOM nodes |
+| What                                                                         | Time              | Notes                                                                                            |
+| ---------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------ |
+| Every Task the Volunteer may read (`select count(*) from tasks` through RLS) | **2.77 s** server | 5 445 rows × the per-Task rule; 381 readable                                                     |
+| Taskurile mele, data                                                         | 240–490 ms        | 4–6 requests, 3 of them one after another; the slowest (Assignments with their Tasks) 200–250 ms |
+| Taskurile mele, until every card is drawn                                    | **0.77 s**        | 306 cards, 10 617 DOM nodes                                                                      |
+| Disponibile, data                                                            | 160–220 ms        | 5 requests, 4 steps one after another                                                            |
+| Disponibile, until every card is drawn                                       | 0.4 s             | 74 cards, 2 239 DOM nodes                                                                        |
 
 Locally there is no network. In production every request that waits for the one before it adds a round trip (about 40–100 ms from Cluj, more on a phone), and the busiest Member gains about 300 Tasks a year.
 
@@ -35,18 +35,18 @@ Six parts, each its own issue and PR, in this order.
 
 - **R2** — the caller's own Assignment or Candidature, ever, on the Task or on its Umbrella;
 - **R1, R3, R4, R6-own, R6-org** — what the caller may see of a Group (`private.can_see_group`), their level against its Minimum Level, a Group Role on its path, Shared Work Visibility on its path, membership;
-- the one per-Task part: *is the Task an open public Opportunity* (kind `task`, mode `public`, queue open, not finished), and its Audience.
+- the one per-Task part: _is the Task an open public Opportunity_ (kind `task`, mode `public`, queue open, not finished), and its Audience.
 
 **R7 reduces to R2.** A sub-Task's Group is its Umbrella's: `private.validate_task_hierarchy` refuses a sub-Task created elsewhere (`subtask_origin_mismatch`), and neither a sub-Task nor an Umbrella that has sub-Tasks can change Group (`subtask_origin_immutable`, `umbrella_has_subtasks`). The Group rules therefore judge the Umbrella exactly as they judge the sub-Task, and an Umbrella is never an Opportunity. What is left of "judged on the Task and its Umbrella" is the caller's own Assignment or Candidature on the Umbrella.
 
 The new rule computes four small sets once per statement, each through `(select …)` so Postgres runs it as an InitPlan:
 
-| Function (security definer, stable) | Returns | From the rule |
-| --- | --- | --- |
-| `private.own_task_ids()` | ids of the Tasks the caller holds or held an Assignment or Candidature on | R2 |
-| `private.task_read_groups('whole')` | Groups whose every Task the caller reads | R1, R3, R4 |
-| `private.task_read_groups('open')` | Groups whose open public Opportunities the caller reads, any Audience | R6-own |
-| `private.task_read_groups('org')` | Groups whose open public org-Audience Opportunities the caller reads | R6-org |
+| Function (security definer, stable) | Returns                                                                   | From the rule |
+| ----------------------------------- | ------------------------------------------------------------------------- | ------------- |
+| `private.own_task_ids()`            | ids of the Tasks the caller holds or held an Assignment or Candidature on | R2            |
+| `private.task_read_groups('whole')` | Groups whose every Task the caller reads                                  | R1, R3, R4    |
+| `private.task_read_groups('open')`  | Groups whose open public Opportunities the caller reads, any Audience     | R6-own        |
+| `private.task_read_groups('org')`   | Groups whose open public org-Audience Opportunities the caller reads      | R6-org        |
 
 ```sql
 tasks_read using (
@@ -87,6 +87,7 @@ The mutation record names the assertion each removed branch breaks. A timing gua
 A new column, `my_candidature`, carries the caller's Candidature status (or null), so Disponibile needs no second read.
 
 For the leadership lists each row embeds every Assignment and Evaluation, which their callers may read. **For `mine` and `available`, the embeds follow the read policies:**
+
 - the caller's own rows;
 - every row when the caller is a global Task reader (level 5 and up);
 - every row of a Task in the caller's managed set (`private.task_list_scope('managed')`, computed once).
@@ -94,6 +95,7 @@ For the leadership lists each row embeds every Assignment and Evaluation, which 
 The parity suite compares these embeds with what the four policies return to the same caller.
 
 **Order.**
+
 - `mine`: open Tasks by deadline (soonest first, undated last), then title (`ro-x-icu`), then id; finished Tasks newest first.
 - `available`: open Tasks only, by deadline, then title, then id. This is today's Disponibile order.
 
@@ -112,6 +114,7 @@ This mirrors #1053:
 ### 4. Anunțuri by pages (backend and frontend)
 
 `public.announcement_feed(p_group_id, p_preferred, p_limit, p_offset)` returns the feed:
+
 - what the page reads today, with the reader's own `read_at`;
 - narrowed by Grupuri preferate (R43: a preferred Group, or critical, or organization-wide, or the caller's own) and by the Group filter (the chosen Group and every Group below it);
 - ordered by R15 (pinned, then unread, then read; newest first in each; id last);
@@ -120,6 +123,7 @@ This mirrors #1053:
 `public.announcement_feed_summary(p_preferred)` returns the unread count the header shows and the newest unread critical Announcement the banner points at.
 
 The page:
+
 - reads the first 20 and the rest on scroll or from **Încarcă mai multe**;
 - reads the Announcement a `?anunt=` link names by its id;
 - reads authors per page.
@@ -147,6 +151,7 @@ The PR lists every route with what it showed before and after.
 ### Not changed: the Calendar
 
 On inspection the Calendar already reads only what it shows:
+
 - the month view reads its month;
 - the Agendă reads the range the Work Filter sets;
 - without a range, the Agendă reads **Ce urmează**, from today on, which is bounded by the Events still to come.
@@ -160,14 +165,14 @@ Nothing there grows without bound, so "past Calendar Events" in the list of impr
 
 ## Delivery
 
-| # | Issue | Blocked by |
-| --- | --- | --- |
-| A | The Task read rule is decided once per request | — |
-| B | `task_list` reads the Member's lists (`mine`, `available`) | A |
-| C | Taskurile mele and Disponibile read through the list reader (R55) | B |
-| D | Anunțuri reads by pages (R56) | — |
-| E | The four findings left from #1053 | — |
-| F | Every page shows its loading state | C, D, E (it audits their screens last) |
+| #   | Issue                                                             | Blocked by                             |
+| --- | ----------------------------------------------------------------- | -------------------------------------- |
+| A   | The Task read rule is decided once per request                    | —                                      |
+| B   | `task_list` reads the Member's lists (`mine`, `available`)        | A                                      |
+| C   | Taskurile mele and Disponibile read through the list reader (R55) | B                                      |
+| D   | Anunțuri reads by pages (R56)                                     | —                                      |
+| E   | The four findings left from #1053                                 | —                                      |
+| F   | Every page shows its loading state                                | C, D, E (it audits their screens last) |
 
 Each PR follows the house gates: pgTAP and harnesses for the backend, vitest, tsc, oxlint and prettier for the frontend, a fresh-context review, CodeRabbit, and a merge on green. Database suites and the full vitest never run at the same time on this machine. When the work is done, the measurement above is repeated with the same synthetic data, before and after side by side.
 
