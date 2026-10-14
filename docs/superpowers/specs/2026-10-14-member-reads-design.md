@@ -51,13 +51,13 @@ The new rule computes four small sets once per statement, each through `(select 
 ```sql
 tasks_read using (
   (select public.auth_is_member())
-  and (   id = any ((select private.own_task_ids()))
-       or parent_task_id = any ((select private.own_task_ids()))
-       or group_id = any ((select private.task_read_groups('whole')))
+  and (   id = any ((select private.own_task_ids())::bigint[])
+       or parent_task_id = any ((select private.own_task_ids())::bigint[])
+       or group_id = any ((select private.task_read_groups('whole'))::bigint[])
        or (    kind = 'task' and assignment_mode = 'public' and queue_closed_at is null
            and status not in ('completed', 'unfulfilled', 'cancelled')
-           and (   group_id = any ((select private.task_read_groups('open')))
-                or (audience = 'org' and group_id = any ((select private.task_read_groups('org'))))))))
+           and (   group_id = any ((select private.task_read_groups('open'))::bigint[])
+                or (audience = 'org' and group_id = any ((select private.task_read_groups('org'))::bigint[]))))))
 ```
 
 The Group sets are built per Group from the same helpers and the same expressions `private.can_read_task` uses today, and are empty for a caller who is not a live `activ` Member, as today.
@@ -105,8 +105,8 @@ This mirrors #1053:
 
 - **Taskurile mele** reads its open Tasks whole and its finished ones under **Taskuri încheiate**, 50 at a time:
   - the next page comes when the end of the list comes into view, or from **Încarcă mai multe**;
-  - the title search, the Work Filter and **Stare** narrow both parts; the server applies them to the finished part;
-  - **Stare** and Rule W read `task_list_summary('mine')`.
+  - the title search and the Work Filter narrow both parts; the server applies them to the finished part. Taskurile mele keeps no **Stare** and no **Ordonează**, as today (ruling in the build: the paging adds no filter);
+  - Rule W reads the open rows and `task_list_summary('mine')`.
 - `useMyTasks` keeps its name and means the open Tasks, which is all Acasă's tiles and **Urmează** use (checked per consumer in the plan).
 - The Calendar month reads the Member's Tasks of the month it shows (`mine` with `p_from` / `p_to`), as De gestionat's Calendar does.
 - **Disponibile** reads `task_list('available')`, and the Member's Groups beside it rather than after it. That is 2 requests side by side where today there are 5 in 4 steps. The `relevant` and `joinable` flags stay on the page.
