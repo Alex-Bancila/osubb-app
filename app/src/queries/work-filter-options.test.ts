@@ -24,4 +24,18 @@ describe('calendarWorkItems', () => {
       { group_id: 5, campaign_id: 9, deadline: '2026-10-02T10:00:00Z' },
     ]);
   });
+
+  it('adds the Groups and Campaigns of the managed Tasks that carry a deadline', () => {
+    const managed = [
+      { group_id: 6, campaign_id: null },
+      { group_id: 6, campaign_id: 10 },
+    ];
+    expect(
+      calendarWorkItems({
+        events: [{ group_id: 1, campaign_id: null }],
+        tasks: [undefined],
+        managed,
+      }),
+    ).toEqual([{ group_id: 1, campaign_id: null }, ...managed]);
+  });
 });

@@ -1,0 +1,230 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const rpc = vi.hoisted(() => vi.fn());
+vi.mock('../lib/supabase', () => ({ supabase: { rpc } }));
+vi.mock('../lib/auth', () => ({
+  useAuth: () => ({ session: { user: { id: 'me' } } }),
+}));
+// The shared label reads: answered at once unless a test says otherwise.
+const labels = vi.hoisted(() => ({
+  groups: { data: undefined, isError: false } as {
+    data: Map<number, unknown> | undefined;
+    isError: boolean;
+  },
+  campaigns: { data: undefined, isError: false } as {
+    data: { id: number; name: string }[] | undefined;
+    isError: boolean;
+  },
+}));
+vi.mock('./reference', () => ({ useGroups: () => labels.groups }));
+vi.mock('./campaigns', () => ({ useCampaigns: () => labels.campaigns }));
+import {
+  useFinishedTasks,
+  useManagedTasks,
+  type TaskListRpcRow,
+} from './task-lists';
+
+const edu = {
+  id: 10,
+  name: 'Educațional',
+  short: 'EDU',
+  color: '#0a7d4f',
+  category: 'department',
+  path: [10],
+  is_organization: false,
+  is_private: false,
+};
+
+function row(id: number, total: number): TaskListRpcRow {
+  return {
+    id,
+    group_id: 10,
+    title: `Task ${id}`,
+    description: null,
+    status: 'completed',
+    deadline: null,
+    completed_at: '2026-03-09T10:00:00+00:00',
+    review_round: 0,
+    assignment_mode: 'direct',
+    audience: 'local',
+    kind: 'task',
+    parent_task_id: null,
+    campaign_id: null,
+    duplicated_from_task_id: null,
+    queue_closed_at: null,
+    links: [],
+    assignments: [],
+    evaluations: [],
+    submission: [],
+    executor: null,
+    total,
+  };
+}
+const rows = (from: number, to: number, total: number) =>
+  Array.from({ length: to - from + 1 }, (_, index) => row(from + index, total));
+
+/** A request the test answers when it chooses to. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+function wrapper() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return ({ children }: { children: ReactNode }) =>
+    createElement(QueryClientProvider, { client }, children);
+}
+
+beforeEach(() => {
+  rpc.mockReset();
+  labels.groups = { data: new Map([[10, edu]]), isError: false };
+  labels.campaigns = { data: [], isError: false };
+});
+
+describe('useFinishedTasks', () => {
+  it('is pending until the first page lands, then has its rows and the total', async () => {
+    const first = deferred<{ data: TaskListRpcRow[]; error: null }>();
+    rpc.mockReturnValue(first.promise);
+    const { result } = renderHook(() => useFinishedTasks('managed', {}, true), {
+      wrapper: wrapper(),
+    });
+    // The labels are already there: only the page is on its way.
+    expect(result.current.isPending).toBe(true);
+    expect(result.current.rows).toEqual([]);
+    expect(result.current.total).toBeUndefined();
+    first.resolve({ data: rows(1, 50, 120), error: null });
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    expect(result.current.rows).toHaveLength(50);
+    expect(result.current.rows[0]?.group?.name).toBe('Educațional');
+    expect(result.current.total).toBe(120);
+    expect(result.current.hasMore).toBe(true);
+  });
+
+  it('is pending again, and empty, while a changed filter is on its way', async () => {
+    rpc.mockResolvedValueOnce({ data: rows(1, 2, 2), error: null });
+    const next = deferred<{ data: TaskListRpcRow[]; error: null }>();
+    rpc.mockReturnValueOnce(next.promise);
+    const { result, rerender } = renderHook(
+      ({ search }: { search: string }) =>
+        useFinishedTasks('managed', search ? { p_search: search } : {}, true),
+      { wrapper: wrapper(), initialProps: { search: '' } },
+    );
+    await waitFor(() => expect(result.current.rows).toHaveLength(2));
+    rerender({ search: 'afis' });
+    expect(result.current.isPending).toBe(true);
+    expect(result.current.rows).toEqual([]);
+    next.resolve({ data: [], error: null });
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    expect(result.current.total).toBe(0);
+  });
+
+  it('keeps a Task once when it appears on two pages, and the first page’s total', async () => {
+    rpc
+      .mockResolvedValueOnce({ data: rows(1, 50, 120), error: null })
+      // A Task finished meanwhile: the next page starts one row early.
+      .mockResolvedValueOnce({ data: rows(50, 99, 121), error: null });
+    const { result } = renderHook(() => useFinishedTasks('managed', {}, true), {
+      wrapper: wrapper(),
+    });
+    await waitFor(() => expect(result.current.rows).toHaveLength(50));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.rows).toHaveLength(99));
+    expect(result.current.rows.map((task) => task.id)).toEqual(
+      Array.from({ length: 99 }, (_, index) => index + 1),
+    );
+    expect(result.current.total).toBe(120);
+    // The next page starts after the rows read, not after the ids kept.
+    expect(rpc.mock.calls.map(([, args]) => args.p_offset)).toEqual([0, 50]);
+  });
+
+  it('keeps the rows and says so when a later page fails; loading more asks again', async () => {
+    rpc
+      .mockResolvedValueOnce({ data: rows(1, 50, 120), error: null })
+      .mockResolvedValueOnce({ data: null, error: new Error('offline') })
+      .mockResolvedValueOnce({ data: rows(51, 100, 120), error: null });
+    const { result } = renderHook(() => useFinishedTasks('managed', {}, true), {
+      wrapper: wrapper(),
+    });
+    await waitFor(() => expect(result.current.rows).toHaveLength(50));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.moreFailed).toBe(true));
+    expect(result.current.rows).toHaveLength(50);
+    expect(result.current.isError).toBe(false);
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.rows).toHaveLength(100));
+    expect(result.current.moreFailed).toBe(false);
+  });
+
+  it('reports a failed first page as the error it is', async () => {
+    rpc.mockResolvedValue({ data: null, error: new Error('offline') });
+    const { result } = renderHook(() => useFinishedTasks('all', {}, true), {
+      wrapper: wrapper(),
+    });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.isPending).toBe(false);
+    expect(result.current.rows).toEqual([]);
+  });
+
+  it('asks nothing and is settled and empty without filters', () => {
+    const { result } = renderHook(
+      () => useFinishedTasks('managed', null, true),
+      { wrapper: wrapper() },
+    );
+    expect(rpc).not.toHaveBeenCalled();
+    expect(result.current).toMatchObject({
+      rows: [],
+      total: 0,
+      isPending: false,
+      isError: false,
+      hasMore: false,
+    });
+  });
+});
+
+describe('useManagedTasks', () => {
+  it('waits for the Group labels rather than show a Task without its Group', async () => {
+    labels.groups = { data: undefined, isError: false };
+    rpc.mockResolvedValue({ data: rows(1, 2, 2), error: null });
+    const { result, rerender } = renderHook(() => useManagedTasks(true), {
+      wrapper: wrapper(),
+    });
+    await waitFor(() => expect(rpc).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.isPending).toBe(true);
+    expect(result.current.data).toBeUndefined();
+    labels.groups = { data: new Map([[10, edu]]), isError: false };
+    rerender();
+    await waitFor(() => expect(result.current.data).toHaveLength(2));
+    expect(result.current.isPending).toBe(false);
+    expect(result.current.data?.[0]?.group?.name).toBe('Educațional');
+  });
+
+  it('shows the Tasks unlabelled when the labels cannot be read', async () => {
+    labels.groups = { data: undefined, isError: true };
+    rpc.mockResolvedValue({ data: rows(1, 2, 2), error: null });
+    const { result } = renderHook(() => useManagedTasks(true), {
+      wrapper: wrapper(),
+    });
+    await waitFor(() => expect(result.current.data).toHaveLength(2));
+    expect(result.current.data?.[0]?.group).toBeNull();
+    expect(result.current.isError).toBe(false);
+  });
+
+  it('asks nothing while it is not enabled', () => {
+    const { result } = renderHook(() => useManagedTasks(false), {
+      wrapper: wrapper(),
+    });
+    expect(rpc).not.toHaveBeenCalled();
+    expect(result.current.data).toBeUndefined();
+  });
+});

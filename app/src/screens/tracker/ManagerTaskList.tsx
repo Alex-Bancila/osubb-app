@@ -1,13 +1,23 @@
 import { useMemo, useState } from 'react';
-import { AnimatedList, EmptyState } from '../../components/layout';
+import { AnimatedList, EmptyState, Panel } from '../../components/layout';
+import { ErrorState, Loading } from '../../components/states';
+import { Button } from '../../components/ui/button';
 import { SegmentedRadio } from '../../components/ui/segmented-radio';
 import { Select } from '../../components/ui/select';
 import { workFilterCellClass } from '../../components/work-filter/field-class';
 import { formatTaskCount } from '../../lib/format';
+import { useInView } from '../../lib/use-in-view';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import { matchesWorkFilter } from '../../lib/work-filter';
 import { executesTask } from '../../lib/preferred-groups';
 import { usePreferredGroups } from '../../components/preferred-groups/preferred-groups';
+import {
+  summaryWork,
+  useFinishedTasks,
+  useTaskListSummary,
+  type FinishedFilters,
+  type TaskListName,
+} from '../../queries/task-lists';
 import {
   ClearSearchButton,
   RANGE_FIRST,
@@ -18,11 +28,15 @@ import { matchesTitle, type TitleSearch } from './use-title-search';
 import { TaskRow } from './TaskRow';
 import {
   compareManagedTasks,
+  finishedStateCounts,
+  isFinishedState,
+  isOpenState,
   MANAGER_TASK_STATES,
   matchesTaskState,
   type ManagerTaskSort,
 } from './manager-task-list';
 import {
+  isTerminalTask,
   toTaskPresentation,
   type TaskPresentationRow,
 } from './task-presentation';
@@ -46,14 +60,25 @@ const SORT_CHOICES: ReadonlyArray<{ value: ManagerTaskSort; label: string }> = [
  * list holds) and the order (#845, layout T4) — then the Tasks as dense rows,
  * no table, so nothing scrolls sideways at any width. `empty` is what the
  * list says when it holds no Task at all.
+ *
+ * The list has two parts (#1053, ruling R54). `rows` are its open Tasks, read
+ * whole: the page filters and orders them, overdue first. The finished Tasks
+ * follow under **Taskuri încheiate**, newest first, read from the server 50
+ * at a time under the same search, filters, state and order — the next page
+ * when the end of the list comes into view, or from **Încarcă mai multe**.
+ * Stare and the Work Filter offer what both parts hold: the open rows, and
+ * the server's summary of the rest.
  */
 export function ManagerTaskList({
+  list,
   rows,
   now,
   search,
   empty,
   onOpenTask,
 }: {
+  /** Which list this is; names the finished part's read. */
+  list: TaskListName;
   rows: readonly TaskPresentationRow[];
   now: Date;
   search: TitleSearch;
@@ -68,7 +93,16 @@ export function ManagerTaskList({
   const [chosenSort, setSort] = useState<ManagerTaskSort>('deadline');
   const { needle } = search;
 
-  const listControls = rows.length >= LIST_CONTROLS_FROM;
+  // What the list holds beyond `rows`: its finished Tasks, counted.
+  const summary = useTaskListSummary(list, true);
+  const held = useMemo(
+    () => (summary.data ?? []).filter((row) => isTerminalTask(row.status)),
+    [summary.data],
+  );
+  const finishedCounts = useMemo(() => finishedStateCounts(held), [held]);
+  const work = useMemo(() => [...rows, ...summaryWork(held)], [rows, held]);
+
+  const listControls = rows.length + finishedCounts.total >= LIST_CONTROLS_FROM;
   const sort = listControls ? chosenSort : 'deadline';
 
   const presented = useMemo(
@@ -79,10 +113,12 @@ export function ManagerTaskList({
   // no longer holds is dropped rather than emptying the list.
   const states = useMemo(
     () =>
-      MANAGER_TASK_STATES.filter(([value]) =>
-        presented.some(({ task }) => matchesTaskState(task, value)),
+      MANAGER_TASK_STATES.filter(
+        ([value]) =>
+          presented.some(({ task }) => matchesTaskState(task, value)) ||
+          (isFinishedState(value) && finishedCounts[value] > 0),
       ),
-    [presented],
+    [presented, finishedCounts],
   );
   const stateOffered =
     listControls && states.some(([value]) => value === chosenState);
@@ -108,6 +144,43 @@ export function ManagerTaskList({
         : [],
     [presented, params, state, needle, sort, preferred],
   );
+
+  // The finished part's read: the same narrowing, applied by the server.
+  // Nothing is asked while the range is inverted or Stare names a state only
+  // an open Task can have.
+  const finishedFilters = useMemo<FinishedFilters | null>(
+    () =>
+      !params || isOpenState(state)
+        ? null
+        : {
+            ...params,
+            ...(needle ? { p_search: needle } : {}),
+            ...(isFinishedState(state) ? { p_state: state } : {}),
+            ...(preferred.active ? { p_preferred: true } : {}),
+            ...(sort === 'title' ? { p_sort: sort } : {}),
+          },
+    [params, state, needle, sort, preferred.active],
+  );
+  const finished = useFinishedTasks(list, finishedFilters, true);
+  // A Task that has just finished can still be in the open read for a moment.
+  const finishedTasks = useMemo(() => {
+    const open = new Set(rows.map((row) => row.id));
+    return finished.rows
+      .filter((row) => !open.has(row.id))
+      .map((row) => toTaskPresentation(row, now));
+  }, [finished.rows, rows, now]);
+  const sentinel = useInView(
+    finished.loadMore,
+    finished.hasMore && !finished.isLoadingMore && !finished.moreFailed,
+  );
+
+  // How many Tasks the list shows; unknown until the finished part answers.
+  const count =
+    !params || finished.isPending || finished.isError
+      ? undefined
+      : tasks.length + (finished.total ?? 0);
+  const nothing = tasks.length === 0 && finishedTasks.length === 0;
+  const settled = !finished.isPending && !finished.isError;
 
   const fields = listControls
     ? (id: string) => (
@@ -143,9 +216,9 @@ export function ManagerTaskList({
   return (
     <div className={trackerListClass}>
       <TrackerWorkFilter
-        rows={rows}
+        rows={work}
         search={search}
-        count={params ? tasks.length : undefined}
+        count={count}
         fields={fields}
         extraChips={
           state
@@ -163,28 +236,88 @@ export function ManagerTaskList({
       {!params ? (
         <p>{RANGE_FIRST}</p>
       ) : (
-        <section aria-label="Lista taskurilor" className="min-w-0 space-y-2">
-          {tasks.length ? (
-            <>
-              {/* Said to a screen reader; sighted, the search names it. */}
-              <p role="status" className="sr-only">
-                {formatTaskCount(tasks.length)}
-              </p>
+        <section
+          aria-label="Lista taskurilor"
+          className="flex min-w-0 flex-col gap-4"
+        >
+          {/* Said to a screen reader; sighted, the search names it. */}
+          {count !== undefined && count > 0 && (
+            <p role="status" className="sr-only">
+              {formatTaskCount(count)}
+            </p>
+          )}
+          {tasks.length > 0 && (
+            <AnimatedList
+              data-slot="task-row-list"
+              className="gap-2"
+              items={tasks}
+              getKey={(task) => task.id}
+            >
+              {(task) => <TaskRow task={task} onOpenTask={onOpenTask} />}
+            </AnimatedList>
+          )}
+          {finished.isPending && (
+            <Loading label="Se încarcă taskurile încheiate…" />
+          )}
+          {finished.isError && (
+            <ErrorState
+              error={finished.error}
+              text="Nu am putut încărca taskurile încheiate."
+              onRetry={finished.refetch}
+            />
+          )}
+          {finishedTasks.length > 0 && (
+            <Panel
+              bare
+              title="Taskuri încheiate"
+              control={
+                finished.total !== undefined && (
+                  <p className="text-sm text-muted-foreground tabular-nums">
+                    {formatTaskCount(finished.total)}
+                  </p>
+                )
+              }
+            >
               <AnimatedList
                 data-slot="task-row-list"
                 className="gap-2"
-                items={tasks}
+                items={finishedTasks}
                 getKey={(task) => task.id}
               >
-                {(task) => <TaskRow task={task} onOpenTask={onOpenTask} />}
+                {(task) => (
+                  <TaskRow task={task} onOpenTask={onOpenTask} titleLevel={3} />
+                )}
               </AnimatedList>
-            </>
-          ) : (
+              {finished.moreFailed ? (
+                <ErrorState
+                  text="Nu am putut încărca mai multe taskuri."
+                  onRetry={finished.loadMore}
+                />
+              ) : (
+                finished.hasMore && (
+                  // The end of the list: coming into view, it asks for the
+                  // next page; the button does the same for a keyboard.
+                  <div ref={sentinel} className="flex justify-center pt-2">
+                    <Button
+                      variant="outline"
+                      disabled={finished.isLoadingMore}
+                      onClick={finished.loadMore}
+                    >
+                      {finished.isLoadingMore
+                        ? 'Se încarcă…'
+                        : 'Încarcă mai multe'}
+                    </Button>
+                  </div>
+                )
+              )}
+            </Panel>
+          )}
+          {nothing && settled && (
             <EmptyState
               bare
               action={needle ? <ClearSearchButton search={search} /> : null}
             >
-              {!rows.length
+              {rows.length + finishedCounts.total === 0
                 ? empty
                 : needle
                   ? 'Niciun task nu corespunde căutării.'

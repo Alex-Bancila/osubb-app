@@ -52,6 +52,16 @@ vi.mock('../../components/tasks/EvaluationFields', () => ({
   ),
 }));
 vi.mock('../../queries/task-details', () => ({ useTaskDetails }));
+// #1053: `can_manage_task` for the one shown Task; unanswered unless a test
+// says so.
+const manageCapability = vi.hoisted(() =>
+  vi.fn(
+    (_taskId: number | null, _enabled?: boolean): { data?: boolean } => ({}),
+  ),
+);
+vi.mock('../../queries/task-lists', () => ({
+  useTaskManageCapability: manageCapability,
+}));
 const deleteTask = vi.hoisted(() =>
   vi.fn().mockResolvedValue({ deletedTasks: 1, pointsReversed: 0, members: 0 }),
 );
@@ -385,6 +395,55 @@ describe('Task details sheet', () => {
     expect(
       await screen.findByText('Taskul a fost creat.', { selector: 'p' }),
     ).toHaveAttribute('role', 'status');
+  });
+
+  it('asks the server about a Task it does not know to be managed, when the opener says to (#1053)', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({ status: 'completed', assignments: [] }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    manageCapability.mockReturnValue({ data: undefined });
+    const { rerender } = render(
+      <TaskDetailsSheet taskId={1} askManage onClose={vi.fn()} />,
+    );
+    expect(manageCapability).toHaveBeenLastCalledWith(1, true);
+    // No answer yet: no manager control.
+    expect(
+      screen.queryByRole('button', { name: 'Duplică' }),
+    ).not.toBeInTheDocument();
+    manageCapability.mockReturnValue({ data: true });
+    rerender(<TaskDetailsSheet taskId={1} askManage onClose={vi.fn()} />);
+    expect(
+      await screen.findByRole('button', { name: 'Duplică' }),
+    ).toBeVisible();
+  });
+
+  it('asks nothing about a Task the opener knows to be managed, or when it was not told to ask', async () => {
+    useTaskDetails.mockReturnValue({
+      data: { task: taskRow(), executorName: null, subtasks: [] },
+    });
+    manageCapability.mockReturnValue({ data: undefined });
+    const { rerender } = render(
+      <TaskDetailsSheet
+        taskId={1}
+        managedTaskIds={new Set([1])}
+        askManage
+        onClose={vi.fn()}
+      />,
+    );
+    expect(manageCapability).toHaveBeenLastCalledWith(1, false);
+    expect(
+      await screen.findByRole('button', { name: 'Duplică' }),
+    ).toBeVisible();
+    // Cereri opens the sheet to read a Task: nothing is asked there.
+    rerender(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    expect(manageCapability).toHaveBeenLastCalledWith(1, false);
+    expect(
+      screen.queryByRole('button', { name: 'Duplică' }),
+    ).not.toBeInTheDocument();
   });
 
   it('shows candidate selection only for a Task authorized by the live management query', async () => {
