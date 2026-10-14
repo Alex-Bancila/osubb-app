@@ -1,7 +1,7 @@
 /**
  * Taskurile mele's open Tasks (ruling R55) read through the list reader in
- * `task-lists.ts`; Acasă, the Calendar and the Tracker import them from
- * here, as before.
+ * `task-lists.ts`; Acasă and the Tracker import them from here, as before (the
+ * Calendar month reads `useMyTasksInRange` there).
  */
 export { useMyTasks } from './task-lists';
 

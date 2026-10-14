@@ -2414,6 +2414,51 @@ describe('Taskuri over the paged lists (#1053)', () => {
       ).toHaveTextContent('Task #55');
     });
 
+    // Fails if a Task another open list holds waits for the server: being
+    // open and outside Taskurile mele's open rows, it cannot be the Member's.
+    it('lands a link to an open managed Task on De gestionat without asking whether it is mine', () => {
+      manages([
+        taskRow({
+          id: 7,
+          title: 'De evaluat',
+          status: 'in_review',
+          assignments: [],
+        }),
+      ]);
+      listReads.isMine.mockReturnValue({ data: undefined, isError: false });
+      renderAt('/tracker?task=7');
+      expect(selected()).toBe('De gestionat');
+      expect(
+        screen.getByRole('dialog', { name: 'Detalii task' }),
+      ).toHaveTextContent('Task #7');
+      expect(listReads.isMine).not.toHaveBeenCalledWith(7, true);
+    });
+
+    it('lands a link to an Opportunity on Disponibile without asking whether it is mine', () => {
+      hooks.useTaskOpportunities.mockReturnValue({
+        data: orderOpportunities(
+          [
+            taskRow({
+              id: 15,
+              title: 'Distribuie story-ul',
+              assignment_mode: 'public',
+              assignments: [],
+            }),
+          ],
+          new Set([1]),
+        ),
+        isPending: false,
+        isError: false,
+      });
+      listReads.isMine.mockReturnValue({ data: undefined, isError: false });
+      renderAt('/tracker?task=15');
+      expect(selected()).toBe('Disponibile');
+      expect(
+        screen.getByRole('dialog', { name: 'Detalii task' }),
+      ).toHaveTextContent('Task #15');
+      expect(listReads.isMine).not.toHaveBeenCalledWith(15, true);
+    });
+
     // Fails if the opening tab reads only the open rows: a Member whose own
     // Tasks are all finished would open on De gestionat or Disponibile.
     it('opens on Taskurile mele when it holds only finished Tasks', () => {

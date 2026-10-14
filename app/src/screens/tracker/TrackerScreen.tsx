@@ -334,7 +334,9 @@ function TrackerContent() {
   // on the opening tab with the sheet's unavailable state. A failed
   // Taskurile mele read never routes a Task of mine elsewhere. The lists
   // hold their finished Tasks by the page (#1053, R55), so a Task their open
-  // rows do not hold is asked of the server, alone.
+  // rows do not hold is asked of the server, alone — unless another list's
+  // open rows hold it: an open Task outside Taskurile mele's open rows is not
+  // the Member's, so it lands where it is without that question.
   const holdsLinked = (rows: readonly { id: number }[]) =>
     rows.some((task) => task.id === linkedId);
   const inOpenMine =
@@ -343,11 +345,15 @@ function TrackerContent() {
       : mine.isError
         ? true
         : ask(mine, true, holdsLinked);
-  const askMine = linkedId !== null && inOpenMine === false;
-  const linkedMine = useTaskIsMine(linkedId, askMine);
   const inOpenManaged =
     linkedId === null ? false : ask(managed, managedShown, holdsLinked);
   const inOpenAll = linkedId === null ? false : ask(all, allShown, holdsLinked);
+  const inAvailable =
+    linkedId === null ? false : ask(available, true, holdsLinked);
+  const openElsewhere =
+    inOpenManaged === true || inOpenAll === true || inAvailable === true;
+  const askMine = linkedId !== null && inOpenMine === false && !openElsewhere;
+  const linkedMine = useTaskIsMine(linkedId, askMine);
   const askManaged =
     linkedId !== null && managedShown === true && inOpenManaged === false;
   const askAll = linkedId !== null && allShown === true && inOpenAll === false;
@@ -355,10 +361,12 @@ function TrackerContent() {
   const linkedReadable = useTaskReadable(linkedId, askAll);
   let landing: { tab: TrackerTab | null; open: boolean } | undefined;
   if (linkedId !== null) {
-    const inMine = orAsked(inOpenMine, linkedMine, askMine);
+    const inMine =
+      inOpenMine === false && openElsewhere
+        ? false
+        : orAsked(inOpenMine, linkedMine, askMine);
     const inManaged = orAsked(inOpenManaged, linkedManaged, askManaged);
     const inAll = orAsked(inOpenAll, linkedReadable, askAll);
-    const inAvailable = ask(available, true, holdsLinked);
     if (inOpenMine) landing = { tab: 'mine', open: false };
     else if (inMine) landing = { tab: 'mine', open: true };
     else if (inMine === false && inManaged)
