@@ -226,6 +226,7 @@ function noFinished() {
     error: null,
     hasMore: false,
     isLoadingMore: false,
+    isFetching: false,
     moreFailed: false,
     loadMore: vi.fn(),
     refetch: vi.fn(),

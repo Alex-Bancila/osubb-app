@@ -186,9 +186,15 @@ export function ManagerTaskList({
       .filter((row) => !openIds.has(row.id))
       .map((row) => toTaskPresentation(row, now));
   }, [finished.rows, rows, now]);
+  // Armed only while nothing is read: not during the next page, nor while
+  // the first page is read again after a change. Re-armed when that lands,
+  // it asks at once if the end is still in view.
   const sentinel = useInView(
     finished.loadMore,
-    finished.hasMore && !finished.isLoadingMore && !finished.moreFailed,
+    finished.hasMore &&
+      !finished.isLoadingMore &&
+      !finished.isFetching &&
+      !finished.moreFailed,
   );
 
   // How many Tasks the list shows; unknown until the finished part answers.

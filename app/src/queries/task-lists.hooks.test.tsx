@@ -21,6 +21,18 @@ const labels = vi.hoisted(() => ({
 }));
 vi.mock('./reference', () => ({ useGroups: () => labels.groups }));
 vi.mock('./campaigns', () => ({ useCampaigns: () => labels.campaigns }));
+// The org:changes topic as `useLiveChanges` joins it: a test sends a
+// change by hand.
+const live = vi.hoisted(() => ({
+  onChange: (() => undefined) as (table: string) => void,
+}));
+vi.mock('./live-changes-channel', () => ({
+  subscribe: (handlers: { onChange: (table: string) => void }) => {
+    live.onChange = handlers.onChange;
+    return () => undefined;
+  },
+}));
+import { useLiveChanges } from './live-changes';
 import {
   useFinishedTasks,
   useManagedTasks,
@@ -161,6 +173,59 @@ describe('useFinishedTasks', () => {
     act(() => result.current.loadMore());
     await waitFor(() => expect(result.current.rows).toHaveLength(100));
     expect(result.current.moreFailed).toBe(false);
+  });
+
+  // Fails if `loadMore` asks for the next page while the first is read
+  // again after a change: `fetchNextPage` would cancel that read and append
+  // page 2 to page 1 as it was, so the Task that just finished never shows.
+  it('asks for the next page only once the first, read again after a change, has landed', async () => {
+    const fresh = deferred<{ data: TaskListRpcRow[]; error: null }>();
+    let changed = false;
+    rpc.mockImplementation((_name: string, args: { p_offset: number }) =>
+      changed && args.p_offset === 0
+        ? fresh.promise
+        : Promise.resolve({
+            data: rows(args.p_offset + 1, args.p_offset + 50, 200),
+            error: null,
+          }),
+    );
+    const offsets = () => rpc.mock.calls.map(([, args]) => args.p_offset);
+    const { result } = renderHook(
+      () => {
+        useLiveChanges('me');
+        return useFinishedTasks('managed', {}, true);
+      },
+      { wrapper: wrapper() },
+    );
+    await waitFor(() => expect(result.current.rows).toHaveLength(50));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.rows).toHaveLength(100));
+    // A Task finishes elsewhere: the list keeps its first page and reads it
+    // again.
+    changed = true;
+    act(() => live.onChange('tasks'));
+    await waitFor(() => expect(offsets()).toEqual([0, 50, 0]));
+    await waitFor(() => expect(result.current.rows).toHaveLength(50));
+    // The end of the list comes into view meanwhile: nothing is asked.
+    act(() => result.current.loadMore());
+    expect(offsets()).toEqual([0, 50, 0]);
+    expect(result.current.isFetching).toBe(true);
+    // The first page lands, with the Task that just finished on top.
+    await act(async () => {
+      fresh.resolve({
+        data: [row(1000, 201), ...rows(1, 49, 201)],
+        error: null,
+      });
+      await fresh.promise;
+    });
+    await waitFor(() => expect(result.current.isFetching).toBe(false));
+    expect(result.current.rows[0]?.id).toBe(1000);
+    expect(result.current.total).toBe(201);
+    // Only now is the next page asked, after the fresh first one.
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.rows).toHaveLength(100));
+    expect(offsets()).toEqual([0, 50, 0, 50]);
+    expect(result.current.rows[0]?.id).toBe(1000);
   });
 
   it('reports a failed first page as the error it is', async () => {

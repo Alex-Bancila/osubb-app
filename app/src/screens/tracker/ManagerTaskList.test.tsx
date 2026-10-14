@@ -64,6 +64,7 @@ function finishedRead(overrides: Partial<FinishedTasks> = {}): FinishedTasks {
     error: null,
     hasMore: false,
     isLoadingMore: false,
+    isFetching: false,
     moreFailed: false,
     loadMore: vi.fn(),
     refetch: vi.fn(),
@@ -1019,6 +1020,37 @@ describe('ManagerTaskList, the finished Tasks (#1053)', () => {
     lists.finished.mockReturnValue(page({ hasMore: false }));
     again();
     expect(watching).toBe(0);
+    vi.unstubAllGlobals();
+  });
+
+  // Fails if the end is watched while the first page is read again after a
+  // change: coming into view, it would ask for page 2 on top of the old one.
+  it('watches the end of the list again only once the first page, read again, has landed', () => {
+    let watching = 0;
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        observe() {
+          watching += 1;
+        }
+        disconnect() {
+          watching -= 1;
+        }
+      },
+    );
+    lists.summary.mockReturnValue({ data: held });
+    const page = (overrides: Partial<FinishedTasks>) =>
+      finishedRead({ rows: done, total: 120, hasMore: true, ...overrides });
+    lists.finished.mockReturnValue(page({ isFetching: true }));
+    const view = renderList();
+    expect(watching).toBe(0);
+    lists.finished.mockReturnValue(page({}));
+    view.rerender(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList rows={rows} now={now} />
+      </MemoryRouter>,
+    );
+    expect(watching).toBe(1);
     vi.unstubAllGlobals();
   });
 

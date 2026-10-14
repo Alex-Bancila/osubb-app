@@ -383,9 +383,16 @@ export type FinishedTasks = {
   isError: boolean;
   error: Error | null;
   hasMore: boolean;
+  /** The next page is on its way. */
   isLoadingMore: boolean;
+  /**
+   * Any read of the list is on its way: the first page, the first page read
+   * again after a change, or the next page. No next page is asked meanwhile.
+   */
+  isFetching: boolean;
   /** A later page failed; the rows read so far stay. */
   moreFailed: boolean;
+  /** Asks for the next page, unless a read is on its way. */
   loadMore: () => void;
   refetch: () => void;
 };
@@ -431,10 +438,15 @@ export function useFinishedTasks(
     error: firstFailed ? query.error : null,
     hasMore: asked && query.hasNextPage,
     isLoadingMore: query.isFetchingNextPage,
+    isFetching: asked && query.isFetching,
     moreFailed: query.isFetchNextPageError,
     loadMore: () => {
-      if (query.hasNextPage && !query.isFetchingNextPage)
-        void query.fetchNextPage();
+      // After a change the list keeps its first page and reads it again
+      // (live-changes.ts). A next page asked meanwhile would cancel that read
+      // and land on top of the old first page; `cancelRefetch: false` also
+      // covers a call made from a render before that read began.
+      if (query.hasNextPage && !query.isFetching)
+        void query.fetchNextPage({ cancelRefetch: false });
     },
     refetch: () => void query.refetch(),
   };
