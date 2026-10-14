@@ -173,7 +173,7 @@ describe('notification Realtime signal', () => {
     ) => void;
 
     act(() =>
-      callback({ eventType: 'INSERT', new: { kind: 'announcement' }, old: {} }),
+      callback({ eventType: 'INSERT', new: { kind: 'announce' }, old: {} }),
     );
 
     expect(queryClient.getQueryData(feedKey)).toEqual({
@@ -181,6 +181,49 @@ describe('notification Realtime signal', () => {
       pageParams: [0],
     });
     expect(queryClient.getQueryState(feedKey)?.isInvalidated).toBe(true);
+  });
+
+  // Fails if reading an Announcement cuts the list the Member is reading:
+  // the read marks its Notification read, and that UPDATE comes back here.
+  it('keeps every loaded page of the feed on any change but a new Announcement, refreshing only the counts', async () => {
+    const queryClient = new QueryClient();
+    const feedKey = keys.announcements.feed(memberId, { p_preferred: true });
+    const summaryKey = keys.announcements.feedSummary(memberId, {
+      p_preferred: true,
+    });
+    const loaded = {
+      pages: [
+        { rows: [{ id: 1 }], total: 3 },
+        { rows: [{ id: 2 }], total: 3 },
+        { rows: [{ id: 3 }], total: 3 },
+      ],
+      pageParams: [0, 1, 2],
+    };
+    queryClient.setQueryData(feedKey, loaded);
+    queryClient.setQueryData(summaryKey, { unread: 1 });
+    queryClient.setQueryData(keys.announcements.unread(memberId), 1);
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    renderHook(() => useNotificationRealtime(memberId), { wrapper });
+    await waitFor(() => expect(supabaseMock.on).toHaveBeenCalledOnce());
+    const callback = supabaseMock.on.mock.calls[0]?.[2] as (
+      payload: unknown,
+    ) => void;
+
+    act(() => callback({ eventType: 'UPDATE', new: {}, old: {} }));
+    act(() => callback({ eventType: 'DELETE', new: {}, old: { id: 9 } }));
+    act(() =>
+      callback({ eventType: 'INSERT', new: { kind: 'task' }, old: {} }),
+    );
+
+    expect(queryClient.getQueryData(feedKey)).toEqual(loaded);
+    expect(queryClient.getQueryState(feedKey)?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryState(summaryKey)?.isInvalidated).toBe(true);
+    expect(
+      queryClient.getQueryState(keys.announcements.unread(memberId))
+        ?.isInvalidated,
+    ).toBe(true);
   });
 });
 

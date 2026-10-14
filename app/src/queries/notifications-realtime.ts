@@ -38,20 +38,27 @@ export function useNotificationRealtime(memberId?: string) {
           });
           // #68 fans every Announcement out as a notification. The signal
           // carries no row (never read payloads), so any change refreshes the
-          // Anunțuri badge, and the feed and what the page shows around it if
-          // they are on screen, to match it. The feed is read by the page
-          // (R56): it keeps its first page and reads that again, as after a
-          // live change.
+          // Anunțuri badge and what the page shows around its feed.
           void queryClient.invalidateQueries({
             queryKey: keys.announcements.unread(memberId),
-          });
-          keepFirstPages(queryClient, keys.announcements.feedAll);
-          void queryClient.invalidateQueries({
-            queryKey: keys.announcements.feedAll,
           });
           void queryClient.invalidateQueries({
             queryKey: keys.announcements.feedSummaryAll,
           });
+          // The feed is read by the page (R56), so it is read again — from its
+          // first page, as after a live change — only when a new Announcement
+          // may have joined it, or after a reconnect that may have missed one.
+          // Anything else (this device marking one read comes back here as an
+          // UPDATE) keeps the pages the Member is reading.
+          if (
+            change === undefined ||
+            (change.event === 'INSERT' && change.kind === 'announce')
+          ) {
+            keepFirstPages(queryClient, keys.announcements.feedAll);
+            void queryClient.invalidateQueries({
+              queryKey: keys.announcements.feedAll,
+            });
+          }
         });
       })
       .catch(() => undefined);

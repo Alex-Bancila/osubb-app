@@ -622,6 +622,13 @@ describe('AnnouncementsScreen', () => {
       expect(
         screen.getByRole('button', { name: 'Se încarcă…' }),
       ).toBeDisabled();
+      // The next page holds its place under the Announcements read so far.
+      const status = screen
+        .getByText('Se încarcă mai multe anunțuri…')
+        .closest('[role="status"]');
+      expect(
+        status?.querySelectorAll('[data-slot="skeleton"]').length ?? 0,
+      ).toBeGreaterThanOrEqual(3);
     });
 
     it('offers nothing more once every Announcement is read', () => {

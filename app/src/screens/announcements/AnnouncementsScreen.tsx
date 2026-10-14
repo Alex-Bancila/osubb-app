@@ -454,6 +454,10 @@ function AnnouncementsContent({
               </li>
             ))}
           </PageGrid>
+          {/* The next page holds its place under the ones read so far. */}
+          {feed.isLoadingMore && (
+            <Loading label="Se încarcă mai multe anunțuri…" />
+          )}
           {feed.moreFailed ? (
             <ErrorState
               text="Nu am putut încărca mai multe anunțuri."
