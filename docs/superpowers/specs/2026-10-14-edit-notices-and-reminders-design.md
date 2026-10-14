@@ -39,14 +39,15 @@ A per-item "already announced" flag was rejected: it would tell a moved Event's 
 - `private.announcement_recipients(row)`: the fan-out's audience rule, moved verbatim, shared by the first notice, an edit notice and the Termen reminder.
 - `private.notify_announcement(row, actor, changed)`: "Anunț nou" / "Deal nou" with its text to whoever does not know it, "Anunț actualizat" / "Deal actualizat" to whoever does, never to the actor. Keyed `announcement:<id>`, so an unread notice is refreshed in place and opening the Announcement clears it.
 - The fan-out on insert and `approve_announcement` both go through it, so BC's approval of an edit that needed approval says the Announcement changed.
-- An after-update trigger: when a signed-in writer changes the content of a published Announcement (title, text, priority, Termen, Minimum Level, links, form, Deal code), its audience hears "Modificat: _câmpuri_." A pin, a write with nobody signed in, a decision command, or an edit that sends it back to BC notifies nobody then.
+- An after-update trigger: when a signed-in writer changes the content of a published Announcement (title, text, priority, Termen, Minimum Level, links, form, Deal code), its audience hears "Modificat: _câmpuri_.", followed by the current Termen when it has one. A pin, a write with nobody signed in, a decision command, or an edit that sends it back to BC notifies nobody then.
 - An Announcement's Group and Audience cannot change once posted (`guard_announcement_origin`), so no edit publishes an Announcement request.
+- Opening an Announcement or a Deal reads its notices by subject (`useReadNotificationsAbout`), so an "actualizat" notice is read even by a Member who had opened it before — their `announcement_reads` row already exists, so its trigger does not fire again.
 
 ### 3. Events
 
 - `private.notify_event(event, actor, members, changed)`: "Eveniment nou" with its schedule (`event:<id>:created`) to whoever does not know it, "Eveniment actualizat" (`event:<id>:changed`) to whoever does.
 - `private.notify_event_created` (create, approval, the move that publishes) goes through it with the same recipients as before.
-- `update_event_impl` notifies on **any** content change — title, description, type, schedule, location, capacity, Group, Minimum Level — in one notice per edit: "Modificat: _câmpuri_", then the new schedule, place, Group and level when those changed. A Campaign-only change notifies nobody, as before.
+- `update_event_impl` notifies on **any** content change — title, description, type, schedule, location, capacity, Group, Minimum Level — in one notice per edit: "Modificat: _câmpuri_", then always the current schedule and place, and the new Group or level when those changed. An unread notice is refreshed in place, so carrying the current schedule, place and Termen keeps a later edit from hiding an earlier move. A Campaign-only change notifies nobody, as before.
 
 ### 4. Tasks
 

@@ -10,7 +10,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(30);
+select plan(32);
 
 create function pg_temp.u53(n integer) returns uuid language sql immutable as $$
   select ('53000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -184,6 +184,25 @@ select pg_temp.as53(4);
 update announcements set body = 'Better offer #53' where id = pg_temp.a53('Deal #53');
 select ok(pg_temp.u53(2) in (select pg_temp.told('Deal actualizat: Deal #53')),
   'an edited Deal is announced as "Deal actualizat"');
+select ok((select bool_and(link = '/anunturi/deals?deal=' || pg_temp.a53('Deal #53'))
+             from notifications where title = 'Deal actualizat: Deal #53'),
+  'and opens on the OSUBB Deals tab');
+
+-- Turned critical, with its Termen moved: the notice is critical and carries
+-- the new Termen (a later edit never hides that it moved).
+select pg_temp.test_clear_jwt();
+insert into announcements(title, body, group_id, audience, deadline, created_by)
+values ('Termen #53', 'Body', pg_temp.g53('Root #53'), 'local', '2026-11-20 12:00+02', pg_temp.u53(1));
+update notifications set read = true
+ where member_id = pg_temp.u53(3) and title = 'Anunț nou: Termen #53';
+select pg_temp.as53(4);
+update announcements set priority = 'critical', deadline = '2026-11-21 12:00+02'
+ where id = pg_temp.a53('Termen #53');
+select ok((select body = 'Modificat: prioritate, termen. Termen: 21.11.2026 12:00.' and critical
+             from notifications
+            where member_id = pg_temp.u53(3) and not read
+              and dedupe_key = 'announcement:' || pg_temp.a53('Termen #53')),
+  'a change to critical is critical, and the notice carries the current Termen');
 
 -- ==================== 2. Events ====================
 
@@ -199,10 +218,10 @@ reset role;
 select set_eq($$ select pg_temp.told('Eveniment actualizat: Meeting renamed #53') $$,
   $$ values (pg_temp.u53(2)), (pg_temp.u53(3)), (pg_temp.u53(5)) $$,
   'a title change now tells the Event''s audience, never the editor');
-select ok((select bool_and(body = 'Modificat: titlu'
+select ok((select bool_and(body = 'Modificat: titlu. Programare: 05.11.2026 15:00 - 05.11.2026 16:00. Locație: Sala A'
                            and dedupe_key = 'event:' || pg_temp.e53('Meeting renamed #53') || ':changed')
              from notifications where title = 'Eveniment actualizat: Meeting renamed #53'),
-  'one notice per edit, naming what changed');
+  'one notice per edit, naming what changed, then the current schedule and place');
 
 select pg_temp.test_login_leadership(pg_temp.u53(1));
 select pg_temp.edit_event(pg_temp.e53('Meeting renamed #53'),
@@ -215,7 +234,7 @@ select is((select count(*)::int from notifications
 select is((select body from notifications
             where member_id = pg_temp.u53(2)
               and dedupe_key = 'event:' || pg_temp.e53('Meeting renamed #53') || ':changed'),
-  'Noua programare: 06.11.2026 15:00. Noua locație: Sala B',
+  'Modificat: programare, locație. Programare: 06.11.2026 15:00. Locație: Sala B',
   'a new schedule and a new place are spelled out');
 
 select pg_temp.read_all();
@@ -237,7 +256,7 @@ select ok((select title = 'Eveniment nou: Meeting renamed #53'
             where member_id = pg_temp.u53(6)
               and dedupe_key = 'event:' || pg_temp.e53('Meeting renamed #53') || ':created'),
   'the new Group''s audience hears of a new Event');
-select ok((select body = 'Noul grup: Other #53'
+select ok((select body = 'Modificat: grup. Programare: 06.11.2026 15:00. Locație: Sala B. Grup: Other #53'
              from notifications
             where member_id = pg_temp.u53(2) and not read
               and dedupe_key = 'event:' || pg_temp.e53('Meeting renamed #53') || ':changed'),

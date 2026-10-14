@@ -33,6 +33,15 @@ vi.mock(
   () => import('../../test/member-card-mock'),
 );
 
+// R53: opening reads its Notifications by subject, so an "actualizat" notice
+// is read even for a Member who had opened the item before (the read row
+// already exists, so its trigger does not fire again).
+const readAbout = vi.hoisted(() => vi.fn());
+vi.mock('../../queries/notifications', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../queries/notifications')>()),
+  useReadNotificationsAbout: readAbout,
+}));
+
 import DealsTab from './DealsTab';
 
 function deal(overrides: Partial<RawDealRow>): RawDealRow {
@@ -143,6 +152,25 @@ describe('Anunțuri › OSUBB Deals (R45)', () => {
     );
     // A member does not see the reveal count.
     expect(within(sheet).queryByText(/Codul a fost deschis/)).toBeNull();
+  });
+
+  it("reads an opened Deal's notifications, even one read before (R53)", async () => {
+    supabaseMock.order.mockReturnValue(
+      answered({
+        data: ROWS.map((row) =>
+          row.id === 2
+            ? {
+                ...row,
+                announcement_reads: [{ read_at: '2026-10-07T10:00:00Z' }],
+              }
+            : row,
+        ),
+        error: null,
+      }),
+    );
+    renderAt('/anunturi/deals?deal=2');
+    await screen.findByRole('dialog', { name: 'Bilete la festival' });
+    expect(readAbout).toHaveBeenLastCalledWith(['announcement:2']);
   });
 
   it('counts a Deal read once its code is revealed from the card', async () => {

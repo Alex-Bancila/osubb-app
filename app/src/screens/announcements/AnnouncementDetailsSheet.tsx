@@ -29,6 +29,10 @@ import {
   useSetAnnouncementPinned,
 } from '../../queries/announcements';
 import { useMyGroupRoles } from '../../queries/my-groups';
+import {
+  NO_SUBJECTS,
+  useReadNotificationsAbout,
+} from '../../queries/notifications';
 import AnnouncementEditSheet from './AnnouncementEditSheet';
 import { AnnouncementMeta } from './AnnouncementMeta';
 import { AnnouncementTermen } from './AnnouncementTermen';
@@ -63,6 +67,11 @@ export default function AnnouncementDetailsSheet({
   // The sheet stays mounted so it slides in and out; while it closes it
   // keeps showing what it held.
   const open = Boolean(announcement) || unavailable;
+  // R53: opening reads its Notifications, an "Anunț actualizat" included --
+  // the read row may already exist, so its trigger alone cannot.
+  useReadNotificationsAbout(
+    announcement ? [`announcement:${announcement.id}`] : NO_SUBJECTS,
+  );
   const [held, setHeld] = useState({ announcement, unavailable });
   if (
     open &&

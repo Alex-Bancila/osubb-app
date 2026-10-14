@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useMarkAnnouncementRead } from '../../queries/announcements';
+import {
+  NO_SUBJECTS,
+  useReadNotificationsAbout,
+} from '../../queries/notifications';
 import { DEAL_PARAM, type DealPresentation } from './deals-presentation';
 
 function parseDealId(value: string | null): number | null {
@@ -27,6 +31,11 @@ export function useOpenDeal(
   const [unavailable, setUnavailable] = useState(false);
   const marked = useRef(new Set<number>());
   const handledParam = useRef<string | null>(null);
+  // R53: an opened Deal reads its Notifications, a "Deal actualizat"
+  // included, even when the Deal was read before.
+  useReadNotificationsAbout(
+    selectedId === null ? NO_SUBJECTS : [`announcement:${selectedId}`],
+  );
 
   // Once per Deal per visit, however it is engaged with.
   function markAsRead(deal: DealPresentation) {

@@ -178,11 +178,11 @@ declare
   v_actor uuid := (select auth.uid());
   v_fields text[];
 begin
-  -- A write with nobody signed in (a migration, a job) tells nobody; the
-  -- decision commands tell the audience themselves; and an edit that sends
-  -- the Announcement back to BC tells nobody until BC approves it.
+  -- A write with nobody signed in (a migration, a job) tells nobody; an edit
+  -- of a row that was not published -- the decision commands only touch
+  -- pending rows -- tells nobody; and an edit that sends the Announcement
+  -- back to BC tells nobody until BC approves it.
   if v_actor is null
-     or coalesce(current_setting('osubb.deciding_approval', true), '') = 'on'
      or old.approval_status <> 'approved'
      or new.approval_status <> 'approved' then
     return new;
@@ -202,14 +202,17 @@ begin
   if cardinality(v_fields) = 0 then
     return new;
   end if;
+  -- The current Termen is always carried, so a later edit that refreshes an
+  -- unread notice never hides that it moved.
   perform private.notify_announcement(new, v_actor,
-    'Modificat: ' || array_to_string(v_fields, ', ') || '.');
+    'Modificat: ' || array_to_string(v_fields, ', ') || '.'
+    || coalesce(' Termen: ' || to_char(new.deadline at time zone 'Europe/Bucharest', 'DD.MM.YYYY HH24:MI') || '.', ''));
   return new;
 end;
 $$;
 revoke execute on function private.notify_announcement_change() from public, anon, authenticated, service_role;
 comment on function private.notify_announcement_change() is
-  'R53: after a signed-in writer changes the content of a published Announcement, private.notify_announcement tells its audience what changed. Nothing for a pin, a system write, a decision command, or an edit that sends it back to BC. Granted to nobody.';
+  'R53: after a signed-in writer changes the content of a published Announcement, private.notify_announcement tells its audience what changed. Nothing for a pin, a system write, an unpublished row, or an edit that sends it back to BC. The notice names what changed and carries the current Termen. Granted to nobody.';
 create trigger announcements_notify_change
   after update on public.announcements
   for each row execute function private.notify_announcement_change();
@@ -456,24 +459,27 @@ begin
     case when v_event.title is distinct from v_updated.title then 'titlu' end,
     case when v_event.description is distinct from v_updated.description then 'descriere' end,
     case when v_event.type is distinct from v_updated.type then 'tip' end,
-    case when v_event.capacity is distinct from v_updated.capacity then 'capacitate' end
-  ], null);
-  v_parts := array_remove(array[
-    case when cardinality(v_fields) > 0 then 'Modificat: ' || array_to_string(v_fields, ', ') end,
     case when v_event.starts_at is distinct from v_updated.starts_at
-           or v_event.ends_at is distinct from v_updated.ends_at
-      then 'Noua programare: '
-        || to_char(v_updated.starts_at at time zone 'Europe/Bucharest', 'DD.MM.YYYY HH24:MI')
-        || coalesce(' - ' || to_char(v_updated.ends_at at time zone 'Europe/Bucharest', 'DD.MM.YYYY HH24:MI'), '')
-    end,
-    case when v_event.location is distinct from v_updated.location
-      then 'Noua locație: ' || coalesce(v_updated.location, 'nespecificată') end,
-    case when v_event.group_id is distinct from v_updated.group_id
-      then 'Noul grup: ' || v_target.name end,
-    case when v_event.min_level is distinct from v_updated.min_level
-      then 'Noul nivel minim: ' || v_updated.min_level::text end
+           or v_event.ends_at is distinct from v_updated.ends_at then 'programare' end,
+    case when v_event.location is distinct from v_updated.location then 'locație' end,
+    case when v_event.capacity is distinct from v_updated.capacity then 'capacitate' end,
+    case when v_event.group_id is distinct from v_updated.group_id then 'grup' end,
+    case when v_event.min_level is distinct from v_updated.min_level then 'nivel minim' end
   ], null);
-  if cardinality(v_parts) > 0 then
+  -- The notice names what changed, then always the current schedule and
+  -- place: a later edit refreshes an unread notice in place, and must never
+  -- hide that the time or the place moved before it.
+  if cardinality(v_fields) > 0 then
+    v_parts := array_remove(array[
+      'Modificat: ' || array_to_string(v_fields, ', '),
+      'Programare: '
+        || to_char(v_updated.starts_at at time zone 'Europe/Bucharest', 'DD.MM.YYYY HH24:MI')
+        || coalesce(' - ' || to_char(v_updated.ends_at at time zone 'Europe/Bucharest', 'DD.MM.YYYY HH24:MI'), ''),
+      'Locație: ' || v_updated.location,
+      case when v_event.group_id is distinct from v_updated.group_id then 'Grup: ' || v_target.name end,
+      case when v_event.min_level is distinct from v_updated.min_level
+        then 'Nivel minim: ' || v_updated.min_level::text end
+    ], null);
     perform private.notify_event(v_updated, v_actor, v_recipients, array_to_string(v_parts, '. '));
   end if;
   return v_updated;
@@ -685,3 +691,11 @@ begin
   return v_task;
 end;
 $function$;
+
+-- 6. The descriptions of the three restated functions, brought up to R53.
+comment on function private.update_event_impl(bigint, text, text, bigint, timestamp with time zone, timestamp with time zone, text, integer, text, integer, bigint) is
+  'Replaces an Event''s whole editable state, authorized by Group Role (ADR-0009 Wave 2, #248). This is a full-state REPLACE, not a patch: every editable column is written from its argument, so a null clears a nullable column (ends_at, location, capacity, description, campaign_id) rather than leaving the old value -- a client that wants to keep a field must send it back. Malformed input is judged first, for everyone, with the same reasons as create_event including event_group_required. A caller who cannot see the Event (below its min_level) is answered PT404 event_not_found, the same as an id that does not exist: hidden is never distinguishable from missing. Authority on the SOURCE: an Organization Group Event (since #582 the Group carrying groups.is_organization) belongs to its creator or to level >= 6; every other Event goes through private.require_group_work_manager, so a Group Manager or Group Responsible of the Group or any ancestor on its path qualifies. Moving the Event re-runs the rule on the TARGET Group, where an Organization target takes create_event''s rule -- level >= 6 or any live Group Role anywhere -- because the Organization Group is a root Group with no ancestors of its own (one root among several: every Department, Independent Team and Project Group is a root too, and most Group paths never contain it), so nobody could reach it through an ancestor role. A MOVE''s target must be active. An edit that leaves the Event in its own Group is NOT refused when that Group has since been archived: this is a full-state replace, so every call names a Group, and an ungated check would leave such an Event uncorrectable while cancel_event -- same authority rule -- still cancelled it. Who may still edit it is decided by the source rule above alone: BC/Moderator always, a Group Role only while the Group is active, which is can_manage_group_work''s own status gate. Minimum Level is then judged against the target Group and the live actor (PT400 event_min_level_below_group / event_min_level_above_actor), and a cancelled Event is PT409 event_cancelled. The Campaign (#691, ADR-0008 amended 2026-09-23) must be owned by the Event''s Group -- the new one, on a move -- or a Group above it, and a newly attached one must be active (events_validate_campaign); anything else is PT400 invalid_campaign, and a Campaign deactivated after it was attached is kept when sent back unchanged. R53 (2026-10-14): every content change -- title, description, type, schedule, location, capacity, Group, Minimum Level -- notifies, in one notice per edit that names what changed and carries the current schedule and place, the current going attendees and the new Group''s Group Audience as Notifications reach it (private.group_notification_audience: #601, minus every live BC member and Moderator, #929, plus the BC members whose Group position reaches it, R42), plus the old Group''s when the Event moved, every recipient filtered through private.can_read_event at the new Minimum Level, link /calendar?event=<id>: private.notify_event tells whoever knows the Event "Eveniment actualizat" (event:<id>:changed) and whoever does not "Eveniment nou"; a Campaign alone notifies nobody. #934: the source-authority rule is private.can_manage_event, the one definition event_attendance_read also reads; the command holds the roster rows it rests on FOR SHARE and asks it again. Spec 2026-10-11 (final review of 2026-10-13): a pending or rejected OSUBB-wide Event moved off the Organization Group is published by the move (private.stamp_approval) -- its new Group hears "Eveniment nou" through private.notify_event_created and no change notice is sent; the old Group''s audience is told of a move only when the Event had been approved.';
+comment on function private.notify_event_created(public.events, uuid) is
+  'Ruling R39''s "Eveniment nou" notice over one Event row: create_event_impl calls it for an approved Event without its Announcement, approve_event for a pending one that just became approved (the author as the actor to drop). R53 (2026-10-14): through private.notify_event, so whoever already knows the Event -- an approval after an edit that needed it -- hears "Eveniment actualizat" instead.';
+comment on function private.fan_out_announcement_row(public.announcements, uuid) is
+  'The Announcement fan-out (#68, R32, R42, R43, R45, #756, #909, #861 -- see announcements_fan_out) as a helper over one row: the trigger calls it for an approved insert and approve_announcement for a pending row that just became approved, with the author as the actor to drop, so the author never gets "Anunț nou" of their own Announcement. R53 (2026-10-14): through private.notify_announcement, so whoever already knows the Announcement -- an approval after an edit that needed it -- hears "Anunț actualizat" instead.';

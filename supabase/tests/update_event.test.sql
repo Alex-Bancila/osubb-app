@@ -92,7 +92,7 @@ select lives_ok($q$select public.update_event((select id from ex where title='Ev
 reset role;
 -- R53 (2026-10-14): every content change notifies, once per edit, naming what changed.
 select is((select count(*) from public.notifications where dedupe_key like 'event:%:changed' and member_id::text like '24800000-%'),3::bigint,'a title, type, description and capacity edit now tells the three recipients once each (R53)');
-select ok((select bool_and(body='Modificat: titlu, descriere, tip, capacitate') from public.notifications where dedupe_key like 'event:%:changed' and member_id::text like '24800000-%'),'and names the four changes');
+select ok((select bool_and(body='Modificat: titlu, descriere, tip, capacitate. Programare: 01.10.2026 15:00') from public.notifications where dedupe_key like 'event:%:changed' and member_id::text like '24800000-%'),'and names the four changes, then the current schedule');
 reset role;
 select pg_temp.test_login_leadership('24800000-0000-0000-0000-000000000002');
 select lives_ok($q$select public.update_event((select id from ex where title='Event a #248'),'Updated','sedinta',(select id from gx where name='a'),'2026-10-02 12:00+00','2026-10-02 13:00+00','Sala',null,null,0,null)$q$,'schedule and location change atomically');
@@ -101,21 +101,21 @@ select is((select count(*) from public.notifications where dedupe_key like 'even
 select is((select count(*) from public.notifications where member_id in ('24800000-0000-0000-0000-000000000002','24800000-0000-0000-0000-000000000007','24800000-0000-0000-0000-000000000009')),0::bigint,'actor declined outsider and inactive attendee excluded');
 -- #843 (D5): the link opens the changed Event, not the bare Calendar.
 select ok((select bool_and(link='/calendar?event=' || (select id from ex where title='Event a #248')::text and kind='event') from public.notifications where member_id::text like '24800000-%'),'Event notifications link to the Event in Calendar (/calendar?event=<id>)');
--- #248: each important change carries its OWN dedupe key, and the text tells the
--- reader which field moved and what it moved to -- a Notification whose body is
--- only the Event's name cannot say anything a coalesced second change would update.
+-- #248, R53: one key per Event (event:<id>:changed), and the text names what
+-- changed and always carries the current schedule and place -- so a second edit
+-- that refreshes an unread notice can never hide that the time or place moved.
 select is((select count(*) from public.notifications where dedupe_key like 'event:%:changed' and member_id::text like '24800000-%'),3::bigint,'every change of one edit shares the event:<id>:changed key');
 select is((select count(*) from public.notifications where dedupe_key ~ '^event:[0-9]+:(schedule|location|group|min_level)$' and member_id::text like '24800000-%'),0::bigint,'no per-field key is written any more (R53)');
 select ok((select bool_and(title='Eveniment actualizat: Updated') from public.notifications where dedupe_key like 'event:%:changed' and member_id::text like '24800000-%'),'the change title names the Event');
-select ok((select bool_and(body='Modificat: titlu, descriere, tip, capacitate. Noua programare: 02.10.2026 15:00 - 02.10.2026 16:00. Noua locație: Sala') from public.notifications where dedupe_key like 'event:%:changed' and member_id::text like '24800000-%'),'the body names what changed, then the new interval in Bucharest time and the new place');
-select ok((select bool_and(body like '%Noua locație: Sala') from public.notifications where dedupe_key like 'event:%:changed' and member_id::text like '24800000-%'),'the new location is spelled out');
+select ok((select bool_and(body='Modificat: titlu, descriere, tip, programare, locație, capacitate. Programare: 02.10.2026 15:00 - 02.10.2026 16:00. Locație: Sala') from public.notifications where dedupe_key like 'event:%:changed' and member_id::text like '24800000-%'),'the body names what changed, then the new interval in Bucharest time and the new place');
+select ok((select bool_and(body like '%Locație: Sala') from public.notifications where dedupe_key like 'event:%:changed' and member_id::text like '24800000-%'),'the new location is spelled out');
 reset role;
 select pg_temp.test_login_leadership('24800000-0000-0000-0000-000000000002');
 select lives_ok($q$select public.update_event((select id from ex where title='Event a #248'),'Updated','sedinta',(select id from gx where name='a'),'2026-10-03 12:00+00',null,'Sala',null,null,0,null)$q$,'subsequent unread schedule change coalesces');
 reset role;
 select is((select count(*) from public.notifications where dedupe_key like 'event:%:changed' and member_id::text like '24800000-%'),3::bigint,'the :changed key refreshes unread notices instead of adding');
 -- #248: coalescing is only useful if the surviving row carries the LATER value.
-select ok((select bool_and(body='Noua programare: 03.10.2026 15:00') from public.notifications where dedupe_key like 'event:%:changed' and member_id::text like '24800000-%'),'the coalesced row carries the second change, not the first');
+select ok((select bool_and(body='Modificat: programare. Programare: 03.10.2026 15:00. Locație: Sala') from public.notifications where dedupe_key like 'event:%:changed' and member_id::text like '24800000-%'),'the coalesced row carries the second change, not the first');
 reset role;
 -- #601: every recipient must be able to read the Event after the change
 -- (private.can_read_event, the events_read rule). The move below raises the floor
@@ -129,12 +129,12 @@ select pg_temp.test_login_leadership('24800000-0000-0000-0000-000000000001');
 select lives_ok($q$select public.update_event((select id from ex where title='Event a #248'),'Updated','sedinta',(select id from gx where name='b'),'2026-10-03 12:00+00',null,'Sala',null,null,3,null)$q$,'BC moves Event and raises floor');
 reset role;
 select is((select count(*) from public.notifications where not read and member_id::text like '24800000-%'),4::bigint,'the move tells old and new Group plus the going attendee, at or above the new floor, once each');
-select ok((select bool_and((dedupe_key like 'event:%:changed' and body='Noul grup: Events B #248. Noul nivel minim: 3') or (dedupe_key like 'event:%:created' and title='Eveniment nou: Updated')) from public.notifications where not read and member_id::text like '24800000-%'),'whoever knew the Event hears what changed, whoever never did hears of a new Event (R53)');
+select ok((select bool_and((dedupe_key like 'event:%:changed' and body='Modificat: grup, nivel minim. Programare: 03.10.2026 15:00. Locație: Sala. Grup: Events B #248. Nivel minim: 3') or (dedupe_key like 'event:%:created' and title='Eveniment nou: Updated')) from public.notifications where not read and member_id::text like '24800000-%'),'whoever knew the Event hears what changed, whoever never did hears of a new Event (R53)');
 select is((select count(*) from public.notifications where not read and member_id='24800000-0000-0000-0000-000000000002'),0::bigint,'the old Group''s Manager below the raised floor (member 2) is not told about an Event it can no longer read');
 -- #579: group_id is the Event's only Origin; a move rewrites exactly it.
 select ok((select group_id=(select id from gx where name='b') from public.events where id=(select id from ex where title='Event a #248')),'moving the Event rewrites its Group');
-select ok(exists(select 1 from public.notifications where not read and dedupe_key like 'event:%:changed' and body like 'Noul grup: Events B #248%' and member_id::text like '24800000-%'),'the change names the new Group');
-select ok(exists(select 1 from public.notifications where not read and dedupe_key like 'event:%:changed' and body like '%Noul nivel minim: 3' and member_id::text like '24800000-%'),'and carries the new level');
+select ok(exists(select 1 from public.notifications where not read and dedupe_key like 'event:%:changed' and body like '%Grup: Events B #248%' and member_id::text like '24800000-%'),'the change names the new Group');
+select ok(exists(select 1 from public.notifications where not read and dedupe_key like 'event:%:changed' and body like '%Nivel minim: 3' and member_id::text like '24800000-%'),'and carries the new level');
 select lives_ok($q$select private.notify(array['24800000-0000-0000-0000-000000000004'::uuid],'event','Compatibility',null,null,null,null)$q$,'existing seven-argument notify remains callable');
 reset role;
 select pg_temp.test_login_leadership('24800000-0000-0000-0000-000000000001');
