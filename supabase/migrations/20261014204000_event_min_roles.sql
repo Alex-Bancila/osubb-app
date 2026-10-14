@@ -1,4 +1,6 @@
--- R57 (Alex, 2026-10-14; spec docs/superpowers/specs/2026-10-14-minimum-role-filter-design.md):
+-- #1066: an Event's Minimum Level admits every Role on the ladder (R57, part 1).
+--
+-- Ruling R57 (Alex, 2026-10-14; spec docs/superpowers/specs/2026-10-14-minimum-role-filter-design.md):
 -- an Event's Cine îl vede offers every Role on the ladder. events_min_level_ck
 -- admitted only the pre-ADR-0009 levels {0, 3, 5, 6}, so "at least Voluntar"
 -- could not be chosen. private.can_read_event already compares
@@ -14,7 +16,7 @@ comment on column public.events.min_level is
 -- 20261014153142_edit_notices.sql) with only the ladder check changed.
 
 create or replace function private.create_event_impl(p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_location text DEFAULT NULL::text, p_capacity integer DEFAULT NULL::integer, p_description text DEFAULT NULL::text, p_min_level integer DEFAULT 0, p_campaign_id bigint DEFAULT NULL::bigint, p_announce boolean DEFAULT false)
- RETURNS events
+ RETURNS public.events
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO ''
@@ -168,7 +170,7 @@ end;
 $function$;
 
 create or replace function private.update_event_impl(p_event_id bigint, p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer, p_campaign_id bigint)
- RETURNS events
+ RETURNS public.events
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO ''
