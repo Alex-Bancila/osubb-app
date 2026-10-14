@@ -359,7 +359,14 @@ describe('Task nou, n copies (spec 2026-10-11)', () => {
     await user.clear(copies);
     await user.type(copies, '2');
     await user.click(screen.getByRole('button', { name: 'Continuă' }));
-    await screen.findByRole('dialog', { name: 'Executorii celor 2 taskuri' });
+    const step = await screen.findByRole('dialog', {
+      name: 'Executorii celor 2 taskuri',
+    });
+    // The step takes Escape once it holds the focus; on a slow runner it is
+    // in the DOM a moment before that.
+    await waitFor(() =>
+      expect(step.contains(document.activeElement)).toBe(true),
+    );
     await user.keyboard('{Escape}');
     await waitFor(() =>
       expect(screen.queryByRole('dialog', { name: /Executorii/ })).toBeNull(),
