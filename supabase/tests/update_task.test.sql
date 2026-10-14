@@ -275,10 +275,13 @@ select lives_ok($$
 $$, 'the edu Group Manager edits each field alone on eighteen Tasks without any acceptance');
 reset role;
 
+-- R53 (2026-10-14): a Campaign is a label, so a change of the Campaign alone
+-- notifies nobody; every other field tells the Executor.
 select is(pg_temp.field_check(s.status_name || ':' || f.field, f.field),
-          format('t|["%s"]|%s|1', f.field, s.expected),
-          format('%s: editing %s alone stores it, logs one task_updated row naming only it, keeps the status and notifies the Executor',
-                 s.status_name, f.field))
+          format('t|["%s"]|%s|%s', f.field, s.expected, case when f.field = 'campaign_id' then 0 else 1 end),
+          format('%s: editing %s alone stores it, logs one task_updated row naming only it, keeps the status and %s',
+                 s.status_name, f.field,
+                 case when f.field = 'campaign_id' then 'tells nobody (a label, R53)' else 'notifies the Executor' end))
   from (values ('todo', 'todo:0'), ('progress', 'in_progress:0'), ('feedback', 'in_progress:1'))
          as s (status_name, expected)
  cross join (values ('title'), ('description'), ('deadline'), ('campaign_id'), ('audience'), ('assignment_mode'))

@@ -11,6 +11,7 @@ import { createPortal } from 'react-dom';
 import { Menu } from '@base-ui/react/menu';
 import { PlusIcon, type LucideIcon } from 'lucide-react';
 import { cn } from 'cn';
+import { useFabPresence } from '../../lib/motion';
 import { Button, buttonVariants } from '../ui/button';
 import {
   FabRegistryContext,
@@ -60,8 +61,9 @@ export function FabActions({
     [],
   );
   const slot = useContext(FabSlotContext);
+  const presence = useFabPresence(slot);
   const only = actions.length === 1 ? actions[0] : undefined;
-  const fab = only ? (
+  const button = only ? (
     <Button
       type="button"
       data-slot="fab"
@@ -75,6 +77,13 @@ export function FabActions({
   ) : actions.length > 1 ? (
     <FabMenu label={label} actions={actions} />
   ) : null;
+  // The button pops in and out (`useFabPresence`); switching between one
+  // action and a menu keeps the wrapper, so it does not pop again.
+  const fab = button && (
+    <span ref={presence} data-slot="fab-presence" className="inline-flex">
+      {button}
+    </span>
+  );
 
   return (
     <FabRegistryContext.Provider value={registry}>

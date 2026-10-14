@@ -117,7 +117,7 @@ A BC member or the Moderator in their standing as a member of every Group by the
 _Avoid_: Ex officio member, board member of the Group
 
 **Group Audience**:
-Every active Member of a Group or of any Group below it, whether through a roster row or through Automatic Membership; the Membri de drept are not part of it. A Group's Announcements, its new Events and the important changes to its Events reach its Group Audience, except BC members and the Moderator, who are never notified through it — save a BC member who holds a Group Manager or Group Responsible position on that Group or on a Group above it, who is notified as any position holder is (ruling R42) — and a Member's Relevant Events are those of the Groups whose Audience they are in. A BCE, BC or Moderator who unselected the Group in their Grupuri preferate is not notified through it either, unless the Announcement is critical or they hold a position on its path (ruling R43). Task notifications never use it; they target the Executor, the Task Manager, and the Candidates.
+Every active Member of a Group or of any Group below it, whether through a roster row or through Automatic Membership; the Membri de drept are not part of it. A Group's Announcements, its new Events and every content change to them (ruling R53) reach its Group Audience, except BC members and the Moderator, who are never notified through it — save a BC member who holds a Group Manager or Group Responsible position on that Group or on a Group above it, who is notified as any position holder is (ruling R42) — and a Member's Relevant Events are those of the Groups whose Audience they are in. A BCE, BC or Moderator who unselected the Group in their Grupuri preferate is not notified through it either, unless the Announcement is critical or they hold a position on its path (ruling R43). Task notifications never use it; they target the Executor, the Task Manager, and the Candidates.
 _Avoid_: Recipients, subscribers, the roster when Automatic Membership is meant
 
 **Organization Group**:
@@ -328,7 +328,7 @@ _Avoid_: Newsletter, email notification
 A rule preventing selected broadcast notification kinds from reaching a Role while preserving direct notifications about a Member’s own work.
 
 **Fan-out**:
-Turning one organization event into targeted Notifications for its intended recipients.
+Turning one organization event into targeted Notifications for its intended recipients. An edit fans out too (ruling R53, 2026-10-14): every content change of an Announcement or an Event reaches the same people, never the one who made it, and a label alone (a pin, a Campaign) reaches nobody. Whoever already knows the item — holds a notice about it, opened the Announcement, answered the Event — hears that it changed; whoever does not hears that it is new.
 
 ## Governance
 
