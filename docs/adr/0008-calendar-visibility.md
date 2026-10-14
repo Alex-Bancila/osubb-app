@@ -9,6 +9,7 @@
 - **Amended:** 2026-09-28 — Other OSUBB Events are labelled by their Group's name ("Alt eveniment OSUBB" retired); a deadline Event offers no RSVP
 - **Amended:** 2026-09-29 — an Event's RSVPs are read by its managers (the people who may edit or cancel it), no longer by every BCE and above
 - **Amended:** 2026-10-11 — an OSUBB-wide Event (one on the Organization Group) by a writer below BC is a **Cerere de aprobare**: pending until a BC member or the Moderator approve it from its own form or reject it with a reason; a pending or rejected Event reads only for its author, BC and the Moderator, takes no RSVP, and the "Eveniment nou" notice (R39) and its Announcement, if asked for, move to the approval; an author's later edit of a decided OSUBB-wide Event asks again. BC and the Moderator publish directly, as before (spec `docs/superpowers/specs/2026-10-11-org-wide-approval-design.md`, ruling R49)
+- **Amended:** 2026-10-14 — #1061 (ruling R53): every content change of an Event notifies its audience and attendees, in one notice per edit; whoever never knew the Event hears that it is new; a Campaign alone notifies nobody
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -84,7 +85,7 @@ Cancellation requires a nonblank reason and preserves Event and audit history. D
 
 ## Important-change notifications
 
-An edit is important when it changes date/time, location, scope, Minimum Level, or cancellation state. Important changes create targeted in-app notifications for the Event's relevant audience and current attendees. Text/description and capacity edits do not fan out.
+An edit is important when it changes date/time, location, scope, Minimum Level, or cancellation state. Important changes create targeted in-app notifications for the Event's relevant audience and current attendees. Text/description and capacity edits do not fan out. _(Amended 2026-10-14, ruling R53: every content change fans out, in one notice per edit — see the amendment below.)_
 
 Members outside the Event Origin may discover it in the gray group, but that visibility alone never subscribes them to unsolicited notifications. An actor never receives an echo of their own action.
 
@@ -129,3 +130,12 @@ An Event belongs to one Group. Organization behavior comes from `groups.is_organ
 ## Amendment (2026-10-06) — a new Event notifies its audience
 
 **Creating an Event is a notified change** (Alex, 2026-10-06, ruling R39: "see why the events don't send a notification anymore"). §Important-change notifications fanned out only on edits, so a new Event reached nobody unless its creator ticked "Anunță și în Anunțuri" (#909) and its Announcement's fan-out spoke for it. `create_event` now writes one Notification, "Eveniment nou: <titlu>", with the Event's date, time and place in Romania's time zone, linked to the Event, to exactly the recipients of an important change — the Group Audience that Notifications reach (no BC member or Moderator through membership, ruling R32), filtered by the Event visibility rule (Minimum Level, Private Groups) — and never to its creator. When the Announcement is published with the Event, its fan-out reaches the same Members and is the one notice: no separate Event Notification is written. The Notification is of the Event kind, so the Member's "Evenimente" push preference applies to it as to every other Event notice. Like every other write that notifies other people, creating an Event is capped per Member: at most 50 in any 24 hours.
+
+## Amendment (2026-10-14) — every content change notifies (ruling R53)
+
+Alex (2026-10-14) chose that every content change of an Announcement, an Event or a Task notifies the people the original notice reached, and that a label alone notifies nobody. For Events this replaces §Important-change notifications:
+
+- **What notifies.** Any change to the title, description, type, schedule, location, capacity, Group or Minimum Level. A change of the Campaign alone notifies nobody: it is a label (ADR-0007).
+- **One notice per edit.** "Eveniment actualizat: _titlu_", naming what changed and spelling out a new schedule, place, Group or Minimum Level, keyed `event:<id>:changed`, so an unread notice about an earlier edit is refreshed instead of doubled.
+- **New or changed, per Member.** Whoever already knows the Event — holds a notice about it, or answered it — hears that it changed. Whoever does not, such as a moved Event's new Group, hears "Eveniment nou" with its schedule. This also makes BC's approval of an edit that needed approval say that the Event changed, not that it is new.
+- **Who.** Unchanged: the Event's relevant audience and its current attendees (`private.event_notification_recipients`), plus the old Group's audience on a move, never the actor.

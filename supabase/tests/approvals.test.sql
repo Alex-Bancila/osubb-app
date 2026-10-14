@@ -355,7 +355,13 @@ select lives_ok($$select public.update_event((pg_temp.ev('Ev moved up #4700')).i
   'the Department''s Manager moves a member''s Event onto the Organization Group');
 reset role;
 select is((pg_temp.ev('Ev moved up #4700')).approval_status, 'pending', 'which makes it a request, whoever moved it');
-select is((select count(*) from pg_temp.told('Eveniment nou: Ev moved up #4700'))::int, 0, 'and tells the organisation nothing yet');
+-- R53: the Department's audience was never told of this fixture Event, so
+-- the move tells it as new; the rest of the organisation hears nothing yet.
+select is((select count(*) from public.notifications as n
+            where n.dedupe_key like 'event:' || (pg_temp.ev('Ev moved up #4700')).id || ':%'
+              and n.member_id::text like '47000000-%'
+              and n.member_id not in (select private.group_audience((select dept from fx47))))::int, 0,
+  'and tells the organisation nothing yet');
 
 -- M7: the decision flag covers no insert.
 select pg_temp.test_login_leadership(pg_temp.u47(1));
