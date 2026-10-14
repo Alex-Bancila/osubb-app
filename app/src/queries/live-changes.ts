@@ -85,10 +85,13 @@ const FAMILIES_BY_TABLE: ReadonlyMap<string, readonly Prefix[]> = new Map<
   ['events', [keys.events.all, keys.approvals.all]],
   ['event_attendance', [keys.events.all]],
   ['announcements', [keys.announcements.all, keys.approvals.all]],
-  // Reads are not a change to the Announcement: only its readers list. The
-  // reader's own feed and badge on their other devices follow anyway: #861
-  // marks their "Anunț nou" Notification read, and that UPDATE reaches them
-  // on the member-filtered notifications channel, which refreshes both.
+  // Reads are not a change to the Announcement: only its readers list. On
+  // the reader's other devices the counts follow at once: #861 marks their
+  // "Anunț nou" Notification read, and that UPDATE reaches them on the
+  // member-filtered notifications channel, which refreshes the badge and the
+  // feed's summary. The card itself shows the read at the feed's next read
+  // — a window focus once it is stale, or any change that reads it again —
+  // because an UPDATE never re-reads the pages the Member is reading (R56).
   ['announcement_reads', [ANNOUNCEMENT_READERS]],
   // R47: a team place changes who may do what.
   ['assignment_team', [keys.assignments.all, CAPABILITIES]],
