@@ -1,4 +1,4 @@
--- Task lists that stay fast (spec 2026-10-14).
+-- #1052: Task lists that stay fast (spec 2026-10-14).
 --
 -- private.can_manage_task and private.can_read_task answer for one Task, and
 -- a list asked them once per row: with the Legacy Import's 5 300 finished

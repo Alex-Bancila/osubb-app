@@ -1,4 +1,4 @@
--- Task lists that stay fast (spec 2026-10-14): private.task_list_scope decides
+-- #1052: Task lists that stay fast (spec 2026-10-14): private.task_list_scope decides
 -- a list's authority once per Group, with the per-Task rules as its fallback;
 -- public.task_list, task_list_summary, leadership_filter_work and
 -- can_manage_task read through it.
