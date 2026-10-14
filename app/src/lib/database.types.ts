@@ -66,8 +66,10 @@ export type Database = {
           code: string | null
           created_by: string | null
           deadline: string | null
+          event_id: number | null
           form_label: string | null
           form_url: string | null
+          from_event: boolean
           group_id: number
           id: number
           kind: string
@@ -88,8 +90,10 @@ export type Database = {
           code?: string | null
           created_by?: string | null
           deadline?: string | null
+          event_id?: number | null
           form_label?: string | null
           form_url?: string | null
+          from_event?: boolean
           group_id: number
           id?: never
           kind?: string
@@ -110,8 +114,10 @@ export type Database = {
           code?: string | null
           created_by?: string | null
           deadline?: string | null
+          event_id?: number | null
           form_label?: string | null
           form_url?: string | null
+          from_event?: boolean
           group_id?: number
           id?: never
           kind?: string
@@ -164,6 +170,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcements_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
           {
@@ -2778,8 +2791,10 @@ export type Database = {
           code: string | null
           created_by: string | null
           deadline: string | null
+          event_id: number | null
           form_label: string | null
           form_url: string | null
+          from_event: boolean
           group_id: number
           id: number
           kind: string
@@ -4044,8 +4059,10 @@ export type Database = {
           code: string | null
           created_by: string | null
           deadline: string | null
+          event_id: number | null
           form_label: string | null
           form_url: string | null
+          from_event: boolean
           group_id: number
           id: number
           kind: string
