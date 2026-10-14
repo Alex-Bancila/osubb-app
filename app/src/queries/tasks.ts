@@ -13,7 +13,7 @@ export { useMyTasks } from './task-lists';
  */
 export const TASK_PRESENTATION_FIELDS = `
   id, group_id, title, description, status, deadline, completed_at, review_round,
-  assignment_mode, audience, kind,
+  assignment_mode, audience, min_level, kind,
   parent_task_id, campaign_id, duplicated_from_task_id, queue_closed_at,
   links,
   group:groups!tasks_group_id_fkey(name, short, color, category, path, is_organization, is_private),

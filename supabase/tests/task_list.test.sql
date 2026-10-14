@@ -39,7 +39,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(52);
+select plan(53);
 
 \ir _group_task_fixtures.psql
 reset role;
@@ -703,6 +703,14 @@ select performs_ok($$select * from public.task_list_summary('mine')$$, 750,
 select performs_ok($$select * from public.task_list('available')$$, 750,
   'Disponibile answers beside 6 000 Tasks the Member reads');
 reset role;
+
+-- R57: a list row carries the Task's own Minimum Level, so an edit opened
+-- from it prefills the real Role.
+insert into public.tasks (title, group_id, deadline, status, kind, audience, assignment_mode, queue_opened_at, min_level)
+values ('TL Role #57', pg_temp.gid_tl('TL Root'), '2030-11-20 18:00+02', 'todo', 'task', 'org', 'public', now(), 2);
+select is(pg_temp.texts_as(pg_temp.g521_uid(9),
+  'select min_level::text from public.task_list(p_list => ''all'') where title = ''TL Role #57'''),
+  array['2'], 'a list row carries the Task''s Minimum Level (R57)');
 
 select * from finish();
 rollback;

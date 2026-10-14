@@ -1237,3 +1237,267 @@ grant execute on function private.preview_task_update_impl(bigint, bigint, text,
 grant execute on function public.preview_task_update(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, jsonb, integer) to authenticated;
 grant execute on function private.update_task_impl(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, boolean, jsonb, integer) to authenticated;
 grant execute on function public.update_task(bigint, bigint, text, text, timestamptz, bigint, text, text, text, text, boolean, jsonb, integer) to authenticated;
+
+-- ==================== 9 · the list readers carry the Role ====================
+-- A new column changes the RETURNS TABLE, so each is dropped and recreated
+-- from main's latest body with min_level beside audience.
+drop function public.task_list(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer);
+drop function private.task_list_impl(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer);
+drop function public.leadership_member_tasks(uuid, timestamptz, timestamptz);
+drop function private.leadership_member_tasks_impl(uuid, timestamptz, timestamptz);
+
+create function private.task_list_impl(p_list text, p_finished boolean, p_group_id bigint, p_campaign_id bigint, p_from timestamp with time zone, p_to timestamp with time zone, p_state text, p_search text, p_preferred boolean, p_sort text, p_limit integer, p_offset integer)
+ RETURNS TABLE(id bigint, group_id bigint, title text, description text, status public.task_status, deadline timestamp with time zone, completed_at timestamp with time zone, review_round integer, assignment_mode text, audience text, min_level integer, kind text, parent_task_id bigint, campaign_id bigint, duplicated_from_task_id bigint, queue_closed_at timestamp with time zone, links jsonb, assignments jsonb, evaluations jsonb, submission jsonb, executor jsonb, total bigint)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select private.require_task_list_args(p_list, p_state, p_sort, p_limit, p_offset);
+  select private.require_date_range(p_from, p_to);
+
+  with muted as (
+    -- R43: the Groups the caller unselected that private.group_muted_for
+    -- still honours, for the preferred view only.
+    select unselected.group_id
+      from public.member_group_unselected as unselected
+     where coalesce(p_preferred, false)
+       and unselected.member_id = (select auth.uid())
+       and private.group_muted_for(unselected.group_id, unselected.member_id)
+  ),
+  needle as (
+    select private.fold_search(btrim(coalesce(p_search, ''))) as value
+  ),
+  matched as (
+    select task.id, task.group_id, task.title, task.description, task.status, task.deadline,
+           task.completed_at, task.review_round, task.assignment_mode, task.audience, task.min_level, task.kind,
+           task.parent_task_id, task.campaign_id, task.duplicated_from_task_id,
+           task.queue_closed_at, task.links,
+           task.status in ('completed', 'unfulfilled', 'cancelled') as finished
+      from private.task_list_scope(p_list) as scope
+      join public.tasks as task on task.id = scope.task_id
+      join public.groups as task_group on task_group.id = task.group_id
+     cross join needle
+     where (p_finished is null
+            or (task.status in ('completed', 'unfulfilled', 'cancelled')) = p_finished)
+       -- The Work Filter (#677): the Group subtree, the exact Campaign, and
+       -- the deadline in [p_from, p_to), so an undated Task is outside any range.
+       and (p_group_id is null or task_group.path @> array[p_group_id])
+       and (p_campaign_id is null or task.campaign_id = p_campaign_id)
+       and (p_from is null or task.deadline >= p_from)
+       and (p_to is null or task.deadline < p_to)
+       and (p_state is null
+            or case p_state
+                 when 'late' then task.status = 'completed' and task.completed_at > task.deadline
+                 else task.status::text = p_state
+               end)
+       and (needle.value = '' or strpos(private.fold_search(task.title), needle.value) > 0)
+       and task.group_id not in (select muted.group_id from muted)
+  ),
+  placed as (
+    -- Open Tasks first, soonest deadline first; then finished ones, newest
+    -- deadline first; undated last in both. A title sort leads inside each
+    -- part. The id ends every tie, so a page boundary never wobbles.
+    select matched.*,
+           count(*) over () as total,
+           row_number() over (
+             order by matched.finished,
+                      (case when p_sort = 'title' then matched.title end) collate pg_catalog."ro-x-icu",
+                      (case when not matched.finished then matched.deadline end) asc nulls last,
+                      (case when matched.finished then matched.deadline end) desc nulls last,
+                      (case when matched.finished then -matched.id else matched.id end)) as place
+      from matched
+  ),
+  page as (
+    select placed.* from placed order by placed.place limit p_limit offset p_offset
+  )
+  select page.id, page.group_id, page.title, page.description, page.status, page.deadline,
+         page.completed_at, page.review_round, page.assignment_mode, page.audience, page.min_level, page.kind,
+         page.parent_task_id, page.campaign_id, page.duplicated_from_task_id,
+         page.queue_closed_at, page.links,
+         coalesce((
+           select jsonb_agg(jsonb_build_object(
+                    'id', held.id, 'member_id', held.member_id, 'ended_at', held.ended_at)
+                    order by held.id)
+             from public.task_assignments as held
+            where held.task_id = page.id), '[]'::jsonb),
+         coalesce((
+           select jsonb_agg(jsonb_build_object(
+                    'id', evaluation.id, 'difficulty', evaluation.difficulty,
+                    'rating', evaluation.rating, 'points', evaluation.points,
+                    'reversed_at', evaluation.reversed_at)
+                    order by evaluation.id)
+             from public.task_evaluations as evaluation
+            where evaluation.task_id = page.id), '[]'::jsonb),
+         -- The latest `submitted` history row: the Submission Note (#685).
+         coalesce((
+           select jsonb_build_array(jsonb_build_object(
+                    'id', event.id, 'kind', event.kind, 'note', event.note,
+                    'details', event.details, 'occurred_at', event.occurred_at))
+             from public.task_activity as event
+            where event.task_id = page.id
+              and event.kind = 'submitted'
+            order by event.id desc
+            limit 1), '[]'::jsonb),
+         -- The Executor, by the rule of private.visible_task_executors (#499,
+         -- #861): the open Assignment of an open Task, or the latest Assignment
+         -- the Evaluation of a completed or unfulfilled Task ended; none otherwise.
+         (select jsonb_build_object(
+                   'member_id', executor.member_id, 'full_name', profile.full_name,
+                   'nickname', profile.nickname, 'is_current', executor.is_current)
+            from (select held.member_id, held.ended_at is null as is_current
+                    from public.task_assignments as held
+                   where held.task_id = page.id
+                     and ((held.ended_at is null
+                           and page.status not in ('completed', 'unfulfilled', 'cancelled'))
+                          or (page.status in ('completed', 'unfulfilled')
+                              and held.end_reason in ('completed', 'failed')))
+                   order by held.ended_at desc nulls first, held.id desc
+                   limit 1) as executor
+            left join public.profiles as profile on profile.id = executor.member_id),
+         page.total
+    from page
+   order by page.place;
+$function$;
+comment on function private.task_list_impl(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer) is
+  'Body of public.task_list. The rows are private.task_list_scope(p_list), narrowed by the Work Filter on the Task itself (Group subtree, Campaign, deadline in [p_from, p_to)), a finished state, the folded title search and -- p_preferred, R43 -- the Groups the caller keeps selected; ordered open first then finished newest first; cut by p_limit and p_offset with the unpaged count in total. Each row carries its whole Assignment History, its Evaluations, its latest submission and its Executor, which is what the read policies of those tables give the only callers either list has (a Task Manager; level 5 and above). R57 (2026-10-14): each row carries the Task''s min_level (its Minimum Level), so a form opened from it shows the real Role.';
+
+create function public.task_list(p_list text, p_finished boolean DEFAULT NULL::boolean, p_group_id bigint DEFAULT NULL::bigint, p_campaign_id bigint DEFAULT NULL::bigint, p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_state text DEFAULT NULL::text, p_search text DEFAULT NULL::text, p_preferred boolean DEFAULT false, p_sort text DEFAULT 'deadline'::text, p_limit integer DEFAULT 500, p_offset integer DEFAULT 0)
+ RETURNS TABLE(id bigint, group_id bigint, title text, description text, status public.task_status, deadline timestamp with time zone, completed_at timestamp with time zone, review_round integer, assignment_mode text, audience text, min_level integer, kind text, parent_task_id bigint, campaign_id bigint, duplicated_from_task_id bigint, queue_closed_at timestamp with time zone, links jsonb, assignments jsonb, evaluations jsonb, submission jsonb, executor jsonb, total bigint)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO ''
+AS $function$
+  select *
+    from private.task_list_impl(
+           p_list, p_finished, p_group_id, p_campaign_id, p_from, p_to,
+           p_state, p_search, p_preferred, p_sort, p_limit, p_offset);
+$function$;
+comment on function public.task_list(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer) is
+  'A page of a leadership Task list, ready to draw, in one request. p_list: managed (the Tasks the caller manages, exactly my_managed_task_ids()) or all (every Task the caller reads, from level 5 up). p_finished: true the finished Tasks, false the open ones, null both. The Work Filter reads the Task: p_group_id that Group and every Group below it, p_campaign_id exact, the deadline in [p_from, p_to). p_state: completed, unfulfilled, cancelled, or late (completed after its deadline). p_search: the title contains it, case and diacritics ignored. p_preferred (R43): without the Groups the caller unselected. Order: open first by deadline ascending, then finished by deadline descending, undated last; p_sort title leads with the title inside each part. p_limit 1..500 and p_offset cut the page; total is the count before the cut. PT400 invalid_list, invalid_state, invalid_sort, invalid_page, invalid_date_range. No rows without org claims or a live activ Profile. R57 (2026-10-14): each row carries the Task''s min_level (its Minimum Level), so a form opened from it shows the real Role.';
+
+create function private.leadership_member_tasks_impl(p_member_id uuid, p_from timestamp with time zone, p_to timestamp with time zone)
+ RETURNS TABLE(assignment_id bigint, member_id uuid, assigned_at timestamp with time zone, assigned_by uuid, assignment_ended_at timestamp with time zone, assignment_end_reason text, assignment_end_note text, task_id bigint, title text, description text, link_label text, link_url text, links jsonb, deadline timestamp with time zone, task_kind text, audience text, min_level integer, assignment_mode text, status public.task_status, is_overdue boolean, completed_late boolean, difficulty integer, rating integer, started_at timestamp with time zone, submitted_at timestamp with time zone, review_round integer, returned_to_progress_at timestamp with time zone, completed_at timestamp with time zone, unfulfilled_at timestamp with time zone, cancelled_at timestamp with time zone, cancel_reason text, queue_opened_at timestamp with time zone, queue_closed_at timestamp with time zone, task_created_at timestamp with time zone, task_created_by uuid, duplicated_from_task_id bigint, group_id bigint, group_name text, campaign_id bigint, campaign_name text, parent_task_id bigint, parent_task_title text, subtasks jsonb, evaluation_history jsonb)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select private.require_date_range(p_from, p_to);
+
+  select assignment.id,
+         assignment.member_id,
+         assignment.assigned_at,
+         assignment.assigned_by,
+         assignment.ended_at,
+         assignment.end_reason,
+         assignment.end_note,
+         task.id,
+         task.title,
+         task.description,
+         task.link_label,
+         task.link_url,
+         task.links,
+         task.deadline,
+         task.kind,
+         task.audience,
+         task.min_level,
+         task.assignment_mode,
+         task.status,
+         coalesce(task.deadline < statement_timestamp(), false)
+           and task.status in ('todo', 'in_progress', 'in_review'),
+         task.status = 'completed'
+           and coalesce(task.completed_at > task.deadline, false),
+         task.difficulty,
+         task.rating,
+         task.started_at,
+         task.submitted_at,
+         task.review_round,
+         task.returned_to_progress_at,
+         task.completed_at,
+         task.unfulfilled_at,
+         task.cancelled_at,
+         task.cancel_reason,
+         task.queue_opened_at,
+         task.queue_closed_at,
+         task.created_at,
+         task.created_by,
+         task.duplicated_from_task_id,
+         task.group_id,
+         origin_group.name,
+         campaign.id,
+         campaign.name,
+         parent.id,
+         parent.title,
+         coalesce((
+           select jsonb_agg(jsonb_build_object(
+                    'id', child.id,
+                    'title', child.title,
+                    'status', child.status,
+                    'completed_late', child.status = 'completed'
+                      and coalesce(child.completed_at > child.deadline, false)
+                  ) order by child.created_at, child.id)
+             from public.tasks as child
+            where child.parent_task_id = task.id
+         ), '[]'::jsonb),
+         coalesce((
+           select jsonb_agg(jsonb_build_object(
+                    'id', evaluation.id,
+                    'source', evaluation.source,
+                    'outcome', evaluation.outcome,
+                    'difficulty', evaluation.difficulty,
+                    'rating', evaluation.rating,
+                    'points', evaluation.points,
+                    'note', evaluation.note,
+                    'evaluated_at', evaluation.evaluated_at,
+                    'evaluated_by', evaluation.evaluated_by,
+                    'reversed_at', evaluation.reversed_at,
+                    'reversed_by', evaluation.reversed_by,
+                    'reversal_reason', evaluation.reversal_reason
+                  ) order by evaluation.evaluated_at, evaluation.id)
+             from public.task_evaluations as evaluation
+            where evaluation.assignment_id = assignment.id
+         ), '[]'::jsonb)
+    from public.task_assignments as assignment
+    join public.tasks as task on task.id = assignment.task_id
+    join public.groups as origin_group on origin_group.id = task.group_id
+    left join public.campaigns as campaign on campaign.id = task.campaign_id
+    left join public.tasks as parent on parent.id = task.parent_task_id
+   where assignment.member_id = p_member_id
+     and public.auth_level() >= 5
+     and (select private.caller_level()) >= 5
+     and exists (
+       select 1
+         from public.profiles as caller
+        where caller.id = (select auth.uid())
+          and caller.status = 'activ'
+     )
+     and (p_from is null or task.deadline >= p_from)
+     and (p_to is null or task.deadline < p_to)
+     and private.can_see_group(task.group_id, (select auth.uid()))
+   order by assignment.assigned_at desc, assignment.id desc;
+$function$;
+comment on function private.leadership_member_tasks_impl(uuid, timestamptz, timestamptz) is
+  'One row per selected Member Assignment, newest first, labelled by the Task''s owning Group and carrying the Task''s Attached Links (#947; R46: links, with the legacy link_label / link_url = links[0] for one release), optionally narrowed to Task deadlines in [p_from, p_to) (#677); PT400 invalid_date_range first when p_to < p_from. A Task whose Group the caller cannot see (private.can_see_group, #756/#759) is omitted, so a BCE drilling into a Member never learns of their work in a Private Group; BC/Moderator see every row. R57 (2026-10-14): each row carries the Task''s min_level (its Minimum Level), so a form opened from it shows the real Role.';
+
+create function public.leadership_member_tasks(p_member_id uuid, p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone)
+ RETURNS TABLE(assignment_id bigint, member_id uuid, assigned_at timestamp with time zone, assigned_by uuid, assignment_ended_at timestamp with time zone, assignment_end_reason text, assignment_end_note text, task_id bigint, title text, description text, link_label text, link_url text, links jsonb, deadline timestamp with time zone, task_kind text, audience text, min_level integer, assignment_mode text, status public.task_status, is_overdue boolean, completed_late boolean, difficulty integer, rating integer, started_at timestamp with time zone, submitted_at timestamp with time zone, review_round integer, returned_to_progress_at timestamp with time zone, completed_at timestamp with time zone, unfulfilled_at timestamp with time zone, cancelled_at timestamp with time zone, cancel_reason text, queue_opened_at timestamp with time zone, queue_closed_at timestamp with time zone, task_created_at timestamp with time zone, task_created_by uuid, duplicated_from_task_id bigint, group_id bigint, group_name text, campaign_id bigint, campaign_name text, parent_task_id bigint, parent_task_title text, subtasks jsonb, evaluation_history jsonb)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO ''
+AS $function$
+  select * from private.leadership_member_tasks_impl(p_member_id, p_from, p_to);
+$function$;
+comment on function public.leadership_member_tasks(uuid, timestamptz, timestamptz) is
+  'Live BCE+ Assignment history with the owning Group''s id and name, the Task''s Attached Links (links; R46 -- link_label, link_url = the first, kept for one release; #947), plus Task and Evaluation history. The date range (#677, R11) keeps only Assignments whose Task deadline is in [p_from, p_to); a Task with no deadline is excluded whenever either bound is set. PT400 invalid_date_range when p_to < p_from. Assignments of a Task in a Private Group the caller cannot see are omitted (#759, ruling R25). R57 (2026-10-14): each row carries the Task''s min_level (its Minimum Level), so a form opened from it shows the real Role.';
+
+revoke execute on function private.task_list_impl(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer)
+  from public, anon, authenticated, service_role;
+revoke execute on function public.task_list(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer)
+  from public, anon, authenticated, service_role;
+revoke execute on function private.leadership_member_tasks_impl(uuid, timestamptz, timestamptz)
+  from public, anon, authenticated, service_role;
+revoke execute on function public.leadership_member_tasks(uuid, timestamptz, timestamptz)
+  from public, anon, authenticated, service_role;
+grant execute on function private.task_list_impl(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer) to authenticated;
+grant execute on function public.task_list(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer) to authenticated;
+grant execute on function private.leadership_member_tasks_impl(uuid, timestamptz, timestamptz) to authenticated;
+grant execute on function public.leadership_member_tasks(uuid, timestamptz, timestamptz) to authenticated;
