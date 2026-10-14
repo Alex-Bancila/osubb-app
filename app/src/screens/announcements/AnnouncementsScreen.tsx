@@ -8,7 +8,6 @@ import { useInView } from '../../lib/use-in-view';
 import { useSwipeTabs } from '../../lib/swipe-tabs';
 import { ANNOUNCEMENTS_PATH } from '../../components/shell/navItems';
 import {
-  ANNOUNCEMENT_PAGE,
   useAnnouncement,
   useAnnouncementFeed,
   useAnnouncementFeedSummary,
@@ -217,12 +216,11 @@ function AnnouncementsContent({
   const criticalRead = useAnnouncement(notLoaded(criticalId));
   const selectedRead = useAnnouncement(notLoaded(selected?.id ?? null));
 
-  // Authors as Member Card buttons, read page by page (and those of the
-  // rows read by their id), so a page that lands reads only its own.
+  // Authors as Member Card buttons, read page by page as the server sent
+  // the pages (and those of the rows read by their id), so a page that
+  // lands reads only its own and no page's set ever shifts.
   const authorPages = useMemo(() => {
-    const pages: string[][] = [];
-    for (let start = 0; start < feed.rows.length; start += ANNOUNCEMENT_PAGE)
-      pages.push(authorsOf(feed.rows.slice(start, start + ANNOUNCEMENT_PAGE)));
+    const pages = feed.pages.map((page) => authorsOf(page));
     const elsewhere = authorsOf([
       linkedRead.data,
       criticalRead.data,
@@ -230,7 +228,7 @@ function AnnouncementsContent({
     ]);
     if (elsewhere.length > 0) pages.push(elsewhere);
     return pages;
-  }, [feed.rows, linkedRead.data, criticalRead.data, selectedRead.data]);
+  }, [feed.pages, linkedRead.data, criticalRead.data, selectedRead.data]);
   const authors = useMemberIdentitiesByPage(authorPages);
 
   const announcements = useMemo(

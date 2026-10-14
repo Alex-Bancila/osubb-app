@@ -174,6 +174,12 @@ export function announcementFeedQueryOptions(
 export type AnnouncementFeed = {
   /** The Announcements read so far, each once, in the server's order. */
   rows: RawAnnouncementRow[];
+  /**
+   * The rows of each page as the server sent it, a duplicate included: what
+   * is read per page (its authors) is cut from these, so a dropped duplicate
+   * never shifts a page's set.
+   */
+  pages: RawAnnouncementRow[][];
   /** How many the filters match; undefined until the first page lands. */
   total: number | undefined;
   /** The first page is on its way. */
@@ -221,9 +227,14 @@ export function useAnnouncementFeed(
         }
     return read;
   }, [query.data]);
+  const pages = useMemo(
+    () => (query.data?.pages ?? []).map((page) => page.rows),
+    [query.data],
+  );
   const firstFailed = query.isError && query.data === undefined;
   return {
     rows,
+    pages,
     total: query.data?.pages[0]?.total,
     isPending: asked && !firstFailed && query.data === undefined,
     isError: asked && firstFailed,

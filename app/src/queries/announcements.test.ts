@@ -376,6 +376,14 @@ describe('the Anunțuri feed, read by the page (R56)', () => {
       );
       // The next page starts after the rows read, not after the ids kept.
       expect(rpc.mock.calls.map(([, args]) => args.p_offset)).toEqual([0, 20]);
+      // The pages stay as the server sent them, the duplicate included, so
+      // what is read per page (its authors) never shifts.
+      expect(
+        result.current.pages.map((page) => page.map((row) => row.id)),
+      ).toEqual([
+        Array.from({ length: 20 }, (_, index) => index + 1),
+        Array.from({ length: 20 }, (_, index) => index + 20),
+      ]);
     });
 
     // Fails if a later page is cut against a later moment than the first:

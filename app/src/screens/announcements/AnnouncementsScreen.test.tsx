@@ -55,7 +55,6 @@ vi.mock('../../queries/approvals', async (importOriginal) => ({
   useApprovalRequests: () => ({ data: approvals.data }),
 }));
 vi.mock('../../queries/announcements', () => ({
-  ANNOUNCEMENT_PAGE: 20,
   useAnnouncementFeed: hooks.useAnnouncementFeed,
   useAnnouncementFeedSummary: hooks.useAnnouncementFeedSummary,
   useAnnouncement: hooks.useAnnouncement,
@@ -160,13 +159,20 @@ function createRow(
   };
 }
 
-/** What `useAnnouncementFeed` answers: these rows, every one read. */
+/**
+ * What `useAnnouncementFeed` answers: these rows, every one read, as the
+ * server's pages of 20 unless a test gives its own.
+ */
 function feedRead(
   rows: AnnouncementFeedRow[],
   overrides: Partial<AnnouncementFeed> = {},
 ): AnnouncementFeed {
+  const pages: AnnouncementFeedRow[][] = [];
+  for (let start = 0; start < rows.length; start += 20)
+    pages.push(rows.slice(start, start + 20));
   return {
     rows,
+    pages,
     total: rows.length,
     isPending: false,
     isError: false,
@@ -762,17 +768,24 @@ describe('AnnouncementsScreen', () => {
 
     // Fails if the authors are read in one set: a page that lands would ask
     // for every author again, and the names drawn would flicker meanwhile.
-    it('reads the authors page by page', () => {
-      showFeed(
-        Array.from({ length: 21 }, (_, index) =>
-          createRow({
-            id: index + 1,
-            title: `Anunț ${index + 1}`,
-            created_by: `author-${index + 1}`,
-          }),
-        ),
-        { total: 21 },
-      );
+    // Fails too if they are cut from the rows kept once rather than from
+    // the server's pages: a dropped duplicate would shift every later
+    // slice, and with it the key its names are read under.
+    it('reads the authors page by page, as the server sent the pages', () => {
+      const row = (id: number) =>
+        createRow({
+          id,
+          title: `Anunț ${id}`,
+          created_by: `author-${id}`,
+        });
+      const ids = (from: number, to: number) =>
+        Array.from({ length: to - from + 1 }, (_, index) => from + index);
+      // One was published between the two pages: the second starts with
+      // the first page's last card, which the list keeps once.
+      showFeed(ids(1, 21).map(row), {
+        total: 22,
+        pages: [ids(1, 20).map(row), ids(20, 21).map(row)],
+      });
       hooks.useMemberIdentitiesByPage.mockReturnValue(
         new Map([
           [
@@ -790,8 +803,8 @@ describe('AnnouncementsScreen', () => {
       renderAt('/anunturi');
 
       expect(hooks.useMemberIdentitiesByPage.mock.lastCall?.[0]).toEqual([
-        Array.from({ length: 20 }, (_, index) => `author-${index + 1}`),
-        ['author-21'],
+        ids(1, 20).map((id) => `author-${id}`),
+        ['author-20', 'author-21'],
       ]);
       expect(
         within(screen.getByRole('article', { name: 'Anunț 1' })).getByText(
