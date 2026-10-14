@@ -15,6 +15,25 @@
 -- expression accepts, computed as postgres (no RLS) with the same claims.
 -- The named cases below pin each branch, so the parity cannot hold by
 -- everything being hidden.
+--
+-- Mutation record (2026-10-14; each branch broken alone, the suite run):
+--   own_task_ids without Candidatures -> "own_task_ids: and the Tasks the
+--     caller is a Candidate on", "R2: a Candidature reads its Task", parity;
+--   own_task_ids for a deactivated Member, or task_read_groups without the
+--     activ check -> "a deactivated Member ... four empty sets", "a
+--     deactivated Member reads no Task", parity;
+--   whole without R3 / R4 / R1 -> the R3, R4 (roster, automatic) and R1
+--     cases, parity; open without the Minimum Level -> the R6-own cases;
+--     org through a Private Group -> the R6-org Private Group cases;
+--   tasks_read without the Umbrella (R7) -> "R2/R7 ..."; without the queue
+--     or the Audience test -> "R6-org: an open org Opportunity ...";
+--   each child policy without its Task -> that table's parity (through the
+--     Candidature, Evaluation and history rows in the Private Group);
+--   tasks_read back on private.can_read_task per row -> the timing guard.
+--   Equivalent: tasks_read without "status not in (finished)" -- a finished
+--   public Task always has a closed queue (tasks_queue_timestamp_state_ck),
+--   so the queue test already excludes it; the clause stays to mirror
+--   private.can_read_task.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
@@ -179,6 +198,23 @@ select pg_temp.g521_task('tr_done', 'dept', 5, 'completed', 'public');
 -- still reads one.
 insert into public.task_assignments(task_id, member_id, assigned_by)
 select id, pg_temp.tr_uid(2), pg_temp.g521_uid(1) from tr_tasks where name in ('pv_own', 'pv_umbrella');
+-- Child rows in the Private Group, where a global reader (the BCE) is refused:
+-- #3's Candidature on its org Opportunity, and a Task #2 executed there,
+-- evaluated through the command (its Evaluation and history rows).
+insert into public.task_candidates(task_id, member_id)
+select id, pg_temp.tr_uid(3) from tr_tasks where name = 'pv_org';
+insert into public.tasks(title, group_id, created_by, status, audience, assignment_mode, kind,
+                         created_at, started_at, submitted_at)
+values ('Task #TR pv_done', pg_temp.tr_gid('Private #TR'), pg_temp.g521_uid(1), 'in_review', 'local',
+        'direct', 'task', now() - interval '4 days', now() - interval '3 days', now() - interval '2 days');
+insert into tr_tasks select 'pv_done', id from public.tasks where title = 'Task #TR pv_done';
+insert into public.task_assignments(task_id, member_id, assigned_by, assigned_at)
+select id, pg_temp.tr_uid(2), pg_temp.g521_uid(1), now() - interval '3 days' from tr_tasks where name = 'pv_done';
+select set_config('request.jwt.claims', jsonb_build_object('sub', pg_temp.g521_uid(1), 'role', 'authenticated',
+  'app_metadata', jsonb_build_object('member_role', 'bc', 'member_level', 6))::text, true);
+select public.complete_task_review((select id from tr_tasks where name = 'pv_done'), 3, 3, 'Fixture evaluation #TR');
+select pg_temp.test_clear_jwt();
+
 -- #7 held a Task before being deactivated: a former Member's own work is
 -- no longer theirs to read.
 insert into public.task_assignments(task_id, member_id, assigned_by)
@@ -227,7 +263,7 @@ select has_function('private', 'own_task_ids', '{}'::name[], 'private.own_task_i
 select has_function('private', 'task_read_groups', array['text']::name[], 'private.task_read_groups(text) exists');
 
 select is(pg_temp.tr_set_as(pg_temp.tr_uid(2), 'private.own_task_ids()'),
-          array(select id from tr_tasks where name in ('pv_umbrella', 'pv_own') order by id),
+          array(select id from tr_tasks where name in ('pv_umbrella', 'pv_own', 'pv_done') order by id),
           'own_task_ids: the Tasks the caller holds an Assignment on');
 select is(pg_temp.tr_set_as(pg_temp.tr_uid(1), 'private.own_task_ids()'),
           array[pg_temp.tr_id('ml_local')],
