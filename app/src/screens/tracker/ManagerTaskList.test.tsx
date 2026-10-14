@@ -766,6 +766,33 @@ describe('ManagerTaskList, the finished Tasks (#1053)', () => {
     ]);
   });
 
+  it('drops a finished Stare the server no longer holds, and stops sending it', async () => {
+    const user = userEvent.setup();
+    lists.summary.mockReturnValue({
+      data: [
+        ...held,
+        summaryRow({ group_id: 1, status: 'unfulfilled', tasks: 1 }),
+      ],
+    });
+    const open = rows.filter((row) => row.status !== 'completed');
+    const view = renderList('', vi.fn(), open);
+    await openFilters(user);
+    await chooseOption(user, screen.getByLabelText('Stare'), 'Nerealizat');
+    await closeFilters(user);
+    expect(lastFinishedCall()[1]).toEqual({ p_state: 'unfulfilled' });
+    expect(filterButton()).toHaveAccessibleName('Filtrează, 1 filtru activ');
+    // The one unfulfilled Task was reopened: the summary comes back without it.
+    lists.summary.mockReturnValue({ data: held });
+    view.rerender(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList rows={open} now={now} />
+      </MemoryRouter>,
+    );
+    expect(filterButton()).toHaveAccessibleName('Filtrează');
+    expect(lastFinishedCall()[1]).toEqual({});
+    expect(titles()).toHaveLength(open.length);
+  });
+
   it('offers the Groups and Campaigns of the finished Tasks too (Rule W)', async () => {
     const user = userEvent.setup();
     lists.summary.mockReturnValue({ data: held });
@@ -845,6 +872,47 @@ describe('ManagerTaskList, the finished Tasks (#1053)', () => {
     expect(loadMore).not.toHaveBeenCalled();
     enter([{ isIntersecting: true }]);
     expect(loadMore).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it('watches the end of the list only while a next page can be asked for', () => {
+    let watching = 0;
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        observe() {
+          watching += 1;
+        }
+        disconnect() {
+          watching -= 1;
+        }
+      },
+    );
+    lists.summary.mockReturnValue({ data: held });
+    const page = (overrides: Partial<FinishedTasks>) =>
+      finishedRead({ rows: done, total: 120, hasMore: true, ...overrides });
+    lists.finished.mockReturnValue(page({ isLoadingMore: true }));
+    const view = renderList();
+    const again = () =>
+      view.rerender(
+        <MemoryRouter initialEntries={['/tracker']}>
+          <ManagerTaskList rows={rows} now={now} />
+        </MemoryRouter>,
+      );
+    // A page is on its way: nothing is watched, so it is not asked twice.
+    expect(watching).toBe(0);
+    // It landed: the end is watched again, in view or not.
+    lists.finished.mockReturnValue(page({}));
+    again();
+    expect(watching).toBe(1);
+    // A failed page waits for the Member's retry.
+    lists.finished.mockReturnValue(page({ moreFailed: true }));
+    again();
+    expect(watching).toBe(0);
+    // The last page: nothing left to watch for.
+    lists.finished.mockReturnValue(page({ hasMore: false }));
+    again();
+    expect(watching).toBe(0);
     vi.unstubAllGlobals();
   });
 

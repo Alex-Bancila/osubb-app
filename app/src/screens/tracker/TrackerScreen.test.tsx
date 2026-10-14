@@ -2214,5 +2214,13 @@ describe('Taskuri over the paged lists (#1053)', () => {
     // The open Tasks and the one just opened from the list are known.
     expect(sheet).toHaveTextContent('gestionate: 3,77');
     expect(sheet).toHaveTextContent('întreabă: da');
+    // Known for as long as that sheet is open, no longer: the next Task
+    // opened is asked about afresh.
+    await user.click(screen.getByRole('button', { name: 'Închide detaliile' }));
+    await user.click(screen.getByRole('link', { name: 'Deschide taskul 99' }));
+    const next = await screen.findByRole('dialog', { name: 'Detalii task' });
+    expect(next).toHaveTextContent('Task #99');
+    expect(next).toHaveTextContent('gestionate: 3');
+    expect(next).not.toHaveTextContent('77');
   });
 });

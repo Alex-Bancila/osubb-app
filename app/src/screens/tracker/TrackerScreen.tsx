@@ -275,7 +275,8 @@ function TrackerContent() {
   // One search text for the four lists: it stays when the tab changes.
   const search = useTitleSearch();
   const [detailId, setDetailId] = useState<number | null>(null);
-  // The Task last opened from De gestionat: managed, whatever page it was on.
+  // The Task opened from De gestionat, while its sheet is open: managed,
+  // whatever page it was on.
   const [openedManaged, setOpenedManaged] = useState<number | null>(null);
   // The Task this page just created or added, and what its details say (#915).
   const [created, setCreated] = useState<{
@@ -732,12 +733,14 @@ function TrackerContent() {
           }
           onClose={() => {
             setDetailId(null);
+            setOpenedManaged(null);
             setCreated(null);
           }}
           onDeleted={(receipt) => {
             setDeleted({ id: detailId ?? 0, receipt });
             setGaveUp(null);
             setDetailId(null);
+            setOpenedManaged(null);
             setCreated(null);
           }}
         />

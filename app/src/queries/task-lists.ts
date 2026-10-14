@@ -403,7 +403,9 @@ export function useFinishedTasks(
         }
     return rows;
   }, [query.data]);
-  const labelled = useLabelled(asked ? read : undefined);
+  // No page yet is "on its way", never "none": an empty list is only what a
+  // page that has landed says.
+  const labelled = useLabelled(asked && query.data ? read : undefined);
   const firstFailed = query.isError && query.data === undefined;
   return {
     rows: labelled ?? [],
