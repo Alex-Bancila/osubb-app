@@ -81,7 +81,10 @@ vi.mock('../../queries/calendar-tasks', () => ({
 }));
 vi.mock('../../queries/task-tabs', () => ({
   useTaskManagement: hooks.useTaskManagement,
-  useManagedTasks: hooks.useManagedTasks,
+}));
+// #1053: the managed Tasks of the month the grid shows, open and finished.
+vi.mock('../../queries/task-lists', () => ({
+  useManagedTasksInRange: hooks.useManagedTasks,
 }));
 vi.mock('../../queries/work-filter-options', () => ({
   useCalendarWork: hooks.useCalendarWork,
@@ -983,16 +986,24 @@ describe('CalendarScreen', () => {
       const user = userEvent.setup();
       stubStorage({ [CALENDAR_VIEW_STORAGE_KEY]: 'month' });
       hooks.useTaskManagement.mockReturnValue(query(true));
-      hooks.useManagedTasks.mockImplementation((enabled: boolean) =>
-        enabled
-          ? query([
-              task({
-                id: 102,
-                title: 'Raport trimestrial',
-                deadline: '2026-10-22T09:00:00.000Z',
-              }),
-            ])
-          : query(undefined, { isPending: true }),
+      hooks.useManagedTasks.mockImplementation(
+        (_range: unknown, enabled: boolean) =>
+          enabled
+            ? query([
+                task({
+                  id: 102,
+                  title: 'Raport trimestrial',
+                  deadline: '2026-10-22T09:00:00.000Z',
+                }),
+                // A finished managed Task keeps its deadline on the grid.
+                task({
+                  id: 103,
+                  title: 'Raport predat',
+                  status: 'completed',
+                  deadline: '2026-10-22T10:00:00.000Z',
+                }),
+              ])
+            : query(undefined, { isPending: true }),
       );
       renderCalendar();
 
@@ -1007,14 +1018,28 @@ describe('CalendarScreen', () => {
       await user.click(toggle);
 
       expect(toggle).toHaveAttribute('aria-pressed', 'true');
-      expect(hooks.useManagedTasks).toHaveBeenLastCalledWith(true);
+      // Only the month the grid shows is read: 28 September to 1 November,
+      // Bucharest days, the clock change of 25 October inside it.
+      expect(hooks.useManagedTasks).toHaveBeenLastCalledWith(
+        { from: '2026-09-27T21:00:00.000Z', to: '2026-11-01T22:00:00.000Z' },
+        true,
+      );
       // The Work Filter offers the managed deadlines' Groups too (Rule W).
       expect(hooks.useCalendarWork).toHaveBeenLastCalledWith(true);
       expect(
         screen.getByRole('button', {
-          name: 'joi, 22 octombrie 2026: 1 termen de task',
+          name: 'joi, 22 octombrie 2026: 2 termene de task',
         }),
       ).toBeInTheDocument();
+      // Another month is another read.
+      await user.click(screen.getByRole('button', { name: /^Luna următoare/ }));
+      expect(hooks.useManagedTasks).toHaveBeenLastCalledWith(
+        { from: '2026-10-25T22:00:00.000Z', to: '2026-12-06T22:00:00.000Z' },
+        true,
+      );
+      await user.click(
+        screen.getByRole('button', { name: /^Luna anterioară/ }),
+      );
       // The Agendă draws no managed deadline, so it offers none of their Groups.
       await user.click(screen.getByRole('button', { name: 'Agendă' }));
       expect(hooks.useCalendarWork).toHaveBeenLastCalledWith(false);

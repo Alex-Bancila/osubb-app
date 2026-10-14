@@ -16,7 +16,8 @@ import {
 import { usePendingCandidatureTasks } from '../../queries/calendar-tasks';
 import { useEventsInRange, type EventPresentation } from '../../queries/events';
 import type { Group } from '../../queries/reference';
-import { useManagedTasks, useTaskManagement } from '../../queries/task-tabs';
+import { useManagedTasksInRange } from '../../queries/task-lists';
+import { useTaskManagement } from '../../queries/task-tabs';
 import { useMyTasks } from '../../queries/tasks';
 import {
   buildMonthGrid,
@@ -97,7 +98,12 @@ export function CalendarMonth({
   const candidatures = usePendingCandidatureTasks();
   const management = useTaskManagement();
   const managesTasks = management.data === true;
-  const managed = useManagedTasks(managesTasks && showManaged);
+  // The managed Tasks with a deadline on the grid, open and finished: one
+  // month's worth, never the whole list (#1053).
+  const managed = useManagedTasksInRange(
+    range?.from && range.to ? { from: range.from, to: range.to } : null,
+    managesTasks && showManaged,
+  );
 
   const tasks = useMemo(
     () =>
