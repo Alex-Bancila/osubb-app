@@ -924,6 +924,82 @@ describe('ManagerTaskList, the finished Tasks (#1053)', () => {
     expect(lastFinishedCall()[1]).toEqual({ p_state: 'cancelled' });
   });
 
+  // Fails if the sheet offers the open rows' choices while what the list
+  // holds is first read, as if they were all of them.
+  it('holds the place of the choices while what the list holds is first read', async () => {
+    const user = userEvent.setup();
+    lists.summary.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isFetching: true,
+      isError: false,
+      error: null,
+      errorUpdateCount: 0,
+      refetch: vi.fn(),
+    });
+    renderList('', vi.fn(), sixRows);
+    expect(titles()).toHaveLength(sixRows.length);
+    const sheet = await openFilters(user);
+    expect(within(sheet).getByRole('status')).toHaveTextContent(
+      'Se încarcă filtrele…',
+    );
+    expect(within(sheet).queryByLabelText('Stare')).toBeNull();
+    expect(
+      within(sheet).queryByRole('combobox', { name: 'Grup principal' }),
+    ).toBeNull();
+    expect(within(sheet).queryByRole('alert')).toBeNull();
+  });
+
+  // Fails if a retry of the failed summary read takes the retry away: the
+  // read is pending again with no error, so the button would unmount, focus
+  // would leave the sheet's content, and the open rows' choices would show.
+  it('keeps the retry where it was, saying it retries, while the summary is asked again', async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn();
+    const failed = {
+      data: undefined,
+      isPending: false,
+      isFetching: false,
+      isError: true,
+      error: new Error('boom'),
+      errorUpdateCount: 1,
+      refetch,
+    };
+    lists.summary.mockReturnValue(failed);
+    const view = renderList('', vi.fn(), sixRows);
+    const sheet = await openFilters(user);
+    const retry = within(sheet).getByRole('button', {
+      name: 'Încearcă din nou',
+    });
+    await user.click(retry);
+    expect(refetch).toHaveBeenCalledTimes(1);
+    // The retry is on its way.
+    lists.summary.mockReturnValue({
+      ...failed,
+      isPending: true,
+      isFetching: true,
+      isError: false,
+      error: null,
+    });
+    view.rerender(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList rows={sixRows} now={now} />
+      </MemoryRouter>,
+    );
+    const alert = within(sheet).getByRole('alert');
+    expect(alert).toHaveTextContent('Nu am putut încărca filtrele.');
+    const retrying = within(alert).getByRole('button', {
+      name: 'Se reîncearcă…',
+    });
+    // The same button, still focused, takes no second press.
+    expect(retrying).toBe(retry);
+    expect(retrying).toHaveFocus();
+    expect(retrying).toHaveAttribute('aria-disabled', 'true');
+    await user.click(retrying);
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(within(sheet).queryByLabelText('Stare')).toBeNull();
+  });
+
   it('loads the next page from the button', async () => {
     const user = userEvent.setup();
     const loadMore = vi.fn();

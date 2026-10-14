@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/button';
 import { SegmentedRadio } from '../../components/ui/segmented-radio';
 import { Select } from '../../components/ui/select';
 import { workFilterCellClass } from '../../components/work-filter/field-class';
+import type { WorkFilterWorkRead } from '../../components/work-filter/WorkFilter';
 import { formatTaskCount } from '../../lib/format';
 import { useInView } from '../../lib/use-in-view';
 import { useWorkFilter } from '../../lib/use-work-filter';
@@ -111,12 +112,22 @@ export function ManagerTaskList({
   );
   const finishedCounts = useMemo(() => finishedStateCounts(held), [held]);
   const work = useMemo(() => [...rows, ...summaryWork(held)], [rows, held]);
-  // Never read: Stare and the Work Filter offer a retry, not the open rows'
-  // choices as if they were all. A later read that fails keeps what was read.
-  const summaryFailed =
-    summary.isError && summary.data === undefined
-      ? { error: summary.error, onRetry: () => void summary.refetch() }
-      : undefined;
+  // Not read yet: Stare and the Work Filter hold their place, or offer a
+  // retry, never the open rows' choices as if they were all. A retry is
+  // pending again with no error: having failed before (`errorUpdateCount`),
+  // it keeps the retry, saying it retries. A later read that fails keeps
+  // what was read.
+  const summaryRead: WorkFilterWorkRead | undefined =
+    summary.data !== undefined
+      ? undefined
+      : summary.isError || summary.errorUpdateCount > 0
+        ? {
+            status: 'failed',
+            error: summary.error,
+            onRetry: () => void summary.refetch(),
+            retrying: !summary.isError,
+          }
+        : { status: 'loading' };
 
   const listControls = rows.length + finishedCounts.total >= LIST_CONTROLS_FROM;
   const sort = listControls ? chosenSort : 'deadline';
@@ -239,7 +250,7 @@ export function ManagerTaskList({
         <div className={trackerListClass}>
           <TrackerWorkFilter
             rows={work}
-            rowsFailed={summaryFailed}
+            rowsRead={summaryRead}
             search={search}
             count={count}
             fields={fields}
