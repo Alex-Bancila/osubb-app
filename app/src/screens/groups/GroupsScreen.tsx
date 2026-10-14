@@ -1,4 +1,3 @@
-import { HomeBackLink } from '../../components/shell/HomeBackLink';
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Link } from 'react-router';
@@ -50,7 +49,6 @@ export default function GroupsScreen() {
   const [search, setSearch] = useState('');
   const header = (
     <>
-      <HomeBackLink />
       <PageHeader title="Grupuri" />
     </>
   );

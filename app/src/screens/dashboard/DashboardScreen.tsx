@@ -6,7 +6,6 @@ import { useCapabilities } from '../../lib/capabilities';
 import { firstName, formatLongDate } from '../../lib/format';
 import { useMyProfile } from '../../queries/profile';
 import CountTiles from './CountTiles';
-import LeadershipLinks from './LeadershipLinks';
 import PointsStat from './PointsStat';
 import PushPromptCard from './PushPromptCard';
 import UpNext from './UpNext';
@@ -20,11 +19,9 @@ function capitalised(text: string): string {
  * Acasă (#822, ruling R27; #859): what is waiting, then what comes next.
  *
  * Under the date and the greeting, a row of count tiles that open what is
- * waiting (`CountTiles`), then — on a phone or a tablet, for whoever has
- * them — **Mai mult** (`LeadershipLinks`): the pages that are on neither the
- * tab bar nor the top bar, which have no other door there. Then one list,
- * **Urmează** (`UpNext`): the next deadlines, Events and the Task to
- * evaluate, as compact rows that link to where the full card lives. The page decides what applies to the viewer
+ * waiting (`CountTiles`), then one list, **Urmează** (`UpNext`): the next
+ * deadlines, Events and the Task to evaluate, as compact rows that link to
+ * where the full card lives. The page decides what applies to the viewer
  * before it renders either, from the server's capability row
  * (`my_capabilities()`):
  * - below BCE (`seeLeadership` false): the points and Role as a stat on the
@@ -89,7 +86,6 @@ export default function DashboardScreen() {
       ) : (
         <>
           <CountTiles ownTasks={ownTasks} reviewer={reviewer} />
-          <LeadershipLinks capabilities={capabilities.data} />
           <UpNext now={now} ownTasks={ownTasks} reviewer={reviewer} />
         </>
       )}
