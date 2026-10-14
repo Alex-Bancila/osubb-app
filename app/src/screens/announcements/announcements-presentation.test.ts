@@ -89,6 +89,8 @@ function rawRow(
     code: null,
     published_at: '2026-09-18T15:00:00.000Z',
     deadline: null,
+    event_id: null,
+    from_event: false,
     min_level: 0,
     created_by: 'd0000000-0000-0000-0000-000000000007',
     announcement_reads: [],
