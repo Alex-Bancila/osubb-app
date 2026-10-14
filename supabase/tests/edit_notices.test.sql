@@ -10,7 +10,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(33);
+select plan(34);
 
 create function pg_temp.u53(n integer) returns uuid language sql immutable as $$
   select ('53000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -291,6 +291,17 @@ select is((select title from notifications
             where member_id = pg_temp.u53(3) and dedupe_key like 'event:' || pg_temp.e53('Going renamed #53') || ':%'),
   'Eveniment nou: Going renamed #53',
   'whoever neither holds a notice nor answered it hears of a new Event');
+
+-- Whoever was told of the Event through its Announcement knows it too.
+select pg_temp.test_login_leadership(pg_temp.u53(1));
+select public.create_event('Announced #53', 'sedinta', pg_temp.g53('Root #53'), '2026-11-25 18:00+02',
+  null, null, null, null, 0, null, true);
+select pg_temp.edit_event(pg_temp.e53('Announced #53'), p_title => 'Announced renamed #53');
+reset role;
+select is((select title from notifications
+            where member_id = pg_temp.u53(2) and dedupe_key like 'event:' || pg_temp.e53('Announced renamed #53') || ':%'),
+  'Eveniment actualizat: Announced renamed #53',
+  'whoever was told of an Event through its Announcement hears that it changed');
 
 -- An organisation-wide Event, edited by its creator below BC: back to BC.
 select pg_temp.test_clear_jwt();
