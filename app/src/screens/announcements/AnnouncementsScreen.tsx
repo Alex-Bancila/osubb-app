@@ -303,14 +303,15 @@ function AnnouncementsContent({
   // D14: `?anunt=<id>` opens that Announcement once the feed is in — from
   // the loaded rows, or read by its id — and marks it read like a click on
   // "Citește". An id the member cannot read (deleted, or outside their
-  // Audience) opens the sheet's unavailable state.
+  // Audience) opens the sheet's unavailable state. A read that failed is no
+  // answer: the sheet says so with a retry, and the link stays unhandled so
+  // the retry's answer opens it.
   const linked =
     linkedId === null ? null : (loaded.get(linkedId) ?? linkedFound);
   const linkAnswered =
-    linkedId === null ||
-    linked !== null ||
-    linkedRead.data === null ||
-    linkedRead.isError;
+    linkedId === null || linked !== null || linkedRead.data === null;
+  const linkFailed =
+    feedReady && linkedId !== null && linked === null && linkedRead.isError;
 
   useEffect(() => {
     if (paramValue === null) {
@@ -484,6 +485,14 @@ function AnnouncementsContent({
       <AnnouncementDetailsSheet
         announcement={selectedAnnouncement}
         unavailable={linkUnavailable}
+        failed={
+          linkFailed
+            ? {
+                onRetry: () => void linkedRead.refetch(),
+                retrying: linkedRead.isFetching,
+              }
+            : null
+        }
         onClose={closeDetails}
         onDeleted={() => {
           closeDetails();

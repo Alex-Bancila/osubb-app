@@ -852,6 +852,48 @@ describe('AnnouncementsScreen', () => {
       ).toBeInTheDocument();
       expect(mutate).not.toHaveBeenCalled();
     });
+
+    // Fails if a failed read says "indisponibil", or is taken as the link's
+    // answer: the Member would be told it is gone, and a retry that
+    // succeeds would open nothing.
+    it('says a failed read failed, with a retry that opens the Announcement once it answers', async () => {
+      const user = userEvent.setup();
+      const refetch = vi.fn();
+      hooks.useAnnouncement.mockImplementation((id: number | null) =>
+        id === 500
+          ? {
+              data: undefined,
+              isPending: false,
+              isError: true,
+              isFetching: false,
+              refetch,
+            }
+          : { data: undefined, isPending: id !== null, isError: false },
+      );
+      const view = renderAt('/anunturi?anunt=500');
+
+      const dialog = screen.getByRole('dialog');
+      expect(
+        within(dialog).getByText('Nu am putut încărca anunțul.'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('dialog', { name: 'Anunț indisponibil' }),
+      ).toBeNull();
+      expect(mutate).not.toHaveBeenCalled();
+
+      await user.click(
+        within(dialog).getByRole('button', { name: 'Reîncearcă' }),
+      );
+      expect(refetch).toHaveBeenCalledTimes(1);
+
+      readableById({ 500: createRow({ id: 500, title: 'Anunț mai vechi' }) });
+      view.rerender(<AnnouncementsScreen />);
+
+      expect(
+        await screen.findByRole('dialog', { name: 'Anunț mai vechi' }),
+      ).toBeInTheDocument();
+      expect(mutate).toHaveBeenCalledWith(500, expect.any(Object));
+    });
   });
 
   describe('Filtrează, by Group', () => {
