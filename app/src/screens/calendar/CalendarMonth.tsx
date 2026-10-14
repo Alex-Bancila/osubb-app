@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router';
 
 import { EmptyState, Panel } from '../../components/layout';
 import { ApprovalRequestsButton } from '../../components/approvals/ApprovalRequestsButton';
-import { ErrorState, Loading } from '../../components/states';
+import { ErrorState } from '../../components/states';
 import { Button } from '../../components/ui/button';
 import { cn } from '../../lib/utils';
 import type { WorkFilterState } from '../../lib/use-work-filter';
@@ -38,6 +38,7 @@ import {
   shiftMonth,
   TASK_SOURCE_LABELS,
   WEEKDAYS,
+  type CalendarDay,
   type CalendarTask,
   type EventRelevance,
   type MonthKey,
@@ -248,7 +249,7 @@ export function CalendarMonth({
           Corectează perioada din filtre ca să vezi luna.
         </p>
       ) : events.isPending ? (
-        <Loading label="Se încarcă luna…" />
+        <MonthSkeleton weeks={weeks} />
       ) : events.isError ? (
         <ErrorState
           error={events.error}
@@ -455,6 +456,56 @@ export function CalendarMonth({
 }
 
 /** A Task deadline under the grid: compact, and a link into the Tracker. */
+/**
+ * The month while its Events are read: the grid is known before any of them
+ * arrives, so the page keeps its shape and fills in, rather than a stack of
+ * bars standing where the month will be. Nothing in it can be pressed yet.
+ */
+function MonthSkeleton({ weeks }: { weeks: CalendarDay[][] }) {
+  const label = 'Se încarcă luna…';
+  return (
+    <div role="status" aria-label={label} data-slot="loading-state">
+      <span className="sr-only">{label}</span>
+      <table className="calendar-grid" aria-hidden="true">
+        <thead>
+          <tr>
+            {WEEKDAYS.map((weekday) => (
+              <th key={weekday.long} scope="col">
+                {weekday.short}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {weeks.map((week, row) => (
+            <tr key={week[0]?.dayKey}>
+              {week.map((day, column) => (
+                <td
+                  key={day.dayKey}
+                  className={cn(!day.inMonth && 'is-outside')}
+                >
+                  <span className="calendar-cell">
+                    <span className="calendar-cell-number">
+                      {day.dayNumber}
+                    </span>
+                    {/* A few placeholder chips, spread over the grid. */}
+                    {day.inMonth && (row * 7 + column) % 3 === 0 && (
+                      <span
+                        data-slot="skeleton"
+                        className="block h-4 w-4/5 animate-pulse rounded bg-muted motion-reduce:animate-none"
+                      />
+                    )}
+                  </span>
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function TaskDayRow({ task }: { task: CalendarTask }) {
   return (
     <Link
