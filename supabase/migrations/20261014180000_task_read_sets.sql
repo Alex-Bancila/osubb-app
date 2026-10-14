@@ -128,13 +128,11 @@ revoke execute on function private.task_read_groups(text) from public, anon, aut
 grant execute on function private.own_task_ids() to authenticated;
 grant execute on function private.task_read_groups(text) to authenticated;
 
--- 3. The policies. tasks_read reads the sets; the four child tables ask
--- tasks_read about their Task instead of private.can_read_task, and keep the
--- rest of their rule as it was (is_global_task_reader read once per
--- statement too).
-drop policy tasks_read on public.tasks;
-create policy tasks_read on public.tasks
-  for select to authenticated
+-- 3. The policies, altered in place so their comments (ADR-0007, #319) stay.
+-- tasks_read reads the sets; the four child tables ask tasks_read about
+-- their Task instead of private.can_read_task, and keep the rest of their
+-- rule as it was (is_global_task_reader read once per statement too).
+alter policy tasks_read on public.tasks
   using (
     (select public.auth_is_member())
     and (   id = any ((select private.own_task_ids())::bigint[])
@@ -151,9 +149,7 @@ create policy tasks_read on public.tasks
 comment on policy tasks_read on public.tasks is
   'The Task read rule (private.can_read_task) decided once per statement: R2/R7 through private.own_task_ids(), R1/R3/R4 through task_read_groups(''whole''), R6-own and R6-org through ''open'' and ''org'' on an open public Opportunity. supabase/tests/task_read_sets.test.sql holds it to private.can_read_task for every caller.';
 
-drop policy task_assignments_read on public.task_assignments;
-create policy task_assignments_read on public.task_assignments
-  for select to authenticated
+alter policy task_assignments_read on public.task_assignments
   using (
     (select public.auth_is_member())
     and exists (select 1 from public.tasks as task where task.id = task_assignments.task_id)
@@ -161,9 +157,7 @@ create policy task_assignments_read on public.task_assignments
          or (select private.is_global_task_reader())
          or private.can_manage_task(task_id)));
 
-drop policy task_candidates_read on public.task_candidates;
-create policy task_candidates_read on public.task_candidates
-  for select to authenticated
+alter policy task_candidates_read on public.task_candidates
   using (
     (select public.auth_is_member())
     and exists (select 1 from public.tasks as task where task.id = task_candidates.task_id)
@@ -171,9 +165,7 @@ create policy task_candidates_read on public.task_candidates
          or (select private.is_global_task_reader())
          or private.can_manage_task(task_id)));
 
-drop policy task_evaluations_read on public.task_evaluations;
-create policy task_evaluations_read on public.task_evaluations
-  for select to authenticated
+alter policy task_evaluations_read on public.task_evaluations
   using (
     (select public.auth_is_member())
     and exists (select 1 from public.tasks as task where task.id = task_evaluations.task_id)
@@ -182,9 +174,7 @@ create policy task_evaluations_read on public.task_evaluations
          or (select private.is_global_task_reader())
          or private.can_manage_task(task_id)));
 
-drop policy task_activity_read on public.task_activity;
-create policy task_activity_read on public.task_activity
-  for select to authenticated
+alter policy task_activity_read on public.task_activity
   using (
     (select public.auth_is_member())
     and exists (select 1 from public.tasks as task where task.id = task_activity.task_id)

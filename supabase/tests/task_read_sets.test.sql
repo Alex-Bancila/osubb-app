@@ -25,6 +25,10 @@
 --   whole without R3 / R4 / R1 -> the R3, R4 (roster, automatic) and R1
 --     cases, parity; open without the Minimum Level -> the R6-own cases;
 --     org through a Private Group -> the R6-org Private Group cases;
+--   whole without the Minimum Level gate -> "R4 needs the Minimum Level";
+--     open emptied -> "R6-own: a member reads their Group's local
+--     Opportunity"; org gated by the Minimum Level -> "R6-org has no Minimum
+--     Level";
 --   tasks_read without the Umbrella (R7) -> "R2/R7 ..."; without the queue
 --     or the Audience test -> "R6-org: an open org Opportunity ...";
 --   each child policy without its Task -> that table's parity (through the
@@ -39,7 +43,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(32);
+select plan(35);
 
 \ir _group_task_fixtures.psql
 reset role;
@@ -133,11 +137,17 @@ select pg_temp.tr_uid(n), 'Member #TR ' || n, 'member.' || n || '.tr@test.local'
        (case when n = 7 then 'inactiv' else 'activ' end)::public.member_status
   from generate_series(1, 7) as n;
 
+-- 8 a Volunteer of the open Group.
+insert into auth.users(id, email) values (pg_temp.tr_uid(8), 'member.8.tr@test.local');
+insert into public.profiles(id, full_name, email, role, status)
+values (pg_temp.tr_uid(8), 'Member #TR 8', 'member.8.tr@test.local', 'voluntar', 'activ');
+
 insert into public.groups(name, category, application_level) values ('Open #TR', 'team', 0);
 insert into public.groups(name, category, application_level, is_private) values ('Private #TR', 'team', 0, true);
 insert into public.groups(name, category) values ('MinLevel #TR', 'team');
 insert into public.groups(name, category, application_level, shared_work_visibility) values ('Shared #TR', 'team', 0, true);
 insert into public.groups(name, category, automatic_membership, shared_work_visibility) values ('Auto #TR', 'team', true, true);
+insert into public.groups(name, category, shared_work_visibility) values ('SharedHigh #TR', 'team', true);
 
 create function pg_temp.tr_gid(p_name text) returns bigint language sql stable as $$
   select id from public.groups where name = p_name
@@ -147,9 +157,11 @@ insert into public.group_members(group_id, member_id, group_role) values
   (pg_temp.tr_gid('Private #TR'), pg_temp.tr_uid(3), 'member'),
   (pg_temp.tr_gid('MinLevel #TR'), pg_temp.tr_uid(4), 'manager'),
   (pg_temp.tr_gid('MinLevel #TR'), pg_temp.tr_uid(5), 'member'),
-  (pg_temp.tr_gid('Shared #TR'), pg_temp.tr_uid(6), 'member');
+  (pg_temp.tr_gid('Shared #TR'), pg_temp.tr_uid(6), 'member'),
+  (pg_temp.tr_gid('SharedHigh #TR'), pg_temp.tr_uid(6), 'member'),
+  (pg_temp.tr_gid('Open #TR'), pg_temp.tr_uid(8), 'member');
 -- The roster refuses a member below the level, so it rises afterwards.
-update public.groups set min_level = 5 where name = 'MinLevel #TR';
+update public.groups set min_level = 5 where name in ('MinLevel #TR', 'SharedHigh #TR');
 
 create temp table tr_tasks(name text primary key, id bigint);
 grant select on tr_tasks to authenticated;
@@ -187,6 +199,8 @@ select pg_temp.tr_task('pv_sub', 'Private #TR', 'direct', 'local', p_parent => '
 select pg_temp.tr_task('pv_own', 'Private #TR', 'direct', 'local');
 select pg_temp.tr_task('ml_direct', 'MinLevel #TR', 'direct', 'local');
 select pg_temp.tr_task('ml_local', 'MinLevel #TR', 'public', 'local');
+select pg_temp.tr_task('ml_org', 'MinLevel #TR', 'public', 'org');
+select pg_temp.tr_task('shh_direct', 'SharedHigh #TR', 'direct', 'local');
 select pg_temp.tr_task('sh_direct', 'Shared #TR', 'direct', 'local');
 select pg_temp.tr_task('auto_direct', 'Auto #TR', 'direct', 'local');
 -- A finished org Opportunity, and one taken by a Member (its Evaluation,
@@ -310,6 +324,12 @@ select ok(pg_temp.tr_reads(6, 'sh_direct') and not pg_temp.tr_reads(1, 'sh_direc
           'R4: Shared Work Visibility through a roster row, not without one');
 select ok(pg_temp.tr_reads(1, 'auto_direct'),
           'R4: Shared Work Visibility through Automatic Membership');
+select ok(not pg_temp.tr_reads(6, 'shh_direct'),
+          'R4 needs the Minimum Level: a member of a sharing Group above them reads none of its Tasks');
+select ok(pg_temp.tr_reads(1, 'ml_org') and pg_temp.tr_reads(5, 'ml_org'),
+          'R6-org has no Minimum Level: an org Opportunity of a Group above the caller is read');
+select ok(pg_temp.tr_reads(8, 'open_local') and not pg_temp.tr_reads(8, 'open_direct'),
+          'R6-own: a member reads their Group''s local Opportunity, not its direct Task');
 select ok(pg_temp.tr_id('open_direct') = any(pg_temp.tr_ids_as(pg_temp.g521_uid(9), 'select id from public.tasks')),
           'R1: a BCE reads every Task of a Group they can see');
 select ok(not pg_temp.tr_id('pv_sub') = any(pg_temp.tr_ids_as(pg_temp.g521_uid(9), 'select id from public.tasks')),
