@@ -4,18 +4,23 @@ import { createPortal } from 'react-dom';
 import { Mail } from 'lucide-react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../../lib/auth';
+import { useInView } from '../../lib/use-in-view';
 import { useSwipeTabs } from '../../lib/swipe-tabs';
 import { ANNOUNCEMENTS_PATH } from '../../components/shell/navItems';
 import {
-  useAnnouncementsFeed,
+  ANNOUNCEMENT_PAGE,
+  useAnnouncement,
+  useAnnouncementFeed,
+  useAnnouncementFeedSummary,
   useMarkAnnouncementRead,
+  type AnnouncementFeedSummary,
+  type FeedFilters,
+  type RawAnnouncementRow,
 } from '../../queries/announcements';
-import { useMemberIdentities } from '../../queries/member-identities';
-import { useGroups } from '../../queries/reference';
+import type { MemberIdentity } from '../../components/member/member-identity';
+import { useMemberIdentitiesByPage } from '../../queries/member-identities';
+import { useGroups, type Group } from '../../queries/reference';
 import {
-  countUnreadAnnouncements,
-  getUnreadCriticalAnnouncement,
-  sortAnnouncements,
   toAnnouncementPresentation,
   type AnnouncementPresentation,
 } from './announcements-presentation';
@@ -34,6 +39,7 @@ import {
 import { PreferredGroupsScope } from '../../components/preferred-groups/PreferredGroupsScope';
 import { usePreferredGroups } from '../../components/preferred-groups/preferred-groups';
 import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import { chosenGroupId, type WorkFilterLevels } from '../../lib/work-filter';
@@ -52,6 +58,42 @@ function parseAnnouncementId(value: string | null): number | null {
   if (!value || !/^\d+$/.test(value)) return null;
   const id = Number(value);
   return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+/** The authors of some rows, as their Member Card buttons need them. */
+function authorsOf(
+  rows: readonly (RawAnnouncementRow | null | undefined)[],
+): string[] {
+  return rows.flatMap((row) => (row?.created_by ? [row.created_by] : []));
+}
+
+/**
+ * Why the feed is empty: from the summary's counts once they have answered,
+ * else (they failed) from the filters in force.
+ */
+function emptyFeedText(
+  counts: AnnouncementFeedSummary | undefined,
+  groupChosen: boolean,
+  preferredOnly: boolean,
+): string {
+  const nothing = 'Nu sunt anunțuri disponibile în acest moment.';
+  const noneInGroup = 'Niciun anunț în grupul ales.';
+  const nonePreferred = 'Niciun anunț în grupurile tale preferate.';
+  if (counts) {
+    if (counts.everything === 0) return nothing;
+    return groupChosen && counts.preferred > 0 ? noneInGroup : nonePreferred;
+  }
+  if (groupChosen) return noneInGroup;
+  return preferredOnly ? nonePreferred : nothing;
+}
+
+/** A row read by its id, presented as the feed's rows are. */
+function presented(
+  row: RawAnnouncementRow | null | undefined,
+  groups: ReadonlyMap<number, Group> | undefined,
+  authors: ReadonlyMap<string, MemberIdentity>,
+): AnnouncementPresentation | null {
+  return row ? toAnnouncementPresentation(row, groups, authors) : null;
 }
 
 /**
@@ -106,6 +148,14 @@ export default function AnnouncementsScreen() {
   );
 }
 
+/**
+ * The feed is read 20 at a time (R56), in the server's R15 order: pinned,
+ * then unread, then read. The server also narrows it — Grupuri preferate,
+ * the Group filter — and counts what the page shows around it: the header's
+ * unread count, the critical banner, the empty states. An Announcement a
+ * link, the banner or an open sheet names that is not among the loaded
+ * pages is read by its id.
+ */
 function AnnouncementsContent({
   headerSlot,
 }: {
@@ -113,14 +163,34 @@ function AnnouncementsContent({
 }) {
   const { session } = useAuth();
   const memberId = session?.user.id;
-  const feedQuery = useAnnouncementsFeed(memberId);
   const groupsQuery = useGroups();
   const markRead = useMarkAnnouncementRead(memberId);
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<
-    number | null
-  >(null);
+  // Filtrează, by Group: the chosen Group and every Group below it.
+  const filter = useWorkFilter(FILTER_LEVELS);
+  const [filterSlot, setFilterSlot] = useState<HTMLElement | null>(null);
+  const filterGroups = useMemo(
+    () => [...(groupsQuery.data?.values() ?? [])],
+    [groupsQuery.data],
+  );
+  const filterGroupId = chosenGroupId(filter.value);
+  const preferred = usePreferredGroups();
+  const feedFilters = useMemo<FeedFilters>(
+    () =>
+      filterGroupId === undefined
+        ? { p_preferred: preferred.active }
+        : { p_group_id: filterGroupId, p_preferred: preferred.active },
+    [filterGroupId, preferred.active],
+  );
+  const feed = useAnnouncementFeed(feedFilters, true);
+  const summary = useAnnouncementFeedSummary(feedFilters, true);
+
+  // The Announcement whose sheet is open, as it was opened: it stays drawn
+  // if a change drops the page it came from.
+  const [selected, setSelected] = useState<AnnouncementPresentation | null>(
+    null,
+  );
   // #930: the details sheet closes on a delete, so the receipt lives here.
   const [deleted, setDeleted] = useState(false);
   const markedIdsRef = useRef<Set<number>>(new Set());
@@ -128,6 +198,80 @@ function AnnouncementsContent({
   // The `?anunt=` value already opened on this visit: a rerender or a feed
   // refetch never reopens a sheet the member closed.
   const handledParamRef = useRef<string | null>(null);
+  const [linkUnavailable, setLinkUnavailable] = useState(false);
+
+  const isPending = feed.isPending || groupsQuery.isPending;
+  const feedReady = !isPending && !feed.isError;
+
+  // Read by its id only once the first page has landed without it.
+  const loadedIds = useMemo(
+    () => new Set(feed.rows.map((row) => row.id)),
+    [feed.rows],
+  );
+  const notLoaded = (id: number | null) =>
+    feedReady && id !== null && !loadedIds.has(id) ? id : null;
+  const paramValue = searchParams.get(ANNOUNCEMENT_PARAM);
+  const linkedId = parseAnnouncementId(paramValue);
+  const criticalId = summary.data?.criticalId ?? null;
+  const linkedRead = useAnnouncement(notLoaded(linkedId));
+  const criticalRead = useAnnouncement(notLoaded(criticalId));
+  const selectedRead = useAnnouncement(notLoaded(selected?.id ?? null));
+
+  // Authors as Member Card buttons, read page by page (and those of the
+  // rows read by their id), so a page that lands reads only its own.
+  const authorPages = useMemo(() => {
+    const pages: string[][] = [];
+    for (let start = 0; start < feed.rows.length; start += ANNOUNCEMENT_PAGE)
+      pages.push(authorsOf(feed.rows.slice(start, start + ANNOUNCEMENT_PAGE)));
+    const elsewhere = authorsOf([
+      linkedRead.data,
+      criticalRead.data,
+      selectedRead.data,
+    ]);
+    if (elsewhere.length > 0) pages.push(elsewhere);
+    return pages;
+  }, [feed.rows, linkedRead.data, criticalRead.data, selectedRead.data]);
+  const authors = useMemberIdentitiesByPage(authorPages);
+
+  const announcements = useMemo(
+    () =>
+      feed.rows.map((row) =>
+        toAnnouncementPresentation(row, groupsQuery.data, authors),
+      ),
+    [feed.rows, groupsQuery.data, authors],
+  );
+  const loaded = useMemo(
+    () => new Map(announcements.map((item) => [item.id, item])),
+    [announcements],
+  );
+  const linkedFound = useMemo(
+    () => presented(linkedRead.data, groupsQuery.data, authors),
+    [linkedRead.data, groupsQuery.data, authors],
+  );
+  const criticalFound = useMemo(
+    () => presented(criticalRead.data, groupsQuery.data, authors),
+    [criticalRead.data, groupsQuery.data, authors],
+  );
+  const selectedFound = useMemo(
+    () => presented(selectedRead.data, groupsQuery.data, authors),
+    [selectedRead.data, groupsQuery.data, authors],
+  );
+
+  // The header counts what the member has to read; the Group filter only
+  // narrows the list below it.
+  const unreadCount = summary.data?.unread ?? 0;
+
+  // B33: the banner points at a critical Announcement further down; when that
+  // Announcement is already the first card, the card is enough.
+  const unreadCritical =
+    criticalId === null ? null : (loaded.get(criticalId) ?? criticalFound);
+  const showCriticalBanner =
+    unreadCritical !== null && announcements[0]?.id !== unreadCritical.id;
+
+  const selectedAnnouncement =
+    selected === null
+      ? null
+      : (loaded.get(selected.id) ?? selectedFound ?? selected);
 
   function markAsRead(announcement: AnnouncementPresentation) {
     if (
@@ -152,95 +296,44 @@ function AnnouncementsContent({
 
   function handleOpenAnnouncement(announcement: AnnouncementPresentation) {
     setDeleted(false);
-    setSelectedAnnouncementId(announcement.id);
+    setSelected(announcement);
     markAsRead(announcement);
   }
 
-  const rawAnnouncements = feedQuery.data ?? [];
-  // Authors as Member Card buttons: one directory read for the whole feed.
-  const authors = useMemberIdentities(
-    rawAnnouncements.flatMap((row) => (row.created_by ? [row.created_by] : [])),
-  );
-  const allAnnouncements: AnnouncementPresentation[] = sortAnnouncements(
-    rawAnnouncements.map((row) =>
-      toAnnouncementPresentation(row, groupsQuery.data, authors.data),
-    ),
-  );
-  const preferred = usePreferredGroups();
-  const inPreferred = allAnnouncements.filter(
-    (announcement) =>
-      preferred.keepGroup(announcement.groupId) ||
-      announcement.priority === 'critical' ||
-      announcement.audience === 'org' ||
-      announcement.authorMember?.memberId === memberId,
-  );
-  // The header counts what the member has to read; the Group filter only
-  // narrows the list below it.
-  const unreadCount = countUnreadAnnouncements(inPreferred);
-
-  // Filtrează, by Group: the chosen Group and every Group below it.
-  const filter = useWorkFilter(FILTER_LEVELS);
-  const [filterSlot, setFilterSlot] = useState<HTMLElement | null>(null);
-  const filterGroups = useMemo(
-    () => [...(groupsQuery.data?.values() ?? [])],
-    [groupsQuery.data],
-  );
-  const filterGroupId = chosenGroupId(filter.value);
-  const announcements =
-    filterGroupId === undefined
-      ? inPreferred
-      : inPreferred.filter((announcement) =>
-          (
-            groupsQuery.data?.get(announcement.groupId)?.path ?? [
-              announcement.groupId,
-            ]
-          ).includes(filterGroupId),
-        );
-
-  // B33: the banner points at a critical Announcement further down; when that
-  // Announcement is already the first card, the card is enough.
-  const unreadCritical = getUnreadCriticalAnnouncement(announcements);
-  const showCriticalBanner =
-    unreadCritical !== null && announcements[0]?.id !== unreadCritical.id;
-
-  const selectedAnnouncement =
-    allAnnouncements.find((a) => a.id === selectedAnnouncementId) ?? null;
-
-  const isPending = feedQuery.isPending || groupsQuery.isPending;
-  const feedReady = !isPending && !feedQuery.isError;
-
-  // D14: `?anunt=<id>` opens that Announcement once the feed is in, and marks
-  // it read like a click on "Citește". An id the member cannot read (deleted,
-  // or outside their Audience) opens the sheet's unavailable state.
-  const paramValue = searchParams.get(ANNOUNCEMENT_PARAM);
-  const linkedId = parseAnnouncementId(paramValue);
-  const linkedAnnouncement =
-    linkedId === null
-      ? null
-      : (allAnnouncements.find((a) => a.id === linkedId) ?? null);
-  const [linkUnavailable, setLinkUnavailable] = useState(false);
+  // D14: `?anunt=<id>` opens that Announcement once the feed is in — from
+  // the loaded rows, or read by its id — and marks it read like a click on
+  // "Citește". An id the member cannot read (deleted, or outside their
+  // Audience) opens the sheet's unavailable state.
+  const linked =
+    linkedId === null ? null : (loaded.get(linkedId) ?? linkedFound);
+  const linkAnswered =
+    linkedId === null ||
+    linked !== null ||
+    linkedRead.data === null ||
+    linkedRead.isError;
 
   useEffect(() => {
     if (paramValue === null) {
       handledParamRef.current = null;
       return;
     }
-    if (!feedReady || handledParamRef.current === paramValue) return;
+    if (!feedReady || !linkAnswered || handledParamRef.current === paramValue)
+      return;
     handledParamRef.current = paramValue;
-    if (linkedAnnouncement) {
+    if (linked) {
       setLinkUnavailable(false);
-      handleOpenAnnouncement(linkedAnnouncement);
+      handleOpenAnnouncement(linked);
     } else {
-      setSelectedAnnouncementId(null);
+      setSelected(null);
       setLinkUnavailable(true);
     }
-    // Runs when the param or the feed's readiness changes; the handled ref
-    // keeps it to once per link.
+    // Runs when the param, the feed's readiness or the link's answer
+    // changes; the handled ref keeps it to once per link.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paramValue, feedReady]);
+  }, [paramValue, feedReady, linkAnswered]);
 
   function closeDetails() {
-    setSelectedAnnouncementId(null);
+    setSelected(null);
     setLinkUnavailable(false);
     if (searchParams.has(ANNOUNCEMENT_PARAM)) {
       setSearchParams(
@@ -253,6 +346,17 @@ function AnnouncementsContent({
       );
     }
   }
+
+  // Armed only while nothing is read: not during the next page, nor while
+  // the first page is read again after a change. Re-armed when that lands,
+  // it asks at once if the end is still in view.
+  const sentinel = useInView(
+    feed.loadMore,
+    feed.hasMore && !feed.isLoadingMore && !feed.isFetching && !feed.moreFailed,
+  );
+
+  // An empty feed says why once the summary has answered.
+  const emptyWaits = announcements.length === 0 && summary.isPending;
 
   return (
     <>
@@ -309,24 +413,22 @@ function AnnouncementsContent({
         <Toast onClose={() => setDeleted(false)}>Anunțul a fost șters.</Toast>
       )}
 
-      {isPending ? (
+      {isPending || (feedReady && emptyWaits) ? (
         <Loading label="Se încarcă anunțurile…" />
-      ) : feedQuery.isError ? (
+      ) : feed.isError ? (
         <ErrorState
-          error={feedQuery.error}
+          error={feed.error}
           text="Nu am putut încărca anunțurile."
-          onRetry={() => void feedQuery.refetch()}
+          onRetry={feed.refetch}
         />
       ) : announcements.length === 0 ? (
         <Empty
           bare
-          text={
-            filterGroupId !== undefined && inPreferred.length > 0
-              ? 'Niciun anunț în grupul ales.'
-              : allAnnouncements.length > 0
-                ? 'Niciun anunț în grupurile tale preferate.'
-                : 'Nu sunt anunțuri disponibile în acest moment.'
-          }
+          text={emptyFeedText(
+            summary.data,
+            filterGroupId !== undefined,
+            preferred.active,
+          )}
         />
       ) : (
         <div className="space-y-6">
@@ -352,6 +454,26 @@ function AnnouncementsContent({
               </li>
             ))}
           </PageGrid>
+          {feed.moreFailed ? (
+            <ErrorState
+              text="Nu am putut încărca mai multe anunțuri."
+              onRetry={feed.loadMore}
+            />
+          ) : (
+            feed.hasMore && (
+              // The end of the list: coming into view, it asks for the next
+              // page; the button does the same for a keyboard.
+              <div ref={sentinel} className="flex justify-center pt-2">
+                <Button
+                  variant="outline"
+                  disabled={feed.isLoadingMore}
+                  onClick={feed.loadMore}
+                >
+                  {feed.isLoadingMore ? 'Se încarcă…' : 'Încarcă mai multe'}
+                </Button>
+              </div>
+            )
+          )}
         </div>
       )}
 

@@ -249,26 +249,6 @@ export function toAnnouncementPresentation(
   };
 }
 
-/**
- * Ruling R15: three bands, newest first inside each — pinned (read or not),
- * then unread, then read. Read state is per Member, so the order is decided
- * here rather than by the server's `pinned, published_at` sort.
- */
-function band(item: AnnouncementPresentation): number {
-  if (item.pinned) return 0;
-  return item.isRead ? 2 : 1;
-}
-
-export function sortAnnouncements(
-  items: AnnouncementPresentation[],
-): AnnouncementPresentation[] {
-  return [...items].sort(
-    (left, right) =>
-      band(left) - band(right) ||
-      Date.parse(right.publishedAt) - Date.parse(left.publishedAt),
-  );
-}
-
 /** `3 anunțuri necitite` — the Anunțuri badge's accessible name, in words. */
 export function unreadAnnouncementsLabel(count: number): string {
   return count === 1 ? '1 anunț necitit' : `${count} anunțuri necitite`;
@@ -386,34 +366,4 @@ export function readersSummary(readers: readonly AnnouncementReader[]): {
     unread,
     label: `Citit de ${read.length} din ${readers.length}`,
   };
-}
-
-/**
- * The unread Announcements of a list: as the server badge
- * (`my_unread_announcements_count`), never the author's own pending or
- * rejected requests (spec 2026-10-11).
- */
-export function countUnreadAnnouncements(
-  items: AnnouncementPresentation[],
-): number {
-  return items.filter(
-    (item) => !item.isRead && item.approvalStatus === 'approved',
-  ).length;
-}
-
-/**
- * The critical Announcement the banner shows: unread and published — never
- * a request BC or its author can read before it is approved (spec 2026-10-11).
- */
-export function getUnreadCriticalAnnouncement(
-  items: AnnouncementPresentation[],
-): AnnouncementPresentation | null {
-  return (
-    items.find(
-      (item) =>
-        item.priority === 'critical' &&
-        !item.isRead &&
-        item.approvalStatus === 'approved',
-    ) ?? null
-  );
 }

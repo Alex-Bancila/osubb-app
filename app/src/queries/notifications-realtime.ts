@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { signalMembershipChange } from '../lib/membership-signal';
 import { keys } from './keys';
+import { keepFirstPages } from './live-changes';
 
 /** Realtime only signals a refetch. Row contents always come through RLS. */
 export function useNotificationRealtime(memberId?: string) {
@@ -37,12 +38,19 @@ export function useNotificationRealtime(memberId?: string) {
           });
           // #68 fans every Announcement out as a notification. The signal
           // carries no row (never read payloads), so any change refreshes the
-          // Anunțuri badge, and the feed if it is on screen, to match it.
+          // Anunțuri badge, and the feed and what the page shows around it if
+          // they are on screen, to match it. The feed is read by the page
+          // (R56): it keeps its first page and reads that again, as after a
+          // live change.
           void queryClient.invalidateQueries({
             queryKey: keys.announcements.unread(memberId),
           });
+          keepFirstPages(queryClient, keys.announcements.feedAll);
           void queryClient.invalidateQueries({
-            queryKey: keys.announcements.feed(memberId),
+            queryKey: keys.announcements.feedAll,
+          });
+          void queryClient.invalidateQueries({
+            queryKey: keys.announcements.feedSummaryAll,
           });
         });
       })

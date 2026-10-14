@@ -3,6 +3,7 @@ import {
   useQueryClient,
   type InfiniteData,
   type QueryClient,
+  type QueryKey,
 } from '@tanstack/react-query';
 import { keys } from './keys';
 
@@ -135,15 +136,17 @@ const FAMILIES_BY_TABLE: ReadonlyMap<string, readonly Prefix[]> = new Map<
 ]);
 
 /**
- * The finished part of a Task list is read 50 at a time (#1053), and a
- * refetch of an infinite query reads again every page it has loaded. Before
- * `['tasks']` is invalidated, each finished part keeps only its first page,
- * so a change costs one request per list; the next pages are read again as
- * the Member scrolls to them. The first page stays on screen meanwhile.
+ * A list read by the page — the finished part of a Task list, 50 at a time
+ * (#1053), or the Anunțuri feed, 20 at a time (R56) — is an infinite query,
+ * and a refetch of one reads again every page it has loaded. Before its
+ * family is invalidated, each such list under `queryKey` keeps only its
+ * first page, so a change costs one request per list; the next pages are
+ * read again as the Member scrolls to them. The first page stays on screen
+ * meanwhile.
  */
-function keepFirstFinishedPages(queryClient: QueryClient) {
+export function keepFirstPages(queryClient: QueryClient, queryKey: QueryKey) {
   queryClient.setQueriesData<InfiniteData<unknown, unknown>>(
-    { queryKey: keys.tasks.finishedAll },
+    { queryKey },
     (data) =>
       data && data.pages.length > 1
         ? {
@@ -153,6 +156,12 @@ function keepFirstFinishedPages(queryClient: QueryClient) {
         : undefined,
   );
 }
+
+/** Each list read by the page, beside the family whose change re-reads it. */
+const PAGED_LISTS: readonly (readonly [family: Prefix, pages: Prefix])[] = [
+  [keys.tasks.all, keys.tasks.finishedAll],
+  [keys.announcements.all, keys.announcements.feedAll],
+];
 
 /**
  * Every change appears live (#961): the database broadcasts "table X
@@ -180,7 +189,8 @@ export function useLiveChanges(memberId?: string) {
         }
       }
       pending.clear();
-      if (prefixes.has(keys.tasks.all)) keepFirstFinishedPages(queryClient);
+      for (const [family, pages] of PAGED_LISTS)
+        if (prefixes.has(family)) keepFirstPages(queryClient, pages);
       for (const queryKey of prefixes) {
         void queryClient.invalidateQueries({ queryKey });
       }
@@ -199,7 +209,8 @@ export function useLiveChanges(memberId?: string) {
           },
           onResubscribe: () => {
             if (!active) return;
-            keepFirstFinishedPages(queryClient);
+            for (const [, pages] of PAGED_LISTS)
+              keepFirstPages(queryClient, pages);
             void queryClient.invalidateQueries();
           },
         });

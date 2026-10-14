@@ -266,10 +266,28 @@ export const keys = {
   },
   announcements: {
     all: ['announcements'] as const,
-    feed: (memberId?: string) =>
-      ['announcements', 'feed', { memberId }] as const,
+    /* Every page of the Anunțuri feed, whatever its filters: a live change
+       keeps only their first pages (live-changes.ts), and marking one read
+       changes their rows in place rather than reading them again (R56). */
+    feedAll: ['announcements', 'feed'] as const,
+    /* The feed under the Group filter and Grupuri preferate, 20 a page. */
+    feed: (
+      memberId: string | undefined,
+      filters: { p_group_id?: number; p_preferred?: boolean },
+    ) => ['announcements', 'feed', { memberId }, filters] as const,
+    /* What the page shows around its feed: the unread count of the header,
+       the critical banner, the empty states. */
+    feedSummaryAll: ['announcements', 'feed-summary'] as const,
+    feedSummary: (
+      memberId: string | undefined,
+      filters: { p_group_id?: number; p_preferred?: boolean },
+    ) => ['announcements', 'feed-summary', { memberId }, filters] as const,
+    /* One Announcement by its id, through RLS: a `?anunt=` link, the banner
+       or a Cerere de aprobare whose row is not among the loaded pages. */
+    one: (announcementId: number, memberId: string | undefined) =>
+      ['announcements', 'one', { announcementId, memberId }] as const,
     /* The Anunțuri badge. Under `['announcements']`, so marking one read
-       refreshes the feed and the badge from the same invalidation. */
+       refreshes the badge with everything else the read changes. */
     unread: (memberId: string | undefined) =>
       ['announcements', 'unread', { memberId }] as const,
     readers: (announcementId: number, memberId: string | undefined) =>
