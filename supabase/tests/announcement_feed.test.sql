@@ -16,14 +16,15 @@
 -- feed without the read rule, or with Deals; Grupuri preferate ignored, or
 -- forgetting its critical, organization-wide or own exemption; the Group
 -- filter on the exact Group only; read before unread; oldest first; the
--- summary counting read ones, or pointing the banner at a read one -- each
+-- summary counting read ones, pending or rejected ones, or pointing the
+-- banner at a read one or one not yet approved -- each
 -- fails at least one named case or parity above.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(19);
+select plan(21);
 
 \ir _group_task_fixtures.psql
 reset role;
@@ -241,6 +242,36 @@ select is(pg_temp.af_row(pg_temp.g521_uid(8), 'select critical_id from public.an
           'null'::jsonb, 'summary: none once it is read');
 select is((pg_temp.af_row(pg_temp.g521_uid(1), 'select everything - preferred as hidden from public.announcement_feed_summary(p_preferred => true)') ->> 'hidden')::int,
           1, 'summary: the preferred view hides the unticked Group''s one local Announcement');
+
+-- ------------------------------- what BC reads before it is approved
+-- BC reads two organization-wide critical Announcements #6, a Volunteer,
+-- asked for -- newer than any other -- one still pending, one rejected:
+-- neither waits for BC to read it, and the banner points at neither. The
+-- stamp judges an insert by its signed-in writer, and the rejection is
+-- written as the decision command writes it (osubb.deciding_approval).
+select set_config('request.jwt.claims',
+                  jsonb_build_object('sub', pg_temp.g521_uid(6), 'role', 'authenticated')::text, true);
+select pg_temp.af_post('pending critical', 'Department #521', 'org', 0, p_priority => 'critical', p_by => 6);
+select pg_temp.af_post('rejected critical', 'Department #521', 'org', 0, p_priority => 'critical', p_by => 6);
+select pg_temp.test_clear_jwt();
+select set_config('osubb.deciding_approval', 'on', true);
+update public.announcements
+   set approval_status = 'rejected', rejection_reason = 'Nu acum #AF',
+       approval_decided_by = pg_temp.g521_uid(1), approval_decided_at = now()
+ where id = pg_temp.af_id('rejected critical');
+select set_config('osubb.deciding_approval', '', true);
+select ok(array[pg_temp.af_id('pending critical'), pg_temp.af_id('rejected critical')]
+            <@ pg_temp.af_ids(pg_temp.g521_uid(1), 'select id from public.announcement_feed(p_limit => 100)
+                                                     where approval_status in (''pending'', ''rejected'')'),
+          'BC''s feed holds a pending and a rejected Announcement');
+select is(pg_temp.af_row(pg_temp.g521_uid(1), 'select unread, critical_id from public.announcement_feed_summary()'),
+          jsonb_build_object(
+            'unread', cardinality(pg_temp.af_ids(pg_temp.g521_uid(1),
+              'select id from public.announcements as a where kind = ''announcement'' and approval_status = ''approved''
+                 and not exists (select 1 from public.announcement_reads as r
+                                  where r.announcement_id = a.id and r.member_id = auth.uid())')),
+            'critical_id', pg_temp.af_id('project critical')),
+          'summary: a pending or rejected Announcement is never unread, and never the banner');
 
 -- ------------------------------------------------------------- refusals
 select throws_ok($$ select * from public.announcement_feed(p_limit => 0) $$, 'PT400', 'invalid_page',
