@@ -3,6 +3,7 @@ import { skipToken, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
+import { readAllRows } from './read-all';
 import type { WorkFilterParams, WorkItem } from '../lib/work-filter';
 import type {
   FinishedState,
@@ -217,11 +218,19 @@ export async function fetchFinishedPage(
 export async function fetchTaskListSummary(
   list: TaskListName,
 ): Promise<TaskListSummaryRow[]> {
-  const { data, error } = await supabase.rpc('task_list_summary', {
-    p_list: list,
-  });
-  if (error) throw error;
-  return (data ?? []) as unknown as TaskListSummaryRow[];
+  // One row per Group, Campaign, state, lateness and date: it grows with
+  // every Campaign. Ordered by that whole key, as the server groups it.
+  const rows = await readAllRows((from, to) =>
+    supabase
+      .rpc('task_list_summary', { p_list: list })
+      .order('group_id')
+      .order('campaign_id')
+      .order('status')
+      .order('late')
+      .order('dated')
+      .range(from, to),
+  );
+  return rows as unknown as TaskListSummaryRow[];
 }
 
 /**

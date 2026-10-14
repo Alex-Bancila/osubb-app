@@ -1,3 +1,4 @@
+import { answered } from '../test/postgrest-fake';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
 vi.mock('../lib/supabase', () => ({ supabase: mocks }));
@@ -300,7 +301,7 @@ describe('fetchTaskListSummary', () => {
         tasks: 12,
       },
     ];
-    mocks.rpc.mockResolvedValue({ data: summary, error: null });
+    mocks.rpc.mockReturnValue(answered({ data: summary, error: null }));
     await expect(fetchTaskListSummary('all')).resolves.toEqual(summary);
     expect(mocks.rpc).toHaveBeenCalledWith('task_list_summary', {
       p_list: 'all',

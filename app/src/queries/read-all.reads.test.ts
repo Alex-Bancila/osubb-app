@@ -26,6 +26,7 @@ import {
   fetchThresholdChanges,
 } from './role-evaluations';
 import { fetchTaskOpportunities } from './task-opportunities';
+import { fetchTaskListSummary } from './task-lists';
 import { fetchMyTasks } from './tasks';
 import { fetchUninvitedMembers } from './volunteer-import';
 
@@ -232,6 +233,29 @@ describe('Taskuri', () => {
       .requestsTo('tasks')
       .filter((request) => !idsAsked(request).length);
     expect(orders(openTasks)).toEqual([['id']]);
+  });
+
+  it('summarises a list whose Groups, Campaigns and states pass 500', async () => {
+    postgrest.serve(
+      'task_list_summary',
+      many((index) => ({
+        group_id: index,
+        campaign_id: null,
+        status: 'completed',
+        late: false,
+        dated: true,
+        tasks: 1,
+      })),
+    );
+    await expect(fetchTaskListSummary('managed')).resolves.toHaveLength(ROWS);
+    // One row per Group, Campaign, state, lateness and date: the whole key.
+    expect(orders(postgrest.requestsTo('task_list_summary')[0])).toEqual([
+      ['group_id'],
+      ['campaign_id'],
+      ['status'],
+      ['late'],
+      ['dated'],
+    ]);
   });
 
   it('reads every Completed-work Request of a Member', async () => {
