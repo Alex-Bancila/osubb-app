@@ -148,7 +148,6 @@ export function MyTaskList({
                 now={now}
                 onOpenTask={onOpenTask}
                 row={FINISHED_ROW}
-                onGaveUp={onGaveUp}
               />
             </FinishedTasksPanel>
           )}
