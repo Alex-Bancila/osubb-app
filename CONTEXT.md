@@ -264,6 +264,10 @@ A Member’s request to recognize work already completed for one Origin. Approva
 In the app the Requests are **Cereri**: a view of Taskuri, not a page of its own, reached with the Taskuri · Cereri toggle by every Member: a volunteer files there, leadership and the Group Managers decide there. Administrare → Cereri is a different thing: Group Applications.
 _Avoid_: Award request, new-task request, `task_requests`
 
+**Legacy Import**:
+The one-time copy of OSUBB's pre-app Google Sheets Task Tracker into the application (2026-10): each sheet row completed on or after 2026-02-01 became a terminal Task dated on its completion day, with its Task Points. An imported Task is told apart by its Evaluation's `legacy_migration` source; it cannot be reopened, only deleted for good.
+_Avoid_: Migration, backfill, opening balance
+
 **Sanction**:
 A deferred BC/Moderator action that may reduce a Member’s Personal Score and must include a visible explanation.
 

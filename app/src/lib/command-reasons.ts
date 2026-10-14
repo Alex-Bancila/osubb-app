@@ -19,6 +19,11 @@
  * fit every command that raises it.
  */
 const REASON_COPY = new Map<string, string>([
+  /* ---- Legacy Import (spec 2026-10-13): reopen reverses a command Evaluation only ---- */
+  [
+    'evaluation_not_found',
+    'Taskul vine din importul vechiului Task Tracker și nu poate fi redeschis. Îl poți șterge definitiv, cu punctele lui.',
+  ],
   /* ---- Security pass L3: the per-Member daily cap on every notifying write ---- */
   ['rate_limited', 'Ai atins limita zilnică. Încearcă mâine.'],
   /* ---- Task copies (spec 2026-10-11) ---- */
