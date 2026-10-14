@@ -2741,6 +2741,41 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      announcement_feed: {
+        Args: {
+          p_group_id?: number
+          p_limit?: number
+          p_offset?: number
+          p_preferred?: boolean
+        }
+        Returns: {
+          approval_status: string
+          audience: string
+          body: string
+          created_by: string
+          deadline: string
+          group_id: number
+          id: number
+          links: Json
+          min_level: number
+          pinned: boolean
+          priority: Database["public"]["Enums"]["announce_priority"]
+          published_at: string
+          read_at: string
+          rejection_reason: string
+          title: string
+          total: number
+        }[]
+      }
+      announcement_feed_summary: {
+        Args: { p_group_id?: number; p_preferred?: boolean }
+        Returns: {
+          critical_id: number
+          everything: number
+          preferred: number
+          unread: number
+        }[]
+      }
       announcement_readers: {
         Args: { p_announcement_id: number }
         Returns: {
