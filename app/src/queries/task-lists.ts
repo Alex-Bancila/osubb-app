@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { skipToken, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
@@ -290,15 +290,22 @@ export type ListRead<Row> = {
  * the app's shared reads (five minutes fresh), so a list costs one request.
  * It waits for them rather than flash "Origine indisponibilă"; if they fail,
  * the Tasks still show, unlabelled, as when RLS withholds a Group.
+ *
+ * It waits only until they first answer. A failed label read that is retried
+ * has neither data nor an error while it runs; the rows already on screen
+ * stay, unlabelled, until it lands, instead of going back to loading.
  */
 function useLabelled(
   rows: readonly TaskPresentationRow[] | undefined,
 ): TaskPresentationRow[] | undefined {
   const groups = useGroups();
   const campaigns = useCampaigns();
-  const ready =
+  const answered =
     (groups.data !== undefined || groups.isError) &&
     (campaigns.data !== undefined || campaigns.isError);
+  const [answeredOnce, setAnsweredOnce] = useState(false);
+  if (answered && !answeredOnce) setAnsweredOnce(true);
+  const ready = answered || answeredOnce;
   return useMemo(
     () =>
       rows && ready ? withLabels(rows, groups.data, campaigns.data) : undefined,

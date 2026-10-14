@@ -173,6 +173,22 @@ describe('useFinishedTasks', () => {
     expect(result.current.rows).toEqual([]);
   });
 
+  // Fails if `useLabelled` stops showing rows while a failed label read is
+  // retried: the finished part would be "on its way" again.
+  it('keeps its rows, not pending, while a failed label read is retried', async () => {
+    labels.campaigns = { data: undefined, isError: true };
+    rpc.mockResolvedValue({ data: rows(1, 3, 3), error: null });
+    const { result, rerender } = renderHook(
+      () => useFinishedTasks('managed', {}, true),
+      { wrapper: wrapper() },
+    );
+    await waitFor(() => expect(result.current.rows).toHaveLength(3));
+    labels.campaigns = { data: undefined, isError: false };
+    rerender();
+    expect(result.current.isPending).toBe(false);
+    expect(result.current.rows).toHaveLength(3);
+  });
+
   it('asks nothing and is settled and empty without filters', () => {
     const { result } = renderHook(
       () => useFinishedTasks('managed', null, true),
@@ -218,6 +234,28 @@ describe('useManagedTasks', () => {
     await waitFor(() => expect(result.current.data).toHaveLength(2));
     expect(result.current.data?.[0]?.group).toBeNull();
     expect(result.current.isError).toBe(false);
+  });
+
+  // Fails if `useLabelled` waits for the labels on every render instead of
+  // only until they first answer: a retried label read has no data and no
+  // error while it runs, and the rows would go back to loading.
+  it('keeps the rows on screen while a failed label read is retried', async () => {
+    labels.groups = { data: undefined, isError: true };
+    rpc.mockResolvedValue({ data: rows(1, 2, 2), error: null });
+    const { result, rerender } = renderHook(() => useManagedTasks(true), {
+      wrapper: wrapper(),
+    });
+    await waitFor(() => expect(result.current.data).toHaveLength(2));
+    // The retry is on its way: no data, and no error any more.
+    labels.groups = { data: undefined, isError: false };
+    rerender();
+    expect(result.current.isPending).toBe(false);
+    expect(result.current.data).toHaveLength(2);
+    expect(result.current.data?.[0]?.group).toBeNull();
+    // It lands: the same rows, labelled.
+    labels.groups = { data: new Map([[10, edu]]), isError: false };
+    rerender();
+    expect(result.current.data?.[0]?.group?.name).toBe('Educațional');
   });
 
   it('asks nothing while it is not enabled', () => {
