@@ -1,5 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
-import type { ComponentProps } from 'react';
+import { useMemo, type ComponentProps } from 'react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { MemoryRouter } from 'react-router';
@@ -49,7 +49,10 @@ import { PreferredGroupsScope } from '../../components/preferred-groups/Preferre
 import { ManagerTaskList as SearchedManagerTaskList } from './ManagerTaskList';
 import { useTitleSearch } from './use-title-search';
 import { compareManagedTasks } from './manager-task-list';
-import { toTaskPresentation } from './task-presentation';
+import {
+  toTaskPresentation,
+  type TaskPresentationRow,
+} from './task-presentation';
 
 /** The finished part as the list reads it; nothing unless a test says so. */
 function finishedRead(overrides: Partial<FinishedTasks> = {}): FinishedTasks {
@@ -157,18 +160,38 @@ const sixRows = [
   }),
 ];
 
-/** The list with the search the page hands it, and De gestionat's empty text. */
-function ManagerTaskList(
-  props: Pick<
-    ComponentProps<typeof SearchedManagerTaskList>,
-    'rows' | 'now' | 'onOpenTask'
-  >,
-) {
+type ListProps = ComponentProps<typeof SearchedManagerTaskList>;
+const NO_ROWS: readonly TaskPresentationRow[] = [];
+
+/**
+ * The list with the search the page hands it, and De gestionat's empty text.
+ * `rows` are its open Tasks, already read, unless `open` says how that read
+ * stands.
+ */
+function ManagerTaskList({
+  rows: openRows = NO_ROWS,
+  open,
+  ...props
+}: Pick<ListProps, 'now' | 'onOpenTask'> & {
+  rows?: readonly TaskPresentationRow[];
+  open?: ListProps['open'];
+}) {
   const search = useTitleSearch();
+  const read = useMemo(
+    () => ({
+      data: [...openRows],
+      isPending: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    }),
+    [openRows],
+  );
   return (
     <SearchedManagerTaskList
       {...props}
       list="managed"
+      open={open ?? read}
       search={search}
       empty="Nu ai taskuri de gestionat acum."
     />
@@ -642,6 +665,43 @@ describe('ManagerTaskList, the finished Tasks (#1053)', () => {
     summaryRow({ group_id: 30, campaign_id: 8, status: 'cancelled', tasks: 1 }),
   ];
   const lastFinishedCall = () => lists.finished.mock.calls.at(-1) ?? [];
+
+  // Fails if the list asks for its finished part only once its open Tasks
+  // have landed (the page drew it only then before).
+  it('asks for them while the open Tasks are on their way, and draws neither part until those land', () => {
+    lists.finished.mockReturnValue(finishedRead({ rows: done, total: 2 }));
+    lists.summary.mockReturnValue({ data: held });
+    const loading = {
+      data: undefined,
+      isPending: true,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    };
+    const view = render(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList open={loading} now={now} />
+      </MemoryRouter>,
+    );
+    expect(lastFinishedCall()).toEqual(['managed', {}, true]);
+    expect(lists.summary).toHaveBeenLastCalledWith('managed', true);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Se încarcă taskurile…',
+    );
+    expect(
+      screen.queryByRole('region', { name: 'Taskuri încheiate' }),
+    ).toBeNull();
+    // The open Tasks land: both parts, in order.
+    view.rerender(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList rows={rows} now={now} />
+      </MemoryRouter>,
+    );
+    expect(titles()).toHaveLength(rows.length + done.length);
+    expect(
+      screen.getByRole('region', { name: 'Taskuri încheiate' }),
+    ).toBeVisible();
+  });
 
   it('draws them after the open Tasks, under their heading, and counts both', () => {
     lists.finished.mockReturnValue(finishedRead({ rows: done, total: 2 }));

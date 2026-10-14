@@ -2199,6 +2199,68 @@ describe('Taskuri over the paged lists (#1053)', () => {
     expect(listReads.summary).toHaveBeenCalledWith('managed', false);
   });
 
+  // Fails if De gestionat draws its list, and so asks for its finished
+  // part, only once its open Tasks have arrived.
+  it('asks for De gestionat’s finished Tasks beside its open ones, not after them', () => {
+    manages();
+    hooks.useManagedTasks.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isError: false,
+    });
+    renderAt('/tracker?lista=gestionat');
+    expect(selected()).toBe('De gestionat');
+    expect(listReads.finished).toHaveBeenCalledWith('managed', {}, true);
+    // The open Tasks hold the list's place meanwhile, and nothing finished
+    // is drawn above them.
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Se încarcă taskurile…',
+    );
+    expect(
+      screen.getByRole('searchbox', { name: 'Caută după titlu' }),
+    ).toBeDisabled();
+  });
+
+  // The same for Toate, whose summary is asked only by its list.
+  it('asks for Toate’s finished Tasks and summary beside its open ones', () => {
+    hooks.level = 5;
+    hooks.useTaskLeadership.mockReturnValue({
+      data: true,
+      ...settled,
+      refetch: vi.fn(),
+    });
+    hooks.useAllTasks.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isError: false,
+    });
+    renderAt('/tracker?lista=toate');
+    expect(selected()).toBe('Toate');
+    expect(listReads.finished).toHaveBeenCalledWith('all', {}, true);
+    expect(listReads.summary).toHaveBeenCalledWith('all', true);
+  });
+
+  it('offers the retry of De gestionat’s open Tasks while its finished part is read', async () => {
+    const user = userEvent.setup();
+    manages();
+    const refetch = vi.fn();
+    hooks.useManagedTasks.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new Error('boom'),
+      refetch,
+    });
+    renderAt('/tracker?lista=gestionat');
+    expect(listReads.finished).toHaveBeenCalledWith('managed', {}, true);
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Nu am putut încărca taskurile.');
+    await user.click(
+      within(alert).getByRole('button', { name: 'Încearcă din nou' }),
+    );
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
   it('tells the sheet a Task opened from De gestionat is managed, and to ask about any other', async () => {
     const user = userEvent.setup();
     manages([taskRow({ id: 3, title: 'Deschis', assignments: [] })]);
