@@ -101,6 +101,12 @@ export function ManagerTaskList({
   );
   const finishedCounts = useMemo(() => finishedStateCounts(held), [held]);
   const work = useMemo(() => [...rows, ...summaryWork(held)], [rows, held]);
+  // Never read: Stare and the Work Filter offer a retry, not the open rows'
+  // choices as if they were all. A later read that fails keeps what was read.
+  const summaryFailed =
+    summary.isError && summary.data === undefined
+      ? { error: summary.error, onRetry: () => void summary.refetch() }
+      : undefined;
 
   const listControls = rows.length + finishedCounts.total >= LIST_CONTROLS_FROM;
   const sort = listControls ? chosenSort : 'deadline';
@@ -217,6 +223,7 @@ export function ManagerTaskList({
     <div className={trackerListClass}>
       <TrackerWorkFilter
         rows={work}
+        rowsFailed={summaryFailed}
         search={search}
         count={count}
         fields={fields}

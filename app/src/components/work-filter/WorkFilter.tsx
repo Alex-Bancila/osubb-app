@@ -2,6 +2,7 @@ import { useMemo, type ReactNode } from 'react';
 import { GroupFilterCombobox } from '../group/GroupFilterCombobox';
 import { PreferredGroupsChip } from '../preferred-groups/PreferredGroupsChip';
 import { usePreferredGroups } from '../preferred-groups/preferred-groups';
+import { ErrorState } from '../states';
 import { Button } from '../ui/button';
 import {
   Combobox,
@@ -38,6 +39,16 @@ export type WorkFilterStatus = {
   failed?: boolean;
   error?: unknown;
   onRetry?: () => void;
+};
+
+/**
+ * The page could not read what it holds (`work`, and what its own cells
+ * offer): the sheet shows a retry where the choices would be, never choices
+ * cut to what was read. The search and the chips stay.
+ */
+export type WorkFilterWorkFailure = {
+  error?: unknown;
+  onRetry: () => void;
 };
 
 type FieldsProps = {
@@ -218,7 +229,9 @@ function WorkFilterFields({
  * none is not drawn, and its URL value shows as a chip. Campanii passes no
  * `work`: it offers the Groups the caller manages, rooted at the topmost.
  * Calendar passes `alwaysShowGroups` (ruling R40): its Group levels offer
- * every Group the member can see, while Campanie keeps Rule W.
+ * every Group the member can see, while Campanie keeps Rule W. When the page
+ * could not read its `work`, it passes `workFailed` and the sheet offers a
+ * retry instead of choices cut short.
  *
  * At every width it is the filter toolbar (#903): **Filtrează** first, which
  * opens the controls in a sheet, then the page's search, then the active
@@ -236,6 +249,7 @@ export function WorkFilter({
   hint,
   label = 'Filtre',
   status,
+  workFailed,
   fields,
   extraChips = [],
   search,
@@ -268,6 +282,8 @@ export function WorkFilter({
   label?: string;
   /** While the options load, or when they failed, the toolbar says so. */
   status?: WorkFilterStatus;
+  /** Set when the read of what the page holds failed; see the type. */
+  workFailed?: WorkFilterWorkFailure;
   /** More cells for the sheet (De gestionat's Stare, Ordonează), given a unique id prefix. */
   fields?: (id: string) => ReactNode;
   /** Chips for the page's own set cells, counted on the button. */
@@ -418,18 +434,26 @@ export function WorkFilter({
       trailing={trailing}
       buttonSlot={buttonSlot}
     >
-      {(id) => (
-        <WorkFilterFields
-          id={id}
-          choices={choices}
-          groupsById={groupsById}
-          filter={filter}
-          showGroup={showGroup}
-          showCampaign={showCampaign}
-          showDates={showDates}
-          fields={fields}
-        />
-      )}
+      {(id) =>
+        workFailed ? (
+          <ErrorState
+            error={workFailed.error}
+            text="Nu am putut încărca filtrele."
+            onRetry={workFailed.onRetry}
+          />
+        ) : (
+          <WorkFilterFields
+            id={id}
+            choices={choices}
+            groupsById={groupsById}
+            filter={filter}
+            showGroup={showGroup}
+            showCampaign={showCampaign}
+            showDates={showDates}
+            fields={fields}
+          />
+        )
+      }
     </FilterToolbar>
   );
 }

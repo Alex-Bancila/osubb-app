@@ -817,6 +817,52 @@ describe('ManagerTaskList, the finished Tasks (#1053)', () => {
     expect(screen.getByLabelText('Stare')).toBeVisible();
   });
 
+  // Fails if a failed summary read is silent: Stare and the Work Filter
+  // would offer only what the open rows hold, as if that were everything.
+  it('offers a retry where the choices would be when what the list holds cannot be read', async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn();
+    lists.summary.mockReturnValue({
+      data: undefined,
+      isError: true,
+      error: new Error('boom'),
+      refetch,
+    });
+    renderList('', vi.fn(), sixRows);
+    // The Tasks and the search are untouched.
+    expect(titles()).toHaveLength(sixRows.length);
+    expect(
+      screen.getByRole('searchbox', { name: 'Caută după titlu' }),
+    ).toBeEnabled();
+    const sheet = await openFilters(user);
+    expect(within(sheet).queryByLabelText('Stare')).toBeNull();
+    expect(
+      within(sheet).queryByRole('combobox', { name: 'Grup principal' }),
+    ).toBeNull();
+    const alert = within(sheet).getByRole('alert');
+    expect(alert).toHaveTextContent('Nu am putut încărca filtrele.');
+    await user.click(
+      within(alert).getByRole('button', { name: 'Încearcă din nou' }),
+    );
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps offering what it read when a later summary read fails', async () => {
+    const user = userEvent.setup();
+    lists.summary.mockReturnValue({
+      data: held,
+      isError: true,
+      error: new Error('offline'),
+      refetch: vi.fn(),
+    });
+    const open = rows.filter((row) => row.status !== 'completed');
+    renderList('', vi.fn(), open);
+    const sheet = await openFilters(user);
+    expect(within(sheet).queryByRole('alert')).toBeNull();
+    await chooseOption(user, within(sheet).getByLabelText('Stare'), 'Anulat');
+    expect(lastFinishedCall()[1]).toEqual({ p_state: 'cancelled' });
+  });
+
   it('loads the next page from the button', async () => {
     const user = userEvent.setup();
     const loadMore = vi.fn();
