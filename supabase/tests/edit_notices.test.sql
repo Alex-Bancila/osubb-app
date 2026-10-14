@@ -10,7 +10,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(32);
+select plan(33);
 
 create function pg_temp.u53(n integer) returns uuid language sql immutable as $$
   select ('53000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -187,6 +187,19 @@ select ok(pg_temp.u53(2) in (select pg_temp.told('Deal actualizat: Deal #53')),
 select ok((select bool_and(link = '/anunturi/deals?deal=' || pg_temp.a53('Deal #53'))
              from notifications where title = 'Deal actualizat: Deal #53'),
   'and opens on the OSUBB Deals tab');
+
+-- An expired Deal reads only for the OSUBB Deals team and BC / the Moderator,
+-- so an edit after its Termen tells no ordinary Member (CodeRabbit on #1061).
+select pg_temp.test_clear_jwt();
+insert into announcements(title, body, group_id, audience, kind, deadline, created_by)
+select 'Expired deal #53', 'Body', id, 'org', 'deal', '2026-12-01 12:00+02', pg_temp.u53(4)
+  from groups where is_organization;
+update announcements set deadline = now() - interval '1 day' where id = pg_temp.a53('Expired deal #53');
+select pg_temp.as53(4);
+update announcements set body = 'Late edit #53' where id = pg_temp.a53('Expired deal #53');
+select is((select count(*)::int from notifications
+            where member_id = pg_temp.u53(2) and title = 'Deal actualizat: Expired deal #53'), 0,
+  'an edit of an expired Deal tells no ordinary Member, who can no longer open it');
 
 -- Turned critical, with its Termen moved: the notice is critical and carries
 -- the new Termen (a later edit never hides that it moved).

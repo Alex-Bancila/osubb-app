@@ -194,6 +194,33 @@ describe('Anunțuri › OSUBB Deals (R45)', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  it("reads a Deal's notifications when its code is revealed, even one read before (R53)", async () => {
+    const user = userEvent.setup();
+    supabaseMock.rpc.mockResolvedValue({ data: 'CAFE10', error: null });
+    supabaseMock.order.mockReturnValue(
+      answered({
+        data: ROWS.map((row) =>
+          row.id === 1
+            ? {
+                ...row,
+                announcement_reads: [{ read_at: '2026-10-07T10:00:00Z' }],
+              }
+            : row,
+        ),
+        error: null,
+      }),
+    );
+    renderAt('/anunturi/deals');
+    const cafe = await screen.findByRole('article', {
+      name: 'Reducere la cafenea',
+    });
+    await user.click(
+      within(cafe).getByRole('button', { name: /Arată codul OSUBB/ }),
+    );
+    expect(await within(cafe).findByText('CAFE10')).toBeVisible();
+    expect(readAbout).toHaveBeenLastCalledWith(['announcement:1']);
+  });
+
   it('says an expired or deleted Deal is unavailable', async () => {
     renderAt('/anunturi/deals?deal=3');
     expect(

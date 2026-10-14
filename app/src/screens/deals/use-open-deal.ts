@@ -31,14 +31,17 @@ export function useOpenDeal(
   const [unavailable, setUnavailable] = useState(false);
   const marked = useRef(new Set<number>());
   const handledParam = useRef<string | null>(null);
-  // R53: an opened Deal reads its Notifications, a "Deal actualizat"
-  // included, even when the Deal was read before.
+  // R53: the Deal last engaged with -- opened, or its code revealed from the
+  // card -- reads its Notifications, a "Deal actualizat" included, even when
+  // the Deal was read before.
+  const [engagedId, setEngagedId] = useState<number | null>(null);
   useReadNotificationsAbout(
-    selectedId === null ? NO_SUBJECTS : [`announcement:${selectedId}`],
+    engagedId === null ? NO_SUBJECTS : [`announcement:${engagedId}`],
   );
 
   // Once per Deal per visit, however it is engaged with.
   function markAsRead(deal: DealPresentation) {
+    setEngagedId(deal.id);
     if (deal.isRead || marked.current.has(deal.id)) return;
     marked.current.add(deal.id);
     markRead.mutate(deal.id, {

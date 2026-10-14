@@ -91,13 +91,21 @@ begin
      and private.can_see_group(p_row.group_id, recipient.member_id)
      -- #909: no Notification to a Member below the Minimum Level, who cannot
      -- read the Announcement (announcements_read agrees).
-     and coalesce(private.actor_level(recipient.member_id), -1) >= p_row.min_level;
+     and coalesce(private.actor_level(recipient.member_id), -1) >= p_row.min_level
+     -- R45: a Deal past its Termen reads only for the OSUBB Deals team and BC /
+     -- the Moderator (announcements_read agrees), so nobody else is told of it
+     -- (CodeRabbit on #1061: an edit of an expired Deal).
+     and (p_row.kind is distinct from 'deal'
+          or p_row.deadline is null
+          or p_row.deadline >= now()
+          or coalesce(private.actor_level(recipient.member_id), -1) >= 6
+          or private.assignment_team_role('osubb_deals', recipient.member_id) is not null);
   return v_recipients;
 end;
 $$;
 revoke execute on function private.announcement_recipients(public.announcements) from public, anon, authenticated, service_role;
 comment on function private.announcement_recipients(public.announcements) is
-  'R53: everyone a notice about this Announcement reaches -- the fan-out''s audience rule (R32, R42, R43, R45, #756, #909, suppression), moved here verbatim and shared by the first notice, an edit notice and the Termen reminder. Granted to nobody.';
+  'R53: everyone a notice about this Announcement reaches -- the fan-out''s audience rule (R32, R42, R43, R45, #756, #909, suppression), moved here verbatim, and an expired Deal only to the OSUBB Deals team and BC / the Moderator and shared by the first notice, an edit notice and the Termen reminder. Granted to nobody.';
 
 create function private.notify_announcement(p_row public.announcements, p_actor uuid, p_changed text)
 returns void
