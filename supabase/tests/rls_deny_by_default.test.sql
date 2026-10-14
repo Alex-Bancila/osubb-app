@@ -191,6 +191,11 @@ insert into promotion_candidates (role_evaluation_id, member_id, task_points, te
 insert into member_imports (member_id, sheet_email, sheet_row, imported_by) values
   ('ffffffff-0000-0000-0000-000000000006', 'rls-import-991@test.local', 2, null),
   ('eeeeeeee-0000-0000-0000-000000000156', 'rls-import-claimless-991@test.local', 3, null);
+-- #1049: the Legacy Import's registry has only a deny-all policy; the row
+-- imported by the claimless uid is the one a self limb would have exposed.
+insert into legacy_task_imports (tracker_id, sheet_row, imported_by) values
+  ('rlsLegacyImportTracker0001', 2, 'ffffffff-0000-0000-0000-000000000006'),
+  ('rlsLegacyImportTracker0001', 3, 'eeeeeeee-0000-0000-0000-000000000156');
 -- R44/R45/R47: the OSUBB Deals team and the Deal Code reveals. These rows
 -- stand on their own. The reveal owned by the claimless uid exercises the
 -- own-row limb of deal_code_reveals_read_self.
