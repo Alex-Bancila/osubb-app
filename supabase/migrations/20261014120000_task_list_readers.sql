@@ -16,13 +16,20 @@ immutable
 parallel safe
 set search_path = ''
 as $$
-  -- Lower case with the combining marks removed after NFD, as the page's
-  -- searchableTitle folds a title: "sedinta" finds "Ședință" and "ŞEDINŢĂ".
-  select lower(regexp_replace(normalize(coalesce(p_text, ''), NFD), '[̀-ͯ]', '', 'g'));
+  -- Lower case with the diacritics removed after NFD, as the page's
+  -- searchableTitle folds a title (JavaScript's \p{Diacritic}): the combining
+  -- marks, so "sedinta" finds the s-comma and the s-cedilla spellings alike,
+  -- and the spacing marks a title can carry (^ ` and U+00A8, AF, B4, B7, B8,
+  -- the modifier letters). The class is written in escapes on purpose: raw
+  -- combining characters in a source file do not survive every editor.
+  select lower(regexp_replace(
+           normalize(coalesce(p_text, ''), NFD),
+           '[\u005E\u0060\u00A8\u00AF\u00B4\u00B7\u00B8\u02B0-\u036F]',
+           '', 'g'));
 $$;
 
 comment on function private.fold_search(text) is
-  'The case- and diacritic-insensitive key the Task list search compares: NFD, combining marks removed, lower case. Empty for null.';
+  'The case- and diacritic-insensitive key the Task list search compares: NFD, combining and spacing diacritics removed, lower case. Empty for null.';
 
 revoke execute on function private.fold_search(text) from public, anon, authenticated, service_role;
 

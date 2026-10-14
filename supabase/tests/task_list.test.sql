@@ -22,7 +22,8 @@
 --   scope: claims not asked -> "a caller without org claims is listed nothing".
 --   task_list: p_finished ignored; the Group exact, not the subtree; the
 --     Campaign ignored; the range's end inside; an undated Task inside a
---     range; late as any completed Task; raw titles compared; Grupuri
+--     range; late as any completed Task; raw titles compared; the search
+--     as a LIKE pattern; the key dropping only combining marks; Grupuri
 --     preferate ignored; every unselected row muting; finished Tasks oldest
 --     first; the Executor of a finished Task its latest Assignment whatever
 --     ended it; the earliest submission; total counting the page -> each
@@ -38,7 +39,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(47);
+select plan(49);
 
 \ir _group_task_fixtures.psql
 reset role;
@@ -51,6 +52,16 @@ insert into public.group_members(group_id, member_id, group_role)
 select grp.id, pg_temp.g521_uid(n), case n when 11 then 'responsible' else 'member' end
   from public.groups as grp cross join (values (10), (11)) as held(n)
  where grp.name = 'Private #TL';
+
+-- A Group whose Minimum Level is above its own Responsible (#10, a
+-- Voluntar): managing a Task there implies reading it by position, and the
+-- sweeps below hold the scope to that.
+-- (The roster refuses a member below the level, so the level is raised after
+-- the appointment, as a later change of the Group's setting would leave it.)
+insert into public.groups(name, category) values ('MinLevel #TL', 'team');
+insert into public.group_members(group_id, member_id, group_role)
+select grp.id, pg_temp.g521_uid(10), 'responsible' from public.groups as grp where grp.name = 'MinLevel #TL';
+update public.groups set min_level = 5 where name = 'MinLevel #TL';
 
 -- An inactive BC (stale claims) beside the matrix.
 insert into auth.users(id, email)
@@ -82,6 +93,12 @@ select 'Group #521 ' || task.name, grp.id, pg_temp.g521_uid(1), 'todo', 'local',
 insert into g521_tasks
 select substr(task.title, 12), task.id from public.tasks as task
  where task.title in ('Group #521 pv_hidden', 'Group #521 pv_own', 'Group #521 pv_candidate');
+-- In the Group above its Responsible's level.
+insert into public.tasks(title, group_id, created_by, status, audience, assignment_mode, kind)
+select 'Group #521 ml_task', grp.id, pg_temp.g521_uid(1), 'todo', 'local', 'direct', 'task'
+  from public.groups as grp where grp.name = 'MinLevel #TL';
+insert into g521_tasks
+select 'ml_task', task.id from public.tasks as task where task.title = 'Group #521 ml_task';
 insert into public.task_assignments(task_id, member_id, assigned_by)
 select id, pg_temp.g521_uid(9), pg_temp.g521_uid(1) from g521_tasks where name = 'pv_own';
 insert into public.task_candidates(task_id, member_id)
@@ -296,6 +313,12 @@ select is(
   (select array_agg(id order by id) from g521_tasks where name like 'p\_%'),
   'a Group Manager manages every Task of the Group, and none of the archived one');
 
+select is(
+  pg_temp.ids_as(pg_temp.g521_uid(10), $$select scope.task_id from pg_temp.scope_tl('managed') as scope
+      join g521_tasks as fixture on fixture.id = scope.task_id$$),
+  (select array_agg(id order by id) from g521_tasks where name = 'ml_task'),
+  'a Responsible below their Group''s Minimum Level manages its Tasks, as my_managed_task_ids() says');
+
 -- ==================== 'all' is what tasks_read returns ====================
 
 select is(
@@ -480,9 +503,12 @@ select is(
   array[pg_temp.listed_tl($$p_search => 'SEDINTA'$$) = array['sedinta de lucru', 'Ședință generală'],
         pg_temp.listed_tl($$p_search => ' afiș '$$) = array['Afiș'],
         pg_temp.listed_tl($$p_search => 'xyz'$$) = '{}'::text[],
-        cardinality(pg_temp.listed_tl($$p_search => '   '$$)) = 7],
-  array[true, true, true, true],
-  'the search ignores case, diacritics and the spaces around it; a blank one matches all');
+        cardinality(pg_temp.listed_tl($$p_search => '   '$$)) = 7,
+        -- % and _ are characters of a title, never wildcards.
+        pg_temp.listed_tl($$p_search => '%'$$) = '{}'::text[],
+        pg_temp.listed_tl($$p_search => 'sedin_a'$$) = '{}'::text[]],
+  array[true, true, true, true, true, true],
+  'the search ignores case, diacritics and the spaces around it; a blank one matches all; % and _ match only themselves');
 select is(
   array[
     cardinality(pg_temp.listed_tl('p_preferred => true')) = 7,
@@ -613,6 +639,14 @@ select is(
         private.fold_search('  Înscrieri la Târg '), private.fold_search(null)],
   array['sedinta', 'sedinta', '  inscrieri la targ ', ''],
   'the search key drops case and diacritics, comma-below and cedilla alike');
+-- The page folds a title with JavaScript's \p{Diacritic}, which also drops
+-- the spacing marks; the same strings are pinned to the same keys in
+-- app/src/screens/tracker/manager-task-list.test.ts.
+select is(
+  array[private.fold_search('Afiș · v2^'), private.fold_search('a`b¨c¯d´e¸f'),
+        private.fold_search('Ziua 100% _liberă_')],
+  array['afis  v2', 'abcdef', 'ziua 100% _libera_'],
+  'the search key drops the spacing marks the page drops, and keeps % and _ as they are');
 
 -- ==================== The guard: a list never asks per Task ====================
 --
