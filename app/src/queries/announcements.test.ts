@@ -19,6 +19,7 @@ import {
   useAnnouncementFeed,
   useAnnouncementFeedSummary,
   type AnnouncementFeedPage,
+  type FeedPageParam,
   type AnnouncementFeedRpcRow,
   type RawAnnouncementRow,
   createAnnouncement,
@@ -84,6 +85,7 @@ function feedRpcRow(
     rejection_reason: null,
     read_at: null,
     total: 1,
+    as_of: '2026-10-14T09:00:00.000Z',
     ...overrides,
   };
 }
@@ -128,7 +130,9 @@ describe('the Anunțuri feed, read by the page (R56)', () => {
   });
 
   describe('fetchAnnouncementFeedPage', () => {
-    it('asks announcement_feed for 20 rows after the offset, under the filters', async () => {
+    const moment = '2026-10-14T09:00:00.000Z';
+
+    it('asks announcement_feed for 20 rows after the offset, under the filters and the reading’s moment', async () => {
       rpc.mockResolvedValue({
         data: [
           feedRpcRow({ id: 9, total: 45, read_at: '2026-10-02T08:00:00Z' }),
@@ -139,7 +143,7 @@ describe('the Anunțuri feed, read by the page (R56)', () => {
 
       const page = await fetchAnnouncementFeedPage(
         { p_group_id: 3, p_preferred: true },
-        20,
+        { offset: 20, asOf: moment },
       );
 
       expect(ANNOUNCEMENT_PAGE).toBe(20);
@@ -148,51 +152,78 @@ describe('the Anunțuri feed, read by the page (R56)', () => {
         p_preferred: true,
         p_limit: 20,
         p_offset: 20,
+        p_as_of: moment,
       });
       expect(page.total).toBe(45);
+      expect(page.asOf).toBe(moment);
       // The reader's own read time becomes the embed the cards read.
       expect(page.rows).toEqual([
         {
           ...feedRpcRow({ id: 9 }),
           read_at: undefined,
           total: undefined,
+          as_of: undefined,
           announcement_reads: [{ read_at: '2026-10-02T08:00:00Z' }],
         },
         {
           ...feedRpcRow({ id: 8 }),
           read_at: undefined,
           total: undefined,
+          as_of: undefined,
           announcement_reads: [],
         },
       ]);
       expect(page.rows[0]).not.toHaveProperty('total');
       expect(page.rows[0]).not.toHaveProperty('read_at');
+      expect(page.rows[0]).not.toHaveProperty('as_of');
     });
 
-    it('counts nothing when the page is empty', async () => {
-      rpc.mockResolvedValue({ data: [], error: null });
-      await expect(fetchAnnouncementFeedPage({}, 0)).resolves.toEqual({
-        rows: [],
-        total: 0,
+    it('starts a reading at the moment the server answers for its first page', async () => {
+      rpc.mockResolvedValue({
+        data: [feedRpcRow({ id: 9, total: 1, as_of: '2026-10-14T10:30:00Z' })],
+        error: null,
       });
+      const page = await fetchAnnouncementFeedPage(
+        {},
+        { offset: 0, asOf: null },
+      );
+      // No moment yet: the server takes its own now and says which.
       expect(rpc).toHaveBeenCalledWith('announcement_feed', {
         p_limit: 20,
         p_offset: 0,
       });
+      expect(page.asOf).toBe('2026-10-14T10:30:00Z');
+    });
+
+    it('counts nothing when the page is empty, and keeps the moment it was given', async () => {
+      rpc.mockResolvedValue({ data: [], error: null });
+      await expect(
+        fetchAnnouncementFeedPage({}, { offset: 0, asOf: null }),
+      ).resolves.toEqual({ rows: [], total: 0, asOf: null });
+      await expect(
+        fetchAnnouncementFeedPage({}, { offset: 40, asOf: moment }),
+      ).resolves.toEqual({ rows: [], total: 0, asOf: moment });
     });
 
     it('propagates a failure', async () => {
       const error = { code: '42501', message: 'denied' };
       rpc.mockResolvedValue({ data: null, error });
-      await expect(fetchAnnouncementFeedPage({}, 0)).rejects.toBe(error);
+      await expect(
+        fetchAnnouncementFeedPage({}, { offset: 0, asOf: null }),
+      ).rejects.toBe(error);
     });
   });
 
   describe('announcementFeedQueryOptions', () => {
     const options = announcementFeedQueryOptions({ p_preferred: true }, 'm1');
-    const page = (count: number, total: number): AnnouncementFeedPage => ({
+    const page = (
+      count: number,
+      total: number,
+      asOf: string | null = '2026-10-14T09:00:00.000Z',
+    ): AnnouncementFeedPage => ({
       rows: Array.from({ length: count }, (_, index) => loadedRow(index + 1)),
       total,
+      asOf,
     });
 
     it('keeps every page of the member’s feed under one key per filter', () => {
@@ -202,11 +233,19 @@ describe('the Anunțuri feed, read by the page (R56)', () => {
       expect(options.queryKey.slice(0, 2)).toEqual(keys.announcements.feedAll);
     });
 
-    it('asks for the page after the rows already read', () => {
-      const first = page(20, 45);
-      expect(options.initialPageParam).toBe(0);
-      expect(options.getNextPageParam(first, [first])).toBe(20);
-      expect(options.getNextPageParam(first, [first, first])).toBe(40);
+    it('asks for the page after the rows already read, at the first page’s moment', () => {
+      const first = page(20, 45, '2026-10-14T09:00:00.000Z');
+      const second = page(20, 45, '2026-10-14T09:05:00.000Z');
+      // A reading from the top starts a new moment.
+      expect(options.initialPageParam).toEqual({ offset: 0, asOf: null });
+      expect(options.getNextPageParam(first, [first])).toEqual({
+        offset: 20,
+        asOf: '2026-10-14T09:00:00.000Z',
+      });
+      expect(options.getNextPageParam(second, [first, second])).toEqual({
+        offset: 40,
+        asOf: '2026-10-14T09:00:00.000Z',
+      });
     });
 
     it('stops when every Announcement is read, or a page comes back empty', () => {
@@ -337,6 +376,77 @@ describe('the Anunțuri feed, read by the page (R56)', () => {
       );
       // The next page starts after the rows read, not after the ids kept.
       expect(rpc.mock.calls.map(([, args]) => args.p_offset)).toEqual([0, 20]);
+    });
+
+    // Fails if a later page is cut against a later moment than the first:
+    // the cards read meanwhile move to the read band (R15), every card after
+    // them moves up, and the next page skips as many as were read.
+    it('cuts every page of one reading at its first page’s moment, so reading cards skips none', async () => {
+      // The server: 35 unread Announcements, newest (id 1) first, in R15's
+      // order as of `p_as_of` (its own now when absent).
+      const start = '2026-10-14T09:00:00.000Z';
+      let now = Date.parse(start);
+      const readAt = new Map<number, string>();
+      rpc.mockImplementation(
+        (
+          _name: string,
+          args: { p_offset: number; p_limit: number; p_as_of?: string },
+        ) => {
+          const asOf = args.p_as_of ?? new Date(now).toISOString();
+          const unread = (id: number) => {
+            const read = readAt.get(id);
+            return read === undefined || read > asOf;
+          };
+          const ordered = Array.from({ length: 35 }, (_, index) => index + 1)
+            .sort((a, b) => Number(unread(b)) - Number(unread(a)) || a - b)
+            .slice(args.p_offset, args.p_offset + args.p_limit);
+          return Promise.resolve({
+            data: ordered.map((id) =>
+              feedRpcRow({
+                id,
+                total: 35,
+                read_at: readAt.get(id) ?? null,
+                as_of: asOf,
+              }),
+            ),
+            error: null,
+          });
+        },
+      );
+      from.mockReturnValue({
+        upsert: (row: { announcement_id: number }) => {
+          readAt.set(row.announcement_id, new Date(now).toISOString());
+          return Promise.resolve({ error: null });
+        },
+      });
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      const { result } = renderHook(() => useAnnouncementFeed({}, true), {
+        wrapper: hookWrapper(client),
+      });
+      await waitFor(() => expect(result.current.rows).toHaveLength(20));
+
+      // The Member reads the first three cards, a minute apart.
+      const mark = markAnnouncementReadMutationOptions(client, 'm1');
+      for (const id of [1, 2, 3]) {
+        now += 60_000;
+        await mark.mutationFn(id);
+        await act(async () => {
+          await mark.onSuccess(undefined, id);
+        });
+      }
+      now += 60_000;
+      act(() => result.current.loadMore());
+
+      await waitFor(() => expect(result.current.rows).toHaveLength(35));
+      expect(result.current.rows.map((row) => row.id)).toEqual(
+        Array.from({ length: 35 }, (_, index) => index + 1),
+      );
+      expect(rpc.mock.calls[1]?.[1]).toMatchObject({
+        p_offset: 20,
+        p_as_of: start,
+      });
     });
 
     it('keeps the rows and says so when a later page fails; loading more asks again', async () => {
@@ -494,16 +604,24 @@ describe('the Anunțuri feed, read by the page (R56)', () => {
     const feedKey = keys.announcements.feed('m1', filters);
 
     function loadedFeed(client: QueryClient) {
-      client.setQueryData<InfiniteData<AnnouncementFeedPage, number>>(feedKey, {
-        pages: [
-          {
-            rows: [loadedRow(1), loadedRow(2, '2026-10-01T09:00:00Z')],
-            total: 3,
-          },
-          { rows: [loadedRow(3)], total: 3 },
-        ],
-        pageParams: [0, 2],
-      });
+      const asOf = '2026-10-14T09:00:00.000Z';
+      client.setQueryData<InfiniteData<AnnouncementFeedPage, FeedPageParam>>(
+        feedKey,
+        {
+          pages: [
+            {
+              rows: [loadedRow(1), loadedRow(2, '2026-10-01T09:00:00Z')],
+              total: 3,
+              asOf,
+            },
+            { rows: [loadedRow(3)], total: 3, asOf },
+          ],
+          pageParams: [
+            { offset: 0, asOf: null },
+            { offset: 2, asOf },
+          ],
+        },
+      );
     }
 
     // Fails if marking read invalidates the feed pages: an infinite query
@@ -519,7 +637,7 @@ describe('the Anunțuri feed, read by the page (R56)', () => {
       );
 
       const feed =
-        client.getQueryData<InfiniteData<AnnouncementFeedPage, number>>(
+        client.getQueryData<InfiniteData<AnnouncementFeedPage, FeedPageParam>>(
           feedKey,
         );
       expect(feed?.pages.map((page) => page.rows.map((row) => row.id))).toEqual(

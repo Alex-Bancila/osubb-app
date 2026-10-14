@@ -90,41 +90,65 @@ export type AnnouncementFeedRpcRow = {
   /** The reader's own read time; null while unread. */
   read_at: string | null;
   total: number;
+  /** The moment the page was cut against (`p_as_of`, or the server's now). */
+  as_of: string;
 };
+
+/**
+ * Where a page of the feed starts: after `offset` rows, in R15's order as of
+ * `asOf`. Being read moves an Announcement to the read band, so every page
+ * of one reading is cut against its first page's moment — a card read in
+ * between keeps its place and the next page skips none. `null` starts a
+ * reading: the server takes its own now and answers it.
+ */
+export type FeedPageParam = { offset: number; asOf: string | null };
 
 export type AnnouncementFeedPage = {
   rows: RawAnnouncementRow[];
   total: number;
+  /** The moment the page was cut against; the next page passes it on. */
+  asOf: string | null;
 };
 
 /** A server row as the cards read an Announcement: its read as the embed. */
 function feedRow(row: AnnouncementFeedRpcRow): RawAnnouncementRow {
-  const { read_at: readAt, total: _total, ...announcement } = row;
+  const { read_at: readAt, total: _total, as_of: _asOf, ...announcement } = row;
   return {
     ...announcement,
     announcement_reads: readAt ? [{ read_at: readAt }] : [],
   } as unknown as RawAnnouncementRow;
 }
 
-/** One page of the feed under `filters`, and how many the filters match. */
+/**
+ * One page of the feed under `filters`, how many the filters match, and the
+ * moment it was cut against.
+ */
 export async function fetchAnnouncementFeedPage(
   filters: FeedFilters,
-  offset: number,
+  { offset, asOf }: FeedPageParam,
 ): Promise<AnnouncementFeedPage> {
   const { data, error } = await supabase.rpc('announcement_feed', {
     ...filters,
     p_limit: ANNOUNCEMENT_PAGE,
     p_offset: offset,
+    ...(asOf === null ? {} : { p_as_of: asOf }),
   });
   if (error) throw error;
   const page = (data ?? []) as unknown as AnnouncementFeedRpcRow[];
-  return { rows: page.map(feedRow), total: page[0]?.total ?? 0 };
+  return {
+    rows: page.map(feedRow),
+    total: page[0]?.total ?? 0,
+    asOf: page[0]?.as_of ?? asOf,
+  };
 }
 
 /**
  * The infinite query of the feed. The next page starts after the rows
- * already read, and there is none once they reach `total` or a page comes
- * back empty.
+ * already read, at the first page's moment, and there is none once they
+ * reach `total` or a page comes back empty. A refetch starts again from
+ * `initialPageParam` — a new moment — and TanStack recomputes every later
+ * page's start from the pages it has just read, so the pages stay one
+ * reading.
  */
 export function announcementFeedQueryOptions(
   filters: FeedFilters,
@@ -132,16 +156,16 @@ export function announcementFeedQueryOptions(
 ) {
   return {
     queryKey: keys.announcements.feed(memberId, filters),
-    queryFn: ({ pageParam }: { pageParam: number }) =>
+    queryFn: ({ pageParam }: { pageParam: FeedPageParam }) =>
       fetchAnnouncementFeedPage(filters, pageParam),
-    initialPageParam: 0,
+    initialPageParam: { offset: 0, asOf: null } as FeedPageParam,
     getNextPageParam: (
       lastPage: AnnouncementFeedPage,
       pages: readonly AnnouncementFeedPage[],
-    ) => {
+    ): FeedPageParam | undefined => {
       const read = pages.reduce((count, page) => count + page.rows.length, 0);
       return lastPage.rows.length > 0 && read < lastPage.total
-        ? read
+        ? { offset: read, asOf: pages[0]?.asOf ?? null }
         : undefined;
     },
   } as const;
@@ -571,7 +595,9 @@ export function markAnnouncementReadMutationOptions(
       // rows between pages while they load; the order is read again only
       // when the feed is read again from the top.
       const readAt = new Date().toISOString();
-      queryClient.setQueriesData<InfiniteData<AnnouncementFeedPage, number>>(
+      queryClient.setQueriesData<
+        InfiniteData<AnnouncementFeedPage, FeedPageParam>
+      >(
         { queryKey: keys.announcements.feedAll },
         (data) =>
           data && {

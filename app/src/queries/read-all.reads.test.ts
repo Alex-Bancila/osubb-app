@@ -12,6 +12,7 @@ import {
   fetchAnnouncementFeedPage,
   fetchAnnouncementReaders,
   type AnnouncementFeedPage,
+  type FeedPageParam,
 } from './announcements';
 import { fetchPendingCandidatureTasks } from './calendar-tasks';
 import { fetchCampaignReport } from './campaigns';
@@ -367,11 +368,11 @@ describe('Anunțuri and Deals', () => {
     });
     const options = announcementFeedQueryOptions({}, 'member');
     const pages: AnnouncementFeedPage[] = [];
-    let offset: number | undefined = options.initialPageParam;
-    while (offset !== undefined) {
-      const page = await fetchAnnouncementFeedPage({}, offset);
+    let param: FeedPageParam | undefined = options.initialPageParam;
+    while (param !== undefined) {
+      const page = await fetchAnnouncementFeedPage({}, param);
       pages.push(page);
-      offset = options.getNextPageParam(page, pages);
+      param = options.getNextPageParam(page, pages);
     }
     expect(pages.flatMap((page) => page.rows)).toHaveLength(ROWS);
     expect(pages).toHaveLength(Math.ceil(ROWS / ANNOUNCEMENT_PAGE));
