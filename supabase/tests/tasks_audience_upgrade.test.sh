@@ -8,14 +8,15 @@ db_container="${SUPABASE_DB_CONTAINER:-supabase_db_osubb-app}"
 begin;
 set local client_min_messages = warning;
 
+-- #318: today's read policy is tasks_read; since spec 2026-10-14 (member
+-- reads) it reads the Task columns dropped below, so it is dropped first.
+drop policy tasks_read on public.tasks;
 drop view if exists public.tasks_with_overdue;  -- #936 dropped it on main
 alter table public.tasks
   drop column started_at, drop column submitted_at, drop column completed_at,
   drop column unfulfilled_at, drop column cancelled_at,
   drop column queue_opened_at, drop column queue_closed_at,
   drop column review_round, drop column returned_to_progress_at;
--- #318: today's read policy is tasks_read (it replaced task_read).
-drop policy tasks_read on public.tasks;
 -- #345 dropped public.claim_open_task and private.task_is_unassigned, so the
 -- two explicit drops that stood here have nothing left to drop.
 truncate public.tasks cascade;

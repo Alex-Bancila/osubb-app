@@ -9,6 +9,9 @@ migration="supabase/migrations/20260911104000_tasks_lifecycle_timestamps.sql"
 begin;
 set local client_min_messages = warning;
 
+-- #318: today's read policy is tasks_read; since spec 2026-10-14 (member
+-- reads) it reads the Task columns dropped below, so it is dropped first.
+drop policy tasks_read on public.tasks;
 drop view if exists public.tasks_with_overdue;  -- #936 dropped it on main
 alter table public.tasks
   drop column started_at, drop column submitted_at, drop column completed_at,
