@@ -345,8 +345,6 @@ describe('what each viewer sees', () => {
       /^12$/,
     );
     expect(stat).toHaveTextContent('voluntar');
-    // A Voluntar's pages are all on the bar or in the top bar: no Conducere.
-    expect(screen.queryByRole('region', { name: 'Mai mult' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Clasament' })).toBeNull();
     // Nothing a Voluntar can never have is read or drawn.
     expect(hooks.useAwaitingMyReview).not.toHaveBeenCalledWith(true);
@@ -404,7 +402,7 @@ describe('what each viewer sees', () => {
     expect(hooks.useMyTasks).toHaveBeenCalled();
   });
 
-  it('Mai mult: the pages off the tab bar and the top bar, as tiles between the counts and Urmează', () => {
+  it('draws no second navigation: the pages off the bar are behind its Mai mult', () => {
     auth.useAuth.mockReturnValue(claims(6));
     viewer({
       seeLeadership: true,
@@ -413,48 +411,8 @@ describe('what each viewer sees', () => {
       administer: true,
     });
     renderDashboard();
-    const block = screen.getByRole('region', { name: 'Mai mult' });
-    expect(
-      within(block)
-        .getAllByRole('link')
-        .map((link) => [link.textContent, link.getAttribute('href')]),
-    ).toEqual([
-      ['Clasament', '/clasament'],
-      ['Voluntari', '/voluntari'],
-      // Administrare is on the bar for this viewer, so Grupuri is here.
-      ['Grupuri', '/grupuri'],
-      ['Campanii', '/administrare/campanii'],
-    ]);
-    // Each tile is a 44 px-plus target with its lucide icon, no emoji.
-    for (const link of within(block).getAllByRole('link')) {
-      expect(link.className).toContain('min-h-24');
-      expect(link.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
-    }
-    // Two columns, and only below lg: the desktop sidebar lists these pages.
-    expect(within(block).getByRole('list').className).toContain('grid-cols-2');
-    expect(block.className).toContain('lg:hidden');
-    // Under the count tiles, above Urmează: in view without hunting.
-    const counts = screen.getByRole('list', { name: 'Ce te așteaptă' });
-    expect(
-      counts.compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(
-      block.compareDocumentPosition(upNext()) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-  });
-
-  it('Mai mult holds only what the viewer may open', () => {
-    // A Responsabil below BCE: Grupuri and Campanii (Administrare is on
-    // their bar), no Clasament.
-    auth.useAuth.mockReturnValue(claims(2));
-    viewer({ seeLeadership: false, manageTasks: true, administer: true });
-    renderDashboard();
-    expect(
-      within(screen.getByRole('region', { name: 'Mai mult' }))
-        .getAllByRole('link')
-        .map((link) => link.textContent),
-    ).toEqual(['Grupuri', 'Campanii']);
+    expect(screen.queryByRole('region', { name: 'Mai mult' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Clasament' })).toBeNull();
   });
 
   it('renders nothing until the capability row decides, then retries its error', () => {

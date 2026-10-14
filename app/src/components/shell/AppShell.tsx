@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Bell } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router';
 import logoDark from '../../assets/brand/osubb-logo-on-dark.png';
@@ -8,7 +8,6 @@ import { useCapabilities } from '../../lib/capabilities';
 import { safeHexColor } from '../../lib/color';
 import { initials } from '../../lib/format';
 import { useEnterMotion, usePopMotion } from '../../lib/motion';
-import { HomePagesContext } from './home-pages';
 import { cn } from '../../lib/utils';
 import { useUnreadAnnouncementsCount } from '../../queries/announcements';
 import { useLiveChanges } from '../../queries/live-changes';
@@ -241,21 +240,9 @@ export default function AppShell() {
   // The Board Title when the Member holds one (#963), else the Role's name.
   const roleLabel = useMyRoleLabel();
 
-  // What the viewer may open and the phone bar's five; the pages on neither
-  // the bar nor the top bar are Acasă's Conducere tiles (`navFor`).
-  const { visible, tabs, elsewhere } = navFor(capabilities.data);
-  // A page a phone reaches from Acasă's tiles sits under Acasă on the bar,
-  // and carries the way back (`HomeBackLink`).
-  const under = elsewhere.some((item) =>
-    isNavItemActive(item, location.pathname),
-  )
-    ? '/'
-    : undefined;
-  const homePaths = elsewhere.map((item) => item.path).join(' ');
-  const homePages = useMemo(
-    () => homePaths.split(' ').filter(Boolean),
-    [homePaths],
-  );
+  // What the viewer may open, the phone bar's four, and the pages behind
+  // its Mai mult (`navFor`).
+  const { visible, tabs, more } = navFor(capabilities.data);
   const denied = deniedMessage(location.state);
   const unreadPop = usePopMotion<HTMLSpanElement>(unreadCount);
   const page = useEnterMotion<HTMLDivElement>(
@@ -281,8 +268,8 @@ export default function AppShell() {
       </aside>
 
       {/* A phone's top bar is the logo, the bell and the avatar for everyone:
-          no menu. The five tabs below, these two, and Acasă's Conducere
-          tiles reach every page. */}
+          no menu. The bar below, its Mai mult drawer and these two reach
+          every page. */}
       <header className="flex items-center gap-3 border-b border-border bg-card px-4 pt-[env(safe-area-inset-top)] [grid-area:topbar] sm:px-6 lg:hidden">
         <span className="shrink-0 lg:hidden" aria-hidden="true">
           <img
@@ -377,30 +364,44 @@ export default function AppShell() {
           <FabSlotContext.Provider value={fabSlot}>
             {/* A page arrives when the area changes; its own tabs move
                 their own content. */}
-            <HomePagesContext.Provider value={homePages}>
-              {/* A phone's bar floats over the page: the page ends with the
-                  bar's height of room, so its last row scrolls clear. */}
-              <div
-                ref={page}
-                className="max-lg:pb-[calc(4.75rem+env(safe-area-inset-bottom))] keyboard:pb-0"
-              >
-                <Outlet />
-              </div>
-            </HomePagesContext.Provider>
+            {/* A phone's bar floats over the page: the page ends with the
+                bar's height of room, so its last row scrolls clear. */}
+            <div
+              ref={page}
+              className="max-lg:pb-[calc(4.75rem+env(safe-area-inset-bottom))] keyboard:pb-0"
+            >
+              <Outlet />
+            </div>
           </FabSlotContext.Provider>
         </>
       </main>
 
-      {/* The page's floating create button (`FabActions`) is drawn here: the
-          content area's bottom right corner, above a phone's floating tab
-          bar and clear of the sidebar, and steps aside for a phone keyboard. */}
+      {/* The foot of the content area. On a phone: the floating tab bar in
+          the middle of the screen and, on its right, the page's create button
+          (`FabActions` draws it into the slot). Equal room is kept on both
+          sides of the bar, so it is centred and stands in the same spot
+          whether or not the page has a button. Under 375 px the left side
+          gives way first and the bar sits a little left of centre. From `lg`
+          the bar is gone and the button keeps the bottom right corner, clear
+          of the sidebar. All of it steps aside for a phone keyboard. */}
       <div
-        ref={setFabSlot}
-        data-slot="fab-slot"
-        className="pointer-events-none z-10 self-end justify-self-end px-4 pt-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] [grid-area:main] *:pointer-events-auto md:px-6 lg:p-6 keyboard:hidden"
-      />
-
-      <TabBar tabs={tabs} badges={badges} under={under} />
+        data-slot="bottom-bar"
+        className="pointer-events-none z-10 flex items-end self-end px-2 pt-2 pb-[calc(.75rem+env(safe-area-inset-bottom))] [grid-area:main] lg:p-6 keyboard:hidden"
+      >
+        <div aria-hidden="true" className="min-w-0 flex-1 lg:hidden" />
+        <TabBar tabs={tabs} more={more} badges={badges} />
+        {/* The button's side: never narrower than the button and its gap. */}
+        <div
+          data-slot="fab-side"
+          className="flex min-w-16 flex-1 justify-start lg:justify-end"
+        >
+          <div
+            ref={setFabSlot}
+            data-slot="fab-slot"
+            className="pointer-events-auto max-lg:ml-2"
+          />
+        </div>
+      </div>
     </div>
   );
 }
