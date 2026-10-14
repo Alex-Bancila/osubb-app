@@ -1,7 +1,7 @@
 # A minimum Role on whatever reaches all of OSUBB — design
 
 - **Date:** 2026-10-14
-- **Decided by:** Alex Băncilă, in the session of 2026-10-14 (ruling R55)
+- **Decided by:** Alex Băncilă, in the session of 2026-10-14 (ruling R57)
 - **Status:** design approved ("perfect"); spec awaiting review.
 
 ## The request
@@ -49,6 +49,8 @@ Two PRs, merged in this order. Each carries its own tests and docs.
 **Data.** `tasks.min_level integer not null default 0`, `tasks_min_level_ck check (min_level in (0, 1, 2, 3, 5, 6))`, and `tasks_min_level_public_ck check (min_level = 0 or (kind = 'task' and assignment_mode = 'public'))`. Every existing Task gets 0, so nothing anyone sees changes until a Role is chosen. The approval stamp is untouched: Tasks have no approval.
 
 **Glossary.** The Task's Minimum Level is the lowest Level that sees the Task as an Opportunity, or through Shared Work Visibility, and may join its Candidate Queue. It never widens who the Audience reaches: a local Task still reaches only its Group's members, an organisation-wide one every active Member, each now only at or above it.
+
+**Built on the read sets of #1064.** PR 2 starts after #1064 (fast reads, part 1) merges: it turns `tasks_read` into Group sets read once per statement (`private.own_task_ids()`, `private.task_read_groups('whole' | 'open' | 'org')`) and keeps `private.can_read_task` as the reference its parity suite holds the policy to. Both change together here: R4 leaves `'whole'` for a new `'shared'` kind, so `'whole'` keeps R1 and R3, which the Role never gates; the policy tests `min_level <= (select private.caller_level())` on the row for `'shared'`, `'open'` and `'org'`; and `task_read_sets.test.sql` keeps its parity cases green and its set-content cases follow the split. Any Member list that #1064's later parts read through those sets or that policy inherits the gate.
 
 **Who reads the Task** (`private.can_read_task`). The new test is `caller level >= target.min_level`, judged on the Task itself, also when it is read through its Umbrella. It applies to:
 
@@ -129,8 +131,8 @@ It does not apply to: one's own Assignment or Candidature, ever (R2); BCE, BC an
 ## Docs
 
 - **CONTEXT.md:** **Minimum Level** gains the Task's; **Task Audience** and **Opportunity** say "at or above the Task's Minimum Level"; **Event** may raise its Group's to any Role.
-- **ADR-0007:** an amendment (2026-10-14, ruling R55) of R26's "no Minimum Level gate".
+- **ADR-0007:** an amendment (2026-10-14, ruling R57) of R26's "no Minimum Level gate".
 - **ADR-0008:** an amendment on the Event ladder.
-- **Rulings table:** row R55 in `docs/superpowers/plans/2026-09-23-prod-readiness-grill.md`.
+- **Rulings table:** row R57 in `docs/superpowers/plans/2026-09-23-prod-readiness-grill.md`.
 
-Ruling numbers: R53 is already used twice on main, by edit notices and reminders and by the Legacy Import. R54 is the fast Task lists, so this design takes R55.
+Ruling numbers: R53 is already used twice on main, by edit notices and reminders and by the Legacy Import. R54 is the fast Task lists, and R55 and R56 are proposed by the member-reads spec (#1064), so this design takes R57.
