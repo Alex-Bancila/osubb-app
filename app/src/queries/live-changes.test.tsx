@@ -244,9 +244,10 @@ describe('live change signals (#961)', () => {
       return result;
     }
 
-    // Fails if a change only invalidates `['announcements']`: the feed then
-    // reads every page it has loaded again, one after another.
-    it('re-reads only the first page after a change and drops the others', async () => {
+    // Fails if a change cuts the feed to its first page: a Member reading
+    // card 55 would lose their place over any Announcement, Group or roster
+    // changed anywhere.
+    it('keeps every loaded page after a change and reads each again', async () => {
       const result = await threePagesLoaded();
       const { onChange } = await joined();
 
@@ -254,15 +255,14 @@ describe('live change signals (#961)', () => {
         onChange({ payload: { table: 'announcements', op: 'INSERT' } }),
       );
 
-      await waitFor(() => expect(feedOffsets()).toHaveLength(4));
+      await waitFor(() => expect(feedOffsets()).toHaveLength(6));
       await waitFor(() => expect(result.current.isFetching).toBe(false));
-      expect(feedOffsets()).toEqual([0, 20, 40, 0]);
-      expect(result.current.data?.pages).toHaveLength(1);
-      expect(result.current.hasNextPage).toBe(true);
+      expect(feedOffsets()).toEqual([0, 20, 40, 0, 20, 40]);
+      expect(result.current.data?.pages).toHaveLength(3);
     });
 
-    // Fails if a reconnect trims only the Task lists.
-    it('re-reads only the first page after a reconnect too', async () => {
+    // Fails if a reconnect cuts the feed too.
+    it('keeps every loaded page after a reconnect too', async () => {
       const result = await threePagesLoaded();
       const { onStatus } = await joined();
 
@@ -270,10 +270,10 @@ describe('live change signals (#961)', () => {
       act(() => onStatus('CHANNEL_ERROR'));
       act(() => onStatus('SUBSCRIBED'));
 
-      await waitFor(() => expect(feedOffsets()).toHaveLength(4));
+      await waitFor(() => expect(feedOffsets()).toHaveLength(6));
       await waitFor(() => expect(result.current.isFetching).toBe(false));
-      expect(feedOffsets()).toEqual([0, 20, 40, 0]);
-      expect(result.current.data?.pages).toHaveLength(1);
+      expect(feedOffsets()).toEqual([0, 20, 40, 0, 20, 40]);
+      expect(result.current.data?.pages).toHaveLength(3);
     });
   });
 

@@ -479,20 +479,36 @@ describe('the Anunțuri feed, read by the page (R56)', () => {
       expect(result.current.rows).toEqual([]);
     });
 
-    // Fails if a live change on `announcements` only invalidates the
-    // family: the feed then reads every loaded page again, and a next page
-    // asked meanwhile would land on top of the old first page.
-    it('reads only its first page again after a change, and the next page only once that has landed', async () => {
-      const fresh = deferred<{ data: AnnouncementFeedRpcRow[]; error: null }>();
+    // Fails if a change cuts the feed to its first page: a Member reading
+    // card 35 would lose their place over any Announcement changed anywhere.
+    // A next page asked while the pages are read again would land on top of
+    // the old ones, so none is.
+    it('keeps every loaded page after a change and reads them all again, the next page only once they have landed', async () => {
+      // The first page read again after the change waits for the test.
+      const fresh = deferred<void>();
+      let held = true;
       let changed = false;
-      rpc.mockImplementation((_name: string, args: { p_offset: number }) =>
-        changed && args.p_offset === 0
-          ? fresh.promise
-          : Promise.resolve({
-              data: feedRpcRows(args.p_offset + 1, 20, 80),
-              error: null,
-            }),
-      );
+      // The server's feed: 80 Announcements, and one more on top once
+      // published elsewhere.
+      const feed = () =>
+        changed
+          ? [500, ...Array.from({ length: 80 }, (_, index) => index + 1)]
+          : Array.from({ length: 80 }, (_, index) => index + 1);
+      rpc.mockImplementation((_name: string, args: { p_offset: number }) => {
+        const ids = feed();
+        const page = {
+          data: ids
+            .slice(args.p_offset, args.p_offset + 20)
+            .map((id) => feedRpcRow({ id, total: ids.length })),
+          error: null as null,
+        };
+        return changed && args.p_offset === 0 && held
+          ? fresh.promise.then(() => {
+              held = false;
+              return page;
+            })
+          : Promise.resolve(page);
+      });
       const offsets = () => rpc.mock.calls.map(([, args]) => args.p_offset);
       const { result } = renderHook(
         () => {
@@ -508,24 +524,25 @@ describe('the Anunțuri feed, read by the page (R56)', () => {
       changed = true;
       act(() => live.onChange('announcements'));
       await waitFor(() => expect(offsets()).toEqual([0, 20, 0]));
-      await waitFor(() => expect(result.current.rows).toHaveLength(20));
+      // Every card read so far stays while the pages are read again.
+      expect(result.current.rows).toHaveLength(40);
       // The end of the list comes into view meanwhile: nothing is asked.
       act(() => result.current.loadMore());
       expect(offsets()).toEqual([0, 20, 0]);
       expect(result.current.isFetching).toBe(true);
       await act(async () => {
-        fresh.resolve({
-          data: [feedRpcRow({ id: 500, total: 81 }), ...feedRpcRows(1, 19, 81)],
-          error: null,
-        });
+        fresh.resolve();
         await fresh.promise;
       });
       await waitFor(() => expect(result.current.isFetching).toBe(false));
+      // Both pages were read again, the new one on top.
+      expect(offsets()).toEqual([0, 20, 0, 20]);
+      expect(result.current.rows).toHaveLength(40);
       expect(result.current.rows[0]?.id).toBe(500);
       expect(result.current.total).toBe(81);
       act(() => result.current.loadMore());
-      await waitFor(() => expect(result.current.rows).toHaveLength(40));
-      expect(offsets()).toEqual([0, 20, 0, 20]);
+      await waitFor(() => expect(result.current.rows).toHaveLength(60));
+      expect(offsets()).toEqual([0, 20, 0, 20, 40]);
     });
 
     it('asks nothing while it is not enabled', () => {

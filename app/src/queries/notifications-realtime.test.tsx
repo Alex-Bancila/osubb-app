@@ -150,36 +150,45 @@ describe('notification Realtime signal', () => {
     expect(supabaseMock.channel).not.toHaveBeenCalled();
   });
 
-  // Fails if the signal only invalidates the feed: an infinite query reads
-  // every page it has loaded again, one after another (R56).
-  it('keeps only the first page of the Anunțuri feed before reading it again', async () => {
+  // Fails if a new Announcement, or a reconnect, cuts the feed to its first
+  // page: the Member reading further down would lose their place. Every
+  // loaded page is read again instead (R56).
+  it('reads every loaded page of the Anunțuri feed again on a new Announcement or a reconnect, keeping them', async () => {
     const queryClient = new QueryClient();
     const feedKey = keys.announcements.feed(memberId, { p_preferred: true });
-    queryClient.setQueryData(feedKey, {
+    const loaded = {
       pages: [
-        { rows: [{ id: 1 }], total: 3 },
-        { rows: [{ id: 2 }], total: 3 },
-        { rows: [{ id: 3 }], total: 3 },
+        { rows: [{ id: 1 }], total: 3, asOf: null },
+        { rows: [{ id: 2 }], total: 3, asOf: null },
+        { rows: [{ id: 3 }], total: 3, asOf: null },
       ],
-      pageParams: [0, 1, 2],
-    });
+      pageParams: [
+        { offset: 0, asOf: null },
+        { offset: 1, asOf: null },
+        { offset: 2, asOf: null },
+      ],
+    };
+    queryClient.setQueryData(feedKey, loaded);
     const wrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
     renderHook(() => useNotificationRealtime(memberId), { wrapper });
     await waitFor(() => expect(supabaseMock.on).toHaveBeenCalledOnce());
     const callback = supabaseMock.on.mock.calls[0]?.[2] as (
-      payload: unknown,
+      payload?: unknown,
     ) => void;
 
     act(() =>
       callback({ eventType: 'INSERT', new: { kind: 'announce' }, old: {} }),
     );
+    expect(queryClient.getQueryData(feedKey)).toEqual(loaded);
+    expect(queryClient.getQueryState(feedKey)?.isInvalidated).toBe(true);
 
-    expect(queryClient.getQueryData(feedKey)).toEqual({
-      pages: [{ rows: [{ id: 1 }], total: 3 }],
-      pageParams: [0],
-    });
+    // A reconnect (no payload) may have missed one.
+    queryClient.setQueryData(feedKey, loaded);
+    expect(queryClient.getQueryState(feedKey)?.isInvalidated).toBe(false);
+    act(() => callback());
+    expect(queryClient.getQueryData(feedKey)).toEqual(loaded);
     expect(queryClient.getQueryState(feedKey)?.isInvalidated).toBe(true);
   });
 

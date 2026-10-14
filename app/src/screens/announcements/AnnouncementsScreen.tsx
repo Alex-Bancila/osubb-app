@@ -348,8 +348,8 @@ function AnnouncementsContent({
   }
 
   // Armed only while nothing is read: not during the next page, nor while
-  // the first page is read again after a change. Re-armed when that lands,
-  // it asks at once if the end is still in view.
+  // the loaded pages are read again after a change. Re-armed when that
+  // lands, it asks at once if the end is still in view.
   const sentinel = useInView(
     feed.loadMore,
     feed.hasMore && !feed.isLoadingMore && !feed.isFetching && !feed.moreFailed,

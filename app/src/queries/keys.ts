@@ -266,9 +266,9 @@ export const keys = {
   },
   announcements: {
     all: ['announcements'] as const,
-    /* Every page of the Anunțuri feed, whatever its filters: a live change
-       keeps only their first pages (live-changes.ts), and marking one read
-       changes their rows in place rather than reading them again (R56). */
+    /* Every page of the Anunțuri feed, whatever its filters: a change reads
+       every loaded page again, and marking one read changes its row in place
+       rather than reading them again (R56). */
     feedAll: ['announcements', 'feed'] as const,
     /* The feed under the Group filter and Grupuri preferate, 20 a page. */
     feed: (

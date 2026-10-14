@@ -137,14 +137,17 @@ const FAMILIES_BY_TABLE: ReadonlyMap<string, readonly Prefix[]> = new Map<
 
 /**
  * A list read by the page — the finished part of a Task list, 50 at a time
- * (#1053), or the Anunțuri feed, 20 at a time (R56) — is an infinite query,
- * and a refetch of one reads again every page it has loaded. Before its
- * family is invalidated, each such list under `queryKey` keeps only its
- * first page, so a change costs one request per list; the next pages are
- * read again as the Member scrolls to them. The first page stays on screen
- * meanwhile.
+ * (#1053) — is an infinite query, and a refetch of one reads again every
+ * page it has loaded. Before its family is invalidated, each such list under
+ * `queryKey` keeps only its first page, so a change costs one request per
+ * list; the next pages are read again as the Member scrolls to them. The
+ * first page stays on screen meanwhile.
+ *
+ * The Anunțuri feed (R56) is not cut: a Member reading its fifth page would
+ * lose their place over any Announcement, Group or roster changed anywhere.
+ * A change reads every page it has loaded again instead.
  */
-export function keepFirstPages(queryClient: QueryClient, queryKey: QueryKey) {
+function keepFirstPages(queryClient: QueryClient, queryKey: QueryKey) {
   queryClient.setQueriesData<InfiniteData<unknown, unknown>>(
     { queryKey },
     (data) =>
@@ -160,7 +163,6 @@ export function keepFirstPages(queryClient: QueryClient, queryKey: QueryKey) {
 /** Each list read by the page, beside the family whose change re-reads it. */
 const PAGED_LISTS: readonly (readonly [family: Prefix, pages: Prefix])[] = [
   [keys.tasks.all, keys.tasks.finishedAll],
-  [keys.announcements.all, keys.announcements.feedAll],
 ];
 
 /**
