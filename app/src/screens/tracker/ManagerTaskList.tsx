@@ -169,7 +169,10 @@ export function ManagerTaskList({
       .filter((row) => !open.has(row.id))
       .map((row) => toTaskPresentation(row, now));
   }, [finished.rows, rows, now]);
-  const sentinel = useInView(finished.loadMore, finished.rows.length);
+  const sentinel = useInView(
+    finished.loadMore,
+    finished.hasMore && !finished.isLoadingMore && !finished.moreFailed,
+  );
 
   // How many Tasks the list shows; unknown until the finished part answers.
   const count =

@@ -112,7 +112,7 @@ vi.mock('../../queries/task-tabs', () => ({
 }));
 // #1053: the finished part of a leadership list, what the list holds, and
 // the two one-Task questions a link asks. Nothing unless a test says so.
-const lists = vi.hoisted(() => ({
+const listReads = vi.hoisted(() => ({
   finished: vi.fn(),
   summary: vi.fn(),
   capability: vi.fn(),
@@ -120,10 +120,11 @@ const lists = vi.hoisted(() => ({
 }));
 vi.mock('../../queries/task-lists', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../queries/task-lists')>()),
-  useFinishedTasks: (...args: unknown[]) => lists.finished(...args),
-  useTaskListSummary: (...args: unknown[]) => lists.summary(...args),
-  useTaskManageCapability: (...args: unknown[]) => lists.capability(...args),
-  useTaskReadable: (...args: unknown[]) => lists.readable(...args),
+  useFinishedTasks: (...args: unknown[]) => listReads.finished(...args),
+  useTaskListSummary: (...args: unknown[]) => listReads.summary(...args),
+  useTaskManageCapability: (...args: unknown[]) =>
+    listReads.capability(...args),
+  useTaskReadable: (...args: unknown[]) => listReads.readable(...args),
 }));
 vi.mock('../../queries/tasks', () => ({ useMyTasks: hooks.useMyTasks }));
 vi.mock('../../queries/task-progress', () => ({
@@ -231,14 +232,14 @@ function noFinished() {
   };
 }
 beforeEach(() => {
-  lists.finished.mockReset();
-  lists.finished.mockReturnValue(noFinished());
-  lists.summary.mockReset();
-  lists.summary.mockReturnValue({ data: [], isError: false });
-  lists.capability.mockReset();
-  lists.capability.mockReturnValue({ data: false, isError: false });
-  lists.readable.mockReset();
-  lists.readable.mockReturnValue({ data: false, isError: false });
+  listReads.finished.mockReset();
+  listReads.finished.mockReturnValue(noFinished());
+  listReads.summary.mockReset();
+  listReads.summary.mockReturnValue({ data: [], isError: false });
+  listReads.capability.mockReset();
+  listReads.capability.mockReturnValue({ data: false, isError: false });
+  listReads.readable.mockReset();
+  listReads.readable.mockReturnValue({ data: false, isError: false });
 });
 
 function Router({ children }: { children: ReactNode }) {
@@ -2101,7 +2102,7 @@ describe('Taskuri over the paged lists (#1053)', () => {
 
   it('lands a link to a finished managed Task on De gestionat by asking the server about that one Task', () => {
     manages();
-    lists.capability.mockImplementation((taskId: number | null) => ({
+    listReads.capability.mockImplementation((taskId: number | null) => ({
       data: taskId === 77 ? true : undefined,
       isError: false,
     }));
@@ -2110,26 +2111,26 @@ describe('Taskuri over the paged lists (#1053)', () => {
     expect(
       screen.getByRole('dialog', { name: 'Detalii task' }),
     ).toHaveTextContent('Task #77');
-    expect(lists.capability).toHaveBeenCalledWith(77, true);
+    expect(listReads.capability).toHaveBeenCalledWith(77, true);
   });
 
   it('asks nothing when the open managed Tasks already hold the linked one', () => {
     manages([taskRow({ id: 7, title: 'De evaluat', status: 'in_review' })]);
     renderAt('/tracker?task=7');
     expect(selected()).toBe('De gestionat');
-    expect(lists.capability).toHaveBeenLastCalledWith(7, false);
+    expect(listReads.capability).toHaveBeenLastCalledWith(7, false);
   });
 
   it('waits for the server before it lands a link no open list holds', () => {
     manages();
-    lists.capability.mockReturnValue({ data: undefined, isError: false });
+    listReads.capability.mockReturnValue({ data: undefined, isError: false });
     renderAt('/tracker?task=77');
     expect(screen.queryByRole('dialog', { name: 'Detalii task' })).toBeNull();
   });
 
   it('lands the link on the opening tab, sheet open, when the Task is not managed', () => {
     manages();
-    lists.capability.mockReturnValue({ data: false, isError: false });
+    listReads.capability.mockReturnValue({ data: false, isError: false });
     renderAt('/tracker?task=77');
     expect(
       screen.getByRole('dialog', { name: 'Detalii task' }),
@@ -2144,7 +2145,7 @@ describe('Taskuri over the paged lists (#1053)', () => {
       ...settled,
       refetch: vi.fn(),
     });
-    lists.readable.mockImplementation((taskId: number | null) => ({
+    listReads.readable.mockImplementation((taskId: number | null) => ({
       data: taskId === 77 ? true : undefined,
       isError: false,
     }));
@@ -2153,12 +2154,12 @@ describe('Taskuri over the paged lists (#1053)', () => {
     expect(
       screen.getByRole('dialog', { name: 'Detalii task' }),
     ).toHaveTextContent('Task #77');
-    expect(lists.readable).toHaveBeenCalledWith(77, true);
+    expect(listReads.readable).toHaveBeenCalledWith(77, true);
   });
 
   it('opens on De gestionat when the Member manages only finished Tasks (B17)', () => {
     manages();
-    lists.summary.mockReturnValue({
+    listReads.summary.mockReturnValue({
       data: [
         {
           group_id: 1,
@@ -2177,31 +2178,31 @@ describe('Taskuri over the paged lists (#1053)', () => {
     });
     renderAt('/tracker');
     expect(selected()).toBe('De gestionat');
-    expect(lists.summary).toHaveBeenCalledWith('managed', true);
+    expect(listReads.summary).toHaveBeenCalledWith('managed', true);
   });
 
   it('waits for what the managed list holds before choosing the opening tab', () => {
     manages();
-    lists.summary.mockReturnValue({ data: undefined, isError: false });
+    listReads.summary.mockReturnValue({ data: undefined, isError: false });
     hooks.useTaskOpportunities.mockReturnValue({
       data: [taskRow({ id: 4, assignments: [] })],
       ...settled,
     });
     const { rerender } = renderAt('/tracker');
-    lists.summary.mockReturnValue({ data: [], isError: false });
+    listReads.summary.mockReturnValue({ data: [], isError: false });
     rerender(tree('/tracker'));
     expect(selected()).toBe('Disponibile');
   });
 
   it('asks for no summary from a Member who manages nothing', () => {
     renderAt('/tracker');
-    expect(lists.summary).toHaveBeenCalledWith('managed', false);
+    expect(listReads.summary).toHaveBeenCalledWith('managed', false);
   });
 
   it('tells the sheet a Task opened from De gestionat is managed, and to ask about any other', async () => {
     const user = userEvent.setup();
     manages([taskRow({ id: 3, title: 'Deschis', assignments: [] })]);
-    lists.finished.mockReturnValue({
+    listReads.finished.mockReturnValue({
       ...noFinished(),
       rows: [finished],
       total: 1,

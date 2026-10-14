@@ -55,10 +55,12 @@ vi.mock('../../queries/task-details', () => ({ useTaskDetails }));
 // #1053: `can_manage_task` for the one shown Task; unanswered unless a test
 // says so.
 const manageCapability = vi.hoisted(() =>
-  vi.fn((): { data: boolean | undefined } => ({ data: undefined })),
+  vi.fn(
+    (_taskId: number | null, _enabled?: boolean): { data?: boolean } => ({}),
+  ),
 );
 vi.mock('../../queries/task-lists', () => ({
-  useTaskManageCapability: (...args: unknown[]) => manageCapability(...args),
+  useTaskManageCapability: manageCapability,
 }));
 const deleteTask = vi.hoisted(() =>
   vi.fn().mockResolvedValue({ deletedTasks: 1, pointsReversed: 0, members: 0 }),
