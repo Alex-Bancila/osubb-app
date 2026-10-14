@@ -261,6 +261,10 @@ sit above that target. A list of rows that can change under the member is an
   one tint under the pointer, and a small give when pressed.
 - _A changed number pops._ A badge or count that changes — never one that has
   just loaded — gives one small pop (`usePopMotion`).
+- _The create button pops._ The page's plus button pops in with a small
+  overshoot while its plus turns a quarter, and pops out where it stood when
+  its page or its last action goes (`useFabPresence`). Its 360 ms entrance is
+  the one move longer than 250 ms (Alex, 2026-10-14); the way out is 160 ms.
 
 **Forms.** Labels sit above fields. Required is the default and unmarked;
 optional fields say "(opțional)". Errors appear under the field, in Romanian,
