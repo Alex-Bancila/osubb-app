@@ -1,5 +1,10 @@
-import { useMemo, useState } from 'react';
-import { skipToken, useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  skipToken,
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
@@ -450,6 +455,32 @@ export function useFinishedTasks(
     },
     refetch: () => void query.refetch(),
   };
+}
+
+/**
+ * Asks once, as soon as `enabled`, for the first page of a list's finished
+ * part under `filters`, before the list is drawn: the Tracker opens on De
+ * gestionat only once its open Tasks have landed, and the list then finds
+ * this page read or on its way, under the same key. `filters` must be what
+ * the list will open with (`finishedListFilters`); a filter changed later
+ * is the list's own read, never asked here.
+ */
+export function usePrefetchFinishedTasks(
+  list: TaskListName,
+  filters: FinishedFilters | null,
+  enabled: boolean,
+): void {
+  const queryClient = useQueryClient();
+  const memberId = useAuth().session?.user.id;
+  const asked = useRef(false);
+  useEffect(() => {
+    if (asked.current || !enabled || !memberId) return;
+    asked.current = true;
+    if (filters)
+      void queryClient.prefetchInfiniteQuery(
+        finishedTasksQueryOptions(list, filters, memberId),
+      );
+  }, [queryClient, list, filters, enabled, memberId]);
 }
 
 /** What a list holds; nothing is asked while `enabled` is false. */

@@ -15,7 +15,6 @@ import {
   summaryWork,
   useFinishedTasks,
   useTaskListSummary,
-  type FinishedFilters,
   type ListRead,
   type TaskListName,
 } from '../../queries/task-lists';
@@ -30,9 +29,9 @@ import { matchesTitle, type TitleSearch } from './use-title-search';
 import { TaskRow } from './TaskRow';
 import {
   compareManagedTasks,
+  finishedListFilters,
   finishedStateCounts,
   isFinishedState,
-  isOpenState,
   MANAGER_TASK_STATES,
   matchesTaskState,
   type ManagerTaskSort,
@@ -165,17 +164,15 @@ export function ManagerTaskList({
   // The finished part's read: the same narrowing, applied by the server.
   // Nothing is asked while the range is inverted or Stare names a state only
   // an open Task can have.
-  const finishedFilters = useMemo<FinishedFilters | null>(
+  const finishedFilters = useMemo(
     () =>
-      !params || isOpenState(state)
-        ? null
-        : {
-            ...params,
-            ...(needle ? { p_search: needle } : {}),
-            ...(isFinishedState(state) ? { p_state: state } : {}),
-            ...(preferred.active ? { p_preferred: true } : {}),
-            ...(sort === 'title' ? { p_sort: sort } : {}),
-          },
+      finishedListFilters({
+        params,
+        needle,
+        preferred: preferred.active,
+        state,
+        sort,
+      }),
     [params, state, needle, sort, preferred.active],
   );
   const finished = useFinishedTasks(list, finishedFilters, true);

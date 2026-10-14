@@ -32,10 +32,14 @@ vi.mock('./live-changes-channel', () => ({
     return () => undefined;
   },
 }));
+import { createQueryClient } from './client';
+import { keys } from './keys';
 import { useLiveChanges } from './live-changes';
 import {
   useFinishedTasks,
   useManagedTasks,
+  usePrefetchFinishedTasks,
+  type FinishedFilters,
   type TaskListRpcRow,
 } from './task-lists';
 
@@ -87,10 +91,11 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function wrapper() {
-  const client = new QueryClient({
+function wrapper(
+  client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
-  });
+  }),
+) {
   return ({ children }: { children: ReactNode }) =>
     createElement(QueryClientProvider, { client }, children);
 }
@@ -267,6 +272,73 @@ describe('useFinishedTasks', () => {
       isError: false,
       hasMore: false,
     });
+  });
+});
+
+describe('usePrefetchFinishedTasks', () => {
+  // Fails if the list asks again for the page the Tracker asked for before
+  // drawing it: the early read would only add a request.
+  it('lets the list find the first page asked for before it was drawn, still on its way', async () => {
+    const first = deferred<{ data: TaskListRpcRow[]; error: null }>();
+    rpc.mockReturnValue(first.promise);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    renderHook(() => usePrefetchFinishedTasks('managed', {}, true), {
+      wrapper: wrapper(client),
+    });
+    await waitFor(() => expect(rpc).toHaveBeenCalledTimes(1));
+    const { result } = renderHook(() => useFinishedTasks('managed', {}, true), {
+      wrapper: wrapper(client),
+    });
+    first.resolve({ data: rows(1, 50, 120), error: null });
+    await waitFor(() => expect(result.current.rows).toHaveLength(50));
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('task_list', {
+      p_list: 'managed',
+      p_finished: true,
+      p_limit: 50,
+      p_offset: 0,
+    });
+  });
+
+  it('lets the list find it once landed too, while fresh (the app’s client)', async () => {
+    rpc.mockResolvedValue({ data: rows(1, 50, 120), error: null });
+    const client = createQueryClient();
+    renderHook(() => usePrefetchFinishedTasks('managed', {}, true), {
+      wrapper: wrapper(client),
+    });
+    await waitFor(() =>
+      expect(
+        client.getQueryData(keys.tasks.finished('me', 'managed', {})),
+      ).toBeDefined(),
+    );
+    const { result } = renderHook(() => useFinishedTasks('managed', {}, true), {
+      wrapper: wrapper(client),
+    });
+    await waitFor(() => expect(result.current.rows).toHaveLength(50));
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks once, when enabled, and never again as the filters change', async () => {
+    rpc.mockResolvedValue({ data: [], error: null });
+    const { rerender } = renderHook(
+      ({ filters, enabled }: { filters: FinishedFilters; enabled: boolean }) =>
+        usePrefetchFinishedTasks('managed', filters, enabled),
+      { wrapper: wrapper(), initialProps: { filters: {}, enabled: false } },
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(rpc).not.toHaveBeenCalled();
+    rerender({ filters: {}, enabled: true });
+    await waitFor(() => expect(rpc).toHaveBeenCalledTimes(1));
+    // A search typed afterwards is the list's own read.
+    rerender({ filters: { p_search: 'afis' }, enabled: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 });
 

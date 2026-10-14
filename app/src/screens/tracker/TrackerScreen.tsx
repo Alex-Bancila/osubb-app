@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSwipeTabs } from '../../lib/swipe-tabs';
 import { useSearchParams } from 'react-router';
 import { Tabs } from '@base-ui/react/tabs';
@@ -19,10 +19,12 @@ import {
   useAllTasks,
 } from '../../queries/task-tabs';
 import {
+  usePrefetchFinishedTasks,
   useTaskListSummary,
   useTaskManageCapability,
   useTaskReadable,
 } from '../../queries/task-lists';
+import { useGroupPreferences } from '../../queries/group-preferences';
 import { usePendingDecisions } from '../../queries/request-decisions';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -37,10 +39,13 @@ import {
 import { useAuth } from '../../lib/auth';
 import { useCapability } from '../../lib/capabilities';
 import { parsePositiveInt } from '../../lib/ids';
+import { useWorkFilter } from '../../lib/use-work-filter';
+import { usePreferredGroups } from '../../components/preferred-groups/preferred-groups';
 import { RequestsView } from '../requests/RequestsView';
 import { AvailableOpportunities } from './AvailableOpportunities';
 import { TaskDetailsSheet } from './TaskDetailsSheet';
 import { ManagerTaskList } from './ManagerTaskList';
+import { finishedListFilters } from './manager-task-list';
 import { AddCompletedTaskControl } from './AddCompletedTaskControl';
 import { NewTaskControl } from './NewTaskControl';
 import { MyTaskList } from './MyTaskList';
@@ -227,6 +232,28 @@ function TrackerContent() {
   const toDecide = decisions.data?.length ?? 0;
   // One search text for the four lists: it stays when the tab changes.
   const search = useTitleSearch();
+  // De gestionat's first finished page, asked beside its open Tasks
+  // (#1053): on a plain visit its tab is chosen, and its list drawn, only
+  // once those land. Asked once, with what the list opens with — the Work
+  // Filter, the search, and Grupuri preferate once the preference is
+  // known — so the list finds it under the same key.
+  const { params: workParams } = useWorkFilter();
+  const preferred = usePreferredGroups();
+  const preferenceKnown = !useGroupPreferences().isPending;
+  const openingFinished = useMemo(
+    () =>
+      finishedListFilters({
+        params: workParams,
+        needle: search.needle,
+        preferred: preferred.active,
+      }),
+    [workParams, search.needle, preferred.active],
+  );
+  usePrefetchFinishedTasks(
+    'managed',
+    openingFinished,
+    management.data === true && preferenceKnown,
+  );
   const [detailId, setDetailId] = useState<number | null>(null);
   // The Task opened from De gestionat, while its sheet is open: managed,
   // whatever page it was on.
