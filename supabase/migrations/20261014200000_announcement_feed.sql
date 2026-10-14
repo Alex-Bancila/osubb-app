@@ -14,7 +14,11 @@
 --   * the Group filter: the chosen Group and every Group below it.
 -- public.announcement_feed returns a page in R15's order -- pinned, then
 -- unread, then read; newest first in each; the id last -- with the unpaged
--- count; public.announcement_feed_summary returns the header's unread count,
+-- count. Being read moves an Announcement in that order, so a page is cut
+-- against a moment, p_as_of: a read made after it still orders as unread.
+-- The first page answers its moment (as_of) and every later page of the
+-- same reading passes it on, so reading a card never shifts the next page;
+-- reading from the top again starts a new moment; public.announcement_feed_summary returns the header's unread count,
 -- the first unread critical Announcement for the banner, and the two counts
 -- the empty states tell apart.
 
@@ -115,7 +119,8 @@ create function private.announcement_feed_impl(
   p_group_id bigint,
   p_preferred boolean,
   p_limit integer,
-  p_offset integer)
+  p_offset integer,
+  p_as_of timestamptz)
 returns table(
   id bigint,
   title text,
@@ -132,7 +137,8 @@ returns table(
   approval_status text,
   rejection_reason text,
   read_at timestamptz,
-  total bigint)
+  total bigint,
+  as_of timestamptz)
 language sql
 stable
 security definer
@@ -142,11 +148,14 @@ as $$
 
   with placed as (
     -- R15: pinned (read or not), then unread, then read; newest first in
-    -- each; the id ends every tie, so a page boundary never wobbles.
+    -- each; the id ends every tie. Read means read by the reading's moment,
+    -- so a page boundary never wobbles while the Member reads.
     select feed.*,
            count(*) over () as total,
            row_number() over (
-             order by case when feed.pinned then 0 when feed.read_at is null then 1 else 2 end,
+             order by case when feed.pinned then 0
+                           when feed.read_at is null or feed.read_at > coalesce(p_as_of, now()) then 1
+                           else 2 end,
                       feed.published_at desc,
                       feed.id desc) as place
       from private.announcement_feed_rows(p_group_id, p_preferred) as feed
@@ -154,20 +163,21 @@ as $$
   select placed.id, placed.title, placed.body, placed.group_id, placed.audience, placed.priority,
          placed.pinned, placed.links, placed.published_at, placed.deadline, placed.min_level,
          placed.created_by, placed.approval_status, placed.rejection_reason, placed.read_at,
-         placed.total
+         placed.total, coalesce(p_as_of, now())
     from placed
    order by placed.place
    limit p_limit offset p_offset;
 $$;
 
-comment on function private.announcement_feed_impl(bigint, boolean, integer, integer) is
-  'Body of public.announcement_feed: private.announcement_feed_rows in R15''s order, cut by p_limit and p_offset, with the unpaged count in total.';
+comment on function private.announcement_feed_impl(bigint, boolean, integer, integer, timestamptz) is
+  'Body of public.announcement_feed: private.announcement_feed_rows in R15''s order as of p_as_of (now when null), cut by p_limit and p_offset, with the unpaged count in total and the moment in as_of.';
 
 create function public.announcement_feed(
   p_group_id bigint default null,
   p_preferred boolean default false,
   p_limit integer default 20,
-  p_offset integer default 0)
+  p_offset integer default 0,
+  p_as_of timestamptz default null)
 returns table(
   id bigint,
   title text,
@@ -184,23 +194,24 @@ returns table(
   approval_status text,
   rejection_reason text,
   read_at timestamptz,
-  total bigint)
+  total bigint,
+  as_of timestamptz)
 language sql
 stable
 set search_path = ''
 as $$
-  select * from private.announcement_feed_impl(p_group_id, p_preferred, p_limit, p_offset);
+  select * from private.announcement_feed_impl(p_group_id, p_preferred, p_limit, p_offset, p_as_of);
 $$;
 
-comment on function public.announcement_feed(bigint, boolean, integer, integer) is
-  'A page of the Anunțuri feed (spec 2026-10-14 member reads, ruling R56), in one request: the Announcements the caller reads (exactly announcements_read; never a Deal), p_preferred (R43) without an unticked Group''s that is neither critical, organization-wide nor theirs, p_group_id that Group and every Group below it; R15''s order (pinned, unread, read; newest first; id last); p_limit 1..100 (20 by default) and p_offset cut the page, total is the count before the cut; read_at is the caller''s own read time. PT400 invalid_page. Nothing without organization claims.';
+comment on function public.announcement_feed(bigint, boolean, integer, integer, timestamptz) is
+  'A page of the Anunțuri feed (spec 2026-10-14 member reads, ruling R56), in one request: the Announcements the caller reads (exactly announcements_read; never a Deal), p_preferred (R43) without an unticked Group''s that is neither critical, organization-wide nor theirs, p_group_id that Group and every Group below it; R15''s order (pinned, unread, read; newest first; id last) as of p_as_of -- a read made after it still orders as unread, so the pages of one reading never shift; null means now, and as_of answers the moment used, for the next page to pass on; p_limit 1..100 (20 by default) and p_offset cut the page, total is the count before the cut; read_at is the caller''s own read time. PT400 invalid_page. Nothing without organization claims.';
 
-revoke execute on function private.announcement_feed_impl(bigint, boolean, integer, integer)
+revoke execute on function private.announcement_feed_impl(bigint, boolean, integer, integer, timestamptz)
   from public, anon, authenticated, service_role;
-revoke execute on function public.announcement_feed(bigint, boolean, integer, integer)
+revoke execute on function public.announcement_feed(bigint, boolean, integer, integer, timestamptz)
   from public, anon, authenticated, service_role;
-grant execute on function private.announcement_feed_impl(bigint, boolean, integer, integer) to authenticated;
-grant execute on function public.announcement_feed(bigint, boolean, integer, integer) to authenticated;
+grant execute on function private.announcement_feed_impl(bigint, boolean, integer, integer, timestamptz) to authenticated;
+grant execute on function public.announcement_feed(bigint, boolean, integer, integer, timestamptz) to authenticated;
 
 -- ==================== 3. What the page shows around it ====================
 

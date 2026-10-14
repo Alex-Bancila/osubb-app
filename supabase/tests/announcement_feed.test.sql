@@ -24,7 +24,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(21);
+select plan(24);
 
 \ir _group_task_fixtures.psql
 reset role;
@@ -152,8 +152,8 @@ create temp table af_callers(uid uuid);
 insert into af_callers select id from public.profiles where status = 'activ';
 
 -- ---------------------------------------------------------------- shape
-select has_function('public', 'announcement_feed', array['bigint', 'boolean', 'integer', 'integer'],
-                    'public.announcement_feed(group, preferred, limit, offset) exists');
+select has_function('public', 'announcement_feed', array['bigint', 'boolean', 'integer', 'integer', 'timestamp with time zone'],
+                    'public.announcement_feed(group, preferred, limit, offset, as_of) exists');
 select has_function('public', 'announcement_feed_summary', array['bigint', 'boolean'],
                     'public.announcement_feed_summary(group, preferred) exists');
 
@@ -222,6 +222,30 @@ select is((pg_temp.af_row(pg_temp.g521_uid(5), 'select total, read_at is null as
           'each row carries the unpaged count');
 select is((pg_temp.af_row(pg_temp.g521_uid(5), format('select read_at is not null as read from public.announcement_feed(p_limit => 100) where id = %s', pg_temp.af_id('dept'))) ->> 'read')::boolean,
           true, 'each row carries the caller''s own read time');
+
+-- ------------------------------------------- one reading, one moment
+-- #5 reads the first unread one a minute into a reading: as of the moment
+-- their reading began it is still unread, so every page of that reading keeps
+-- its place -- the next page neither skips nor repeats a card. A reading
+-- begun after it sees it read.
+create temp table af_reading as
+select pg_temp.af_ids(pg_temp.g521_uid(5),
+         'select id from public.announcement_feed(p_limit => 100, p_as_of => now())') as ids;
+grant select on af_reading to authenticated;
+insert into public.announcement_reads(announcement_id, member_id, read_at)
+select (select ids[2] from af_reading), pg_temp.g521_uid(5), now() + interval '1 minute';
+select is(pg_temp.af_ids(pg_temp.g521_uid(5),
+            'select id from public.announcement_feed(p_limit => 100, p_as_of => now())'),
+          (select ids from af_reading),
+          'one reading keeps its order while the Member reads: a read after its moment still orders as unread');
+select isnt(pg_temp.af_ids(pg_temp.g521_uid(5), 'select id from public.announcement_feed(p_limit => 100, p_as_of => now() + interval ''2 minutes'')'),
+            (select ids from af_reading),
+            'a reading begun after the read orders it among the read ones');
+select is((pg_temp.af_row(pg_temp.g521_uid(5),
+             'select as_of = now() as now, (select as_of from public.announcement_feed(p_limit => 1, p_as_of => now() - interval ''1 minute'')) = now() - interval ''1 minute'' as passed
+                from public.announcement_feed(p_limit => 1)')),
+          '{"now": true, "passed": true}'::jsonb,
+          'as_of answers the moment used: now for a first page, the one passed on for the next');
 
 -- --------------------------------------------------------------- summary
 select is(pg_temp.af_row(pg_temp.g521_uid(5), 'select unread, critical_id, everything, preferred from public.announcement_feed_summary()'),

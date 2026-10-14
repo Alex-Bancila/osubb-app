@@ -966,7 +966,7 @@ insert into pinned_private_functions (proname, args, category) values
   -- bodies the invoker wrappers call as the caller.
   ('announcement_feed_rows',             'p_group_id bigint, p_preferred boolean', 'none'),
   ('require_announcement_feed_page',     'p_limit integer, p_offset integer', 'require'),
-  ('announcement_feed_impl',             'p_group_id bigint, p_preferred boolean, p_limit integer, p_offset integer', 'impl'),
+  ('announcement_feed_impl',             'p_group_id bigint, p_preferred boolean, p_limit integer, p_offset integer, p_as_of timestamp with time zone', 'impl'),
   ('announcement_feed_summary_impl',     'p_group_id bigint, p_preferred boolean', 'impl');
 
 select is(

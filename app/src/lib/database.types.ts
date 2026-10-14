@@ -2743,6 +2743,7 @@ export type Database = {
       }
       announcement_feed: {
         Args: {
+          p_as_of?: string
           p_group_id?: number
           p_limit?: number
           p_offset?: number
@@ -2750,6 +2751,7 @@ export type Database = {
         }
         Returns: {
           approval_status: string
+          as_of: string
           audience: string
           body: string
           created_by: string
