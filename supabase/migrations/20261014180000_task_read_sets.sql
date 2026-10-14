@@ -1,5 +1,5 @@
--- Fast reads everywhere, part 1 (docs/superpowers/specs/2026-10-14-member-reads-design.md):
--- the Task read rule, decided once per request.
+-- Spec 2026-10-14 member reads, part 1: the Task read rule, decided once per request.
+-- (docs/superpowers/specs/2026-10-14-member-reads-design.md; Alex chose PRs without issues.)
 --
 -- tasks_read called private.can_read_task(id) for every row it looked at: a
 -- security-definer join Postgres cannot inline, about 0.5 ms a row (a
