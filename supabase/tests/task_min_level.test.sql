@@ -7,7 +7,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(55);
+select plan(57);
 
 create function pg_temp.m(n integer) returns uuid language sql immutable as $$
   select ('57100000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -237,8 +237,13 @@ select throws_ok($$select pg_temp.edit('High 2 #57', 5, false)$$, 'PT400', 'task
   'but cannot choose another Role above their own');
 select throws_ok($$select pg_temp.edit('High 2 #57', 4, false)$$, 'PT400', 'invalid_task_min_level',
   'an edit takes only the ladder');
+select throws_ok($$select pg_temp.edit('High 2 #57', 2, false)$$, 'PT400', 'task_min_level_above_actor',
+  'nor lower a Role above their own');
+select throws_ok($$select pg_temp.edit('High 2 #57', 6, false, p_mode := 'direct', p_audience := 'local')$$,
+  'PT400', 'task_min_level_above_actor', 'nor clear it by making the Task Direct');
+select pg_temp.test_login_leadership(pg_temp.m(4));
 select lives_ok($$select pg_temp.edit('High 2 #57', 6, false, p_mode := 'direct', p_audience := 'local')$$,
-  'made Direct with the Role still sent');
+  'BC makes it Direct with the Role still sent');
 reset role;
 select pg_temp.test_clear_jwt();
 select is((select min_level from tasks where title = 'High 2 #57'), 0, 'a direct Task is stored at 0');
