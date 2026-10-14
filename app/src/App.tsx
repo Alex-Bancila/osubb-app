@@ -39,7 +39,8 @@ import ProfileScreen from './screens/profile/ProfileScreen';
 import PrivacyNoticeScreen from './screens/privacy/PrivacyNoticeScreen';
 import { PrivacyGate } from './components/shell/PrivacyGate';
 import { AccountConfirmGate } from './components/shell/AccountConfirmGate';
-import { SessionLoader, SessionScreen } from './components/shell/SessionScreen';
+import { BootShell } from './components/shell/BootShell';
+import { RouteLoader } from './components/shell/RouteLoader';
 import { Loading } from './components/states';
 
 const GroupsScreen = lazy(() => import('./screens/groups/GroupsScreen'));
@@ -85,19 +86,7 @@ const GroupScreen = lazy(() => import('./screens/administrare/GroupScreen'));
    page load, and treating it as "signed out" would bounce a signed-in member to
    the login screen every single time they refresh. */
 function Splash() {
-  return (
-    <SessionScreen centered>
-      <SessionLoader label="Se încarcă" />
-    </SessionScreen>
-  );
-}
-
-function RouteLoader() {
-  return (
-    <div className="page">
-      <SessionLoader label="Se încarcă pagina" />
-    </div>
-  );
+  return <BootShell />;
 }
 
 function DeferredRoute({ children }: { children: ReactElement }) {

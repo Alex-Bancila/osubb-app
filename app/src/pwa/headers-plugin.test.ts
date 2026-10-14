@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { headersPlugin, renderHeaders } from './headers-plugin';
@@ -161,5 +161,22 @@ describe('index.html', () => {
       expect(body.trim()).toBe('');
     }
     expect(html).toMatch(/<script src="\/theme-init\.js"><\/script>/);
+  });
+
+  it("draws the app's shell before its code runs, styled from a file, never inline", () => {
+    const html = readFileSync(path.resolve('index.html'), 'utf8');
+    // React replaces #root's children when it mounts; until then the
+    // shell says what is coming, so a slow start never shows a blank page.
+    const root =
+      /<div id="root">([\s\S]*?)<\/div>\s*<script/.exec(html)?.[1] ?? '';
+    expect(root).toMatch(/class="boot-shell"/);
+    expect(root).toMatch(/role="status"/);
+    expect(root).toMatch(/aria-label="Se încarcă aplicația"/);
+    expect(root).toMatch(/class="boot-bar"/);
+    expect(html).toMatch(/<link rel="stylesheet" href="\/splash\.css" \/>/);
+    // style-src stays 'self' (#770): no <style> element, no style attribute.
+    expect(html).not.toMatch(/<style\b/);
+    expect(html).not.toMatch(/\sstyle=/);
+    expect(existsSync(path.resolve('public/splash.css'))).toBe(true);
   });
 });

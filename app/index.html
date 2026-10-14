@@ -24,9 +24,25 @@
     <!-- Theme before first paint. A blocking classic script from public/, not
          inline: the Content-Security-Policy allows script-src 'self' only (#770). -->
     <script src="/theme-init.js"></script>
+    <!-- The shell drawn until the app's code runs (and BootShell after it):
+         a file, never inline, since style-src is 'self' (#770). -->
+    <link rel="stylesheet" href="/splash.css" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot-shell" role="status" aria-label="Se încarcă aplicația">
+        <img
+          class="boot-logo"
+          src="/favicon.svg"
+          alt=""
+          width="48"
+          height="48"
+        />
+        <span class="boot-bar"></span>
+        <span class="boot-bar"></span>
+        <span class="boot-bar"></span>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

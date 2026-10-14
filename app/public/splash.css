@@ -1,0 +1,57 @@
+/* The shell index.html draws before the app's code runs, and BootShell draws
+   again while the stored session is read, so a slow start never shows a blank
+   page and the hand-over to React does not flicker. A file, never a <style>
+   element or attribute: style-src is 'self' (#770). Light by default;
+   theme-init.js sets data-theme="dark" before the first paint. The colours
+   are the theme's --surface-2 and a step above --surface-3. */
+.boot-shell {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: #fafafb;
+}
+:root[data-theme='dark'] .boot-shell {
+  background: #0e0e11;
+}
+.boot-logo {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+}
+.boot-bar {
+  display: block;
+  width: min(240px, 60vw);
+  height: 12px;
+  border-radius: 6px;
+  background: #ececef;
+  animation: boot-pulse 1.4s ease-in-out infinite;
+}
+.boot-bar + .boot-bar {
+  width: min(180px, 45vw);
+  animation-delay: 0.15s;
+}
+.boot-bar + .boot-bar + .boot-bar {
+  width: min(120px, 30vw);
+  animation-delay: 0.3s;
+}
+:root[data-theme='dark'] .boot-bar {
+  background: #1f1f24;
+}
+@keyframes boot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .boot-bar {
+    animation: none;
+  }
+}

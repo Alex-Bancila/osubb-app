@@ -20,6 +20,7 @@ function createInjectManifestOptions() {
        Cloudflare `_headers` file matches none of these and stays out. */
     globPatterns: [
       'index.html',
+      'splash.css',
       'theme-init.js',
       'assets/*.{js,css,woff2,png,svg,ico}',
     ],
