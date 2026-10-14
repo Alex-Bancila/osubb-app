@@ -8,6 +8,7 @@ import {
 
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
+import { readAllRows } from './read-all';
 import { keys } from './keys';
 import { fetchMemberIdentities } from './member-identities';
 import type { AnnouncementChanges } from '../screens/announcements/announcement-draft';
@@ -48,16 +49,18 @@ export type MarkAnnouncementReadInput = {
  * thanks to the announcement_reads_manage_self RLS policy.
  */
 export async function fetchAnnouncementsFeed(): Promise<RawAnnouncementRow[]> {
-  const { data, error } = await supabase
-    .from('announcements')
-    .select(ANNOUNCEMENT_FIELDS)
-    // A Deal is an Announcement of kind deal (R45); it lives on its own tab.
-    .eq('kind', 'announcement')
-    .order('pinned', { ascending: false })
-    .order('published_at', { ascending: false });
-
-  if (error) throw error;
-  return (data as unknown as RawAnnouncementRow[]) ?? [];
+  const rows = await readAllRows((from, to) =>
+    supabase
+      .from('announcements')
+      .select(ANNOUNCEMENT_FIELDS)
+      // A Deal is an Announcement of kind deal (R45); it lives on its own tab.
+      .eq('kind', 'announcement')
+      .order('pinned', { ascending: false })
+      .order('published_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to),
+  );
+  return rows as unknown as RawAnnouncementRow[];
 }
 
 export function announcementsFeedQueryOptions(memberId?: string) {
@@ -112,14 +115,19 @@ export function useUnreadAnnouncementsCount() {
 export async function fetchAnnouncementReaders(
   announcementId: number,
 ): Promise<AnnouncementReader[] | null> {
-  const { data, error } = await supabase.rpc('announcement_readers', {
-    p_announcement_id: announcementId,
-  });
-  if (error) {
-    if (error.code === 'PT404') return null;
+  // An org Audience is every active Member: it passes 500. Newest read
+  // first, as the server lists them; the id keeps the pages stable.
+  const rows = await readAllRows((from, to) =>
+    supabase
+      .rpc('announcement_readers', { p_announcement_id: announcementId })
+      .order('read_at', { ascending: false, nullsFirst: false })
+      .order('member_id')
+      .range(from, to),
+  ).catch((error: unknown) => {
+    if ((error as { code?: unknown } | null)?.code === 'PT404') return null;
     throw error;
-  }
-  const rows = data ?? [];
+  });
+  if (!rows) return null;
   const identities = await fetchMemberIdentities(
     rows.map((row) => row.member_id),
   );

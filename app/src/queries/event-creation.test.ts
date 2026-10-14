@@ -1,3 +1,4 @@
+import { answered } from '../test/postgrest-fake';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({
@@ -207,10 +208,12 @@ describe('Event form options', () => {
       { id: 3, name: 'Bun venit', group_id: 7, is_active: true },
       { id: 4, name: 'Arhivată', group_id: 7, is_active: false },
     ]);
-    const select = vi.fn().mockResolvedValue({
-      data: readableGroups,
-      error: null,
-    });
+    const select = vi.fn().mockReturnValue(
+      answered({
+        data: readableGroups,
+        error: null,
+      }),
+    );
     api.from.mockReturnValue({ select });
 
     await expect(fetchEventFormOptions()).resolves.toEqual({

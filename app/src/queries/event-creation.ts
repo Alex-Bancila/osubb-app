@@ -11,6 +11,7 @@ import { useAuth } from '../lib/auth';
 import { inTreeOrder } from '../lib/work-filter';
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
+import { readAllRows } from './read-all';
 import type {
   EventDraft,
   EventFormCampaign,
@@ -85,12 +86,16 @@ export function buildEventFormOptions(
 }
 
 export async function fetchEventFormOptions(): Promise<EventFormOptions> {
-  const [capabilities, mine, groupsResult, campaigns] = await Promise.all([
+  const [capabilities, mine, groups, campaigns] = await Promise.all([
     fetchCapabilities(),
     fetchMyGroups(),
-    supabase
-      .from('groups')
-      .select('id,name,path,min_level,status,is_organization'),
+    readAllRows((from, to) =>
+      supabase
+        .from('groups')
+        .select('id,name,path,min_level,status,is_organization')
+        .order('id')
+        .range(from, to),
+    ),
     // Only an active Campaign may be attached (#691); the Group rule is
     // eventCampaignsFor's, applied once a Group is chosen.
     fetchCampaigns().then((rows) =>
@@ -99,11 +104,10 @@ export async function fetchEventFormOptions(): Promise<EventFormOptions> {
         .map(({ id, name, group_id }) => ({ id, name, group_id })),
     ),
   ]);
-  if (groupsResult.error) throw groupsResult.error;
   return buildEventFormOptions(
     capabilities,
     mine,
-    (groupsResult.data ?? []) as GroupRow[],
+    groups as GroupRow[],
     campaigns,
   );
 }

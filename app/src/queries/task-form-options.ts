@@ -2,25 +2,12 @@ import { skipToken, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
+import { readAllRows } from './read-all';
 import { fetchCampaigns } from './campaigns';
 import type { TaskFormOptions } from '../screens/tracker/task-form-model';
 
-async function pages<T>(
-  read: (
-    from: number,
-    to: number,
-  ) => PromiseLike<{ data: T[] | null; error: unknown }>,
-) {
-  const rows: T[] = [];
-  for (let offset = 0; ; offset += 500) {
-    const { data, error } = await read(offset, offset + 499);
-    if (error) throw error;
-    rows.push(...(data ?? []));
-    if (!data || data.length < 500) return rows;
-  }
-}
 export async function fetchTaskFormOptions(): Promise<TaskFormOptions> {
-  const groups = await pages((from, to) =>
+  const groups = await readAllRows((from, to) =>
     supabase
       .rpc('managed_work_groups')
       .order('path')
@@ -32,7 +19,7 @@ export async function fetchTaskFormOptions(): Promise<TaskFormOptions> {
     fetchCampaigns().then((rows) =>
       rows.filter((campaign) => campaign.is_active),
     ),
-    pages((from, to) =>
+    readAllRows((from, to) =>
       supabase
         .from('tasks')
         .select('id,title,group_id')
@@ -43,7 +30,7 @@ export async function fetchTaskFormOptions(): Promise<TaskFormOptions> {
     ),
     // Readable Group names, so a managed Child Group is shown with its parent,
     // and which of them are private (#757): their Tasks are local only.
-    pages((from, to) =>
+    readAllRows((from, to) =>
       supabase
         .from('groups')
         .select('id,name,is_private')

@@ -1,3 +1,4 @@
+import { answered } from '../../test/postgrest-fake';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -240,13 +241,15 @@ describe('AnnouncementDetailsSheet', () => {
     };
 
     function answerReaders() {
-      supabaseMock.rpc.mockResolvedValue({
-        data: [
-          { member_id: 'r1', read_at: '2026-09-20T09:30:00.000Z' },
-          { member_id: 'r2', read_at: null },
-        ],
-        error: null,
-      });
+      supabaseMock.rpc.mockReturnValue(
+        answered({
+          data: [
+            { member_id: 'r1', read_at: '2026-09-20T09:30:00.000Z' },
+            { member_id: 'r2', read_at: null },
+          ],
+          error: null,
+        }),
+      );
       supabaseMock.select.mockReturnValue({
         in: vi.fn().mockResolvedValue({
           data: [
@@ -270,7 +273,7 @@ describe('AnnouncementDetailsSheet', () => {
 
     it('names the author as a Member Card button', async () => {
       const user = userEvent.setup();
-      supabaseMock.rpc.mockResolvedValue({ data: [], error: null });
+      supabaseMock.rpc.mockReturnValue(answered({ data: [], error: null }));
       renderSheet(
         <AnnouncementDetailsSheet
           announcement={presentation({ authorMember: author })}
@@ -326,10 +329,12 @@ describe('AnnouncementDetailsSheet', () => {
 
     it('asks for a BC/Moderator and hides the line silently on PT404', async () => {
       viewer.bcOrModerator = true;
-      supabaseMock.rpc.mockResolvedValue({
-        data: null,
-        error: { code: 'PT404', message: 'announcement_not_found' },
-      });
+      supabaseMock.rpc.mockReturnValue(
+        answered({
+          data: null,
+          error: { code: 'PT404', message: 'announcement_not_found' },
+        }),
+      );
       renderSheet(
         <AnnouncementDetailsSheet
           announcement={presentation({

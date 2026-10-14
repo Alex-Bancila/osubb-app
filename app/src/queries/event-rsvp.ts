@@ -10,6 +10,7 @@ import { queryErrorCode } from '../lib/query-error';
 import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
+import { readAllRows } from './read-all';
 import type { EventAttendance } from './event-attendance';
 import { keys } from './keys';
 
@@ -278,13 +279,16 @@ export function eventRsvpMutationOptions(
  * a manager may read other members' answers through RLS.
  */
 export async function fetchGoingEventIds(memberId: string): Promise<number[]> {
-  const { data, error } = await supabase
-    .from('event_attendance')
-    .select('event_id')
-    .eq('member_id', memberId)
-    .eq('status', 'going');
-  if (error) throw error;
-  return (data ?? []).map((row) => row.event_id);
+  const rows = await readAllRows((from, to) =>
+    supabase
+      .from('event_attendance')
+      .select('event_id')
+      .eq('member_id', memberId)
+      .eq('status', 'going')
+      .order('event_id')
+      .range(from, to),
+  );
+  return rows.map((row) => row.event_id);
 }
 
 export function useGoingEventIds() {

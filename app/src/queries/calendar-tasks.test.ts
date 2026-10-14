@@ -1,3 +1,4 @@
+import { answered } from '../test/postgrest-fake';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resetSupabaseMock, supabaseMock } from '../test/supabase-mock';
@@ -30,10 +31,12 @@ describe('pending candidature Tasks', () => {
   // wants only a candidature still waiting. Mutation this catches: dropping
   // the `status = 'pending'` filter, or the self-filter a manager needs.
   it('reads my own pending candidatures, each Task once', async () => {
-    supabaseMock.eq.mockReturnValueOnce(supabaseMock).mockResolvedValueOnce({
-      data: [{ task: row }, { task: row }, { task: null }],
-      error: null,
-    });
+    supabaseMock.eq.mockReturnValueOnce(supabaseMock).mockReturnValueOnce(
+      answered({
+        data: [{ task: row }, { task: row }, { task: null }],
+        error: null,
+      }),
+    );
 
     const tasks = await fetchPendingCandidatureTasks('member-1');
 
@@ -50,7 +53,7 @@ describe('pending candidature Tasks', () => {
     const error = { code: '42501', message: 'permission denied' };
     supabaseMock.eq
       .mockReturnValueOnce(supabaseMock)
-      .mockResolvedValueOnce({ data: null, error });
+      .mockReturnValueOnce(answered({ data: null, error }));
 
     await expect(fetchPendingCandidatureTasks('member-1')).rejects.toBe(error);
   });

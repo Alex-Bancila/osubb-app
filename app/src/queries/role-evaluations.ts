@@ -10,6 +10,7 @@ import type { Database } from '../lib/database.types';
 import type { RoleEvaluationKind } from '../lib/schemas/role-evaluation';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
+import { readAllRows } from './read-all';
 
 type MemberRole = Database['public']['Enums']['member_role'];
 
@@ -104,15 +105,16 @@ export type ThresholdChange = {
 
 /** The threshold log, newest first. BC and the Moderator read it (level 6). */
 export async function fetchThresholdChanges(): Promise<ThresholdChange[]> {
-  const { data, error } = await supabase
-    .from('promotion_threshold_changes')
-    .select(
-      'id, kind, field, promotion_rule_id, from_value, to_value, source, changed_by, role_evaluation_id, changed_at',
-    )
-    .order('changed_at', { ascending: false })
-    .order('id', { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  return readAllRows((from, to) =>
+    supabase
+      .from('promotion_threshold_changes')
+      .select(
+        'id, kind, field, promotion_rule_id, from_value, to_value, source, changed_by, role_evaluation_id, changed_at',
+      )
+      .order('changed_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to),
+  );
 }
 
 export function useThresholdChanges() {
@@ -144,16 +146,18 @@ export type PromotionCandidate = {
 export async function fetchPromotionCandidates(): Promise<
   PromotionCandidate[]
 > {
-  const { data, error } = await supabase
-    .from('promotion_candidates')
-    .select(
-      'id, member_id, task_points, tenure_since, threshold_used, created_at, role_evaluation_id, role_evaluation:role_evaluations!promotion_candidates_role_evaluation_id_fkey(name)',
-    )
-    .is('decision', null)
-    .order('task_points', { ascending: false })
-    .order('id', { ascending: true });
-  if (error) throw error;
-  return (data ?? []).map((row) => ({
+  const rows = await readAllRows((from, to) =>
+    supabase
+      .from('promotion_candidates')
+      .select(
+        'id, member_id, task_points, tenure_since, threshold_used, created_at, role_evaluation_id, role_evaluation:role_evaluations!promotion_candidates_role_evaluation_id_fkey(name)',
+      )
+      .is('decision', null)
+      .order('task_points', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to),
+  );
+  return rows.map((row) => ({
     id: row.id,
     memberId: row.member_id,
     taskPoints: row.task_points,
@@ -187,13 +191,21 @@ export type RankingRow = {
 export async function fetchRoleEvaluationRanking(
   run: Pick<RoleEvaluation, 'kind' | 'period_from' | 'period_to'>,
 ): Promise<RankingRow[]> {
-  const { data, error } = await supabase.rpc('role_evaluation_ranking', {
-    p_kind: run.kind,
-    p_from: run.period_from,
-    p_to: run.period_to,
-  });
-  if (error) throw error;
-  return (data ?? []).map((row) => ({
+  // A cohort is every Member of the kind's population: it passes 500. The
+  // server's own order, the Member's id last to keep the pages stable.
+  const rows = await readAllRows((from, to) =>
+    supabase
+      .rpc('role_evaluation_ranking', {
+        p_kind: run.kind,
+        p_from: run.period_from,
+        p_to: run.period_to,
+      })
+      .order('role')
+      .order('rank')
+      .order('member_id')
+      .range(from, to),
+  );
+  return rows.map((row) => ({
     memberId: row.member_id,
     role: row.role,
     taskPoints: row.task_points,

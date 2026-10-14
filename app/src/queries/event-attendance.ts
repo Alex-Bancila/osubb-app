@@ -2,6 +2,7 @@ import { skipToken, useQuery } from '@tanstack/react-query';
 
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
+import { readAllRows } from './read-all';
 import { keys } from './keys';
 
 /** Every answer on one Event, split the way **Cine participă** shows it. */
@@ -18,13 +19,17 @@ export type EventAttendance = {
 export async function fetchEventAttendance(
   eventId: number,
 ): Promise<EventAttendance> {
-  const { data, error } = await supabase
-    .from('event_attendance')
-    .select('member_id, status')
-    .eq('event_id', eventId);
-  if (error) throw error;
+  // An Event for the whole organization can pass 500 answers.
+  const rows = await readAllRows((from, to) =>
+    supabase
+      .from('event_attendance')
+      .select('member_id, status')
+      .eq('event_id', eventId)
+      .order('member_id')
+      .range(from, to),
+  );
   const attendance: EventAttendance = { going: [], declined: [] };
-  for (const row of data ?? []) {
+  for (const row of rows) {
     if (row.status === 'going') attendance.going.push(row.member_id);
     else if (row.status === 'declined') attendance.declined.push(row.member_id);
   }

@@ -15,7 +15,7 @@ const db = vi.hoisted(() => {
   };
   function builder(kind: 'select' | 'update') {
     const chain: Record<string, unknown> = {};
-    for (const op of ['select', 'eq', 'not']) {
+    for (const op of ['select', 'eq', 'not', 'order', 'range']) {
       chain[op] = (...args: unknown[]) => {
         calls.push({ op, args });
         return chain;
@@ -97,6 +97,8 @@ describe('fetchUnreadNotificationSubjects', () => {
       { op: 'eq', args: ['member_id', 'member-1'] },
       { op: 'eq', args: ['read', false] },
       { op: 'not', args: ['subject', 'is', null] },
+      { op: 'order', args: ['id'] },
+      { op: 'range', args: [0, 499] },
     ]);
   });
 });

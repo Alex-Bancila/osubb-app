@@ -1,3 +1,4 @@
+import { answered } from '../test/postgrest-fake';
 import { QueryClient } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetSupabaseMock, supabaseMock } from '../test/supabase-mock';
@@ -46,7 +47,7 @@ describe('completed-work Request mutation', () => {
   });
 
   it('always filters Cererile mele to the signed-in requester', async () => {
-    const order = vi.fn().mockResolvedValue({ data: [], error: null });
+    const order = vi.fn().mockReturnValue(answered({ data: [], error: null }));
     const eq = vi.fn().mockReturnValue({ order });
     supabaseMock.from.mockReturnValueOnce({
       select: vi.fn().mockReturnValue({ eq }),

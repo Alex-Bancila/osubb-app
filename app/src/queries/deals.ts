@@ -10,6 +10,7 @@ import { useAuth } from '../lib/auth';
 import type { Json } from '../lib/database.types';
 import type { AttachedLink } from '../lib/schemas/attached-link';
 import { supabase } from '../lib/supabase';
+import { readAllRows } from './read-all';
 import { AnnouncementRefusedError } from './announcements';
 import { keys } from './keys';
 
@@ -65,13 +66,16 @@ export type RawDealRow = {
  * where those show.
  */
 export async function fetchDeals(): Promise<RawDealRow[]> {
-  const { data, error } = await supabase
-    .from('announcements')
-    .select(DEAL_FIELDS)
-    .eq('kind', 'deal')
-    .order('published_at', { ascending: false });
-  if (error) throw error;
-  return (data as unknown as RawDealRow[]) ?? [];
+  const rows = await readAllRows((from, to) =>
+    supabase
+      .from('announcements')
+      .select(DEAL_FIELDS)
+      .eq('kind', 'deal')
+      .order('published_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to),
+  );
+  return rows as unknown as RawDealRow[];
 }
 
 export function useDeals() {

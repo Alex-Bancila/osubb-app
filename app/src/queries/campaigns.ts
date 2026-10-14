@@ -9,6 +9,7 @@ import { CommandError } from '../lib/command-reasons';
 import { parseOrRefuse } from '../lib/form-errors';
 import { campaignSchema } from '../lib/schemas/campaign';
 import { supabase } from '../lib/supabase';
+import { readAllRows } from './read-all';
 import { keys } from './keys';
 export type Campaign = {
   id: number;
@@ -111,10 +112,17 @@ export async function fetchCampaignReport(
   if (range.p_to !== undefined) args.p_to = range.p_to;
   const [totals, members] = await Promise.all([
     supabase.rpc('campaign_totals', args),
-    supabase.rpc('campaign_report', args),
+    // One row per Executor of the Campaign: it can pass 500.
+    readAllRows((from, to) =>
+      supabase
+        .rpc('campaign_report', args)
+        .order('points', { ascending: false })
+        .order('full_name')
+        .order('member_id')
+        .range(from, to),
+    ),
   ]);
   if (totals.error) throw totals.error;
-  if (members.error) throw members.error;
   const total = totals.data?.[0];
   return {
     totals: {
@@ -122,7 +130,7 @@ export async function fetchCampaignReport(
       tasksCompleted: total?.tasks_completed ?? 0,
       tasksTotal: total?.tasks_total ?? 0,
     },
-    members: (members.data ?? []).map((row) => ({
+    members: members.map((row) => ({
       memberId: row.member_id,
       name: row.full_name ?? 'Membru',
       nickname: row.nickname?.trim() || null,

@@ -1,3 +1,4 @@
+import { answered } from '../test/postgrest-fake';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetSupabaseMock, supabaseMock } from '../test/supabase-mock';
 
@@ -27,7 +28,9 @@ beforeEach(() => resetSupabaseMock());
 
 describe('fetchDeals (R45)', () => {
   it('reads Announcements of kind deal only, newest first, with my read and my reveal', async () => {
-    supabaseMock.order.mockResolvedValue({ data: [{ id: 1 }], error: null });
+    supabaseMock.order.mockReturnValue(
+      answered({ data: [{ id: 1 }], error: null }),
+    );
     await expect(fetchDeals()).resolves.toEqual([{ id: 1 }]);
     expect(supabaseMock.from).toHaveBeenCalledWith('announcements');
     expect(supabaseMock.eq).toHaveBeenCalledWith('kind', 'deal');

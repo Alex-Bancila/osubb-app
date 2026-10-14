@@ -1,3 +1,4 @@
+import { answered } from '../../test/postgrest-fake';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -90,7 +91,7 @@ function renderAt(path: string) {
 beforeEach(() => {
   resetSupabaseMock();
   viewer.caps = {};
-  supabaseMock.order.mockResolvedValue({ data: ROWS, error: null });
+  supabaseMock.order.mockReturnValue(answered({ data: ROWS, error: null }));
   supabaseMock.upsert.mockResolvedValue({ error: null });
 });
 
@@ -176,7 +177,9 @@ describe('Anunțuri › OSUBB Deals (R45)', () => {
   });
 
   it('says there is nothing yet without looking like a failure', async () => {
-    supabaseMock.order.mockResolvedValue({ data: [ROWS[2]], error: null });
+    supabaseMock.order.mockReturnValue(
+      answered({ data: [ROWS[2]], error: null }),
+    );
     renderAt('/anunturi/deals');
     expect(await screen.findByText(/Niciun deal activ acum/)).toBeVisible();
   });

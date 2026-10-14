@@ -1,3 +1,4 @@
+import { answered } from '../test/postgrest-fake';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({
@@ -269,28 +270,30 @@ describe('sending', () => {
 
 describe('the grid', () => {
   it('reads uninvited_members(): roster order, notes never blocking', async () => {
-    api.rpc.mockResolvedValue({
-      error: null,
-      data: [
-        {
-          member_id: 'm1',
-          full_name: 'Pop Ana',
-          email: 'ana@example.test',
-          phone: null,
-          role: 'bce',
-          problems: ['BCE fără poziție'],
-          memberships: [
-            {
-              group_id: 3,
-              name: 'Educațional',
-              group_role: 'manager',
-              position_title: null,
-            },
-            { group_id: 5, name: 'Tineret', group_role: 'member' },
-          ],
-        },
-      ],
-    });
+    api.rpc.mockReturnValue(
+      answered({
+        error: null,
+        data: [
+          {
+            member_id: 'm1',
+            full_name: 'Pop Ana',
+            email: 'ana@example.test',
+            phone: null,
+            role: 'bce',
+            problems: ['BCE fără poziție'],
+            memberships: [
+              {
+                group_id: 3,
+                name: 'Educațional',
+                group_role: 'manager',
+                position_title: null,
+              },
+              { group_id: 5, name: 'Tineret', group_role: 'member' },
+            ],
+          },
+        ],
+      }),
+    );
     const [member] = await fetchUninvitedMembers();
     expect(api.rpc).toHaveBeenCalledWith('uninvited_members');
     expect(member).toEqual({

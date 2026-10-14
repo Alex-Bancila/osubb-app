@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
+import { readAllRows } from './read-all';
 import { keys } from './keys';
 import { fetchMyGroups, isMemberOf, type MyGroup } from './my-groups';
 
@@ -42,13 +43,15 @@ export function useRequestOrigins() {
 }
 
 export async function fetchMyCompletedWorkRequests(memberId: string) {
-  const { data, error } = await supabase
-    .from('completed_work_requests')
-    .select('id,group_id,description,status,created_at,decision_note,task_id')
-    .eq('requester_id', memberId)
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return data;
+  return readAllRows((from, to) =>
+    supabase
+      .from('completed_work_requests')
+      .select('id,group_id,description,status,created_at,decision_note,task_id')
+      .eq('requester_id', memberId)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to),
+  );
 }
 
 export function useMyCompletedWorkRequests() {

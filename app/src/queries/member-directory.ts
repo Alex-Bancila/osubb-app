@@ -4,6 +4,7 @@ import { groupOptionLabel } from '../components/ui/combobox';
 import { useAuth } from '../lib/auth';
 import { useCapability } from '../lib/capabilities';
 import { supabase } from '../lib/supabase';
+import { readAllRows } from './read-all';
 
 /** One Group a member belongs to, labelled `Name · Parent`. */
 export type DirectoryGroup = {
@@ -93,25 +94,6 @@ export function primaryGroupOf(rows: MembershipCandidate[]): {
  * here would be a false 0.
  */
 const rolesWithoutPoints = new Set(['bce', 'bc', 'moderator']);
-
-// Supabase caps each response at 1,000 rows. Memberships can exceed that
-// before the directory does, so every projection is read in stable pages.
-async function readAllRows<T>(
-  readPage: (
-    from: number,
-    to: number,
-  ) => PromiseLike<{ data: T[] | null; error: unknown }>,
-): Promise<T[]> {
-  const rows: T[] = [];
-  const pageSize = 500;
-  for (let from = 0; ; from += pageSize) {
-    const { data, error } = await readPage(from, from + pageSize - 1);
-    if (error) throw error;
-    const page = data ?? [];
-    rows.push(...page);
-    if (page.length < pageSize) return rows;
-  }
-}
 
 export async function fetchMemberDirectory(): Promise<DirectoryMember[]> {
   const [profiles, contacts, memberships, groups, roles, points] =

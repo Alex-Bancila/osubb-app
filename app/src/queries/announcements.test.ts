@@ -1,3 +1,4 @@
+import { answered } from '../test/postgrest-fake';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
@@ -41,23 +42,25 @@ describe('announcements query layer', () => {
 
   describe('fetchAnnouncementsFeed', () => {
     it('queries announcements table with embedded reads ordered by pinned and date', async () => {
-      const mockOrderDate = vi.fn().mockResolvedValue({
-        data: [
-          {
-            id: 1,
-            title: 'Test',
-            body: 'Content',
-            dept_id: null,
-            priority: 'normal',
-            pinned: false,
-            links: [],
-            published_at: '2026-09-19T10:00:00Z',
-            created_by: null,
-            announcement_reads: [],
-          },
-        ],
-        error: null,
-      });
+      const mockOrderDate = vi.fn().mockReturnValue(
+        answered({
+          data: [
+            {
+              id: 1,
+              title: 'Test',
+              body: 'Content',
+              dept_id: null,
+              priority: 'normal',
+              pinned: false,
+              links: [],
+              published_at: '2026-09-19T10:00:00Z',
+              created_by: null,
+              announcement_reads: [],
+            },
+          ],
+          error: null,
+        }),
+      );
 
       const mockOrderPinned = vi.fn().mockReturnValue({
         order: mockOrderDate,
@@ -96,10 +99,12 @@ describe('announcements query layer', () => {
     });
 
     it('throws error when database query fails', async () => {
-      const mockOrderDate = vi.fn().mockResolvedValue({
-        data: null,
-        error: { code: '42501', message: 'permission denied' },
-      });
+      const mockOrderDate = vi.fn().mockReturnValue(
+        answered({
+          data: null,
+          error: { code: '42501', message: 'permission denied' },
+        }),
+      );
 
       const mockOrderPinned = vi.fn().mockReturnValue({
         order: mockOrderDate,
@@ -335,10 +340,12 @@ describe('announcements query layer', () => {
 
   describe('fetchAnnouncementReaders', () => {
     it('answers null on PT404, so the readers line stays hidden', async () => {
-      (supabase.rpc as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-        data: null,
-        error: { code: 'PT404', message: 'announcement_not_found' },
-      });
+      (supabase.rpc as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+        answered({
+          data: null,
+          error: { code: 'PT404', message: 'announcement_not_found' },
+        }),
+      );
 
       await expect(fetchAnnouncementReaders(7)).resolves.toBeNull();
       expect(supabase.rpc).toHaveBeenCalledWith('announcement_readers', {
@@ -347,10 +354,12 @@ describe('announcements query layer', () => {
     });
 
     it('throws any other failure', async () => {
-      (supabase.rpc as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-        data: null,
-        error: { code: '08006', message: 'connection failure' },
-      });
+      (supabase.rpc as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+        answered({
+          data: null,
+          error: { code: '08006', message: 'connection failure' },
+        }),
+      );
 
       await expect(fetchAnnouncementReaders(7)).rejects.toMatchObject({
         code: '08006',
@@ -358,13 +367,15 @@ describe('announcements query layer', () => {
     });
 
     it('names every recipient from the directory, unread ones with a null time', async () => {
-      (supabase.rpc as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-        data: [
-          { member_id: 'a', read_at: '2026-09-20T10:00:00Z' },
-          { member_id: 'b', read_at: null },
-        ],
-        error: null,
-      });
+      (supabase.rpc as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+        answered({
+          data: [
+            { member_id: 'a', read_at: '2026-09-20T10:00:00Z' },
+            { member_id: 'b', read_at: null },
+          ],
+          error: null,
+        }),
+      );
       const inIds = vi.fn().mockResolvedValue({
         data: [
           {
@@ -405,7 +416,7 @@ describe('announcements query layer', () => {
 describe('the readers list stays current', () => {
   it('asks again every time the list is opened, whatever the cache holds', async () => {
     const rpc = supabase.rpc as unknown as ReturnType<typeof vi.fn>;
-    rpc.mockReset().mockResolvedValue({ data: [], error: null });
+    rpc.mockReset().mockReturnValue(answered({ data: [], error: null }));
     const client = new QueryClient({
       defaultOptions: { queries: { staleTime: 30_000, retry: false } },
     });

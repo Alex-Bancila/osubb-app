@@ -1,3 +1,4 @@
+import { answered } from '../../test/postgrest-fake';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import { Fragment } from 'react';
@@ -90,7 +91,7 @@ const card = (name: string) => screen.findByRole('article', { name });
 
 beforeEach(() => {
   resetSupabaseMock();
-  supabaseMock.order.mockResolvedValue({ data: ROWS, error: null });
+  supabaseMock.order.mockReturnValue(answered({ data: ROWS, error: null }));
   supabaseMock.rpc.mockResolvedValue({ data: 3, error: null });
 });
 

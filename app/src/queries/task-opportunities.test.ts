@@ -7,6 +7,7 @@ import {
   orderOpportunities,
 } from './task-opportunities';
 import { memberGroupIds, type MyGroup } from './my-groups';
+import { answered } from '../test/postgrest-fake';
 import { taskRow } from '../test/task-fixtures';
 
 function myGroup(overrides: Partial<MyGroup> = {}): MyGroup {
@@ -225,7 +226,7 @@ function mockTaskReads(
   openQuery.limit.mockReturnValue(openQuery);
   openQuery.eq.mockReturnValue(openQuery);
   openQuery.is.mockReturnValue(openQuery);
-  openQuery.in.mockResolvedValue({ data: openTasks, error: null });
+  openQuery.in.mockReturnValue(answered({ data: openTasks, error: null }));
   const participatedQuery = {
     select: vi.fn(),
     eq: vi.fn(),
@@ -241,12 +242,30 @@ function mockTaskReads(
   api.from.mockImplementation((table: string) => {
     if (table === 'tasks')
       return taskQueryCount++ === 0 ? openQuery : participatedQuery;
-    if (table === 'task_candidates')
-      return {
-        select: () => ({
-          eq: () => Promise.resolve({ data: candidatures, error: null }),
-        }),
+    if (table === 'task_candidates') {
+      // Answers as the server would: only the rows its `.eq` filters keep.
+      const wanted: [string, unknown][] = [];
+      const query = {
+        select: () => query,
+        eq: (column: string, value: unknown) => {
+          if (column !== 'member_id') wanted.push([column, value]);
+          return query;
+        },
+        order: () => query,
+        range: () => query,
+        then: (resolve: (value: unknown) => unknown) =>
+          resolve({
+            data: candidatures.filter((row) =>
+              wanted.every(
+                ([column, value]) =>
+                  (row as Record<string, unknown>)[column] === value,
+              ),
+            ),
+            error: null,
+          }),
       };
+      return query;
+    }
     throw new Error(`unexpected table ${table}`);
   });
   return { openQuery, participatedQuery };

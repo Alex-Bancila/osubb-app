@@ -1,0 +1,471 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { taskRow } from '../test/task-fixtures';
+import { postgrest, type FakeRequest } from '../test/postgrest-fake';
+
+vi.mock('../lib/supabase', async () => ({
+  supabase: (await import('../test/postgrest-fake')).postgrest.client,
+}));
+
+import {
+  fetchAnnouncementReaders,
+  fetchAnnouncementsFeed,
+} from './announcements';
+import { fetchPendingCandidatureTasks } from './calendar-tasks';
+import { fetchCampaignReport } from './campaigns';
+import { fetchMyCompletedWorkRequests } from './completed-work-requests';
+import { fetchDeals } from './deals';
+import { fetchEventAttendance } from './event-attendance';
+import { fetchEventFormOptions } from './event-creation';
+import { fetchGoingEventIds } from './event-rsvp';
+import { fetchEventsInRange } from './events';
+import { fetchUnreadNotificationSubjects } from './notifications';
+import { fetchGroups } from './reference';
+import {
+  fetchPromotionCandidates,
+  fetchRoleEvaluationRanking,
+  fetchThresholdChanges,
+} from './role-evaluations';
+import { fetchTaskOpportunities } from './task-opportunities';
+import { fetchTaskListSummary } from './task-lists';
+import { fetchMyTasks } from './tasks';
+import { fetchUninvitedMembers } from './volunteer-import';
+
+/*
+ * #1058: every read that can pass 500 rows reads them by pages. The fake
+ * answers as PostgREST does — 500 rows a request at most, silently — so each
+ * read is handed 501 rows and must return the 501st. Each also orders by a
+ * unique column last, so no row is skipped or repeated across pages.
+ */
+
+const ROWS = 501;
+const many = <T>(make: (index: number) => T) =>
+  Array.from({ length: ROWS }, (_, index) => make(index));
+
+/** The orders of one request on its own rows, not on an embed's. */
+function orders(request: FakeRequest | undefined) {
+  return postgrest
+    .argsOf(request, 'order')
+    .filter(
+      ([, options]) =>
+        !(options as { referencedTable?: string } | undefined)?.referencedTable,
+    );
+}
+
+/** The ids one request asked for by `.in('id', …)`; none for any other read. */
+function idsAsked(request: FakeRequest) {
+  const asked = postgrest
+    .argsOf(request, 'in')
+    .find(([column]) => column === 'id');
+  return (asked?.[1] ?? []) as unknown[];
+}
+
+const ranked = (index: number) => ({
+  member_id: `member-${index}`,
+  role: 'activ',
+  task_points: ROWS - index,
+  rank: index + 1,
+  cohort_size: ROWS,
+  share_size: 50,
+  inside: index < 50,
+  tenure_since: null,
+});
+const run = {
+  kind: 'voluntar_activ',
+  period_from: '2026-02-01',
+  period_to: '2026-07-31',
+};
+
+beforeEach(() => postgrest.reset());
+
+describe('Administrare', () => {
+  it('ranks a Role Evaluation cohort past 500 Members', async () => {
+    postgrest.serve('role_evaluation_ranking', many(ranked));
+    const ranking = await fetchRoleEvaluationRanking(run);
+    expect(ranking).toHaveLength(ROWS);
+    expect(ranking.at(-1)).toMatchObject({
+      memberId: 'member-500',
+      rank: 501,
+    });
+    expect(orders(postgrest.requestsTo('role_evaluation_ranking')[0])).toEqual([
+      ['role'],
+      ['rank'],
+      ['member_id'],
+    ]);
+  });
+
+  it('fails the ranking whole when a later page fails', async () => {
+    const failure = new Error('offline');
+    // The first page lands; the one after it fails.
+    postgrest.serve('role_evaluation_ranking', (request) =>
+      (postgrest.argsOf(request, 'range')[0]?.[0] ?? 0) === 0
+        ? many(ranked)
+        : failure,
+    );
+    await expect(fetchRoleEvaluationRanking(run)).rejects.toBe(failure);
+  });
+
+  it('lists every open Promotion Candidate', async () => {
+    postgrest.serve(
+      'promotion_candidates',
+      many((index) => ({
+        id: index,
+        member_id: `member-${index}`,
+        task_points: 900 - index,
+        tenure_since: '2025-10-01',
+        threshold_used: 100,
+        created_at: '2026-10-01T10:00:00Z',
+        role_evaluation_id: null,
+        role_evaluation: null,
+      })),
+    );
+    await expect(fetchPromotionCandidates()).resolves.toHaveLength(ROWS);
+    expect(orders(postgrest.requestsTo('promotion_candidates')[0])).toEqual([
+      ['task_points', { ascending: false }],
+      ['id', { ascending: true }],
+    ]);
+  });
+
+  it('reads the whole threshold log', async () => {
+    postgrest.serve(
+      'promotion_threshold_changes',
+      many((index) => ({ id: index })),
+    );
+    await expect(fetchThresholdChanges()).resolves.toHaveLength(ROWS);
+  });
+
+  it('lists every Member not yet invited, in sheet order', async () => {
+    postgrest.serve(
+      'uninvited_members',
+      many((index) => ({
+        member_id: `member-${index}`,
+        full_name: `Membru ${index}`,
+        email: `membru${index}@example.com`,
+        phone: null,
+        role: 'recrut',
+        memberships: [],
+        problems: [],
+        sheet_row: index + 2,
+      })),
+    );
+    const members = await fetchUninvitedMembers();
+    expect(members).toHaveLength(ROWS);
+    expect(members.at(-1)?.memberId).toBe('member-500');
+    expect(orders(postgrest.requestsTo('uninvited_members')[0])).toEqual([
+      ['sheet_row'],
+      ['full_name'],
+      ['member_id'],
+    ]);
+  });
+});
+
+describe('Taskuri', () => {
+  it('keeps every Task of a Member with more than 500 Assignments, parents asked 100 at a time', async () => {
+    postgrest.serve(
+      'task_assignments',
+      many((index) => ({
+        end_reason: null,
+        task: taskRow({
+          id: index,
+          title: `Task ${String(index).padStart(3, '0')}`,
+          deadline: null,
+          parent_task_id: index < 250 ? 10_000 + index : null,
+        }),
+      })),
+    );
+    postgrest.serve('tasks', (request) =>
+      idsAsked(request).map((id) => ({ id, title: `Umbrela ${String(id)}` })),
+    );
+    postgrest.serve('visible_task_executors', []);
+
+    const tasks = await fetchMyTasks('member');
+    expect(tasks).toHaveLength(ROWS);
+    expect(tasks.at(-1)?.id).toBe(500);
+    expect(tasks.find((task) => task.id === 249)?.parent?.title).toBe(
+      'Umbrela 10249',
+    );
+    expect(orders(postgrest.requestsTo('task_assignments')[0])).toEqual([
+      ['assigned_at', { ascending: false }],
+      ['id', { ascending: false }],
+    ]);
+    const parents = postgrest.requestsTo('tasks');
+    expect(parents.map((request) => idsAsked(request).length)).toEqual([
+      100, 100, 50,
+    ]);
+  });
+
+  it('offers every open Task and keeps every pending Candidature in Disponibile', async () => {
+    const offer = (id: number, queueClosedAt: string | null = null) =>
+      taskRow({
+        id,
+        assignment_mode: 'public',
+        audience: 'org',
+        assignments: [],
+        queue_closed_at: queueClosedAt,
+      });
+    postgrest.serve('my_groups', []);
+    postgrest.serve(
+      'task_candidates',
+      many((index) => ({ task_id: 1_000 + index })),
+    );
+    postgrest.serve('tasks', (request) => {
+      const ids = idsAsked(request);
+      // The Tasks of pending Candidatures, their queues since closed; or the
+      // open Tasks.
+      return ids.length
+        ? ids.map((id) => offer(Number(id), '2026-10-01T00:00:00Z'))
+        : many((index) => offer(index));
+    });
+    postgrest.serve('visible_task_executors', []);
+
+    const offered = await fetchTaskOpportunities('member');
+    const ids = new Set(offered.map((task) => task.id));
+    expect(ids.size).toBe(2 * ROWS);
+    expect(ids.has(500)).toBe(true);
+    expect(ids.has(1_500)).toBe(true);
+
+    const [candidatures] = postgrest.requestsTo('task_candidates');
+    expect(postgrest.argsOf(candidatures, 'eq')).toContainEqual([
+      'status',
+      'pending',
+    ]);
+    expect(orders(candidatures)).toEqual([['id']]);
+    const [openTasks] = postgrest
+      .requestsTo('tasks')
+      .filter((request) => !idsAsked(request).length);
+    expect(orders(openTasks)).toEqual([['id']]);
+  });
+
+  it('summarises a list whose Groups, Campaigns and states pass 500', async () => {
+    postgrest.serve(
+      'task_list_summary',
+      many((index) => ({
+        group_id: index,
+        campaign_id: null,
+        status: 'completed',
+        late: false,
+        dated: true,
+        tasks: 1,
+      })),
+    );
+    await expect(fetchTaskListSummary('managed')).resolves.toHaveLength(ROWS);
+    // One row per Group, Campaign, state, lateness and date: the whole key.
+    expect(orders(postgrest.requestsTo('task_list_summary')[0])).toEqual([
+      ['group_id'],
+      ['campaign_id'],
+      ['status'],
+      ['late'],
+      ['dated'],
+    ]);
+  });
+
+  it('reads every Completed-work Request of a Member', async () => {
+    postgrest.serve(
+      'completed_work_requests',
+      many((index) => ({ id: index, status: 'approved' })),
+    );
+    await expect(fetchMyCompletedWorkRequests('member')).resolves.toHaveLength(
+      ROWS,
+    );
+    expect(orders(postgrest.requestsTo('completed_work_requests')[0])).toEqual([
+      ['created_at', { ascending: false }],
+      ['id', { ascending: false }],
+    ]);
+  });
+});
+
+describe('Calendar', () => {
+  it('reads every Event of the window', async () => {
+    postgrest.serve(
+      'events',
+      many((index) => ({
+        id: index,
+        title: `Eveniment ${index}`,
+        type: 'sedinta',
+        group_id: 7,
+        starts_at: '2026-11-02T16:00:00.000Z',
+        ends_at: null,
+        location: null,
+        capacity: null,
+        description: null,
+        min_level: 0,
+        created_by: null,
+        cancelled_at: null,
+        cancel_reason: null,
+        campaign_id: null,
+        group: null,
+      })),
+    );
+    const events = await fetchEventsInRange({ from: '2026-10-13T21:00:00Z' });
+    expect(events).toHaveLength(ROWS);
+    expect(orders(postgrest.requestsTo('events')[0])).toEqual([
+      ['starts_at', { ascending: true }],
+      ['id'],
+    ]);
+  });
+
+  it('reads every Event a Member goes to', async () => {
+    postgrest.serve(
+      'event_attendance',
+      many((index) => ({ event_id: index })),
+    );
+    await expect(fetchGoingEventIds('member')).resolves.toHaveLength(ROWS);
+    expect(orders(postgrest.requestsTo('event_attendance')[0])).toEqual([
+      ['event_id'],
+    ]);
+  });
+
+  it('reads every Task a Member is a pending Candidate on', async () => {
+    postgrest.serve(
+      'task_candidates',
+      many((index) => ({
+        task: {
+          id: index,
+          title: `Task ${index}`,
+          status: 'todo',
+          deadline: null,
+          group_id: 1,
+          campaign_id: null,
+          group: null,
+        },
+      })),
+    );
+    await expect(fetchPendingCandidatureTasks('member')).resolves.toHaveLength(
+      ROWS,
+    );
+    expect(orders(postgrest.requestsTo('task_candidates')[0])).toEqual([
+      ['id'],
+    ]);
+  });
+
+  it('reads every answer on an Event for the whole organization', async () => {
+    postgrest.serve(
+      'event_attendance',
+      many((index) => ({ member_id: `member-${index}`, status: 'going' })),
+    );
+    const attendance = await fetchEventAttendance(42);
+    expect(attendance.going).toHaveLength(ROWS);
+    expect(orders(postgrest.requestsTo('event_attendance')[0])).toEqual([
+      ['member_id'],
+    ]);
+  });
+});
+
+describe('Anunțuri and Deals', () => {
+  it('reads every Announcement', async () => {
+    postgrest.serve(
+      'announcements',
+      many((index) => ({ id: index })),
+    );
+    await expect(fetchAnnouncementsFeed()).resolves.toHaveLength(ROWS);
+    expect(orders(postgrest.requestsTo('announcements')[0])).toEqual([
+      ['pinned', { ascending: false }],
+      ['published_at', { ascending: false }],
+      ['id', { ascending: false }],
+    ]);
+  });
+
+  it('reads every reader of an Announcement for the whole organization', async () => {
+    postgrest.serve(
+      'announcement_readers',
+      many((index) => ({ member_id: `member-${index}`, read_at: null })),
+    );
+    postgrest.serve('profiles_directory', (request) =>
+      idsAsked(request).map((id) => ({
+        id,
+        full_name: `Membru ${String(id)}`,
+        nickname: null,
+        avatar_color: null,
+      })),
+    );
+    const readers = await fetchAnnouncementReaders(7);
+    expect(readers).toHaveLength(ROWS);
+    expect(readers?.at(-1)?.member.fullName).toBe('Membru member-500');
+    expect(orders(postgrest.requestsTo('announcement_readers')[0])).toEqual([
+      ['read_at', { ascending: false, nullsFirst: false }],
+      ['member_id'],
+    ]);
+  });
+
+  it('reads every Deal', async () => {
+    postgrest.serve(
+      'announcements',
+      many((index) => ({ id: index })),
+    );
+    await expect(fetchDeals()).resolves.toHaveLength(ROWS);
+    expect(orders(postgrest.requestsTo('announcements')[0])).toEqual([
+      ['published_at', { ascending: false }],
+      ['id', { ascending: false }],
+    ]);
+  });
+});
+
+describe('Campanii', () => {
+  it('reports every Executor of a Campaign', async () => {
+    postgrest.serve('campaign_totals', [
+      { points_total: 0, tasks_completed: 0, tasks_total: 0 },
+    ]);
+    postgrest.serve(
+      'campaign_report',
+      many((index) => ({
+        member_id: `member-${index}`,
+        full_name: `Membru ${index}`,
+        nickname: null,
+        points: ROWS - index,
+        tasks_completed: 1,
+      })),
+    );
+    const report = await fetchCampaignReport(3);
+    expect(report.members).toHaveLength(ROWS);
+    expect(orders(postgrest.requestsTo('campaign_report')[0])).toEqual([
+      ['points', { ascending: false }],
+      ['full_name'],
+      ['member_id'],
+    ]);
+  });
+});
+
+describe('Groups and Notifications', () => {
+  const group = (id: number) => ({
+    id,
+    name: `Grup ${id}`,
+    short: null,
+    color: null,
+    category: 'department',
+    path: [id],
+    parent_id: null,
+    min_level: 0,
+    status: 'active',
+    is_organization: false,
+    is_private: false,
+  });
+
+  it('knows every Group past 500', async () => {
+    postgrest.serve('groups', many(group));
+    const groups = await fetchGroups();
+    expect(groups.size).toBe(ROWS);
+    expect(orders(postgrest.requestsTo('groups')[0])).toEqual([['id']]);
+  });
+
+  it('names every Group in the Event form', async () => {
+    postgrest.serve('my_capabilities', [
+      { create_top_level_groups: true, manages_any_group: true },
+    ]);
+    postgrest.serve('my_groups', []);
+    postgrest.serve('campaigns', []);
+    postgrest.serve('groups', many(group));
+    const options = await fetchEventFormOptions();
+    expect(options.groupNames).toHaveLength(ROWS);
+    expect(orders(postgrest.requestsTo('groups')[0])).toEqual([['id']]);
+  });
+
+  it('reads the subject of every unread Notification', async () => {
+    postgrest.serve(
+      'notifications',
+      many((index) => ({ subject: `task:${index}` })),
+    );
+    await expect(
+      fetchUnreadNotificationSubjects('member'),
+    ).resolves.toHaveLength(ROWS);
+    expect(orders(postgrest.requestsTo('notifications')[0])).toEqual([['id']]);
+  });
+});

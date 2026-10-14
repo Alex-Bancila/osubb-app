@@ -2,6 +2,7 @@ import { skipToken, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
 import { CommandError } from '../lib/command-reasons';
 import { supabase } from '../lib/supabase';
+import { readAllRows } from './read-all';
 import { keys } from './keys';
 
 /*
@@ -394,9 +395,16 @@ export async function sendInvitationBatch(
 }
 
 export async function fetchUninvitedMembers(): Promise<UninvitedMember[]> {
-  const { data, error } = await supabase.rpc('uninvited_members');
-  if (error) throw error;
-  return readUninvited(data);
+  // In sheet order, as the server lists them; the id keeps the pages stable.
+  const rows = await readAllRows((from, to) =>
+    supabase
+      .rpc('uninvited_members')
+      .order('sheet_row')
+      .order('full_name')
+      .order('member_id')
+      .range(from, to),
+  );
+  return readUninvited(rows);
 }
 
 /** BC and the Moderator only: the read refuses everyone else (42501). */

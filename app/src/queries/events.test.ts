@@ -1,3 +1,4 @@
+import { answered } from '../test/postgrest-fake';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Database } from '../lib/database.types';
@@ -132,7 +133,9 @@ describe('events range query', () => {
   };
 
   it('reads a start window, half-open, in chronological order', async () => {
-    supabaseMock.order.mockResolvedValue({ data: [eventRow()], error: null });
+    supabaseMock.order.mockReturnValue(
+      answered({ data: [eventRow()], error: null }),
+    );
 
     const result = await fetchEventsInRange(range);
 
@@ -156,7 +159,7 @@ describe('events range query', () => {
   it('sends no now floor: an open window asks for every readable Event', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-09-24T10:00:00.000Z'));
-    supabaseMock.order.mockResolvedValue({ data: [], error: null });
+    supabaseMock.order.mockReturnValue(answered({ data: [], error: null }));
 
     await fetchEventsInRange({});
 
@@ -166,7 +169,7 @@ describe('events range query', () => {
   });
 
   it('bounds only the ends it is given', async () => {
-    supabaseMock.order.mockResolvedValue({ data: [], error: null });
+    supabaseMock.order.mockReturnValue(answered({ data: [], error: null }));
 
     await fetchEventsInRange({ from: range.from });
 
@@ -178,7 +181,9 @@ describe('events range query', () => {
   // calendar does not second-guess it. Mutation this catches: putting the
   // `.neq('scope', 'project')` filter back.
   it('asks for every visible Event, Project Events included', async () => {
-    supabaseMock.order.mockResolvedValue({ data: [eventRow()], error: null });
+    supabaseMock.order.mockReturnValue(
+      answered({ data: [eventRow()], error: null }),
+    );
 
     await fetchEventsInRange(range);
 
@@ -187,13 +192,13 @@ describe('events range query', () => {
 
   it('surfaces the Supabase error to React Query', async () => {
     const error = { code: '42501', message: 'permission denied' };
-    supabaseMock.order.mockResolvedValue({ data: null, error });
+    supabaseMock.order.mockReturnValue(answered({ data: null, error }));
 
     await expect(fetchEventsInRange(range)).rejects.toBe(error);
   });
 
   it('treats a successful null payload as an empty event list', async () => {
-    supabaseMock.order.mockResolvedValue({ data: null, error: null });
+    supabaseMock.order.mockReturnValue(answered({ data: null, error: null }));
 
     await expect(fetchEventsInRange(range)).resolves.toEqual([]);
   });

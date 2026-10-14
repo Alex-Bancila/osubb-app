@@ -121,11 +121,13 @@ function tableRows(table: string): unknown {
   }
 }
 
-vi.mock('../../lib/supabase', () => {
+vi.mock('../../lib/supabase', async () => {
+  const { answered } = await import('../../test/postgrest-fake');
   const from = (table: string) => {
     const builder = {
       select: () => builder,
       order: () => builder,
+      range: () => builder,
       eq: () => builder,
       is: () => builder,
       maybeSingle: () =>
@@ -135,7 +137,10 @@ vi.mock('../../lib/supabase', () => {
     };
     return builder;
   };
-  const rpc = async (name: string, args: Record<string, unknown>) => {
+  // A read may page itself (`.order`, `.range`): the answer passes through.
+  const rpc = (name: string, args: Record<string, unknown>) =>
+    answered(answer(name, args));
+  const answer = async (name: string, args: Record<string, unknown>) => {
     db.rpc(name, args);
     const refusal = db.refuse.get(name);
     if (refusal) return { data: null, error: refusal };
