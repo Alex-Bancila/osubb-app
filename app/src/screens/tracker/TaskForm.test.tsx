@@ -7,7 +7,7 @@ import {
   within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { chooseOption } from '../../test/select';
+import { chooseOption, optionNames } from '../../test/select';
 import * as axe from 'axe-core';
 import { expect, it, vi } from 'vitest';
 import { pickDate } from '../../test/date-picker';
@@ -164,6 +164,7 @@ it('picks the Origin as a root Group, then a Group below it, and emits a trimmed
     campaignId: 10,
     links: [],
     copies: 1,
+    minLevel: 0,
   });
 });
 it("disables the organization-wide Audience for a Private Group's Task, with the reason (#757)", async () => {
@@ -818,4 +819,47 @@ it.each([
   await user.click(screen.getByRole('button', { name: /Creează|Continuă/ }));
   expect(await screen.findByText(new RegExp(message))).toBeVisible();
   expect(onDraft).not.toHaveBeenCalled();
+});
+it('offers Cine îl vede on a public Task only, by Role from the Group floor up to the actor, and sends the choice (R57)', async () => {
+  const onDraft = vi.fn().mockResolvedValue(undefined);
+  render(<TaskForm options={options} onDraft={onDraft} actorLevel={2} />);
+  const user = await content();
+  await chooseOrigin(user, 'Conferință');
+  // A direct Task has no queue to gate.
+  expect(screen.queryByLabelText('Cine îl vede')).toBeNull();
+  await choose(user, modeGroup(), 'Public');
+  // Conferință sits at Voluntar: its own members start there, up to the
+  // actor's own Voluntar Activ.
+  expect(
+    await optionNames(user, screen.getByLabelText('Cine îl vede')),
+  ).toEqual(['Voluntar', 'Voluntar Activ']);
+  // Organisation-wide, it reaches below the Group's floor (R26).
+  await choose(user, audienceGroup(), 'Toți membrii OSUBB');
+  expect(
+    await optionNames(user, screen.getByLabelText('Cine îl vede')),
+  ).toEqual(['Recrut', 'Voluntar', 'Voluntar Activ']);
+  await chooseOption(
+    user,
+    screen.getByLabelText('Cine îl vede'),
+    'Voluntar Activ',
+  );
+  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+  await waitFor(() =>
+    expect(onDraft).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        assignmentMode: 'public',
+        audience: 'org',
+        minLevel: 2,
+      }),
+    ),
+  );
+  // Back to Direct: the field goes and nothing is gated.
+  await choose(user, modeGroup(), 'Direct');
+  expect(screen.queryByLabelText('Cine îl vede')).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+  await waitFor(() =>
+    expect(onDraft).toHaveBeenLastCalledWith(
+      expect.objectContaining({ assignmentMode: 'direct', minLevel: 0 }),
+    ),
+  );
 });

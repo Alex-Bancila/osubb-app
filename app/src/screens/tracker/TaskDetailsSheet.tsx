@@ -23,6 +23,7 @@ import {
   History,
   Layers,
   RefreshCw,
+  ShieldCheck,
   Trash2,
   UserCheck,
   UserRound,
@@ -264,6 +265,12 @@ function TaskFacts({
       {task.assignmentMode === 'public' && (
         <Fact icon={Users} label="Audiență">
           {task.audienceLabel}
+        </Fact>
+      )}
+      {/* R57: the Role a public Task asks for, when above Recrut. */}
+      {task.assignmentMode === 'public' && task.minLevelLabel && (
+        <Fact icon={ShieldCheck} label="Cine îl vede">
+          {task.minLevelLabel}
         </Fact>
       )}
       {showReviewRound && (

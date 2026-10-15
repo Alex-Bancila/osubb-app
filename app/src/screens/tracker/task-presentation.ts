@@ -4,6 +4,7 @@ import {
   attachedLinksFrom,
   type AttachedLink,
 } from '../../lib/schemas/attached-link';
+import { minimumLevelText } from '../../lib/minimum-level';
 import { AUDIENCE_LABELS } from './task-form-model';
 
 type Tables = Database['public']['Tables'];
@@ -30,6 +31,9 @@ export type TaskPresentationRow = Pick<
   | 'queue_closed_at'
   | 'links'
 > & {
+  /** Cine îl vede (R57): the Task's Minimum Level. Absent from a read that
+   *  does not carry it, which then neither shows nor sends it. */
+  min_level?: number;
   /** The Task's Origin Group; null when RLS withholds it. */
   group?:
     | (Pick<
@@ -89,6 +93,8 @@ export type TaskPresentation = {
   };
   audience: 'local' | 'org' | null;
   audienceLabel: string;
+  /** Cine îl vede (R57): "De la Voluntar", or null at Recrut. */
+  minLevelLabel: string | null;
   assignmentMode: 'direct' | 'public' | null;
   executor: {
     memberId: string;
@@ -269,6 +275,10 @@ export function toTaskPresentation(
       row.audience === 'local' || row.audience === 'org'
         ? AUDIENCE_LABELS[row.audience]
         : 'Audiență indisponibilă',
+    minLevelLabel:
+      (row.min_level ?? 0) > 0
+        ? `De la ${minimumLevelText(row.min_level ?? 0)}`
+        : null,
     assignmentMode:
       row.assignment_mode === 'direct' || row.assignment_mode === 'public'
         ? row.assignment_mode

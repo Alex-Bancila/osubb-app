@@ -19,6 +19,8 @@ const input: TaskUpdateInput = {
   audience: 'local',
   // R46: the Attached Links, full state like every other field.
   links: [{ label: 'Brief', url: 'https://example.org/brief' }],
+  // R57: an edit that does not send the Role keeps it.
+  minLevel: null,
 };
 const args = {
   p_task_id: 1,
@@ -30,6 +32,7 @@ const args = {
   p_assignment_mode: 'direct',
   p_audience: 'local',
   p_links: [{ label: 'Brief', url: 'https://example.org/brief' }],
+  p_min_level: null,
 };
 beforeEach(() => vi.resetAllMocks());
 

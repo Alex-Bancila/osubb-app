@@ -78,6 +78,7 @@ export function taskDraftSchema(options: TaskFormOptions, when: When = {}) {
       parentTaskId: z.number().nullable(),
       audience: z.enum(['local', 'org']).nullable(),
       assignmentMode: z.enum(['direct', 'public']).nullable(),
+      minLevel: z.number(),
       executorId: z.string().nullable(),
       campaignId: z.number().nullable(),
       copies: z.number({ error: 'invalid_copies' }),
@@ -165,6 +166,8 @@ export type TaskUpdateValues = {
   audience: 'local' | 'org' | null;
   /** The Attached Links as typed; a blank row means none (R46). */
   links: { label?: string | null; url?: string | null }[];
+  /** **Cine îl vede** (R57); null keeps the stored Role. */
+  minLevel: number | null;
 };
 
 /**
@@ -193,6 +196,7 @@ export function taskUpdateSchema({
       assignmentMode: z.enum(['direct', 'public']).nullable(),
       audience: z.enum(['local', 'org']).nullable(),
       links: attachedLinksSchema,
+      minLevel: z.number().nullable(),
     })
     .superRefine((values, ctx) => {
       const issue = (path: keyof TaskUpdateValues, message: string) =>
@@ -275,6 +279,9 @@ export const fieldForReason: Readonly<Record<string, string>> = {
   parent_unavailable: 'parentTaskId',
   subtask_origin_mismatch: 'parentTaskId',
   invalid_audience: 'audience',
+  // R57: a public Task's Cine îl vede.
+  invalid_task_min_level: 'minLevel',
+  task_min_level_above_actor: 'minLevel',
   // #756: a Private Group's Tasks are local only.
   private_group_local_only: 'audience',
   invalid_assignment_mode: 'assignmentMode',

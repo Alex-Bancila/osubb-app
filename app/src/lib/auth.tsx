@@ -344,3 +344,13 @@ export function useAuth(): AuthState {
   if (!value) throw new Error('useAuth() must be used inside <AuthProvider>');
   return value;
 }
+
+/**
+ * The signed-in Member's Level for a form's choices (R57's Cine îl vede), or 0
+ * outside an AuthProvider. Cosmetic like every level check here: it only
+ * shortens a list; the database refuses a Role above the actor's own.
+ */
+// oxlint-disable-next-line react/only-export-components
+export function useMemberLevel(): number {
+  return useContext(AuthContext)?.claims?.member_level ?? 0;
+}

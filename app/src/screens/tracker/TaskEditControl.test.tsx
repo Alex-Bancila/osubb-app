@@ -5,6 +5,12 @@ import axe from 'axe-core';
 import { taskRow } from '../../test/task-fixtures';
 import { chooseOption } from '../../test/select';
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+// R57: the editor's Level, which caps Cine îl vede (0 unless a case sets it).
+const auth = vi.hoisted(() => ({ level: 0 }));
+vi.mock('../../lib/auth', async (original) => ({
+  ...(await original<object>()),
+  useMemberLevel: () => auth.level,
+}));
 const state = vi.hoisted(() => ({
   options: vi.fn(),
   refetch: vi.fn(),
@@ -181,6 +187,8 @@ it('edits every field through update_task after a preview with no consequences',
     audience: 'org',
     // Full state: the prefilled links travel as the form shows them.
     links: [{ label: 'Brief', url: 'https://example.org/brief' }],
+    // R57: a public Task sends its Cine îl vede (Recrut by default).
+    minLevel: 0,
   };
   expect(state.refetch).toHaveBeenCalledTimes(1);
   expect(state.preview).toHaveBeenCalledWith(values);
@@ -676,4 +684,95 @@ it('edits an Umbrella without deadline, Campaign, mode or audience', async () =>
       }),
     ),
   );
+});
+
+it('prefills Cine îl vede from the Task and sends a new Role (R57)', async () => {
+  auth.level = 6;
+  state.options.mockReturnValue({
+    data,
+    isPending: false,
+    isError: false,
+    refetch: state.refetch.mockResolvedValue({ data }),
+  });
+  state.preview.mockResolvedValue([]);
+  state.mutate.mockResolvedValue({});
+  render(
+    <TaskEditControl
+      task={taskRow({
+        ...task,
+        assignment_mode: 'public',
+        audience: 'org',
+        min_level: 1,
+      })}
+      canManage
+    />,
+  );
+  const user = await openEditor();
+  const field = screen.getByLabelText('Cine îl vede');
+  expect(field).toHaveTextContent('Voluntar');
+  await chooseOption(user, field, 'BC');
+  await user.click(
+    screen.getByRole('button', { name: 'Salvează modificările' }),
+  );
+  await waitFor(() =>
+    expect(state.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ minLevel: 6, acceptConsequences: false }),
+    ),
+  );
+  auth.level = 0;
+});
+it('shows a Role above the editor without offering it, and keeps it (R57)', async () => {
+  auth.level = 1;
+  state.options.mockReturnValue({
+    data,
+    isPending: false,
+    isError: false,
+    refetch: state.refetch.mockResolvedValue({ data }),
+  });
+  render(
+    <TaskEditControl
+      task={taskRow({
+        ...task,
+        assignment_mode: 'public',
+        audience: 'org',
+        min_level: 6,
+      })}
+      canManage
+    />,
+  );
+  await openEditor();
+  expect(screen.queryByLabelText('Cine îl vede')).toBeNull();
+  expect(
+    screen.getByText('De la BC. Doar cineva cu acest rol îl poate schimba.'),
+  ).toBeVisible();
+  auth.level = 0;
+});
+it('neither shows nor sends Cine îl vede for a row that does not carry it (R57)', async () => {
+  auth.level = 6;
+  state.options.mockReturnValue({
+    data,
+    isPending: false,
+    isError: false,
+    refetch: state.refetch.mockResolvedValue({ data }),
+  });
+  state.preview.mockResolvedValue([]);
+  state.mutate.mockResolvedValue({});
+  const { min_level: _dropped, ...withoutRole } = taskRow({
+    ...task,
+    assignment_mode: 'public',
+    audience: 'org',
+  });
+  render(<TaskEditControl task={withoutRole as typeof task} canManage />);
+  const user = await openEditor();
+  expect(screen.queryByLabelText('Cine îl vede')).toBeNull();
+  await user.type(screen.getByLabelText('Titlu'), ' nou');
+  await user.click(
+    screen.getByRole('button', { name: 'Salvează modificările' }),
+  );
+  await waitFor(() =>
+    expect(state.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ minLevel: null }),
+    ),
+  );
+  auth.level = 0;
 });

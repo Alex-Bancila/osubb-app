@@ -43,6 +43,7 @@ const draft: TaskDraftInput = {
   campaignId: null,
   links: [],
   copies: 1,
+  minLevel: 0,
 };
 const schema = taskDraftSchema(options, { now });
 const check = (patch: Partial<TaskDraftInput>) => {
@@ -246,6 +247,7 @@ describe('taskUpdateSchema', () => {
     assignmentMode: 'direct' as const,
     audience: 'local' as const,
     links: [{ label: 'Brief', url: 'https://example.org/brief' }],
+    minLevel: null,
   };
   const checkEdit = (patch: object, editSchema = edit) => {
     const result = editSchema.safeParse({ ...values, ...patch });
@@ -308,6 +310,7 @@ describe('taskUpdateSchema: Group and Attached Link (#627, #684)', () => {
     assignmentMode: 'direct' as const,
     audience: 'local' as const,
     links: [] as { label: string; url: string }[],
+    minLevel: null,
   };
   const checkMove = (patch: object, groupIds?: number[]) => {
     const result = taskUpdateSchema({
@@ -370,6 +373,7 @@ it('maps every reason a Task command raises to a Task field', () => {
       'campaignId',
       'links',
       'copies',
+      'minLevel',
     ],
     [
       // #673
@@ -410,6 +414,9 @@ it('maps every reason a Task command raises to a Task field', () => {
       'link_url_invalid',
       // R46: at most five
       'too_many_links',
+      // R57: Cine îl vede
+      'invalid_task_min_level',
+      'task_min_level_above_actor',
     ],
   );
 });

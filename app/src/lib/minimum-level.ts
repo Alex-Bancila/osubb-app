@@ -61,3 +61,21 @@ export function minimumLevelOptions(
     (rung) => allowed.includes(rung.level) && keep(rung.level),
   );
 }
+
+/**
+ * A public Task's **Cine îl vede** (R57): every Role for an organisation-wide
+ * Task (R26: it reaches below its Group's floor); from the Group's Minimum
+ * Level up for a local one, whose Audience is that Group already; never above
+ * the actor's own Level, the Moderator's 9 excepted.
+ */
+export function taskMinimumLevelChoices(
+  origin: { min_level: number } | undefined,
+  audience: 'local' | 'org',
+  actorLevel: number,
+): MinimumLevelOption[] {
+  const floor = audience === 'local' ? (origin?.min_level ?? 0) : 0;
+  return minimumLevelOptions(
+    GROUP_MINIMUM_LEVELS,
+    (level) => level >= floor && (actorLevel >= 9 || level <= actorLevel),
+  );
+}

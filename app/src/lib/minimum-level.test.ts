@@ -8,6 +8,7 @@ import {
   minimumLevelLabel,
   minimumLevelOptions,
   minimumLevelText,
+  taskMinimumLevelChoices,
 } from './minimum-level';
 
 const LADDER: Array<[number, string]> = [
@@ -68,5 +69,20 @@ describe('Minimum Level ladder (R29b)', () => {
         (option) => option.level,
       ),
     ).toEqual([0, 2]);
+  });
+
+  it('offers a Task every Role when org-wide, the Group floor up when local, never above the actor (R57)', () => {
+    const levels = (floor: number, audience: 'local' | 'org', actor: number) =>
+      taskMinimumLevelChoices({ min_level: floor }, audience, actor).map(
+        (rung) => rung.level,
+      );
+    expect(levels(3, 'org', 6)).toEqual([0, 1, 2, 3, 5, 6]);
+    expect(levels(3, 'local', 6)).toEqual([3, 5, 6]);
+    expect(levels(0, 'org', 2)).toEqual([0, 1, 2]);
+    expect(levels(0, 'org', 9)).toEqual([0, 1, 2, 3, 5, 6]);
+    expect(levels(5, 'local', 2)).toEqual([]);
+    expect(
+      taskMinimumLevelChoices(undefined, 'local', 6).map((rung) => rung.level),
+    ).toEqual([0, 1, 2, 3, 5, 6]);
   });
 });

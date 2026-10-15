@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { Button } from '../../components/ui/button';
+import { useMemberLevel } from '../../lib/auth';
 import { CommandError } from '../../lib/command-reasons';
 import { taskDraftSchema } from '../../lib/schemas/task';
 import { useTaskFormOptions } from '../../queries/task-form-options';
@@ -30,6 +31,8 @@ export function ManagedTaskForm({
   plural?: 'taskuri' | 'subtaskuri';
 }) {
   const query = useTaskFormOptions();
+  // R57: Cine îl vede never offers a Role above the actor's own.
+  const actorLevel = useMemberLevel();
   const [pending, setPending] = useState(false);
   const submitting = useRef(false);
   /**
@@ -90,6 +93,7 @@ export function ManagedTaskForm({
             onCancel={onCancel}
             cancelLabel={cancelLabel}
             plural={plural}
+            actorLevel={actorLevel}
             status={pending && <p role="status">{pendingLabel}</p>}
           />
         </fieldset>

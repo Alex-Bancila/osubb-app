@@ -6,6 +6,7 @@ import {
   expressTaskInterest,
   taskInterestMutationOptions,
   TaskInterestError,
+  taskInterestError,
 } from './task-interest';
 
 function reads(status: string, position: number | null = null) {
@@ -85,5 +86,16 @@ describe('Express Task interest', () => {
     const invalidate = vi.spyOn(client, 'invalidateQueries');
     await taskInterestMutationOptions(client, 'member').onSettled();
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['tasks'] });
+  });
+});
+
+describe('a Task above the Member’s Role (R57)', () => {
+  it('says why the join was refused', () => {
+    const refused = taskInterestError('42501', 'task_level_forbidden');
+    expect(refused.kind).toBe('level');
+    expect(refused.message).toBe(
+      'Taskul e doar pentru un rol mai mare decât al tău.',
+    );
+    expect(taskInterestError('42501').kind).toBe('forbidden');
   });
 });

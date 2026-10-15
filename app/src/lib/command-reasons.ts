@@ -165,6 +165,16 @@ const REASON_COPY = new Map<string, string>([
     'direct_task_local_only',
     'Un task atribuit direct este doar pentru grupul lui. Alege modul public ca să-l deschizi întregului OSUBB.',
   ],
+  /* ---- R57: a public Task's Cine îl vede ---- */
+  [
+    'invalid_task_min_level',
+    'Alege cine vede taskul dintre rolurile din listă.',
+  ],
+  ['task_min_level_above_actor', 'Nu poți alege un rol peste al tău.'],
+  [
+    'task_level_forbidden',
+    'Taskul e doar pentru un rol mai mare decât al tău.',
+  ],
   [
     'group_has_members_below_level',
     'Unii membri au nivelul sub noul nivel minim. Confirmă scoaterea lor.',

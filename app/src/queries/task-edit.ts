@@ -21,6 +21,9 @@ export type TaskUpdateInput = {
   /** The Attached Links, full state like every other field: `[]` clears
    *  them (R46). */
   links: AttachedLink[];
+  /** **Cine îl vede** (R57): null keeps the stored Role (an Umbrella, or a
+   *  row that did not carry it); 0 for a direct Task. */
+  minLevel: number | null;
 };
 
 export type TaskUpdateConsequence = {
@@ -52,6 +55,7 @@ function commandArgs(input: TaskUpdateInput) {
     p_assignment_mode: input.assignmentMode,
     p_audience: input.audience,
     p_links: input.links,
+    p_min_level: input.minLevel,
   } as unknown as Database['public']['Functions']['preview_task_update']['Args'];
 }
 
