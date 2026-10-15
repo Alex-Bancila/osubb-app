@@ -48,11 +48,18 @@ describe('Minimum Level ladder (R29b)', () => {
     );
   });
 
-  it('offers only the events_min_level_ck subset, same order, for an Event', () => {
-    expect(EVENT_MINIMUM_LEVELS).toEqual([0, 3, 5, 6]);
+  it('offers every rung for an Event, same order (R57)', () => {
+    expect(EVENT_MINIMUM_LEVELS).toEqual([0, 1, 2, 3, 5, 6]);
     expect(
       minimumLevelOptions(EVENT_MINIMUM_LEVELS).map((option) => option.label),
-    ).toEqual(['Recrut', 'Voluntar cu Drept de Vot', 'BCE', 'BC']);
+    ).toEqual([
+      'Recrut',
+      'Voluntar',
+      'Voluntar Activ',
+      'Voluntar cu Drept de Vot',
+      'BCE',
+      'BC',
+    ]);
   });
 
   it('keeps ladder order whatever order the allowed levels come in', () => {
