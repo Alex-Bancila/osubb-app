@@ -39,7 +39,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(49);
+select plan(52);
 
 \ir _group_task_fixtures.psql
 reset role;
@@ -691,6 +691,17 @@ select performs_ok($$select * from public.task_list('all', p_finished => true, p
   'a page of every Task answers without asking per Task');
 select performs_ok($$select * from public.leadership_filter_work()$$, 750,
   'the leadership filter work answers without reading every evaluated Task through RLS');
+reset role;
+-- The Member's lists (spec 2026-10-14 member reads): the Executor of the
+-- 6 000, a Volunteer -- the caller the managed set and the per-row
+-- embeds are decided for.
+select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
+select performs_ok($$select * from public.task_list('mine', p_finished => true, p_limit => 50, p_offset => 3000)$$, 750,
+  'a page of a Member''s 6 000 Tasks answers without asking per Task');
+select performs_ok($$select * from public.task_list_summary('mine')$$, 750,
+  'the summary of a Member''s 6 000 Tasks answers without asking per Task');
+select performs_ok($$select * from public.task_list('available')$$, 750,
+  'Disponibile answers beside 6 000 Tasks the Member reads');
 reset role;
 
 select * from finish();

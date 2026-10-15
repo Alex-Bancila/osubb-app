@@ -80,7 +80,7 @@ Both are `stable security definer`, with `set search_path = ''`, and `grant exec
 
 **Files:**
 
-- Create `supabase/migrations/20261014190000_member_task_lists.sql`.
+- Create `supabase/migrations/20261014210000_member_task_lists.sql`.
 - Modify `supabase/tests/task_list.test.sql` (new block), the upgrade harnesses (drop the new signature), `tracker_grants.test.sql` and `app/src/lib/database.types.ts` (regenerated).
 
 **Interfaces:**
