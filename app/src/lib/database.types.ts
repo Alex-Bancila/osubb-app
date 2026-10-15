@@ -4722,6 +4722,7 @@ export type Database = {
           id: number
           kind: string
           links: Json
+          my_candidature: string
           parent_task_id: number
           queue_closed_at: string
           review_round: number
