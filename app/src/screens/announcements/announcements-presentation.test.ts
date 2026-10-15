@@ -3,9 +3,7 @@ import type { Group } from '../../queries/reference';
 import {
   describeTermen,
   minLevelLabel,
-  countUnreadAnnouncements,
   formatAnnouncementDate,
-  getUnreadCriticalAnnouncement,
   mayAskForReaders,
   mayManageAnnouncement,
   mayPinAnnouncement,
@@ -13,7 +11,6 @@ import {
   priorityMeta,
   readersSummary,
   showsPriority,
-  sortAnnouncements,
   toAnnouncementPresentation,
   unreadAnnouncementsLabel,
   type RawAnnouncementRow,
@@ -213,150 +210,6 @@ describe('announcements-presentation', () => {
     });
   });
 
-  describe('sortAnnouncements', () => {
-    it('sorts pinned announcements first, then descending by date', () => {
-      const olderPinned = toAnnouncementPresentation(
-        rawRow({
-          id: 1,
-          pinned: true,
-          published_at: '2026-09-10T10:00:00.000Z',
-        }),
-      );
-      const newerUnpinned = toAnnouncementPresentation(
-        rawRow({
-          id: 2,
-          pinned: false,
-          published_at: '2026-09-18T10:00:00.000Z',
-        }),
-      );
-      const newerPinned = toAnnouncementPresentation(
-        rawRow({
-          id: 3,
-          pinned: true,
-          published_at: '2026-09-15T10:00:00.000Z',
-        }),
-      );
-      const olderUnpinned = toAnnouncementPresentation(
-        rawRow({
-          id: 4,
-          pinned: false,
-          published_at: '2026-09-05T10:00:00.000Z',
-        }),
-      );
-
-      const sorted = sortAnnouncements([
-        olderPinned,
-        newerUnpinned,
-        newerPinned,
-        olderUnpinned,
-      ]);
-
-      expect(sorted.map((item) => item.id)).toEqual([3, 1, 2, 4]);
-    });
-  });
-
-  describe('countUnreadAnnouncements', () => {
-    it('counts only items that have isRead = false', () => {
-      const items = [
-        toAnnouncementPresentation(rawRow({ id: 1, announcement_reads: [] })),
-        toAnnouncementPresentation(
-          rawRow({
-            id: 2,
-            announcement_reads: [{ read_at: '2026-09-18T10:00:00Z' }],
-          }),
-        ),
-        toAnnouncementPresentation(rawRow({ id: 3, announcement_reads: [] })),
-      ];
-
-      expect(countUnreadAnnouncements(items)).toBe(2);
-    });
-
-    it("leaves out the author's own pending and rejected requests, as the server badge does (spec 2026-10-11)", () => {
-      const items = [
-        toAnnouncementPresentation(rawRow({ id: 1, announcement_reads: [] })),
-        toAnnouncementPresentation(
-          rawRow({ id: 2, announcement_reads: [], approval_status: 'pending' }),
-        ),
-        toAnnouncementPresentation(
-          rawRow({
-            id: 3,
-            announcement_reads: [],
-            approval_status: 'rejected',
-            rejection_reason: 'Lipsesc datele.',
-          }),
-        ),
-      ];
-
-      expect(countUnreadAnnouncements(items)).toBe(1);
-    });
-  });
-
-  describe('getUnreadCriticalAnnouncement', () => {
-    it('never offers a pending or rejected critical Announcement (final review, 2026-10-13)', () => {
-      const items = [
-        toAnnouncementPresentation(
-          rawRow({
-            id: 1,
-            priority: 'critical',
-            announcement_reads: [],
-            approval_status: 'pending',
-          }),
-        ),
-        toAnnouncementPresentation(
-          rawRow({
-            id: 2,
-            priority: 'critical',
-            announcement_reads: [],
-            approval_status: 'rejected',
-            rejection_reason: 'Lipsesc datele.',
-          }),
-        ),
-      ];
-      expect(getUnreadCriticalAnnouncement(items)).toBeNull();
-    });
-
-    it('returns first unread critical announcement', () => {
-      const normalUnread = toAnnouncementPresentation(
-        rawRow({ id: 1, priority: 'normal', announcement_reads: [] }),
-      );
-      const criticalRead = toAnnouncementPresentation(
-        rawRow({
-          id: 2,
-          priority: 'critical',
-          announcement_reads: [{ read_at: '2026-09-18T10:00:00Z' }],
-        }),
-      );
-      const criticalUnread = toAnnouncementPresentation(
-        rawRow({ id: 3, priority: 'critical', announcement_reads: [] }),
-      );
-
-      const result = getUnreadCriticalAnnouncement([
-        normalUnread,
-        criticalRead,
-        criticalUnread,
-      ]);
-
-      expect(result?.id).toBe(3);
-    });
-
-    it('returns null when no unread critical announcements exist', () => {
-      const items = [
-        toAnnouncementPresentation(
-          rawRow({
-            id: 1,
-            priority: 'critical',
-            announcement_reads: [{ read_at: '2026-09-18T10:00:00Z' }],
-          }),
-        ),
-        toAnnouncementPresentation(
-          rawRow({ id: 2, priority: 'important', announcement_reads: [] }),
-        ),
-      ];
-
-      expect(getUnreadCriticalAnnouncement(items)).toBeNull();
-    });
-  });
-
   describe('formatAnnouncementDate', () => {
     it('formats the day short, with its hour, in Romanian and Bucharest time', () => {
       const now = new Date('2026-10-10T09:00:00.000Z');
@@ -377,76 +230,6 @@ describe('announcements-presentation', () => {
       expect(formatAnnouncementDate('not a date', now)).toBe('—');
     });
   });
-  describe('R15 ordering', () => {
-    const READ = [{ read_at: '2026-09-20T10:00:00Z' }];
-    it('puts pinned first whatever their read state, then unread, then read, newest first in each band', () => {
-      const rows = [
-        rawRow({
-          id: 1,
-          pinned: false,
-          announcement_reads: READ,
-          published_at: '2026-09-05T10:00:00Z',
-        }), // read old
-        rawRow({
-          id: 2,
-          pinned: false,
-          announcement_reads: [],
-          published_at: '2026-09-06T10:00:00Z',
-        }), // unread old
-        rawRow({
-          id: 3,
-          pinned: true,
-          announcement_reads: READ,
-          published_at: '2026-09-01T10:00:00Z',
-        }), // pinned read
-        rawRow({
-          id: 4,
-          pinned: false,
-          announcement_reads: READ,
-          published_at: '2026-09-19T10:00:00Z',
-        }), // read new
-        rawRow({
-          id: 5,
-          pinned: false,
-          announcement_reads: [],
-          published_at: '2026-09-18T10:00:00Z',
-        }), // unread new
-        rawRow({
-          id: 6,
-          pinned: true,
-          announcement_reads: [],
-          published_at: '2026-08-30T10:00:00Z',
-        }), // pinned unread
-      ];
-      const sorted = sortAnnouncements(
-        rows.map((row) => toAnnouncementPresentation(row)),
-      );
-      expect(sorted.map((item) => item.id)).toEqual([3, 6, 5, 2, 4, 1]);
-    });
-
-    it('keeps a read, pinned Announcement above an unread, unpinned one', () => {
-      const sorted = sortAnnouncements([
-        toAnnouncementPresentation(
-          rawRow({
-            id: 1,
-            pinned: false,
-            announcement_reads: [],
-            published_at: '2026-09-20T10:00:00Z',
-          }),
-        ),
-        toAnnouncementPresentation(
-          rawRow({
-            id: 2,
-            pinned: true,
-            announcement_reads: READ,
-            published_at: '2026-09-01T10:00:00Z',
-          }),
-        ),
-      ]);
-      expect(sorted.map((item) => item.id)).toEqual([2, 1]);
-    });
-  });
-
   describe('author', () => {
     it('names the author through created_by, with a placeholder until the directory answers', () => {
       const pending = toAnnouncementPresentation(rawRow());

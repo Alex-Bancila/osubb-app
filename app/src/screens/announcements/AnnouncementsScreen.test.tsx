@@ -4,7 +4,11 @@ import type { ReactNode } from 'react';
 import { MemoryRouter, useLocation } from 'react-router';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AnnouncementFeedRow } from '../../queries/announcements';
+import type {
+  AnnouncementFeed,
+  AnnouncementFeedRow,
+  AnnouncementFeedSummary,
+} from '../../queries/announcements';
 import type { Group } from '../../queries/reference';
 
 // R43: Grupuri preferate. Nothing is unselected unless a test says so.
@@ -20,10 +24,13 @@ vi.mock('../../queries/group-preferences', () => ({
 }));
 
 const hooks = vi.hoisted(() => ({
-  useAnnouncementsFeed: vi.fn(),
+  useAnnouncementFeed: vi.fn(),
+  useAnnouncementFeedSummary: vi.fn(),
+  useAnnouncement: vi.fn(),
   useMarkAnnouncementRead: vi.fn(),
   useGroups: vi.fn(),
   useUnreadCountByKind: vi.fn(),
+  useMemberIdentitiesByPage: vi.fn(),
 }));
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -48,7 +55,9 @@ vi.mock('../../queries/approvals', async (importOriginal) => ({
   useApprovalRequests: () => ({ data: approvals.data }),
 }));
 vi.mock('../../queries/announcements', () => ({
-  useAnnouncementsFeed: hooks.useAnnouncementsFeed,
+  useAnnouncementFeed: hooks.useAnnouncementFeed,
+  useAnnouncementFeedSummary: hooks.useAnnouncementFeedSummary,
+  useAnnouncement: hooks.useAnnouncement,
   useMarkAnnouncementRead: hooks.useMarkAnnouncementRead,
   useAnnouncementReaders: () => ({ data: undefined }),
   useSetAnnouncementPinned: () => ({ mutate: vi.fn(), isPending: false }),
@@ -66,6 +75,7 @@ vi.mock('../deals/DealsTab', () => ({
 vi.mock('../deals/DealFormSheet', () => ({ NewDealControl: () => null }));
 vi.mock('../../queries/member-identities', () => ({
   useMemberIdentities: () => ({ data: undefined }),
+  useMemberIdentitiesByPage: hooks.useMemberIdentitiesByPage,
 }));
 vi.mock('../../lib/capabilities', () => ({
   useCapability: () => ({ data: false }),
@@ -149,6 +159,71 @@ function createRow(
   };
 }
 
+/**
+ * What `useAnnouncementFeed` answers: these rows, every one read, as the
+ * server's pages of 20 unless a test gives its own.
+ */
+function feedRead(
+  rows: AnnouncementFeedRow[],
+  overrides: Partial<AnnouncementFeed> = {},
+): AnnouncementFeed {
+  const pages: AnnouncementFeedRow[][] = [];
+  for (let start = 0; start < rows.length; start += 20)
+    pages.push(rows.slice(start, start + 20));
+  return {
+    rows,
+    pages,
+    total: rows.length,
+    isPending: false,
+    isError: false,
+    error: null,
+    hasMore: false,
+    isLoadingMore: false,
+    isFetching: false,
+    moreFailed: false,
+    loadMore: vi.fn(),
+    refetch: vi.fn(),
+    ...overrides,
+  };
+}
+
+/** The feed the server answers, in its own (R15) order. */
+function showFeed(
+  rows: AnnouncementFeedRow[],
+  overrides: Partial<AnnouncementFeed> = {},
+) {
+  hooks.useAnnouncementFeed.mockReturnValue(feedRead(rows, overrides));
+}
+
+/** What `announcement_feed_summary` answers. */
+function showSummary(summary: Partial<AnnouncementFeedSummary> = {}) {
+  hooks.useAnnouncementFeedSummary.mockReturnValue({
+    data: {
+      unread: 0,
+      criticalId: null,
+      everything: 1,
+      preferred: 1,
+      ...summary,
+    },
+    isPending: false,
+    isError: false,
+  });
+}
+
+/** `useAnnouncement` answers these rows by their id, and is on its way for any other. */
+function readableById(rows: Record<number, AnnouncementFeedRow | null>) {
+  hooks.useAnnouncement.mockImplementation((id: number | null) =>
+    id !== null && id in rows
+      ? { data: rows[id], isPending: false, isError: false }
+      : { data: undefined, isPending: id !== null, isError: false },
+  );
+}
+
+/** The filters of the feed's latest read. */
+function feedFilters() {
+  return hooks.useAnnouncementFeed.mock.lastCall?.[0];
+}
+
 describe('AnnouncementsScreen', () => {
   const mutate = vi.fn();
 
@@ -170,15 +245,14 @@ describe('AnnouncementsScreen', () => {
     hooks.useGroups.mockReturnValue({ data: mockGroups, isPending: false });
     hooks.useMarkAnnouncementRead.mockReturnValue({ mutate, isPending: false });
     hooks.useUnreadCountByKind.mockReturnValue({ data: 0 });
+    hooks.useMemberIdentitiesByPage.mockReturnValue(new Map());
+    showFeed([]);
+    showSummary({ everything: 0, preferred: 0 });
+    readableById({});
   });
 
   describe('Anunțuri | OSUBB Deals tabs (R45)', () => {
     it('puts the two tabs under the title, Anunțuri open, each with its own unread count', () => {
-      hooks.useAnnouncementsFeed.mockReturnValue({
-        isPending: false,
-        isError: false,
-        data: [],
-      });
       // The server counts each tab under the badge's own rule (R45).
       hooks.useUnreadCountByKind.mockImplementation((kind: string) => ({
         data: kind === 'deal' ? 1 : 3,
@@ -201,11 +275,7 @@ describe('AnnouncementsScreen', () => {
     });
 
     it('shows only the Deals at /anunturi/deals, never the Announcements feed', () => {
-      hooks.useAnnouncementsFeed.mockReturnValue({
-        isPending: false,
-        isError: false,
-        data: [createRow({ title: 'Ședință' })],
-      });
+      showFeed([createRow({ title: 'Ședință' })]);
 
       renderAt('/anunturi/deals');
 
@@ -220,11 +290,7 @@ describe('AnnouncementsScreen', () => {
     });
 
     it('never shows the Deals tab on Anunțuri', () => {
-      hooks.useAnnouncementsFeed.mockReturnValue({
-        isPending: false,
-        isError: false,
-        data: [createRow({ title: 'Ședință' })],
-      });
+      showFeed([createRow({ title: 'Ședință' })]);
 
       renderAt('/anunturi');
 
@@ -233,12 +299,8 @@ describe('AnnouncementsScreen', () => {
     });
   });
 
-  it('renders loading state when feed query is pending', () => {
-    hooks.useAnnouncementsFeed.mockReturnValue({
-      isPending: true,
-      isError: false,
-      data: undefined,
-    });
+  it('holds the place of the feed while its first page loads', () => {
+    showFeed([], { isPending: true, total: undefined });
 
     renderAt('/anunturi');
 
@@ -252,12 +314,11 @@ describe('AnnouncementsScreen', () => {
       .mockImplementation(() => undefined);
     const refetch = vi.fn();
     const user = userEvent.setup();
-
-    hooks.useAnnouncementsFeed.mockReturnValue({
-      isPending: false,
+    showFeed([], {
       isError: true,
       error: new Error('Failed to load'),
       refetch,
+      total: undefined,
     });
 
     renderAt('/anunturi');
@@ -273,13 +334,7 @@ describe('AnnouncementsScreen', () => {
     consoleError.mockRestore();
   });
 
-  it('renders empty state when there are no announcements', () => {
-    hooks.useAnnouncementsFeed.mockReturnValue({
-      isPending: false,
-      isError: false,
-      data: [],
-    });
-
+  it('says so when the Member reads no Announcement at all', () => {
     renderAt('/anunturi');
 
     expect(
@@ -289,108 +344,96 @@ describe('AnnouncementsScreen', () => {
     expect(screen.queryByText(/necitit/)).toBeNull();
   });
 
-  it('renders feed sorted pinned-first then newest, showing critical banner and unread counts', () => {
-    const rowNormalOld = createRow({
-      id: 1,
-      title: 'Anunț Vechi',
-      pinned: false,
-      priority: 'normal',
-      published_at: '2026-09-15T10:00:00Z',
-      announcement_reads: [{ read_at: '2026-09-16T10:00:00Z' }],
-    });
-
-    const rowCriticalNew = createRow({
-      id: 2,
-      title: 'Urgență Server',
-      pinned: false,
-      priority: 'critical',
-      published_at: '2026-09-18T12:00:00Z',
-      announcement_reads: [], // unread!
-    });
-
-    const rowPinnedOlder = createRow({
-      id: 3,
-      title: 'Regulament Intern',
-      pinned: true,
-      priority: 'important',
-      published_at: '2026-09-10T10:00:00Z',
-      announcement_reads: [{ read_at: '2026-09-11T10:00:00Z' }],
-    });
-
-    hooks.useAnnouncementsFeed.mockReturnValue({
-      isPending: false,
+  it('waits for the summary before it says the feed is empty', () => {
+    hooks.useAnnouncementFeedSummary.mockReturnValue({
+      data: undefined,
+      isPending: true,
       isError: false,
-      data: [rowNormalOld, rowCriticalNew, rowPinnedOlder],
     });
+
+    renderAt('/anunturi');
+
+    expect(screen.getByText('Se încarcă anunțurile…')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Nu sunt anunțuri disponibile în acest moment.'),
+    ).toBeNull();
+  });
+
+  // R56: the server orders the feed (R15) and counts what the page shows
+  // around it; the screen neither sorts nor counts its loaded rows.
+  it('draws the feed in the server’s order, the header’s count and the banner from the summary', () => {
+    showFeed([
+      createRow({
+        id: 1,
+        title: 'Anunț Vechi',
+        published_at: '2026-09-15T10:00:00Z',
+        announcement_reads: [{ read_at: '2026-09-16T10:00:00Z' }],
+      }),
+      createRow({
+        id: 2,
+        title: 'Urgență Server',
+        priority: 'critical',
+        published_at: '2026-09-18T12:00:00Z',
+      }),
+      createRow({
+        id: 3,
+        title: 'Regulament Intern',
+        pinned: true,
+        priority: 'important',
+        published_at: '2026-09-10T10:00:00Z',
+        announcement_reads: [{ read_at: '2026-09-11T10:00:00Z' }],
+      }),
+    ]);
+    // More are unread than the loaded rows hold: the count is the server's.
+    showSummary({ unread: 7, criticalId: 2, everything: 30, preferred: 30 });
 
     renderAt('/anunturi');
 
     expect(
       screen.getByRole('heading', { level: 1, name: 'Anunțuri' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('1 anunț necitit')).toBeInTheDocument();
+    expect(screen.getByText('7 anunțuri necitite')).toBeInTheDocument();
 
-    // Critical banner is present for unread critical announcement
     const alert = screen.getByRole('alert');
-    expect(alert).toBeInTheDocument();
     expect(within(alert).getByText(/Urgență Server/)).toBeInTheDocument();
 
-    // Feed items ordering: pinned first (Regulament Intern), then newer (Urgență Server), then older (Anunț Vechi)
     const articles = screen.getAllByRole('article');
     expect(articles).toHaveLength(3);
-    expect(articles[0]).toHaveAccessibleName('Regulament Intern');
+    expect(articles[0]).toHaveAccessibleName('Anunț Vechi');
     expect(articles[1]).toHaveAccessibleName('Urgență Server');
-    expect(articles[2]).toHaveAccessibleName('Anunț Vechi');
+    expect(articles[2]).toHaveAccessibleName('Regulament Intern');
+    expect(hooks.useAnnouncement).not.toHaveBeenCalledWith(2);
   });
 
   it('opens details sheet when a card is clicked and marks it as read', async () => {
     const user = userEvent.setup();
-    const row = createRow({
-      id: 42,
-      title: 'Ședință Generală',
-      body: 'Prezența este obligatorie.',
-      announcement_reads: [], // unread
-    });
-
-    hooks.useAnnouncementsFeed.mockReturnValue({
-      isPending: false,
-      isError: false,
-      data: [row],
-    });
+    showFeed([
+      createRow({
+        id: 42,
+        title: 'Ședință Generală',
+        body: 'Prezența este obligatorie.',
+      }),
+    ]);
 
     renderAt('/anunturi');
 
-    // Click "Citește" button inside card
     const card = screen.getByRole('article', { name: 'Ședință Generală' });
     const readButton = within(card).getByRole('button', { name: /Citește/ });
     await user.click(readButton);
 
-    // Details sheet dialog should be open
     const dialog = screen.getByRole('dialog');
-    expect(dialog).toBeInTheDocument();
     expect(
       within(dialog).getByText('Prezența este obligatorie.'),
     ).toBeInTheDocument();
-
-    // Mark as read should have been triggered exactly once
     expect(mutate).toHaveBeenCalledTimes(1);
     expect(mutate).toHaveBeenCalledWith(42, expect.any(Object));
   });
 
   it('triggers markRead exactly once for an unread announcement even across parent rerenders or mutation changes', async () => {
     const user = userEvent.setup();
-    const row = createRow({
-      id: 77,
-      title: 'Anunț Unic',
-      body: 'Test unicitate marcare.',
-      announcement_reads: [], // unread
-    });
-
-    hooks.useAnnouncementsFeed.mockReturnValue({
-      isPending: false,
-      isError: false,
-      data: [row],
-    });
+    showFeed([
+      createRow({ id: 77, title: 'Anunț Unic', body: 'Test unicitate.' }),
+    ]);
 
     const { rerender } = renderAt('/anunturi');
 
@@ -401,36 +444,58 @@ describe('AnnouncementsScreen', () => {
     expect(mutate).toHaveBeenCalledTimes(1);
     expect(mutate).toHaveBeenCalledWith(77, expect.any(Object));
 
-    // Simulate mutation state update rerendering parent (e.g. isPending: true)
     hooks.useMarkAnnouncementRead.mockReturnValue({
       mutate,
       isPending: true,
     });
     rerender(<AnnouncementsScreen />);
-
-    // Simulate another unrelated rerender
     rerender(<AnnouncementsScreen />);
 
-    // Must remain called exactly once
     expect(mutate).toHaveBeenCalledTimes(1);
+  });
+
+  // Fails if the sheet falls back to what was opened whatever the read by
+  // id answers: it would stay open on an Announcement deleted elsewhere.
+  it('keeps the open sheet while its row is read by its id, and closes it when that read finds none', async () => {
+    const user = userEvent.setup();
+    showFeed([
+      createRow({ id: 42, title: 'Ședință Generală' }),
+      createRow({ id: 43, title: 'Altul' }),
+    ]);
+    const view = renderAt('/anunturi');
+    await user.click(
+      within(
+        screen.getByRole('article', { name: 'Ședință Generală' }),
+      ).getByRole('button', { name: /Citește/ }),
+    );
+    expect(
+      screen.getByRole('dialog', { name: 'Ședință Generală' }),
+    ).toBeInTheDocument();
+
+    // The feed is read again without it: the sheet holds on while the row
+    // is read by its id…
+    showFeed([createRow({ id: 43, title: 'Altul' })]);
+    readableById({});
+    view.rerender(<AnnouncementsScreen />);
+    expect(hooks.useAnnouncement).toHaveBeenCalledWith(42);
+    expect(
+      screen.getByRole('dialog', { name: 'Ședință Generală' }),
+    ).toBeInTheDocument();
+
+    // …and closes once that read finds none: it was deleted elsewhere.
+    readableById({ 42: null });
+    view.rerender(<AnnouncementsScreen />);
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
   });
 
   it('allows retrying markRead if previous mutation failed', async () => {
     const user = userEvent.setup();
-    const row = createRow({
-      id: 88,
-      title: 'Anunț cu Eșec',
-      body: 'Test reîncercare.',
-      announcement_reads: [], // unread
-    });
+    showFeed([
+      createRow({ id: 88, title: 'Anunț cu Eșec', body: 'Test reîncercare.' }),
+    ]);
 
-    hooks.useAnnouncementsFeed.mockReturnValue({
-      isPending: false,
-      isError: false,
-      data: [row],
-    });
-
-    // First attempt fails
     mutate.mockImplementationOnce(
       (
         _id: number,
@@ -449,16 +514,13 @@ describe('AnnouncementsScreen', () => {
     const card = screen.getByRole('article', { name: 'Anunț cu Eșec' });
     const readButton = within(card).getByRole('button', { name: /Citește/ });
 
-    // Open sheet 1st time - mutation fails
     await user.click(readButton);
     expect(mutate).toHaveBeenCalledTimes(1);
     expect(mutate).toHaveBeenCalledWith(88, expect.any(Object));
 
-    // Close sheet
     const closeButton = screen.getByRole('button', { name: 'Închide' });
     await user.click(closeButton);
 
-    // Second attempt succeeds
     mutate.mockImplementationOnce(
       (
         _id: number,
@@ -472,24 +534,17 @@ describe('AnnouncementsScreen', () => {
       },
     );
 
-    // Open sheet 2nd time - should retry mutation
     await user.click(readButton);
     expect(mutate).toHaveBeenCalledTimes(2);
 
-    // Close sheet again
     await user.click(closeButton);
 
-    // Open sheet 3rd time - since 2nd attempt succeeded, it should not call mutate again
     await user.click(readButton);
     expect(mutate).toHaveBeenCalledTimes(2);
   });
 
   it('renders loading state when groups query is pending even if feed has loaded', () => {
-    hooks.useAnnouncementsFeed.mockReturnValue({
-      isPending: false,
-      isError: false,
-      data: [createRow()],
-    });
+    showFeed([createRow()]);
     hooks.useGroups.mockReturnValue({
       isPending: true,
       data: undefined,
@@ -502,40 +557,31 @@ describe('AnnouncementsScreen', () => {
     expect(screen.getByText('Se încarcă anunțurile…')).toBeInTheDocument();
   });
 
-  it('opens details sheet when critical banner is clicked', async () => {
-    const user = userEvent.setup();
-    const row = createRow({
-      id: 99,
-      title: 'Atenție Server Cazut',
-      priority: 'critical',
-      announcement_reads: [], // unread critical
+  describe('the critical banner', () => {
+    it('opens the Announcement it points at', async () => {
+      const user = userEvent.setup();
+      showFeed([
+        createRow({ id: 5, title: 'Regulament', pinned: true }),
+        createRow({
+          id: 99,
+          title: 'Atenție Server Cazut',
+          priority: 'critical',
+        }),
+      ]);
+      showSummary({ criticalId: 99 });
+
+      renderAt('/anunturi');
+
+      await user.click(screen.getByRole('button', { name: 'Citește acum' }));
+
+      expect(
+        screen.getByRole('dialog', { name: 'Atenție Server Cazut' }),
+      ).toBeInTheDocument();
+      expect(mutate).toHaveBeenCalledWith(99, expect.any(Object));
     });
-    // A pinned Announcement sits above it, so the banner has work to do.
-    const pinned = createRow({ id: 5, title: 'Regulament', pinned: true });
 
-    hooks.useAnnouncementsFeed.mockReturnValue({
-      isPending: false,
-      isError: false,
-      data: [row, pinned],
-    });
-
-    renderAt('/anunturi');
-
-    const bannerButton = screen.getByRole('button', { name: 'Citește acum' });
-    await user.click(bannerButton);
-
-    const dialog = screen.getByRole('dialog', {
-      name: 'Atenție Server Cazut',
-    });
-    expect(dialog).toBeInTheDocument();
-    expect(mutate).toHaveBeenCalledWith(99, expect.any(Object));
-  });
-
-  it('shows no critical banner when that Announcement is already the first card (B33)', () => {
-    hooks.useAnnouncementsFeed.mockReturnValue({
-      isPending: false,
-      isError: false,
-      data: [
+    it('is not drawn when that Announcement is already the first card (B33)', () => {
+      showFeed([
         createRow({
           id: 1,
           title: 'Ședință extraordinară',
@@ -543,41 +589,249 @@ describe('AnnouncementsScreen', () => {
           pinned: true,
         }),
         createRow({ id: 2, title: 'Altceva' }),
-      ],
+      ]);
+      showSummary({ criticalId: 1 });
+
+      renderAt('/anunturi');
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Citește acum' }),
+      ).not.toBeInTheDocument();
+      expect(screen.getAllByText(/Ședință extraordinară/)).toHaveLength(1);
+      expect(screen.getAllByRole('article')[0]).toHaveAccessibleName(
+        'Ședință extraordinară',
+      );
     });
 
-    renderAt('/anunturi');
+    it('reads one further down by its id, and opens it from there', async () => {
+      const user = userEvent.setup();
+      showFeed([createRow({ id: 1, title: 'Primul' })], { hasMore: true });
+      showSummary({ criticalId: 77 });
+      readableById({
+        77: createRow({
+          id: 77,
+          title: 'Critic mai jos',
+          priority: 'critical',
+        }),
+      });
 
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'Citește acum' }),
-    ).not.toBeInTheDocument();
-    // It appears once: as the first card.
-    expect(screen.getAllByText(/Ședință extraordinară/)).toHaveLength(1);
-    expect(screen.getAllByRole('article')[0]).toHaveAccessibleName(
-      'Ședință extraordinară',
+      renderAt('/anunturi');
+
+      expect(hooks.useAnnouncement).toHaveBeenCalledWith(77);
+      const alert = screen.getByRole('alert');
+      expect(within(alert).getByText(/Critic mai jos/)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Citește acum' }));
+      expect(
+        screen.getByRole('dialog', { name: 'Critic mai jos' }),
+      ).toBeInTheDocument();
+      expect(mutate).toHaveBeenCalledWith(77, expect.any(Object));
+    });
+
+    it('is not drawn without a critical Announcement to point at', () => {
+      showFeed([createRow({ id: 1, title: 'Primul' })]);
+      showSummary({ criticalId: null });
+
+      renderAt('/anunturi');
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('more Announcements, 20 at a time (R56)', () => {
+    const twenty = Array.from({ length: 20 }, (_, index) =>
+      createRow({ id: index + 1, title: `Anunț ${index + 1}` }),
     );
+
+    it('asks for the next page from Încarcă mai multe', async () => {
+      const user = userEvent.setup();
+      const loadMore = vi.fn();
+      showFeed(twenty, { total: 45, hasMore: true, loadMore });
+
+      renderAt('/anunturi');
+
+      await user.click(
+        screen.getByRole('button', { name: 'Încarcă mai multe' }),
+      );
+      expect(loadMore).toHaveBeenCalledTimes(1);
+    });
+
+    it('says so while the next page loads', () => {
+      showFeed(twenty, { total: 45, hasMore: true, isLoadingMore: true });
+
+      renderAt('/anunturi');
+
+      expect(
+        screen.getByRole('button', { name: 'Se încarcă…' }),
+      ).toBeDisabled();
+      // The next page holds its place under the Announcements read so far.
+      const status = screen
+        .getByText('Se încarcă mai multe anunțuri…')
+        .closest('[role="status"]');
+      expect(
+        status?.querySelectorAll('[data-slot="skeleton"]').length ?? 0,
+      ).toBeGreaterThanOrEqual(3);
+    });
+
+    it('offers nothing more once every Announcement is read', () => {
+      showFeed(twenty, { total: 20, hasMore: false });
+
+      renderAt('/anunturi');
+
+      expect(
+        screen.queryByRole('button', { name: 'Încarcă mai multe' }),
+      ).toBeNull();
+    });
+
+    it('keeps what is loaded and offers a retry when a later page fails', async () => {
+      const user = userEvent.setup();
+      const loadMore = vi.fn();
+      showFeed(twenty, {
+        total: 45,
+        hasMore: true,
+        moreFailed: true,
+        loadMore,
+      });
+
+      renderAt('/anunturi');
+
+      expect(screen.getAllByRole('article')).toHaveLength(20);
+      expect(
+        screen.getByText('Nu am putut încărca mai multe anunțuri.'),
+      ).toBeInTheDocument();
+      await user.click(
+        screen.getByRole('button', { name: 'Încearcă din nou' }),
+      );
+      expect(loadMore).toHaveBeenCalledTimes(1);
+    });
+
+    it('loads the next page when the end of the list comes into view', () => {
+      const observed: Element[] = [];
+      let enter: (entries: { isIntersecting: boolean }[]) => void = () => {};
+      vi.stubGlobal(
+        'IntersectionObserver',
+        class {
+          constructor(callback: typeof enter) {
+            enter = callback;
+          }
+          observe(element: Element) {
+            observed.push(element);
+          }
+          disconnect() {}
+        },
+      );
+      const loadMore = vi.fn();
+      showFeed(twenty, { total: 45, hasMore: true, loadMore });
+
+      renderAt('/anunturi');
+
+      expect(observed).toHaveLength(1);
+      expect(observed[0]).toContainElement(
+        screen.getByRole('button', { name: 'Încarcă mai multe' }),
+      );
+      enter([{ isIntersecting: false }]);
+      expect(loadMore).not.toHaveBeenCalled();
+      enter([{ isIntersecting: true }]);
+      expect(loadMore).toHaveBeenCalledTimes(1);
+      vi.unstubAllGlobals();
+    });
+
+    // Fails if the end is watched while any read is on its way: coming into
+    // view, it would ask for a page on top of the first one read again.
+    it('watches the end of the list only while a next page can be asked for', () => {
+      let watching = 0;
+      vi.stubGlobal(
+        'IntersectionObserver',
+        class {
+          observe() {
+            watching += 1;
+          }
+          disconnect() {
+            watching -= 1;
+          }
+        },
+      );
+      showFeed(twenty, { total: 45, hasMore: true, isLoadingMore: true });
+      const view = renderAt('/anunturi');
+      expect(watching).toBe(0);
+      showFeed(twenty, { total: 45, hasMore: true });
+      view.rerender(<AnnouncementsScreen />);
+      expect(watching).toBe(1);
+      showFeed(twenty, { total: 45, hasMore: true, isFetching: true });
+      view.rerender(<AnnouncementsScreen />);
+      expect(watching).toBe(0);
+      showFeed(twenty, { total: 45, hasMore: true, moreFailed: true });
+      view.rerender(<AnnouncementsScreen />);
+      expect(watching).toBe(0);
+      vi.unstubAllGlobals();
+    });
+
+    // Fails if the authors are read in one set: a page that lands would ask
+    // for every author again, and the names drawn would flicker meanwhile.
+    // Fails too if they are cut from the rows kept once rather than from
+    // the server's pages: a dropped duplicate would shift every later
+    // slice, and with it the key its names are read under.
+    it('reads the authors page by page, as the server sent the pages', () => {
+      const row = (id: number) =>
+        createRow({
+          id,
+          title: `Anunț ${id}`,
+          created_by: `author-${id}`,
+        });
+      const ids = (from: number, to: number) =>
+        Array.from({ length: to - from + 1 }, (_, index) => from + index);
+      // One was published between the two pages: the second starts with
+      // the first page's last card, which the list keeps once.
+      showFeed(ids(1, 21).map(row), {
+        total: 22,
+        pages: [ids(1, 20).map(row), ids(20, 21).map(row)],
+      });
+      hooks.useMemberIdentitiesByPage.mockReturnValue(
+        new Map([
+          [
+            'author-1',
+            {
+              memberId: 'author-1',
+              fullName: 'Ana Pop',
+              nickname: null,
+              avatarColor: null,
+            },
+          ],
+        ]),
+      );
+
+      renderAt('/anunturi');
+
+      expect(hooks.useMemberIdentitiesByPage.mock.lastCall?.[0]).toEqual([
+        ids(1, 20).map((id) => `author-${id}`),
+        ['author-20', 'author-21'],
+      ]);
+      expect(
+        within(screen.getByRole('article', { name: 'Anunț 1' })).getByText(
+          'Ana Pop',
+        ),
+      ).toBeInTheDocument();
+    });
   });
 
   describe('?anunt= deep link (D14)', () => {
     beforeEach(() => {
-      hooks.useAnnouncementsFeed.mockReturnValue({
-        isPending: false,
-        isError: false,
-        data: [
-          createRow({ id: 1, title: 'Primul', pinned: true }),
-          createRow({ id: 42, title: 'Ședință Generală' }),
-        ],
-      });
+      showFeed([
+        createRow({ id: 1, title: 'Primul', pinned: true }),
+        createRow({ id: 42, title: 'Ședință Generală' }),
+      ]);
     });
 
     it('opens the linked Announcement and marks it read', () => {
       renderAt('/anunturi?anunt=42');
 
-      const dialog = screen.getByRole('dialog', { name: 'Ședință Generală' });
-      expect(dialog).toBeInTheDocument();
+      expect(
+        screen.getByRole('dialog', { name: 'Ședință Generală' }),
+      ).toBeInTheDocument();
       expect(mutate).toHaveBeenCalledTimes(1);
       expect(mutate).toHaveBeenCalledWith(42, expect.any(Object));
+      // It is among the loaded rows: nothing is read by its id.
+      expect(hooks.useAnnouncement).not.toHaveBeenCalledWith(42);
     });
 
     it('drops the param when the sheet closes, and does not reopen it', async () => {
@@ -596,12 +850,30 @@ describe('AnnouncementsScreen', () => {
     });
 
     it('does not open anything before the feed is in', () => {
-      hooks.useAnnouncementsFeed.mockReturnValue({
-        isPending: true,
-        isError: false,
-        data: undefined,
-      });
+      showFeed([], { isPending: true, total: undefined });
       renderAt('/anunturi?anunt=42');
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(mutate).not.toHaveBeenCalled();
+    });
+
+    // R56: the linked one may sit on a page not read yet.
+    it('reads one not among the loaded rows by its id, opens it and marks it read', () => {
+      readableById({
+        500: createRow({ id: 500, title: 'Anunț mai vechi' }),
+      });
+
+      renderAt('/anunturi?anunt=500');
+
+      expect(hooks.useAnnouncement).toHaveBeenCalledWith(500);
+      expect(
+        screen.getByRole('dialog', { name: 'Anunț mai vechi' }),
+      ).toBeInTheDocument();
+      expect(mutate).toHaveBeenCalledWith(500, expect.any(Object));
+    });
+
+    it('waits while that read is on its way', () => {
+      renderAt('/anunturi?anunt=500');
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(mutate).not.toHaveBeenCalled();
@@ -609,6 +881,7 @@ describe('AnnouncementsScreen', () => {
 
     it('opens the unavailable state for an Announcement the member cannot read', async () => {
       const user = userEvent.setup();
+      readableById({ 999: null });
       renderAt('/anunturi?anunt=999');
 
       const dialog = screen.getByRole('dialog', { name: 'Anunț indisponibil' });
@@ -627,6 +900,48 @@ describe('AnnouncementsScreen', () => {
         screen.getByRole('dialog', { name: 'Anunț indisponibil' }),
       ).toBeInTheDocument();
       expect(mutate).not.toHaveBeenCalled();
+    });
+
+    // Fails if a failed read says "indisponibil", or is taken as the link's
+    // answer: the Member would be told it is gone, and a retry that
+    // succeeds would open nothing.
+    it('says a failed read failed, with a retry that opens the Announcement once it answers', async () => {
+      const user = userEvent.setup();
+      const refetch = vi.fn();
+      hooks.useAnnouncement.mockImplementation((id: number | null) =>
+        id === 500
+          ? {
+              data: undefined,
+              isPending: false,
+              isError: true,
+              isFetching: false,
+              refetch,
+            }
+          : { data: undefined, isPending: id !== null, isError: false },
+      );
+      const view = renderAt('/anunturi?anunt=500');
+
+      const dialog = screen.getByRole('dialog');
+      expect(
+        within(dialog).getByText('Nu am putut încărca anunțul.'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('dialog', { name: 'Anunț indisponibil' }),
+      ).toBeNull();
+      expect(mutate).not.toHaveBeenCalled();
+
+      await user.click(
+        within(dialog).getByRole('button', { name: 'Reîncearcă' }),
+      );
+      expect(refetch).toHaveBeenCalledTimes(1);
+
+      readableById({ 500: createRow({ id: 500, title: 'Anunț mai vechi' }) });
+      view.rerender(<AnnouncementsScreen />);
+
+      expect(
+        await screen.findByRole('dialog', { name: 'Anunț mai vechi' }),
+      ).toBeInTheDocument();
+      expect(mutate).toHaveBeenCalledWith(500, expect.any(Object));
     });
   });
 
@@ -654,18 +969,15 @@ describe('AnnouncementsScreen', () => {
         ]),
         isPending: false,
       });
-      hooks.useAnnouncementsFeed.mockReturnValue({
-        isPending: false,
-        isError: false,
-        data: [
-          createRow({ id: 1, title: 'Din IT', group_id: 10 }),
-          createRow({ id: 2, title: 'Din Echipa Web', group_id: 11 }),
-          createRow({ id: 3, title: 'Din Educațional', group_id: 20 }),
-        ],
-      });
+      showFeed([
+        createRow({ id: 1, title: 'Din IT', group_id: 10 }),
+        createRow({ id: 2, title: 'Din Echipa Web', group_id: 11 }),
+        createRow({ id: 3, title: 'Din Educațional', group_id: 20 }),
+      ]);
+      showSummary({ unread: 3, everything: 3, preferred: 3 });
     });
 
-    it('draws Filtrează on the title row and lists everything with no Group chosen', () => {
+    it('draws Filtrează on the title row and asks for every Group with none chosen', () => {
       renderAt('/anunturi');
 
       expect(
@@ -673,17 +985,27 @@ describe('AnnouncementsScreen', () => {
           .getByRole('button', { name: 'Filtrează' })
           .closest('[data-slot="page-actions"]'),
       ).not.toBeNull();
+      expect(feedFilters()).toEqual({ p_preferred: false });
       expect(screen.getByText('Din IT')).toBeInTheDocument();
       expect(screen.getByText('Din Echipa Web')).toBeInTheDocument();
       expect(screen.getByText('Din Educațional')).toBeInTheDocument();
     });
 
-    it('keeps the chosen Group and the Groups below it, and still counts every unread', () => {
+    // The server keeps the chosen Group and every Group below it.
+    it('asks the server for the chosen Group, and the header still counts every unread', () => {
+      showFeed([
+        createRow({ id: 1, title: 'Din IT', group_id: 10 }),
+        createRow({ id: 2, title: 'Din Echipa Web', group_id: 11 }),
+      ]);
       renderAt('/anunturi?grup=10');
 
+      expect(feedFilters()).toEqual({ p_group_id: 10, p_preferred: false });
+      expect(hooks.useAnnouncementFeedSummary).toHaveBeenLastCalledWith(
+        { p_group_id: 10, p_preferred: false },
+        true,
+      );
       expect(screen.getByText('Din IT')).toBeInTheDocument();
       expect(screen.getByText('Din Echipa Web')).toBeInTheDocument();
-      expect(screen.queryByText('Din Educațional')).toBeNull();
       expect(screen.getByText('3 anunțuri necitite')).toBeInTheDocument();
       expect(
         screen.getByRole('button', {
@@ -693,11 +1015,7 @@ describe('AnnouncementsScreen', () => {
     });
 
     it('says so when the chosen Group has no Announcement', () => {
-      hooks.useAnnouncementsFeed.mockReturnValue({
-        isPending: false,
-        isError: false,
-        data: [createRow({ id: 1, title: 'Din IT', group_id: 10 })],
-      });
+      showFeed([]);
       renderAt('/anunturi?grup=20');
 
       expect(screen.getByText('Niciun anunț în grupul ales.')).toBeVisible();
@@ -721,51 +1039,33 @@ describe('AnnouncementsScreen', () => {
         ]),
         isPending: false,
       });
-      hooks.useAnnouncementsFeed.mockReturnValue({
-        isPending: false,
-        isError: false,
-        data: [
-          createRow({ id: 1, title: 'Din IT', group_id: 10 }),
-          createRow({ id: 2, title: 'Local din Educațional', group_id: 20 }),
-          createRow({
-            id: 3,
-            title: 'Critic din Educațional',
-            group_id: 20,
-            priority: 'critical',
-          }),
-          createRow({
-            id: 4,
-            title: 'Pentru toți din Educațional',
-            group_id: 20,
-            audience: 'org',
-          }),
-          createRow({
-            id: 5,
-            title: 'Al meu din Educațional',
-            group_id: 20,
-            created_by: 'test-user-id',
-          }),
-        ],
-      });
+      showFeed([
+        createRow({ id: 1, title: 'Din IT', group_id: 10 }),
+        createRow({
+          id: 3,
+          title: 'Critic din Educațional',
+          group_id: 20,
+          priority: 'critical',
+        }),
+      ]);
+      showSummary({ everything: 5, preferred: 2 });
     });
     afterEach(() => {
       preferences.muted = new Set();
       preferences.memberId = undefined;
     });
 
-    it('opens on the preferred Groups, keeping critical, organization-wide and own Announcements', () => {
+    // The server keeps a critical, organization-wide or own Announcement of
+    // an unticked Group (announcement_feed.test.sql).
+    it('opens on the preferred Groups, asking the server for them', () => {
       renderAt('/anunturi');
+
+      expect(feedFilters()).toEqual({ p_preferred: true });
+      expect(hooks.useAnnouncementFeedSummary).toHaveBeenLastCalledWith(
+        { p_preferred: true },
+        true,
+      );
       expect(screen.getByText('Din IT')).toBeInTheDocument();
-      expect(
-        screen.queryByText('Local din Educațional'),
-      ).not.toBeInTheDocument();
-      expect(
-        screen.getAllByText('Critic din Educațional').length,
-      ).toBeGreaterThan(0);
-      expect(
-        screen.getByText('Pentru toți din Educațional'),
-      ).toBeInTheDocument();
-      expect(screen.getByText('Al meu din Educațional')).toBeInTheDocument();
       expect(
         screen.getByRole('button', { name: 'Doar grupurile preferate' }),
       ).toHaveAttribute('aria-pressed', 'true');
@@ -777,21 +1077,29 @@ describe('AnnouncementsScreen', () => {
       await user.click(
         screen.getByRole('button', { name: 'Doar grupurile preferate' }),
       );
-      expect(screen.getByText('Local din Educațional')).toBeInTheDocument();
+      expect(feedFilters()).toEqual({ p_preferred: false });
       const star = screen.getByRole('button', {
         name: 'Doar grupurile preferate',
       });
       expect(star).toHaveAttribute('aria-pressed', 'false');
       await user.click(star);
+      expect(feedFilters()).toEqual({ p_preferred: true });
+    });
+
+    it('says so when only the unticked Groups have Announcements', () => {
+      showFeed([]);
+      showSummary({ everything: 3, preferred: 0 });
+      renderAt('/anunturi');
+
       expect(
-        screen.queryByText('Local din Educațional'),
-      ).not.toBeInTheDocument();
+        screen.getByText('Niciun anunț în grupurile tale preferate.'),
+      ).toBeVisible();
     });
 
     it('changes nothing for a member who unselected nothing', () => {
       preferences.muted = new Set();
       renderAt('/anunturi');
-      expect(screen.getByText('Local din Educațional')).toBeInTheDocument();
+      expect(feedFilters()).toEqual({ p_preferred: false });
       expect(
         screen.queryByRole('button', { name: 'Doar grupurile preferate' }),
       ).not.toBeInTheDocument();

@@ -1,12 +1,17 @@
+import { useMemo } from 'react';
 import {
   skipToken,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
+  type InfiniteData,
   type QueryClient,
+  type QueryKey,
 } from '@tanstack/react-query';
 
 import { useAuth } from '../lib/auth';
+import type { Database, Json } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import { readAllRows } from './read-all';
 import { keys } from './keys';
@@ -42,46 +47,291 @@ export type MarkAnnouncementReadInput = {
   memberId: string;
 };
 
-/**
- * Fetch all announcements visible to the current member through RLS.
- * Pinned announcements appear first, followed by newest published_at.
- * Embedded announcement_reads rows reflect only the current member's reads
- * thanks to the announcement_reads_manage_self RLS policy.
- */
-export async function fetchAnnouncementsFeed(): Promise<RawAnnouncementRow[]> {
-  const rows = await readAllRows((from, to) =>
-    supabase
-      .from('announcements')
-      .select(ANNOUNCEMENT_FIELDS)
-      // A Deal is an Announcement of kind deal (R45); it lives on its own tab.
-      .eq('kind', 'announcement')
-      .order('pinned', { ascending: false })
-      .order('published_at', { ascending: false })
-      .order('id', { ascending: false })
-      .range(from, to),
-  );
-  return rows as unknown as RawAnnouncementRow[];
-}
-
-export function announcementsFeedQueryOptions(memberId?: string) {
-  return {
-    queryKey: keys.announcements.feed(memberId),
-    queryFn: () => fetchAnnouncementsFeed(),
-  } as const;
-}
-
 export type {
   RawAnnouncementRow,
   RawAnnouncementRow as AnnouncementFeedRow,
 } from '../screens/announcements/announcements-presentation';
 
-export function useAnnouncementsFeed(memberId?: string) {
-  const { session } = useAuth();
-  const effectiveMemberId = memberId ?? session?.user.id;
+/*
+ * Anunțuri by the page (ruling R56, spec 2026-10-14 member reads, part 4).
+ * The server reads the feed: what the Member reads (exactly
+ * `announcements_read`, never a Deal), narrowed by Grupuri preferate (R43)
+ * and the Group filter, in R15's order — pinned, then unread, then read,
+ * newest first in each — 20 rows a page with the unpaged count. Around it,
+ * `announcement_feed_summary` answers the header's unread count, the
+ * critical banner and the empty states, so nothing here counts or orders.
+ */
 
+/** How many Announcements one page of the feed holds. */
+export const ANNOUNCEMENT_PAGE = 20;
+
+/** What narrows the feed: the Work Filter's Group, Grupuri preferate (R43). */
+export type FeedFilters = { p_group_id?: number; p_preferred?: boolean };
+
+/**
+ * One `announcement_feed` row. Written out because the generated type of a
+ * table-returning function marks every column as never null.
+ */
+export type AnnouncementFeedRpcRow = {
+  id: number;
+  title: string;
+  body: string;
+  group_id: number;
+  audience: string;
+  priority: Database['public']['Enums']['announce_priority'];
+  pinned: boolean;
+  links: Json;
+  published_at: string;
+  deadline: string | null;
+  min_level: number;
+  created_by: string | null;
+  approval_status: string;
+  rejection_reason: string | null;
+  /** The reader's own read time; null while unread. */
+  read_at: string | null;
+  total: number;
+  /** The moment the page was cut against (`p_as_of`, or the server's now). */
+  as_of: string;
+};
+
+/**
+ * Where a page of the feed starts: after `offset` rows, in R15's order as of
+ * `asOf`. Being read moves an Announcement to the read band, so every page
+ * of one reading is cut against its first page's moment — a card read in
+ * between keeps its place and the next page skips none. `null` starts a
+ * reading: the server takes its own now and answers it.
+ */
+export type FeedPageParam = { offset: number; asOf: string | null };
+
+export type AnnouncementFeedPage = {
+  rows: RawAnnouncementRow[];
+  total: number;
+  /** The moment the page was cut against; the next page passes it on. */
+  asOf: string | null;
+};
+
+/** A server row as the cards read an Announcement: its read as the embed. */
+function feedRow(row: AnnouncementFeedRpcRow): RawAnnouncementRow {
+  const { read_at: readAt, total: _total, as_of: _asOf, ...announcement } = row;
+  return {
+    ...announcement,
+    announcement_reads: readAt ? [{ read_at: readAt }] : [],
+  } as unknown as RawAnnouncementRow;
+}
+
+/**
+ * One page of the feed under `filters`, how many the filters match, and the
+ * moment it was cut against.
+ */
+export async function fetchAnnouncementFeedPage(
+  filters: FeedFilters,
+  { offset, asOf }: FeedPageParam,
+): Promise<AnnouncementFeedPage> {
+  const { data, error } = await supabase.rpc('announcement_feed', {
+    ...filters,
+    p_limit: ANNOUNCEMENT_PAGE,
+    p_offset: offset,
+    ...(asOf === null ? {} : { p_as_of: asOf }),
+  });
+  if (error) throw error;
+  const page = (data ?? []) as unknown as AnnouncementFeedRpcRow[];
+  return {
+    rows: page.map(feedRow),
+    total: page[0]?.total ?? 0,
+    asOf: page[0]?.as_of ?? asOf,
+  };
+}
+
+/**
+ * The infinite query of the feed. The next page starts after the rows
+ * already read, at the first page's moment, and there is none once they
+ * reach `total` or a page comes back empty. A refetch starts again from
+ * `initialPageParam` — a new moment — and TanStack recomputes every later
+ * page's start from the pages it has just read, so the pages stay one
+ * reading.
+ */
+export function announcementFeedQueryOptions(
+  filters: FeedFilters,
+  memberId: string | undefined,
+) {
+  return {
+    queryKey: keys.announcements.feed(memberId, filters),
+    queryFn: ({ pageParam }: { pageParam: FeedPageParam }) =>
+      fetchAnnouncementFeedPage(filters, pageParam),
+    initialPageParam: { offset: 0, asOf: null } as FeedPageParam,
+    getNextPageParam: (
+      lastPage: AnnouncementFeedPage,
+      pages: readonly AnnouncementFeedPage[],
+    ): FeedPageParam | undefined => {
+      const read = pages.reduce((count, page) => count + page.rows.length, 0);
+      return lastPage.rows.length > 0 && read < lastPage.total
+        ? { offset: read, asOf: pages[0]?.asOf ?? null }
+        : undefined;
+    },
+  } as const;
+}
+
+export type AnnouncementFeed = {
+  /** The Announcements read so far, each once, in the server's order. */
+  rows: RawAnnouncementRow[];
+  /**
+   * The rows of each page as the server sent it, a duplicate included: what
+   * is read per page (its authors) is cut from these, so a dropped duplicate
+   * never shifts a page's set.
+   */
+  pages: RawAnnouncementRow[][];
+  /** How many the filters match; undefined until the first page lands. */
+  total: number | undefined;
+  /** The first page is on its way. */
+  isPending: boolean;
+  /** The first page failed. */
+  isError: boolean;
+  error: Error | null;
+  hasMore: boolean;
+  /** The next page is on its way. */
+  isLoadingMore: boolean;
+  /**
+   * Any read of the feed is on its way: the first page, the loaded pages
+   * read again after a change, or the next page. No next page is asked
+   * meanwhile.
+   */
+  isFetching: boolean;
+  /** A later page failed; the rows read so far stay. */
+  moreFailed: boolean;
+  /** Asks for the next page, unless a read is on its way. */
+  loadMore: () => void;
+  refetch: () => void;
+};
+
+/** The feed under `filters`, read by the page; nothing is asked while `enabled` is false. */
+export function useAnnouncementFeed(
+  filters: FeedFilters,
+  enabled = true,
+): AnnouncementFeed {
+  const memberId = useAuth().session?.user.id;
+  const asked = Boolean(memberId && enabled);
+  const query = useInfiniteQuery({
+    ...announcementFeedQueryOptions(filters, memberId),
+    enabled: asked,
+  });
+  const rows = useMemo(() => {
+    // One published between two pages shifts the next one: keep the first
+    // appearance of each id.
+    const seen = new Set<number>();
+    const read: RawAnnouncementRow[] = [];
+    for (const page of query.data?.pages ?? [])
+      for (const row of page.rows)
+        if (!seen.has(row.id)) {
+          seen.add(row.id);
+          read.push(row);
+        }
+    return read;
+  }, [query.data]);
+  const pages = useMemo(
+    () => (query.data?.pages ?? []).map((page) => page.rows),
+    [query.data],
+  );
+  const firstFailed = query.isError && query.data === undefined;
+  return {
+    rows,
+    pages,
+    total: query.data?.pages[0]?.total,
+    isPending: asked && !firstFailed && query.data === undefined,
+    isError: asked && firstFailed,
+    error: firstFailed ? query.error : null,
+    hasMore: asked && query.hasNextPage,
+    isLoadingMore: query.isFetchingNextPage,
+    isFetching: asked && query.isFetching,
+    moreFailed: query.isFetchNextPageError,
+    loadMore: () => {
+      // After a change the feed reads every loaded page again. A next page
+      // asked meanwhile would cancel that read and land on top of the old
+      // pages; `cancelRefetch: false` also covers a call made from a render
+      // before that read began.
+      if (query.hasNextPage && !query.isFetching)
+        void query.fetchNextPage({ cancelRefetch: false });
+    },
+    refetch: () => void query.refetch(),
+  };
+}
+
+/** What the page shows around its feed (`announcement_feed_summary`). */
+export type AnnouncementFeedSummary = {
+  /** The header's unread count: the view's approved unread ones, whatever the Group filter. */
+  unread: number;
+  /** The first unread critical Announcement of the list shown, for the banner. */
+  criticalId: number | null;
+  /** Every Announcement the Member reads. */
+  everything: number;
+  /** Those of the preferred view (every one when it is not asked). */
+  preferred: number;
+};
+
+export async function fetchAnnouncementFeedSummary(
+  filters: FeedFilters,
+): Promise<AnnouncementFeedSummary> {
+  const { data, error } = await supabase.rpc(
+    'announcement_feed_summary',
+    filters,
+  );
+  if (error) throw error;
+  const row = (data ?? [])[0] as
+    | {
+        unread: number | null;
+        critical_id: number | null;
+        everything: number | null;
+        preferred: number | null;
+      }
+    | undefined;
+  return {
+    unread: row?.unread ?? 0,
+    criticalId: row?.critical_id ?? null,
+    everything: row?.everything ?? 0,
+    preferred: row?.preferred ?? 0,
+  };
+}
+
+/** The summary under the feed's own filters; nothing is asked while `enabled` is false. */
+export function useAnnouncementFeedSummary(
+  filters: FeedFilters,
+  enabled = true,
+) {
+  const memberId = useAuth().session?.user.id;
   return useQuery({
-    ...announcementsFeedQueryOptions(effectiveMemberId),
-    enabled: Boolean(effectiveMemberId),
+    queryKey: keys.announcements.feedSummary(memberId, filters),
+    queryFn:
+      memberId && enabled
+        ? () => fetchAnnouncementFeedSummary(filters)
+        : skipToken,
+  });
+}
+
+/**
+ * One Announcement by its id, through RLS, with the reader's own read: what
+ * a `?anunt=` link, the banner or a Cerere de aprobare opens when the row is
+ * not among the loaded pages. `null` when the Member may not read it (or it
+ * is gone, or it is a Deal).
+ */
+export async function fetchAnnouncement(
+  id: number,
+): Promise<RawAnnouncementRow | null> {
+  const { data, error } = await supabase
+    .from('announcements')
+    .select(ANNOUNCEMENT_FIELDS)
+    // A Deal is an Announcement of kind deal (R45); it lives on its own tab.
+    .eq('kind', 'announcement')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as unknown as RawAnnouncementRow | null;
+}
+
+/** Nothing is asked for a `null` id. */
+export function useAnnouncement(id: number | null) {
+  const memberId = useAuth().session?.user.id;
+  return useQuery({
+    queryKey: keys.announcements.one(id ?? 0, memberId),
+    queryFn: memberId && id !== null ? () => fetchAnnouncement(id) : skipToken,
   });
 }
 
@@ -351,16 +601,59 @@ export function markAnnouncementReadMutationOptions(
         memberId,
       });
     },
-    // The feed, the badge and the readers list (all under
-    // `['announcements']`), and the notifications: reading an Announcement
-    // reads its "Anunț nou" notification too (#861, Audit D-4/D-20).
-    onSuccess: async () => {
+    onSuccess: async (_: void, announcementId: number) => {
+      // R56: the loaded feed marks the row read where it stands. Reading the
+      // pages again would reorder them (R15 puts read ones last) and move
+      // rows between pages while they load; the order is read again only
+      // when the feed is read again from the top.
+      const readAt = new Date().toISOString();
+      queryClient.setQueriesData<
+        InfiniteData<AnnouncementFeedPage, FeedPageParam>
+      >(
+        { queryKey: keys.announcements.feedAll },
+        (data) =>
+          data && {
+            ...data,
+            pages: data.pages.map((page) => ({
+              ...page,
+              rows: page.rows.map((row) =>
+                row.id === announcementId ? readRow(row, readAt) : row,
+              ),
+            })),
+          },
+      );
+      queryClient.setQueryData<RawAnnouncementRow | null>(
+        keys.announcements.one(announcementId, memberId),
+        (row) => row && readRow(row, readAt),
+      );
+      // Everything else the read changes, all under `['announcements']`
+      // but the feed's pages — the summary, the badges, the readers list,
+      // the Deals, the one read by id — and the notifications: reading an
+      // Announcement reads its "Anunț nou" notification too (#861, Audit
+      // D-4/D-20).
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: keys.announcements.all }),
+        queryClient.invalidateQueries({
+          queryKey: keys.announcements.all,
+          predicate: (query) => !isFeedPage(query.queryKey),
+        }),
         queryClient.invalidateQueries({ queryKey: keys.notifications.all }),
       ]);
     },
   } as const;
+}
+
+/** A row as read by its reader: a row already read keeps its own time. */
+function readRow(row: RawAnnouncementRow, readAt: string): RawAnnouncementRow {
+  return row.announcement_reads?.length
+    ? row
+    : { ...row, announcement_reads: [{ read_at: readAt }] };
+}
+
+/** A page of the feed: under `keys.announcements.feedAll`. */
+function isFeedPage(queryKey: QueryKey): boolean {
+  return keys.announcements.feedAll.every(
+    (part, index) => queryKey[index] === part,
+  );
 }
 
 export function useMarkAnnouncementRead(memberId?: string) {
