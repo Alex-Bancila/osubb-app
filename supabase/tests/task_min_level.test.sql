@@ -7,7 +7,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(57);
+select plan(62);
 
 create function pg_temp.m(n integer) returns uuid language sql immutable as $$
   select ('57100000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -255,6 +255,28 @@ select is(pg_temp.preview('Move #57', 2, 'Floor #57'), array['executor_removed:'
 reset role;
 select pg_temp.test_clear_jwt();
 select is(private.task_field_labels(array['min_level']), 'cine îl vede', 'the change has a Romanian label');
+
+-- The removed Executor hears the reason that is theirs, judged per person
+-- (final review of R57): a move and a raise at once, a narrowing and a raise.
+insert into tasks (title, group_id, deadline, status, kind, audience, assignment_mode, queue_opened_at, min_level)
+values ('Narrow #57', pg_temp.g('Min #57'), '2030-11-20 18:00+02', 'todo', 'task', 'org', 'public', now(), 0);
+select pg_temp.test_login_leadership(pg_temp.m(7));
+select public.express_task_interest(pg_temp.t('Narrow #57'));
+select pg_temp.test_login_leadership(pg_temp.m(5));
+select public.select_task_candidate(pg_temp.t('Narrow #57'),
+  (select id from task_candidates where task_id = pg_temp.t('Narrow #57') and member_id = pg_temp.m(7)), false);
+select lives_ok($$select pg_temp.edit('Move #57', 2, true, p_group := 'Floor #57')$$, 'moved and raised at once');
+select lives_ok($$select pg_temp.edit('Narrow #57', 1, true, p_audience := 'local')$$, 'narrowed and raised at once');
+reset role;
+select pg_temp.test_clear_jwt();
+select is((select body from notifications where member_id = pg_temp.m(7) and title = 'Task actualizat: Move #57'),
+  'Nu mai ești executorul acestui task: e acum doar pentru Voluntar Activ și peste.',
+  'moved into a Group they may join but below the new Role: told it is the Role');
+select is((select end_reason from task_assignments where task_id = pg_temp.t('Move #57') and member_id = pg_temp.m(7)),
+  'task_updated', '... and the Assignment ends as an edit, not a move');
+select is((select body from notifications where member_id = pg_temp.m(7) and title = 'Task actualizat: Narrow #57'),
+  'Nu mai ești executorul acestui task: audiența lui s-a schimbat.',
+  'removed by a narrower Audience while at or above the new Role: told it is the Audience');
 
 select * from finish();
 rollback;

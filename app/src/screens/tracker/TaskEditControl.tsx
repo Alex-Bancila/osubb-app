@@ -225,6 +225,10 @@ function TaskEditForm({
   const storedRole: number | null =
     typeof task.min_level === 'number' ? task.min_level : null;
   const [minLevel, setMinLevel] = useState(storedRole ?? 0);
+  // Until the manager picks a Role, the edit keeps the stored one exactly:
+  // a Task stored below its Group's floor (every Task before R57) is not
+  // "changed" by opening the form (final review of R57).
+  const [roleTouched, setRoleTouched] = useState(false);
   const [initialLinks] = useState(() => attachedLinksFrom(task.links));
   const [links, setLinks] = useState(initialLinks);
   const locked = groupLock(task);
@@ -274,11 +278,17 @@ function TaskEditForm({
       ? 0
       : storedRole === null
         ? null
-        : lockedRole
+        : lockedRole || !roleTouched
           ? storedRole
           : roleChoices.some((rung) => rung.level === minLevel)
             ? minLevel
             : (roleChoices[0]?.level ?? 0);
+  // What the field shows: the Role the Task reaches at (a stored value below
+  // the offered list reads as the lowest choice, which is what gates it).
+  const shownRole =
+    sentRole !== null && roleChoices.some((rung) => rung.level === sentRole)
+      ? sentRole
+      : (roleChoices[0]?.level ?? sentRole ?? 0);
   const values: TaskUpdateValues = {
     groupId,
     title,
@@ -535,10 +545,13 @@ function TaskEditForm({
               {assignmentMode === 'public' && storedRole !== null && (
                 <MinimumLevelField
                   id={id}
-                  value={sentRole ?? 0}
+                  value={shownRole}
                   choices={roleChoices}
                   locked={lockedRole}
-                  onChange={setMinLevel}
+                  onChange={(level) => {
+                    setRoleTouched(true);
+                    setMinLevel(level);
+                  }}
                   form={form}
                 />
               )}

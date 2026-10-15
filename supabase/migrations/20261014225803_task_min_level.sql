@@ -1016,6 +1016,7 @@ declare
   v_constraint text;
   v_min_level integer;
   v_old_min_level integer;
+  v_removed_reason text;
 begin
   -- R57: the ladder, malformed for every caller.
   if p_min_level is not null and p_min_level not in (0, 1, 2, 3, 5, 6) then
@@ -1128,8 +1129,22 @@ begin
      where assignment.task_id = p_task_id and assignment.ended_at is null
        and assignment.member_id = v_removed_executor
      for update;
+    -- Final review of R57: the reason is the removed Executor's own, read on
+    -- the live Level the FOR SHARE hold above keeps still -- a move only
+    -- removes one below the target Group, a raise one below the new Role,
+    -- and anything else is the narrower Audience.
+    v_removed_reason := case
+      when v_group_changed
+           and coalesce(private.actor_level(v_removed_executor), -1)
+               < (select grp.min_level from public.groups as grp where grp.id = p_group_id)
+        then 'group'
+      when v_min_level > v_old_min_level
+           and coalesce(private.actor_level(v_removed_executor), -1) < v_min_level
+        then 'role'
+      else 'audience'
+    end;
     perform private.end_task_assignment(v_assignment_id,
-      case when v_group_changed then 'group_changed' else 'task_updated' end, null);
+      case when v_removed_reason = 'group' then 'group_changed' else 'task_updated' end, null);
     if v_task.status <> 'todo' then
       v_from := v_task.status;
       v_to := 'todo';
@@ -1185,9 +1200,10 @@ begin
   if v_removed_executor is not null then
     perform private.notify(array[v_removed_executor], 'task'::public.noti_kind,
       'Task actualizat: ' || v_task.title,
-      case when v_group_changed
+      case v_removed_reason
+        when 'group'
         then 'Taskul a fost mutat într-un grup pentru care nu ești eligibil.'
-        when v_min_level > v_old_min_level
+        when 'role'
         then 'Nu mai ești executorul acestui task: e acum doar pentru '
              || (select role.name from public.roles as role where role.level = v_min_level)
              || ' și peste.'
