@@ -10,6 +10,7 @@
 - **Amended:** 2026-09-29 — an Event's RSVPs are read by its managers (the people who may edit or cancel it), no longer by every BCE and above
 - **Amended:** 2026-10-11 — an OSUBB-wide Event (one on the Organization Group) by a writer below BC is a **Cerere de aprobare**: pending until a BC member or the Moderator approve it from its own form or reject it with a reason; a pending or rejected Event reads only for its author, BC and the Moderator, takes no RSVP, and the "Eveniment nou" notice (R39) and its Announcement, if asked for, move to the approval; an author's later edit of a decided OSUBB-wide Event asks again. BC and the Moderator publish directly, as before (spec `docs/superpowers/specs/2026-10-11-org-wide-approval-design.md`, ruling R49)
 - **Amended:** 2026-10-14 — #1061, #1062 (ruling R53): every content change of an Event notifies its audience and attendees, in one notice per edit; whoever never knew the Event hears that it is new; a Campaign alone notifies nobody; everyone going hears the day before
+- **Amended:** 2026-10-14 — ruling R57: an Event's Minimum Level may be any Role on the ladder (Voluntar and Voluntar Activ added); the Event's Announcement copies it
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -34,11 +35,13 @@ Minimum Level is selected from these organization concepts:
 | Choice              | Required role level |
 | ------------------- | ------------------: |
 | Everyone            |                   0 |
+| Voluntar+           |                   1 |
+| Voluntar Activ+     |                   2 |
 | AG / Voting Member+ |                   3 |
 | BCE+                |                   5 |
 | BC+                 |                   6 |
 
-"Responsible+" (level 4) is retired as a Minimum Level choice — see the 2026-09-20 amendment above; `events_min_level_ck` admits only `{0, 3, 5, 6}`.
+"Responsible+" (level 4) is retired as a Minimum Level choice — see the 2026-09-20 amendment above. Since ruling R57 (2026-10-14) `events_min_level_ck` admits `{0, 1, 2, 3, 5, 6}`: Voluntar+ and Voluntar Activ+ were added so that an organisation-wide Event can require at least the Voluntar Role.
 
 An Event creator cannot choose a Minimum Level above their own organizational level. Moderator retains global override.
 

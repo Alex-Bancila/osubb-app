@@ -255,12 +255,14 @@ describe('NewEventControl', () => {
     ).toHaveTextContent('Alege întâi grupul');
   });
 
-  it('offers "Cine îl vede" by Role name: the Event subset of the ladder, in order (R29b)', async () => {
+  it('offers "Cine îl vede" by Role name: the whole ladder, in order (R29b, R57)', async () => {
     const user = setup();
     await open(user);
     await chooseGroup(user);
     expect(await optionNames(user, 'Cine îl vede')).toEqual([
       'Recrut',
+      'Voluntar',
+      'Voluntar Activ',
       'Voluntar cu Drept de Vot',
       'BCE',
       'BC',
