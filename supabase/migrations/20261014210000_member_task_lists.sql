@@ -1,5 +1,5 @@
--- Fast reads everywhere, part 2 (docs/superpowers/specs/2026-10-14-member-reads-design.md):
--- the Member's lists in the list reader of #1052.
+-- Spec 2026-10-14 member reads, part 2: the Member's lists in the list reader of #1052.
+-- (docs/superpowers/specs/2026-10-14-member-reads-design.md; Alex chose PRs without issues.)
 --
 -- Taskurile mele read every Assignment of the Member with its Task, then the
 -- parent titles, then the Executors: three requests one after another, all
