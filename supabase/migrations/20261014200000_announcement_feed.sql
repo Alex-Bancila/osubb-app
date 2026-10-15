@@ -5,10 +5,14 @@
 -- narrowed (Grupuri preferate, the Group filter), counted (the header's
 -- unread badge, the critical banner, the empty states) and ordered (R15) in
 -- the browser. It reads 20 at a time now; those rules move to the server,
--- in one place, private.announcement_feed_rows, so the page and its summary
+-- in one place, private.announcement_feed_base, so the page and its summary
 -- can never disagree:
---   * what the caller reads: exactly announcements_read (the policy's own
---     expression), Announcements only -- a Deal lives on its own tab (R45);
+--   * what the caller reads: exactly announcements_read, Announcements only
+--     -- a Deal lives on its own tab (R45). private.can_read_announcement is
+--     a security-definer helper Postgres cannot inline, about half a
+--     millisecond a row, so the rule is decided once per Group (seeing it,
+--     its local Audience) and the rest -- the Minimum Level, the author, the
+--     approval -- on the row;
 --   * Grupuri preferate (R43), when asked: an unticked Group's Announcement
 --     leaves unless it is critical, organization-wide or the caller's own;
 --   * the Group filter: the chosen Group and every Group below it.
@@ -18,11 +22,103 @@
 -- against a moment, p_as_of: a read made after it still orders as unread.
 -- The first page answers its moment (as_of) and every later page of the
 -- same reading passes it on, so reading a card never shifts the next page;
--- reading from the top again starts a new moment; public.announcement_feed_summary returns the header's unread count,
--- the first unread critical Announcement for the banner, and the two counts
--- the empty states tell apart.
+-- reading from the top again starts a new moment.
+-- public.announcement_feed_summary returns, in one pass, the header's unread
+-- count, the first unread critical Announcement for the banner, and the two
+-- counts the empty states tell apart.
 
 -- ==================== 1. The feed's rule, in one place ====================
+
+create function private.announcement_feed_base(p_group_id bigint)
+returns table(
+  id bigint,
+  title text,
+  body text,
+  group_id bigint,
+  audience text,
+  priority public.announce_priority,
+  pinned boolean,
+  links jsonb,
+  published_at timestamptz,
+  deadline timestamptz,
+  min_level integer,
+  created_by uuid,
+  approval_status text,
+  rejection_reason text,
+  read_at timestamptz,
+  preference_hides boolean,
+  in_group boolean)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with caller as materialized (
+    select (select auth.uid()) as id, coalesce(private.caller_level(), -1) as level
+     where coalesce(public.auth_is_member(), false)
+       and private.actor_level() is not null
+  ),
+  -- private.can_read_announcement for an Announcement, decided once per
+  -- Group rather than once per row (a security-definer helper Postgres
+  -- cannot inline, about half a millisecond a call): the Groups the caller
+  -- can see, and whether their local Audience holds or is led by the
+  -- caller -- asked only of a Group that has a local Announcement, since
+  -- private.group_audience builds the whole Audience.
+  origin as materialized (
+    select grp.id,
+           case when exists (select 1 from public.announcements as local_one
+                              where local_one.group_id = grp.id
+                                and local_one.audience = 'local'
+                                and local_one.kind = 'announcement')
+                then caller.id in (select private.group_audience(grp.id))
+                     or coalesce(private.group_role_of(grp.id, caller.id) in ('manager', 'responsible'), false)
+                else false
+           end as local_ok,
+           (p_group_id is null or grp.path @> array[p_group_id]) as in_group
+      from caller
+      join public.groups as grp on private.can_see_group(grp.id, caller.id)
+  ),
+  -- R43: the Groups the caller unticked that private.group_muted_for still
+  -- honours (a position on the path, or a Group set in Setări, unmutes).
+  muted as (
+    select unselected.group_id
+      from caller
+      join public.member_group_unselected as unselected on unselected.member_id = caller.id
+     where private.group_muted_for(unselected.group_id, unselected.member_id)
+  )
+  select announcement.id, announcement.title, announcement.body, announcement.group_id,
+         announcement.audience, announcement.priority, announcement.pinned, announcement.links,
+         announcement.published_at, announcement.deadline, announcement.min_level,
+         announcement.created_by, announcement.approval_status, announcement.rejection_reason,
+         reads.read_at,
+         -- Grupuri preferate would hide it: an unticked Group's, neither
+         -- critical, nor organization-wide, nor the caller's own.
+         (    announcement.group_id in (select muted.group_id from muted)
+          and announcement.priority <> 'critical'
+          and announcement.audience <> 'org'
+          and announcement.created_by is distinct from caller.id),
+         origin.in_group
+    from caller
+    join public.announcements as announcement on announcement.kind = 'announcement'
+    join origin on origin.id = announcement.group_id
+    left join public.announcement_reads as reads
+      on reads.announcement_id = announcement.id
+     and reads.member_id = caller.id
+   -- announcements_read, as the policy reads it: the Audience, the Minimum
+   -- Level (the author always), and an unapproved one for its author and
+   -- level 6 only. A Deal never reaches here, so R45's Termen does not apply.
+   where (announcement.audience = 'org' or (announcement.audience = 'local' and origin.local_ok))
+     and (caller.level >= coalesce(announcement.min_level, 0) or announcement.created_by = caller.id)
+     and (announcement.approval_status = 'approved'
+          or announcement.created_by = caller.id
+          or caller.level >= 6);
+$$;
+
+comment on function private.announcement_feed_base(bigint) is
+  'Fast reads part 4 (spec 2026-10-14 member reads, ruling R56): every Announcement (kind announcement, never a Deal) announcements_read gives the caller -- private.can_read_announcement decided once per Group, the rest on the row --, with the caller''s read time, whether Grupuri preferate (R43) would hide it (preference_hides), and whether it lies in p_group_id and every Group below it (in_group). Nothing without organization claims or a live level. Read only by the feed''s rows and its summary.';
+
+revoke execute on function private.announcement_feed_base(bigint)
+  from public, anon, authenticated, service_role;
 
 create function private.announcement_feed_rows(p_group_id bigint, p_preferred boolean)
 returns table(
@@ -46,50 +142,16 @@ stable
 security definer
 set search_path = ''
 as $$
-  with caller as materialized (
-    select (select auth.uid()) as id
-     where coalesce(public.auth_is_member(), false)
-  ),
-  -- R43: the Groups the caller unticked that private.group_muted_for still
-  -- honours (a position on the path, or a Group set in Setări, unmutes).
-  muted as (
-    select unselected.group_id
-      from caller
-      join public.member_group_unselected as unselected on unselected.member_id = caller.id
-     where coalesce(p_preferred, false)
-       and private.group_muted_for(unselected.group_id, unselected.member_id)
-  )
-  select announcement.id, announcement.title, announcement.body, announcement.group_id,
-         announcement.audience, announcement.priority, announcement.pinned, announcement.links,
-         announcement.published_at, announcement.deadline, announcement.min_level,
-         announcement.created_by, announcement.approval_status, announcement.rejection_reason,
-         reads.read_at
-    from caller
-   cross join public.announcements as announcement
-    left join public.announcement_reads as reads
-      on reads.announcement_id = announcement.id
-     and reads.member_id = caller.id
-   where announcement.kind = 'announcement'
-     -- announcements_read, as the policy reads it.
-     and private.can_read_announcement(announcement.group_id, announcement.audience,
-                                       announcement.min_level, announcement.created_by,
-                                       announcement.kind, announcement.deadline)
-     and (announcement.approval_status = 'approved'
-          or announcement.created_by = caller.id
-          or coalesce((select private.caller_level()), 0) >= 6)
-     and (announcement.group_id not in (select muted.group_id from muted)
-          or announcement.priority = 'critical'
-          or announcement.audience = 'org'
-          or announcement.created_by = caller.id)
-     and (p_group_id is null
-          or exists (select 1
-                       from public.groups as grp
-                      where grp.id = announcement.group_id
-                        and grp.path @> array[p_group_id]));
+  select base.id, base.title, base.body, base.group_id, base.audience, base.priority, base.pinned,
+         base.links, base.published_at, base.deadline, base.min_level, base.created_by,
+         base.approval_status, base.rejection_reason, base.read_at
+    from private.announcement_feed_base(p_group_id) as base
+   where base.in_group
+     and not (coalesce(p_preferred, false) and base.preference_hides);
 $$;
 
 comment on function private.announcement_feed_rows(bigint, boolean) is
-  'Fast reads part 4 (spec 2026-10-14 member reads, ruling R56): the Anunțuri feed''s one rule. The Announcements (kind announcement, never a Deal) announcements_read gives the caller -- its own expression --, with the caller''s read time; p_preferred (R43): without an unticked Group''s Announcement that is neither critical, organization-wide nor the caller''s own; p_group_id: that Group and every Group below it. Nothing without organization claims. Read only by the two feed bodies.';
+  'Fast reads part 4 (spec 2026-10-14 member reads, ruling R56): the Anunțuri feed''s one rule. private.announcement_feed_base narrowed to p_group_id and every Group below it and, with p_preferred (R43), without what Grupuri preferate hides. Read only by public.announcement_feed''s body.';
 
 revoke execute on function private.announcement_feed_rows(bigint, boolean)
   from public, anon, authenticated, service_role;
@@ -222,28 +284,37 @@ stable
 security definer
 set search_path = ''
 as $$
+  -- One pass over what the caller reads; each count takes its part of it.
+  with feed as materialized (
+    select base.*,
+           not (coalesce(p_preferred, false) and base.preference_hides) as in_view
+      from private.announcement_feed_base(p_group_id) as base
+  )
   select
     -- The header counts what the caller has to read in the view they are
     -- in; the Group filter only narrows the list below it.
     (select count(*)::integer
-       from private.announcement_feed_rows(null, p_preferred) as feed
-      where feed.approval_status = 'approved'
+       from feed
+      where feed.in_view
+        and feed.approval_status = 'approved'
         and feed.read_at is null),
     -- The banner points at the first unread critical one of the list shown.
     (select feed.id
-       from private.announcement_feed_rows(p_group_id, p_preferred) as feed
-      where feed.priority = 'critical'
+       from feed
+      where feed.in_view
+        and feed.in_group
+        and feed.priority = 'critical'
         and feed.read_at is null
         and feed.approval_status = 'approved'
       order by case when feed.pinned then 0 else 1 end, feed.published_at desc, feed.id desc
       limit 1),
     -- The empty states tell "nothing at all" from "nothing preferred".
-    (select count(*)::integer from private.announcement_feed_rows(null, false)),
-    (select count(*)::integer from private.announcement_feed_rows(null, p_preferred));
+    (select count(*)::integer from feed),
+    (select count(*)::integer from feed where feed.in_view);
 $$;
 
 comment on function private.announcement_feed_summary_impl(bigint, boolean) is
-  'Body of public.announcement_feed_summary.';
+  'Body of public.announcement_feed_summary: one pass over private.announcement_feed_base.';
 
 create function public.announcement_feed_summary(
   p_group_id bigint default null,

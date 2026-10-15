@@ -13,18 +13,20 @@
 -- states tell apart.
 --
 -- Mutation record (2026-10-14; each rule broken alone, the suite run): the
--- feed without the read rule, or with Deals; Grupuri preferate ignored, or
+-- feed without the Audience, the local Audience, Private Groups, the
+-- Minimum Level or the approval rule, or with Deals; Grupuri preferate ignored, or
 -- forgetting its critical, organization-wide or own exemption; the Group
 -- filter on the exact Group only; read before unread; oldest first; the
--- summary counting read ones, pending or rejected ones, or pointing the
--- banner at a read one or one not yet approved -- each
+-- summary counting read ones, pending or rejected ones, or outside the view,
+-- or pointing the banner at a read one, one not yet approved or one outside
+-- the Group filter; the page order ignoring the reading's moment -- each
 -- fails at least one named case or parity above.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(24);
+select plan(26);
 
 \ir _group_task_fixtures.psql
 reset role;
@@ -97,16 +99,16 @@ grant select on af to authenticated;
 create function pg_temp.af_post(p_name text, p_group text, p_audience text, p_minutes_ago integer,
                                 p_priority text default 'normal', p_pinned boolean default false,
                                 p_by integer default 1, p_status text default 'approved',
-                                p_kind text default 'announcement')
+                                p_kind text default 'announcement', p_min_level integer default null)
 returns bigint language plpgsql as $$
 declare
   v_id bigint;
 begin
   insert into public.announcements(title, body, group_id, audience, priority, pinned, created_by,
-                                   approval_status, kind, published_at)
+                                   approval_status, kind, published_at, min_level)
   values ('Anunț #AF ' || p_name, 'Text', pg_temp.af_gid(p_group), p_audience,
           p_priority::public.announce_priority, p_pinned, pg_temp.g521_uid(p_by), p_status, p_kind,
-          now() - make_interval(mins => p_minutes_ago))
+          now() - make_interval(mins => p_minutes_ago), coalesce(p_min_level, 0))
   returning id into v_id;
   insert into af values (p_name, v_id);
   return v_id;
@@ -129,6 +131,20 @@ select pg_temp.af_post('independent', 'Independent #521', 'org', 1440, p_by => 6
 select pg_temp.af_post('own', 'Department #521', 'local', 1, p_by => 5);
 select pg_temp.af_post('deal', (select name from public.groups where is_organization), 'org', 10, p_kind => 'deal');
 select pg_temp.af_post('bulk ' || n, 'Department #521', 'org', 100 + n) from generate_series(1, 25) as n;
+-- The read rule's other parts, each keeping one from someone: an
+-- organization-wide Announcement of a Private Group (#756) only its member
+-- #2 reads; one at Minimum Level 5 (#909) reads from BCE up; and an
+-- organization-wide one #6, a Volunteer, asked for -- the stamp judges an
+-- insert by its signed-in writer -- reads, while pending, for #6 and level 6.
+insert into public.groups(name, category, application_level, is_private) values ('Privat #AF', 'team', 0, true);
+insert into public.group_members(group_id, member_id, group_role)
+values (pg_temp.af_gid('Privat #AF'), pg_temp.g521_uid(2), 'member');
+select pg_temp.af_post('private', 'Privat #AF', 'org', 300, p_by => 2);
+select pg_temp.af_post('level five', 'Department #521', 'org', 400, p_min_level => 5);
+select set_config('request.jwt.claims',
+                  jsonb_build_object('sub', pg_temp.g521_uid(6), 'role', 'authenticated')::text, true);
+select pg_temp.af_post('requested', 'Department #521', 'org', 500, p_by => 6);
+select pg_temp.test_clear_jwt();
 
 -- #5 has read the Department's local Announcement.
 insert into public.announcement_reads(announcement_id, member_id)
@@ -266,6 +282,13 @@ select is(pg_temp.af_row(pg_temp.g521_uid(8), 'select critical_id from public.an
           'null'::jsonb, 'summary: none once it is read');
 select is((pg_temp.af_row(pg_temp.g521_uid(1), 'select everything - preferred as hidden from public.announcement_feed_summary(p_preferred => true)') ->> 'hidden')::int,
           1, 'summary: the preferred view hides the unticked Group''s one local Announcement');
+select is((pg_temp.af_row(pg_temp.g521_uid(1), 'select unread from public.announcement_feed_summary(p_preferred => true)') ->> 'unread')::int,
+          (pg_temp.af_row(pg_temp.g521_uid(1), 'select unread from public.announcement_feed_summary()') ->> 'unread')::int - 1,
+          'summary: the header counts the view it is in -- the unticked Group''s unread local one leaves the preferred count');
+select is(pg_temp.af_row(pg_temp.g521_uid(5), format('select critical_id from public.announcement_feed_summary(p_group_id => %s)',
+                                                     pg_temp.af_gid('Independent #521'))) -> 'critical_id',
+          'null'::jsonb,
+          'summary: the banner keeps to the Group filter -- none in a Group without a critical one');
 
 -- ------------------------------- what BC reads before it is approved
 -- BC reads two organization-wide critical Announcements #6, a Volunteer,
