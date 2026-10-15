@@ -778,13 +778,23 @@ it('neither shows nor sends Cine îl vede for a row that does not carry it (R57)
 });
 it('invents no Role change on a local Task stored below its Group’s floor (R57, review)', async () => {
   auth.level = 6;
-  state.options.mockReturnValue({ data, isPending: false, isError: false, refetch: state.refetch.mockResolvedValue({ data }) });
+  state.options.mockReturnValue({
+    data,
+    isPending: false,
+    isError: false,
+    refetch: state.refetch.mockResolvedValue({ data }),
+  });
   state.preview.mockResolvedValue([]);
   state.mutate.mockResolvedValue({});
   // Echipa (2) sits at Voluntar; the Task was stored at 0 (every Task before R57).
   render(
     <TaskEditControl
-      task={taskRow({ ...task, assignment_mode: 'public', audience: 'local', min_level: 0 })}
+      task={taskRow({
+        ...task,
+        assignment_mode: 'public',
+        audience: 'local',
+        min_level: 0,
+      })}
       canManage
     />,
   );
@@ -793,7 +803,9 @@ it('invents no Role change on a local Task stored below its Group’s floor (R57
     screen.getByRole('button', { name: 'Salvează modificările' }),
   ).toBeDisabled();
   await user.type(screen.getByLabelText('Titlu'), ' nou');
-  await user.click(screen.getByRole('button', { name: 'Salvează modificările' }));
+  await user.click(
+    screen.getByRole('button', { name: 'Salvează modificările' }),
+  );
   await waitFor(() =>
     expect(state.mutate).toHaveBeenCalledWith(
       expect.objectContaining({ minLevel: 0 }),
