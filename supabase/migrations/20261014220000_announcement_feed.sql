@@ -1,5 +1,5 @@
--- Fast reads everywhere, part 4 (docs/superpowers/specs/2026-10-14-member-reads-design.md):
--- Anunțuri by the page (ruling R56).
+-- Spec 2026-10-14 member reads, part 4: Anunțuri by the page (ruling R56).
+-- (docs/superpowers/specs/2026-10-14-member-reads-design.md; Alex chose PRs without issues.)
 --
 -- The Anunțuri page read every Announcement the Member may read, then
 -- narrowed (Grupuri preferate, the Group filter), counted (the header's
@@ -118,7 +118,7 @@ as $$
 $$;
 
 comment on function private.announcement_feed_base(bigint) is
-  'Fast reads part 4 (spec 2026-10-14 member reads, ruling R56): every Announcement (kind announcement, never a Deal) announcements_read gives the caller -- private.can_read_announcement decided once per Group, the rest on the row --, with the caller''s read time, whether Grupuri preferate (R43) would hide it (preference_hides), and whether it lies in p_group_id and every Group below it (in_group). Nothing without organization claims or a live level. Read only by the feed''s rows and its summary.';
+  'Fast reads part 4 (spec 2026-10-14 member reads, ruling R56): every Announcement (kind announcement, never a Deal) announcements_read gives the caller -- private.can_read_announcement decided once per Group, the rest on the row --, with the caller''s read time, whether Grupuri preferate (R43) would hide it (preference_hides), and whether it lies in p_group_id and every Group below it (in_group). Nothing without organization claims or a live level. Read only by the feed''s rows, its summary and the badge (private.unread_announcements_count).';
 
 revoke execute on function private.announcement_feed_base(bigint)
   from public, anon, authenticated, service_role;

@@ -26,7 +26,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(31);
 
 \ir _group_task_fixtures.psql
 reset role;
@@ -145,6 +145,17 @@ select set_config('request.jwt.claims',
                   jsonb_build_object('sub', pg_temp.g521_uid(6), 'role', 'authenticated')::text, true);
 select pg_temp.af_post('requested', 'Department #521', 'org', 500, p_by => 6);
 select pg_temp.test_clear_jwt();
+-- An author always reads their own (#909): #2, a Volunteer, wrote one at
+-- Minimum Level 5 -- a server-side write, as an author demoted since.
+select pg_temp.af_post('own level five', 'Department #521', 'org', 450, p_by => 2, p_min_level => 5);
+-- A Member deactivated since, who wrote an organization-wide Announcement:
+-- their token outlives them, with the BC claims it was signed with.
+insert into auth.users(id, email) values ('af000000-0000-0000-0000-000000000001', 'gone.af@test.local');
+insert into public.profiles(id, full_name, email, role, status)
+values ('af000000-0000-0000-0000-000000000001', 'Gone #AF', 'gone.af@test.local', 'bc', 'inactiv');
+insert into public.announcements(title, body, group_id, audience, priority, created_by, kind, published_at, min_level)
+values ('Anunț #AF gone', 'Text', pg_temp.af_gid('Department #521'), 'org', 'normal',
+        'af000000-0000-0000-0000-000000000001', 'announcement', now() - interval '30 days', 0);
 
 -- #5 has read the Department's local Announcement.
 insert into public.announcement_reads(announcement_id, member_id)
@@ -366,6 +377,30 @@ select ok((select bool_or(count > 0) and bool_or(count = 0)
              from (select (pg_temp.af_ids(caller.uid, 'select public.my_unread_announcements_count()::bigint'))[1] as count
                      from af_callers as caller) as counts),
           'the badge parity reads something: some callers have unread Announcements, some none');
+
+-- --------------------------------------------- no standing, nothing at all
+-- The feed, the summary and the badge, each a set read as the owner: a
+-- deactivated Member with stale BC claims -- even their own -- and a live
+-- Member whose session carries no organization claims read and count nothing.
+select is(pg_temp.af_ids('af000000-0000-0000-0000-000000000001',
+            'select (select count(*) from public.announcement_feed(p_limit => 100))
+             union all select everything from public.announcement_feed_summary()
+             union all select coalesce(critical_id, 0) from public.announcement_feed_summary()
+             union all select public.my_unread_announcements_count()',
+            jsonb_build_object('member_role', 'bc', 'member_level', 6, 'group_ids', '[]'::jsonb)),
+          '{0,0,0,0}'::bigint[],
+          'a deactivated Member with stale BC claims reads and counts nothing, not even their own organization-wide Announcement');
+select is(pg_temp.af_ids(pg_temp.g521_uid(5),
+            'select (select count(*) from public.announcement_feed(p_limit => 100))
+             union all select everything from public.announcement_feed_summary()
+             union all select coalesce(critical_id, 0) from public.announcement_feed_summary()
+             union all select public.my_unread_announcements_count()',
+            '{}'::jsonb),
+          '{0,0,0,0}'::bigint[],
+          'a live Member whose session carries no organization claims reads and counts nothing');
+select ok(pg_temp.af_id('own level five') = any(pg_temp.af_ids(pg_temp.g521_uid(2), 'select id from public.announcement_feed(p_limit => 100)'))
+          and not pg_temp.af_id('own level five') = any(pg_temp.af_ids(pg_temp.g521_uid(3), 'select id from public.announcement_feed(p_limit => 100)')),
+          'an author reads their own above their level; another Volunteer does not');
 
 -- ------------------------------------------------------------- refusals
 select throws_ok($$ select * from public.announcement_feed(p_limit => 0) $$, 'PT400', 'invalid_page',

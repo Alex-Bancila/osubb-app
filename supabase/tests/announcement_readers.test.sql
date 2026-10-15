@@ -275,7 +275,7 @@ reset role;
 
 -- ==================== catalog ====================
 select is((select prosecdef from pg_proc where oid='public.my_unread_announcements_count(text)'::regprocedure),
-  false,'the unread count is security invoker, so announcements_read decides which rows count');
+  false,'the unread count is security invoker: a Deal counts through announcements_read, the Announcements through private.unread_announcements_count, the feed''s copy of its rule (announcement_feed.test.sql holds the parity)');
 select is((select proconfig from pg_proc where oid='private.announcement_readers_impl(bigint)'::regprocedure),
   array['search_path=""'],'the readers body pins an empty search_path');
 
