@@ -1,5 +1,5 @@
--- Fast reads everywhere, part 2 (docs/superpowers/specs/2026-10-14-member-reads-design.md):
--- the Member's lists in the list reader of #1052.
+-- Spec 2026-10-14 member reads, part 2: the Member's lists in the list reader of #1052.
+-- (docs/superpowers/specs/2026-10-14-member-reads-design.md; Alex chose PRs without issues.)
 --
 -- Taskurile mele read every Assignment of the Member with its Task, then the
 -- parent titles, then the Executors: three requests one after another, all
@@ -451,3 +451,6 @@ $$;
 
 comment on function private.task_list_summary_impl(text) is
   'Body of public.task_list_summary: private.task_list_scope(p_list) -- managed, all, mine or available -- counted by the Task''s Group, Campaign, status, whether it was completed after its deadline, and whether it carries a deadline.';
+
+comment on function public.task_list_summary(text) is
+  'What a Task list (managed, all, mine or available, as public.task_list) holds, without reading a Task: its Tasks counted by Group, Campaign, status, late (completed after the deadline) and dated (a deadline is set). The page takes from it the Groups and Campaigns the Work Filter offers (Rule W), the states Stare offers and how many finished Tasks there are. PT400 invalid_list. No rows without org claims or a live activ Profile.';

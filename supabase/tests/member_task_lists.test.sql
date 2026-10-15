@@ -18,19 +18,21 @@
 -- RLS, and the embeds equal the rows RLS returns for the same Tasks.
 --
 -- Mutation record (2026-10-14; each piece broken alone, the suite run): mine
--- keeping a Task given up, or deciding by the oldest own Assignment; available
--- without pending Candidatures, without the read rule, or ignoring a closed
--- queue; a Member list embedding every row; Evaluations without the own
--- Assignment; Assignments without the managed Tasks; open Member lists without
--- the title tiebreak; available accepting a finished part; my_candidature
--- reading the oldest Candidature -- each fails at least one named case above,
--- and the embed changes fail the parity too.
+-- keeping a Task given up, deciding by the oldest own Assignment, or trusting
+-- auth.uid() without the caller's standing; available without pending
+-- Candidatures, without the read rule, or ignoring a closed queue; a Member
+-- list embedding every row, every Evaluation or every Submission; Evaluations
+-- without the own Assignment or the managed Tasks; Assignments without the
+-- managed Tasks; Submissions without Shared Work Visibility; open Member lists
+-- without the title tiebreak; available accepting a finished part;
+-- my_candidature reading the oldest Candidature -- each of the 16 fails at
+-- least one named case below, and the embed changes fail the parity too.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(29);
 
 \ir _group_task_fixtures.psql
 reset role;
@@ -67,17 +69,18 @@ end;
 $$;
 
 -- 1 and 2 Volunteers of the Group, 3 its Manager (a Volunteer), 4 a
--- Volunteer in no Group.
+-- Volunteer in no Group; 5 the Executor of a team's Opportunity; 6 a
+-- Volunteer of the Group deactivated at the end.
 insert into auth.users(id, email)
-select pg_temp.ml_uid(n), 'member.' || n || '.ml@test.local' from generate_series(1, 4) as n;
+select pg_temp.ml_uid(n), 'member.' || n || '.ml@test.local' from generate_series(1, 6) as n;
 insert into public.profiles(id, full_name, email, role, status)
 select pg_temp.ml_uid(n), 'Member #ML ' || n, 'member.' || n || '.ml@test.local', 'voluntar', 'activ'
-  from generate_series(1, 4) as n;
+  from generate_series(1, 6) as n;
 insert into public.groups(name, category, application_level) values ('Mine #ML', 'team', 0);
 insert into public.group_members(group_id, member_id, group_role)
 select grp.id, pg_temp.ml_uid(held.n), held.role
   from public.groups as grp
- cross join (values (1, 'member'), (2, 'member'), (3, 'manager')) as held(n, role)
+ cross join (values (1, 'member'), (2, 'member'), (3, 'manager'), (6, 'member')) as held(n, role)
  where grp.name = 'Mine #ML';
 
 create temp table ml_tasks(name text primary key, id bigint);
@@ -157,6 +160,44 @@ select pg_temp.ml_held('o_local', 2, 1);
 -- Finished work with an Evaluation and a Submission, from the shared fixture.
 select pg_temp.g521_task('ml_done', 'dept', 5, 'completed', 'public');
 
+-- Another Member's work on a Task the caller lists: an org Opportunity of a
+-- Group with Shared Work Visibility (#2 a member, #3 its Manager) that #5
+-- submitted and was evaluated on, then reopened, its queue open again --
+-- through the commands. Disponibile lists it to everyone; who reads #5's
+-- Submission and Evaluation is the read policies' answer, never "everyone".
+insert into public.groups(name, category, application_level, shared_work_visibility)
+values ('Echipa #ML', 'team', 0, true);
+insert into public.group_members(group_id, member_id, group_role)
+select grp.id, pg_temp.ml_uid(held.n), held.role
+  from public.groups as grp
+ cross join (values (2, 'member'), (3, 'manager'), (5, 'member')) as held(n, role)
+ where grp.name = 'Echipa #ML';
+create temp table ml_team(id bigint);
+grant select on ml_team to authenticated;
+with made as (
+  insert into public.tasks(title, group_id, created_by, status, audience, assignment_mode, kind,
+                           deadline, created_at, queue_opened_at)
+  values ('Echipă #ML', (select id from public.groups where name = 'Echipa #ML'), pg_temp.ml_uid(3),
+          'todo', 'org', 'public', 'task', now() + interval '8 days', now() - interval '5 days',
+          now() - interval '4 days')
+  returning id)
+insert into ml_team select id from made;
+insert into public.task_assignments(task_id, member_id, assigned_by, assigned_at)
+select id, pg_temp.ml_uid(5), pg_temp.ml_uid(3), now() - interval '3 days' from ml_team;
+select pg_temp.test_login(pg_temp.ml_uid(5), pg_temp.ml_meta(pg_temp.ml_uid(5)));
+select public.start_task((select id from ml_team));
+select public.submit_task_for_review(p_task_id => (select id from ml_team), p_note => 'Predat #ML');
+select pg_temp.test_login(pg_temp.g521_uid(1), pg_temp.ml_meta(pg_temp.g521_uid(1)));
+select public.complete_task_review((select id from ml_team), 3, 3, 'Evaluare #ML');
+select public.reopen_task((select id from ml_team), 'Redeschis #ML');
+select public.set_task_queue((select id from ml_team), true);
+select set_config('role', 'none', true);
+select pg_temp.test_clear_jwt();
+
+-- #6's own Task, before they are deactivated.
+select pg_temp.ml_task('t_six', 'Theta #ML', 'direct', 'local', now() + interval '4 days');
+select pg_temp.ml_held('t_six', 6, 3);
+
 create function pg_temp.ml_id(p_name text) returns bigint language sql stable as $$
   select coalesce((select id from ml_tasks where name = p_name),
                   (select id from g521_tasks where name = p_name))
@@ -231,6 +272,21 @@ select is(jsonb_array_length((select row -> 'assignments' from jsonb_array_eleme
                                where (row ->> 'id')::bigint = pg_temp.ml_id('o_local'))), 0,
           'a Volunteer does not see another Member''s Assignment on an Opportunity');
 
+-- The reopened team Opportunity: #5's Submission and reversed Evaluation.
+create function pg_temp.ml_team_row(p_uid uuid) returns jsonb language sql as $$
+  select row from jsonb_array_elements(pg_temp.ml_list(p_uid, 'available')) as row
+   where (row ->> 'id')::bigint = (select id from ml_team)
+$$;
+select ok((select row -> 'submission' = '[]'::jsonb and row -> 'evaluations' = '[]'::jsonb
+             from (select pg_temp.ml_team_row(pg_temp.ml_uid(4)) as row) as listed),
+          'available: a Volunteer outside the work reads neither the Executor''s Submission nor their Evaluation');
+select ok((select jsonb_array_length(row -> 'submission') = 1 and row -> 'evaluations' = '[]'::jsonb
+             from (select pg_temp.ml_team_row(pg_temp.ml_uid(2)) as row) as listed),
+          'available: a member of a Group with Shared Work Visibility reads the Executor''s Submission, not their Evaluation');
+select ok((select jsonb_array_length(row -> 'evaluations') = 1
+             from (select pg_temp.ml_team_row(pg_temp.ml_uid(3)) as row) as listed),
+          'available: the Group''s Manager, a Volunteer, reads the Executor''s Evaluation');
+
 -- ------------------------------------------------------------- the parity
 select is_empty($$
   select caller.uid
@@ -298,6 +354,24 @@ select throws_ok($$ select * from public.task_list(p_list => 'available', p_fini
 select is((pg_temp.ml_as(pg_temp.ml_uid(1),
             'select sum(tasks)::int as tasks from public.task_list_summary(''mine'')') -> 0 ->> 'tasks')::int, 6,
           'task_list_summary(mine) counts the Member''s list');
+
+-- --------------------------------------- no organization standing, nothing
+select ok(pg_temp.ml_id('t_six') = any(pg_temp.ml_ids(pg_temp.ml_list(pg_temp.ml_uid(6), 'mine'))),
+          'mine: an active Member lists their own Task');
+update public.profiles set status = 'inactiv' where id = pg_temp.ml_uid(6);
+select is(pg_temp.ml_as(pg_temp.ml_uid(6),
+            'select id from public.task_list(p_list => ''mine'')
+             union all select id from public.task_list(p_list => ''available'')'), '[]'::jsonb,
+          'a deactivated Member with stale claims lists nothing: not their own Tasks, not an Opportunity');
+select is(pg_temp.ml_as(pg_temp.ml_uid(6), 'select tasks from public.task_list_summary(''mine'')'), '[]'::jsonb,
+          'a deactivated Member''s summary of their list is empty');
+select pg_temp.test_login(pg_temp.ml_uid(1), '{}'::jsonb);
+select is_empty($$ select id from public.task_list(p_list => 'mine')
+                   union all select id from public.task_list(p_list => 'available')
+                   union all select 0 from public.task_list_summary('mine') $$,
+                'a caller without organization claims lists nothing and counts nothing');
+select set_config('role', 'none', true);
+select pg_temp.test_clear_jwt();
 
 select * from finish();
 rollback;
