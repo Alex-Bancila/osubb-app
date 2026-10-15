@@ -26,7 +26,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(35);
 
 \ir _group_task_fixtures.psql
 reset role;
@@ -405,6 +405,14 @@ select ok(pg_temp.af_id('own level five') = any(pg_temp.af_ids(pg_temp.g521_uid(
 -- ------------------------------------------------------------- refusals
 select throws_ok($$ select * from public.announcement_feed(p_limit => 0) $$, 'PT400', 'invalid_page',
                  'a page of no rows is refused: PT400 invalid_page');
+select throws_ok($$ select * from public.announcement_feed(p_limit => 101) $$, 'PT400', 'invalid_page',
+                 'a page above 100 rows is refused: PT400 invalid_page');
+select throws_ok($$ select * from public.announcement_feed(p_offset => -1) $$, 'PT400', 'invalid_page',
+                 'a negative offset is refused: PT400 invalid_page');
+select throws_ok($$ select * from public.announcement_feed(p_limit => null) $$, 'PT400', 'invalid_page',
+                 'a page with no size is refused: PT400 invalid_page');
+select throws_ok($$ select * from public.announcement_feed(p_offset => null) $$, 'PT400', 'invalid_page',
+                 'a page with no offset is refused: PT400 invalid_page');
 
 select * from finish();
 rollback;
