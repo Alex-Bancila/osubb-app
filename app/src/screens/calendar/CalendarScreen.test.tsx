@@ -37,7 +37,7 @@ const hooks = vi.hoisted(() => ({
   useGoingEventIds: vi.fn(),
   useEventRsvp: vi.fn(),
   useSetEventRsvp: vi.fn(),
-  useMyTasks: vi.fn(),
+  useMyTasksInRange: vi.fn(),
   usePendingCandidatureTasks: vi.fn(),
   useTaskManagement: vi.fn(),
   useManagedTasks: vi.fn(),
@@ -75,16 +75,17 @@ vi.mock('../../queries/event-rsvp', () => ({
   useSetEventRsvp: hooks.useSetEventRsvp,
   useGoingEventIds: hooks.useGoingEventIds,
 }));
-vi.mock('../../queries/tasks', () => ({ useMyTasks: hooks.useMyTasks }));
 vi.mock('../../queries/calendar-tasks', () => ({
   usePendingCandidatureTasks: hooks.usePendingCandidatureTasks,
 }));
 vi.mock('../../queries/task-tabs', () => ({
   useTaskManagement: hooks.useTaskManagement,
 }));
-// #1053: the managed Tasks of the month the grid shows, open and finished.
+// #1053, R55: the managed and the member's own Tasks of the month the grid
+// shows, open and finished.
 vi.mock('../../queries/task-lists', () => ({
   useManagedTasksInRange: hooks.useManagedTasks,
+  useMyTasksInRange: hooks.useMyTasksInRange,
 }));
 vi.mock('../../queries/work-filter-options', () => ({
   useCalendarWork: hooks.useCalendarWork,
@@ -331,7 +332,7 @@ describe('CalendarScreen', () => {
       isPending: false,
       mutateAsync: vi.fn(),
     });
-    hooks.useMyTasks.mockReturnValue(query([task()]));
+    hooks.useMyTasksInRange.mockReturnValue(query([task()]));
     hooks.usePendingCandidatureTasks.mockReturnValue(query([]));
     hooks.useTaskManagement.mockReturnValue(query(false));
     hooks.useManagedTasks.mockReturnValue(
@@ -932,6 +933,23 @@ describe('CalendarScreen', () => {
       ).toHaveAttribute('aria-current', 'date');
     });
 
+    // Fails if the month reads the member's whole list (every Task they ever
+    // finished) instead of the month the grid shows (ruling R55).
+    it('reads only the member’s own Tasks of the month the grid shows', async () => {
+      const user = userEvent.setup();
+      stubStorage({ [CALENDAR_VIEW_STORAGE_KEY]: 'month' });
+      renderCalendar();
+      expect(hooks.useMyTasksInRange).toHaveBeenLastCalledWith({
+        from: '2026-09-27T21:00:00.000Z',
+        to: '2026-11-01T22:00:00.000Z',
+      });
+      await user.click(screen.getByRole('button', { name: /^Luna următoare/ }));
+      expect(hooks.useMyTasksInRange).toHaveBeenLastCalledWith({
+        from: '2026-10-25T22:00:00.000Z',
+        to: '2026-12-06T22:00:00.000Z',
+      });
+    });
+
     it('lists a tapped day below the grid: Events as cards, Tasks as rows', async () => {
       const user = userEvent.setup();
       stubStorage({ [CALENDAR_VIEW_STORAGE_KEY]: 'month' });
@@ -969,7 +987,7 @@ describe('CalendarScreen', () => {
 
     it('adds pending candidatures to the own deadlines', () => {
       stubStorage({ [CALENDAR_VIEW_STORAGE_KEY]: 'month' });
-      hooks.useMyTasks.mockReturnValue(query([]));
+      hooks.useMyTasksInRange.mockReturnValue(query([]));
       hooks.usePendingCandidatureTasks.mockReturnValue(
         query([task({ id: 101, title: 'Voluntar la stand' })]),
       );
@@ -1157,7 +1175,9 @@ describe('CalendarScreen', () => {
 
     it('does not call a Group empty while its deadlines are still loading (R40)', () => {
       stubStorage({ [CALENDAR_VIEW_STORAGE_KEY]: 'month' });
-      hooks.useMyTasks.mockReturnValue(query(undefined, { isPending: true }));
+      hooks.useMyTasksInRange.mockReturnValue(
+        query(undefined, { isPending: true }),
+      );
       renderCalendar('/calendar?grup=20');
       expect(screen.queryByText('Nimic în luna aceasta.')).toBeNull();
     });
@@ -1190,7 +1210,7 @@ describe('CalendarScreen', () => {
     it('narrows Events and Task chips alike by the Work Filter', () => {
       stubStorage({ [CALENDAR_VIEW_STORAGE_KEY]: 'month' });
       setEvents([event(), festivalEvent]);
-      hooks.useMyTasks.mockReturnValue(
+      hooks.useMyTasksInRange.mockReturnValue(
         query([
           task(),
           task({

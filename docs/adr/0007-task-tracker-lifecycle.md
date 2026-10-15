@@ -13,6 +13,7 @@
 - **Amended:** 2026-10-13 — #1046 (ruling R51): a finished Task added directly (`create_completed_task`, `create_completed_tasks`) may be credited to any active Member at or above the Group's Minimum Level, member of the Group or not; BC and the Moderator stay excluded, the decider rule stays, and the points land on the Task's Group
 - **Amended:** 2026-10-14 — #1049 (ruling R53): the Legacy Import writes the pre-app Task Tracker history once, as terminal Tasks dated on their completion day with `legacy_migration` Evaluations; it is the second and last writer of Task Points and is closed after the run
 - **Amended:** 2026-10-14 — #1052, #1053 (ruling R54): a leadership Task list shows open work first and finished work after it, newest first and by the page; a list decides authority per Group and no page reads the finished Tasks whole
+- **Amended:** 2026-10-14 — ruling R55: Taskurile mele shows its open Tasks first and its finished Tasks after them, newest first and by the page, as R54 does for the leadership lists; Taskurile mele and Disponibile are read through the same list reader
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -203,3 +204,16 @@ A leadership Task list therefore has two parts (#1052, #1053, spec `docs/superpo
 The title search, the Work Filter, **Stare**, Grupuri preferate and **Ordonează după** narrow both parts. **Stare** still offers only the states the list holds, and the Work Filter only the Groups and Campaigns with work (Rule W): both read the open Tasks and the server's summary of the finished ones.
 
 Nothing about authority changes. `private.can_manage_task` and `private.can_read_task` remain the rules; a list decides them once per Group (`private.task_list_scope`) and falls back to them for the rows a Group cannot decide. `docs/backend/conventions.md` §4 makes that the way any list of Tasks is read.
+
+## Amendment (2026-10-14) — Taskurile mele by the page (ruling R55)
+
+Ruling R10's order held for **Taskurile mele** too: every Task the Member holds or held to the end, in one list by deadline, finished work mixed in. The busiest Member gains some 300 Tasks a year, so the list grew without bound and was read whole on every visit, in several requests one after another (spec `docs/superpowers/specs/2026-10-14-member-reads-design.md`).
+
+Taskurile mele therefore has the two parts R54 gave the leadership lists:
+
+- **Open Tasks** (De făcut, În lucru, În verificare) first, by deadline ascending with undated last.
+- **Finished Tasks** (Finalizat, Nerealizat, Anulat) after them, under **Taskuri încheiate**, newest deadline first with undated last. They are read 50 at a time — the next page when the end of the list comes into view, or from **Încarcă mai multe**.
+
+The title search and the Work Filter narrow both parts. The list has no **Stare** and no **Ordonează după**, and Grupuri preferate never narrows it (R43): it is the Member's own work. The Work Filter offers the Groups and Campaigns of the open Tasks and of the server's summary of the list (Rule W). A `?task=` link to one of the Member's finished Tasks opens its details on Taskurile mele.
+
+What the list holds is unchanged: the Tasks whose newest Assignment of the Member did not end in giving the Task up, being replaced, or being taken off it by an edit or a change of Group. **Disponibile** keeps its one band and its order; both lists are read through the list reader of R54 (`task_list('mine')`, `task_list('available')`), and Acasă reads only Taskurile mele's open Tasks.

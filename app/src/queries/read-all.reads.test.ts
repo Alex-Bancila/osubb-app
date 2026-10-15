@@ -26,8 +26,11 @@ import {
   fetchThresholdChanges,
 } from './role-evaluations';
 import { fetchTaskOpportunities } from './task-opportunities';
-import { fetchTaskListSummary } from './task-lists';
-import { fetchMyTasks } from './tasks';
+import {
+  fetchOpenTasks,
+  fetchTaskListSummary,
+  type TaskListRpcRow,
+} from './task-lists';
 import { fetchUninvitedMembers } from './volunteer-import';
 
 /*
@@ -159,80 +162,53 @@ describe('Administrare', () => {
 });
 
 describe('Taskuri', () => {
-  it('keeps every Task of a Member with more than 500 Assignments, parents asked 100 at a time', async () => {
-    postgrest.serve(
-      'task_assignments',
-      many((index) => ({
-        end_reason: null,
-        task: taskRow({
-          id: index,
-          title: `Task ${String(index).padStart(3, '0')}`,
-          deadline: null,
-          parent_task_id: index < 250 ? 10_000 + index : null,
-        }),
-      })),
-    );
-    postgrest.serve('tasks', (request) =>
-      idsAsked(request).map((id) => ({ id, title: `Umbrela ${String(id)}` })),
-    );
-    postgrest.serve('visible_task_executors', []);
+  /** `task_list` as the server pages it: by `p_offset` and `p_limit`. */
+  function serveTaskList(rows: readonly TaskListRpcRow[]) {
+    postgrest.serve('task_list', (request) => {
+      const { p_offset, p_limit } = request.args as {
+        p_offset: number;
+        p_limit: number;
+      };
+      return rows.slice(p_offset, p_offset + p_limit);
+    });
+  }
+  const listed = (index: number): TaskListRpcRow => ({
+    ...taskRow({
+      id: index,
+      assignment_mode: 'public',
+      audience: 'org',
+    }),
+    assignments: [],
+    evaluations: [],
+    submission: [],
+    executor: null,
+    // Every other one a pending Candidature, its queue since closed.
+    my_candidature: index % 2 ? 'pending' : null,
+    queue_closed_at: index % 2 ? '2026-10-01T00:00:00Z' : null,
+    total: ROWS,
+  });
+  const offsets = () =>
+    postgrest
+      .requestsTo('task_list')
+      .map((request) => (request.args as { p_offset: number }).p_offset);
 
-    const tasks = await fetchMyTasks('member');
+  it('keeps every open Task of a Member past 500 (Taskurile mele)', async () => {
+    serveTaskList(many(listed));
+    const tasks = await fetchOpenTasks('mine');
     expect(tasks).toHaveLength(ROWS);
     expect(tasks.at(-1)?.id).toBe(500);
-    expect(tasks.find((task) => task.id === 249)?.parent?.title).toBe(
-      'Umbrela 10249',
-    );
-    expect(orders(postgrest.requestsTo('task_assignments')[0])).toEqual([
-      ['assigned_at', { ascending: false }],
-      ['id', { ascending: false }],
-    ]);
-    const parents = postgrest.requestsTo('tasks');
-    expect(parents.map((request) => idsAsked(request).length)).toEqual([
-      100, 100, 50,
-    ]);
+    expect(offsets()).toEqual([0, 500]);
   });
 
-  it('offers every open Task and keeps every pending Candidature in Disponibile', async () => {
-    const offer = (id: number, queueClosedAt: string | null = null) =>
-      taskRow({
-        id,
-        assignment_mode: 'public',
-        audience: 'org',
-        assignments: [],
-        queue_closed_at: queueClosedAt,
-      });
+  it('offers every available Task and keeps every pending Candidature in Disponibile', async () => {
     postgrest.serve('my_groups', []);
-    postgrest.serve(
-      'task_candidates',
-      many((index) => ({ task_id: 1_000 + index })),
-    );
-    postgrest.serve('tasks', (request) => {
-      const ids = idsAsked(request);
-      // The Tasks of pending Candidatures, their queues since closed; or the
-      // open Tasks.
-      return ids.length
-        ? ids.map((id) => offer(Number(id), '2026-10-01T00:00:00Z'))
-        : many((index) => offer(index));
-    });
-    postgrest.serve('visible_task_executors', []);
-
+    serveTaskList(many(listed));
     const offered = await fetchTaskOpportunities('member');
     const ids = new Set(offered.map((task) => task.id));
-    expect(ids.size).toBe(2 * ROWS);
+    expect(ids.size).toBe(ROWS);
+    expect(ids.has(499)).toBe(true);
     expect(ids.has(500)).toBe(true);
-    expect(ids.has(1_500)).toBe(true);
-
-    const [candidatures] = postgrest.requestsTo('task_candidates');
-    expect(postgrest.argsOf(candidatures, 'eq')).toContainEqual([
-      'status',
-      'pending',
-    ]);
-    expect(orders(candidatures)).toEqual([['id']]);
-    const [openTasks] = postgrest
-      .requestsTo('tasks')
-      .filter((request) => !idsAsked(request).length);
-    expect(orders(openTasks)).toEqual([['id']]);
+    expect(offsets()).toEqual([0, 500]);
   });
 
   it('summarises a list whose Groups, Campaigns and states pass 500', async () => {

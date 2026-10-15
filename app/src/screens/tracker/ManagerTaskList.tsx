@@ -1,24 +1,20 @@
 import { useMemo, useState } from 'react';
-import { AnimatedList, EmptyState, Panel } from '../../components/layout';
-import { ErrorState, Loading } from '../../components/states';
-import { Button } from '../../components/ui/button';
+import { AnimatedList, EmptyState } from '../../components/layout';
 import { SegmentedRadio } from '../../components/ui/segmented-radio';
 import { Select } from '../../components/ui/select';
 import { workFilterCellClass } from '../../components/work-filter/field-class';
-import type { WorkFilterWorkRead } from '../../components/work-filter/WorkFilter';
 import { formatTaskCount } from '../../lib/format';
-import { useInView } from '../../lib/use-in-view';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import { matchesWorkFilter } from '../../lib/work-filter';
 import { executesTask } from '../../lib/preferred-groups';
 import { usePreferredGroups } from '../../components/preferred-groups/preferred-groups';
 import {
   summaryWork,
-  useFinishedTasks,
   useTaskListSummary,
   type ListRead,
-  type TaskListName,
 } from '../../queries/task-lists';
+import { summaryWorkRead, useFinishedPart } from './finished-part';
+import { FinishedTasksPanel } from './FinishedTasksPanel';
 import { TaskQueryStates } from './TaskQueryStates';
 import {
   ClearSearchButton,
@@ -87,7 +83,7 @@ export function ManagerTaskList({
   onOpenTask,
 }: {
   /** Which list this is; names the finished part's read. */
-  list: TaskListName;
+  list: 'managed' | 'all';
   /** The read of the list's open Tasks. */
   open: ListRead<TaskPresentationRow>;
   now: Date;
@@ -113,21 +109,8 @@ export function ManagerTaskList({
   const finishedCounts = useMemo(() => finishedStateCounts(held), [held]);
   const work = useMemo(() => [...rows, ...summaryWork(held)], [rows, held]);
   // Not read yet: Stare and the Work Filter hold their place, or offer a
-  // retry, never the open rows' choices as if they were all. A retry is
-  // pending again with no error: having failed before (`errorUpdateCount`),
-  // it keeps the retry, saying it retries. A later read that fails keeps
-  // what was read.
-  const summaryRead: WorkFilterWorkRead | undefined =
-    summary.data !== undefined
-      ? undefined
-      : summary.isError || summary.errorUpdateCount > 0
-        ? {
-            status: 'failed',
-            error: summary.error,
-            onRetry: () => void summary.refetch(),
-            retrying: !summary.isError,
-          }
-        : { status: 'loading' };
+  // retry, never the open rows' choices as if they were all.
+  const summaryRead = summaryWorkRead(summary);
 
   const listControls = rows.length + finishedCounts.total >= LIST_CONTROLS_FROM;
   const sort = listControls ? chosenSort : 'deadline';
@@ -186,23 +169,10 @@ export function ManagerTaskList({
       }),
     [params, state, needle, sort, preferred.active],
   );
-  const finished = useFinishedTasks(list, finishedFilters, true);
-  // A Task that has just finished can still be in the open read for a moment.
-  const finishedTasks = useMemo(() => {
-    const openIds = new Set(rows.map((row) => row.id));
-    return finished.rows
-      .filter((row) => !openIds.has(row.id))
-      .map((row) => toTaskPresentation(row, now));
-  }, [finished.rows, rows, now]);
-  // Armed only while nothing is read: not during the next page, nor while
-  // the first page is read again after a change. Re-armed when that lands,
-  // it asks at once if the end is still in view.
-  const sentinel = useInView(
-    finished.loadMore,
-    finished.hasMore &&
-      !finished.isLoadingMore &&
-      !finished.isFetching &&
-      !finished.moreFailed,
+  const finished = useFinishedPart(list, finishedFilters, rows);
+  const finishedTasks = useMemo(
+    () => finished.rows.map((row) => toTaskPresentation(row, now)),
+    [finished.rows, now],
   );
 
   // How many Tasks the list shows; unknown until the finished part answers.
@@ -291,66 +261,22 @@ export function ManagerTaskList({
                   {(task) => <TaskRow task={task} onOpenTask={onOpenTask} />}
                 </AnimatedList>
               )}
-              {finished.isPending && (
-                <Loading label="Se încarcă taskurile încheiate…" />
-              )}
-              {finished.isError && (
-                <ErrorState
-                  error={finished.error}
-                  text="Nu am putut încărca taskurile încheiate."
-                  onRetry={finished.refetch}
-                />
-              )}
-              {finishedTasks.length > 0 && (
-                <Panel
-                  bare
-                  title="Taskuri încheiate"
-                  control={
-                    finished.total !== undefined && (
-                      <p className="text-sm text-muted-foreground tabular-nums">
-                        {formatTaskCount(finished.total)}
-                      </p>
-                    )
-                  }
+              <FinishedTasksPanel finished={finished}>
+                <AnimatedList
+                  data-slot="task-row-list"
+                  className="gap-2"
+                  items={finishedTasks}
+                  getKey={(task) => task.id}
                 >
-                  <AnimatedList
-                    data-slot="task-row-list"
-                    className="gap-2"
-                    items={finishedTasks}
-                    getKey={(task) => task.id}
-                  >
-                    {(task) => (
-                      <TaskRow
-                        task={task}
-                        onOpenTask={onOpenTask}
-                        titleLevel={3}
-                      />
-                    )}
-                  </AnimatedList>
-                  {finished.moreFailed ? (
-                    <ErrorState
-                      text="Nu am putut încărca mai multe taskuri."
-                      onRetry={finished.loadMore}
+                  {(task) => (
+                    <TaskRow
+                      task={task}
+                      onOpenTask={onOpenTask}
+                      titleLevel={3}
                     />
-                  ) : (
-                    finished.hasMore && (
-                      // The end of the list: coming into view, it asks for the
-                      // next page; the button does the same for a keyboard.
-                      <div ref={sentinel} className="flex justify-center pt-2">
-                        <Button
-                          variant="outline"
-                          disabled={finished.isLoadingMore}
-                          onClick={finished.loadMore}
-                        >
-                          {finished.isLoadingMore
-                            ? 'Se încarcă…'
-                            : 'Încarcă mai multe'}
-                        </Button>
-                      </div>
-                    )
                   )}
-                </Panel>
-              )}
+                </AnimatedList>
+              </FinishedTasksPanel>
               {nothing && settled && (
                 <EmptyState
                   bare

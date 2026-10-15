@@ -113,14 +113,15 @@ vi.mock('../../queries/task-tabs', () => ({
   useManagedTasks: hooks.useManagedTasks,
   useAllTasks: hooks.useAllTasks,
 }));
-// #1053: the finished part of a leadership list, what the list holds, and
-// the two one-Task questions a link asks. Nothing unless a test says so.
+// #1053, R55: the finished part of a list, what the list holds, and the
+// three one-Task questions a link asks. Nothing unless a test says so.
 const listReads = vi.hoisted(() => ({
   finished: vi.fn(),
   prefetch: vi.fn(),
   summary: vi.fn(),
   capability: vi.fn(),
   readable: vi.fn(),
+  isMine: vi.fn(),
 }));
 vi.mock('../../queries/task-lists', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../queries/task-lists')>()),
@@ -130,6 +131,7 @@ vi.mock('../../queries/task-lists', async (importOriginal) => ({
   useTaskManageCapability: (...args: unknown[]) =>
     listReads.capability(...args),
   useTaskReadable: (...args: unknown[]) => listReads.readable(...args),
+  useTaskIsMine: (...args: unknown[]) => listReads.isMine(...args),
 }));
 vi.mock('../../queries/tasks', () => ({ useMyTasks: hooks.useMyTasks }));
 vi.mock('../../queries/task-progress', () => ({
@@ -247,6 +249,8 @@ beforeEach(() => {
   listReads.capability.mockReturnValue({ data: false, isError: false });
   listReads.readable.mockReset();
   listReads.readable.mockReturnValue({ data: false, isError: false });
+  listReads.isMine.mockReset();
+  listReads.isMine.mockReturnValue({ data: false, isError: false });
 });
 
 function Router({ children }: { children: ReactNode }) {
@@ -2085,6 +2089,24 @@ describe('Taskuri over the paged lists (#1053)', () => {
     completed_at: '2026-03-30T10:00:00Z',
     assignments: [],
   });
+  /** Three finished Tasks, as a list's summary counts them. */
+  const finishedSummary = [
+    {
+      group_id: 10,
+      campaign_id: null,
+      status: 'completed',
+      late: false,
+      dated: true,
+      tasks: 3,
+    },
+  ];
+  /** What `list` holds by the server's summary; every other list, nothing. */
+  function holding(list: string, rows: unknown[] = finishedSummary) {
+    listReads.summary.mockImplementation((name: string) => ({
+      data: name === list ? rows : [],
+      isError: false,
+    }));
+  }
 
   beforeEach(() => {
     hooks.level = 1;
@@ -2166,19 +2188,7 @@ describe('Taskuri over the paged lists (#1053)', () => {
 
   it('opens on De gestionat when the Member manages only finished Tasks (B17)', () => {
     manages();
-    listReads.summary.mockReturnValue({
-      data: [
-        {
-          group_id: 1,
-          campaign_id: null,
-          status: 'completed',
-          late: false,
-          dated: true,
-          tasks: 3,
-        },
-      ],
-      isError: false,
-    });
+    holding('managed');
     hooks.useTaskOpportunities.mockReturnValue({
       data: [taskRow({ id: 4, assignments: [] })],
       ...settled,
@@ -2273,19 +2283,7 @@ describe('Taskuri over the paged lists (#1053)', () => {
       listReads.prefetch.mock.calls.filter(([, , enabled]) => enabled);
     /** De gestionat holds finished Tasks only, so it opens once known. */
     function holdsFinished() {
-      listReads.summary.mockReturnValue({
-        data: [
-          {
-            group_id: 10,
-            campaign_id: null,
-            status: 'completed',
-            late: false,
-            dated: true,
-            tasks: 3,
-          },
-        ],
-        isError: false,
-      });
+      holding('managed');
     }
     afterEach(() => {
       preferences.pending = false;
@@ -2350,6 +2348,167 @@ describe('Taskuri over the paged lists (#1053)', () => {
     it('asks nothing early of a Member who manages nothing', () => {
       renderAt('/tracker');
       expect(askedEarly()).toEqual([]);
+    });
+  });
+
+  describe('Taskurile mele by the page (ruling R55)', () => {
+    const highlighted = () =>
+      document.querySelectorAll('article[data-highlighted]');
+    beforeEach(() => {
+      Element.prototype.scrollIntoView = vi.fn();
+      hooks.useMyTasks.mockReturnValue({
+        data: [taskRow({ id: 2, title: 'Al doilea task' })],
+        ...settled,
+      });
+    });
+
+    // Fails if a link to a finished Task of the Member's goes elsewhere: its
+    // open rows no longer hold it, and De gestionat would claim it first.
+    it('lands a link to a finished Task of mine on Taskurile mele, its details sheet open', () => {
+      manages();
+      listReads.capability.mockReturnValue({ data: true, isError: false });
+      listReads.isMine.mockImplementation((taskId: number | null) => ({
+        data: taskId === 55 ? true : undefined,
+        isError: false,
+      }));
+      renderAt('/tracker?task=55');
+      expect(selected()).toBe('Taskurile mele');
+      expect(
+        screen.getByRole('dialog', { name: 'Detalii task' }),
+      ).toHaveTextContent('Task #55');
+      expect(listReads.isMine).toHaveBeenCalledWith(55, true);
+      expect(highlighted()).toHaveLength(0);
+    });
+
+    it('asks nothing when its open rows hold the linked Task, which lands highlighted', () => {
+      renderAt('/tracker?task=2');
+      expect(selected()).toBe('Taskurile mele');
+      expect(listReads.isMine).toHaveBeenLastCalledWith(2, false);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(
+        screen.getByRole('article', { name: 'Al doilea task' }),
+      ).toHaveAttribute('data-highlighted');
+    });
+
+    it('waits for the server before it lands a link its open rows do not hold', () => {
+      manages();
+      listReads.capability.mockReturnValue({ data: true, isError: false });
+      listReads.isMine.mockReturnValue({ data: undefined, isError: false });
+      renderAt('/tracker?task=55');
+      expect(screen.queryByRole('dialog', { name: 'Detalii task' })).toBeNull();
+      expect(selected()).toBe('Taskurile mele');
+    });
+
+    it('routes the link as before when the Task is not the Member’s, or that cannot be told', () => {
+      manages();
+      listReads.capability.mockReturnValue({ data: true, isError: false });
+      listReads.isMine.mockReturnValue({
+        data: undefined,
+        isError: true,
+        error: new Error('offline'),
+      });
+      renderAt('/tracker?task=55');
+      expect(selected()).toBe('De gestionat');
+      expect(
+        screen.getByRole('dialog', { name: 'Detalii task' }),
+      ).toHaveTextContent('Task #55');
+    });
+
+    // Fails if a Task another open list holds waits for the server: being
+    // open and outside Taskurile mele's open rows, it cannot be the Member's.
+    it('lands a link to an open managed Task on De gestionat without asking whether it is mine', () => {
+      manages([
+        taskRow({
+          id: 7,
+          title: 'De evaluat',
+          status: 'in_review',
+          assignments: [],
+        }),
+      ]);
+      listReads.isMine.mockReturnValue({ data: undefined, isError: false });
+      renderAt('/tracker?task=7');
+      expect(selected()).toBe('De gestionat');
+      expect(
+        screen.getByRole('dialog', { name: 'Detalii task' }),
+      ).toHaveTextContent('Task #7');
+      expect(listReads.isMine).not.toHaveBeenCalledWith(7, true);
+    });
+
+    it('lands a link to an Opportunity on Disponibile without asking whether it is mine', () => {
+      hooks.useTaskOpportunities.mockReturnValue({
+        data: orderOpportunities(
+          [
+            taskRow({
+              id: 15,
+              title: 'Distribuie story-ul',
+              assignment_mode: 'public',
+              assignments: [],
+            }),
+          ],
+          new Set([1]),
+        ),
+        isPending: false,
+        isError: false,
+      });
+      listReads.isMine.mockReturnValue({ data: undefined, isError: false });
+      renderAt('/tracker?task=15');
+      expect(selected()).toBe('Disponibile');
+      expect(
+        screen.getByRole('dialog', { name: 'Detalii task' }),
+      ).toHaveTextContent('Task #15');
+      expect(listReads.isMine).not.toHaveBeenCalledWith(15, true);
+    });
+
+    // Fails if the opening tab reads only the open rows: a Member whose own
+    // Tasks are all finished would open on De gestionat or Disponibile.
+    it('opens on Taskurile mele when it holds only finished Tasks', () => {
+      hooks.useMyTasks.mockReturnValue({ data: [], ...settled });
+      manages([taskRow({ id: 3, title: 'Al grupului' })]);
+      holding('mine');
+      renderAt('/tracker');
+      expect(selected()).toBe('Taskurile mele');
+      expect(listReads.summary).toHaveBeenCalledWith('mine', true);
+    });
+
+    // Fails if the page chooses while the summary is on its way: it would
+    // open on De gestionat and stay there.
+    it('waits for what Taskurile mele holds before choosing the opening tab', () => {
+      hooks.useMyTasks.mockReturnValue({ data: [], ...settled });
+      manages([taskRow({ id: 3, title: 'Al grupului' })]);
+      listReads.summary.mockImplementation((name: string) => ({
+        data: name === 'mine' ? undefined : [],
+        isError: false,
+      }));
+      const { rerender } = renderAt('/tracker');
+      holding('mine');
+      rerender(tree('/tracker'));
+      expect(selected()).toBe('Taskurile mele');
+    });
+
+    it('moves on when what Taskurile mele holds cannot be read', () => {
+      hooks.useMyTasks.mockReturnValue({ data: [], ...settled });
+      manages([taskRow({ id: 3, title: 'Al grupului' })]);
+      listReads.summary.mockImplementation((name: string) => ({
+        data: name === 'mine' ? undefined : [],
+        isError: name === 'mine',
+      }));
+      renderAt('/tracker');
+      expect(selected()).toBe('De gestionat');
+    });
+
+    // Fails if the list is drawn only once the open Tasks land: the finished
+    // read would wait for them.
+    it('asks for Taskurile mele’s finished Tasks beside its open ones', () => {
+      hooks.useMyTasks.mockReturnValue({
+        data: undefined,
+        isPending: true,
+        isError: false,
+      });
+      renderAt('/tracker');
+      expect(listReads.finished).toHaveBeenCalledWith('mine', {}, true);
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Se încarcă taskurile…',
+      );
     });
   });
 
