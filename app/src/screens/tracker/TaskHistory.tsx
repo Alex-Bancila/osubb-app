@@ -55,6 +55,8 @@ const fields: Record<string, string> = {
   link_url: 'Adresă link',
   // R46: an edit to the Attached Links records the whole list.
   links: 'Linkuri',
+  // R57: a public Task's Role.
+  min_level: 'Cine îl vede',
 };
 // #626's task_updated activity carries `details.changed`: the raw field
 // names an edit touched, in server order. Reused as the sentence's field

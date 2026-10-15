@@ -1,6 +1,8 @@
 import { FieldError } from '../../components/ui/field';
 import { InfoHint } from '../../components/ui/info-hint';
 import { SegmentedRadio } from '../../components/ui/segmented-radio';
+import { Select } from '../../components/ui/select';
+import type { MinimumLevelOption } from '../../lib/minimum-level';
 import type { useFormValidation } from '../../lib/use-form-validation';
 import {
   AUDIENCE_HINT,
@@ -113,6 +115,57 @@ export function AudienceField({
           {PRIVATE_GROUP_AUDIENCE_HINT}
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * **Cine îl vede** (R57), under Audiență while the mode is Public: the lowest
+ * Role that sees the Task and may join its queue. `locked` names a Role above
+ * the editor's own, which only someone at it may change: shown, not offered.
+ */
+export function MinimumLevelField({
+  id,
+  value,
+  choices,
+  locked,
+  onChange,
+  form,
+}: {
+  /** A `useId()` of the form. */
+  id: string;
+  value: number;
+  choices: readonly MinimumLevelOption[];
+  locked?: string;
+  onChange: (value: number) => void;
+  form: Bound;
+}) {
+  if (locked)
+    return (
+      <div className="grid gap-1.5">
+        <span className="text-sm font-medium">Cine îl vede</span>
+        <p className="m-0 text-sm text-muted-foreground">
+          De la {locked}. Doar cineva cu acest rol îl poate schimba.
+        </p>
+      </div>
+    );
+  return (
+    <div className="grid gap-1.5">
+      <label htmlFor={`${id}-min-level`} className="text-sm font-medium">
+        Cine îl vede
+      </label>
+      <Select
+        id={`${id}-min-level`}
+        name="min_level"
+        value={String(value)}
+        options={choices.map((choice) => ({
+          value: String(choice.level),
+          label: choice.label,
+        }))}
+        onValueChange={(level) => onChange(Number(level))}
+        {...form.field('minLevel')}
+      />
+      <FieldError {...form.errorProps('minLevel')} />
     </div>
   );
 }

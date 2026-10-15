@@ -90,6 +90,7 @@ describe('taskDraftInput', () => {
     campaignId: 12,
     links: [{ label: 'Brief', url: 'https://example.org' }],
     copies: '1',
+    minLevel: 0,
   };
   it('sends exactly the one chosen Group, the Campaign it shows and the links as typed', () => {
     expect(taskDraftInput(values, options)).toMatchObject({
@@ -128,5 +129,43 @@ describe('taskDraftInput', () => {
         options,
       ).audience,
     ).toBe('org');
+  });
+});
+
+describe('taskDraftInput: Cine îl vede (R57)', () => {
+  const publicOrg: TaskFormValues = {
+    title: 'Afișe',
+    description: '',
+    deadline: '2030-10-01T12:30',
+    groupId: 4,
+    kind: 'task',
+    parentTaskId: null,
+    audience: 'org',
+    assignmentMode: 'public',
+    executorId: null,
+    campaignId: null,
+    links: [],
+    copies: '1',
+    minLevel: 2,
+  };
+  const sent = (values: TaskFormValues, actorLevel: number) =>
+    taskDraftInput(values, options, actorLevel).minLevel;
+  it('sends the chosen Role while it is offered', () => {
+    expect(sent(publicOrg, 6)).toBe(2);
+  });
+  it('sends 0 for an Umbrella and for a direct Task, whatever was chosen', () => {
+    expect(sent({ ...publicOrg, kind: 'umbrella' }, 6)).toBe(0);
+    expect(sent({ ...publicOrg, assignmentMode: 'direct' }, 6)).toBe(0);
+  });
+  it('falls to the lowest choice when the chosen one is no longer offered', () => {
+    // Afișe mari (6) sits at Voluntar: a local Task there starts at Voluntar.
+    expect(
+      sent({ ...publicOrg, groupId: 6, audience: 'local', minLevel: 0 }, 6),
+    ).toBe(1);
+    // An actor at Voluntar cannot keep a Voluntar Activ choice.
+    expect(sent(publicOrg, 1)).toBe(0);
+  });
+  it('sends 0 when no Role is offered at all', () => {
+    expect(sent({ ...publicOrg, groupId: 6, audience: 'local' }, 0)).toBe(0);
   });
 });

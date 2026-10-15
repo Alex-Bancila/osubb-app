@@ -5,8 +5,9 @@
 -- private.can_read_task(id) for every row. They read four caller-scoped sets
 -- that Postgres computes once per statement: private.own_task_ids() (R2: the
 -- caller's Assignments and Candidatures, ever) and
--- private.task_read_groups('whole' | 'open' | 'org') (R1/R3/R4; R6-own;
--- R6-org). private.can_read_task stays: commands ask it about one Task, and it
+-- private.task_read_groups('whole' | 'shared' | 'open' | 'org') (R1/R3; R4;
+-- R6-own; R6-org -- since R57 the last three also need the Task's own
+-- Minimum Level, a test on the row). private.can_read_task stays: commands ask it about one Task, and it
 -- is the reference this suite holds the new rule to.
 --
 -- Parity: for every caller -- each Member in the database with live claims, a
@@ -43,7 +44,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(35);
+select plan(37);
 
 \ir _group_task_fixtures.psql
 reset role;
@@ -203,6 +204,13 @@ select pg_temp.tr_task('ml_org', 'MinLevel #TR', 'public', 'org');
 select pg_temp.tr_task('shh_direct', 'SharedHigh #TR', 'direct', 'local');
 select pg_temp.tr_task('sh_direct', 'Shared #TR', 'direct', 'local');
 select pg_temp.tr_task('auto_direct', 'Auto #TR', 'direct', 'local');
+-- R57: a Task's own Minimum Level above every Volunteer here, read through
+-- Shared Work Visibility (sh_high) and as an org Opportunity (open_org_high).
+select pg_temp.tr_task('sh_high', 'Shared #TR', 'public', 'local', p_queue_closed => true);
+select pg_temp.tr_task('open_org_high', 'Open #TR', 'public', 'org');
+select pg_temp.tr_task('open_local_high', 'Open #TR', 'public', 'local');
+update public.tasks set min_level = 2
+ where id in (select id from tr_tasks where name in ('sh_high', 'open_org_high', 'open_local_high'));
 -- A finished org Opportunity, and one taken by a Member (its Evaluation,
 -- Assignment and history are the child rows the parity reads).
 select pg_temp.g521_task('tr_done', 'dept', 5, 'completed', 'public');
@@ -292,12 +300,15 @@ select ok(pg_temp.tr_gid('Private #TR') = any(pg_temp.tr_set_as(pg_temp.tr_uid(3
           and not pg_temp.tr_gid('Private #TR') = any(pg_temp.tr_set_as(pg_temp.tr_uid(1), 'private.task_read_groups(''org'')'))
           and pg_temp.tr_gid('Open #TR') = any(pg_temp.tr_set_as(pg_temp.tr_uid(1), 'private.task_read_groups(''org'')')),
           'org: every Group the caller can see (R6-org); a Private Group only from inside');
-select is(pg_temp.tr_set_as(pg_temp.tr_uid(7), 'private.own_task_ids() || private.task_read_groups(''whole'') || private.task_read_groups(''open'') || private.task_read_groups(''org'')',
+select ok(pg_temp.tr_gid('Shared #TR') = any(pg_temp.tr_set_as(pg_temp.tr_uid(6), 'private.task_read_groups(''shared'')'))
+          and not pg_temp.tr_gid('Shared #TR') = any(pg_temp.tr_set_as(pg_temp.tr_uid(6), 'private.task_read_groups(''whole'')')),
+          'shared: Shared Work Visibility is its own set since R57, out of whole');
+select is(pg_temp.tr_set_as(pg_temp.tr_uid(7), 'private.own_task_ids() || private.task_read_groups(''whole'') || private.task_read_groups(''shared'') || private.task_read_groups(''open'') || private.task_read_groups(''org'')',
                             '{"member_role": "bc", "member_level": 6, "group_ids": []}'::jsonb),
-          '{}'::bigint[], 'a deactivated Member with stale claims gets four empty sets');
-select is(pg_temp.tr_set_as(pg_temp.tr_uid(1), 'private.own_task_ids() || private.task_read_groups(''whole'') || private.task_read_groups(''open'') || private.task_read_groups(''org'')',
+          '{}'::bigint[], 'a deactivated Member with stale claims gets five empty sets');
+select is(pg_temp.tr_set_as(pg_temp.tr_uid(1), 'private.own_task_ids() || private.task_read_groups(''whole'') || private.task_read_groups(''shared'') || private.task_read_groups(''open'') || private.task_read_groups(''org'')',
                             '{}'::jsonb),
-          '{}'::bigint[], 'a caller without organization claims gets four empty sets');
+          '{}'::bigint[], 'a caller without organization claims gets five empty sets');
 
 -- ------------------------------------------------------- the named branches
 create function pg_temp.tr_reads(p_n integer, p_task text, p_meta jsonb default null) returns boolean
@@ -312,6 +323,10 @@ select ok(pg_temp.tr_reads(3, 'pv_org') and not pg_temp.tr_reads(1, 'pv_org'),
 select ok(pg_temp.tr_reads(1, 'open_org') and not pg_temp.tr_reads(1, 'open_local')
           and not pg_temp.tr_reads(1, 'open_closed') and not pg_temp.tr_reads(1, 'open_direct'),
           'R6-org: an open org Opportunity, not a local one, a closed queue or a direct Task');
+select ok(pg_temp.tr_reads(6, 'sh_direct') and not pg_temp.tr_reads(6, 'sh_high')
+          and pg_temp.tr_reads(1, 'open_org') and not pg_temp.tr_reads(1, 'open_org_high')
+          and pg_temp.tr_reads(8, 'open_local') and not pg_temp.tr_reads(8, 'open_local_high'),
+          'R57: R4, R6-org and R6-own stop below a Task''s own Minimum Level');
 select ok(not pg_temp.tr_reads(6, 'tr_done'),
           'a finished org Opportunity is no Opportunity');
 select ok(pg_temp.tr_reads(4, 'ml_direct') and pg_temp.tr_reads(4, 'ml_local'),

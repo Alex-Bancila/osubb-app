@@ -13,9 +13,11 @@ import { keys } from './keys';
  */
 export type TaskInterestResult = { position: number };
 export type TaskInterestErrorKind =
-  'forbidden' | 'conflict' | 'invalid' | 'unknown';
+  'forbidden' | 'level' | 'conflict' | 'invalid' | 'unknown';
 const messages: Record<TaskInterestErrorKind, string> = {
   forbidden: 'Nu mai poți participa la acest task.',
+  // R57: the Task's Cine îl vede is above the Member's Role.
+  level: 'Taskul e doar pentru un rol mai mare decât al tău.',
   conflict: 'Taskul s-a schimbat. Lista a fost actualizată.',
   invalid: 'Nu te poți înscrie la acest task în starea curentă.',
   unknown:
@@ -28,15 +30,20 @@ export class TaskInterestError extends Error {
     this.kind = kind;
   }
 }
-export function taskInterestError(code?: string): TaskInterestError {
+export function taskInterestError(
+  code?: string,
+  message?: string,
+): TaskInterestError {
   return new TaskInterestError(
-    code === '42501'
-      ? 'forbidden'
-      : code === 'PT409' || code === 'PT404'
-        ? 'conflict'
-        : code === 'PT400'
-          ? 'invalid'
-          : 'unknown',
+    message === 'task_level_forbidden'
+      ? 'level'
+      : code === '42501'
+        ? 'forbidden'
+        : code === 'PT409' || code === 'PT404'
+          ? 'conflict'
+          : code === 'PT400'
+            ? 'invalid'
+            : 'unknown',
   );
 }
 
@@ -94,7 +101,7 @@ export async function expressTaskInterest(
   const { error } = await supabase.rpc('express_task_interest', {
     p_task_id: taskId,
   });
-  if (error) throw taskInterestError(error.code);
+  if (error) throw taskInterestError(error.code, error.message);
   const candidate = await fetchOwnCandidature(taskId, memberId);
   if (candidate?.status === 'pending') {
     const position = await fetchOwnQueuePosition(taskId);

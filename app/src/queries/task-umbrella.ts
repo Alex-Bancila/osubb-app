@@ -29,6 +29,8 @@ export async function createTask(draft: TaskDraft) {
     p_deadline: draft.deadline,
     // R46: the Attached Links, complete rows only (none is `[]`).
     p_links: draft.links,
+    // R57: Cine îl vede (0 for a direct Task and an Umbrella).
+    p_min_level: draft.minLevel,
   };
   // PostgreSQL accepts NULL for the optional values (an Umbrella has no mode,
   // audience, Executor or Campaign). Generated RPC argument types omit
@@ -101,6 +103,7 @@ export function createTasksArgs({ draft, executorIds }: CreateTasksInput) {
     p_deadline: draft.deadline,
     p_links: draft.links,
     p_copies: draft.copies,
+    p_min_level: draft.minLevel,
   };
 }
 

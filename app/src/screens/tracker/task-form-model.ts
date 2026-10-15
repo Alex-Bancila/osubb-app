@@ -1,6 +1,7 @@
 import { bucharestWallTimeToIso } from '../../lib/calendar-time';
 import type { AttachedLinkValue } from '../../components/attached-link/AttachedLinkFields';
 import type { AttachedLink } from '../../lib/schemas/attached-link';
+import { taskMinimumLevelChoices } from '../../lib/minimum-level';
 import type { TaskDraftInput } from '../../lib/schemas/task';
 
 export type ManagedWorkGroup = {
@@ -34,6 +35,9 @@ export type TaskDraft = {
   copies: number;
   /** The Attached Links (ruling R46): complete rows only, at most five. */
   links: AttachedLink[];
+  /** **Cine îl vede** (R57): the lowest Level that sees a public Task and may
+   *  join its queue; 0 for a direct Task and an Umbrella. */
+  minLevel: number;
 };
 export type TaskFormValues = {
   title: string;
@@ -50,6 +54,8 @@ export type TaskFormValues = {
   copies: string;
   /** The Attached Links as typed, one row each (R46). */
   links: AttachedLinkValue[];
+  /** **Cine îl vede** as chosen (R57); `taskDraftInput` decides what is sent. */
+  minLevel: number;
 };
 
 /**
@@ -174,6 +180,8 @@ export function campaignsFor(
 export function taskDraftInput(
   values: TaskFormValues,
   options: TaskFormOptions,
+  /** The actor's Level, which caps **Cine îl vede** (0 when unknown). */
+  actorLevel = 0,
 ): TaskDraftInput {
   const origin = originFor(values, options);
   const umbrella = values.kind === 'umbrella';
@@ -218,5 +226,17 @@ export function taskDraftInput(
         ? Number.NaN
         : Number(values.copies),
     links: values.links,
+    // R57: only an ordinary public Task has a queue to gate; a choice no
+    // longer offered (another Group, another Audience) falls to the lowest.
+    minLevel: (() => {
+      if (umbrella || values.assignmentMode !== 'public') return 0;
+      const audience = isPrivateGroup(origin?.id, options)
+        ? 'local'
+        : values.audience;
+      const choices = taskMinimumLevelChoices(origin, audience, actorLevel);
+      return choices.some((rung) => rung.level === values.minLevel)
+        ? values.minLevel
+        : (choices[0]?.level ?? 0);
+    })(),
   };
 }

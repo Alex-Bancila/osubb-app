@@ -182,6 +182,7 @@ describe('Taskuri', () => {
       assignment_mode: 'public',
       audience: 'org',
     }),
+    min_level: 0,
     assignments: [],
     evaluations: [],
     submission: [],

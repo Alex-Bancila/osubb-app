@@ -48,7 +48,16 @@ import {
 import { useTaskFormOptions } from '../../queries/task-form-options';
 import type { TaskPresentationRow } from './task-presentation';
 import { TaskGroupCascade } from './TaskGroupCascade';
-import { AssignmentModeField, AudienceField } from './TaskModeFields';
+import {
+  AssignmentModeField,
+  AudienceField,
+  MinimumLevelField,
+} from './TaskModeFields';
+import { useMemberLevel } from '../../lib/auth';
+import {
+  minimumLevelText,
+  taskMinimumLevelChoices,
+} from '../../lib/minimum-level';
 import {
   campaignsFor,
   groupLookup,
@@ -210,6 +219,16 @@ function TaskEditForm({
     task.audience === 'org' ? 'org' : 'local',
   );
   const [groupId, setGroupId] = useState(task.group_id);
+  // R57: the Task's Cine îl vede. A row that does not carry it (an older
+  // cache) neither shows nor sends it, so an edit never lowers it by accident.
+  const actorLevel = useMemberLevel();
+  const storedRole: number | null =
+    typeof task.min_level === 'number' ? task.min_level : null;
+  const [minLevel, setMinLevel] = useState(storedRole ?? 0);
+  // Until the manager picks a Role, the edit keeps the stored one exactly:
+  // a Task stored below its Group's floor (every Task before R57) is not
+  // "changed" by opening the form (final review of R57).
+  const [roleTouched, setRoleTouched] = useState(false);
   const [initialLinks] = useState(() => attachedLinksFrom(task.links));
   const [links, setLinks] = useState(initialLinks);
   const locked = groupLock(task);
@@ -243,6 +262,33 @@ function TaskEditForm({
         ? (bucharestWallTimeToIso(value) ?? '')
         : null;
   }
+  const roleChoices = taskMinimumLevelChoices(
+    group,
+    localOnly ? 'local' : audience,
+    actorLevel,
+  );
+  // Only someone at or above a Role changes it (the Moderator's 9 excepted).
+  const lockedRole =
+    storedRole !== null && actorLevel < 9 && storedRole > actorLevel
+      ? minimumLevelText(storedRole)
+      : undefined;
+  const sentRole: number | null = umbrella
+    ? null
+    : assignmentMode === 'direct'
+      ? 0
+      : storedRole === null
+        ? null
+        : lockedRole || !roleTouched
+          ? storedRole
+          : roleChoices.some((rung) => rung.level === minLevel)
+            ? minLevel
+            : (roleChoices[0]?.level ?? 0);
+  // What the field shows: the Role the Task reaches at (a stored value below
+  // the offered list reads as the lowest choice, which is what gates it).
+  const shownRole =
+    sentRole !== null && roleChoices.some((rung) => rung.level === sentRole)
+      ? sentRole
+      : (roleChoices[0]?.level ?? sentRole ?? 0);
   const values: TaskUpdateValues = {
     groupId,
     title,
@@ -258,6 +304,7 @@ function TaskEditForm({
         ? 'local'
         : audience,
     links,
+    minLevel: sentRole,
   };
   const form = useFormValidation(
     taskUpdateSchema({
@@ -276,7 +323,8 @@ function TaskEditForm({
     (!umbrella &&
       (campaignId !== task.campaign_id ||
         values.assignmentMode !== task.assignment_mode ||
-        values.audience !== task.audience));
+        values.audience !== task.audience ||
+        (values.minLevel !== null && values.minLevel !== (storedRole ?? 0))));
 
   async function save(update: TaskUpdateInput, acceptConsequences: boolean) {
     try {
@@ -491,6 +539,19 @@ function TaskEditForm({
                   value={audience}
                   localOnly={localOnly}
                   onChange={setAudience}
+                  form={form}
+                />
+              )}
+              {assignmentMode === 'public' && storedRole !== null && (
+                <MinimumLevelField
+                  id={id}
+                  value={shownRole}
+                  choices={roleChoices}
+                  locked={lockedRole}
+                  onChange={(level) => {
+                    setRoleTouched(true);
+                    setMinLevel(level);
+                  }}
                   form={form}
                 />
               )}

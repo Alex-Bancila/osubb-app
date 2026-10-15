@@ -74,6 +74,7 @@ export type TaskListRpcRow = {
   review_round: number;
   assignment_mode: string | null;
   audience: string | null;
+  min_level: number;
   kind: string;
   parent_task_id: number | null;
   campaign_id: number | null;

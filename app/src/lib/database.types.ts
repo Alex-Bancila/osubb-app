@@ -2495,6 +2495,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -2527,6 +2528,7 @@ export type Database = {
           link_label?: string | null
           link_url?: string | null
           links?: Json
+          min_level?: number
           parent_task_id?: number | null
           queue_closed_at?: string | null
           queue_opened_at?: string | null
@@ -2559,6 +2561,7 @@ export type Database = {
           link_label?: string | null
           link_url?: string | null
           links?: Json
+          min_level?: number
           parent_task_id?: number | null
           queue_closed_at?: string | null
           queue_opened_at?: string | null
@@ -2972,6 +2975,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3075,6 +3079,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3144,6 +3149,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3185,6 +3191,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3274,6 +3281,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3326,6 +3334,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3469,6 +3478,7 @@ export type Database = {
           p_link_label?: string
           p_link_url?: string
           p_links?: Json
+          p_min_level?: number
           p_parent_task_id?: number
           p_title: string
         }
@@ -3491,6 +3501,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3523,6 +3534,7 @@ export type Database = {
           p_group_id?: number
           p_kind?: string
           p_links?: Json
+          p_min_level?: number
           p_parent_task_id?: number
           p_title: string
         }
@@ -3545,6 +3557,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3630,6 +3643,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3680,6 +3694,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3721,6 +3736,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -3843,6 +3859,7 @@ export type Database = {
           link_url: string
           links: Json
           member_id: string
+          min_level: number
           parent_task_id: number
           parent_task_title: string
           queue_closed_at: string
@@ -3903,6 +3920,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -4041,6 +4059,7 @@ export type Database = {
           p_link_label?: string
           p_link_url?: string
           p_links?: Json
+          p_min_level?: number
           p_task_id: number
           p_title: string
         }
@@ -4231,6 +4250,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -4276,6 +4296,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -4343,6 +4364,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -4561,6 +4583,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -4625,6 +4648,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -4671,6 +4695,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -4722,6 +4747,7 @@ export type Database = {
           id: number
           kind: string
           links: Json
+          min_level: number
           my_candidature: string
           parent_task_id: number
           queue_closed_at: string
@@ -4954,6 +4980,7 @@ export type Database = {
           p_link_label?: string
           p_link_url?: string
           p_links?: Json
+          p_min_level?: number
           p_task_id: number
           p_title: string
         }
@@ -4976,6 +5003,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null
@@ -5047,6 +5075,7 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           links: Json
+          min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
           queue_opened_at: string | null

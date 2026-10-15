@@ -24,7 +24,12 @@ import {
   ComboboxValue,
 } from '../../components/ui/combobox';
 import { SegmentedRadio } from '../../components/ui/segmented-radio';
-import { AssignmentModeField, AudienceField } from './TaskModeFields';
+import {
+  AssignmentModeField,
+  AudienceField,
+  MinimumLevelField,
+} from './TaskModeFields';
+import { taskMinimumLevelChoices } from '../../lib/minimum-level';
 import {
   MAX_TASK_COPIES,
   fieldForReason,
@@ -88,9 +93,12 @@ export function TaskForm({
   cancelLabel = 'Renunță',
   status,
   plural = 'taskuri',
+  actorLevel = 0,
 }: {
   options: TaskFormOptions;
   onDraft: (draft: TaskDraft) => void | Promise<void>;
+  /** The actor's Level: **Cine îl vede** never offers a Role above it (R57). */
+  actorLevel?: number;
   parentTaskId?: number | null;
   /** False where a Subtask cannot be started (it is created from its Umbrella). */
   allowSubtask?: boolean;
@@ -121,12 +129,13 @@ export function TaskForm({
       campaignId: null,
       links: [],
       copies: '1',
+      minLevel: 0,
     };
   });
   const schema = useMemo(() => taskDraftSchema(options), [options]);
   const form = useFormValidation(
     schema,
-    taskDraftInput(values, options),
+    taskDraftInput(values, options, actorLevel),
     fieldForReason,
   );
   const groupsById = useMemo(() => groupLookup(options), [options]);
@@ -387,6 +396,20 @@ export function TaskForm({
               value={values.audience}
               localOnly={localOnly}
               onChange={(audience) => update({ audience })}
+              form={form}
+            />
+          )}
+          {values.assignmentMode === 'public' && values.kind !== 'umbrella' && (
+            <MinimumLevelField
+              id={id}
+              // What is sent: a choice no longer offered shows the lowest.
+              value={taskDraftInput(values, options, actorLevel).minLevel}
+              choices={taskMinimumLevelChoices(
+                origin,
+                localOnly ? 'local' : values.audience,
+                actorLevel,
+              )}
+              onChange={(minLevel) => update({ minLevel })}
               form={form}
             />
           )}

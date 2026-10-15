@@ -120,6 +120,26 @@ describe('Available work ordering (ruling R26)', () => {
     ]);
   });
 
+  it('offers the join only at or above the Task’s Role, a pending Candidature excepted (R57)', () => {
+    const rows = [
+      taskRow({ id: 10, group_id: 99, audience: 'org', min_level: 2 }),
+      taskRow({ id: 11, group_id: 10, audience: 'local', min_level: 2 }),
+      taskRow({ id: 12, group_id: 99, audience: 'org', min_level: 1 }),
+    ];
+    expect(
+      orderOpportunities(rows, scopes, { level: 1 }).map((row) => row.id),
+    ).toEqual([12]);
+    expect(
+      orderOpportunities(rows, scopes, {
+        level: 1,
+        pending: new Set([10]),
+      }).map((row) => row.id),
+    ).toEqual([10, 12]);
+    expect(
+      orderOpportunities(rows, scopes, { level: 2 }).map((row) => row.id),
+    ).toEqual([10, 11, 12]);
+  });
+
   it('keeps a pending Candidature the Member cannot join, so they can withdraw', () => {
     const rows = [
       taskRow({ id: 8, group_id: 99, audience: 'local' }),
@@ -221,6 +241,7 @@ function available(overrides: Partial<TaskListRpcRow> = {}): TaskListRpcRow {
     review_round: 0,
     assignment_mode: 'public',
     audience: 'org',
+    min_level: 0,
     kind: 'task',
     parent_task_id: null,
     campaign_id: null,

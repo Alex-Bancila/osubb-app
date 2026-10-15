@@ -174,16 +174,16 @@ grant select on f327 to authenticated;
 
 select has_function('public', 'create_task',
   array['text', 'text', 'timestamptz', 'text', 'text',
-        'uuid', 'bigint', 'bigint', 'text', 'bigint', 'text', 'text', 'jsonb'],
-  'public.create_task exists with the pinned Group-only signature plus the #684 Attached Link pair and R46 p_links');
+        'uuid', 'bigint', 'bigint', 'text', 'bigint', 'text', 'text', 'jsonb', 'integer'],
+  'public.create_task exists with the pinned Group-only signature plus the #684 Attached Link pair, R46 p_links and R57 p_min_level');
 
 select is(pg_get_function_identity_arguments(
-    'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text,jsonb)'::regprocedure),
-  'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_link_label text, p_link_url text, p_links jsonb',
+    'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text,jsonb,integer)'::regprocedure),
+  'p_title text, p_description text, p_deadline timestamp with time zone, p_audience text, p_assignment_mode text, p_executor_id uuid, p_campaign_id bigint, p_parent_task_id bigint, p_kind text, p_group_id bigint, p_link_label text, p_link_url text, p_links jsonb, p_min_level integer',
   'create_task exposes no actor parameter — the actor is always auth.uid()');
 
 select is(pg_get_function_result(
-    'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text,jsonb)'::regprocedure),
+    'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text,jsonb,integer)'::regprocedure),
   'tasks', 'create_task returns the created Task row');
 
 select ok(not (select procedure.prosecdef
@@ -217,15 +217,15 @@ select ok(coalesce((
 ), false), 'every function in the kit pins an empty search_path');
 
 select ok(has_function_privilege('authenticated',
-  'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text,jsonb)'::regprocedure,
+  'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text,jsonb,integer)'::regprocedure,
   'execute'), 'authenticated can execute public.create_task');
 
 select ok(not has_function_privilege('anon',
-  'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text,jsonb)'::regprocedure,
+  'public.create_task(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text,jsonb,integer)'::regprocedure,
   'execute'), 'anon cannot execute public.create_task');
 
 select ok(has_function_privilege('authenticated',
-  'private.create_task_impl(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text,jsonb)'::regprocedure,
+  'private.create_task_impl(text,text,timestamptz,text,text,uuid,bigint,bigint,text,bigint,text,text,jsonb,integer)'::regprocedure,
   'execute'), 'authenticated can execute private.create_task_impl');
 
 select ok(has_function_privilege('authenticated',

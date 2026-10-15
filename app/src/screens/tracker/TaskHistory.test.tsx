@@ -106,6 +106,25 @@ describe('Authorized Task timeline', () => {
     expect(screen.getByText('Atribuire: Publică')).toBeVisible();
     expect(screen.getByText('Campanie: #7')).toBeVisible();
   });
+  it('names a change of Cine îl vede (R57)', () => {
+    render(
+      <TaskTimeline
+        activity={[
+          activity({
+            kind: 'task_updated',
+            note: null,
+            details: {
+              changed: ['min_level'],
+              before: { min_level: 0 },
+              after: { min_level: 1 },
+              consequences: [],
+            },
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByText('Task actualizat: cine îl vede')).toBeVisible();
+  });
   it('labels a task_updated row with the changed fields and its consequences (#626, #646)', () => {
     render(
       <TaskTimeline

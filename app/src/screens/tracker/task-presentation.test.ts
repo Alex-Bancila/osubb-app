@@ -467,3 +467,20 @@ describe('Task Audience words (F-12)', () => {
     });
   });
 });
+
+describe('Cine îl vede (R57)', () => {
+  it('names a public Task’s Role, and nothing at Recrut', () => {
+    expect(
+      toTaskPresentation(
+        taskRow({ assignment_mode: 'public', audience: 'org', min_level: 1 }),
+        now,
+      ).minLevelLabel,
+    ).toBe('De la Voluntar');
+    expect(
+      toTaskPresentation(
+        taskRow({ assignment_mode: 'public', min_level: 0 }),
+        now,
+      ).minLevelLabel,
+    ).toBeNull();
+  });
+});

@@ -24,6 +24,7 @@ const draft: TaskDraft = {
   campaignId: null,
   links: [],
   copies: 1,
+  minLevel: 1,
 };
 
 describe('Umbrella commands', () => {
@@ -43,6 +44,7 @@ describe('Umbrella commands', () => {
       p_parent_task_id: 10,
       p_kind: 'task',
       p_links: [],
+      p_min_level: 1,
     });
   });
   it('creates a top-level direct Task with its Executor and Campaign', async () => {
@@ -68,6 +70,7 @@ describe('Umbrella commands', () => {
       p_parent_task_id: null,
       p_kind: 'task',
       p_links: [{ label: 'Brief', url: 'https://example.org/brief' }],
+      p_min_level: 1,
     });
   });
   it('creates an Umbrella with no mode, audience, Executor or Campaign', async () => {

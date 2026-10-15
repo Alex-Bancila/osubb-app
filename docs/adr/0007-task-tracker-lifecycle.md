@@ -14,6 +14,7 @@
 - **Amended:** 2026-10-14 — #1049 (ruling R53): the Legacy Import writes the pre-app Task Tracker history once, as terminal Tasks dated on their completion day with `legacy_migration` Evaluations; it is the second and last writer of Task Points and is closed after the run
 - **Amended:** 2026-10-14 — #1052, #1053 (ruling R54): a leadership Task list shows open work first and finished work after it, newest first and by the page; a list decides authority per Group and no page reads the finished Tasks whole
 - **Amended:** 2026-10-14 — ruling R55: Taskurile mele shows its open Tasks first and its finished Tasks after them, newest first and by the page, as R54 does for the leadership lists; Taskurile mele and Disponibile are read through the same list reader
+- **Amended:** 2026-10-14 — ruling R57: a public Task carries a Minimum Level (**Cine îl vede**); below it a Member does not see the Opportunity, does not see it through Shared Work Visibility and cannot join its queue; raising it removes the waiting Candidates and the Executor below it, as confirmed consequences; R26's "no Minimum Level gate" becomes "at or above the Task's Minimum Level"
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -217,3 +218,12 @@ Taskurile mele therefore has the two parts R54 gave the leadership lists:
 The title search and the Work Filter narrow both parts. The list has no **Stare** and no **Ordonează după**, and Grupuri preferate never narrows it (R43): it is the Member's own work. The Work Filter offers the Groups and Campaigns of the open Tasks and of the server's summary of the list (Rule W). A `?task=` link to one of the Member's finished Tasks opens its details on Taskurile mele.
 
 What the list holds is unchanged: the Tasks whose newest Assignment of the Member did not end in giving the Task up, being replaced, or being taken off it by an edit or a change of Group. **Disponibile** keeps its one band and its order; both lists are read through the list reader of R54 (`task_list('mine')`, `task_list('available')`), and Acasă reads only Taskurile mele's open Tasks.
+
+## Amendment (2026-10-14) — a public Task's Minimum Level (ruling R57)
+
+Alex asked for "a filter of role for every create that has the whole osubb as scope, because some things even though are designed for the entire ong, some require al least volunteer role". Since ruling R26 an organisation-wide Opportunity reached every active Member, a Recrut included, with no Minimum Level gate. Asked, he chose: every public Task gets the field (not only the organisation-wide ones), and below it the Task is hidden (spec `docs/superpowers/specs/2026-10-14-minimum-role-filter-design.md`).
+
+- **The field.** `tasks.min_level`, **Cine îl vede**, on an ordinary public Task: any Role for an organisation-wide Task, from the Group's Minimum Level up for a local one, never above its writer's Level. A direct Task and an Umbrella carry 0. Every existing Task got 0, so R26 holds until a Role is chosen.
+- **Who reads it.** The organisation-wide Opportunity rule, the Opportunities of one's own Group and Shared Work Visibility now also need the reader at or above the Task's Minimum Level, judged on the Task itself, also through its Umbrella. A Group Role on the path, BCE and above, and one's own Assignments and Candidatures read it as before. The Group card of an Opportunity follows the same rule.
+- **Joining.** Below the Task's Minimum Level, `express_task_interest` refuses `task_level_forbidden`, also for a reader through a Group Role or a past Candidature.
+- **Editing.** It is editable until review, like every field. Only an editor at or above both the stored and the new value changes it (the Moderator excepted), so nobody below a Role raises, lowers or clears it — making the Task Direct clears it. An unchanged value is never judged. Raising it removes the waiting Candidates and the Executor below it, as consequences the manager confirms, exactly as a move to a stricter Group does. The Executor's edit notice names "cine îl vede".

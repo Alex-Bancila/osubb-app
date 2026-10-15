@@ -81,6 +81,8 @@ export type OpportunityViewer = {
   pending?: ReadonlySet<number>;
   /** The viewer: a Task they execute is theirs, not an Opportunity. */
   memberId?: string;
+  /** The viewer's Level: a Task above it (R57) is not theirs to join. */
+  level?: number;
 };
 
 /**
@@ -95,7 +97,7 @@ export type OpportunityViewer = {
 export function orderOpportunities(
   rows: TaskPresentationRow[],
   memberships: TaskMemberships,
-  { pending = new Set(), memberId }: OpportunityViewer = {},
+  { pending = new Set(), memberId, level }: OpportunityViewer = {},
 ): Opportunity[] {
   return rows
     .filter(
@@ -109,7 +111,11 @@ export function orderOpportunities(
         relevant,
         // A pending Candidate keeps their controls after leaving the Group:
         // `withdraw_task_interest` checks no Audience, so they can still leave.
-        joinable: relevant || task.audience === 'org' || pending.has(task.id),
+        // R57: below the Task's Cine îl vede the server refuses the join.
+        joinable:
+          pending.has(task.id) ||
+          ((relevant || task.audience === 'org') &&
+            (level === undefined || (task.min_level ?? 0) <= level)),
       };
     })
     .filter((task) => task.joinable)
@@ -127,6 +133,7 @@ export function orderOpportunities(
  */
 export async function fetchTaskOpportunities(
   memberId: string,
+  level?: number,
 ): Promise<Opportunity[]> {
   const [groups, rows] = await Promise.all([
     fetchMyGroups(),
@@ -138,15 +145,21 @@ export async function fetchTaskOpportunities(
   return orderOpportunities(rows.map(taskListRow), memberGroupIds(groups), {
     pending,
     memberId,
+    level,
   });
 }
 
 /** Disponibile, labelled like every other list. */
 export function useTaskOpportunities(): ListRead<Opportunity> {
-  const memberId = useAuth().session?.user.id;
+  const { session, claims } = useAuth();
+  const memberId = session?.user.id;
+  // R57: a Task above the viewer's Role is not theirs to join.
+  const level = claims?.member_level;
   const query = useQuery({
     queryKey: keys.tasks.available(memberId),
-    queryFn: memberId ? () => fetchTaskOpportunities(memberId) : skipToken,
+    queryFn: memberId
+      ? () => fetchTaskOpportunities(memberId, level)
+      : skipToken,
   });
   return useLabelledRead(query);
 }

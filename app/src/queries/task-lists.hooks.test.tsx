@@ -69,6 +69,7 @@ function row(id: number, total: number): TaskListRpcRow {
     review_round: 0,
     assignment_mode: 'direct',
     audience: 'local',
+    min_level: 0,
     kind: 'task',
     parent_task_id: null,
     campaign_id: null,

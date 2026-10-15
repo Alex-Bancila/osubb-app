@@ -176,6 +176,7 @@ describe('Task nou', () => {
       p_links: [],
       p_executor_ids: ['executor-1'],
       p_copies: 1,
+      p_min_level: 0,
       p_campaign_id: 7,
       p_audience: 'local',
       p_assignment_mode: 'direct',
@@ -204,6 +205,7 @@ describe('Task nou', () => {
       p_audience: 'org',
       p_executor_ids: null,
       p_copies: 1,
+      p_min_level: 0,
     });
   });
 
@@ -225,6 +227,7 @@ describe('Task nou', () => {
       p_links: [],
       p_executor_ids: null,
       p_copies: 1,
+      p_min_level: 0,
       p_campaign_id: null,
       p_audience: null,
       p_assignment_mode: null,

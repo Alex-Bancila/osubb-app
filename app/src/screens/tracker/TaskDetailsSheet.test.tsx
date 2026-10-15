@@ -230,6 +230,38 @@ describe('Task details sheet', () => {
     // Once: the sheet has no OSUBB chip beside the row (B20).
     expect(screen.queryByText('OSUBB')).toBeNull();
   });
+  it('shows Cine îl vede on a public Task above Recrut, and not at Recrut (R57)', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({
+          assignment_mode: 'public',
+          audience: 'org',
+          min_level: 2,
+        }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    const view = render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: TITLE });
+    const row = screen.getByText('Cine îl vede').closest('div') as HTMLElement;
+    expect(within(row).getByText('De la Voluntar Activ')).toBeVisible();
+    view.unmount();
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({
+          assignment_mode: 'public',
+          audience: 'org',
+          min_level: 0,
+        }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: TITLE });
+    expect(screen.queryByText('Cine îl vede')).toBeNull();
+  });
   it('shows the review round only to a manager, and only from round 1 (B20)', async () => {
     useTaskDetails.mockReturnValue({
       data: {

@@ -75,7 +75,7 @@ It does not apply to: one's own Assignment or Candidature, ever (R2); BCE, BC an
 **Editing** (`private.update_task_impl`, `private.preview_task_update_impl`, `private.plan_task_update`, `private.task_update_consequences`, public `update_task` and `preview_task_update`). Each takes `p_min_level integer default null`; null keeps the stored value, so an installed client that does not send it changes nothing. Like every Task field, it is editable until review (ADR-0007, 2026-09-21).
 
 - A Task made direct is stored at 0.
-- A changed value above the actor's own Level → `task_min_level_above_actor`. An unchanged one is never judged, so a manager below a Role set by BC can still edit the Task's other fields.
+- A change by an editor below the stored or the new value → `task_min_level_above_actor` (raising, lowering, or clearing it by making the Task Direct; the Moderator excepted). An unchanged one is never judged, so a manager below a Role set by BC can still edit the Task's other fields. _Tightened during the build after an automated security review: the first version only refused raising above the editor's Level._
 - **Raising it** adds two consequences to the shared definition. They are previewed, need `p_accept_consequences`, and are applied as the Group move applies them:
   - `candidate_removed` for each pending Candidate below the new value;
   - `executor_removed` for an active Executor below it, who loses the Assignment and leaves the Task To do with its queue intact (#682).
