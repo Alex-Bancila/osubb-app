@@ -241,6 +241,7 @@ function available(overrides: Partial<TaskListRpcRow> = {}): TaskListRpcRow {
     review_round: 0,
     assignment_mode: 'public',
     audience: 'org',
+    min_level: 0,
     kind: 'task',
     parent_task_id: null,
     campaign_id: null,
