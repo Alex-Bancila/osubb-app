@@ -88,7 +88,7 @@ export const EVENT_TYPE_CHOICES: ReadonlyArray<{
 ];
 
 /**
- * "Cine îl vede": the ladder rungs `events_min_level_ck` accepts, by Role name
+ * "Cine îl vede": the ladder rungs `events_min_level_ck` accepts (all six since R57), by Role name
  * (ruling R29b), from the Group's floor up to the actor's own level.
  */
 export function minimumLevelChoices(

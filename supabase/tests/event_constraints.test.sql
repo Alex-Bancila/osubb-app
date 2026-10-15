@@ -71,9 +71,9 @@ select is(
 
 select throws_ok(
   $$ insert into events (title, type, group_id, starts_at, min_level)
-     values ('Nivel invalid', 'sedinta', pg_temp.dept_group('org'), now(), 2) $$,
+     values ('Nivel invalid', 'sedinta', pg_temp.dept_group('org'), now(), 4) $$,
   '23514', 'new row for relation "events" violates check constraint "events_min_level_ck"',
-  'min_level rejects a value outside the ADR-0008 table');
+  'min_level rejects the retired level 4');
 
 select lives_ok(
   $$ insert into events (title, type, group_id, starts_at, min_level)

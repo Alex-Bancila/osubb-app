@@ -1,5 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
-import type { ComponentProps } from 'react';
+import { useMemo, type ComponentProps } from 'react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { MemoryRouter } from 'react-router';
@@ -49,7 +49,10 @@ import { PreferredGroupsScope } from '../../components/preferred-groups/Preferre
 import { ManagerTaskList as SearchedManagerTaskList } from './ManagerTaskList';
 import { useTitleSearch } from './use-title-search';
 import { compareManagedTasks } from './manager-task-list';
-import { toTaskPresentation } from './task-presentation';
+import {
+  toTaskPresentation,
+  type TaskPresentationRow,
+} from './task-presentation';
 
 /** The finished part as the list reads it; nothing unless a test says so. */
 function finishedRead(overrides: Partial<FinishedTasks> = {}): FinishedTasks {
@@ -61,6 +64,7 @@ function finishedRead(overrides: Partial<FinishedTasks> = {}): FinishedTasks {
     error: null,
     hasMore: false,
     isLoadingMore: false,
+    isFetching: false,
     moreFailed: false,
     loadMore: vi.fn(),
     refetch: vi.fn(),
@@ -157,18 +161,38 @@ const sixRows = [
   }),
 ];
 
-/** The list with the search the page hands it, and De gestionat's empty text. */
-function ManagerTaskList(
-  props: Pick<
-    ComponentProps<typeof SearchedManagerTaskList>,
-    'rows' | 'now' | 'onOpenTask'
-  >,
-) {
+type ListProps = ComponentProps<typeof SearchedManagerTaskList>;
+const NO_ROWS: readonly TaskPresentationRow[] = [];
+
+/**
+ * The list with the search the page hands it, and De gestionat's empty text.
+ * `rows` are its open Tasks, already read, unless `open` says how that read
+ * stands.
+ */
+function ManagerTaskList({
+  rows: openRows = NO_ROWS,
+  open,
+  ...props
+}: Pick<ListProps, 'now' | 'onOpenTask'> & {
+  rows?: readonly TaskPresentationRow[];
+  open?: ListProps['open'];
+}) {
   const search = useTitleSearch();
+  const read = useMemo(
+    () => ({
+      data: [...openRows],
+      isPending: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    }),
+    [openRows],
+  );
   return (
     <SearchedManagerTaskList
       {...props}
       list="managed"
+      open={open ?? read}
       search={search}
       empty="Nu ai taskuri de gestionat acum."
     />
@@ -643,6 +667,43 @@ describe('ManagerTaskList, the finished Tasks (#1053)', () => {
   ];
   const lastFinishedCall = () => lists.finished.mock.calls.at(-1) ?? [];
 
+  // Fails if the list asks for its finished part only once its open Tasks
+  // have landed (the page drew it only then before).
+  it('asks for them while the open Tasks are on their way, and draws neither part until those land', () => {
+    lists.finished.mockReturnValue(finishedRead({ rows: done, total: 2 }));
+    lists.summary.mockReturnValue({ data: held });
+    const loading = {
+      data: undefined,
+      isPending: true,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    };
+    const view = render(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList open={loading} now={now} />
+      </MemoryRouter>,
+    );
+    expect(lastFinishedCall()).toEqual(['managed', {}, true]);
+    expect(lists.summary).toHaveBeenLastCalledWith('managed', true);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Se încarcă taskurile…',
+    );
+    expect(
+      screen.queryByRole('region', { name: 'Taskuri încheiate' }),
+    ).toBeNull();
+    // The open Tasks land: both parts, in order.
+    view.rerender(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList rows={rows} now={now} />
+      </MemoryRouter>,
+    );
+    expect(titles()).toHaveLength(rows.length + done.length);
+    expect(
+      screen.getByRole('region', { name: 'Taskuri încheiate' }),
+    ).toBeVisible();
+  });
+
   it('draws them after the open Tasks, under their heading, and counts both', () => {
     lists.finished.mockReturnValue(finishedRead({ rows: done, total: 2 }));
     lists.summary.mockReturnValue({ data: held });
@@ -817,6 +878,128 @@ describe('ManagerTaskList, the finished Tasks (#1053)', () => {
     expect(screen.getByLabelText('Stare')).toBeVisible();
   });
 
+  // Fails if a failed summary read is silent: Stare and the Work Filter
+  // would offer only what the open rows hold, as if that were everything.
+  it('offers a retry where the choices would be when what the list holds cannot be read', async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn();
+    lists.summary.mockReturnValue({
+      data: undefined,
+      isError: true,
+      error: new Error('boom'),
+      refetch,
+    });
+    renderList('', vi.fn(), sixRows);
+    // The Tasks and the search are untouched.
+    expect(titles()).toHaveLength(sixRows.length);
+    expect(
+      screen.getByRole('searchbox', { name: 'Caută după titlu' }),
+    ).toBeEnabled();
+    const sheet = await openFilters(user);
+    expect(within(sheet).queryByLabelText('Stare')).toBeNull();
+    expect(
+      within(sheet).queryByRole('combobox', { name: 'Grup principal' }),
+    ).toBeNull();
+    const alert = within(sheet).getByRole('alert');
+    expect(alert).toHaveTextContent('Nu am putut încărca filtrele.');
+    await user.click(
+      within(alert).getByRole('button', { name: 'Încearcă din nou' }),
+    );
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps offering what it read when a later summary read fails', async () => {
+    const user = userEvent.setup();
+    lists.summary.mockReturnValue({
+      data: held,
+      isError: true,
+      error: new Error('offline'),
+      refetch: vi.fn(),
+    });
+    const open = rows.filter((row) => row.status !== 'completed');
+    renderList('', vi.fn(), open);
+    const sheet = await openFilters(user);
+    expect(within(sheet).queryByRole('alert')).toBeNull();
+    await chooseOption(user, within(sheet).getByLabelText('Stare'), 'Anulat');
+    expect(lastFinishedCall()[1]).toEqual({ p_state: 'cancelled' });
+  });
+
+  // Fails if the sheet offers the open rows' choices while what the list
+  // holds is first read, as if they were all of them.
+  it('holds the place of the choices while what the list holds is first read', async () => {
+    const user = userEvent.setup();
+    lists.summary.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isFetching: true,
+      isError: false,
+      error: null,
+      errorUpdateCount: 0,
+      refetch: vi.fn(),
+    });
+    renderList('', vi.fn(), sixRows);
+    expect(titles()).toHaveLength(sixRows.length);
+    const sheet = await openFilters(user);
+    expect(within(sheet).getByRole('status')).toHaveTextContent(
+      'Se încarcă filtrele…',
+    );
+    expect(within(sheet).queryByLabelText('Stare')).toBeNull();
+    expect(
+      within(sheet).queryByRole('combobox', { name: 'Grup principal' }),
+    ).toBeNull();
+    expect(within(sheet).queryByRole('alert')).toBeNull();
+  });
+
+  // Fails if a retry of the failed summary read takes the retry away: the
+  // read is pending again with no error, so the button would unmount, focus
+  // would leave the sheet's content, and the open rows' choices would show.
+  it('keeps the retry where it was, saying it retries, while the summary is asked again', async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn();
+    const failed = {
+      data: undefined,
+      isPending: false,
+      isFetching: false,
+      isError: true,
+      error: new Error('boom'),
+      errorUpdateCount: 1,
+      refetch,
+    };
+    lists.summary.mockReturnValue(failed);
+    const view = renderList('', vi.fn(), sixRows);
+    const sheet = await openFilters(user);
+    const retry = within(sheet).getByRole('button', {
+      name: 'Încearcă din nou',
+    });
+    await user.click(retry);
+    expect(refetch).toHaveBeenCalledTimes(1);
+    // The retry is on its way.
+    lists.summary.mockReturnValue({
+      ...failed,
+      isPending: true,
+      isFetching: true,
+      isError: false,
+      error: null,
+    });
+    view.rerender(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList rows={sixRows} now={now} />
+      </MemoryRouter>,
+    );
+    const alert = within(sheet).getByRole('alert');
+    expect(alert).toHaveTextContent('Nu am putut încărca filtrele.');
+    const retrying = within(alert).getByRole('button', {
+      name: 'Se reîncearcă…',
+    });
+    // The same button, still focused, takes no second press.
+    expect(retrying).toBe(retry);
+    expect(retrying).toHaveFocus();
+    expect(retrying).toHaveAttribute('aria-disabled', 'true');
+    await user.click(retrying);
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(within(sheet).queryByLabelText('Stare')).toBeNull();
+  });
+
   it('loads the next page from the button', async () => {
     const user = userEvent.setup();
     const loadMore = vi.fn();
@@ -913,6 +1096,37 @@ describe('ManagerTaskList, the finished Tasks (#1053)', () => {
     lists.finished.mockReturnValue(page({ hasMore: false }));
     again();
     expect(watching).toBe(0);
+    vi.unstubAllGlobals();
+  });
+
+  // Fails if the end is watched while the first page is read again after a
+  // change: coming into view, it would ask for page 2 on top of the old one.
+  it('watches the end of the list again only once the first page, read again, has landed', () => {
+    let watching = 0;
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        observe() {
+          watching += 1;
+        }
+        disconnect() {
+          watching -= 1;
+        }
+      },
+    );
+    lists.summary.mockReturnValue({ data: held });
+    const page = (overrides: Partial<FinishedTasks>) =>
+      finishedRead({ rows: done, total: 120, hasMore: true, ...overrides });
+    lists.finished.mockReturnValue(page({ isFetching: true }));
+    const view = renderList();
+    expect(watching).toBe(0);
+    lists.finished.mockReturnValue(page({}));
+    view.rerender(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList rows={rows} now={now} />
+      </MemoryRouter>,
+    );
+    expect(watching).toBe(1);
     vi.unstubAllGlobals();
   });
 

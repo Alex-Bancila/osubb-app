@@ -1,5 +1,9 @@
 import { useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import {
+  useQueryClient,
+  type InfiniteData,
+  type QueryClient,
+} from '@tanstack/react-query';
 import { keys } from './keys';
 
 /**
@@ -131,6 +135,26 @@ const FAMILIES_BY_TABLE: ReadonlyMap<string, readonly Prefix[]> = new Map<
 ]);
 
 /**
+ * The finished part of a Task list is read 50 at a time (#1053), and a
+ * refetch of an infinite query reads again every page it has loaded. Before
+ * `['tasks']` is invalidated, each finished part keeps only its first page,
+ * so a change costs one request per list; the next pages are read again as
+ * the Member scrolls to them. The first page stays on screen meanwhile.
+ */
+function keepFirstFinishedPages(queryClient: QueryClient) {
+  queryClient.setQueriesData<InfiniteData<unknown, unknown>>(
+    { queryKey: keys.tasks.finishedAll },
+    (data) =>
+      data && data.pages.length > 1
+        ? {
+            pages: data.pages.slice(0, 1),
+            pageParams: data.pageParams.slice(0, 1),
+          }
+        : undefined,
+  );
+}
+
+/**
  * Every change appears live (#961): the database broadcasts "table X
  * changed" on the private topic org:changes after every statement, and the
  * families that table feeds refetch through RLS. The payload is a table
@@ -156,6 +180,7 @@ export function useLiveChanges(memberId?: string) {
         }
       }
       pending.clear();
+      if (prefixes.has(keys.tasks.all)) keepFirstFinishedPages(queryClient);
       for (const queryKey of prefixes) {
         void queryClient.invalidateQueries({ queryKey });
       }
@@ -173,7 +198,9 @@ export function useLiveChanges(memberId?: string) {
             timer ??= setTimeout(flush, COALESCE_MS);
           },
           onResubscribe: () => {
-            if (active) void queryClient.invalidateQueries();
+            if (!active) return;
+            keepFirstFinishedPages(queryClient);
+            void queryClient.invalidateQueries();
           },
         });
       })
