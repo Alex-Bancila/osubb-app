@@ -38,10 +38,13 @@ import { useLiveChanges } from './live-changes';
 import {
   useFinishedTasks,
   useManagedTasks,
+  useMyTasksInRange,
   usePrefetchFinishedTasks,
   type FinishedFilters,
   type TaskListRpcRow,
 } from './task-lists';
+import { useTaskOpportunities } from './task-opportunities';
+import { useMyTasks } from './tasks';
 
 const edu = {
   id: 10,
@@ -76,6 +79,7 @@ function row(id: number, total: number): TaskListRpcRow {
     evaluations: [],
     submission: [],
     executor: null,
+    my_candidature: null,
     total,
   };
 }
@@ -401,5 +405,109 @@ describe('useManagedTasks', () => {
     });
     expect(rpc).not.toHaveBeenCalled();
     expect(result.current.data).toBeUndefined();
+  });
+});
+
+/** A client that never retries, to look into after a read. */
+const quietClient = () =>
+  new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+describe('useMyTasks (ruling R55)', () => {
+  // Fails if Taskurile mele reads more than its open Tasks (its finished
+  // ones are read by the page), or caches them anywhere but the key every
+  // reader of the Member's own Tasks shares.
+  it('reads the open Tasks of Taskurile mele in one request, labelled, under the Member’s key', async () => {
+    rpc.mockResolvedValue({
+      data: rows(1, 2, 2).map((task) => ({ ...task, status: 'todo' })),
+      error: null,
+    });
+    const client = quietClient();
+    const { result } = renderHook(() => useMyTasks(), {
+      wrapper: wrapper(client),
+    });
+    await waitFor(() => expect(result.current.data).toHaveLength(2));
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('task_list', {
+      p_list: 'mine',
+      p_finished: false,
+      p_limit: 500,
+      p_offset: 0,
+    });
+    expect(result.current.data?.[0]?.group?.name).toBe('Educațional');
+    expect(result.current.isPending).toBe(false);
+    expect(client.getQueryData(keys.tasks.mine('me'))).toHaveLength(2);
+  });
+});
+
+describe('useMyTasksInRange', () => {
+  const october = {
+    from: '2026-09-27T21:00:00.000Z',
+    to: '2026-11-01T22:00:00.000Z',
+  };
+
+  // Fails if the Calendar's month reads the Member's whole list, or only its
+  // open part: a finished Task keeps its deadline on the grid.
+  it('reads the Member’s Tasks of the month, open and finished, labelled', async () => {
+    rpc.mockResolvedValue({ data: rows(1, 3, 3), error: null });
+    const client = quietClient();
+    const { result } = renderHook(() => useMyTasksInRange(october), {
+      wrapper: wrapper(client),
+    });
+    await waitFor(() => expect(result.current.data).toHaveLength(3));
+    expect(rpc).toHaveBeenCalledWith('task_list', {
+      p_list: 'mine',
+      p_from: october.from,
+      p_to: october.to,
+      p_limit: 500,
+      p_offset: 0,
+    });
+    expect(result.current.data?.[0]?.group?.name).toBe('Educațional');
+    expect(
+      client.getQueryData(keys.tasks.mineRange('me', october)),
+    ).toHaveLength(3);
+  });
+
+  it('asks nothing without a range', () => {
+    const { result } = renderHook(() => useMyTasksInRange(null), {
+      wrapper: wrapper(),
+    });
+    expect(rpc).not.toHaveBeenCalled();
+    expect(result.current.data).toBeUndefined();
+  });
+});
+
+describe('useTaskOpportunities', () => {
+  // Fails if Disponibile's rows skip the labels every other list joins: a
+  // card would say "Origine indisponibilă" for a Group the Member reads.
+  it('labels the Opportunities like the other lists, under the Member’s key', async () => {
+    rpc.mockImplementation((name: string) =>
+      Promise.resolve(
+        name === 'my_groups'
+          ? { data: [], error: null }
+          : {
+              data: [
+                {
+                  ...row(4, 1),
+                  status: 'todo',
+                  assignment_mode: 'public',
+                  audience: 'org',
+                },
+              ],
+              error: null,
+            },
+      ),
+    );
+    const client = quietClient();
+    const { result } = renderHook(() => useTaskOpportunities(), {
+      wrapper: wrapper(client),
+    });
+    await waitFor(() => expect(result.current.data).toHaveLength(1));
+    expect(result.current.data?.[0]).toMatchObject({
+      id: 4,
+      relevant: false,
+      joinable: true,
+      group: { name: 'Educațional' },
+    });
+    expect(client.getQueryData(keys.tasks.available('me'))).toHaveLength(1);
   });
 });

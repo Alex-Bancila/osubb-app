@@ -1,23 +1,21 @@
 import { skipToken, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
-import { supabase } from '../lib/supabase';
-import { readAllRows } from './read-all';
 import { keys } from './keys';
 import { fetchMyGroups, memberGroupIds } from './my-groups';
-import { latestSubmissionOnly, TASK_PRESENTATION_FIELDS } from './tasks';
-import { attachVisibleTaskExecutors } from './task-executors';
+import {
+  readWholeTaskRows,
+  taskListRow,
+  useLabelledRead,
+  type ListRead,
+} from './task-lists';
 import type { TaskPresentationRow } from '../screens/tracker/task-presentation';
 
-/** The ids of the Groups this Member is a member of, from `my_groups()`. */
-export type TaskMemberships = ReadonlySet<number>;
-
 /**
- * Read live on every fetch of Available work, so an Appointment into a Group
- * makes its local Opportunities "own" on the next refetch, with no re-login.
+ * The ids of the Groups this Member is a member of, from `my_groups()`. Read
+ * live on every read of Disponibile, so an Appointment into a Group makes
+ * its local Opportunities "own" on the next read, with no re-login.
  */
-export async function fetchTaskMemberships(): Promise<TaskMemberships> {
-  return memberGroupIds(await fetchMyGroups());
-}
+export type TaskMemberships = ReadonlySet<number>;
 
 /**
  * Exact membership of the Task's own Group — never an ancestor or descendant
@@ -118,73 +116,37 @@ export function orderOpportunities(
     .sort(compareByDeadline);
 }
 
+/**
+ * Disponibile in two requests side by side (spec 2026-10-14, part 3): the
+ * Member's Groups, and `task_list('available')` — the open public
+ * Opportunities they read with a queue still open, and every Task they are a
+ * pending Candidate on, whatever its queue, so they can withdraw. Each row
+ * carries the Member's Candidature and the Task's Executor, so nothing more
+ * is asked. Which of them the Member can join is decided here
+ * (`orderOpportunities`); Grupuri preferate narrows them on the page (R43).
+ */
 export async function fetchTaskOpportunities(
   memberId: string,
 ): Promise<Opportunity[]> {
-  const [scopes, candidatures] = await Promise.all([
-    fetchTaskMemberships(),
-    // The pending ones only: a Member's every Candidature passes 500.
-    readAllRows((from, to) =>
-      supabase
-        .from('task_candidates')
-        .select('task_id')
-        .eq('member_id', memberId)
-        .eq('status', 'pending')
-        .order('id')
-        .range(from, to),
-    ),
+  const [groups, rows] = await Promise.all([
+    fetchMyGroups(),
+    readWholeTaskRows({ p_list: 'available', p_finished: false }),
   ]);
-
-  const pendingTaskIds = new Set(
-    candidatures.map((candidate) => candidate.task_id),
+  const pending = new Set(
+    rows.filter((row) => row.my_candidature === 'pending').map((row) => row.id),
   );
-  const openTasks = await readAllRows((from, to) =>
-    latestSubmissionOnly(
-      supabase.from('tasks').select(TASK_PRESENTATION_FIELDS),
-    )
-      .eq('kind', 'task')
-      .eq('assignment_mode', 'public')
-      .is('queue_closed_at', null)
-      .in('status', [...OPEN_TASK_STATUSES])
-      .order('id')
-      .range(from, to),
-  );
-  const pendingIds = [...pendingTaskIds];
-  const batches: number[][] = [];
-  for (let offset = 0; offset < pendingIds.length; offset += 100)
-    batches.push(pendingIds.slice(offset, offset + 100));
-  const queuedResults = await Promise.all(
-    batches.map((ids) =>
-      latestSubmissionOnly(
-        supabase.from('tasks').select(TASK_PRESENTATION_FIELDS),
-      )
-        .eq('kind', 'task')
-        .eq('assignment_mode', 'public')
-        .in('id', ids),
-    ),
-  );
-  const queuedTasks: TaskPresentationRow[] = [];
-  for (const result of queuedResults) {
-    if (result.error) throw result.error;
-    queuedTasks.push(...result.data);
-  }
-
-  // The server remains authoritative for both sets. The second query keeps a
-  // pending Candidate's Task after its queue closes, so they can withdraw.
-  const tasks = new Map<number, TaskPresentationRow>();
-  for (const task of [...openTasks, ...queuedTasks]) tasks.set(task.id, task);
-  return attachVisibleTaskExecutors(
-    orderOpportunities([...tasks.values()], scopes, {
-      pending: pendingTaskIds,
-      memberId,
-    }),
-  );
+  return orderOpportunities(rows.map(taskListRow), memberGroupIds(groups), {
+    pending,
+    memberId,
+  });
 }
 
-export function useTaskOpportunities() {
+/** Disponibile, labelled like every other list. */
+export function useTaskOpportunities(): ListRead<Opportunity> {
   const memberId = useAuth().session?.user.id;
-  return useQuery({
+  const query = useQuery({
     queryKey: keys.tasks.available(memberId),
     queryFn: memberId ? () => fetchTaskOpportunities(memberId) : skipToken,
   });
+  return useLabelledRead(query);
 }

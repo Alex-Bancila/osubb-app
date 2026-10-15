@@ -134,8 +134,17 @@ export const keys = {
       // The deadline range (#677); null while the Work Filter's is inverted.
       range: { p_from?: string; p_to?: string } | null = {},
     ) => ['tasks', 'member-history', memberId, targetId, range] as const,
+    /* Taskurile mele's OPEN Tasks (ruling R55): Acasă reads them too. */
     mine: (memberId: string | undefined) =>
       ['tasks', 'mine', { memberId }] as const,
+    /* The Member's own Tasks whose deadline is in a range: the Calendar's month. */
+    mineRange: (
+      memberId: string | undefined,
+      range: { from: string; to: string } | null,
+    ) => ['tasks', 'mine-range', { memberId }, range] as const,
+    /* Whether one Task is in Taskurile mele, finished or not: a `?task=` link. */
+    isMine: (taskId: number | null, memberId: string | undefined) =>
+      ['tasks', 'is-mine', { taskId, memberId }] as const,
     open: () => ['tasks', 'open'] as const,
     available: (memberId: string | undefined) =>
       ['tasks', 'available', { memberId }] as const,
@@ -155,18 +164,21 @@ export const keys = {
     /* The OPEN Tasks I manage (#1053): De gestionat, Acasă's De evaluat. */
     managed: (memberId: string | undefined) =>
       ['tasks', 'managed', { memberId }] as const,
-    /* The finished Tasks of a leadership list, by the page, under its filters. */
+    /* The finished Tasks of a list, by the page, under its filters:
+       De gestionat, Toate, Taskurile mele (Disponibile has none). */
     finished: (
       memberId: string | undefined,
-      list: 'managed' | 'all',
+      list: 'managed' | 'all' | 'mine',
       filters: Record<string, unknown>,
     ) => ['tasks', 'finished', { memberId, list }, filters] as const,
     /* Every finished part, whatever its list and filters: a live change
        keeps only their first pages (live-changes.ts). */
     finishedAll: ['tasks', 'finished'] as const,
-    /* What a leadership list holds: Groups, Campaigns, states, counts. */
-    summary: (memberId: string | undefined, list: 'managed' | 'all') =>
-      ['tasks', 'summary', { memberId, list }] as const,
+    /* What a list holds: Groups, Campaigns, states, counts. */
+    summary: (
+      memberId: string | undefined,
+      list: 'managed' | 'all' | 'mine' | 'available',
+    ) => ['tasks', 'summary', { memberId, list }] as const,
     /* The managed Tasks whose deadline is in a range: the Calendar's month. */
     managedRange: (
       memberId: string | undefined,
