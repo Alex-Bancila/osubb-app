@@ -39,7 +39,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(49);
+select plan(52);
 
 \ir _group_task_fixtures.psql
 reset role;
@@ -349,7 +349,7 @@ select is(
   '{}'::bigint[],
   'a caller without org claims is listed nothing');
 select is(
-  pg_temp.ids_as(pg_temp.g521_uid(1), $$select task_id from pg_temp.scope_tl('mine')$$),
+  pg_temp.ids_as(pg_temp.g521_uid(1), $$select task_id from pg_temp.scope_tl('nope')$$),
   '{}'::bigint[],
   'an unknown list is empty');
 
@@ -362,11 +362,11 @@ select ok(has_function_privilege('authenticated', 'public.task_list(text, boolea
       and not has_function_privilege('anon', 'public.task_list(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer)', 'execute')
       and not has_function_privilege('service_role', 'public.task_list(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer)', 'execute')
       and not has_function_privilege('anon', 'private.task_list_impl(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer)', 'execute')
-      and not has_function_privilege('authenticated', 'private.require_task_list_args(text, text, text, integer, integer)', 'execute'),
+      and not has_function_privilege('authenticated', 'private.require_task_list_args(text, boolean, text, text, integer, integer)', 'execute'),
   'only a signed-in Member calls task_list');
 select is(
   array[
-    pg_temp.reason_tl($$select * from public.task_list('mine')$$),
+    pg_temp.reason_tl($$select * from public.task_list('nope')$$),
     pg_temp.reason_tl($$select * from public.task_list(null)$$),
     pg_temp.reason_tl($$select * from public.task_list('managed', p_state => 'todo')$$),
     pg_temp.reason_tl($$select * from public.task_list('managed', p_sort => 'points')$$),
@@ -573,7 +573,7 @@ select is(
           is distinct from cardinality(pg_temp.ids_as(caller.id, $$select task_id from pg_temp.scope_tl('all')$$))),
   0::bigint,
   'for every caller the summary counts exactly the list');
-select is(pg_temp.reason_tl($$select * from public.task_list_summary('mine')$$), 'PT400 invalid_list',
+select is(pg_temp.reason_tl($$select * from public.task_list_summary('nope')$$), 'PT400 invalid_list',
   'the summary refuses an unknown list');
 
 -- ==================== leadership_filter_work ====================
@@ -691,6 +691,17 @@ select performs_ok($$select * from public.task_list('all', p_finished => true, p
   'a page of every Task answers without asking per Task');
 select performs_ok($$select * from public.leadership_filter_work()$$, 750,
   'the leadership filter work answers without reading every evaluated Task through RLS');
+reset role;
+-- The Member's lists (spec 2026-10-14 member reads): the Executor of the
+-- 6 000, a Volunteer -- the caller the managed set and the per-row
+-- embeds are decided for.
+select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
+select performs_ok($$select * from public.task_list('mine', p_finished => true, p_limit => 50, p_offset => 3000)$$, 750,
+  'a page of a Member''s 6 000 Tasks answers without asking per Task');
+select performs_ok($$select * from public.task_list_summary('mine')$$, 750,
+  'the summary of a Member''s 6 000 Tasks answers without asking per Task');
+select performs_ok($$select * from public.task_list('available')$$, 750,
+  'Disponibile answers beside 6 000 Tasks the Member reads');
 reset role;
 
 select * from finish();

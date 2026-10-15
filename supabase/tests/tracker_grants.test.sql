@@ -957,7 +957,7 @@ insert into pinned_private_functions (proname, args, category) values
   -- wrappers as the caller, like every _impl.
   ('fold_search',                        'p_text text',       'none'),
   ('task_list_scope',                    'p_list text',       'none'),
-  ('require_task_list_args',             'p_list text, p_state text, p_sort text, p_limit integer, p_offset integer', 'require'),
+  ('require_task_list_args',             'p_list text, p_finished boolean, p_state text, p_sort text, p_limit integer, p_offset integer', 'require'),
   ('task_list_impl',                     'p_list text, p_finished boolean, p_group_id bigint, p_campaign_id bigint, p_from timestamp with time zone, p_to timestamp with time zone, p_state text, p_search text, p_preferred boolean, p_sort text, p_limit integer, p_offset integer', 'impl'),
   ('task_list_summary_impl',             'p_list text',       'impl'),
   ('leadership_filter_work_impl',        '',                  'impl'),
