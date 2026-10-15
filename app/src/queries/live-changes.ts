@@ -3,6 +3,7 @@ import {
   useQueryClient,
   type InfiniteData,
   type QueryClient,
+  type QueryKey,
 } from '@tanstack/react-query';
 import { keys } from './keys';
 
@@ -84,10 +85,13 @@ const FAMILIES_BY_TABLE: ReadonlyMap<string, readonly Prefix[]> = new Map<
   ['events', [keys.events.all, keys.approvals.all]],
   ['event_attendance', [keys.events.all]],
   ['announcements', [keys.announcements.all, keys.approvals.all]],
-  // Reads are not a change to the Announcement: only its readers list. The
-  // reader's own feed and badge on their other devices follow anyway: #861
-  // marks their "Anunț nou" Notification read, and that UPDATE reaches them
-  // on the member-filtered notifications channel, which refreshes both.
+  // Reads are not a change to the Announcement: only its readers list. On
+  // the reader's other devices the counts follow at once: #861 marks their
+  // "Anunț nou" Notification read, and that UPDATE reaches them on the
+  // member-filtered notifications channel, which refreshes the badge and the
+  // feed's summary. The card itself shows the read at the feed's next read
+  // — a window focus once it is stale, or any change that reads it again —
+  // because an UPDATE never re-reads the pages the Member is reading (R56).
   ['announcement_reads', [ANNOUNCEMENT_READERS]],
   // R47: a team place changes who may do what.
   ['assignment_team', [keys.assignments.all, CAPABILITIES]],
@@ -135,15 +139,20 @@ const FAMILIES_BY_TABLE: ReadonlyMap<string, readonly Prefix[]> = new Map<
 ]);
 
 /**
- * The finished part of a Task list is read 50 at a time (#1053), and a
- * refetch of an infinite query reads again every page it has loaded. Before
- * `['tasks']` is invalidated, each finished part keeps only its first page,
- * so a change costs one request per list; the next pages are read again as
- * the Member scrolls to them. The first page stays on screen meanwhile.
+ * A list read by the page — the finished part of a Task list, 50 at a time
+ * (#1053) — is an infinite query, and a refetch of one reads again every
+ * page it has loaded. Before its family is invalidated, each such list under
+ * `queryKey` keeps only its first page, so a change costs one request per
+ * list; the next pages are read again as the Member scrolls to them. The
+ * first page stays on screen meanwhile.
+ *
+ * The Anunțuri feed (R56) is not cut: a Member reading its fifth page would
+ * lose their place over any Announcement, Group or roster changed anywhere.
+ * A change reads every page it has loaded again instead.
  */
-function keepFirstFinishedPages(queryClient: QueryClient) {
+function keepFirstPages(queryClient: QueryClient, queryKey: QueryKey) {
   queryClient.setQueriesData<InfiniteData<unknown, unknown>>(
-    { queryKey: keys.tasks.finishedAll },
+    { queryKey },
     (data) =>
       data && data.pages.length > 1
         ? {
@@ -153,6 +162,11 @@ function keepFirstFinishedPages(queryClient: QueryClient) {
         : undefined,
   );
 }
+
+/** Each list read by the page, beside the family whose change re-reads it. */
+const PAGED_LISTS: readonly (readonly [family: Prefix, pages: Prefix])[] = [
+  [keys.tasks.all, keys.tasks.finishedAll],
+];
 
 /**
  * Every change appears live (#961): the database broadcasts "table X
@@ -180,7 +194,8 @@ export function useLiveChanges(memberId?: string) {
         }
       }
       pending.clear();
-      if (prefixes.has(keys.tasks.all)) keepFirstFinishedPages(queryClient);
+      for (const [family, pages] of PAGED_LISTS)
+        if (prefixes.has(family)) keepFirstPages(queryClient, pages);
       for (const queryKey of prefixes) {
         void queryClient.invalidateQueries({ queryKey });
       }
@@ -199,7 +214,8 @@ export function useLiveChanges(memberId?: string) {
           },
           onResubscribe: () => {
             if (!active) return;
-            keepFirstFinishedPages(queryClient);
+            for (const [, pages] of PAGED_LISTS)
+              keepFirstPages(queryClient, pages);
             void queryClient.invalidateQueries();
           },
         });

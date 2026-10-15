@@ -68,8 +68,9 @@ select is((select count(*) from announcements where title = 'Ann pending #4700')
   'a third Member cannot read a pending Announcement');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.u47(1));
--- The badge is an invoker read: for anyone else the policy already hides the
--- row; for the author it is visible, and still never counts as unread.
+-- The badge counts through the feed's copy of announcements_read: for anyone
+-- else the row is not theirs to read; for the author it is visible, and
+-- still never counts as unread.
 select is(public.my_unread_announcements_count('announcement'),
   (select count(*)::int from announcements as a
     where a.kind = 'announcement' and a.approval_status = 'approved'

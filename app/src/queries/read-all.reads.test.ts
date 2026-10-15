@@ -7,8 +7,12 @@ vi.mock('../lib/supabase', async () => ({
 }));
 
 import {
+  ANNOUNCEMENT_PAGE,
+  announcementFeedQueryOptions,
+  fetchAnnouncementFeedPage,
   fetchAnnouncementReaders,
-  fetchAnnouncementsFeed,
+  type AnnouncementFeedPage,
+  type FeedPageParam,
 } from './announcements';
 import { fetchPendingCandidatureTasks } from './calendar-tasks';
 import { fetchCampaignReport } from './campaigns';
@@ -327,17 +331,28 @@ describe('Calendar', () => {
 });
 
 describe('Anunțuri and Deals', () => {
-  it('reads every Announcement', async () => {
-    postgrest.serve(
-      'announcements',
-      many((index) => ({ id: index })),
-    );
-    await expect(fetchAnnouncementsFeed()).resolves.toHaveLength(ROWS);
-    expect(orders(postgrest.requestsTo('announcements')[0])).toEqual([
-      ['pinned', { ascending: false }],
-      ['published_at', { ascending: false }],
-      ['id', { ascending: false }],
-    ]);
+  // R56: the feed is read 20 at a time, in the server's order; every
+  // Announcement past 500 is still reached, one page after another.
+  it('reaches every Announcement by the page, never reading the table whole', async () => {
+    const feed = many((index) => ({ id: index, read_at: null, total: ROWS }));
+    postgrest.serve('announcement_feed', (request) => {
+      const { p_limit, p_offset } = request.args as {
+        p_limit: number;
+        p_offset: number;
+      };
+      return feed.slice(p_offset, p_offset + p_limit);
+    });
+    const options = announcementFeedQueryOptions({}, 'member');
+    const pages: AnnouncementFeedPage[] = [];
+    let param: FeedPageParam | undefined = options.initialPageParam;
+    while (param !== undefined) {
+      const page = await fetchAnnouncementFeedPage({}, param);
+      pages.push(page);
+      param = options.getNextPageParam(page, pages);
+    }
+    expect(pages.flatMap((page) => page.rows)).toHaveLength(ROWS);
+    expect(pages).toHaveLength(Math.ceil(ROWS / ANNOUNCEMENT_PAGE));
+    expect(postgrest.requestsTo('announcements')).toEqual([]);
   });
 
   it('reads every reader of an Announcement for the whole organization', async () => {

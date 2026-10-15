@@ -37,13 +37,26 @@ export function useNotificationRealtime(memberId?: string) {
           });
           // #68 fans every Announcement out as a notification. The signal
           // carries no row (never read payloads), so any change refreshes the
-          // Anunțuri badge, and the feed if it is on screen, to match it.
+          // Anunțuri badge and what the page shows around its feed.
           void queryClient.invalidateQueries({
             queryKey: keys.announcements.unread(memberId),
           });
           void queryClient.invalidateQueries({
-            queryKey: keys.announcements.feed(memberId),
+            queryKey: keys.announcements.feedSummaryAll,
           });
+          // The feed is read by the page (R56): every page it has loaded is
+          // read again, and kept meanwhile, only when a new Announcement may
+          // have joined it, or after a reconnect that may have missed one.
+          // Anything else (this device marking one read comes back here as an
+          // UPDATE) leaves the pages the Member is reading as they are.
+          if (
+            change === undefined ||
+            (change.event === 'INSERT' && change.kind === 'announce')
+          ) {
+            void queryClient.invalidateQueries({
+              queryKey: keys.announcements.feedAll,
+            });
+          }
         });
       })
       .catch(() => undefined);

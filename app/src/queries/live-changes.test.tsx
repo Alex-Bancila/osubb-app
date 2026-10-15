@@ -16,6 +16,10 @@ vi.mock('../lib/supabase', async () => {
   return { supabase: supabaseClientMock };
 });
 
+import {
+  ANNOUNCEMENT_PAGE,
+  announcementFeedQueryOptions,
+} from './announcements';
 import { useLiveChanges } from './live-changes';
 import { FINISHED_PAGE, finishedTasksQueryOptions } from './task-lists';
 
@@ -192,6 +196,84 @@ describe('live change signals (#961)', () => {
       await waitFor(() => expect(result.current.isFetching).toBe(false));
       expect(taskListOffsets()).toEqual([0, 50, 100, 0]);
       expect(result.current.data?.pages).toHaveLength(1);
+    });
+  });
+
+  describe('the Anunțuri feed, read by the page (R56)', () => {
+    /** The `p_offset` of every `announcement_feed` request, in order. */
+    const feedOffsets = () =>
+      supabaseMock.rpc.mock.calls
+        .filter(([name]) => name === 'announcement_feed')
+        .map(([, args]) => (args as { p_offset: number }).p_offset);
+
+    /** The feed with three of its four pages loaded. */
+    async function threePagesLoaded() {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      );
+      // 80 Announcements, 20 a page.
+      supabaseMock.rpc.mockImplementation(
+        (_name: string, args: { p_offset: number }) =>
+          Promise.resolve({
+            data: Array.from({ length: ANNOUNCEMENT_PAGE }, (_, index) => ({
+              id: args.p_offset + index + 1,
+              read_at: null,
+              total: 80,
+            })),
+            error: null,
+          }),
+      );
+      const { result } = renderHook(
+        () => {
+          useLiveChanges(memberId);
+          return useInfiniteQuery(announcementFeedQueryOptions({}, memberId));
+        },
+        { wrapper },
+      );
+      await waitFor(() => expect(result.current.data?.pages).toHaveLength(1));
+      await act(() => result.current.fetchNextPage());
+      await waitFor(() => expect(result.current.data?.pages).toHaveLength(2));
+      await act(() => result.current.fetchNextPage());
+      await waitFor(() => expect(result.current.data?.pages).toHaveLength(3));
+      expect(feedOffsets()).toEqual([0, 20, 40]);
+      return result;
+    }
+
+    // Fails if a change cuts the feed to its first page: a Member reading
+    // card 55 would lose their place over any Announcement, Group or roster
+    // changed anywhere.
+    it('keeps every loaded page after a change and reads each again', async () => {
+      const result = await threePagesLoaded();
+      const { onChange } = await joined();
+
+      act(() =>
+        onChange({ payload: { table: 'announcements', op: 'INSERT' } }),
+      );
+
+      await waitFor(() => expect(feedOffsets()).toHaveLength(6));
+      await waitFor(() => expect(result.current.isFetching).toBe(false));
+      expect(feedOffsets()).toEqual([0, 20, 40, 0, 20, 40]);
+      expect(result.current.data?.pages).toHaveLength(3);
+    });
+
+    // Fails if a reconnect cuts the feed too.
+    it('keeps every loaded page after a reconnect too', async () => {
+      const result = await threePagesLoaded();
+      const { onStatus } = await joined();
+
+      act(() => onStatus('SUBSCRIBED'));
+      act(() => onStatus('CHANNEL_ERROR'));
+      act(() => onStatus('SUBSCRIBED'));
+
+      await waitFor(() => expect(feedOffsets()).toHaveLength(6));
+      await waitFor(() => expect(result.current.isFetching).toBe(false));
+      expect(feedOffsets()).toEqual([0, 20, 40, 0, 20, 40]);
+      expect(result.current.data?.pages).toHaveLength(3);
     });
   });
 

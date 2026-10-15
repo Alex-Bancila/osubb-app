@@ -1,4 +1,10 @@
-import { skipToken, useQuery } from '@tanstack/react-query';
+import {
+  queryOptions,
+  skipToken,
+  useQueries,
+  useQuery,
+  type UseQueryResult,
+} from '@tanstack/react-query';
 import type { MemberIdentity } from '../components/member/member-identity';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
@@ -35,14 +41,47 @@ export async function fetchMemberIdentities(
   return identities;
 }
 
-/** Read once per set of Members; the order of `memberIds` does not matter. */
-export function useMemberIdentities(memberIds: readonly string[]) {
-  const viewerId = useAuth().session?.user.id;
+/** The read of one set of Members, shared by every hook that asks for it. */
+function namesQuery(
+  viewerId: string | undefined,
+  memberIds: readonly string[],
+) {
   const ids = [...new Set(memberIds)].sort();
-  return useQuery({
+  return queryOptions({
     queryKey: keys.members.names(viewerId, ids),
     staleTime: 60_000,
     queryFn:
       viewerId && ids.length ? () => fetchMemberIdentities(ids) : skipToken,
+  });
+}
+
+/** Read once per set of Members; the order of `memberIds` does not matter. */
+export function useMemberIdentities(memberIds: readonly string[]) {
+  const viewerId = useAuth().session?.user.id;
+  return useQuery(namesQuery(viewerId, memberIds));
+}
+
+function everyAnswer(
+  results: UseQueryResult<Map<string, MemberIdentity>>[],
+): Map<string, MemberIdentity> {
+  const identities = new Map<string, MemberIdentity>();
+  for (const result of results)
+    for (const [memberId, identity] of result.data ?? [])
+      identities.set(memberId, identity);
+  return identities;
+}
+
+/**
+ * The Members of a list read by the page (Anunțuri's authors, R56): one read
+ * per page's set, so a page that lands asks only for its own Members and the
+ * names already drawn stay while it does. The map holds every answer so far.
+ */
+export function useMemberIdentitiesByPage(
+  pages: readonly (readonly string[])[],
+): Map<string, MemberIdentity> {
+  const viewerId = useAuth().session?.user.id;
+  return useQueries({
+    queries: pages.map((memberIds) => namesQuery(viewerId, memberIds)),
+    combine: everyAnswer,
   });
 }

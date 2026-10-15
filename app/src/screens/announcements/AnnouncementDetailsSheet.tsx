@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
 import { AttachedLinksList } from '../../components/attached-link/AttachedLinksList';
 import { EmptyState } from '../../components/layout';
+import { ErrorState } from '../../components/states';
 import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
 import {
@@ -50,6 +51,12 @@ type AnnouncementDetailsSheetProps = {
    * outside their Audience): the sheet opens and says so.
    */
   unavailable?: boolean;
+  /**
+   * A `?anunt=` link whose Announcement could not be read (the read failed,
+   * not refused): the sheet opens, says so and offers the retry. A retry
+   * that answers opens the Announcement in it.
+   */
+  failed?: { onRetry: () => void; retrying: boolean } | null;
   onClose: () => void;
   /**
    * The Announcement was deleted from this sheet (#930); the screen closes it
@@ -61,24 +68,32 @@ type AnnouncementDetailsSheetProps = {
 export default function AnnouncementDetailsSheet({
   announcement,
   unavailable = false,
+  failed = null,
   onClose,
   onDeleted = onClose,
 }: AnnouncementDetailsSheetProps) {
   // The sheet stays mounted so it slides in and out; while it closes it
   // keeps showing what it held.
-  const open = Boolean(announcement) || unavailable;
+  const open = Boolean(announcement) || unavailable || failed !== null;
   // R53: opening reads its Notifications, an "Anunț actualizat" included --
   // the read row may already exist, so its trigger alone cannot.
   useReadNotificationsAbout(
     announcement ? [`announcement:${announcement.id}`] : NO_SUBJECTS,
   );
-  const [held, setHeld] = useState({ announcement, unavailable });
+  const [held, setHeld] = useState({
+    announcement,
+    unavailable,
+    failed: failed !== null,
+  });
   if (
     open &&
-    (held.announcement !== announcement || held.unavailable !== unavailable)
+    (held.announcement !== announcement ||
+      held.unavailable !== unavailable ||
+      held.failed !== (failed !== null))
   )
-    setHeld({ announcement, unavailable });
+    setHeld({ announcement, unavailable, failed: failed !== null });
   const shown = open ? announcement : held.announcement;
+  const showFailed = open ? failed !== null : held.failed;
 
   return (
     <Sheet
@@ -92,6 +107,21 @@ export default function AnnouncementDetailsSheet({
         <SheetPopup side="bottom" className="gap-5 p-4 sm:max-w-2xl sm:p-6">
           {shown ? (
             <AnnouncementDetails announcement={shown} onDeleted={onDeleted} />
+          ) : showFailed ? (
+            <>
+              <SheetHeader>
+                <SheetTitle>Anunț</SheetTitle>
+                <SheetDescription className="sr-only">
+                  Anunțul din link nu a putut fi încărcat.
+                </SheetDescription>
+              </SheetHeader>
+              <ErrorState
+                text="Nu am putut încărca anunțul."
+                retryLabel="Reîncearcă"
+                onRetry={failed?.onRetry}
+                retrying={failed?.retrying ?? false}
+              />
+            </>
           ) : (
             <>
               <SheetHeader>
