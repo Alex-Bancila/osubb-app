@@ -55,11 +55,17 @@ export function ErrorState({
   error,
   text,
   retryLabel = 'Încearcă din nou',
+  retrying = false,
 }: {
   onRetry?: () => void;
   error?: unknown;
   text?: string;
   retryLabel?: string;
+  /**
+   * The retry is on its way. The button stays where it was and keeps focus,
+   * says so, and takes no second press, until the read answers.
+   */
+  retrying?: boolean;
 }) {
   if (import.meta.env.DEV && error) console.error('[query]', error);
 
@@ -69,8 +75,14 @@ export function ErrorState({
         {text ?? queryErrorMessage(error)}
       </p>
       {onRetry && (
-        <Button variant="outline" size="sm" onClick={onRetry}>
-          {retryLabel}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onRetry}
+          disabled={retrying}
+          focusableWhenDisabled
+        >
+          {retrying ? 'Se reîncearcă…' : retryLabel}
         </Button>
       )}
     </div>

@@ -161,6 +161,9 @@ export const keys = {
       list: 'managed' | 'all',
       filters: Record<string, unknown>,
     ) => ['tasks', 'finished', { memberId, list }, filters] as const,
+    /* Every finished part, whatever its list and filters: a live change
+       keeps only their first pages (live-changes.ts). */
+    finishedAll: ['tasks', 'finished'] as const,
     /* What a leadership list holds: Groups, Campaigns, states, counts. */
     summary: (memberId: string | undefined, list: 'managed' | 'all') =>
       ['tasks', 'summary', { memberId, list }] as const,

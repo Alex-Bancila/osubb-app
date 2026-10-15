@@ -1,3 +1,5 @@
+import type { WorkFilterParams } from '../../lib/work-filter';
+import type { FinishedFilters } from '../../queries/task-lists';
 import type { TaskPresentation } from './task-presentation';
 
 /** Today's nine Stare options: six statuses and three derived states. */
@@ -31,6 +33,39 @@ export function isFinishedState(state: string): state is FinishedState {
 /** A state only an open Task has: no finished Task can match it. */
 export function isOpenState(state: string): boolean {
   return state !== '' && !isFinishedState(state);
+}
+
+/**
+ * What the finished part of a leadership list is asked with (#1053): the
+ * Work Filter, the title search, Stare, Grupuri preferate and the order,
+ * applied by the server. `null` asks nothing: the dates are inverted, or
+ * Stare names a state only an open Task has. The list and the Tracker,
+ * which asks for the list's first page before drawing it, both build it
+ * here, so they name the same read; `state` and `sort` default to the
+ * list's opening ones.
+ */
+export function finishedListFilters({
+  params,
+  needle,
+  preferred,
+  state = '',
+  sort = 'deadline',
+}: {
+  params: WorkFilterParams | null;
+  needle: string;
+  /** Grupuri preferate narrows the list now (R43). */
+  preferred: boolean;
+  state?: string;
+  sort?: ManagerTaskSort;
+}): FinishedFilters | null {
+  if (!params || isOpenState(state)) return null;
+  return {
+    ...params,
+    ...(needle ? { p_search: needle } : {}),
+    ...(isFinishedState(state) ? { p_state: state } : {}),
+    ...(preferred ? { p_preferred: true } : {}),
+    ...(sort === 'title' ? { p_sort: sort } : {}),
+  };
 }
 
 /**

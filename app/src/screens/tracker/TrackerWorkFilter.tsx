@@ -4,7 +4,10 @@ import {
   FilterSearch,
   type FilterChip,
 } from '../../components/work-filter/FilterToolbar';
-import { WorkFilter } from '../../components/work-filter/WorkFilter';
+import {
+  WorkFilter,
+  type WorkFilterWorkRead,
+} from '../../components/work-filter/WorkFilter';
 import { formatTaskCount } from '../../lib/format';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import { workFilterChoices, type WorkItem } from '../../lib/work-filter';
@@ -34,6 +37,7 @@ export const trackerListClass = 'flex min-w-0 flex-col gap-4';
  */
 export function TrackerWorkFilter({
   rows,
+  rowsRead,
   search,
   count,
   disabled = false,
@@ -42,6 +46,12 @@ export function TrackerWorkFilter({
   extraChips,
 }: {
   rows: readonly WorkItem[];
+  /**
+   * Part of what the list holds has no answer yet (De gestionat's summary):
+   * the sheet waits for it, or offers a retry, instead of choices from
+   * `rows` alone.
+   */
+  rowsRead?: WorkFilterWorkRead;
   search: TitleSearch;
   /** How many Tasks the list shows now, named in the search's placeholder. */
   count?: number;
@@ -69,6 +79,7 @@ export function TrackerWorkFilter({
         error: options.error,
         onRetry: () => void options.refetch(),
       }}
+      workRead={rowsRead}
       groups={groups}
       campaigns={campaigns}
       work={rows}

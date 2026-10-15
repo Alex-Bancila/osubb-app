@@ -1,5 +1,10 @@
-import { useMemo } from 'react';
-import { skipToken, useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  skipToken,
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
@@ -290,15 +295,22 @@ export type ListRead<Row> = {
  * the app's shared reads (five minutes fresh), so a list costs one request.
  * It waits for them rather than flash "Origine indisponibilă"; if they fail,
  * the Tasks still show, unlabelled, as when RLS withholds a Group.
+ *
+ * It waits only until they first answer. A failed label read that is retried
+ * has neither data nor an error while it runs; the rows already on screen
+ * stay, unlabelled, until it lands, instead of going back to loading.
  */
 function useLabelled(
   rows: readonly TaskPresentationRow[] | undefined,
 ): TaskPresentationRow[] | undefined {
   const groups = useGroups();
   const campaigns = useCampaigns();
-  const ready =
+  const answered =
     (groups.data !== undefined || groups.isError) &&
     (campaigns.data !== undefined || campaigns.isError);
+  const [answeredOnce, setAnsweredOnce] = useState(false);
+  if (answered && !answeredOnce) setAnsweredOnce(true);
+  const ready = answered || answeredOnce;
   return useMemo(
     () =>
       rows && ready ? withLabels(rows, groups.data, campaigns.data) : undefined,
@@ -376,9 +388,16 @@ export type FinishedTasks = {
   isError: boolean;
   error: Error | null;
   hasMore: boolean;
+  /** The next page is on its way. */
   isLoadingMore: boolean;
+  /**
+   * Any read of the list is on its way: the first page, the first page read
+   * again after a change, or the next page. No next page is asked meanwhile.
+   */
+  isFetching: boolean;
   /** A later page failed; the rows read so far stay. */
   moreFailed: boolean;
+  /** Asks for the next page, unless a read is on its way. */
   loadMore: () => void;
   refetch: () => void;
 };
@@ -424,13 +443,44 @@ export function useFinishedTasks(
     error: firstFailed ? query.error : null,
     hasMore: asked && query.hasNextPage,
     isLoadingMore: query.isFetchingNextPage,
+    isFetching: asked && query.isFetching,
     moreFailed: query.isFetchNextPageError,
     loadMore: () => {
-      if (query.hasNextPage && !query.isFetchingNextPage)
-        void query.fetchNextPage();
+      // After a change the list keeps its first page and reads it again
+      // (live-changes.ts). A next page asked meanwhile would cancel that read
+      // and land on top of the old first page; `cancelRefetch: false` also
+      // covers a call made from a render before that read began.
+      if (query.hasNextPage && !query.isFetching)
+        void query.fetchNextPage({ cancelRefetch: false });
     },
     refetch: () => void query.refetch(),
   };
+}
+
+/**
+ * Asks once, as soon as `enabled`, for the first page of a list's finished
+ * part under `filters`, before the list is drawn: the Tracker opens on De
+ * gestionat only once its open Tasks have landed, and the list then finds
+ * this page read or on its way, under the same key. `filters` must be what
+ * the list will open with (`finishedListFilters`); a filter changed later
+ * is the list's own read, never asked here.
+ */
+export function usePrefetchFinishedTasks(
+  list: TaskListName,
+  filters: FinishedFilters | null,
+  enabled: boolean,
+): void {
+  const queryClient = useQueryClient();
+  const memberId = useAuth().session?.user.id;
+  const asked = useRef(false);
+  useEffect(() => {
+    if (asked.current || !enabled || !memberId) return;
+    asked.current = true;
+    if (filters)
+      void queryClient.prefetchInfiniteQuery(
+        finishedTasksQueryOptions(list, filters, memberId),
+      );
+  }, [queryClient, list, filters, enabled, memberId]);
 }
 
 /** What a list holds; nothing is asked while `enabled` is false. */

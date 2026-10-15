@@ -2,6 +2,7 @@ import { useMemo, type ReactNode } from 'react';
 import { GroupFilterCombobox } from '../group/GroupFilterCombobox';
 import { PreferredGroupsChip } from '../preferred-groups/PreferredGroupsChip';
 import { usePreferredGroups } from '../preferred-groups/preferred-groups';
+import { ErrorState, Loading } from '../states';
 import { Button } from '../ui/button';
 import {
   Combobox,
@@ -39,6 +40,22 @@ export type WorkFilterStatus = {
   error?: unknown;
   onRetry?: () => void;
 };
+
+/**
+ * The page's read of what it holds (`work`, and what its own cells offer)
+ * while it has no answer: the sheet shows it where the choices would be —
+ * placeholder rows while it is first read, a retry once it failed (kept,
+ * saying it retries, while it is asked again) — never choices cut to what
+ * was read. The search and the chips stay.
+ */
+export type WorkFilterWorkRead =
+  | { status: 'loading' }
+  | {
+      status: 'failed';
+      error?: unknown;
+      onRetry: () => void;
+      retrying?: boolean;
+    };
 
 type FieldsProps = {
   id: string;
@@ -218,7 +235,9 @@ function WorkFilterFields({
  * none is not drawn, and its URL value shows as a chip. Campanii passes no
  * `work`: it offers the Groups the caller manages, rooted at the topmost.
  * Calendar passes `alwaysShowGroups` (ruling R40): its Group levels offer
- * every Group the member can see, while Campanie keeps Rule W.
+ * every Group the member can see, while Campanie keeps Rule W. While the
+ * page has no answer for its `work`, it passes `workRead` and the sheet
+ * holds the choices' place, or offers a retry, instead of choices cut short.
  *
  * At every width it is the filter toolbar (#903): **Filtrează** first, which
  * opens the controls in a sheet, then the page's search, then the active
@@ -236,6 +255,7 @@ export function WorkFilter({
   hint,
   label = 'Filtre',
   status,
+  workRead,
   fields,
   extraChips = [],
   search,
@@ -268,6 +288,8 @@ export function WorkFilter({
   label?: string;
   /** While the options load, or when they failed, the toolbar says so. */
   status?: WorkFilterStatus;
+  /** Set while the read of what the page holds has no answer; see the type. */
+  workRead?: WorkFilterWorkRead;
   /** More cells for the sheet (De gestionat's Stare, Ordonează), given a unique id prefix. */
   fields?: (id: string) => ReactNode;
   /** Chips for the page's own set cells, counted on the button. */
@@ -418,18 +440,29 @@ export function WorkFilter({
       trailing={trailing}
       buttonSlot={buttonSlot}
     >
-      {(id) => (
-        <WorkFilterFields
-          id={id}
-          choices={choices}
-          groupsById={groupsById}
-          filter={filter}
-          showGroup={showGroup}
-          showCampaign={showCampaign}
-          showDates={showDates}
-          fields={fields}
-        />
-      )}
+      {(id) =>
+        workRead?.status === 'loading' ? (
+          <Loading label="Se încarcă filtrele…" />
+        ) : workRead?.status === 'failed' ? (
+          <ErrorState
+            error={workRead.error}
+            text="Nu am putut încărca filtrele."
+            onRetry={workRead.onRetry}
+            retrying={workRead.retrying}
+          />
+        ) : (
+          <WorkFilterFields
+            id={id}
+            choices={choices}
+            groupsById={groupsById}
+            filter={filter}
+            showGroup={showGroup}
+            showCampaign={showCampaign}
+            showDates={showDates}
+            fields={fields}
+          />
+        )
+      }
     </FilterToolbar>
   );
 }
