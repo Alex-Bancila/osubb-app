@@ -57,6 +57,10 @@ export function FinishedTasksPanel({
           }
         >
           {children}
+          {/* The next page holds its place under the rows read so far. */}
+          {finished.isLoadingMore && (
+            <Loading label="Se încarcă mai multe taskuri…" />
+          )}
           {finished.moreFailed ? (
             <ErrorState
               text="Nu am putut încărca mai multe taskuri."

@@ -82,6 +82,17 @@ beforeEach(() => {
   });
 });
 
+it('holds the place of the list while it is read, never a bare line of text', () => {
+  api.rpc.mockImplementation(() => new Promise(() => {}));
+  const { container } = show();
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Se încarcă confirmările…',
+  );
+  expect(
+    container.querySelectorAll('[data-slot="skeleton"]').length,
+  ).toBeGreaterThanOrEqual(3);
+});
+
 it('lists the Members without the current version, with a count', async () => {
   const { container } = show();
   expect(

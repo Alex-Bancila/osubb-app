@@ -509,7 +509,7 @@ describe('route guards', () => {
     render(<App />);
 
     expect(
-      screen.getByRole('status', { name: 'Se încarcă' }),
+      screen.getByRole('status', { name: 'Se încarcă aplicația' }),
     ).toBeInTheDocument();
   });
 
@@ -530,7 +530,7 @@ describe('route guards', () => {
     render(<App />);
 
     expect(
-      screen.getByRole('status', { name: 'Se încarcă' }),
+      screen.getByRole('status', { name: 'Se încarcă aplicația' }),
     ).toBeInTheDocument();
   });
 
@@ -562,7 +562,7 @@ describe('route guards', () => {
     render(<App />);
 
     expect(
-      screen.getByRole('status', { name: 'Se încarcă' }),
+      screen.getByRole('status', { name: 'Se încarcă aplicația' }),
     ).toBeInTheDocument();
   });
 
@@ -675,7 +675,7 @@ describe('route guards', () => {
     render(<App />);
 
     expect(
-      screen.getByRole('status', { name: 'Se încarcă' }),
+      screen.getByRole('status', { name: 'Se încarcă aplicația' }),
     ).toBeInTheDocument();
   });
 

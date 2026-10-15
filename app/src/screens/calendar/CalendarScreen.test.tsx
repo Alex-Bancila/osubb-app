@@ -811,6 +811,32 @@ describe('CalendarScreen', () => {
   });
 
   describe('Lună', () => {
+    // Fails if the month loads as a stack of bars: its grid is known before
+    // any Event arrives, so the page keeps its shape while they come.
+    it('holds the month’s grid, its days numbered, while its Events load', async () => {
+      const user = userEvent.setup();
+      stubStorage();
+      setEvents(undefined, { isPending: true });
+      renderCalendar();
+      await user.click(screen.getByRole('button', { name: 'Lună' }));
+      const status = screen.getByRole('status', { name: 'Se încarcă luna…' });
+      const grid = status.querySelector('table.calendar-grid');
+      expect(grid).not.toBeNull();
+      expect(grid?.querySelectorAll('th')).toHaveLength(7);
+      expect(grid?.querySelectorAll('tbody tr').length).toBeGreaterThanOrEqual(
+        4,
+      );
+      expect(grid?.textContent).toContain('31');
+      expect(
+        status.querySelectorAll('[data-slot="skeleton"]').length,
+      ).toBeGreaterThan(0);
+      // Nothing to press until the month is read.
+      expect(status.querySelector('button')).toBeNull();
+      expect(
+        screen.queryByRole('table', { name: 'octombrie 2026' }),
+      ).toBeNull();
+    });
+
     it('marks the chip of a pending or rejected Event (final review, 2026-10-13)', async () => {
       const user = userEvent.setup();
       stubStorage();

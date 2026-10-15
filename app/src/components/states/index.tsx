@@ -15,14 +15,29 @@ import { EmptyState, stateBoxClass } from '../layout/EmptyState';
  * placeholder rows that pulse where the list will be, so the page does not
  * jump when the data lands. The label is still said to a screen reader.
  */
-export function Loading({ label = 'Se încarcă…' }: { label?: string }) {
+export function Loading({
+  label = 'Se încarcă…',
+  variant = 'rows',
+}: {
+  label?: string;
+  /** `page` adds the page's title above the rows: a whole page is coming. */
+  variant?: 'rows' | 'page';
+}) {
   return (
     <div
       className="flex w-full flex-col gap-3"
       role="status"
+      aria-label={label}
       data-slot="loading-state"
     >
       <span className="sr-only">{label}</span>
+      {variant === 'page' && (
+        <span
+          aria-hidden="true"
+          data-slot="skeleton-heading"
+          className="mb-3 block h-9 w-56 max-w-full animate-pulse rounded-md bg-muted motion-reduce:animate-none"
+        />
+      )}
       {[1, 0.7, 0.4].map((opacity) => (
         <span
           key={opacity}

@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { ListRow, Panel, rowListClass } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
 import { memberDisplayName } from '../../components/member/member-identity';
+import { Loading } from '../../components/states';
 import { Button } from '../../components/ui/button';
 import { formatMemberCount } from '../../lib/format';
 import { useMemberIdentities } from '../../queries/member-identities';
@@ -68,9 +69,7 @@ export function PrivacyPanel() {
       stack={3}
     >
       {status.isPending || namesPending ? (
-        <p role="status" className="m-0">
-          Se încarcă confirmările…
-        </p>
+        <Loading label="Se încarcă confirmările…" />
       ) : status.isError || members.isError ? (
         <div role="alert" className="flex flex-col items-start gap-3">
           <p className="m-0">Nu am putut încărca confirmările.</p>
