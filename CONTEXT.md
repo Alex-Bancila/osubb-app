@@ -69,7 +69,7 @@ The presentation label chosen when a Group is created: Department, Project, or T
 _Avoid_: Kind, type, group type
 
 **Minimum Level**:
-The lowest Level allowed to join a Group or to discover it and what it publishes, such as its Events. A Child Group's Minimum Level is at least its parent's, an Event may raise it to any Role but never lower it (ruling R57), and a creator cannot set it above their own Level.
+The lowest Level allowed to join a Group or to discover it and what it publishes, such as its Events. A Child Group's Minimum Level is at least its parent's, an Event may raise it to any Role but never lower it (ruling R57), and a creator cannot set it above their own Level. A public Task has its own Minimum Level (ruling R57): the lowest Level that sees it as an Opportunity or through Shared Work Visibility and may join its Candidate Queue — any Role for an organisation-wide Task, from its Group's Minimum Level up for a local one. Only a Member at or above both the old and the new value changes it (the Moderator excepted); a Group Role on the path still reads the Task below it.
 _Avoid_: Min level, access level, role gate
 
 **Group Role**:
@@ -166,7 +166,7 @@ The Group that owns a Task. Every Task has exactly one Origin.
 _Avoid_: Scope when ownership is meant
 
 **Task Audience**:
-Whether a public Task is visible and joinable only by the Origin Group's members or by every active Member; a directly assigned Task carries the local Audience.
+Whether a public Task is visible and joinable only by the Origin Group's members or by every active Member, in both cases at or above the Task's Minimum Level (ruling R57); a directly assigned Task carries the local Audience.
 _Avoid_: Visibility, scope
 
 **Assignment Mode**:
@@ -197,7 +197,7 @@ _Avoid_: Assignee for the current accountable person
 A historical record of a Member serving as a Task’s Executor. A Task may have several Assignments over time but at most one active Executor.
 
 **Opportunity**:
-A public Task whose Candidate Queue is open to eligible Members.
+A public Task whose Candidate Queue is open to eligible Members: its Audience, at or above its Minimum Level.
 _Avoid_: Open status
 
 **Candidate**:
