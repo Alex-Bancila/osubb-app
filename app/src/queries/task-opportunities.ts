@@ -156,7 +156,7 @@ export function useTaskOpportunities(): ListRead<Opportunity> {
   // R57: a Task above the viewer's Role is not theirs to join.
   const level = claims?.member_level;
   const query = useQuery({
-    queryKey: keys.tasks.available(memberId),
+    queryKey: keys.tasks.available(memberId, level),
     queryFn: memberId
       ? () => fetchTaskOpportunities(memberId, level)
       : skipToken,

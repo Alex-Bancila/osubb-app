@@ -26,6 +26,7 @@ vi.mock('../../queries/task-tabs', () => ({
   useTaskLeadership: () => ({ data: true }),
 }));
 import MemberTrackerScreen from './MemberTrackerScreen';
+import { memberTaskPresentation } from './member-history';
 vi.mock(
   '../../queries/member-card',
   () => import('../../test/member-card-mock'),
@@ -739,3 +740,18 @@ it('adds a completed Task for the tracked Member, preselected, and says so (#915
   ).toHaveFocus();
   // A long form: slow under the full parallel run.
 }, 20_000);
+
+it('carries a Task’s Cine îl vede into the drill-down’s rows (R57)', () => {
+  const presented = memberTaskPresentation(
+    // The screen's fixtures carry only the columns it shows.
+    {
+      ...workshop,
+      assignment_mode: 'public',
+      audience: 'org',
+      min_level: 1,
+    } as unknown as Parameters<typeof memberTaskPresentation>[0],
+    new Map(),
+    new Date('2026-10-15T12:00:00Z'),
+  );
+  expect(presented.minLevelLabel).toBe('De la Voluntar');
+});

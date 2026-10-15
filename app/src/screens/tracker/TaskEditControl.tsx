@@ -530,6 +530,9 @@ function TaskEditForm({
                 value={assignmentMode}
                 onChange={setAssignmentMode}
                 form={form}
+                directLockedBy={
+                  assignmentMode === 'public' ? lockedRole : undefined
+                }
               />
               {/* Hidden while Direct (R26): switching to Public is how a
                   direct Task is opened, starting from its stored Audience. */}
