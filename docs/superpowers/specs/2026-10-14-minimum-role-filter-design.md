@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-14
 - **Decided by:** Alex Băncilă, in the session of 2026-10-14 (ruling R57)
-- **Status:** design approved ("perfect"); spec awaiting review.
+- **Status:** approved and built — part 1 (Events) #1066, part 2 (Tasks) #1067, both merged 2026-10-15.
 
 ## The request
 

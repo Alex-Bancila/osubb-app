@@ -14,7 +14,7 @@
 - **Amended:** 2026-10-14 — #1049 (ruling R53): the Legacy Import writes the pre-app Task Tracker history once, as terminal Tasks dated on their completion day with `legacy_migration` Evaluations; it is the second and last writer of Task Points and is closed after the run
 - **Amended:** 2026-10-14 — #1052, #1053 (ruling R54): a leadership Task list shows open work first and finished work after it, newest first and by the page; a list decides authority per Group and no page reads the finished Tasks whole
 - **Amended:** 2026-10-14 — ruling R55: Taskurile mele shows its open Tasks first and its finished Tasks after them, newest first and by the page, as R54 does for the leadership lists; Taskurile mele and Disponibile are read through the same list reader
-- **Amended:** 2026-10-14 — ruling R57: a public Task carries a Minimum Level (**Cine îl vede**); below it a Member does not see the Opportunity, does not see it through Shared Work Visibility and cannot join its queue; raising it removes the waiting Candidates and the Executor below it, as confirmed consequences; R26's "no Minimum Level gate" becomes "at or above the Task's Minimum Level"
+- **Amended:** 2026-10-14 — #1067 (ruling R57): a public Task carries a Minimum Level (**Cine îl vede**); below it a Member does not see the Opportunity, does not see it through Shared Work Visibility and cannot join its queue; raising it removes the waiting Candidates and the Executor below it, as confirmed consequences; R26's "no Minimum Level gate" becomes "at or above the Task's Minimum Level"
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
