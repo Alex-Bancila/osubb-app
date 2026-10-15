@@ -1263,20 +1263,37 @@ drop function public.leadership_member_tasks(uuid, timestamptz, timestamptz);
 drop function private.leadership_member_tasks_impl(uuid, timestamptz, timestamptz);
 
 create function private.task_list_impl(p_list text, p_finished boolean, p_group_id bigint, p_campaign_id bigint, p_from timestamp with time zone, p_to timestamp with time zone, p_state text, p_search text, p_preferred boolean, p_sort text, p_limit integer, p_offset integer)
- RETURNS TABLE(id bigint, group_id bigint, title text, description text, status public.task_status, deadline timestamp with time zone, completed_at timestamp with time zone, review_round integer, assignment_mode text, audience text, min_level integer, kind text, parent_task_id bigint, campaign_id bigint, duplicated_from_task_id bigint, queue_closed_at timestamp with time zone, links jsonb, assignments jsonb, evaluations jsonb, submission jsonb, executor jsonb, total bigint)
+ RETURNS TABLE(id bigint, group_id bigint, title text, description text, status public.task_status, deadline timestamp with time zone, completed_at timestamp with time zone, review_round integer, assignment_mode text, audience text, min_level integer, kind text, parent_task_id bigint, campaign_id bigint, duplicated_from_task_id bigint, queue_closed_at timestamp with time zone, links jsonb, assignments jsonb, evaluations jsonb, submission jsonb, executor jsonb, my_candidature text, total bigint)
  LANGUAGE sql
  STABLE SECURITY DEFINER
  SET search_path TO ''
 AS $function$
-  select private.require_task_list_args(p_list, p_state, p_sort, p_limit, p_offset);
+  select private.require_task_list_args(p_list, p_finished, p_state, p_sort, p_limit, p_offset);
   select private.require_date_range(p_from, p_to);
 
-  with muted as (
+  with reader as materialized (
+    -- Who embeds what. A leadership list's caller reads every row of these
+    -- tables; for the Member's lists the read policies decide: own rows,
+    -- every row from level 5 up (private.is_global_task_reader), or on a Task
+    -- the caller manages (private.can_manage_task, as the managed scope).
+    select (select auth.uid()) as id,
+           p_list in ('managed', 'all')
+           or coalesce((select private.actor_level()) >= 5, false) as whole
+  ),
+  managed as materialized (
+    select scope.task_id
+      from private.task_list_scope('managed') as scope
+     where p_list in ('mine', 'available')
+       and not (select reader.whole from reader)
+  ),
+  muted as (
     -- R43: the Groups the caller unselected that private.group_muted_for
-    -- still honours, for the preferred view only.
+    -- still honours, for the preferred view of a leadership list only; it
+    -- never narrows the Member's own lists.
     select unselected.group_id
       from public.member_group_unselected as unselected
      where coalesce(p_preferred, false)
+       and p_list in ('managed', 'all')
        and unselected.member_id = (select auth.uid())
        and private.group_muted_for(unselected.group_id, unselected.member_id)
   ),
@@ -1312,7 +1329,9 @@ AS $function$
   placed as (
     -- Open Tasks first, soonest deadline first; then finished ones, newest
     -- deadline first; undated last in both. A title sort leads inside each
-    -- part. The id ends every tie, so a page boundary never wobbles.
+    -- part; the Member's lists also break an equal deadline by the title,
+    -- as their pages did. The id ends every tie, so a page boundary never
+    -- wobbles.
     select matched.*,
            count(*) over () as total,
            row_number() over (
@@ -1320,6 +1339,8 @@ AS $function$
                       (case when p_sort = 'title' then matched.title end) collate pg_catalog."ro-x-icu",
                       (case when not matched.finished then matched.deadline end) asc nulls last,
                       (case when matched.finished then matched.deadline end) desc nulls last,
+                      (case when not matched.finished and p_list in ('mine', 'available')
+                            then matched.title end) collate pg_catalog."ro-x-icu",
                       (case when matched.finished then -matched.id else matched.id end)) as place
       from matched
   ),
@@ -1335,7 +1356,10 @@ AS $function$
                     'id', held.id, 'member_id', held.member_id, 'ended_at', held.ended_at)
                     order by held.id)
              from public.task_assignments as held
-            where held.task_id = page.id), '[]'::jsonb),
+            where held.task_id = page.id
+              and (   (select reader.whole from reader)
+                   or held.member_id = (select reader.id from reader)
+                   or page.id in (select managed.task_id from managed))), '[]'::jsonb),
          coalesce((
            select jsonb_agg(jsonb_build_object(
                     'id', evaluation.id, 'difficulty', evaluation.difficulty,
@@ -1343,8 +1367,15 @@ AS $function$
                     'reversed_at', evaluation.reversed_at)
                     order by evaluation.id)
              from public.task_evaluations as evaluation
-            where evaluation.task_id = page.id), '[]'::jsonb),
-         -- The latest `submitted` history row: the Submission Note (#685).
+            where evaluation.task_id = page.id
+              and (   (select reader.whole from reader)
+                   or evaluation.evaluated_by = (select reader.id from reader)
+                   or exists (select 1 from public.task_assignments as own
+                               where own.id = evaluation.assignment_id
+                                 and own.member_id = (select reader.id from reader))
+                   or page.id in (select managed.task_id from managed))), '[]'::jsonb),
+         -- The latest `submitted` history row the caller reads: the
+         -- Submission Note (#685).
          coalesce((
            select jsonb_build_array(jsonb_build_object(
                     'id', event.id, 'kind', event.kind, 'note', event.note,
@@ -1352,6 +1383,13 @@ AS $function$
              from public.task_activity as event
             where event.task_id = page.id
               and event.kind = 'submitted'
+              and (   (select reader.whole from reader)
+                   or event.actor_id = (select reader.id from reader)
+                   or exists (select 1 from public.task_assignments as own
+                               where own.id = event.assignment_id
+                                 and own.member_id = (select reader.id from reader))
+                   or page.id in (select managed.task_id from managed)
+                   or private.is_task_team_member(page.id))
             order by event.id desc
             limit 1), '[]'::jsonb),
          -- The Executor, by the rule of private.visible_task_executors (#499,
@@ -1370,15 +1408,21 @@ AS $function$
                    order by held.ended_at desc nulls first, held.id desc
                    limit 1) as executor
             left join public.profiles as profile on profile.id = executor.member_id),
+         (select candidature.status
+            from public.task_candidates as candidature
+           where candidature.task_id = page.id
+             and candidature.member_id = (select reader.id from reader)
+           order by candidature.id desc
+           limit 1),
          page.total
     from page
    order by page.place;
 $function$;
 comment on function private.task_list_impl(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer) is
-  'Body of public.task_list. The rows are private.task_list_scope(p_list), narrowed by the Work Filter on the Task itself (Group subtree, Campaign, deadline in [p_from, p_to)), a finished state, the folded title search and -- p_preferred, R43 -- the Groups the caller keeps selected; ordered open first then finished newest first; cut by p_limit and p_offset with the unpaged count in total. Each row carries its whole Assignment History, its Evaluations, its latest submission and its Executor, which is what the read policies of those tables give the only callers either list has (a Task Manager; level 5 and above). R57 (2026-10-14): each row carries the Task''s min_level (its Minimum Level), so a form opened from it shows the real Role.';
+  'Body of public.task_list. The rows are private.task_list_scope(p_list), narrowed by the Work Filter on the Task itself (Group subtree, Campaign, deadline in [p_from, p_to)), a finished state, the folded title search and -- p_preferred, R43, leadership lists only -- the Groups the caller keeps selected; ordered open first then finished newest first (the Member''s lists break an equal deadline of an open Task by its title); cut by p_limit and p_offset with the unpaged count in total. Each row carries its Assignment History, its Evaluations, its latest submission and its Executor -- whole for the leadership lists, whose callers read every row; for mine and available exactly the rows the read policies of those tables give the caller -- and my_candidature, the status of the caller''s newest Candidature on it. R57 (2026-10-14): each row carries the Task''s min_level (its Minimum Level), so a form opened from it shows the real Role.';
 
 create function public.task_list(p_list text, p_finished boolean DEFAULT NULL::boolean, p_group_id bigint DEFAULT NULL::bigint, p_campaign_id bigint DEFAULT NULL::bigint, p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_state text DEFAULT NULL::text, p_search text DEFAULT NULL::text, p_preferred boolean DEFAULT false, p_sort text DEFAULT 'deadline'::text, p_limit integer DEFAULT 500, p_offset integer DEFAULT 0)
- RETURNS TABLE(id bigint, group_id bigint, title text, description text, status public.task_status, deadline timestamp with time zone, completed_at timestamp with time zone, review_round integer, assignment_mode text, audience text, min_level integer, kind text, parent_task_id bigint, campaign_id bigint, duplicated_from_task_id bigint, queue_closed_at timestamp with time zone, links jsonb, assignments jsonb, evaluations jsonb, submission jsonb, executor jsonb, total bigint)
+ RETURNS TABLE(id bigint, group_id bigint, title text, description text, status public.task_status, deadline timestamp with time zone, completed_at timestamp with time zone, review_round integer, assignment_mode text, audience text, min_level integer, kind text, parent_task_id bigint, campaign_id bigint, duplicated_from_task_id bigint, queue_closed_at timestamp with time zone, links jsonb, assignments jsonb, evaluations jsonb, submission jsonb, executor jsonb, my_candidature text, total bigint)
  LANGUAGE sql
  STABLE
  SET search_path TO ''
@@ -1389,7 +1433,7 @@ AS $function$
            p_state, p_search, p_preferred, p_sort, p_limit, p_offset);
 $function$;
 comment on function public.task_list(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer) is
-  'A page of a leadership Task list, ready to draw, in one request. p_list: managed (the Tasks the caller manages, exactly my_managed_task_ids()) or all (every Task the caller reads, from level 5 up). p_finished: true the finished Tasks, false the open ones, null both. The Work Filter reads the Task: p_group_id that Group and every Group below it, p_campaign_id exact, the deadline in [p_from, p_to). p_state: completed, unfulfilled, cancelled, or late (completed after its deadline). p_search: the title contains it, case and diacritics ignored. p_preferred (R43): without the Groups the caller unselected. Order: open first by deadline ascending, then finished by deadline descending, undated last; p_sort title leads with the title inside each part. p_limit 1..500 and p_offset cut the page; total is the count before the cut. PT400 invalid_list, invalid_state, invalid_sort, invalid_page, invalid_date_range. No rows without org claims or a live activ Profile. R57 (2026-10-14): each row carries the Task''s min_level (its Minimum Level), so a form opened from it shows the real Role.';
+  'A page of a Task list, ready to draw, in one request. p_list: managed (the Tasks the caller manages, exactly my_managed_task_ids()), all (every Task the caller reads, from level 5 up), mine (Taskurile mele: the Tasks the caller holds or held to the end) or available (Disponibile: the open public Opportunities the caller reads and the Tasks of their pending Candidatures; no finished part). p_finished: true the finished Tasks, false the open ones, null both. The Work Filter reads the Task: p_group_id that Group and every Group below it, p_campaign_id exact, the deadline in [p_from, p_to). p_state: completed, unfulfilled, cancelled, or late (completed after its deadline). p_search: the title contains it, case and diacritics ignored. p_preferred (R43): without the Groups the caller unselected, for managed and all. Order: open first by deadline ascending (mine and available then by title), then finished by deadline descending, undated last; p_sort title leads with the title inside each part. p_limit 1..500 and p_offset cut the page; total is the count before the cut. my_candidature: the caller''s newest Candidature status on the Task, or null. PT400 invalid_list, invalid_state, invalid_sort, invalid_page, invalid_date_range. No rows without org claims or a live activ Profile. R57 (2026-10-14): each row carries the Task''s min_level (its Minimum Level), so a form opened from it shows the real Role.';
 
 create function private.leadership_member_tasks_impl(p_member_id uuid, p_from timestamp with time zone, p_to timestamp with time zone)
  RETURNS TABLE(assignment_id bigint, member_id uuid, assigned_at timestamp with time zone, assigned_by uuid, assignment_ended_at timestamp with time zone, assignment_end_reason text, assignment_end_note text, task_id bigint, title text, description text, link_label text, link_url text, links jsonb, deadline timestamp with time zone, task_kind text, audience text, min_level integer, assignment_mode text, status public.task_status, is_overdue boolean, completed_late boolean, difficulty integer, rating integer, started_at timestamp with time zone, submitted_at timestamp with time zone, review_round integer, returned_to_progress_at timestamp with time zone, completed_at timestamp with time zone, unfulfilled_at timestamp with time zone, cancelled_at timestamp with time zone, cancel_reason text, queue_opened_at timestamp with time zone, queue_closed_at timestamp with time zone, task_created_at timestamp with time zone, task_created_by uuid, duplicated_from_task_id bigint, group_id bigint, group_name text, campaign_id bigint, campaign_name text, parent_task_id bigint, parent_task_title text, subtasks jsonb, evaluation_history jsonb)
@@ -1517,3 +1561,110 @@ grant execute on function private.task_list_impl(text, boolean, bigint, bigint, 
 grant execute on function public.task_list(text, boolean, bigint, bigint, timestamptz, timestamptz, text, text, boolean, text, integer, integer) to authenticated;
 grant execute on function private.leadership_member_tasks_impl(uuid, timestamptz, timestamptz) to authenticated;
 grant execute on function public.leadership_member_tasks(uuid, timestamptz, timestamptz) to authenticated;
+
+-- ==================== 10 · the Member's Available list follows the read rule ====================
+-- #1065 copied tasks_read's test into task_list_scope('available'); it
+-- takes the same 'shared' split and Minimum Level row test as the policy
+-- (section 3), restated from #1065's body (20261014210000_member_task_lists.sql).
+create or replace function private.task_list_scope(p_list text)
+ RETURNS TABLE(task_id bigint)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  -- One row for a caller with org claims and a live activ Profile; none
+  -- otherwise, which empties everything below (no rows, never an error).
+  with caller as materialized (
+    select (select auth.uid()) as id, level.value as level
+      from (select private.actor_level() as value) as level
+     where coalesce(public.auth_is_member(), false)
+       and level.value is not null
+  ),
+  -- Each Group judged once, by the helpers the per-Task rules call.
+  --   managed: `listed` is can_manage_group_work; `whole` is the part of
+  --     private.can_manage_task that does not read the Executor (level 6 up,
+  --     a Group Manager on the path, or no Manager anywhere on it).
+  --   all: `listed` is rule R1 of private.can_read_task (level 5 up and a
+  --     Group the caller can see); nothing below level 5.
+  judged as materialized (
+    select grp.id,
+           case p_list
+             when 'managed' then private.can_manage_group_work(grp.id)
+             when 'all' then caller.level >= 5 and private.can_see_group(grp.id, caller.id)
+             else false
+           end as listed,
+           case
+             when p_list <> 'managed' then true
+             when caller.level >= 6 then true
+             else private.group_role_of(grp.id, caller.id) = 'manager'
+                  or not private.has_group_manager(grp.id)
+           end as whole
+      from caller
+     cross join public.groups as grp
+     where p_list in ('managed', 'all')
+  )
+  select task.id
+    from judged
+    join public.tasks as task on task.group_id = judged.id
+   where case p_list
+           -- A Task of a listed Group is managed when the Group is whole or
+           -- nobody executes it (what can_manage_task answers there); any
+           -- other Task of a listed Group is asked of can_manage_task itself.
+           when 'managed' then
+             judged.listed
+             and (judged.whole
+                  or not exists (select 1 from public.task_assignments as held
+                                  where held.task_id = task.id and held.ended_at is null)
+                  or private.can_manage_task(task.id))
+           -- Outside a listed Group a Task is still read through the caller's
+           -- own Assignment or Candidature: can_read_task decides.
+           when 'all' then
+             (select caller.level from caller) >= 5
+             and (judged.listed or private.can_read_task(task.id))
+           else false
+         end
+  union all
+  -- mine: the newest own Assignment of each Task decides; leaving it (given
+  -- up, replaced, taken off by an edit or a change of Group) drops the Task.
+  -- An own Assignment is always readable (R2).
+  select own.task_id
+    from (select distinct on (assignment.task_id) assignment.task_id, assignment.end_reason
+            from caller
+            join public.task_assignments as assignment on assignment.member_id = caller.id
+           where p_list = 'mine'
+           order by assignment.task_id, assignment.assigned_at desc, assignment.id desc) as own
+   where coalesce(own.end_reason, '') not in ('gave_up', 'replaced', 'task_updated', 'group_changed')
+  union all
+  -- available: an open public Opportunity tasks_read gives the caller (the
+  -- same sets, the same test -- since R57 R4 in 'shared', and 'shared',
+  -- 'open' and 'org' only at or above the Task's own Minimum Level), and the
+  -- Tasks of their pending Candidatures, read through R2 whatever their queue.
+  select open_work.id
+    from (select task.id
+            from caller
+           cross join public.tasks as task
+           where p_list = 'available'
+             and task.kind = 'task'
+             and task.assignment_mode = 'public'
+             and task.queue_closed_at is null
+             and task.status in ('todo', 'in_progress', 'in_review')
+             and (   task.id = any ((select private.own_task_ids())::bigint[])
+                  or task.parent_task_id = any ((select private.own_task_ids())::bigint[])
+                  or task.group_id = any ((select private.task_read_groups('whole'))::bigint[])
+                  or (    task.min_level <= (select private.caller_level())
+                      and (   task.group_id = any ((select private.task_read_groups('shared'))::bigint[])
+                           or task.group_id = any ((select private.task_read_groups('open'))::bigint[])
+                           or (    task.audience = 'org'
+                               and task.group_id = any ((select private.task_read_groups('org'))::bigint[])))))
+          union
+          select task.id
+            from caller
+            join public.task_candidates as candidature on candidature.member_id = caller.id
+            join public.tasks as task on task.id = candidature.task_id
+           where p_list = 'available'
+             and candidature.status = 'pending'
+             and task.kind = 'task'
+             and task.assignment_mode = 'public') as open_work;
+$function$;
+comment on function private.task_list_scope(text) is
+  'The Tasks of a Task list for the caller. Leadership lists, authority decided once per Group: ''managed'' is exactly public.my_managed_task_ids() (private.can_manage_task, which implies tasks_read), ''all'' is exactly what tasks_read returns from level 5 up and nothing below; private.can_manage_task and private.can_read_task remain the per-Task fallback for the rows a Group cannot decide. The Member''s lists (spec 2026-10-14 member reads): ''mine'' is every Task whose newest Assignment of the caller did not end in gave_up, replaced, task_updated or group_changed; ''available'' is every open public Task of kind task with an open queue that tasks_read gives the caller (private.own_task_ids and private.task_read_groups, as the policy reads them), plus every public Task of kind task the caller is a pending Candidate on. No rows without org claims or a live activ Profile, or for any other list. R57 (2026-10-14): ''available'' reads R4 through task_read_groups(''shared'') and, like tasks_read, takes ''shared'', ''open'' and ''org'' only at or above the Task''s own Minimum Level.';

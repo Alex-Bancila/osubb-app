@@ -7,7 +7,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(62);
+select plan(64);
 
 create function pg_temp.m(n integer) returns uuid language sql immutable as $$
   select ('57100000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -277,6 +277,23 @@ select is((select end_reason from task_assignments where task_id = pg_temp.t('Mo
 select is((select body from notifications where member_id = pg_temp.m(7) and title = 'Task actualizat: Narrow #57'),
   'Nu mai ești executorul acestui task: audiența lui s-a schimbat.',
   'removed by a narrower Audience while at or above the new Role: told it is the Audience');
+
+-- The Member's Available list (#1065) follows the read rule: a Recrut with no
+-- tie to Org V #57 is not offered it there, a Voluntar is.
+create function pg_temp.available(p_member integer) returns text[] language plpgsql as $$
+declare v_titles text[];
+begin
+  perform pg_temp.test_login_leadership(pg_temp.m(p_member));
+  select coalesce(array_agg(title order by title), '{}') into v_titles
+    from public.task_list(p_list => 'available', p_limit => 500)
+   where title in ('Org V #57', 'Org R #57');
+  perform set_config('role', 'none', true);
+  perform pg_temp.test_clear_jwt();
+  return v_titles;
+end;
+$$;
+select is(pg_temp.available(9), array['Org R #57'], 'Available offers a Recrut the Task at Recrut, not the one at Voluntar');
+select is(pg_temp.available(7), array['Org R #57', 'Org V #57'], 'Available offers a Voluntar both');
 
 select * from finish();
 rollback;
