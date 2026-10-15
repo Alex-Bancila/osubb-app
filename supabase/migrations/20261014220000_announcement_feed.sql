@@ -26,6 +26,9 @@
 -- public.announcement_feed_summary returns, in one pass, the header's unread
 -- count, the first unread critical Announcement for the banner, and the two
 -- counts the empty states tell apart.
+-- public.my_unread_announcements_count, the badge every page shows, counts
+-- its Announcements through the same set instead of reading the table
+-- through announcements_read row by row; what it counts is unchanged.
 
 -- ==================== 1. The feed's rule, in one place ====================
 
@@ -336,3 +339,94 @@ revoke execute on function public.announcement_feed_summary(bigint, boolean)
   from public, anon, authenticated, service_role;
 grant execute on function private.announcement_feed_summary_impl(bigint, boolean) to authenticated;
 grant execute on function public.announcement_feed_summary(bigint, boolean) to authenticated;
+
+-- ==================== 4. The badge, through the same set ====================
+
+create function private.unread_announcements_count()
+returns integer
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with caller as materialized (
+    select (select auth.uid()) as id, coalesce(private.caller_level(), -1) as level
+  ),
+  -- R42: the Groups a BC member's Manager or Responsible position reaches --
+  -- the Announcements the fan-out notified them of.
+  reached as materialized (
+    select grp.id
+      from public.groups as grp
+     where grp.path && coalesce((select array_agg(held.group_id)
+                                   from public.group_members as held
+                                  where held.member_id = (select caller.id from caller)
+                                    and held.group_role in ('manager', 'responsible')), '{}')
+  ),
+  -- R43: private.is_group_muted, as a set.
+  muted as (
+    select unselected.group_id
+      from public.member_group_unselected as unselected
+     where unselected.member_id = (select caller.id from caller)
+       and private.group_muted_for(unselected.group_id, unselected.member_id)
+  )
+  select count(*)::integer
+    from private.announcement_feed_base(null) as feed
+   where feed.approval_status = 'approved'
+     and feed.read_at is null
+     and (   (select caller.level from caller) < 6
+          or ((select caller.level from caller) = 6 and feed.group_id in (select reached.id from reached)))
+     and (   feed.priority = 'critical'
+          or feed.audience = 'org'
+          or feed.group_id not in (select muted.group_id from muted));
+$$;
+
+comment on function private.unread_announcements_count() is
+  'The Announcement part of public.my_unread_announcements_count (spec 2026-10-14 member reads): the approved Announcements of private.announcement_feed_base the caller has not read, a live BC member only those whose Origin their Manager or Responsible position reaches (R42), the Moderator none, and none of a Group the caller unselected in Grupuri preferate unless critical or organization-wide (R43).';
+
+revoke execute on function private.unread_announcements_count()
+  from public, anon, authenticated, service_role;
+grant execute on function private.unread_announcements_count() to authenticated;
+
+create or replace function public.my_unread_announcements_count(p_kind text default null)
+returns integer
+language sql
+stable
+set search_path = ''
+as $$
+  -- The Announcements through the feed's set, decided once per Group; a
+  -- Deal (R45) still through announcements_read, which a kind = 'deal'
+  -- filter keeps to the few Deals.
+  select case when p_kind is null or p_kind = 'announcement'
+              then private.unread_announcements_count()
+              else 0
+         end
+       + case when p_kind is null or p_kind = 'deal' then (
+           select count(*)::integer
+             from public.announcements as announcement
+            where announcement.kind = 'deal'
+              and announcement.approval_status = 'approved'
+              and ((select private.caller_level()) < 6
+                   or ((select private.caller_level()) = 6
+                       and exists (
+                         select 1
+                           from public.groups as origin
+                           join public.group_members as held
+                             on origin.path @> array[held.group_id]
+                            and held.member_id = (select auth.uid())
+                            and held.group_role in ('manager', 'responsible')
+                          where origin.id = announcement.group_id)))
+              and (announcement.priority = 'critical'
+                   or announcement.audience = 'org'
+                   or not private.is_group_muted(announcement.group_id))
+              and (announcement.deadline is null or announcement.deadline >= now())
+              and not exists (
+                select 1
+                  from public.announcement_reads as reads
+                 where reads.announcement_id = announcement.id
+                   and reads.member_id = (select auth.uid())))
+           else 0
+         end;
+$$;
+
+comment on function public.my_unread_announcements_count(text) is
+  'The caller''s unread Announcements for the Anunțuri badge (#693, R15): rows announcements_read lets them see, minus those with their own announcement_reads row. Zero without organization claims. A live BC member counts only the Announcements whose Origin their Manager or Responsible position reaches (R42), the ones the fan-out notified them of; the Moderator, whom no Announcement reaches through membership (#929, ruling R32), counts none. A Member at level >= 5 does not count a local Announcement of a Group they unselected in Grupuri preferate (R43, private.is_group_muted); a critical or organization-wide one still counts. R45: p_kind (announcement or deal) counts one tab, null both; a Deal past its Termen never counts. A pending or rejected Announcement never counts (spec 2026-10-11). The Announcements are counted through private.unread_announcements_count, the feed''s set decided once per Group (spec 2026-10-14 member reads); a Deal through announcements_read.';

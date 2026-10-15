@@ -26,7 +26,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(26);
+select plan(28);
 
 \ir _group_task_fixtures.psql
 reset role;
@@ -157,6 +157,15 @@ insert into public.group_members(group_id, member_id, group_role)
 values (pg_temp.af_gid('Project #521'), pg_temp.g521_uid(1), 'member');
 select pg_temp.test_login(pg_temp.g521_uid(1), pg_temp.af_meta(pg_temp.g521_uid(1)));
 select public.set_unselected_groups(array[pg_temp.af_gid('Project #521'), pg_temp.af_gid('Independent #521')]);
+select set_config('role', 'none', true);
+select pg_temp.test_clear_jwt();
+-- BCE member #9 joins the Project too and unticks it, so the badge's R43
+-- has a caller it applies to: from level 5 up, and not BC, who counts only
+-- what their own position reaches (R42).
+insert into public.group_members(group_id, member_id, group_role)
+values (pg_temp.af_gid('Project #521'), pg_temp.g521_uid(9), 'member');
+select pg_temp.test_login(pg_temp.g521_uid(9), pg_temp.af_meta(pg_temp.g521_uid(9)));
+select public.set_unselected_groups(array[pg_temp.af_gid('Project #521')]);
 select set_config('role', 'none', true);
 select pg_temp.test_clear_jwt();
 
@@ -319,6 +328,44 @@ select is(pg_temp.af_row(pg_temp.g521_uid(1), 'select unread, critical_id from p
                                   where r.announcement_id = a.id and r.member_id = auth.uid())')),
             'critical_id', pg_temp.af_id('project critical')),
           'summary: a pending or rejected Announcement is never unread, and never the banner');
+
+-- ---------------------------------------------------------------- badge
+-- The badge counts what it counted when it read the table through
+-- announcements_read (20261011140000's body), for every caller and tab.
+create function pg_temp.af_badge_reference(p_kind text) returns text language sql immutable as $$
+  select format($q$
+    select count(*)::bigint
+      from public.announcements as announcement
+     where announcement.approval_status = 'approved'
+       and ((select private.caller_level()) < 6
+            or ((select private.caller_level()) = 6
+                and exists (select 1
+                              from public.groups as origin
+                              join public.group_members as held
+                                on origin.path @> array[held.group_id]
+                               and held.member_id = (select auth.uid())
+                               and held.group_role in ('manager', 'responsible')
+                             where origin.id = announcement.group_id)))
+       and (announcement.priority = 'critical'
+            or announcement.audience = 'org'
+            or not private.is_group_muted(announcement.group_id))
+       and (%1$L::text is null or announcement.kind = %1$L::text)
+       and (announcement.kind <> 'deal' or announcement.deadline is null or announcement.deadline >= now())
+       and not exists (select 1 from public.announcement_reads as reads
+                        where reads.announcement_id = announcement.id
+                          and reads.member_id = (select auth.uid())) $q$, p_kind)
+$$;
+select is_empty($$
+  select caller.uid, kinds.kind
+    from af_callers as caller
+   cross join (values (null::text), ('announcement'), ('deal')) as kinds(kind)
+   where pg_temp.af_ids(caller.uid, format('select public.my_unread_announcements_count(%L)::bigint', kinds.kind))
+         is distinct from pg_temp.af_ids(caller.uid, pg_temp.af_badge_reference(kinds.kind))
+$$, 'the badge counts, for every caller and either tab, what it counted through announcements_read');
+select ok((select bool_or(count > 0) and bool_or(count = 0)
+             from (select (pg_temp.af_ids(caller.uid, 'select public.my_unread_announcements_count()::bigint'))[1] as count
+                     from af_callers as caller) as counts),
+          'the badge parity reads something: some callers have unread Announcements, some none');
 
 -- ------------------------------------------------------------- refusals
 select throws_ok($$ select * from public.announcement_feed(p_limit => 0) $$, 'PT400', 'invalid_page',
