@@ -433,6 +433,7 @@ export function pointsSinceText(date: string | null | undefined): string | null;
 - Produces:
 
 ```sql
+-- Section 0: public.retention_signals -- the table described under Task 10 "Section 6" is created HERE, as this migration's first section (ledger Ruling 1), because this task's run writes it and this task's suite asserts the rows; its rls_deny_by_default fixture and live_changes trigger come with it. Task 10 keeps sections 7-9.
 -- Section 1: the shares move home.
 alter table public.evaluation_settings
   add column activ_percent integer not null default 35, add column vot_percent integer not null default 25,
@@ -510,7 +511,7 @@ create function public.role_evaluation_ranking(p_role_evaluation_id bigint) retu
 - Produces:
 
 ```sql
--- Section 6: the table.
+-- Section 6: the table (the shape; CREATED BY TASK 9 as its section 0 per ledger Ruling 1 -- Task 10 writes nothing for it).
 create table public.retention_signals (
   id                 bigint generated always as identity primary key,
   kind               text not null check (kind in ('voluntar_activ','adunarea_generala')),
