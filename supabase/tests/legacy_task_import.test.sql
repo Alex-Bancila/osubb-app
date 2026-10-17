@@ -9,7 +9,19 @@
 --
 -- Mutation guards (run 2026-10-18 against the local database, each reverted;
 -- the assertion that turned red is named):
---   MUTATION_RECORD
+--   * before the migration (CI run 39072510378, commit cc87b40d) -> "the import
+--     command is gone", "its read-back is gone with it", "no function in
+--     public or private writes the registry" and "a legacy_migration
+--     Evaluation is refused, even for a Task the import registered";
+--   * the trigger letting a registered Task through again -> "a
+--     legacy_migration Evaluation is refused, even for a Task the import
+--     registered";
+--   * a function inserting into the registry -> "no function in public or
+--     private writes the registry";
+--   * select on the registry granted to authenticated -> "no role reads or
+--     writes the registry directly";
+--   * a public.import_legacy_tasks back in place -> "the import command is
+--     gone: nobody can run the Legacy Import again".
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
