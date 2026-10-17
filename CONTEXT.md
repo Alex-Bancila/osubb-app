@@ -53,8 +53,12 @@ The short name a Member chooses for themselves, shown wherever the application n
 _Avoid_: Display name, alias, username, handle
 
 **Member Card**:
-The summary opened from any Member's name: Nickname, full name, Role, join date, and Groups. Contact details appear only to viewers already allowed to read them; Task Points and rank never appear.
+The summary opened from any Member's name: Nickname, full name, Role, join date, Universitate, and Groups. Contact details appear only to viewers already allowed to read them; Task Points and rank never appear.
 _Avoid_: Profile pop-up, tooltip, user card
+
+**Universitate**:
+The university a Member studies at, chosen from a list on which Universitatea Babeș-Bolyai is one entry among the others; every Member is a student somewhere. BC or the Moderator records it; the Member reads it in Profil, under Date personale, and on the Member Card. Only a Member whose Universitate is Universitatea Babeș-Bolyai may hold Voluntar cu Drept de Vot, a rule of the organization that never changes; an unknown Universitate never counts as UBB.
+_Avoid_: Faculty, school, "UBB student" as a flag, "Nu sunt student"
 
 **Group**:
 A named body of OSUBB people and work, created by BC or Moderator with its own name and settings. A Group holds one roster of Members with Group roles and one Minimum Level. Departments, Teams, Projects, and the Adunarea Generală are Groups; every Task Origin and Event Scope is a Group.
@@ -154,7 +158,7 @@ A Child Group of a Department in the Team category, overseen by the Department's
 A top-level Group in the Team category with no parent Group and no Group Manager: every member is a Group Responsible, so they jointly manage its planned work while BC or Moderator manages its roster and evaluates their Tasks.
 
 **Interne**:
-The Vicepreședinte Interne and Echipa Interne, a Department Team of Diverse. Its members track AG eligibility and voting-right information as Group Responsibles of the Adunarea Generală.
+The Vicepreședinte Interne and Echipa Interne, a Department Team of Diverse. Its members track AG eligibility and voting-right information as Group Responsibles of the Adunarea Generală. The Vicepreședinte Interne works the Role Evaluations and their settings from Portofoliu Interne, as any BC member or the Moderator may.
 
 ## Task Tracker
 
@@ -251,13 +255,17 @@ Points produced by an evaluated Task: its Difficulty's base points × the Rating
 The append-only history of every change contributing to a Member’s Personal Score.
 
 **Personal Score**:
-The total visible to an individual Member from their own Points Ledger entries.
+The total visible to an individual Member from their own Points Ledger entries, counted from the Points Start Date.
+
+**Points Start Date** (Data de început a punctajului):
+The day from which every points total in the application counts: the Personal Score, the Leadership Leaderboard, the Department Cup and Campaign totals sum only Task Points earned on or after it. Earlier Tasks keep their own points and stay in the Member's history; they are simply not summed. BC or the Moderator sets it from Portofoliu Interne, typically on the day a new BC takes office, every change audited. Only the Leadership Leaderboard's Work Filter may look back before it, on purpose. Role Evaluations ignore it: their Evaluation Period is explicit.
+_Avoid_: Reset, points reset, season start, mandate start when the date is meant
 
 **Leadership Leaderboard**:
-A BCE/BC/Moderator view of Members ordered by Task Points only.
+A BCE/BC/Moderator view of Members ordered by Task Points only, counted from the Points Start Date unless its Work Filter asks for an earlier day.
 
 **Department Cup**:
-A BCE/BC/Moderator comparison of Task Points earned in the top-level Groups set to compete and in every Group below them set to count toward them. Only a top-level Department may be set to compete (ruling R52, 2026-10-13); Project and Independent-Team work never contributes.
+A BCE/BC/Moderator comparison of Task Points earned from the Points Start Date in the top-level Groups set to compete and in every Group below them set to count toward them. Only a top-level Department may be set to compete (ruling R52, 2026-10-13); Project and Independent-Team work never contributes.
 
 **Completed-work Request**:
 A Member’s request to recognize work already completed for one Origin. Approval creates the completed Task, Assignment, Evaluation, and Task Points together; the decider may first change the Task's title, details, Group, Attached Link and Campaign. A Group's managers can also add such a completed Task directly, without a Request, for any active Member at or above the Group's Minimum Level, member of the Group or not (ruling R51, 2026-10-13) — never for themselves, a BC member or the Moderator, and a Group Responsible never for a Member who holds a Manager or Responsible role on that Group's path; its points count for the Group the work was done for.
@@ -336,36 +344,48 @@ Turning one organization event into targeted Notifications for its intended reci
 
 ## Governance
 
+**Portofoliu Interne**:
+The Administrare page where BC or the Moderator runs Role Evaluations and keeps their settings: the Eligibility Floor, each kind's top share, the Membership Cutoff Date, the Points Start Date, the Promotion Thresholds in force, the Promotion Candidates, the Retention Signals and the history of runs and changes. It replaced Evaluări de rol (ruling R58, 2026-10-18).
+_Avoid_: Evaluări de rol, Perioade, the Interne page
+
 **Role Evaluation**:
-A run BC performs from Administrare over an Evaluation Period chosen at that moment, of one kind: Voluntar Activ or Adunarea Generală. It ranks the Task Points of the Task Evaluations falling in that range, records the Promotion Threshold it used and the one it computed, and produces Promotion Candidates and Retention Signals. Nothing ranks live between Role Evaluations, though a Voluntar who reaches the threshold in force between runs is listed as a Promotion Candidate at once (#983).
-_Avoid_: Evaluation alone (that is a Task's review), opening or closing a Period, live ranking
+A run BC or the Moderator performs from Portofoliu Interne over an Evaluation Period chosen at that moment, of one kind: Voluntar Activ or Adunarea Generală. The Voluntar Activ kind ranks every active Member below BCE, Recruți included; the Adunarea Generală kind ranks only the Voluntar cu Drept de Vot holders. A run ranks the Task Points of the Task Evaluations in its period among the Members at or above the Eligibility Floor, records the Promotion Threshold it used and the one it computed, and produces Promotion Candidates and Retention Signals. A run changes nobody's Role. A Simulation shows what a run would produce; only a finalised run is a Role Evaluation.
+_Avoid_: Evaluation alone (that is a Task's review), opening or closing a Period, live ranking, Promotion Rule, tenure, vechime
 
 **Evaluation Period**:
 The date range, from one day to another, that BC chooses for one Role Evaluation, typically from one AGO to the next. It is a parameter of that run: it is never opened, closed, or current.
 _Avoid_: Season, scoring window, semester when the ranking window is meant, open Period
 
-**Promotion Rule**:
-A BC-set rule about moving a Member to a higher Role. Automatic only for Recrut to Voluntar (tenure). Voluntar to Voluntar Activ needs the required tenure counted from the join date plus Task Points at or above the Voluntar Activ Promotion Threshold, at a Role Evaluation or, counted since the last one, between runs, which makes the Member a Promotion Candidate; BC then promotes by hand. Voluntar Activ to Voluntar cu Drept de Vot is human-confirmed; nothing is automatic downward. A Member below the required tenure is neither a Promotion Candidate nor notified. BC edits each rule's required tenure (whole months) and turns it on or off at any time, every change audited; a rule turned off promotes nobody (Recrut to Voluntar) and lists no Promotion Candidate (Voluntar to Voluntar Activ).
-_Avoid_: Auto-promotion, level-up, threshold alone
+**Simulation** (Simulare):
+A Role Evaluation computed with chosen values and shown on Portofoliu Interne without being recorded: no history row, no Promotion Candidate, no Retention Signal, no Notification, no change to any setting. BC may simulate as often as it likes before finalising; finalising records the run with the values shown, and those values become the settings in force.
+_Avoid_: Dry run, draft evaluation, preview run
+
+**Eligibility Floor** (Prag minim):
+The Task Points a Member must have earned in the Evaluation Period to be ranked by a Role Evaluation at all; one value, shared by both kinds. A Member below it is not ranked and does not shape the percentile. BC sets it from Portofoliu Interne, where it is prefilled for each run, and a finalised run's value becomes the one in force.
+_Avoid_: Prag alone, minimum threshold when the Promotion Threshold is meant, participation threshold
+
+**Membership Cutoff Date** (Data limită de intrare):
+The calendar day by which a Voluntar must have joined OSUBB to become a Promotion Candidate, at a Voluntar Activ Role Evaluation or between runs. BC sets it from Portofoliu Interne at any time, so the door is open before the first run; each Voluntar Activ run records the date it used, and a finalised run's date becomes the one in force. A Member who joined after it is still ranked; they only cannot be listed. The Adunarea Generală kind has no cutoff.
+_Avoid_: Tenure, vechime, required months, seniority
 
 **Promotion Candidate**:
-A Voluntar with the required tenure whose Task Points reach the Voluntar Activ Promotion Threshold: at a Role Evaluation, or between runs the moment their Task Points since the last Voluntar Activ Role Evaluation reach the threshold in force (2026-10-02, #983). They join the candidates list at once and BC and Moderator receive one Notification per Member per listing; they are never promoted automatically, only by BC in the Role panel. A Member listed between runs leaves the list again when they stop qualifying (a reversal, a raised threshold, the rule turned off), and a rejection made between runs holds until the next Voluntar Activ Role Evaluation. Distinct from a Candidate, who waits in a Task's Candidate Queue.
+A Voluntar who joined on or before the Membership Cutoff Date and whose Task Points reach the Voluntar Activ Promotion Threshold: at a Role Evaluation, or between runs the moment their Task Points since the last Voluntar Activ Role Evaluation reach the threshold in force (2026-10-02, #983). They join the candidates list at once and BC and Moderator receive one Notification per Member per listing; they are never promoted automatically, only by BC in the Role panel. A Member listed between runs leaves the list again when they stop qualifying (a reversal, a raised threshold, a later cutoff date), and a rejection made between runs holds until the next Voluntar Activ Role Evaluation. Recrut to Voluntar is BC's hand too: nothing promotes anyone by the calendar. Distinct from a Candidate, who waits in a Task's Candidate Queue.
 _Avoid_: Candidate alone, eligible, auto-promoted
 
-**Promotion Threshold**:
-A Task Points value kept per Role Evaluation kind: the Voluntar Activ threshold and the Adunarea Generală threshold. BC enters the first value by hand and may edit either at any time, every edit audited. Each Role Evaluation uses the threshold in force and computes a new one, the Task Points of the last Member inside its kind's top share (x % of the Voluntar Activ cohort, y % of the Voluntar cu Drept de Vot cohort; BC edits both shares, 1–100 %, every change audited, and a change applies from the next Role Evaluation), which is in force for that kind's next Role Evaluation unless BC edits it.
+**Promotion Threshold** (Prag de promovare, Prag Adunarea Generală):
+A Task Points value kept per Role Evaluation kind: the Voluntar Activ threshold and the Adunarea Generală threshold. BC enters the first value by hand and may edit either at any time, every edit audited. Each Role Evaluation uses the threshold in force and computes a new one, the Task Points of the last Member inside its kind's top share of the Members it ranked (x %, 35 by default, for the Voluntar Activ kind; y %, 25 by default, for the Adunarea Generală kind; BC edits both shares, 1–100 %, every change audited), which is in force for that kind's next Role Evaluation unless BC edits it. It is never below the Eligibility Floor.
 _Avoid_: Cutoff, minimum points, prag alone
 
 **Retention Signal**:
-The automatic notice BC receives when a Role Evaluation ranks a Voluntar Activ (Voluntar Activ kind) or a Voluntar cu Drept de Vot (Adunarea Generală kind) below the share of the ranking their Role requires. BC decides each withdrawal by hand; nobody loses a Role automatically.
+The notice BC receives about a Voluntar Activ (Voluntar Activ kind) or a Voluntar cu Drept de Vot (Adunarea Generală kind) who no longer meets what their Role requires: ranked below the Promotion Threshold used, left unranked below the Eligibility Floor, or, for a voter, no longer a UBB student, which raises the signal the moment their Universitate changes. BC decides each withdrawal by hand; nobody loses a Role automatically.
 _Avoid_: Demotion, auto-demotion, downgrade
 
 **AG Eligibility**:
-The qualification every Voluntar Activ holds by Role, because that Role already required both tenure and the Voluntar Activ Promotion Threshold. Promotion to Voluntar Activ offers the adherence form; only BC's confirmation of it grants Drept de Vot and, through Automatic Membership, a seat in the Adunarea Generală. No threshold leads to Drept de Vot; the Adunarea Generală Promotion Threshold only measures who keeps it.
+The qualification a Voluntar Activ whose Universitate is Universitatea Babeș-Bolyai holds: the only two conditions for a seat in the Adunarea Generală. Promotion to Voluntar Activ offers the adherence form; only BC's confirmation of it grants Drept de Vot and, through Automatic Membership, a seat in the Adunarea Generală, and the application refuses that grant to anyone who is not a UBB student. No threshold leads to Drept de Vot; the Adunarea Generală Promotion Threshold only measures who keeps it.
 _Avoid_: Drept de Vot threshold
 
 **Vote Retention Threshold**:
-The top share (y %, BC-editable from 1 to 100 %) of an Adunarea Generală Role Evaluation's ranking a Voluntar cu Drept de Vot must reach to keep the Role. BC decides each withdrawal by hand after that Role Evaluation; nobody is removed automatically.
+The top share (y %, 25 by default, BC-editable from 1 to 100 %) of an Adunarea Generală Role Evaluation's ranking a Voluntar cu Drept de Vot must reach to keep the Role. BC decides each withdrawal by hand after that Role Evaluation; nobody is removed automatically.
 _Avoid_: Quorum, Top 25%
 
 ## Access

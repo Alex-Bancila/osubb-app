@@ -8,6 +8,7 @@
 - **Amended:** 2026-09-27 — ruling R28: no Period is opened or closed; BC runs Role Evaluations over a chosen date range, of two kinds with one BC-editable Promotion Threshold each; Voluntar → Voluntar Activ is BC-confirmed from a list of Promotion Candidates; only Recrut → Voluntar stays automatic
 - **Amended:** 2026-09-29 — ruling R31: every BC member, not only the Moderator, grants and removes the BC and Moderator Roles; whoever removes the last active Moderator or BC member names the replacement in the same change; extended the same day (#917) to the Status of a BC member or Moderator and to provisioning or re-inviting at either rank
 - **Amended:** 2026-10-02 — ruling R35 (#983): a Voluntar who holds the required tenure and reaches the Promotion Threshold in force between Role Evaluations becomes a Promotion Candidate at once, not only at the next run; BC still promotes by hand
+- **Amended:** 2026-10-18 — ruling R58 (Portofoliu Interne): nothing promotes by the calendar any more, Recrut → Voluntar included; a Membership Cutoff Date replaces tenure; an Eligibility Floor gates who is ranked and the percentile is taken over the eligible alone, in one ranking of every Member below BCE for the Voluntar Activ kind; a run measures its Candidates and Signals against the line it computes; only a UBB student may hold Drept de Vot; a Simulation precedes every finalised run
 - **Deciders:** Alex Băncilă (IT Coordinator)
 - **Supersedes:** —
 - **Superseded by:** —
@@ -93,3 +94,21 @@ Amends the 2026-09-27 amendment's "Voluntar → Voluntar Activ is BC-confirmed".
 **Runs stand.** A Role Evaluation still supersedes every open row, lists from its range, and computes the next threshold; nothing ranks live and no Retention Signal is raised between runs. After a run, the window restarts and whoever is already at the threshold in it is listed at once. A rejection made between runs holds until the next Voluntar Activ run; a run row's rejection holds for its run only.
 
 **Nothing is promoted.** Decision 1's withdrawal of the automatic Voluntar → Membru Activ stands: BC promotes by hand in the Role panel, and only Recrut → Voluntar by tenure is automatic.
+
+## Amendment (2026-10-18) — Portofoliu Interne: no calendar, an Eligibility Floor, one ranking, the UBB rule (ruling R58)
+
+Design: `docs/superpowers/specs/2026-10-18-portofoliu-interne-design.md`. Alex (2026-10-18): "remove vechime, it doesn't hold to how we work anymore"; "just drop for good the promotion to voluntar"; "only volunteers that are students of BBU are able to become Voluntar cu Drept de Vot, this is a must and won't ever change". Read decision 1 and every earlier amendment as follows.
+
+**Nothing promotes by the calendar.** Decision 1's automatic Recrut → Voluntar is withdrawn: BC promotes Recruți by hand in Roluri like every other Role. The tenure gate of the 2026-09-21 amendment is withdrawn too; in its place a **Membership Cutoff Date**, a calendar day BC sets from Portofoliu Interne at any time, every change audited: a Voluntar who joined on or before it may become a Promotion Candidate, at a run or between runs. Both Promotion Rules, the months, and the daily job go. The trade-off accepted: a cohort is promoted by hand rather than on a timer, because the real criterion ("about a semester in") is a date Interne chooses, never a fixed number of days.
+
+**An Eligibility Floor gates the ranking.** One Task Points value, shared by both kinds (Prag minim, the (department meetings + general meetings) / 2 of the Interne document, entered by hand): a Member below it in the Evaluation Period is not ranked and does not shape the percentile. The Promotion Threshold a run computes is the Task Points of the last Member inside the kind's top share **of the eligible Members alone** (x = 35 % and y = 25 % by default, both still BC-editable). It is therefore never below the Floor.
+
+**One ranking for the Voluntar Activ kind.** The run ranks every active Member below BCE, Recruți and Voluntari cu Drept de Vot included, in one cohort; the per-Role share of the 2026-09-27 amendment (R28 decision 2) is withdrawn. Recruți are ranked on purpose, since their points are part of the semester's results, though they are never listed. The Adunarea Generală kind still ranks the Voluntar cu Drept de Vot holders alone and has no cutoff: UBB student and Voluntar Activ are the only conditions for that Group, so the run only finds who is no longer active enough.
+
+**A run measures against the line it computes.** A finalised run computes its kind's line from this period's eligible Members and measures its own Promotion Candidates and Retention Signals against it; that line is then in force until the next run of its kind (the live Candidates read it; BC may still edit it by hand). The previous line plays no part in the run. A **Simulation** computes the same with chosen values and writes nothing; only a finalised run is a Role Evaluation, and the values it used (Floor, share, cutoff) become the settings in force.
+
+**Retention Signals are stored, and one of them is live.** A Signal is raised for a holder ranked below the line, for a holder left unranked below the Floor, and, for a voter, the moment their Universitate stops being Universitatea Babeș-Bolyai. Points-based Signals come only from a finalised run; the Universitate Signal is live because it is a fact, not a score. Nothing lowers a Role automatically (decision 3 stands).
+
+**Only a UBB student holds Drept de Vot.** The application refuses to grant Voluntar cu Drept de Vot to a Member whose Universitate is not Universitatea Babeș-Bolyai, an unknown value included. This is a rule of the organization, not a setting: it has no toggle.
+
+**AG Eligibility** is therefore two facts, Voluntar Activ and UBB student; no threshold leads to Drept de Vot, which only BC's confirmation of the adherence form grants.
