@@ -1,7 +1,8 @@
 <!--
   Politica de confidențialitate a aplicației OSUBB: sursa de adevăr pentru pagina /confidentialitate
   și pentru pasul de confirmare de după conectare (#771, ruling L16). Textul versiunii 1.0 a fost
-  aprobat de Alex pe 2026-09-27; corecturile versiunii 1.1 (#860), pe 2026-09-29.
+  aprobat de Alex pe 2026-09-27; corecturile versiunii 1.1 (#860), pe 2026-09-29; versiunea 1.2
+  (universitatea, ruling R58) a fost scrisă pe 2026-10-18.
   Regula versiunilor: orice schimbare de conținut incrementează „Versiunea” și data, în acest fișier și
   în app/src/screens/privacy/PrivacyNoticeContent.tsx, iar în același pull request o migrație ridică
   în org_settings `privacy_notice_version` la același număr; aplicația cere apoi fiecărui Membru o
@@ -11,7 +12,7 @@
 
 # Politica de confidențialitate a aplicației OSUBB
 
-**Versiunea 1.1 · în vigoare de la 02.10.2026**
+**Versiunea 1.2 · în vigoare de la 18.10.2026**
 
 Aplicația OSUBB („app.osubb.ro”) este aplicația internă a Organizației Studenților din Universitatea Babeș-Bolyai (OSUBB). Este folosită doar de membrii organizației, pe bază de invitație, pentru a organiza activitatea de voluntariat: taskuri și puncte, calendarul evenimentelor, anunțuri și notificări.
 
@@ -25,7 +26,7 @@ Operatorul datelor este organizația Studenților din Universitatea Babeș-Bolya
 
 **Date de identificare și contact.** Numele complet, numărul de telefon și adresa de email, colectate de către Biroul de Conducere prin intermediul bazei de date a voluntarilor sau a formularului de recrutare. Opțional, un pseudonim, pe care îl poți completa tu în Profil.
 
-**Apartenența la organizație.** Rolul (Recrut, Voluntar, Voluntar Activ, Voluntar cu Drept de Vot, BCE, BC, Moderator), statutul de membru (activ/inactiv), data intrării în organizație, grupurile și departamentele din care faci parte, funcțiile de conducere în grupuri și istoricul schimbărilor de rol, cu cine le-a făcut și când.
+**Apartenența la organizație.** Rolul (Recrut, Voluntar, Voluntar Activ, Voluntar cu Drept de Vot, BCE, BC, Moderator), statutul de membru (activ/inactiv), data intrării în organizație, universitatea la care studiezi, grupurile și departamentele din care faci parte, funcțiile de conducere în grupuri și istoricul schimbărilor de rol, cu cine le-a făcut și când.
 
 **Activitatea în aplicație.**
 
@@ -49,7 +50,7 @@ Aplicația aplică automat o singură regulă de promovare stabilită de BC: tre
 
 Vizibilitatea depinde de rol, exact ca în organizație:
 
-- **Orice membru** vede numele și pseudonimul tău, rolul, data intrării în organizație, grupurile din care faci parte, și te poate vedea în clasament, dacă rolul lui permite clasamentul.
+- **Orice membru** vede numele și pseudonimul tău, rolul, data intrării în organizație, universitatea, grupurile din care faci parte, și te poate vedea în clasament, dacă rolul lui permite clasamentul.
 - **Coordonatorii grupurilor tale** văd taskurile tale din acele grupuri, evaluările și punctele aferente, candidaturile și cererile tale.
 - **BC, BCE și Moderatorul** văd toate taskurile, evaluările și punctele, participarea (RSVP) la evenimente și datele de contact (email, telefon); **BC și Moderatorul** văd în plus candidaturile și cererile din toate grupurile, istoricul rolurilor și confirmările acestei politici.
 
@@ -100,6 +101,8 @@ Aplicația păstrează în memoria browserului tău sesiunea de conectare, adres
 Când schimbăm această politică, publicăm noua versiune în aplicație, cu numărul și data ei, și îți cerem să confirmi că ai citit-o la următoarea conectare. Confirmarea ta (versiunea și momentul) este păstrată și vizibilă pentru BC și Moderator, ca dovadă că ai fost informat; ea nu este un consimțământ și nu schimbă nimic din datele tale.
 
 ---
+
+_Versiunea 1.2 — 18.10.2026. Adaugă universitatea la care studiezi, vizibilă oricărui membru._
 
 _Versiunea 1.1 — 02.10.2026. Corectează textul după aplicația de la lansare: pseudonimul, promovarea la Voluntar Activ decisă de BC, evaluările de rol, rezumatul zilnic pe email și cine vede ce date._
 
