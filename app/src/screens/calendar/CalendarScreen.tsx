@@ -9,9 +9,11 @@ import {
   SegmentedToggle,
   type SegmentedOption,
 } from '../../components/layout';
+import { APPROVAL_RECEIPTS } from '../../components/approvals/approval-labels';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
 import { bucharestDayKey } from '../../lib/calendar-time';
 import { useWorkFilter } from '../../lib/use-work-filter';
+import { useDecidesApprovals } from '../../queries/approvals';
 import { useCampaigns } from '../../queries/campaigns';
 import { useGoingEventIds } from '../../queries/event-rsvp';
 import type { EventPresentation } from '../../queries/events';
@@ -28,7 +30,12 @@ import {
   type EventRelevance,
 } from './calendar-presentation';
 import { useCalendarView, type CalendarView } from './calendar-view';
-import { clearEventReceipts, useCalendarReceipt } from './event-receipts';
+import {
+  clearEventReceipts,
+  setEventReceipt,
+  useCalendarReceipt,
+} from './event-receipts';
+import { EventReviewSheet } from './EventReviewSheet';
 import { NewEventControl } from './NewEventControl';
 import { PreferredGroupsScope } from '../../components/preferred-groups/PreferredGroupsScope';
 import { usePreferredGroups } from '../../components/preferred-groups/preferred-groups';
@@ -83,6 +90,11 @@ function CalendarContent() {
   // An edit or cancel receipt belongs to this visit (#849).
   useEffect(() => clearEventReceipts, []);
   const deleted = useCalendarReceipt();
+  // Alex, 2026-10-18: an Event "În așteptare" opens on its review for a
+  // Member who may publish it — from its card, its chip in Lună or its
+  // `?event=` link. Nobody else is handed `onReview`.
+  const [reviewing, setReviewing] = useState<number | null>(null);
+  const onReview = useDecidesApprovals() ? setReviewing : undefined;
   const todayKey = bucharestDayKey(new Date(now)) ?? '';
 
   const groups = useGroups();
@@ -205,6 +217,7 @@ function CalendarContent() {
             keepGroup={preferred.keepGroup}
             showManaged={showManaged}
             onShowManagedChange={setShowManaged}
+            onReview={onReview}
           />
         ) : (
           <CalendarAgenda
@@ -215,6 +228,22 @@ function CalendarContent() {
             groups={groups.data}
             relevanceOf={relevanceOf}
             keepEvent={keepEvent}
+            onReview={onReview}
+          />
+        )}
+
+        {/* The decision's receipt sits on the card, as an edit's does. */}
+        {reviewing !== null && (
+          <EventReviewSheet
+            id={reviewing}
+            open
+            onOpenChange={(next) => {
+              if (!next) setReviewing(null);
+            }}
+            onDecided={(outcome) => {
+              setReviewing(null);
+              setEventReceipt(reviewing, APPROVAL_RECEIPTS.event[outcome]);
+            }}
           />
         )}
       </FabActions>

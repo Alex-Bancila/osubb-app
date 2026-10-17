@@ -10,20 +10,8 @@ import { AnnouncementReviewSheet } from '../../screens/announcements/Announcemen
 import { EventReviewSheet } from '../../screens/calendar/EventReviewSheet';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { approvalRequestsLabel } from './approval-labels';
+import { APPROVAL_RECEIPTS, approvalRequestsLabel } from './approval-labels';
 import { ApprovalRequestsSheet } from './ApprovalRequestsSheet';
-
-/** What the list says under itself after a decision, until it closes. */
-const RECEIPTS: Record<ApprovalKind, Record<ReviewOutcome, string>> = {
-  announcement: {
-    approved: 'Anunțul a fost aprobat și publicat.',
-    rejected: 'Anunțul a fost respins.',
-  },
-  event: {
-    approved: 'Evenimentul a fost aprobat și publicat.',
-    rejected: 'Evenimentul a fost respins.',
-  },
-};
 
 /**
  * The request icon (spec 2026-10-11): shown only to a viewer who decides and
@@ -44,7 +32,7 @@ export function ApprovalRequestsButton({ kind }: { kind: ApprovalKind }) {
 
   function decided(outcome: ReviewOutcome) {
     setReviewing(null);
-    setReceipt(RECEIPTS[kind][outcome]);
+    setReceipt(APPROVAL_RECEIPTS[kind][outcome]);
   }
 
   return (
