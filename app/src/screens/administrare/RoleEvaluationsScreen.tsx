@@ -1452,9 +1452,12 @@ function RejectDialog({
 function CandidatesPanel({
   disabled,
   onRun,
+  showEmpty,
 }: {
   disabled: boolean;
   onRun: Run;
+  /** After a first run the panel stays to say it is empty; before it, it appears with its first candidate. */
+  showEmpty: boolean;
 }) {
   const candidates = usePromotionCandidates();
   const memberIds = useMemo(
@@ -1468,6 +1471,11 @@ function CandidatesPanel({
     candidates.data ? [PROMOTION_CANDIDATES_SUBJECT] : NO_SUBJECTS,
   );
   const [notice, setNotice] = useState<string | null>(null);
+  // B58: no empty block before the first run. Since #983 a Voluntar is
+  // listed the moment their points reach the threshold, run or no run, so
+  // the panel appears with its first candidate, not with the first run.
+  if (!showEmpty && !candidates.isError && (candidates.data?.length ?? 0) === 0)
+    return null;
   return (
     <Panel
       title="Candidați la promovare"
@@ -1874,7 +1882,7 @@ function KindView({
 }) {
   // Until the first run only Run and Praguri have anything to say (B58): the
   // candidates, signals and history panels appear with their first row, the
-  // log with its first change.
+  // log with its first change. A live candidate (#983) needs no run.
   const hasRun = evaluations.length > 0;
   return (
     <>
@@ -1897,7 +1905,7 @@ function KindView({
       <PageGrid columns={1}>
         {/* Under both kinds: a promotion waits for a decision whichever
             evaluation the viewer is looking at. */}
-        {hasRun && <CandidatesPanel disabled={disabled} onRun={onRun} />}
+        <CandidatesPanel disabled={disabled} onRun={onRun} showEmpty={hasRun} />
         {hasRun && (
           <SignalsPanel
             // Keyed by kind: one kind's rows never linger under the other.

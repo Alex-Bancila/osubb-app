@@ -1459,6 +1459,38 @@ it('shows only Run and Praguri under a kind, and only the tenure rule under Vech
   );
 });
 
+// Fails if the candidates wait for a run: since #983 a Voluntar becomes a
+// candidate the moment their points reach the threshold, with no run at all
+// (the Legacy Import listed 64 that way), and their Notifications lead here.
+it('lists live Promotion Candidates before the first run, and only them (B58, #983)', async () => {
+  db.candidates = [
+    {
+      id: 9,
+      member_id: 'ana',
+      task_points: 48,
+      tenure_since: '2026-03-15',
+      role_evaluation_id: null,
+      threshold_used: 30,
+      created_at: '2026-10-17T09:00:00Z',
+      decision: null,
+    },
+  ];
+  show();
+  const candidates = await panel('Candidați la promovare');
+  const list = await within(candidates).findByRole('list', {
+    name: 'Candidați la promovare',
+  });
+  expect(
+    within(list).getByRole('link', { name: 'Promovează: Ana Pop' }),
+  ).toBeVisible();
+  // The other panels still wait for their first row.
+  expect(shownPanels()).toEqual([
+    'Rulează o evaluare de rol',
+    'Praguri',
+    'Candidați la promovare',
+  ]);
+});
+
 it('says when a kind has never run, once another kind has', async () => {
   db.runs = [RUN_VA];
   db.rankings.set('voluntar_activ:2026-02-01:2026-06-30', []);
