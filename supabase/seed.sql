@@ -339,15 +339,15 @@ select '00000000-0000-0000-0000-000000000000', m.id, 'authenticated', 'authentic
 -- reads as a prototype, and BC are looking at this on September 15.
 -- #160: every demo profile joined on January 1 of its year (#936 dropped the
 -- joined_year column that joined_at was first backfilled from).
-insert into profiles (id, full_name, email, role, joined_at, avatar_color) values
-  ('d0000000-0000-0000-0000-000000000001', 'Andrei Mureșan',   'recrut@demo.osubb',      'recrut',      '2026-01-01', '#ED2025'),
-  ('d0000000-0000-0000-0000-000000000002', 'Ioana Popescu',    'voluntar@demo.osubb',    'voluntar',    '2025-01-01', '#284C93'),
-  ('d0000000-0000-0000-0000-000000000003', 'Vlad Constantin',  'activ@demo.osubb',       'activ',       '2025-01-01', '#7500A0'),
-  ('d0000000-0000-0000-0000-000000000004', 'Maria Dobre',      'vot@demo.osubb',         'vot',         '2024-01-01', '#007F33'),
-  ('d0000000-0000-0000-0000-000000000005', 'Raluca Ionescu',   'responsabil@demo.osubb', 'vot', '2024-01-01', '#F2A700'),
-  ('d0000000-0000-0000-0000-000000000006', 'Alex Băncilă',     'bce@demo.osubb',         'bce',         '2023-01-01', '#ED2025'),
-  ('d0000000-0000-0000-0000-000000000007', 'Cristina Șerban',  'bc@demo.osubb',          'bc',          '2023-01-01', '#FF3B3B'),
-  ('d0000000-0000-0000-0000-000000000008', 'Moderator OSUBB',  'moderator@demo.osubb',   'moderator',   '2023-01-01', '#241F1E');
+insert into profiles (id, full_name, email, role, joined_at, avatar_color, university) values
+  ('d0000000-0000-0000-0000-000000000001', 'Andrei Mureșan',   'recrut@demo.osubb',      'recrut',      '2026-01-01', '#ED2025', 'Universitatea Babeș-Bolyai'),
+  ('d0000000-0000-0000-0000-000000000002', 'Ioana Popescu',    'voluntar@demo.osubb',    'voluntar',    '2025-01-01', '#284C93', 'Universitatea Tehnică din Cluj-Napoca'),
+  ('d0000000-0000-0000-0000-000000000003', 'Vlad Constantin',  'activ@demo.osubb',       'activ',       '2025-01-01', '#7500A0', 'Universitatea Babeș-Bolyai'),
+  ('d0000000-0000-0000-0000-000000000004', 'Maria Dobre',      'vot@demo.osubb',         'vot',         '2024-01-01', '#007F33', 'Universitatea Babeș-Bolyai'),
+  ('d0000000-0000-0000-0000-000000000005', 'Raluca Ionescu',   'responsabil@demo.osubb', 'vot', '2024-01-01', '#F2A700', 'Universitatea Babeș-Bolyai'),
+  ('d0000000-0000-0000-0000-000000000006', 'Alex Băncilă',     'bce@demo.osubb',         'bce',         '2023-01-01', '#ED2025', 'Universitatea Tehnică din Cluj-Napoca'),
+  ('d0000000-0000-0000-0000-000000000007', 'Cristina Șerban',  'bc@demo.osubb',          'bc',          '2023-01-01', '#FF3B3B', 'Universitatea Babeș-Bolyai'),
+  ('d0000000-0000-0000-0000-000000000008', 'Moderator OSUBB',  'moderator@demo.osubb',   'moderator',   '2023-01-01', '#241F1E', null);
 
 -- Group commands own the demo directory and rosters. Claims are set only for
 -- this transaction; the command implementations still verify the live BC role.
