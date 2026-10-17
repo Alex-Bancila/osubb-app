@@ -59,13 +59,23 @@ export async function fetchApprovalRequests(): Promise<ApprovalRequest[]> {
 }
 
 /**
- * The requests, read only for a viewer who decides them (`manageRoles`: BC
- * or the Moderator); `kind` narrows to one page's. `data` stays undefined
- * for everyone else, so the icon renders nothing.
+ * Whether the viewer decides the Cereri de aprobare: BC or the Moderator
+ * (`manageRoles`, level 6 and above — the server's `private.approval_decider`).
+ * The client's one copy of the rule: the request icons read with it, and an
+ * item "În așteptare" opens on its review for this viewer (2026-10-18).
+ */
+export function useDecidesApprovals(): boolean {
+  return useCapability('manageRoles').data === true;
+}
+
+/**
+ * The requests, read only for a viewer who decides them
+ * (`useDecidesApprovals`); `kind` narrows to one page's. `data` stays
+ * undefined for everyone else, so the icon renders nothing.
  */
 export function useApprovalRequests(kind?: ApprovalKind) {
   const memberId = useAuth().session?.user.id;
-  const decides = useCapability('manageRoles').data === true;
+  const decides = useDecidesApprovals();
   return useQuery({
     queryKey: keys.approvals.list(memberId),
     queryFn: memberId && decides ? fetchApprovalRequests : skipToken,

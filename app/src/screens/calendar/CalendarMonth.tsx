@@ -69,6 +69,7 @@ export function CalendarMonth({
   keepGroup = keepAll,
   showManaged,
   onShowManagedChange: setShowManaged,
+  onReview,
 }: {
   month: MonthKey;
   /** The screen's clock, in milliseconds (a render must not read the time). */
@@ -84,6 +85,11 @@ export function CalendarMonth({
   /** **Taskurile gestionate**, kept by the screen: its Work Filter reads it too (#845). */
   showManaged: boolean;
   onShowManagedChange: (next: boolean) => void;
+  /**
+   * Opens a pending Event's review, for a Member who decides it: from its
+   * card under the grid, and from its chip (2026-10-18).
+   */
+  onReview?: (eventId: number) => void;
 }) {
   const [, setParams] = useSearchParams();
   const weeks = useMemo(
@@ -280,6 +286,7 @@ export function CalendarMonth({
                     const chips = [
                       ...(items?.events ?? []).map((event) => ({
                         key: `e${event.id}`,
+                        eventId: event.id,
                         kind: 'event' as const,
                         title: event.title,
                         color: relevanceColor(
@@ -296,6 +303,7 @@ export function CalendarMonth({
                       })),
                       ...(items?.tasks ?? []).map((task) => ({
                         key: `t${task.id}`,
+                        eventId: null,
                         kind: 'task' as const,
                         title: task.title,
                         color: task.color,
@@ -319,7 +327,18 @@ export function CalendarMonth({
                             selectedDay === day.dayKey ? 'true' : 'false'
                           }
                           aria-current={day.isToday ? 'date' : undefined}
-                          onClick={() => setPicked({ month, day: day.dayKey })}
+                          onClick={(clicked) => {
+                            setPicked({ month, day: day.dayKey });
+                            // A decider's click on a pending Event's chip
+                            // opens its review too. The cell stays the day's
+                            // one button: a keyboard picks the day, then
+                            // reaches the review on the card below.
+                            const chip = (
+                              clicked.target as Element
+                            ).closest<HTMLElement>('[data-review-event]');
+                            if (chip && onReview)
+                              onReview(Number(chip.dataset.reviewEvent));
+                          }}
                         >
                           <span className="calendar-cell-number">
                             {day.dayNumber}
@@ -328,6 +347,11 @@ export function CalendarMonth({
                             {chips.slice(0, CHIPS_PER_DAY).map((chip) => (
                               <span
                                 key={chip.key}
+                                data-review-event={
+                                  onReview && chip.pending
+                                    ? (chip.eventId ?? undefined)
+                                    : undefined
+                                }
                                 className={cn(
                                   'calendar-chip',
                                   chip.kind === 'task' && 'is-task',
@@ -432,6 +456,7 @@ export function CalendarMonth({
                           relevance={relevanceOf(event)}
                           past={Date.parse(event.startsAt) < now}
                           manageable
+                          onReview={onReview}
                         />
                       </li>
                     ))}

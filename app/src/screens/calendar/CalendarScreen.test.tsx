@@ -103,11 +103,52 @@ vi.mock('./NewEventControl', () => ({
   ),
 }));
 // Who may manage an Event is EventManageControls' own suite; here a card only
-// has to ask for it.
-vi.mock('./EventManageControls', () => ({
-  EventManageControls: ({ event: shown }: { event: EventPresentation }) => (
-    <span data-testid={`manage-${shown.id}`} />
-  ),
+// has to ask for it, and shows the receipt it would show.
+vi.mock('./EventManageControls', async () => {
+  const { useEventReceipt } =
+    await vi.importActual<typeof import('./event-receipts')>(
+      './event-receipts',
+    );
+  return {
+    EventManageControls: ({ event: shown }: { event: EventPresentation }) => (
+      <span data-testid={`manage-${shown.id}`}>
+        {useEventReceipt(shown.id)}
+      </span>
+    ),
+  };
+});
+// BC and the Moderator decide the Cereri de aprobare (`manageRoles`); nobody
+// here does unless a test says so.
+const capability = vi.hoisted(() => ({ manageRoles: false }));
+vi.mock('../../lib/capabilities', () => ({
+  useCapability: (name: string) => ({
+    data: name === 'manageRoles' && capability.manageRoles,
+  }),
+}));
+// The review surface itself is the edit sheet's own suite; here it is a stub
+// that decides or closes on a click.
+vi.mock('./EventReviewSheet', () => ({
+  EventReviewSheet: ({
+    id,
+    open,
+    onOpenChange,
+    onDecided,
+  }: {
+    id: number;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onDecided: (outcome: 'approved' | 'rejected') => void;
+  }) =>
+    open ? (
+      <div role="dialog" aria-label={`Revizuire eveniment ${id}`}>
+        <button type="button" onClick={() => onDecided('rejected')}>
+          Respinge
+        </button>
+        <button type="button" onClick={() => onOpenChange(false)}>
+          Renunță
+        </button>
+      </div>
+    ) : null,
 }));
 // Likewise Cine participă (#934): EventAttendance's suite decides who sees it.
 vi.mock('./EventAttendance', () => ({
@@ -1281,6 +1322,148 @@ describe('CalendarScreen', () => {
         screen.getByRole('table', { name: 'octombrie 2026' }),
       ).toBeInTheDocument();
     });
+  });
+
+  /* Alex, 2026-10-18: an Event "În așteptare", clicked by someone who may
+     publish it, opens on Publică / Respinge. */
+  describe('a pending Event, for a Member who decides it', () => {
+    const gala = event({
+      id: 71,
+      title: 'Gala OSUBB',
+      groupId: 5,
+      group: osubbGroup,
+      approvalStatus: 'pending',
+    });
+    const reviewButton = { name: 'Revizuiește evenimentul Gala OSUBB' };
+    const galaChip = () =>
+      Array.from(document.querySelectorAll<HTMLElement>('.calendar-chip')).find(
+        (chip) => chip.textContent?.includes('Gala OSUBB'),
+      );
+
+    beforeEach(() => {
+      capability.manageRoles = true;
+    });
+    afterEach(() => {
+      capability.manageRoles = false;
+    });
+
+    it('opens its review from its Agendă card', async () => {
+      const user = userEvent.setup();
+      setEvents([gala]);
+      renderCalendar();
+
+      const card = screen.getByRole('article', { name: 'Gala OSUBB' });
+      await user.click(within(card).getByRole('button', reviewButton));
+
+      expect(
+        screen.getByRole('dialog', { name: 'Revizuire eveniment 71' }),
+      ).toBeVisible();
+    });
+
+    it('closes on the decision and leaves its receipt on the card', async () => {
+      const user = userEvent.setup();
+      setEvents([gala]);
+      renderCalendar();
+
+      const card = screen.getByRole('article', { name: 'Gala OSUBB' });
+      await user.click(within(card).getByRole('button', reviewButton));
+      await user.click(
+        within(screen.getByRole('dialog')).getByRole('button', {
+          name: 'Respinge',
+        }),
+      );
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(within(card).getByTestId('manage-71')).toHaveTextContent(
+        'Evenimentul a fost respins.',
+      );
+    });
+
+    it('opens its review from its chip in Lună, and lists its day', async () => {
+      const user = userEvent.setup();
+      stubStorage({ [CALENDAR_VIEW_STORAGE_KEY]: 'month' });
+      setEvents([gala]);
+      renderCalendar();
+
+      const chip = galaChip();
+      expect(chip).toBeDefined();
+      await user.click(chip as HTMLElement);
+
+      expect(
+        screen.getByRole('dialog', { name: 'Revizuire eveniment 71' }),
+      ).toBeVisible();
+      expect(chip?.closest('button')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('opens its review once from the ?event= link its request Notification carries', async () => {
+      const user = userEvent.setup();
+      hooks.useEvent.mockReturnValue(query(gala));
+      setEvents([gala]);
+      renderCalendar('/calendar?event=71');
+
+      expect(
+        screen.getByRole('dialog', { name: 'Revizuire eveniment 71' }),
+      ).toBeVisible();
+      await user.click(
+        within(screen.getByRole('dialog')).getByRole('button', {
+          name: 'Renunță',
+        }),
+      );
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      // The card stays where the link landed, its review a click away.
+      expect(
+        screen.getByRole('article', { name: 'Gala OSUBB' }),
+      ).toHaveAttribute('aria-current', 'true');
+    });
+
+    it('offers no review of an approved or a rejected Event', async () => {
+      const user = userEvent.setup();
+      setEvents([
+        event({ id: 72, title: 'Bal', approvalStatus: 'rejected' }),
+        event({ id: 73, title: 'Ședință' }),
+      ]);
+      renderCalendar();
+
+      expect(
+        screen.queryByRole('button', { name: /^Revizuiește/ }),
+      ).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Lună' }));
+      const bal = Array.from(
+        document.querySelectorAll<HTMLElement>('.calendar-chip'),
+      ).find((chip) => chip.textContent?.includes('Bal'));
+      await user.click(bal as HTMLElement);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
+
+  it('offers a Member who does not decide no review of a pending Event: not on its card, its link or its chip', async () => {
+    const user = userEvent.setup();
+    const gala = event({
+      id: 71,
+      title: 'Gala OSUBB',
+      groupId: 5,
+      group: osubbGroup,
+      approvalStatus: 'pending',
+    });
+    hooks.useEvent.mockReturnValue(query(gala));
+    setEvents([gala]);
+    renderCalendar('/calendar?event=71');
+
+    const card = screen.getByRole('article', { name: 'Gala OSUBB' });
+    expect(within(card).getByText('Așteaptă aprobarea BC.')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: /^Revizuiește/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Lună' }));
+    const chip = Array.from(
+      document.querySelectorAll<HTMLElement>('.calendar-chip'),
+    ).find((element) => element.textContent?.includes('Gala OSUBB'));
+    await user.click(chip as HTMLElement);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    // The chip still picks its day, as for everyone.
+    expect(chip?.closest('button')).toHaveAttribute('aria-pressed', 'true');
   });
 });
 
