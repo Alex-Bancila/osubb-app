@@ -25,9 +25,12 @@ import {
 } from './announcements-presentation';
 import AnnouncementCard from './AnnouncementCard';
 import AnnouncementDetailsSheet from './AnnouncementDetailsSheet';
+import { AnnouncementReviewSheet } from './AnnouncementReviewSheet';
 import CriticalAnnouncementBanner from './CriticalAnnouncementBanner';
 import AnnouncementComposeSheet from './AnnouncementComposeSheet';
+import { APPROVAL_RECEIPTS } from '../../components/approvals/approval-labels';
 import { ApprovalRequestsButton } from '../../components/approvals/ApprovalRequestsButton';
+import { useDecidesApprovals } from '../../queries/approvals';
 import { Empty, ErrorState, Loading } from '../../components/states';
 import {
   FabActions,
@@ -190,8 +193,10 @@ function AnnouncementsContent({
   const [selected, setSelected] = useState<AnnouncementPresentation | null>(
     null,
   );
-  // #930: the details sheet closes on a delete, so the receipt lives here.
-  const [deleted, setDeleted] = useState(false);
+  // #930: the details sheet closes on a delete, and the review on its
+  // decision, so the receipt lives here.
+  const [receipt, setReceipt] = useState<string | null>(null);
+  const decides = useDecidesApprovals();
   const markedIdsRef = useRef<Set<number>>(new Set());
   const inFlightIdsRef = useRef<Set<number>>(new Set());
   // The `?anunt=` value already opened on this visit: a rerender or a feed
@@ -274,6 +279,14 @@ function AnnouncementsContent({
       : (loaded.get(selected.id) ??
         selectedFound ??
         (selectedRead.data === undefined ? selected : null));
+  // Alex, 2026-10-18: one "În așteptare", opened by a Member who may publish
+  // it — from its card, the banner or its link — opens on its review instead.
+  // Decided on the row as it was opened: the decision's refetch lands before
+  // it returns, and must not swap the details sheet in under the review.
+  const reviewing =
+    decides && selected?.approvalStatus === 'pending'
+      ? selectedAnnouncement
+      : null;
 
   function markAsRead(announcement: AnnouncementPresentation) {
     if (
@@ -297,7 +310,7 @@ function AnnouncementsContent({
   }
 
   function handleOpenAnnouncement(announcement: AnnouncementPresentation) {
-    setDeleted(false);
+    setReceipt(null);
     setSelected(announcement);
     markAsRead(announcement);
   }
@@ -412,9 +425,7 @@ function AnnouncementsContent({
         buttonSlot={filterSlot}
       />
 
-      {deleted && (
-        <Toast onClose={() => setDeleted(false)}>Anunțul a fost șters.</Toast>
-      )}
+      {receipt && <Toast onClose={() => setReceipt(null)}>{receipt}</Toast>}
 
       {isPending || (feedReady && emptyWaits) ? (
         <Loading label="Se încarcă anunțurile…" />
@@ -484,8 +495,21 @@ function AnnouncementsContent({
         </div>
       )}
 
+      {reviewing && (
+        <AnnouncementReviewSheet
+          id={reviewing.id}
+          open
+          onOpenChange={(next) => {
+            if (!next) closeDetails();
+          }}
+          onDecided={(outcome) => {
+            closeDetails();
+            setReceipt(APPROVAL_RECEIPTS.announcement[outcome]);
+          }}
+        />
+      )}
       <AnnouncementDetailsSheet
-        announcement={selectedAnnouncement}
+        announcement={reviewing ? null : selectedAnnouncement}
         unavailable={linkUnavailable}
         failed={
           linkFailed
@@ -498,7 +522,7 @@ function AnnouncementsContent({
         onClose={closeDetails}
         onDeleted={() => {
           closeDetails();
-          setDeleted(true);
+          setReceipt('Anunțul a fost șters.');
         }}
       />
     </>

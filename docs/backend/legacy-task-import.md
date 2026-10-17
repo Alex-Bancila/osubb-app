@@ -1,5 +1,7 @@
 # Legacy Task Tracker import (#1049)
 
+> **Closed.** The import ran once in production on 2026-10-17: 5 411 sheet rows, 29 392 Task Points, 219 Members, read back against the file (recorded on #1049). #1050 dropped `public.import_legacy_tasks` and `public.legacy_task_import_totals`, and every `legacy_migration` Evaluation is refused again. Nothing on this page can run any more; it stays as the record of how the run was done.
+
 The one-time copy of the pre-app Google Sheets Task Tracker into production. Design: [the spec](../superpowers/specs/2026-10-13-legacy-task-import-design.md); rule: ADR-0007, amendment of 2026-10-14. After the verified production run the command is dropped (#1050) and none of this is ever run again.
 
 ## What you need
@@ -38,7 +40,7 @@ Pick a quiet hour: every batch broadcasts its rows to open clients, and 67 promo
 SUPABASE_URL=https://<production-ref>.supabase.co SUPABASE_SECRET_KEY=sb_secret_… node scripts/import-legacy-tasks.mjs --file ../osubb-legacy-import/import-set.json --actor <the Moderator's address> --dry-run
 ```
 
-It must end with `Dry run: 5270 would be imported, 0 already imported. Nothing was written.` and the per-Group lines must match `import-summary.json`.
+It must end with `Dry run: <rows> would be imported, 0 already imported. Nothing was written.` (5 411 in the run of 2026-10-17, after the set was rebuilt; the first build had 5 270) and the per-Group lines must match `import-summary.json`.
 
 3. **The real run** — the same line with `--execute`. It must end with `Verified: … matching the file for every Group and Member.`
 4. **Look.** Three imported Tasks from different Groups, one Member's total, Clasament for March 2026, the promotion candidates in Administrare → Evaluări de rol.

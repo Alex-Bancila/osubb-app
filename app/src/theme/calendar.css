@@ -682,6 +682,64 @@
   font-weight: var(--fw-semibold);
 }
 
+/* A request the viewer decides (2026-10-18): the whole card opens its review.
+   Revizuiește is the button, its hit area the card (so the card's hover is
+   the button's); the managers' strip stays above it, its own targets. */
+.event-card.is-reviewable {
+  cursor: pointer;
+}
+
+.event-card.is-reviewable:hover {
+  border-color: color-mix(in srgb, var(--text) 25%, var(--border));
+}
+
+.event-card.is-reviewable .event-pending {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-3);
+}
+
+.event-review-open {
+  min-height: 44px;
+  padding: 0 var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+}
+
+.event-review-open:hover {
+  background: var(--surface-2);
+}
+
+.event-review-open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-md);
+}
+
+.event-review-open:focus-visible {
+  outline: none;
+}
+
+.event-review-open:focus-visible::after {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: -2px;
+}
+
+.event-card.is-reviewable .event-manage,
+.event-card.is-reviewable .event-attendance {
+  position: relative;
+  z-index: 1;
+}
+
 .event-rejected {
   margin: var(--s-5) 0 0;
   padding-top: var(--s-4);

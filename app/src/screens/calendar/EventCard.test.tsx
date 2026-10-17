@@ -115,6 +115,54 @@ describe('EventCard — approval (spec 2026-10-11)', () => {
     ).toBeVisible();
   });
 
+  it('makes only a pending card the hit area of its review, for a Member who decides (2026-10-18)', () => {
+    const onReview = vi.fn();
+    render(
+      <>
+        <EventCard
+          event={event({ approvalStatus: 'pending' })}
+          onReview={onReview}
+        />
+        <EventCard
+          event={event({ id: 32, title: 'Bal', approvalStatus: 'rejected' })}
+          onReview={onReview}
+        />
+        <EventCard
+          event={event({ id: 33, title: 'Gala' })}
+          onReview={onReview}
+        />
+        {/* Review I1: a cancelled pending Event is no request. */}
+        <EventCard
+          event={event({
+            id: 34,
+            title: 'Anulat',
+            approvalStatus: 'pending',
+            cancelledAt: '2030-09-01T10:00:00.000Z',
+            cancelReason: 'Sala nu mai e liberă.',
+          })}
+          onReview={onReview}
+        />
+      </>,
+    );
+    const pending = screen.getByRole('article', {
+      name: 'Ședință Educațional',
+    });
+    expect(pending).toHaveClass('is-reviewable');
+    within(pending)
+      .getByRole('button', {
+        name: 'Revizuiește evenimentul Ședință Educațional',
+      })
+      .click();
+    expect(onReview).toHaveBeenCalledWith(31);
+    for (const name of ['Bal', 'Gala', 'Anulat']) {
+      const card = screen.getByRole('article', { name });
+      expect(card).not.toHaveClass('is-reviewable');
+      expect(
+        within(card).queryByRole('button', { name: /^Revizuiește/ }),
+      ).toBeNull();
+    }
+  });
+
   it('shows neither on an approved Event', () => {
     render(<EventCard event={event()} />);
     const card = screen.getByRole('article', { name: 'Ședință Educațional' });

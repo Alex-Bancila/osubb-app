@@ -15,6 +15,7 @@ import {
 } from '../../queries/notifications';
 import type { Group } from '../../queries/reference';
 import {
+  awaitsDecision,
   eventCardId,
   countLabel,
   eventRangeForDays,
@@ -53,6 +54,7 @@ export function CalendarAgenda({
   groups,
   relevanceOf,
   keepEvent = keepAll,
+  onReview,
 }: {
   /** The screen's clock, in milliseconds (a render must not read the time). */
   now: number;
@@ -63,6 +65,11 @@ export function CalendarAgenda({
   relevanceOf: (event: EventPresentation) => EventRelevance;
   /** R43: whether an Event is shown under the preferred Groups. */
   keepEvent?: (event: EventPresentation) => boolean;
+  /**
+   * Opens a pending Event's review, for a Member who decides it: from its
+   * card, and once from a link that lands on it (2026-10-18).
+   */
+  onReview?: (eventId: number) => void;
 }) {
   const linked = useEvent(linkedId);
   const linkedEvent = linkedId !== null ? (linked.data ?? null) : null;
@@ -123,6 +130,22 @@ export function CalendarAgenda({
     card?.scrollIntoView?.({ block: 'center' });
     card?.focus({ preventScroll: true });
   }, [landing, linkedId]);
+
+  // The link a request Notification carries lands a decider on the review,
+  // once per link: closing it leaves the card, its review a click away. The
+  // decider's flag may arrive after the landing, so it is its own effect.
+  const reviewed = useRef<number | null>(null);
+  const reviewLanding =
+    onReview && linkedEvent && awaitsDecision(linkedEvent) ? landing : null;
+  useEffect(() => {
+    if (reviewLanding === null) {
+      if (linkedId === null) reviewed.current = null;
+      return;
+    }
+    if (reviewed.current === reviewLanding) return;
+    reviewed.current = reviewLanding;
+    onReview?.(reviewLanding);
+  }, [reviewLanding, linkedId, onReview]);
 
   return (
     <div className="calendar-agenda-view">
@@ -197,6 +220,7 @@ export function CalendarAgenda({
                         past={Date.parse(event.startsAt) < now}
                         highlighted={event.id === linkedId}
                         manageable
+                        onReview={onReview}
                       />
                     </li>
                   ))}

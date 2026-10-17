@@ -3785,10 +3785,6 @@ export type Database = {
           source: string
         }[]
       }
-      import_legacy_tasks: {
-        Args: { p_actor: string; p_dry_run?: boolean; p_rows: Json }
-        Returns: Json
-      }
       import_member: {
         Args: {
           p_email: string
@@ -3885,7 +3881,6 @@ export type Database = {
           unfulfilled_at: string
         }[]
       }
-      legacy_task_import_totals: { Args: never; Returns: Json }
       managed_work_groups: {
         Args: never
         Returns: {

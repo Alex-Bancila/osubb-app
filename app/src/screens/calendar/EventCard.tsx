@@ -6,6 +6,7 @@ import { cn } from '../../lib/utils';
 import type { EventPresentation } from '../../queries/events';
 import type { Group } from '../../queries/reference';
 import {
+  awaitsDecision,
   eventCardId,
   eventGroupIcon,
   eventGroupLabel,
@@ -38,6 +39,12 @@ type EventCardProps = {
    * Calendar's cards, not on Acasă's preview.
    */
   manageable?: boolean;
+  /**
+   * Given only to a Member who decides the Cereri de aprobare: a pending
+   * Event's card opens its review (Alex, 2026-10-18) — **Revizuiește** is
+   * the button, its hit area the whole card.
+   */
+  onReview?: (eventId: number) => void;
 };
 
 export default function EventCard({
@@ -48,6 +55,7 @@ export default function EventCard({
   highlighted = false,
   showDay = false,
   manageable = false,
+  onReview,
 }: EventCardProps) {
   // Colour follows the relevance rule, then the Group chain (eventAccentColor).
   // The category icon is painted from the same variable.
@@ -64,6 +72,7 @@ export default function EventCard({
   // published; nobody answers it until then.
   const pending = event.approvalStatus === 'pending';
   const rejected = event.approvalStatus === 'rejected';
+  const reviewable = awaitsDecision(event) && onReview !== undefined;
 
   return (
     <article
@@ -74,6 +83,7 @@ export default function EventCard({
         relevance === 'other' && 'is-other',
         highlighted && 'is-highlighted',
         cancelled && 'is-cancelled',
+        reviewable && 'is-reviewable',
       )}
       aria-labelledby={titleId}
       aria-current={highlighted ? 'true' : undefined}
@@ -157,7 +167,19 @@ export default function EventCard({
           <span className="event-rejected-reason">{event.rejectionReason}</span>
         </p>
       ) : pending ? (
-        <p className="event-pending">Așteaptă aprobarea BC.</p>
+        <p className="event-pending">
+          Așteaptă aprobarea BC.
+          {reviewable && (
+            <button
+              type="button"
+              className="event-review-open"
+              aria-label={`Revizuiește evenimentul ${event.title}`}
+              onClick={() => onReview?.(event.id)}
+            >
+              Revizuiește
+            </button>
+          )}
+        </p>
       ) : (
         takesRsvp &&
         (past ? (

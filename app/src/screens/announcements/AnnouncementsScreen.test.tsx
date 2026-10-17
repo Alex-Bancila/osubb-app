@@ -53,6 +53,9 @@ const approvals = vi.hoisted(() => ({ data: [] as unknown[] }));
 vi.mock('../../queries/approvals', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../queries/approvals')>()),
   useApprovalRequests: () => ({ data: approvals.data }),
+  // BC's details sheet offers Editează, whose form can also decide.
+  useApproveAnnouncement: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useRejectAnnouncement: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('../../queries/announcements', () => ({
   useAnnouncementFeed: hooks.useAnnouncementFeed,
@@ -77,8 +80,38 @@ vi.mock('../../queries/member-identities', () => ({
   useMemberIdentities: () => ({ data: undefined }),
   useMemberIdentitiesByPage: hooks.useMemberIdentitiesByPage,
 }));
+// BC and the Moderator decide the Cereri de aprobare (`manageRoles`); nobody
+// here does unless a test says so.
+const capability = vi.hoisted(() => ({ manageRoles: false }));
 vi.mock('../../lib/capabilities', () => ({
-  useCapability: () => ({ data: false }),
+  useCapability: (name: string) => ({
+    data: name === 'manageRoles' && capability.manageRoles,
+  }),
+}));
+// The review surface itself is the edit sheet's own suite; here it is a stub
+// that decides or closes on a click.
+vi.mock('./AnnouncementReviewSheet', () => ({
+  AnnouncementReviewSheet: ({
+    id,
+    open,
+    onOpenChange,
+    onDecided,
+  }: {
+    id: number;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onDecided: (outcome: 'approved' | 'rejected') => void;
+  }) =>
+    open ? (
+      <div role="dialog" aria-label={`Revizuire anunț ${id}`}>
+        <button type="button" onClick={() => onDecided('approved')}>
+          Aprobă
+        </button>
+        <button type="button" onClick={() => onOpenChange(false)}>
+          Renunță
+        </button>
+      </div>
+    ) : null,
 }));
 vi.mock('../../queries/my-groups', () => ({
   useMyGroupRoles: () => ({ data: [] }),
@@ -943,6 +976,178 @@ describe('AnnouncementsScreen', () => {
       ).toBeInTheDocument();
       expect(mutate).toHaveBeenCalledWith(500, expect.any(Object));
     });
+  });
+
+  /* Alex, 2026-10-18: an Announcement "În așteptare", opened by someone who
+     may publish it, opens on Publică / Respinge rather than on reading it. */
+  describe('a pending Announcement, opened by a Member who decides it', () => {
+    const pending = (overrides: Partial<AnnouncementFeedRow> = {}) =>
+      createRow({
+        id: 42,
+        title: 'Burse de merit',
+        approval_status: 'pending',
+        ...overrides,
+      });
+
+    beforeEach(() => {
+      capability.manageRoles = true;
+    });
+    afterEach(() => {
+      capability.manageRoles = false;
+    });
+
+    it('opens its review from the card, in place of the details sheet', async () => {
+      const user = userEvent.setup();
+      showFeed([pending()]);
+      renderAt('/anunturi');
+
+      await user.click(
+        within(
+          screen.getByRole('article', { name: 'Burse de merit' }),
+        ).getByRole('button', { name: /Citește/ }),
+      );
+
+      expect(
+        screen.getByRole('dialog', { name: 'Revizuire anunț 42' }),
+      ).toBeVisible();
+      expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    });
+
+    it('opens its review from the ?anunt= link its request Notification carries', () => {
+      showFeed([pending()]);
+      renderAt('/anunturi?anunt=42');
+
+      expect(
+        screen.getByRole('dialog', { name: 'Revizuire anunț 42' }),
+      ).toBeVisible();
+      expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    });
+
+    it('opens the review of one read by its id, off the loaded pages', () => {
+      showFeed([createRow({ id: 1, title: 'Primul' })]);
+      readableById({ 500: pending({ id: 500 }) });
+      renderAt('/anunturi?anunt=500');
+
+      expect(
+        screen.getByRole('dialog', { name: 'Revizuire anunț 500' }),
+      ).toBeVisible();
+    });
+
+    it('closes on the decision, drops the link and says what was decided', async () => {
+      const user = userEvent.setup();
+      showFeed([pending()]);
+      renderAt('/anunturi?anunt=42&x=1');
+
+      await user.click(
+        within(screen.getByRole('dialog')).getByRole('button', {
+          name: 'Aprobă',
+        }),
+      );
+
+      await waitFor(() => expect(currentSearch()).toBe('?x=1'));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(
+        screen.getByText('Anunțul a fost aprobat și publicat.'),
+      ).toBeVisible();
+    });
+
+    // A decision refetches the feed before it returns: the row says
+    // approved while the review still sends. The review stays until the
+    // decision closes it, and the details sheet never shows in between.
+    it('stays on the review while the decision’s refetch lands before it returns', async () => {
+      const user = userEvent.setup();
+      showFeed([pending()]);
+      const view = renderAt('/anunturi?anunt=42');
+
+      showFeed([pending({ approval_status: 'approved' })]);
+      view.rerender(<AnnouncementsScreen />);
+
+      expect(
+        screen.getByRole('dialog', { name: 'Revizuire anunț 42' }),
+      ).toBeVisible();
+      expect(
+        screen.queryByRole('dialog', { name: 'Burse de merit' }),
+      ).not.toBeInTheDocument();
+
+      await user.click(
+        within(screen.getByRole('dialog')).getByRole('button', {
+          name: 'Aprobă',
+        }),
+      );
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(
+        screen.getByText('Anunțul a fost aprobat și publicat.'),
+      ).toBeVisible();
+    });
+
+    it('closes undecided and drops the link, without reopening', async () => {
+      const user = userEvent.setup();
+      showFeed([pending()]);
+      renderAt('/anunturi?anunt=42');
+
+      await user.click(
+        within(screen.getByRole('dialog')).getByRole('button', {
+          name: 'Renunță',
+        }),
+      );
+
+      await waitFor(() => expect(currentSearch()).toBe(''));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('keeps the details sheet for a rejected Announcement', async () => {
+      const user = userEvent.setup();
+      showFeed([
+        pending({
+          approval_status: 'rejected',
+          rejection_reason: 'Lipsește termenul.',
+        }),
+      ]);
+      renderAt('/anunturi');
+
+      await user.click(
+        within(
+          screen.getByRole('article', { name: 'Burse de merit' }),
+        ).getByRole('button', { name: /Citește/ }),
+      );
+
+      expect(
+        screen.getByRole('dialog', { name: 'Burse de merit' }),
+      ).toBeVisible();
+      expect(
+        screen.queryByRole('dialog', { name: /^Revizuire/ }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it('keeps the details sheet on a pending Announcement for a Member who does not decide it', async () => {
+    const user = userEvent.setup();
+    showFeed([
+      createRow({
+        id: 42,
+        title: 'Burse de merit',
+        approval_status: 'pending',
+      }),
+    ]);
+    renderAt('/anunturi?anunt=42');
+
+    expect(
+      screen.getByRole('dialog', { name: 'Burse de merit' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('dialog', { name: /^Revizuire/ }),
+    ).not.toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    await user.click(
+      within(screen.getByRole('article', { name: 'Burse de merit' })).getByRole(
+        'button',
+        { name: /Citește/ },
+      ),
+    );
+    expect(
+      screen.queryByRole('dialog', { name: /^Revizuire/ }),
+    ).not.toBeInTheDocument();
   });
 
   describe('Filtrează, by Group', () => {

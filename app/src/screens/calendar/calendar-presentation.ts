@@ -90,6 +90,17 @@ export function eventGroupIcon(event: EventPresentation): LucideIcon {
   return GROUP_CATEGORY_ICONS[event.group.category] ?? Circle;
 }
 
+/**
+ * Whether an Event waits for BC's decision (spec 2026-10-11): pending and not
+ * cancelled. A cancelled request is history the server will not decide
+ * (`event_cancelled`, review I1), and `approval_requests()` leaves it out.
+ */
+export function awaitsDecision(
+  event: Pick<EventPresentation, 'approvalStatus' | 'cancelledAt'>,
+): boolean {
+  return event.approvalStatus === 'pending' && event.cancelledAt === null;
+}
+
 /** The element the `?event=<id>` deep link scrolls to and focuses. */
 export function eventCardId(eventId: number): string {
   return `event-${eventId}`;
