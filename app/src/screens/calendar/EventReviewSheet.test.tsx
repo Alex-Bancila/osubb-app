@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const reads = vi.hoisted(() => ({
@@ -73,5 +74,84 @@ describe('EventReviewSheet (spec 2026-10-11)', () => {
     );
 
     expect(readNotificationsAbout).toHaveBeenCalledWith(['event:71']);
+  });
+
+  const sheet = () => (
+    <EventReviewSheet id={71} open onOpenChange={vi.fn()} onDecided={vi.fn()} />
+  );
+
+  // Fails if the sheet waits for its Event unseen: a tap on a card, a chip
+  // or a request would seem to do nothing.
+  it('opens at once and holds the place of the form while the Event is read', () => {
+    reads.useEvent.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isError: false,
+      isFetching: true,
+      refetch: vi.fn(),
+    });
+
+    render(sheet());
+
+    const dialog = screen.getByRole('dialog', {
+      name: 'Revizuiește evenimentul',
+    });
+    expect(within(dialog).getByRole('status')).toHaveTextContent(
+      'Se încarcă evenimentul…',
+    );
+  });
+
+  // Fails if a failed read draws nothing, or offers no way to try again:
+  // tapping the same card again would change nothing.
+  it('says a failed read failed and reads it again on Reîncearcă', async () => {
+    const user = userEvent.setup();
+    const refetchEvent = vi.fn();
+    const refetchOptions = vi.fn();
+    reads.useEvent.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      isFetching: false,
+      refetch: refetchEvent,
+    });
+    reads.useEventFormOptions.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      isFetching: false,
+      refetch: refetchOptions,
+    });
+
+    render(sheet());
+
+    const dialog = screen.getByRole('dialog', {
+      name: 'Revizuiește evenimentul',
+    });
+    expect(
+      within(dialog).getByText('Nu am putut încărca evenimentul.'),
+    ).toBeInTheDocument();
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Reîncearcă' }),
+    );
+    expect(refetchEvent).toHaveBeenCalledTimes(1);
+    expect(refetchOptions).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so when the Event is gone', () => {
+    reads.useEvent.mockReturnValue({
+      data: null,
+      isPending: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    render(sheet());
+
+    expect(
+      within(
+        screen.getByRole('dialog', { name: 'Revizuiește evenimentul' }),
+      ).getByText('Acest eveniment nu mai există.'),
+    ).toBeInTheDocument();
   });
 });
