@@ -1479,6 +1479,7 @@ export type Database = {
           phone: string | null
           role: Database["public"]["Enums"]["member_role"]
           status: Database["public"]["Enums"]["member_status"]
+          university: string | null
         }
         Insert: {
           avatar_color?: string | null
@@ -1492,6 +1493,7 @@ export type Database = {
           phone?: string | null
           role?: Database["public"]["Enums"]["member_role"]
           status?: Database["public"]["Enums"]["member_status"]
+          university?: string | null
         }
         Update: {
           avatar_color?: string | null
@@ -1505,6 +1507,7 @@ export type Database = {
           phone?: string | null
           role?: Database["public"]["Enums"]["member_role"]
           status?: Database["public"]["Enums"]["member_status"]
+          university?: string | null
         }
         Relationships: []
       }
@@ -2669,6 +2672,7 @@ export type Database = {
           nickname: string | null
           role: Database["public"]["Enums"]["member_role"] | null
           status: Database["public"]["Enums"]["member_status"] | null
+          university: string | null
         }
         Insert: {
           avatar_color?: string | null
@@ -2680,6 +2684,7 @@ export type Database = {
           nickname?: string | null
           role?: Database["public"]["Enums"]["member_role"] | null
           status?: Database["public"]["Enums"]["member_status"] | null
+          university?: string | null
         }
         Update: {
           avatar_color?: string | null
@@ -2691,6 +2696,7 @@ export type Database = {
           nickname?: string | null
           role?: Database["public"]["Enums"]["member_role"] | null
           status?: Database["public"]["Enums"]["member_status"] | null
+          university?: string | null
         }
         Relationships: []
       }
@@ -3956,6 +3962,7 @@ export type Database = {
           primary_group_id: number
           primary_group_name: string
           role: Database["public"]["Enums"]["member_role"]
+          university: string
         }[]
       }
       member_contacts: {
@@ -4495,6 +4502,7 @@ export type Database = {
           phone: string | null
           role: Database["public"]["Enums"]["member_role"]
           status: Database["public"]["Enums"]["member_status"]
+          university: string | null
         }
         SetofOptions: {
           from: "*"
@@ -4522,6 +4530,7 @@ export type Database = {
           phone: string | null
           role: Database["public"]["Enums"]["member_role"]
           status: Database["public"]["Enums"]["member_status"]
+          university: string | null
         }
         SetofOptions: {
           from: "*"

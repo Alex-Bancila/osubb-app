@@ -177,3 +177,41 @@ export function useUpdateMemberJoinedAt() {
     },
   });
 }
+
+/**
+ * R58's write path for the Universitate: the same `profiles_update_self`
+ * policy (a live BC or the Moderator updates any row, #944) and the column
+ * grant `update (university)`; `guard_profile_privileged_columns` refuses the
+ * change below level 6, and `profiles_university_length_ck` keeps it to 2-120
+ * characters. `.single()` turns an RLS refusal (zero rows) into a failure
+ * instead of a silent no-op.
+ */
+export async function updateMemberUniversity(input: {
+  memberId: string;
+  university: string;
+}) {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ university: input.university })
+    .eq('id', input.memberId)
+    .select('id')
+    .single();
+  if (error) throw error;
+}
+
+export function useUpdateMemberUniversity() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: updateMemberUniversity,
+    // The Member Card and Profil read it; so does the Roluri panel, through the
+    // directory the Groups queries hold (it offers Drept de Vot only to a UBB
+    // student).
+    onSuccess: async () => {
+      await Promise.all(
+        [keys.members.all, keys.profile.all, keys.groups.all].map((queryKey) =>
+          client.invalidateQueries({ queryKey }),
+        ),
+      );
+    },
+  });
+}

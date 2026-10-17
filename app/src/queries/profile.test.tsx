@@ -68,6 +68,7 @@ describe('profile queries and mutations', () => {
                     status: 'activ',
                     avatar_color: '#ED2025',
                     joined_at: '2024-01-01',
+                    university: 'Universitatea Babeș-Bolyai',
                   },
                   error: null,
                 }),
@@ -88,6 +89,7 @@ describe('profile queries and mutations', () => {
         status: 'activ',
         avatar_color: '#ED2025',
         joined_at: '2024-01-01',
+        university: 'Universitatea Babeș-Bolyai',
         email: 'alex@osubb.ro',
         phone: '0712345678',
       });
@@ -95,6 +97,14 @@ describe('profile queries and mutations', () => {
         p_ids: [memberId],
       });
       expect(supabaseMock.from).not.toHaveBeenCalledWith('profiles_contact');
+      // R58: the Universitate is read with the rest of the row (the column is
+      // granted to `authenticated`); nothing else widens the select.
+      const read = supabaseMock.from.mock.results
+        .map((result) => result.value as { select?: ReturnType<typeof vi.fn> })
+        .find((value) => value.select !== undefined);
+      expect(read?.select).toHaveBeenCalledWith(
+        'id, full_name, nickname, role, status, avatar_color, joined_at, university',
+      );
     });
 
     it('handles null contact info safely', async () => {
@@ -119,6 +129,7 @@ describe('profile queries and mutations', () => {
                     status: 'activ',
                     avatar_color: null,
                     joined_at: '2026-09-01',
+                    university: null,
                   },
                   error: null,
                 }),
@@ -139,6 +150,7 @@ describe('profile queries and mutations', () => {
         status: 'activ',
         avatar_color: null,
         joined_at: '2026-09-01',
+        university: null,
         email: null,
         phone: null,
       });

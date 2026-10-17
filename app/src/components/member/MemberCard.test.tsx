@@ -35,6 +35,7 @@ const card: MemberCardData = {
   roleLabel: 'Voluntar Activ',
   rankLabel: 'Voluntar Activ',
   joinedAt: '2024-03-12',
+  university: null,
   avatarColor: '#284C93',
   primaryGroup: {
     id: 1,
@@ -121,6 +122,8 @@ it('shows the Nickname, then one line of Role, full name and a short join date, 
     'role-badge',
   );
   expect(meta(dialog)).toHaveTextContent('Membru din 12 mar. 2024');
+  // No Universitate on the card: the line is as it was before R58.
+  expect(meta(dialog)).not.toHaveTextContent('·');
   expect(dialog).not.toHaveTextContent('martie');
   // The line describes the sheet, whose title is the Member.
   expect(dialog).toHaveAccessibleDescription(
@@ -194,6 +197,28 @@ it('omits the join line when the date was never recorded, and draws no Group sum
   expect(dialog).not.toHaveTextContent('Membru din');
   expect(within(dialog).queryByText(/^\+\d/)).toBeNull();
   expect(meta(dialog)).toHaveTextContent(/^Voluntar Activ Ana Pop$/);
+});
+
+it('appends the Universitate to the join line when the Member has one (R58)', async () => {
+  answer({ university: 'Universitatea Babeș-Bolyai' });
+  const dialog = await openCard();
+  expect(meta(dialog)).toHaveTextContent(
+    'Membru din 12 mar. 2024 · Universitatea Babeș-Bolyai',
+  );
+  expect(dialog).toHaveAccessibleDescription(
+    'Voluntar Activ Ana Pop Membru din 12 mar. 2024 · Universitatea Babeș-Bolyai',
+  );
+});
+
+it('names the Universitate alone when the join date was never recorded (R58)', async () => {
+  answer({ joinedAt: null, university: 'Universitatea Sapientia' });
+  const dialog = await openCard();
+  expect(dialog).not.toHaveTextContent('Membru din');
+  expect(meta(dialog)).toHaveTextContent(
+    /^Voluntar Activ Ana Pop Universitatea Sapientia$/,
+  );
+  // The line is never the empty-card fallback while it says something.
+  expect(dialog).not.toHaveTextContent('Profil de membru');
 });
 
 it('shows contact only when member_contacts returned a row', async () => {

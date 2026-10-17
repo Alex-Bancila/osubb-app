@@ -18,6 +18,8 @@ export type MyProfile = {
   status: Database['public']['Enums']['member_status'];
   avatar_color: string | null;
   joined_at: string | null;
+  /** The Universitate (R58): BC sets it, the Member reads it. */
+  university: string | null;
   email: string | null;
   phone: string | null;
 };
@@ -60,7 +62,9 @@ export async function fetchMyProfile(memberId: string): Promise<MyProfile> {
   const [profileRes, contactRes] = await Promise.all([
     supabase
       .from('profiles')
-      .select('id, full_name, nickname, role, status, avatar_color, joined_at')
+      .select(
+        'id, full_name, nickname, role, status, avatar_color, joined_at, university',
+      )
       .eq('id', memberId)
       .single(),
     supabase

@@ -20,6 +20,7 @@ import { useAuth } from '../../lib/auth';
 import { memberEditRights } from '../../lib/member-edit-rights';
 import { commandErrorMessage } from '../../lib/command-reasons';
 import { isUuid } from '../../lib/ids';
+import { isUbbStudent } from '../../lib/universities';
 import {
   useAdminGroups,
   useAppointableMembers,
@@ -308,6 +309,13 @@ export function RolePanel({
         .sort((a, b) => a[1].level - b[1].level),
     [roles.data, leader],
   );
+  // Drept de Vot is for UBB students only (R58): the option stays in the list
+  // -- unlike the leadership ranks above, which are left out -- so BC sees why
+  // it cannot be chosen. The call sits in a memo because the React Compiler
+  // otherwise takes it to mutate what it reads from the query, and then
+  // rejects the memos above (preserve-manual-memoization).
+  const university = member?.university;
+  const ubbStudent = useMemo(() => isUbbStudent(university), [university]);
   const pickable = useMemo(
     () =>
       (members.data ?? [])
@@ -400,6 +408,7 @@ export function RolePanel({
     canEditMember &&
     nextRole !== member?.roleId &&
     roleOptions.some(([id]) => id === nextRole) &&
+    (nextRole !== 'vot' || ubbStudent) &&
     (!roleGuard || replacement !== undefined) &&
     groups.isSuccess &&
     groupIds.isSuccess &&
@@ -581,6 +590,7 @@ export function RolePanel({
                     options={roleOptions.map(([id, role]) => ({
                       value: id,
                       label: role.name,
+                      disabled: id === 'vot' && !ubbStudent,
                     }))}
                     disabled={change.isPending}
                     onValueChange={(next) => {
@@ -588,6 +598,11 @@ export function RolePanel({
                       setReplacementId('');
                     }}
                   />
+                  {!ubbStudent && (
+                    <p className="m-0 text-sm text-muted-foreground">
+                      Doar un student UBB poate primi Drept de Vot.
+                    </p>
+                  )}
                   {nextRole === 'vot' && nextRole !== member.roleId && (
                     <p className="m-0 text-sm">
                       Confirmi Drept de Vot pentru acest membru. Decizia va fi

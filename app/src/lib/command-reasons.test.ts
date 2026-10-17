@@ -213,6 +213,18 @@ it.each([
   expect(commandReason({ code: '23514', message: reason })).toBe(reason);
 });
 
+/* R58: the Universitate and the rule that only a UBB student is granted Drept de Vot. */
+it.each([
+  ['invalid_university', 'Universitatea are între 2 și 120 de caractere.'],
+  [
+    'vote_requires_ubb_student',
+    'Doar un student UBB poate primi Drept de Vot.',
+  ],
+])('has Romanian copy for the Universitate reason %s', (reason, copy) => {
+  expect(reasonCopy(reason)).toBe(copy);
+  expect(commandReason({ code: 'PT409', message: reason })).toBe(reason);
+});
+
 it('describes a failure for a form: the reason and the copy', () => {
   expect(
     describeFailure({ code: 'PT400', message: 'title_too_long' }, 'fallback'),

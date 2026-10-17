@@ -6,6 +6,8 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import axe from 'axe-core';
 import { BackLink } from '../../components/layout';
 import { pickDate } from '../../test/date-picker';
+import { UNIVERSITIES } from '../../lib/universities';
+import { chooseOption, optionNames } from '../../test/select';
 const state = vi.hoisted(() => ({
   member: vi.fn(),
   capabilities: vi.fn(),
@@ -13,6 +15,7 @@ const state = vi.hoisted(() => ({
   mine: vi.fn(),
   mutate: vi.fn(),
   joined: vi.fn(),
+  university: vi.fn(),
   privacy: vi.fn(),
   auth: vi.fn(),
 }));
@@ -24,6 +27,10 @@ vi.mock('../../queries/admin-member', () => ({
   }),
   useUpdateMemberJoinedAt: () => ({
     mutateAsync: state.joined,
+    isPending: false,
+  }),
+  useUpdateMemberUniversity: () => ({
+    mutateAsync: state.university,
     isPending: false,
   }),
 }));
@@ -141,6 +148,7 @@ function member(patch: object = {}) {
     rankLabel: 'Voluntar',
     role: 'voluntar',
     joinedAt: '2025-01-01',
+    university: null,
     avatarColor: null,
     primaryGroup: null,
     otherMemberships: 0,
@@ -200,6 +208,7 @@ beforeEach(() => {
   state.privacy.mockReturnValue({ ...ready, data: null });
   state.mutate.mockReset().mockResolvedValue(undefined);
   state.joined.mockReset().mockResolvedValue(undefined);
+  state.university.mockReset().mockResolvedValue(undefined);
 });
 
 it('draws the page as Profil is: the identity as its header, then tabs kept in the URL', async () => {
@@ -702,13 +711,18 @@ it('sends a Group page opened from here back to this member (D4, A63)', async ()
 });
 
 it('sets each fact as a row: a muted label, its value at the end (AD2)', () => {
-  show();
+  const { unmount } = show();
   const label = screen.getByText('Nume complet');
   expect(label).toHaveClass('text-sm', 'text-muted-foreground');
   expect(label.nextElementSibling).toHaveClass('text-right', 'font-medium');
   expect(label.closest('li')).toHaveClass('min-h-11', 'justify-between');
-  // An unset Nickname says so quietly rather than leaving a gap.
-  state.member.mockReturnValue({ ...ready, data: member({ nickname: null }) });
+  // An unset Nickname says so quietly rather than leaving a gap (the
+  // Universitate is set here, so it is the only unset fact).
+  unmount();
+  state.member.mockReturnValue({
+    ...ready,
+    data: member({ nickname: null, university: 'Universitatea Sapientia' }),
+  });
   show();
   expect(screen.getByText('Necompletată')).toHaveClass('text-muted-foreground');
 });
@@ -907,6 +921,153 @@ it('puts a refused join-date write in the editor and keeps it open (#932)', asyn
     screen.getByRole('button', { name: 'Editează data intrării' }),
   ).toHaveFocus();
   expect(fact('Data intrării')).toHaveTextContent('1 ianuarie 2025');
+});
+
+it('BC edits Universitate from a list, with Altă universitate as free text (R58)', async () => {
+  const user = userEvent.setup();
+  show();
+  // Never recorded: said quietly, in italics, as the phone is on Profil.
+  expect(fact('Universitate')).toHaveTextContent('Necompletată');
+  expect(within(fact('Universitate')).getByText('Necompletată')).toHaveClass(
+    'italic',
+  );
+  // One pencil, not a text button.
+  const edit = screen.getByRole('button', { name: 'Editează universitatea' });
+  expect(edit).toHaveTextContent('');
+  expect(edit.querySelector('svg')).not.toBeNull();
+  await user.click(edit);
+  const field = screen.getByRole('combobox', { name: 'Universitate' });
+  expect(field).toHaveFocus();
+  expect(field).toHaveAttribute('data-slot', 'select');
+  expect(await optionNames(user, field)).toEqual([
+    ...UNIVERSITIES,
+    'Altă universitate',
+  ]);
+  // Nothing chosen yet: nothing to save, and no free text.
+  expect(screen.getByRole('button', { name: 'Salvează' })).toBeDisabled();
+  expect(screen.queryByLabelText('Numele universității')).toBeNull();
+  await chooseOption(user, field, 'Altă universitate');
+  await user.type(
+    screen.getByLabelText('Numele universității'),
+    '  Universitatea din București ',
+  );
+  await user.click(screen.getByRole('button', { name: 'Salvează' }));
+  expect(state.university).toHaveBeenCalledWith({
+    memberId: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+    university: 'Universitatea din București',
+  });
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Universitatea a fost salvată.',
+  );
+  // Back from the editor, focus returns to the button that opened it.
+  expect(
+    screen.getByRole('button', { name: 'Editează universitatea' }),
+  ).toHaveFocus();
+});
+
+it('saves a university chosen from the list as the list names it (R58)', async () => {
+  const user = userEvent.setup();
+  show();
+  await user.click(
+    screen.getByRole('button', { name: 'Editează universitatea' }),
+  );
+  await chooseOption(
+    user,
+    screen.getByRole('combobox', { name: 'Universitate' }),
+    'Universitatea Babeș-Bolyai',
+  );
+  // A list entry needs no typed name.
+  expect(screen.queryByLabelText('Numele universității')).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Salvează' }));
+  expect(state.university).toHaveBeenCalledWith({
+    memberId: '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d',
+    university: 'Universitatea Babeș-Bolyai',
+  });
+});
+
+it('opens a stored Universitate on its list entry, or on Altă universitate with the name typed (R58)', async () => {
+  const user = userEvent.setup();
+  state.member.mockReturnValue({
+    ...ready,
+    data: member({ university: 'Universitatea Sapientia' }),
+  });
+  const { unmount } = show();
+  expect(fact('Universitate')).toHaveTextContent('Universitatea Sapientia');
+  await user.click(
+    screen.getByRole('button', { name: 'Editează universitatea' }),
+  );
+  expect(
+    screen.getByRole('combobox', { name: 'Universitate' }),
+  ).toHaveTextContent('Universitatea Sapientia');
+  // Unchanged: nothing to save.
+  expect(screen.getByRole('button', { name: 'Salvează' })).toBeDisabled();
+  unmount();
+
+  state.member.mockReturnValue({
+    ...ready,
+    data: member({ university: 'Universitatea din București' }),
+  });
+  show();
+  await user.click(
+    screen.getByRole('button', { name: 'Editează universitatea' }),
+  );
+  expect(
+    screen.getByRole('combobox', { name: 'Universitate' }),
+  ).toHaveTextContent('Altă universitate');
+  expect(screen.getByLabelText('Numele universității')).toHaveValue(
+    'Universitatea din București',
+  );
+  await user.click(screen.getByRole('button', { name: 'Renunță' }));
+  expect(fact('Universitate')).toHaveTextContent('Universitatea din București');
+});
+
+it('refuses a typed university under 2 characters under its field, and puts a refused write in the editor (R58)', async () => {
+  const user = userEvent.setup();
+  show();
+  await user.click(
+    screen.getByRole('button', { name: 'Editează universitatea' }),
+  );
+  await chooseOption(
+    user,
+    screen.getByRole('combobox', { name: 'Universitate' }),
+    'Altă universitate',
+  );
+  const name = screen.getByLabelText('Numele universității');
+  await user.type(name, 'A');
+  await user.click(screen.getByRole('button', { name: 'Salvează' }));
+  expect(
+    screen.getByText('Universitatea are între 2 și 120 de caractere.'),
+  ).toBeVisible();
+  expect(name).toHaveFocus();
+  expect(name).toHaveAttribute('aria-invalid', 'true');
+  expect(state.university).not.toHaveBeenCalled();
+
+  state.university.mockRejectedValue(new Error('permission denied'));
+  await user.type(name, 'bc');
+  await user.click(screen.getByRole('button', { name: 'Salvează' }));
+  expect(
+    screen.getByText(
+      'Nu am putut salva universitatea. Verifică permisiunile și reîncearcă.',
+    ),
+  ).toBeVisible();
+  expect(name).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Renunță' }));
+  expect(
+    screen.getByRole('button', { name: 'Editează universitatea' }),
+  ).toHaveFocus();
+  expect(fact('Universitate')).toHaveTextContent('Necompletată');
+});
+
+it('offers Universitate to no Member who is not BC or the Moderator (R58)', () => {
+  state.capabilities.mockReturnValue({
+    ...ready,
+    data: { manageRoles: false },
+  });
+  show();
+  expect(screen.queryByText('Universitate')).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Editează universitatea' }),
+  ).toBeNull();
 });
 
 it("shows BC the Member's Istoric roluri, from their Role and join date (#932)", () => {

@@ -221,6 +221,11 @@ export type AppointableMember = {
   /** The Role's name, or the Member's Board Title when they hold one (#963). */
   roleLabel: string;
   level: number;
+  /**
+   * The Universitate (R58), which decides whether Drept de Vot can be offered;
+   * absent is as unknown as null.
+   */
+  university?: string | null;
 };
 
 export async function fetchAppointableMembers(): Promise<AppointableMember[]> {
@@ -229,7 +234,7 @@ export async function fetchAppointableMembers(): Promise<AppointableMember[]> {
       supabase
         .from('profiles_directory')
         .select(
-          'id, full_name, nickname, status, avatar_color, role, board_title',
+          'id, full_name, nickname, status, avatar_color, role, board_title, university',
         )
         .order('id')
         .range(from, to),
@@ -257,6 +262,7 @@ export async function fetchAppointableMembers(): Promise<AppointableMember[]> {
           roleId: profile.role,
           roleLabel: memberRoleLabel(role?.name, profile.board_title),
           level: role?.level ?? 0,
+          university: profile.university,
         },
       ];
     })
