@@ -813,3 +813,32 @@ it('invents no Role change on a local Task stored below its Group’s floor (R57
   );
   auth.level = 0;
 });
+it('disables Direct under a Role above the editor, and says why (R57)', async () => {
+  auth.level = 1;
+  state.options.mockReturnValue({
+    data,
+    isPending: false,
+    isError: false,
+    refetch: state.refetch.mockResolvedValue({ data }),
+  });
+  render(
+    <TaskEditControl
+      task={taskRow({
+        ...task,
+        assignment_mode: 'public',
+        audience: 'org',
+        min_level: 6,
+      })}
+      canManage
+    />,
+  );
+  await openEditor();
+  expect(segment(modeGroup(), 'Direct')).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  expect(modeGroup()).toHaveAccessibleDescription(
+    /Doar cineva de la BC în sus poate face taskul direct/,
+  );
+  auth.level = 0;
+});

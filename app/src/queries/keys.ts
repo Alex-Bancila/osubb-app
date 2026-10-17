@@ -146,8 +146,10 @@ export const keys = {
     isMine: (taskId: number | null, memberId: string | undefined) =>
       ['tasks', 'is-mine', { taskId, memberId }] as const,
     open: () => ['tasks', 'open'] as const,
-    available: (memberId: string | undefined) =>
-      ['tasks', 'available', { memberId }] as const,
+    // R57: which Opportunities the Member may join depends on their Role
+    // level, so a promotion is a different Disponibile.
+    available: (memberId: string | undefined, level?: number) =>
+      ['tasks', 'available', { memberId, level }] as const,
     scopes: (memberId: string | undefined) =>
       ['tasks', 'scopes', { memberId }] as const,
     queue: (taskId: number, memberId: string | undefined) =>

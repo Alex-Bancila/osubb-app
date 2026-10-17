@@ -5,8 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const rpc = vi.hoisted(() => vi.fn());
 vi.mock('../lib/supabase', () => ({ supabase: { rpc } }));
+// R57: the Member's Role level, which Disponibile's join depends on.
+const auth = vi.hoisted(() => ({
+  claims: undefined as { member_level: number } | undefined,
+}));
 vi.mock('../lib/auth', () => ({
-  useAuth: () => ({ session: { user: { id: 'me' } } }),
+  useAuth: () => ({ session: { user: { id: 'me' } }, claims: auth.claims }),
 }));
 // The shared label reads: answered at once unless a test says otherwise.
 const labels = vi.hoisted(() => ({
@@ -510,5 +514,37 @@ describe('useTaskOpportunities', () => {
       group: { name: 'Educațional' },
     });
     expect(client.getQueryData(keys.tasks.available('me'))).toHaveLength(1);
+  });
+
+  it('keeps Disponibile per Role level, so a promotion reads it again (R57)', async () => {
+    auth.claims = { member_level: 1 };
+    rpc.mockImplementation((name: string) =>
+      Promise.resolve(
+        name === 'my_groups'
+          ? { data: [], error: null }
+          : {
+              data: [
+                {
+                  ...row(4, 1),
+                  status: 'todo',
+                  assignment_mode: 'public',
+                  audience: 'org',
+                  min_level: 2,
+                },
+              ],
+              error: null,
+            },
+      ),
+    );
+    const client = quietClient();
+    const { result } = renderHook(() => useTaskOpportunities(), {
+      wrapper: wrapper(client),
+    });
+    // A Voluntar is not offered a Voluntar Activ Task, and the answer is
+    // kept under their level: after a promotion the list is read again.
+    await waitFor(() => expect(result.current.data).toEqual([]));
+    expect(client.getQueryData(keys.tasks.available('me', 1))).toEqual([]);
+    expect(client.getQueryData(keys.tasks.available('me', 2))).toBeUndefined();
+    auth.claims = undefined;
   });
 });

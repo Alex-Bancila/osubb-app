@@ -98,6 +98,7 @@ export function memberTaskPresentation(
     group_id: row.group_id,
     assignment_mode: row.assignment_mode,
     audience: row.audience,
+    min_level: row.min_level,
     kind: row.task_kind,
     parent_task_id: row.parent_task_id,
     campaign_id: row.campaign_id,

@@ -33,12 +33,19 @@ export function AssignmentModeField({
   value,
   onChange,
   form,
+  directLockedBy,
 }: {
   /** A `useId()` of the form. */
   id: string;
   value: Mode;
   onChange: (value: Mode) => void;
   form: Bound;
+  /**
+   * R57: the Role a public Task asks for, when it is above the editor's own.
+   * Direct would clear it, which only someone at that Role may do, so the
+   * choice is off and the reason stays in view.
+   */
+  directLockedBy?: string;
 }) {
   return (
     <div className="grid gap-1.5">
@@ -52,12 +59,29 @@ export function AssignmentModeField({
       </div>
       <SegmentedRadio
         aria-labelledby={`${id}-mode`}
-        options={MODES}
+        options={MODES.map((mode) => ({
+          ...mode,
+          disabled: mode.value === 'direct' && directLockedBy !== undefined,
+        }))}
         value={value}
         onValueChange={onChange}
-        {...form.field('assignmentMode', `${id}-mode-info`)}
+        {...form.field(
+          'assignmentMode',
+          directLockedBy
+            ? `${id}-mode-info ${id}-mode-locked`
+            : `${id}-mode-info`,
+        )}
       />
       <FieldError {...form.errorProps('assignmentMode')} />
+      {directLockedBy && (
+        <p
+          id={`${id}-mode-locked`}
+          className="m-0 text-sm text-muted-foreground"
+        >
+          Doar cineva de la {directLockedBy} în sus poate face taskul direct:
+          modul direct șterge „Cine îl vede”.
+        </p>
+      )}
     </div>
   );
 }

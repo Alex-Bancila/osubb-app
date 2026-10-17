@@ -7,7 +7,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(64);
+select plan(65);
 
 create function pg_temp.m(n integer) returns uuid language sql immutable as $$
   select ('57100000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -204,6 +204,10 @@ select pg_temp.test_clear_jwt();
 select is((select min_level from tasks where title = 'Edit #57'), 2, 'stored at Voluntar Activ');
 select is((select status from task_candidates where task_id = pg_temp.t('Edit #57') and member_id = pg_temp.m(1)), 'closed',
   'the Recrut''s Candidature is closed');
+select is((select count(*)::int from notifications where member_id = pg_temp.m(1)
+            and title = 'Coadă închisă: Edit #57'
+            and body = 'Nu mai poți fi selectat pentru acest task.'), 1,
+  'the removed Candidate is told the queue closed for them');
 select is((select count(*)::int from task_assignments where task_id = pg_temp.t('Edit #57')
             and member_id = pg_temp.m(2) and ended_at is null), 0, 'the Voluntar is no longer the Executor');
 select is((select count(*)::int from notifications where member_id = pg_temp.m(2)
