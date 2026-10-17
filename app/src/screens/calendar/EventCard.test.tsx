@@ -131,6 +131,17 @@ describe('EventCard — approval (spec 2026-10-11)', () => {
           event={event({ id: 33, title: 'Gala' })}
           onReview={onReview}
         />
+        {/* Review I1: a cancelled pending Event is no request. */}
+        <EventCard
+          event={event({
+            id: 34,
+            title: 'Anulat',
+            approvalStatus: 'pending',
+            cancelledAt: '2030-09-01T10:00:00.000Z',
+            cancelReason: 'Sala nu mai e liberă.',
+          })}
+          onReview={onReview}
+        />
       </>,
     );
     const pending = screen.getByRole('article', {
@@ -143,7 +154,7 @@ describe('EventCard — approval (spec 2026-10-11)', () => {
       })
       .click();
     expect(onReview).toHaveBeenCalledWith(31);
-    for (const name of ['Bal', 'Gala']) {
+    for (const name of ['Bal', 'Gala', 'Anulat']) {
       const card = screen.getByRole('article', { name });
       expect(card).not.toHaveClass('is-reviewable');
       expect(

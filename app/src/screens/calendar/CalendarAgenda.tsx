@@ -15,6 +15,7 @@ import {
 } from '../../queries/notifications';
 import type { Group } from '../../queries/reference';
 import {
+  awaitsDecision,
   eventCardId,
   countLabel,
   eventRangeForDays,
@@ -135,7 +136,7 @@ export function CalendarAgenda({
   // decider's flag may arrive after the landing, so it is its own effect.
   const reviewed = useRef<number | null>(null);
   const reviewLanding =
-    onReview && linkedEvent?.approvalStatus === 'pending' ? landing : null;
+    onReview && linkedEvent && awaitsDecision(linkedEvent) ? landing : null;
   useEffect(() => {
     if (reviewLanding === null) {
       if (linkedId === null) reviewed.current = null;

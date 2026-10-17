@@ -22,6 +22,7 @@ import {
 } from '../../queries/task-lists';
 import { useTaskManagement } from '../../queries/task-tabs';
 import {
+  awaitsDecision,
   buildMonthGrid,
   calendarTasks,
   dayKeyHeading,
@@ -286,7 +287,8 @@ export function CalendarMonth({
                     const chips = [
                       ...(items?.events ?? []).map((event) => ({
                         key: `e${event.id}`,
-                        eventId: event.id,
+                        // Only a request opens its review (review I1).
+                        reviewId: awaitsDecision(event) ? event.id : null,
                         kind: 'event' as const,
                         title: event.title,
                         color: relevanceColor(
@@ -303,7 +305,7 @@ export function CalendarMonth({
                       })),
                       ...(items?.tasks ?? []).map((task) => ({
                         key: `t${task.id}`,
-                        eventId: null,
+                        reviewId: null,
                         kind: 'task' as const,
                         title: task.title,
                         color: task.color,
@@ -348,8 +350,8 @@ export function CalendarMonth({
                               <span
                                 key={chip.key}
                                 data-review-event={
-                                  onReview && chip.pending
-                                    ? (chip.eventId ?? undefined)
+                                  onReview
+                                    ? (chip.reviewId ?? undefined)
                                     : undefined
                                 }
                                 className={cn(

@@ -1416,6 +1416,28 @@ describe('CalendarScreen', () => {
       ).toHaveAttribute('aria-current', 'true');
     });
 
+    // Review I1 (2026-10-13): a cancelled pending Event is no request, and
+    // the server refuses to decide it (`event_cancelled`).
+    it('offers no review of a cancelled request: not on its card, its link or its chip', async () => {
+      const user = userEvent.setup();
+      const cancelled = event({
+        ...gala,
+        cancelledAt: '2026-10-15T10:00:00.000Z',
+        cancelReason: 'Sala nu mai e liberă.',
+      });
+      hooks.useEvent.mockReturnValue(query(cancelled));
+      setEvents([cancelled]);
+      renderCalendar('/calendar?event=71');
+
+      const card = screen.getByRole('article', { name: 'Gala OSUBB' });
+      expect(card).not.toHaveClass('is-reviewable');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Lună' }));
+      await user.click(galaChip() as HTMLElement);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
     it('offers no review of an approved or a rejected Event', async () => {
       const user = userEvent.setup();
       setEvents([

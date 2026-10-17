@@ -6,6 +6,7 @@ import { cn } from '../../lib/utils';
 import type { EventPresentation } from '../../queries/events';
 import type { Group } from '../../queries/reference';
 import {
+  awaitsDecision,
   eventCardId,
   eventGroupIcon,
   eventGroupLabel,
@@ -71,7 +72,7 @@ export default function EventCard({
   // published; nobody answers it until then.
   const pending = event.approvalStatus === 'pending';
   const rejected = event.approvalStatus === 'rejected';
-  const reviewable = pending && onReview !== undefined;
+  const reviewable = awaitsDecision(event) && onReview !== undefined;
 
   return (
     <article

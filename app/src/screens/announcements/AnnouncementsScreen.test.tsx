@@ -1051,6 +1051,35 @@ describe('AnnouncementsScreen', () => {
       ).toBeVisible();
     });
 
+    // A decision refetches the feed before it returns: the row says
+    // approved while the review still sends. The review stays until the
+    // decision closes it, and the details sheet never shows in between.
+    it('stays on the review while the decision’s refetch lands before it returns', async () => {
+      const user = userEvent.setup();
+      showFeed([pending()]);
+      const view = renderAt('/anunturi?anunt=42');
+
+      showFeed([pending({ approval_status: 'approved' })]);
+      view.rerender(<AnnouncementsScreen />);
+
+      expect(
+        screen.getByRole('dialog', { name: 'Revizuire anunț 42' }),
+      ).toBeVisible();
+      expect(
+        screen.queryByRole('dialog', { name: 'Burse de merit' }),
+      ).not.toBeInTheDocument();
+
+      await user.click(
+        within(screen.getByRole('dialog')).getByRole('button', {
+          name: 'Aprobă',
+        }),
+      );
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(
+        screen.getByText('Anunțul a fost aprobat și publicat.'),
+      ).toBeVisible();
+    });
+
     it('closes undecided and drops the link, without reopening', async () => {
       const user = userEvent.setup();
       showFeed([pending()]);

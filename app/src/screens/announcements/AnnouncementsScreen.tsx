@@ -281,8 +281,10 @@ function AnnouncementsContent({
         (selectedRead.data === undefined ? selected : null));
   // Alex, 2026-10-18: one "În așteptare", opened by a Member who may publish
   // it — from its card, the banner or its link — opens on its review instead.
+  // Decided on the row as it was opened: the decision's refetch lands before
+  // it returns, and must not swap the details sheet in under the review.
   const reviewing =
-    decides && selectedAnnouncement?.approvalStatus === 'pending'
+    decides && selected?.approvalStatus === 'pending'
       ? selectedAnnouncement
       : null;
 
