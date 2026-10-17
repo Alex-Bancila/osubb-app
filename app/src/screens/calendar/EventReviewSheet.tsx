@@ -1,6 +1,7 @@
 import type { ReviewOutcome } from '../../queries/approvals';
 import { useEventFormOptions } from '../../queries/event-creation';
 import { useEvent } from '../../queries/events';
+import { useReadNotificationsAbout } from '../../queries/notifications';
 import { useGroups } from '../../queries/reference';
 import { EditEventSheet } from './EventManageControls';
 
@@ -21,6 +22,9 @@ export function EventReviewSheet({
   onOpenChange: (open: boolean) => void;
   onDecided: (outcome: ReviewOutcome) => void;
 }) {
+  // R37: opening reads its Notifications — the request's own "Cerere de
+  // aprobare" (event:<id>) whichever way the review was opened.
+  useReadNotificationsAbout([`event:${id}`]);
   const event = useEvent(id);
   const options = useEventFormOptions();
   const groups = useGroups();

@@ -5,6 +5,7 @@ import { FormSheet } from '../../components/ui/form-sheet';
 import { useAnnouncement } from '../../queries/announcements';
 import type { ReviewOutcome } from '../../queries/approvals';
 import { useMemberIdentities } from '../../queries/member-identities';
+import { useReadNotificationsAbout } from '../../queries/notifications';
 import { useGroups } from '../../queries/reference';
 import AnnouncementEditSheet from './AnnouncementEditSheet';
 import { toAnnouncementPresentation } from './announcements-presentation';
@@ -31,6 +32,9 @@ export function AnnouncementReviewSheet({
   onOpenChange: (open: boolean) => void;
   onDecided: (outcome: ReviewOutcome) => void;
 }) {
+  // R37: opening reads its Notifications — the request's own "Cerere de
+  // aprobare" (announcement:<id>) whichever way the review was opened.
+  useReadNotificationsAbout([`announcement:${id}`]);
   const read = useAnnouncement(id);
   const row = read.data ?? null;
   const groups = useGroups();

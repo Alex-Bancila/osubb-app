@@ -15,6 +15,13 @@ vi.mock('../../queries/member-identities', () => ({
 vi.mock('../../queries/reference', () => ({
   useGroups: () => ({ data: undefined }),
 }));
+// #1012 (R37): opening a thing reads its Notifications; the hook's own
+// behaviour is queries/notifications-read.test.tsx's.
+const readNotificationsAbout = vi.hoisted(() => vi.fn());
+vi.mock('../../queries/notifications', () => ({
+  NO_SUBJECTS: [],
+  useReadNotificationsAbout: readNotificationsAbout,
+}));
 // The review surface is the edit sheet's own suite: here it names what it
 // was handed.
 vi.mock('./AnnouncementEditSheet', () => ({
@@ -77,6 +84,24 @@ describe('AnnouncementReviewSheet (spec 2026-10-11)', () => {
     expect(screen.getByRole('dialog', { name: 'Burse' })).toHaveTextContent(
       'pending',
     );
+  });
+
+  // The request's own Notification ("Cerere de aprobare", subject
+  // announcement:<id>) is read however the review opened: the list, the
+  // card, the link — as the details sheet reads it.
+  it('reads its Notifications as soon as it opens, before the row is in', () => {
+    reads.useAnnouncement.mockReturnValue({ data: undefined });
+
+    render(
+      <AnnouncementReviewSheet
+        id={3}
+        open
+        onOpenChange={vi.fn()}
+        onDecided={vi.fn()}
+      />,
+    );
+
+    expect(readNotificationsAbout).toHaveBeenCalledWith(['announcement:3']);
   });
 
   const sheet = () => (
