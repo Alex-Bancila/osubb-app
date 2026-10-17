@@ -40,7 +40,7 @@ Pick a quiet hour: every batch broadcasts its rows to open clients, and 67 promo
 SUPABASE_URL=https://<production-ref>.supabase.co SUPABASE_SECRET_KEY=sb_secret_… node scripts/import-legacy-tasks.mjs --file ../osubb-legacy-import/import-set.json --actor <the Moderator's address> --dry-run
 ```
 
-It must end with `Dry run: 5270 would be imported, 0 already imported. Nothing was written.` and the per-Group lines must match `import-summary.json`.
+It must end with `Dry run: <rows> would be imported, 0 already imported. Nothing was written.` (5 411 in the run of 2026-10-17, after the set was rebuilt; the first build had 5 270) and the per-Group lines must match `import-summary.json`.
 
 3. **The real run** — the same line with `--execute`. It must end with `Verified: … matching the file for every Group and Member.`
 4. **Look.** Three imported Tasks from different Groups, one Member's total, Clasament for March 2026, the promotion candidates in Administrare → Evaluări de rol.
