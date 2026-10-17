@@ -18,8 +18,9 @@
 --     registered";
 --   * a function inserting into the registry -> "no function in public or
 --     private writes the registry";
---   * select on the registry granted to authenticated -> "no role reads or
---     writes the registry directly";
+--   * select on the registry granted to authenticated, and (CodeRabbit)
+--     update granted to service_role -> "no role reads, inserts, updates or
+--     deletes the registry directly";
 --   * a public.import_legacy_tasks back in place -> "the import command is
 --     gone: nobody can run the Legacy Import again".
 begin;
@@ -81,13 +82,12 @@ select hasnt_function('public', 'legacy_task_import_totals',
 
 select has_table('public', 'legacy_task_imports',
   'the registry stays as the record of which sheet row became which Task');
-select ok(not has_table_privilege('anon', 'public.legacy_task_imports', 'select')
-          and not has_table_privilege('anon', 'public.legacy_task_imports', 'insert')
-          and not has_table_privilege('authenticated', 'public.legacy_task_imports', 'select')
-          and not has_table_privilege('authenticated', 'public.legacy_task_imports', 'insert')
-          and not has_table_privilege('service_role', 'public.legacy_task_imports', 'select')
-          and not has_table_privilege('service_role', 'public.legacy_task_imports', 'insert'),
-  'no role reads or writes the registry directly');
+select is_empty($$
+  select role.name || ' ' || privilege.name
+    from unnest(array['anon', 'authenticated', 'service_role']) as role(name)
+   cross join unnest(array['select', 'insert', 'update', 'delete']) as privilege(name)
+   where has_table_privilege(role.name, 'public.legacy_task_imports', privilege.name)
+$$, 'no role reads, inserts, updates or deletes the registry directly');
 select is_empty($$
   select proc.oid::regprocedure::text
     from pg_proc as proc
@@ -124,8 +124,9 @@ select pg_temp.test_clear_jwt();
 select is((select sum(delta)::int from public.points_ledger
             where member_id = pg_temp.g521_uid(5) and deleted_task_title = 'Importat LI'),
   0, 'its points are reversed: the Executor''s ledger nets to zero for it');
-select is((select task_id from public.legacy_task_imports where tracker_id = 'legacyImportTrackerLI0002'),
-  null::bigint, 'the registry keeps the sheet row, its Task cleared');
+select is((select count(*)::int from public.legacy_task_imports
+            where tracker_id = 'legacyImportTrackerLI0002' and sheet_row = 2 and task_id is null),
+  1, 'the registry keeps the sheet row, its Task cleared');
 
 select * from finish();
 rollback;
