@@ -76,6 +76,16 @@ vi.mock('../../lib/auth', () => ({
   }),
 }));
 
+// R58: BC and the Moderator hold `manageRoles`, which is what lets them write
+// their own Universitate from the pencil; everyone else reads it.
+const capabilityMock = vi.hoisted(() => ({ manageRoles: false }));
+vi.mock('../../lib/capabilities', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/capabilities')>()),
+  useCapability: (name: string) => ({
+    data: name === 'manageRoles' ? capabilityMock.manageRoles : false,
+  }),
+}));
+
 const profileMocks = vi.hoisted(() => {
   const mockProfile = {
     id: 'p1',
@@ -345,6 +355,7 @@ describe('ProfileScreen', () => {
       member_level: 1,
       group_ids: [10, 20, 30],
     };
+    capabilityMock.manageRoles = false;
 
     profileListeners.clear();
     setTestProfile({ ...mockProfile });
@@ -1365,6 +1376,61 @@ describe('ProfileScreen', () => {
       expect(
         within(sheet).getByRole('button', { name: 'Schimbă adresa' }),
       ).toBeInTheDocument();
+    });
+
+    it.each(['bc', 'moderator'] as const)(
+      'offers Universitate in the sheet to %s, who needs no hint on the row (R58)',
+      async (role) => {
+        const user = userEvent.setup();
+        authMock.claims = {
+          member_role: role,
+          member_level: 6,
+          group_ids: [],
+        };
+        capabilityMock.manageRoles = true;
+        setTestProfile({ ...mockProfile, role });
+        render(<ProfileScreen />, { wrapper: wrapper() });
+
+        // The row stays on the page, read-only; whom to ask is for Members
+        // below BC, so BC and the Moderator get no "i" beside it.
+        const row = screen.getByText('Universitate').closest('li');
+        expect(row).toHaveTextContent('UniversitateUniversitatea Babeș-Bolyai');
+        expect(
+          within(row as HTMLElement).queryByRole('button', {
+            name: 'Despre universitate',
+          }),
+        ).toBeNull();
+
+        await user.click(
+          screen.getByRole('button', { name: 'Editează datele personale' }),
+        );
+        const sheet = screen.getByRole('dialog');
+        // Prefilled from the profile.
+        expect(
+          within(sheet).getByRole('combobox', { name: 'Universitate' }),
+        ).toHaveTextContent('Universitatea Babeș-Bolyai');
+      },
+    );
+
+    it('keeps Universitate out of the sheet for a Voluntar, who keeps the hint on the row (R58)', async () => {
+      const user = userEvent.setup();
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      const row = screen.getByText('Universitate').closest('li');
+      expect(
+        within(row as HTMLElement).getByRole('button', {
+          name: 'Despre universitate',
+        }),
+      ).toBeInTheDocument();
+
+      await user.click(
+        screen.getByRole('button', { name: 'Editează datele personale' }),
+      );
+      const sheet = screen.getByRole('dialog');
+      expect(
+        within(sheet).queryByRole('combobox', { name: 'Universitate' }),
+      ).toBeNull();
+      expect(within(sheet).queryByText('Universitate')).toBeNull();
     });
   });
 

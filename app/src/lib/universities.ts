@@ -34,3 +34,26 @@ export function universityOption(value: string | null): string | null {
 export function isUbbStudent(value: string | null | undefined): boolean {
   return value === UBB;
 }
+
+/** The Universitate select's entries: the list, then the free-text one. */
+export const UNIVERSITY_CHOICES: readonly { value: string; label: string }[] = [
+  ...UNIVERSITIES.map((name) => ({ value: name, label: name })),
+  { value: OTHER_UNIVERSITY, label: 'Altă universitate' },
+];
+
+/**
+ * The select's draft for a stored Universitate: its list entry, or "Altă
+ * universitate" with the stored name as the free text. Nothing stored is an
+ * empty `option`, which the select shows as its placeholder.
+ */
+export function universityDraft(university: string | null) {
+  const option = universityOption(university) ?? '';
+  return {
+    option,
+    other: option === OTHER_UNIVERSITY ? (university ?? '') : '',
+  };
+}
+
+/** What a Universitate form says when the write itself fails (no reason). */
+export const UNIVERSITY_SAVE_FAILED =
+  'Nu am putut salva universitatea. Verifică permisiunile și reîncearcă.';

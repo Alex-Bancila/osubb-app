@@ -57,7 +57,7 @@ The summary opened from any Member's name: Nickname, full name, Role, join date,
 _Avoid_: Profile pop-up, tooltip, user card
 
 **Universitate**:
-The university a Member studies at, chosen from a list on which Universitatea Babeș-Bolyai is one entry among the others; every Member is a student somewhere. BC or the Moderator records it; the Member reads it in Profil, under Date personale, and on the Member Card. Only a Member whose Universitate is Universitatea Babeș-Bolyai may hold Voluntar cu Drept de Vot, a rule of the organization that never changes; an unknown Universitate never counts as UBB.
+The university a Member studies at, chosen from a list on which Universitatea Babeș-Bolyai is one entry among the others; every Member is a student somewhere. BC or the Moderator records it, their own from Profil included; the Member reads it in Profil, under Date personale, and on the Member Card. Only a Member whose Universitate is Universitatea Babeș-Bolyai may hold Voluntar cu Drept de Vot, a rule of the organization that never changes; an unknown Universitate never counts as UBB.
 _Avoid_: Faculty, school, "UBB student" as a flag, "Nu sunt student"
 
 **Group**:

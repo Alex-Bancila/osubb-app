@@ -1,13 +1,25 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Field, FieldError, FieldLabel } from '../../components/ui/field';
 import { FormSheet, FormSheetFooter } from '../../components/ui/form-sheet';
 import { InfoHint } from '../../components/ui/info-hint';
 import { Input } from '../../components/ui/input';
+import { Select } from '../../components/ui/select';
 import { normalizePhone } from '../../lib/normalize';
+import {
+  memberUniversitySchema,
+  universityFieldForReason,
+} from '../../lib/schemas/member-identity';
 import { fieldForReason, profileSchema } from '../../lib/schemas/profile';
+import {
+  OTHER_UNIVERSITY,
+  UNIVERSITY_CHOICES,
+  UNIVERSITY_SAVE_FAILED,
+  universityDraft,
+} from '../../lib/universities';
 import { useFormValidation } from '../../lib/use-form-validation';
+import { useUpdateMemberUniversity } from '../../queries/admin-member';
 import { type MyProfile, useUpdateMyProfile } from '../../queries/profile';
 import { ColorPicker } from '../../components/ui/color-picker';
 import ChangeEmailSection from './ChangeEmailSection';
@@ -22,19 +34,28 @@ export type EditProfileSheetProps = {
   open: boolean;
   onClose: () => void;
   profile: MyProfile;
+  /**
+   * BC and the Moderator (`manageRoles`) record the Universitate, their own
+   * included (R58): for them the sheet carries the field. For everyone else
+   * Profil shows it read-only and the sheet neither offers nor sends it.
+   */
+  canEditUniversity: boolean;
   /** After a successful save, before the sheet closes: Profil's receipt. */
   onSaved?: () => void;
 };
 
 function EditProfileForm({
   profile,
+  canEditUniversity,
   onClose,
   onSaved,
 }: {
   profile: MyProfile;
+  canEditUniversity: boolean;
   onClose: () => void;
   onSaved?: () => void;
 }) {
+  const universityNameId = useId();
   const [nickname, setNickname] = useState(profile.nickname ?? '');
   const [phone, setPhone] = useState(profile.phone ?? '');
   const [avatarColor, setAvatarColor] = useState(
@@ -51,22 +72,69 @@ function EditProfileForm({
   );
   const phoneField = form.field('phone', 'edit-profile-phone-hint');
 
+  // R58: the Universitate, as Administrare edits it on a Member's page -- the
+  // select's entry and, under "Altă universitate", the typed name.
+  const [university, setUniversity] = useState(() =>
+    universityDraft(profile.university),
+  );
+  const universityMutation = useUpdateMemberUniversity();
+  const chosenUniversity =
+    university.option === OTHER_UNIVERSITY
+      ? university.other.trim()
+      : university.option;
+  // The hook hides a refusal once the value at the field it was shown under
+  // changes, and that field is `university`, not the draft's `option` and
+  // `other`: the values it reads carry the chosen name under that key.
+  const judged = { ...university, university: chosenUniversity };
+  const universityForm = useFormValidation(
+    memberUniversitySchema,
+    judged,
+    universityFieldForReason,
+  );
+  // Only a changed Universitate is judged and written, so a blank one never
+  // blocks the profile; choosing "Altă universitate" is a change even before
+  // the name is typed.
+  const universityChanged =
+    canEditUniversity &&
+    (university.option !== universityDraft(profile.university).option ||
+      chosenUniversity !== (profile.university ?? ''));
+  const pending = updateMutation.isPending || universityMutation.isPending;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Both forms are judged before anything is written, so every problem shows.
     const values = form.validate();
-    if (!values) return;
+    const universityValue = universityChanged
+      ? universityForm.validate()
+      : undefined;
+    if (!values || universityValue === null) return;
 
-    try {
-      await updateMutation.mutateAsync({
+    // The Universitate is written beside the profile, and the sheet closes
+    // only when both are saved; each refusal lands where its field is.
+    const [profileResult, universityResult] = await Promise.allSettled([
+      updateMutation.mutateAsync({
         nickname: values.nickname,
         phone: values.phone,
         avatarColor: values.avatarColor,
-      });
-      onSaved?.();
-      onClose();
-    } catch (err) {
-      form.fail(err, 'Nu am putut salva modificările.');
-    }
+      }),
+      universityValue
+        ? universityMutation.mutateAsync({
+            memberId: profile.id,
+            university: universityValue.university,
+          })
+        : Promise.resolve(),
+    ]);
+    if (profileResult.status === 'rejected')
+      form.fail(profileResult.reason, 'Nu am putut salva modificările.');
+    if (universityResult.status === 'rejected')
+      universityForm.fail(universityResult.reason, UNIVERSITY_SAVE_FAILED);
+    if (
+      profileResult.status === 'rejected' ||
+      universityResult.status === 'rejected'
+    )
+      return;
+    onSaved?.();
+    onClose();
   };
 
   return (
@@ -155,6 +223,47 @@ function EditProfileForm({
           <FieldError {...form.errorProps('phone')} />
         </Field>
 
+        {canEditUniversity && (
+          <>
+            <Field>
+              <FieldLabel htmlFor="edit-profile-university">
+                Universitate
+              </FieldLabel>
+              <Select
+                id="edit-profile-university"
+                value={university.option}
+                placeholder="Alege universitatea"
+                options={UNIVERSITY_CHOICES}
+                disabled={universityMutation.isPending}
+                onValueChange={(option) => {
+                  setUniversity({ ...university, option });
+                  // A refusal was about the old choice.
+                  universityForm.reset();
+                }}
+              />
+              <FieldError>{universityForm.formError}</FieldError>
+            </Field>
+            {university.option === OTHER_UNIVERSITY && (
+              <Field>
+                <FieldLabel htmlFor={universityNameId}>
+                  Numele universității
+                </FieldLabel>
+                <Input
+                  id={universityNameId}
+                  type="text"
+                  value={university.other}
+                  disabled={universityMutation.isPending}
+                  onChange={(e) =>
+                    setUniversity({ ...university, other: e.target.value })
+                  }
+                  {...universityForm.field('university')}
+                />
+                <FieldError {...universityForm.errorProps('university')} />
+              </Field>
+            )}
+          </>
+        )}
+
         <Field {...form.slot('avatarColor')}>
           <FieldLabel>Culoare avatar</FieldLabel>
           <ColorPicker
@@ -179,16 +288,12 @@ function EditProfileForm({
           type="button"
           variant="outline"
           onClick={onClose}
-          disabled={updateMutation.isPending}
+          disabled={pending}
         >
           Renunță
         </Button>
-        <Button
-          type="submit"
-          form={FORM_ID}
-          disabled={updateMutation.isPending}
-        >
-          {updateMutation.isPending ? 'Se salvează…' : 'Salvează modificările'}
+        <Button type="submit" form={FORM_ID} disabled={pending}>
+          {pending ? 'Se salvează…' : 'Salvează modificările'}
         </Button>
       </FormSheetFooter>
     </>
@@ -196,14 +301,16 @@ function EditProfileForm({
 }
 
 /**
- * **Editează profilul**: the Member's own Nickname, phone and avatar colour,
- * and under them the request to change the sign-in address — one form sheet,
- * whose pinned **Salvează modificările** saves the profile form.
+ * **Editează profilul**: the Member's own Nickname, phone and avatar colour
+ * (and, for BC and the Moderator, their Universitate), and under them the
+ * request to change the sign-in address — one form sheet, whose pinned
+ * **Salvează modificările** saves the profile form.
  */
 export default function EditProfileSheet({
   open,
   onClose,
   profile,
+  canEditUniversity,
   onSaved,
 }: EditProfileSheetProps) {
   return (
@@ -217,6 +324,7 @@ export default function EditProfileSheet({
       {open && (
         <EditProfileForm
           profile={profile}
+          canEditUniversity={canEditUniversity}
           onClose={onClose}
           onSaved={onSaved}
         />
