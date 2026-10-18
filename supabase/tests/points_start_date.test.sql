@@ -4,6 +4,8 @@
 -- after it. Spec docs/superpowers/specs/2026-10-18-portofoliu-interne-design.md,
 -- section D.
 --
+--   0. The invariant the Personal Score relies on: a `task` ledger row is dated
+--      by its Evaluation's instant, so my_points never reads task_evaluations.
 --   1. Day one: no date set, every reader counts from the beginning.
 --   2. BC sets the date; the Personal Score (my_points) follows it, a Sanction
 --      by its own date, and a Member with nothing left to count keeps a zero row.
@@ -11,7 +13,8 @@
 --      Clasament's Work Filter may look back past it (the lookback), an explicit
 --      later one is honoured.
 --   4. Campaign totals and reports follow it with no lookback, tasks_completed
---      included.
+--      included; a completed Umbrella (no Evaluation) counts by its completion
+--      against the date, and an explicit range still leaves it out.
 --   5. A Role Evaluation's standing ignores it.
 --   6. Review Focus 2: a Task deleted for good after the date was set leaves
 --      the Personal Score unchanged (its orphaned award and reversal never
@@ -27,7 +30,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(26);
+select plan(30);
 
 -- ==================== Fixtures ====================
 
@@ -36,14 +39,15 @@ create function pg_temp.u(n integer) returns uuid language sql immutable as $$
 $$;
 
 insert into auth.users (id, email)
-select pg_temp.u(n), 'member.' || n || '.r58t6@test.local' from generate_series(1, 3) n;
+select pg_temp.u(n), 'member.' || n || '.r58t6@test.local' from generate_series(1, 4) n;
 
 -- 1 BC (the evaluator, and the one who sets the date), 2 the earner, 3 a
--- Member whose only ledger row is a Sanction from before the date.
+-- Member whose only ledger row is a Sanction from before the date, 4 the
+-- earner in the second Group, whose Campaign holds the Umbrellas.
 insert into public.profiles (id, full_name, email, role, status)
 select pg_temp.u(n), 'Member R58T6 ' || n, 'member.' || n || '.r58t6@test.local',
   (case n when 1 then 'bc' else 'voluntar' end)::public.member_role, 'activ'
-from generate_series(1, 3) n;
+from generate_series(1, 4) n;
 
 insert into public.groups (name, category, min_level, competes_in_cup, created_by)
 values ('Grup Start R58T6', 'department', 0, true, pg_temp.u(1));
@@ -83,16 +87,94 @@ insert into public.points_ledger (member_id, delta, reason, note, created_at) va
   (pg_temp.u(2), -2, 'sanction', 'sanction fixture R58T6', '2026-04-01 12:00:00+03'),
   (pg_temp.u(3), -1, 'sanction', 'sanction fixture R58T6', '2026-04-01 12:00:00+03');
 
+-- A Task awarded in March and reopened in September: its award is before the
+-- date and its task_reversal row, dated after it, shares the award's
+-- Evaluation. The pair must count or not together (it nets to zero in every
+-- total), so no expected number below moves.
+insert into public.tasks
+  (title, group_id, audience, assignment_mode, status, difficulty, rating,
+   created_at, started_at, completed_at, created_by)
+select 'Start redeschis R58T6', grp.id, 'local', 'direct', 'completed', 4, 3,
+       now() - interval '9 days', now() - interval '8 days', now(), pg_temp.u(1)
+  from public.groups as grp where grp.name = 'Grup Start R58T6';
+select pg_temp.test_credit_task(task.id, pg_temp.u(2), pg_temp.u(1), 'fixture evaluation',
+                                 '2026-03-15 12:00:00+02')
+  from public.tasks as task where task.title = 'Start redeschis R58T6';
+select pg_temp.test_reverse_award(task.id, pg_temp.u(2), '2026-09-10 12:00:00+03')
+  from public.tasks as task where task.title = 'Start redeschis R58T6';
+
+-- A second Group and Campaign (Member 4 earns there, so nothing above moves):
+-- an evaluated Subtask awarded on 2026-10-05, an Umbrella completed on
+-- 2026-10-06 over it, and an Umbrella completed on 2026-03-01. An Umbrella has
+-- no Evaluation.
+insert into public.groups (name, category, min_level, created_by)
+values ('Grup Umbrela R58T6', 'department', 0, pg_temp.u(1));
+insert into public.campaigns (name, group_id, created_by)
+select 'Campanie Umbrela R58T6', grp.id, pg_temp.u(1)
+  from public.groups as grp where grp.name = 'Grup Umbrela R58T6';
+insert into public.tasks
+  (title, group_id, campaign_id, kind, audience, assignment_mode, status,
+   created_at, completed_at, created_by)
+select umbrella.title, grp.id, campaign.id, 'umbrella', null, null, 'completed',
+       umbrella.created_at, umbrella.completed_at, pg_temp.u(1)
+  from public.groups as grp
+  join public.campaigns as campaign on campaign.group_id = grp.id
+ cross join (values
+   ('Umbrela noua R58T6',   '2026-09-15 12:00:00+03'::timestamptz, '2026-10-06 12:00:00+03'::timestamptz),
+   ('Umbrela veche R58T6',  '2026-02-01 12:00:00+02',              '2026-03-01 12:00:00+02')
+ ) as umbrella (title, created_at, completed_at)
+ where grp.name = 'Grup Umbrela R58T6';
+insert into public.tasks
+  (title, group_id, campaign_id, parent_task_id, audience, assignment_mode, status,
+   difficulty, rating, created_at, started_at, completed_at, created_by)
+select 'Subtask umbrela R58T6', grp.id, campaign.id, parent.id, 'local', 'direct', 'completed',
+       7, 3, now() - interval '9 days', now() - interval '8 days', now(), pg_temp.u(1)
+  from public.groups as grp
+  join public.campaigns as campaign on campaign.group_id = grp.id
+  join public.tasks as parent on parent.title = 'Umbrela noua R58T6'
+ where grp.name = 'Grup Umbrela R58T6';
+select pg_temp.test_credit_task(task.id, pg_temp.u(4), pg_temp.u(1), 'fixture evaluation',
+                                 '2026-10-05 12:00:00+03')
+  from public.tasks as task where task.title = 'Subtask umbrela R58T6';
+-- A completed Task that is not an Umbrella and was never evaluated (a fixture
+-- only: the commands always evaluate): it has no award instant either, but the
+-- date reads only an Umbrella by its completion.
+insert into public.tasks
+  (title, group_id, campaign_id, audience, assignment_mode, status, difficulty, rating,
+   created_at, started_at, completed_at, created_by)
+select 'Fara evaluare R58T6', grp.id, campaign.id, 'local', 'direct', 'completed', 7, 3,
+       now() - interval '9 days', now() - interval '8 days', now(), pg_temp.u(1)
+  from public.groups as grp
+  join public.campaigns as campaign on campaign.group_id = grp.id
+ where grp.name = 'Grup Umbrela R58T6';
+
 create temporary table fx as
-select (select id from public.groups where name = 'Grup Start R58T6')       as g,
-       (select id from public.campaigns where name = 'Campanie Start R58T6') as k,
-       (select id from public.tasks where title = 'Start martie R58T6')      as t_march;
+select (select id from public.groups where name = 'Grup Start R58T6')           as g,
+       (select id from public.campaigns where name = 'Campanie Start R58T6')     as k,
+       (select id from public.campaigns where name = 'Campanie Umbrela R58T6')   as k_umbrella,
+       (select id from public.tasks where title = 'Start martie R58T6')          as t_march;
 grant select on fx to authenticated;
 
 create function pg_temp.as_bc() returns void language sql as $$
   select pg_temp.test_login(pg_temp.u(1), '{"member_role":"bc","member_level":6}'::jsonb) $$;
 create function pg_temp.as_member(n integer) returns void language sql as $$
   select pg_temp.test_login(pg_temp.u(n), '{"member_role":"voluntar","member_level":1}'::jsonb) $$;
+
+-- ==================== 0 · The invariant the Personal Score relies on ====================
+
+-- my_points reads the award instant from the Member's own ledger rows, never
+-- through task_evaluations (which a security-invoker view would read under the
+-- Task visibility policies, many times slower): that is only right while every
+-- `task` row is dated by its Evaluation. Every writer does so -- evaluate_task,
+-- the Legacy Import, the #317 backfill and the fixtures here -- and this pins it
+-- over the seed and the fixtures alike.
+select is(
+  (select count(*)::int
+     from public.points_ledger as entry
+     join public.task_evaluations as evaluation on evaluation.id = entry.evaluation_id
+    where entry.reason = 'task' and entry.created_at <> evaluation.evaluated_at),
+  0,
+  'every task ledger row is dated by the instant of its Evaluation');
 
 -- ==================== 1 · Day one: no date, every total counts from the beginning ====================
 
@@ -109,6 +191,10 @@ select results_eq(
   $$ select tasks_total, tasks_completed, points_total from public.campaign_totals((select k from fx)) $$,
   $$ values (3, 3, 15) $$,
   'no Points Start Date: the Campaign totals count everything');
+select results_eq(
+  $$ select tasks_total, tasks_completed, points_total from public.campaign_totals((select k_umbrella from fx)) $$,
+  $$ values (4, 4, 7) $$,
+  'no Points Start Date: both completed Umbrellas count beside the evaluated Subtask and the unevaluated Task');
 
 -- ==================== 2 · BC sets the date; the Personal Score follows it ====================
 
@@ -119,7 +205,7 @@ select pg_temp.as_member(2);
 select results_eq(
   $$ select member_id, points from public.my_points $$,
   $$ values (pg_temp.u(2), 12) $$,
-  'my_points: the award at the Bucharest midnight and the October one count; the March award and the April Sanction do not');
+  'my_points: the award at the Bucharest midnight and the October one count; the March award, the April Sanction and a March award reopened in September (the pair nets out together) do not');
 select pg_temp.as_member(3);
 select results_eq(
   $$ select member_id, points from public.my_points $$,
@@ -169,6 +255,17 @@ select results_eq(
        from public.campaign_report((select k from fx), '2026-01-01 00:00:00+02') $$,
   $$ values (pg_temp.u(2), 2, 12) $$,
   'campaign_report with an explicit earlier "De la" still follows the Points Start Date');
+-- A completed Umbrella has no Evaluation: the Points Start Date alone reads it
+-- by its completion (Ruling 13), an explicit range leaves it out as before.
+select results_eq(
+  $$ select tasks_total, tasks_completed, points_total from public.campaign_totals((select k_umbrella from fx)) $$,
+  $$ values (4, 2, 7) $$,
+  'campaign_totals with no range counts the Umbrella completed after the date (and the Subtask), not the one completed before it nor an unevaluated Task that is no Umbrella');
+select results_eq(
+  $$ select tasks_total, tasks_completed, points_total
+       from public.campaign_totals((select k_umbrella from fx), '2026-01-01 00:00:00+02') $$,
+  $$ values (4, 1, 7) $$,
+  'campaign_totals under an explicit "De la" leaves both Umbrellas out, as #677 documents; only the evaluated Subtask counts');
 
 -- ==================== 5 · A Role Evaluation ignores it ====================
 

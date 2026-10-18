@@ -479,6 +479,9 @@ revoke execute on function private.points_floor()
 -- Clasament alone may look back: an explicit "De la" (p_from) wins over the
 -- date, even an earlier one, and the Department Cup, which that page reads
 -- under the same Work Filter, follows it. A Campaign number never looks back.
+-- campaign_totals counts a completed Umbrella (it has no Evaluation) by its own
+-- completion instant against the Points Start Date alone; an explicit p_from or
+-- p_to still leaves an Umbrella out, as #677 documents.
 --
 -- points_floor() has a SET clause, so the planner never inlines it and a bare
 -- call in a WHERE would run once per ledger row. The SQL readers therefore ask
@@ -491,11 +494,21 @@ revoke execute on function private.points_floor()
 -- midnight; an unreadable or unset row is -infinity, i.e. no floor. The bound
 -- sits in the left join's ON clause so a Member with nothing left to count
 -- keeps their zero row. A Sanction has no Evaluation and counts by its own
--- created_at. A task or task_reversal row counts through its Evaluation, which
--- an award and its reversal share; one whose Task was deleted for good has
--- lost its Evaluation (task_id and evaluation_id are nulled together) and
--- never counts -- the pair nets to zero, and a reversal dated "now" must not
--- count while its award, dated before the floor, does not.
+-- created_at.
+--
+-- A task or task_reversal row counts by its award instant, read from the
+-- Member's own ledger rows and never through task_evaluations: that join would
+-- run under the caller's RLS, paying the Task visibility policies on every read
+-- (many times the old cost) and coupling the Personal Score to them. Every
+-- writer sets the `task` row's created_at equal to its Evaluation's
+-- evaluated_at (evaluate_task, the Legacy Import and the #317 backfill; the
+-- invariant is pinned by points_start_date.test.sql), and a task_reversal
+-- shares its award's evaluation_id and member, so a window over evaluation_id
+-- gives an award and its reversal the same instant and they count or not
+-- together. A pair whose Task was deleted for good has lost its evaluation_id
+-- (task_id and evaluation_id are nulled together), fails both arms below and
+-- never counts: it nets to zero, and a reversal dated "now" must not count
+-- while its award, dated before the floor, does not.
 create or replace view public.my_points
 with (security_invoker = on) as
  select p.id as member_id,
@@ -508,11 +521,17 @@ with (security_invoker = on) as
                    where setting.id = 1),
                  '-infinity'::timestamptz) as starts_at
        ) as bound
-   left join (public.points_ledger as l
-              left join public.task_evaluations as evaluation on evaluation.id = l.evaluation_id)
+   left join (
+        select ledger.member_id, ledger.delta, ledger.reason, ledger.created_at,
+               ledger.evaluation_id,
+               min(ledger.created_at) filter (where ledger.reason = 'task')
+                 over (partition by ledger.evaluation_id) as awarded_at
+          from public.points_ledger as ledger
+         where ledger.member_id = (select auth.uid())
+       ) as l
      on l.member_id = p.id
     and (
-          (l.evaluation_id is not null and evaluation.evaluated_at >= bound.starts_at)
+          (l.evaluation_id is not null and l.awarded_at >= bound.starts_at)
        or (l.reason not in ('task', 'task_reversal') and l.created_at >= bound.starts_at)
         )
   where public.auth_is_member()
@@ -521,7 +540,7 @@ with (security_invoker = on) as
   group by p.id;
 
 comment on view public.my_points is
-  'The current active member''s complete personal points total, counted from the Points Start Date (R58: evaluation_settings.points_start_date, read through its Europe/Bucharest midnight; no date set means the whole ledger). Identity comes from auth.uid(); task points and sanctions are both included. A task or task_reversal row counts when its Evaluation (task_evaluations.evaluated_at through points_ledger.evaluation_id, shared by an award and its reversal) falls on or after that instant; a Sanction, which has no Evaluation, counts when its own created_at does. A row whose Task was deleted for good has no Evaluation left and never counts (the award and its reversal net to zero). A Member with nothing left to count still gets their zero row. This security-invoker view intentionally exposes at most one row and never accepts a member ID from the client.';
+  'The current active member''s complete personal points total, counted from the Points Start Date (R58: evaluation_settings.points_start_date, read through its Europe/Bucharest midnight; no date set means the whole ledger). Identity comes from auth.uid(); task points and sanctions are both included. A task or task_reversal row counts when its award instant falls on or after that instant. The award instant is read from the Member''s own ledger rows, never through task_evaluations: the task row''s created_at is the Evaluation''s evaluated_at by every writer''s invariant (pinned by points_start_date.test.sql), and a task_reversal shares the award''s evaluation_id, so an award and its reversal count or not together; a security-invoker view that joined task_evaluations would pay the Task visibility policies on every read and depend on them. A Sanction, which has no Evaluation, counts when its own created_at does. A row whose Task was deleted for good has no Evaluation left and never counts (the award and its reversal net to zero). A Member with nothing left to count still gets their zero row. This security-invoker view intentionally exposes at most one row and never accepts a member ID from the client.';
 
 -- Clasament.
 create or replace function private.leadership_leaderboard_impl(
@@ -813,7 +832,7 @@ begin
 
   return query
   with campaign_tasks as (
-    select task.id, task.status
+    select task.id, task.status, task.kind, task.completed_at
       from public.tasks as task
      where task.campaign_id = p_campaign_id
   ),
@@ -822,14 +841,20 @@ begin
   -- Umbrella, which is never evaluated -- has no award instant: it counts
   -- when no bound is set (the unbounded result is unchanged) and never
   -- inside a bounded range, whose predicates a null instant cannot satisfy.
-  -- R58: the Points Start Date is such a bound once it is set.
+  -- R58: the Points Start Date alone is the exception: it reads a completed
+  -- Umbrella by its own completion instant (tasks.completed_at), so an Umbrella
+  -- completed on or after the date keeps counting when no range is given,
+  -- while an explicit p_from or p_to still leaves it out, as above (#677).
   completed_tasks as (
     select ct.id,
            (select max(evaluation.evaluated_at)
               from public.task_evaluations as evaluation
              where evaluation.task_id = ct.id
                and evaluation.outcome = 'completed'
-               and evaluation.reversed_at is null) as awarded_at
+               and evaluation.reversed_at is null) as awarded_at,
+           -- R58: an Umbrella has no Evaluation; the Points Start Date reads it
+           -- by its own completion instant.
+           case when ct.kind = 'umbrella' then ct.completed_at end as umbrella_completed_at
       from campaign_tasks as ct
      where ct.status = 'completed'
   ),
@@ -848,14 +873,15 @@ begin
     (select count(*)
        from completed_tasks
       where (p_from is null or completed_tasks.awarded_at >= p_from)
-        and (v_floor is null or completed_tasks.awarded_at >= v_floor)
+        and (v_floor is null
+             or coalesce(completed_tasks.awarded_at, completed_tasks.umbrella_completed_at) >= v_floor)
         and (p_to is null or completed_tasks.awarded_at < p_to))::int,
     (select ledger_total.points_total from ledger_total);
 end;
 $$;
 
 comment on function private.campaign_totals_impl(bigint, timestamptz, timestamptz) is
-  'tasks_total/tasks_completed/points_total for one Campaign -- every Task (any kind) carrying campaign_id = p_campaign_id, points summed off the points_ledger rows private.evaluate_task writes exactly as private.campaign_report_impl does. The date range (#677) follows the award instant: points_total sums ledger rows whose Evaluation (task_evaluations.evaluated_at via points_ledger.evaluation_id) falls in [p_from, p_to); tasks_completed counts completed Tasks whose live completed Evaluation falls in it (a completed Umbrella, never evaluated, counts only when no bound and no Points Start Date is set); tasks_total ignores the range and stays the whole Campaign (R13 speaks of points only). R58: neither points_total nor tasks_completed counts before the Points Start Date (private.points_floor(), asked once; no date set means no floor), whatever p_from says. PT400 invalid_date_range first when p_to < p_from; then the same PT404/42501 preamble as private.campaign_report_impl -- both share private.require_campaign_report_access.';
+  'tasks_total/tasks_completed/points_total for one Campaign -- every Task (any kind) carrying campaign_id = p_campaign_id, points summed off the points_ledger rows private.evaluate_task writes exactly as private.campaign_report_impl does. The date range (#677) follows the award instant: points_total sums ledger rows whose Evaluation (task_evaluations.evaluated_at via points_ledger.evaluation_id) falls in [p_from, p_to); tasks_completed counts completed Tasks whose live completed Evaluation falls in it (a completed Umbrella, never evaluated, counts only when no p_from or p_to is set); tasks_total ignores the range and stays the whole Campaign (R13 speaks of points only). R58: neither points_total nor tasks_completed counts before the Points Start Date (private.points_floor(), asked once; no date set means no floor), whatever p_from says; the date alone reads a completed Umbrella by its own completed_at, so one completed on or after it keeps counting when no p_from or p_to is given and one completed before it does not. PT400 invalid_date_range first when p_to < p_from; then the same PT404/42501 preamble as private.campaign_report_impl -- both share private.require_campaign_report_access.';
 
 -- The public wrappers are unchanged; only what they document gains the rule.
 comment on function public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz, boolean) is
