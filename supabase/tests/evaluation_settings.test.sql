@@ -15,7 +15,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(55);
+select plan(56);
 
 -- ==================== Fixtures — prefix 58582000-… ====================
 -- 1 bc; 2 voluntar; 3 deactivated voluntar holding a still-valid token.
@@ -72,11 +72,24 @@ select has_index('public', 'evaluation_settings', 'evaluation_settings_updated_b
 select is((select count(*) from public.evaluation_settings), 1::bigint,
   'exactly one row exists after the migrations');
 select is((select id from public.evaluation_settings), 1::smallint, 'and it is row 1');
+
+-- The suite must not depend on what the database committed: put the row as the
+-- migration seeded it (rolled back with the transaction), then judge it.
+update public.evaluation_settings
+   set eligibility_floor = null, membership_cutoff = null, points_start_date = null, updated_by = null
+ where id = 1;
 select results_eq(
   $$ select eligibility_floor, membership_cutoff, points_start_date, updated_by
        from public.evaluation_settings $$,
   $$ values (null::integer, null::date, null::date, null::uuid) $$,
   'the Prag minim, the Data limită de intrare and the Data de început a punctajului are all unset until BC sets them');
+select is(
+  (select count(*)::int from information_schema.columns
+    where table_schema = 'public' and table_name = 'evaluation_settings'
+      and column_name in ('eligibility_floor', 'membership_cutoff', 'points_start_date')
+      and column_default is not null),
+  0,
+  'and none of the three values has a column default, so the row stays unset until BC sets them');
 
 select throws_ok(
   $$ insert into public.evaluation_settings (id) values (2) $$,

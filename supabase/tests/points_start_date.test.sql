@@ -30,7 +30,14 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(30);
+select plan(35);
+
+-- The row as the migration seeded it, whatever an earlier suite or the database
+-- left in it: this suite sets and clears the date itself.
+update public.evaluation_settings
+   set eligibility_floor = null, membership_cutoff = null, points_start_date = null, updated_by = null
+ where id = 1;
+delete from public.promotion_threshold_changes where field in ('floor', 'cutoff', 'points_start');
 
 -- ==================== Fixtures ====================
 
@@ -39,15 +46,16 @@ create function pg_temp.u(n integer) returns uuid language sql immutable as $$
 $$;
 
 insert into auth.users (id, email)
-select pg_temp.u(n), 'member.' || n || '.r58t6@test.local' from generate_series(1, 4) n;
+select pg_temp.u(n), 'member.' || n || '.r58t6@test.local' from generate_series(1, 5) n;
 
 -- 1 BC (the evaluator, and the one who sets the date), 2 the earner, 3 a
 -- Member whose only ledger row is a Sanction from before the date, 4 the
--- earner in the second Group, whose Campaign holds the Umbrellas.
+-- earner in the second Group, whose Campaign holds the Umbrellas, 5 the
+-- Executor of the two Tasks that go through the real commands (section 0).
 insert into public.profiles (id, full_name, email, role, status)
 select pg_temp.u(n), 'Member R58T6 ' || n, 'member.' || n || '.r58t6@test.local',
   (case n when 1 then 'bc' else 'voluntar' end)::public.member_role, 'activ'
-from generate_series(1, 4) n;
+from generate_series(1, 5) n;
 
 insert into public.groups (name, category, min_level, competes_in_cup, created_by)
 values ('Grup Start R58T6', 'department', 0, true, pg_temp.u(1));
@@ -148,11 +156,31 @@ select 'Fara evaluare R58T6', grp.id, campaign.id, 'local', 'direct', 'completed
   join public.campaigns as campaign on campaign.group_id = grp.id
  where grp.name = 'Grup Umbrela R58T6';
 
+-- Two Tasks in review in a third Group, for the real commands of section 0: one
+-- is awarded and stays awarded, the other is awarded and then reopened. Member
+-- 5 earns nowhere else, so no total below moves.
+insert into public.groups (name, category, min_level, created_by)
+values ('Grup Comenzi R58T6', 'department', 0, pg_temp.u(1));
+insert into public.tasks
+  (title, group_id, audience, assignment_mode, status,
+   created_at, started_at, submitted_at, created_by)
+select task.title, grp.id, 'local', 'direct', 'in_review',
+       now() - interval '9 days', now() - interval '8 days', now() - interval '1 day', pg_temp.u(1)
+  from public.groups as grp
+ cross join (values ('Comanda acordata R58T6'), ('Comanda redeschisa R58T6')) as task (title)
+ where grp.name = 'Grup Comenzi R58T6';
+insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
+select task.id, pg_temp.u(5), pg_temp.u(1), now() - interval '8 days'
+  from public.tasks as task
+ where task.title in ('Comanda acordata R58T6', 'Comanda redeschisa R58T6');
+
 create temporary table fx as
 select (select id from public.groups where name = 'Grup Start R58T6')           as g,
        (select id from public.campaigns where name = 'Campanie Start R58T6')     as k,
        (select id from public.campaigns where name = 'Campanie Umbrela R58T6')   as k_umbrella,
-       (select id from public.tasks where title = 'Start martie R58T6')          as t_march;
+       (select id from public.tasks where title = 'Start martie R58T6')          as t_march,
+       (select id from public.tasks where title = 'Comanda acordata R58T6')      as t_cmd_kept,
+       (select id from public.tasks where title = 'Comanda redeschisa R58T6')    as t_cmd_reopened;
 grant select on fx to authenticated;
 
 create function pg_temp.as_bc() returns void language sql as $$
@@ -165,9 +193,36 @@ create function pg_temp.as_member(n integer) returns void language sql as $$
 -- my_points reads the award instant from the Member's own ledger rows, never
 -- through task_evaluations (which a security-invoker view would read under the
 -- Task visibility policies, many times slower): that is only right while every
--- `task` row is dated by its Evaluation. Every writer does so -- evaluate_task,
--- the Legacy Import, the #317 backfill and the fixtures here -- and this pins it
--- over the seed and the fixtures alike.
+-- `task` row is dated by its Evaluation. points_ledger_guard_award_instant
+-- makes that a rule of the table (R58 ruling 18). The live writers are
+-- exercised first -- two awards through complete_task_review, one of them then
+-- reversed through reopen_task -- beside the fixtures and the seed, and the
+-- count then pins the invariant over all of them.
+select pg_temp.as_bc();
+select lives_ok(format($$ select public.complete_task_review(%s, 3, 4, 'comanda acordata') $$,
+  (select t_cmd_kept from fx)),
+  'BC awards a Task through complete_task_review');
+select lives_ok(format($$ select public.complete_task_review(%s, 3, 4, 'comanda redeschisa') $$,
+  (select t_cmd_reopened from fx)),
+  'BC awards a second Task through complete_task_review');
+select lives_ok(format($$ select public.reopen_task(%s, 'redeschisa pentru test') $$,
+  (select t_cmd_reopened from fx)),
+  'and reopens it through reopen_task, which reverses the award');
+reset role;
+
+select is(
+  (select format('%s|%s|%s|%s',
+                 count(*) filter (where entry.reason = 'task'),
+                 count(*) filter (where entry.reason = 'task_reversal'),
+                 sum(entry.delta),
+                 count(*) filter (where entry.reason = 'task'
+                                    and entry.created_at = evaluation.evaluated_at))
+     from public.points_ledger as entry
+     join public.task_evaluations as evaluation on evaluation.id = entry.evaluation_id
+    where entry.member_id = pg_temp.u(5)),
+  '2|1|6|2',
+  'the commands wrote two task rows (each dated by its Evaluation), one task_reversal, and a net of one award');
+
 select is(
   (select count(*)::int
      from public.points_ledger as entry
@@ -175,6 +230,19 @@ select is(
     where entry.reason = 'task' and entry.created_at <> evaluation.evaluated_at),
   0,
   'every task ledger row is dated by the instant of its Evaluation');
+
+-- And the rule is the table's own: a task row a second off its Evaluation is
+-- refused whoever writes it.
+select throws_ok(
+  $$ insert into public.points_ledger (member_id, delta, reason, task_id, evaluation_id, created_at)
+     select entry.member_id, entry.delta, 'task', entry.task_id, entry.evaluation_id,
+            evaluation.evaluated_at + interval '1 second'
+       from public.points_ledger as entry
+       join public.task_evaluations as evaluation on evaluation.id = entry.evaluation_id
+      where entry.member_id = pg_temp.u(5) and entry.reason = 'task'
+      limit 1 $$,
+  '23514', 'ledger_award_instant_mismatch',
+  'points_ledger_guard_award_instant refuses a task row dated off its Evaluation');
 
 -- ==================== 1 · Day one: no date, every total counts from the beginning ====================
 
