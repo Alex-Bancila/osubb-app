@@ -22,7 +22,7 @@
 -- personas only -- promotion_thresholds and promotion_threshold_changes are
 -- global singletons (one row per kind), never namespaced by a fixture
 -- prefix, so every write here is read back by kind and undone by this
--- suite's rollback like every other suite that touches promotion_rules.
+-- suite's rollback like every other suite that touches those settings.
 --
 -- Mutation guards (run 2026-09-27 against the live database, reverted
 -- after):

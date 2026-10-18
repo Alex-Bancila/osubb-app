@@ -2,13 +2,14 @@
 -- app still reads stay, and an Announcement keeps its Group and Audience.
 -- Migration 20260929234000_retire_dead_surface.sql. Section 6: R58
 -- (20261018170000_portofoliu_interne.sql) retired the Promotion Rules, the
--- daily promotion job and the pre-R58 Role Evaluation signatures.
+-- daily promotion job and the pre-R58 Role Evaluation signatures, and keeps
+-- the R28 close-time pins of the suites it deleted.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(34);
 
 -- ==================== 1. retired Task commands ====================
 select hasnt_function('public', 'update_task_content',
@@ -107,6 +108,14 @@ select hasnt_function('public', 'role_evaluation_ranking', array['text', 'date',
   'the (kind, from, to) ranking is gone: a recorded run is ranked by its id');
 select hasnt_function('public', 'run_role_evaluation', array['text', 'date', 'date', 'text'],
   'the four-argument run is gone: a run is given its Floor, share and cutoff');
+-- Kept from apply_promotions.test.sql and detect_promotions.test.sql, which R58
+-- deleted with the job: the close-time functions R28 retired stay gone.
+select hasnt_function('private', 'apply_close_promotions', array['bigint'],
+  'apply_close_promotions no longer exists -- the close-time run is gone (ruling R28)');
+select hasnt_function('private', 'detect_close_promotions', array['bigint'],
+  'detect_close_promotions no longer exists -- the close-time run is gone (ruling R28)');
+select hasnt_function('private', 'detect_retention_signals', array['bigint'],
+  'detect_retention_signals no longer exists -- a finalised run stores the Retention Signals (#826, R58)');
 
 select * from finish();
 rollback;

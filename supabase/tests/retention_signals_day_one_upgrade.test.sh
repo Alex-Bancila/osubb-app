@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # R58 (ruling 14): replay the Portofoliu Interne migration's day-one block --
-# the latest run of each kind has its Retention Signals stored, one open
-# below_line row per Member its retention_signal Notifications name -- first
-# on a database with no run (nothing is stored), then over pre-R58 runs of
-# both kinds, inside one rollback transaction. The block is the migration's
+# the latest run of each kind has its Retention Signals stored, one
+# below_line row per Member its retention_signal Notifications name, listed
+# at the Role its kind signalled and closed as role_changed when the Role
+# changed after the run -- first on a database with no run (nothing is
+# stored), then over pre-R58 runs of both kinds with Role history around
+# them, inside one rollback transaction. The block is the migration's
 # only DO block; the seeded demo Members stand in for the holders.
 set -euo pipefail
 migration=$(printf '%s\n' supabase/migrations/*_portofoliu_interne.sql)
@@ -55,6 +57,23 @@ select recipient.id, 'system', 'Semnal de retenție', note.prefix || run.id || '
   join public.role_evaluations as run on run.name = note.run_name
   join public.profiles as subject on subject.email = note.subject_email
   join public.profiles as recipient on recipient.email = note.recipient_email;
+
+-- Role history around the runs (decision 16). The Voluntar Activ holder was
+-- moved down 12 hours ago and back up 6 hours ago: their Signal arrives closed
+-- at the first change. The voter got Drept de Vot three days ago (before the
+-- runs) and was deactivated 6 hours ago (a status change, the Role kept):
+-- neither closes theirs.
+insert into public.role_history (member_id, from_role, to_role, from_status, to_status,
+                                 changed_by, actor_kind, reason, created_at)
+select member.id, change.from_role, change.to_role, change.from_status::public.member_status,
+       change.to_status::public.member_status, bc.id, 'human', 'Day-one harness', change.at
+  from (values ('activ@demo.osubb', 'activ', 'voluntar', null, null, now() - interval '12 hours'),
+               ('activ@demo.osubb', 'voluntar', 'activ', null, null, now() - interval '6 hours'),
+               ('vot@demo.osubb', 'activ', 'vot', null, null, now() - interval '3 days'),
+               ('vot@demo.osubb', 'vot', 'vot', 'activ', 'inactiv', now() - interval '6 hours'))
+       as change (email, from_role, to_role, from_status, to_status, at)
+  join public.profiles as member on member.email = change.email
+  join public.profiles as bc on bc.email = 'bc@demo.osubb';
 SQL
   day_one
   cat <<'SQL'
@@ -76,13 +95,20 @@ begin
     raise exception 'day-one Signals are %', v_stored;
   end if;
 
-  -- Each row: the run's kind, below_line, the Member's current Role, their
-  -- Task Points over the run's Evaluation Period, the run's line and
-  -- instant, open.
+  -- Each row: the run's kind, below_line, the Role the run listed (by its
+  -- kind, whatever the Member holds now: the voter is listed activ by the
+  -- Voluntar Activ run), their Task Points over the run's Evaluation Period,
+  -- the run's line and instant -- and closed as role_changed at the first
+  -- Role change after the run, open otherwise.
   select count(*) into v_wrong
     from public.retention_signals as signal
     join public.role_evaluations as run on run.id = signal.role_evaluation_id
     join public.profiles as member on member.id = signal.member_id
+    join (values ('Ultima VA', 'activ@demo.osubb', 'activ', 'role_changed', now() - interval '12 hours'),
+                 ('Ultima VA', 'vot@demo.osubb', 'activ', null, null),
+                 ('Ultima AG', 'vot@demo.osubb', 'vot', null, null))
+         as expected (run_name, email, role_at_listing, closed_as, closed_at)
+      on expected.run_name = run.name and expected.email = member.email
     left join lateral (
       select earned.task_points
         from private.task_points_in_range(
@@ -91,14 +117,17 @@ begin
        where earned.member_id = member.id) as points on true
    where not (signal.kind = run.kind
               and signal.reason = 'below_line'
-              and signal.role_at_listing = member.role
+              and signal.role_at_listing::text = expected.role_at_listing
               and signal.task_points = coalesce(points.task_points, 0)
               and signal.threshold_used = run.threshold_used
               and signal.created_at = run.run_at
-              and signal.closed_at is null
-              and signal.closed_as is null);
+              and signal.closed_as is not distinct from expected.closed_as
+              and signal.closed_at is not distinct from expected.closed_at::timestamptz);
   if v_wrong <> 0 then
     raise exception '% day-one Signal(s) carry the wrong values', v_wrong;
+  end if;
+  if (select count(*) from public.retention_signals) <> 3 then
+    raise exception 'the expected rows did not all match';
   end if;
 
   -- The points really come from the period: the demo voter earned in it.

@@ -1548,10 +1548,16 @@ comment on function public.my_role_evaluation_standing(text) is
 -- stored. Before R58 they were not rows: the page derived them from the
 -- ranking, and the run told BC once per Signal. Those Notifications
 -- (retention_signal:<run>:<member>) are the exact record of what was raised,
--- so each Member they name becomes one open below_line row of the run: the
--- Member's current Role, their Task Points over the run's Evaluation Period
+-- so each Member they name becomes one below_line row of the run: the Role
+-- the run listed (a run before R58 signalled only the Voluntar Activ holders
+-- of its Voluntar Activ kind and the Voluntar cu Drept de Vot holders of its
+-- Adunarea Generală kind), their Task Points over the run's Evaluation Period
 -- (0 when nothing touched them), the line the run measured against, and the
--- run's instant. A database with no run gets nothing.
+-- run's instant. Decision 16: a Role change closes a Signal, and BC may have
+-- acted since the run -- a Member with a role_history row changing the Role
+-- after the run's instant arrives closed as role_changed, at the first such
+-- change. A Member no longer activ arrives open; the next run of the kind
+-- closes it. A database with no run gets nothing.
 -- retention_signals_day_one_upgrade.test.sh replays this block.
 do $$
 declare
@@ -1564,15 +1570,26 @@ begin
      order by run.kind, run.run_at desc, run.id desc
   loop
     insert into public.retention_signals (
-      kind, member_id, role_at_listing, reason, task_points, threshold_used, role_evaluation_id, created_at
+      kind, member_id, role_at_listing, reason, task_points, threshold_used, role_evaluation_id, created_at,
+      closed_at, closed_as
     )
-    select v_run.kind, member.id, member.role, 'below_line', coalesce(earned.task_points, 0),
-           v_run.threshold_used, v_run.id, v_run.run_at
+    select v_run.kind, member.id,
+           (case v_run.kind when 'voluntar_activ' then 'activ' else 'vot' end)::public.member_role,
+           'below_line', coalesce(earned.task_points, 0),
+           v_run.threshold_used, v_run.id, v_run.run_at,
+           changed.changed_at,
+           case when changed.changed_at is not null then 'role_changed' end
       from public.profiles as member
       left join private.task_points_in_range(
              (v_run.period_from::timestamp at time zone 'Europe/Bucharest'),
              ((v_run.period_to + 1)::timestamp at time zone 'Europe/Bucharest')) as earned
         on earned.member_id = member.id
+      left join lateral (
+             select min(history.created_at) as changed_at
+               from public.role_history as history
+              where history.member_id = member.id
+                and history.to_role <> history.from_role
+                and history.created_at > v_run.run_at) as changed on true
      where member.id::text in (
              select split_part(notification.dedupe_key, ':', 3)
                from public.notifications as notification
@@ -1621,5 +1638,91 @@ comment on table public.promotion_thresholds is
 
 comment on column public.profiles.joined_at is
   'Exact join date; the Membership Cutoff Date (R58) is measured against it -- a Voluntar who joined on or before it may be listed as a Promotion Candidate (before R58, tenure for Recrut -> Voluntar and the Promotion Candidate cohort counted from it). provision_profile stamps it (#933): the given date, otherwise the provisioning day on the Europe/Bucharest calendar. #160 backfilled known members as January 1 of joined_year; #933 backfilled the rest from the Europe/Bucharest date of profiles.created_at. BC edits historical dates (#932). Null only for a profile inserted outside provision_profile without one.';
+
+-- provision_profile's body said the join date is what tenure counts from;
+-- restated from 20260929210000_provision_joined_at.sql with that one comment
+-- changed and nothing else.
+create or replace function public.provision_profile(p_user_id uuid, p_full_name text, p_email text, p_role member_role DEFAULT 'recrut'::member_role, p_group_ids bigint[] DEFAULT '{}'::bigint[], p_appointed_by uuid DEFAULT NULL::uuid, p_joined_at date DEFAULT NULL::date)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_group_id  bigint;
+  v_reason    text;
+begin
+  -- The rank ceiling (H1, widened by #917). A leadership account is created
+  -- by leadership -- a live active BC or Moderator, the actor set_member_role
+  -- accepts -- and answered before anything is written.
+  if p_role in ('bc', 'moderator') then
+    if p_appointed_by is null then
+      -- The bootstrap path: the first Moderator, appointed by nobody. Once an
+      -- `activ` Moderator exists, a null appointer creates no leadership.
+      -- Two concurrent bootstrap calls would both see "no Moderator yet", so
+      -- the `moderator` Role row is locked first: the second call waits, and
+      -- its check below (a new snapshot under read committed) sees the
+      -- first's committed row. `for no key update`, the house mode for a row
+      -- other tables reference, so a key-share lock on it is never blocked.
+      if p_role = 'moderator' then
+        perform 1
+           from public.roles as role
+          where role.id = 'moderator'
+            for no key update;
+      end if;
+      if p_role <> 'moderator'
+         or exists (select 1
+                      from public.profiles as holder
+                     where holder.role = 'moderator'
+                       and holder.status = 'activ') then
+        raise exception using errcode = '42501', message = 'member_manage_forbidden';
+      end if;
+    else
+      -- #917: the appointer is a live active BC or Moderator, read under a
+      -- share lock so a concurrent demotion or deactivation of them waits.
+      perform 1
+         from public.profiles as appointer
+         join public.roles as role on role.id = appointer.role
+        where appointer.id = p_appointed_by
+          and appointer.status = 'activ'
+          and role.level >= 6
+          for share of appointer;
+      if not found then
+        raise exception using errcode = '42501', message = 'member_manage_forbidden';
+      end if;
+    end if;
+  end if;
+
+  -- #933: the join date -- the given one, or the provisioning day on the
+  -- Europe/Bucharest calendar. R58 measures the Membership Cutoff Date
+  -- against it.
+  insert into public.profiles (id, full_name, email, role, joined_at)
+  values (p_user_id, p_full_name, lower(trim(p_email)), p_role,
+          coalesce(p_joined_at, (now() at time zone 'Europe/Bucharest')::date));
+
+  -- Shape 4: ascending id, duplicates collapsed.
+  begin
+    for v_group_id in
+      select distinct g
+        from unnest(coalesce(p_group_ids, '{}'::bigint[])) as g
+       order by 1
+    loop
+      -- Shape 1 and 2: the one insert path, with the inviting BC as the actor.
+      perform private.appoint_group_member(v_group_id, p_user_id, p_appointed_by);
+    end loop;
+  exception
+    -- Shape 3: keep the core's reason, normalise the class. Anything else --
+    -- a 23505 on the profiles row, say, which invite-member reads to tell a
+    -- race from a typo -- passes through untouched, because it is raised
+    -- outside this block.
+    when insufficient_privilege or sqlstate 'PT400' or sqlstate 'PT409' then
+      get stacked diagnostics v_reason = message_text;
+      raise sqlstate 'PT400' using message = v_reason;
+  end;
+
+  return p_user_id;
+end;
+$function$;
+
 comment on function public.provision_profile(uuid, text, text, public.member_role, bigint[], uuid, date) is
   'Atomically provisions an invited auth user (ADR-0003, #602): the profiles row, then one Appointment per p_group_ids Group through private.appoint_group_member -- the ONE insert path into public.group_members (rulings R6/R27), which carries every roster invariant and writes the new Member''s Appointment Notification. The profile''s joined_at (#933) is p_joined_at when given, otherwise the provisioning day on the Europe/Bucharest calendar, so the Membership Cutoff Date (R58) measures the Member from the day they joined. p_appointed_by is the inviting BC or Moderator, whose live level >= 6 the Edge Function verifies from the database, and it reaches the core as p_actor, so the Notification is attributed to them (and private.notify drops the actor, so provisioning somebody as their own appointer notifies nobody). Rank ceiling (security pass 2026-09-27, H1; widened by ruling R31, #917): a bc or moderator profile is provisioned only when p_appointed_by is a live activ BC or Moderator (level 6 and up, read FOR SHARE) -- the actor set_member_role accepts -- or, for the bootstrap, when p_appointed_by is null, the role is moderator and no activ Moderator exists yet; anything else is 42501 member_manage_forbidden before anything is written. Groups are appointed in ascending id order with duplicates collapsed, so the FOR NO KEY UPDATE locks the core takes can never deadlock two concurrent calls. Any refusal from the core -- group_archived, group_member_not_eligible, group_member_below_min_level, automatic_group_has_no_roster_members, already_group_member, or the non-disclosing group_manage_forbidden for an unknown id -- fails the WHOLE call as PT400 carrying the core''s own reason string, so no half-placed Member survives. Writes no legacy membership table: #590 drops both. Service-role only; shared by the single-invite and CSV-import flows and the production bootstrap.';

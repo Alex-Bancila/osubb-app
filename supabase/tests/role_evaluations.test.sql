@@ -23,7 +23,8 @@
 -- private.task_points_in_range's raw timestamptz bounds; 5.
 -- private.role_evaluation_rows' inclusive-Bucharest-day range; 6.
 -- promotion_threshold_changes schema, its source-shape check, and its
--- level->=6 read gate.
+-- level->=6 read gate; 7. the log's shape rules for its tenure and on/off
+-- history rows (moved from promotion_rule_command.test.sql, R58).
 --
 -- Mutation guards, each named against the assertion that turns red (run as
 -- scratch copies of this file on 2026-09-27; see the report for exact runs):
@@ -43,7 +44,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(50);
+select plan(58);
 
 -- ==================== Fixtures ====================
 
@@ -200,10 +201,10 @@ select is(
   array[true, false, false, false],
   'authenticated may select role_evaluations and nothing else -- run_role_evaluation is the only write path');
 -- The table's revoke only names public/anon/authenticated (the idiom every
--- promotion_rules-family table in this migration and #49's promotion_rules
--- share -- conventions section 4's older two/three-role form); service_role
--- keeps Supabase's default table privileges, so only its read is asserted
--- here, matching promotion_rules.test.sql's own scope.
+-- table of this family in #826's migration shares, as #49's promotion_rules
+-- did until R58 dropped it -- conventions section 4's older two/three-role
+-- form); service_role keeps Supabase's default table privileges, so only its
+-- read is asserted here, as promotion_thresholds.test.sql scopes its own.
 select is(has_table_privilege('service_role', 'public.role_evaluations', 'select'), true,
   'service_role may select role_evaluations');
 select is(
@@ -452,6 +453,53 @@ set local role anon;
 select throws_ok($$ select count(*) from public.promotion_threshold_changes $$, '42501', null,
   'anon cannot read promotion_threshold_changes at all');
 reset role;
+
+-- ==================== 7. The log's history rows (tenure, enabled) ====================
+-- Moved here from promotion_rule_command.test.sql §8 (#935) when R58 dropped
+-- the Promotion Rules, their command and that suite: the log keeps its
+-- tenure and on/off rows as history, so its shape rules for them still hold.
+-- promotion_rule_id is a plain number since R58 (no foreign key), so a
+-- literal id stands for the dropped rule.
+
+select throws_ok(
+  $$ insert into public.promotion_threshold_changes (kind, field, promotion_rule_id, from_value, to_value, source, changed_by)
+     values ('voluntar_activ', 'tenure', 2, 6, 4, 'manual', '82600000-0000-0000-0000-000000000001') $$,
+  '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_subject_ck"',
+  'promotion_threshold_changes_subject_ck: a rule change names its rule, never a kind');
+select throws_ok(
+  $$ insert into public.promotion_threshold_changes (kind, field, from_value, to_value, source, changed_by)
+     values (null, 'threshold', 15, 20, 'manual', '82600000-0000-0000-0000-000000000001') $$,
+  '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_subject_ck"',
+  'promotion_threshold_changes_subject_ck: a threshold change still names its kind');
+select throws_ok(
+  $$ insert into public.promotion_threshold_changes (field, promotion_rule_id, from_value, to_value, source, changed_by)
+     values ('tenure', 2, 6, 121, 'manual', '82600000-0000-0000-0000-000000000001') $$,
+  '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_tenure_shape_ck"',
+  'promotion_threshold_changes_tenure_shape_ck: a tenure above 120 months cannot be logged');
+select throws_ok(
+  format($$ insert into public.promotion_threshold_changes (field, promotion_rule_id, from_value, to_value, source, role_evaluation_id)
+            values ('tenure', 2, 6, 4, 'role_evaluation', %s) $$, (select re1 from fx826)),
+  '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_tenure_shape_ck"',
+  'promotion_threshold_changes_tenure_shape_ck: a Role Evaluation never changes a tenure');
+select throws_ok(
+  $$ insert into public.promotion_threshold_changes (field, promotion_rule_id, from_value, to_value, source, changed_by)
+     values ('enabled', 2, 1, 1, 'manual', '82600000-0000-0000-0000-000000000001') $$,
+  '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_enabled_shape_ck"',
+  'promotion_threshold_changes_enabled_shape_ck: an on/off row is always a flip');
+select throws_ok(
+  $$ insert into public.promotion_threshold_changes (field, promotion_rule_id, from_value, to_value, source, changed_by)
+     values ('enabled', 2, 0, 2, 'manual', '82600000-0000-0000-0000-000000000001') $$,
+  '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_enabled_shape_ck"',
+  'promotion_threshold_changes_enabled_shape_ck: on/off is 0 or 1');
+select throws_ok(
+  $$ insert into public.promotion_threshold_changes (kind, from_value, to_value, source, changed_by)
+     values ('voluntar_activ', 15, 0, 'manual', '82600000-0000-0000-0000-000000000001') $$,
+  '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_to_value_range_ck"',
+  'promotion_threshold_changes_to_value_range_ck: a threshold is still at least 1 Task Point');
+select lives_ok(
+  $$ insert into public.promotion_threshold_changes (field, promotion_rule_id, from_value, to_value, source, changed_by)
+     values ('tenure', 1, 2, 0, 'manual', '82600000-0000-0000-0000-000000000001') $$,
+  'a tenure of 0 months can be logged -- the table allows it, and since R58 the rule it names need not exist');
 
 select * from finish();
 rollback;
