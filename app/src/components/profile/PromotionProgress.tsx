@@ -51,8 +51,9 @@ import {
  * (`din 01.09.2026`) under the number. The figure below is the Member's
  * standing (`my_role_evaluation_standing`), which the date does not floor
  * (ruling 17: PR 3 floors it with the live-candidate window), so with a date
- * set it is never taken for the total: the panel leads with the floored total
- * and the bar or the reference keeps its own figure, unlabelled.
+ * set — or not yet known — it is never taken for the total: the panel leads
+ * with the floored total and the bar or the reference keeps its own figure,
+ * unlabelled.
  *
  * Read-only and never a leaderboard: no rank, no other Member's points (R6).
  */
@@ -70,11 +71,17 @@ export function PromotionPanel({
   // A Voluntar Activ or a Voluntar cu Drept de Vot has no promotion to show
   // here, only their points against the reference threshold.
   const title = view?.kind === 'reference' ? 'Punctaj' : 'Punctaj și promovare';
-  const hasStartDate = pointsSinceText(usePointsStartDate()) !== null;
-  // Before any Role Evaluation, and while no Points Start Date floors the
-  // total, the figure below is the total already.
+  const startDate = usePointsStartDate();
+  // Before any Role Evaluation the figure below is the total already — but
+  // only where no Points Start Date floors the total, and only a confirmed
+  // `null` says so. While the date is unknown (`undefined`: loading, or a
+  // failed read) the floored total leads instead, so the figure is always
+  // correct and the layout does not jump once the settings arrive.
   const figureIsTotal =
-    view !== null && view.kind !== 'tenure' && !view.since && !hasStartDate;
+    view !== null &&
+    view.kind !== 'tenure' &&
+    !view.since &&
+    startDate === null;
   const showTotal = totalPoints !== undefined && !figureIsTotal;
   return (
     <Panel title={title}>

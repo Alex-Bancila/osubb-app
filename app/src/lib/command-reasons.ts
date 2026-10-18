@@ -628,7 +628,7 @@ const REASON_COPY = new Map<string, string>([
     'Doar BC și Moderatorul pot schimba regulile de promovare.',
   ],
   // set_org_setting refuses y: only set_evaluation_percent writes it.
-  ['org_setting_not_settable', 'Setarea se schimbă din Portofoliu Interne.'],
+  ['org_setting_not_settable', 'Setarea se schimbă din Evaluări de rol.'],
   /* The evaluation settings (R58): the Eligibility Floor, the Membership
      Cutoff and the Points Start Date, and the runs that need the first two. */
   [
