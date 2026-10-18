@@ -2,10 +2,8 @@ import type { ReactNode } from 'react';
 import { Panel } from '../layout';
 import { ErrorState, Loading } from '../states';
 import { formatPointCount, formatPoints, pointWord } from '../../lib/format';
-import {
-  pointsSinceText,
-  usePointsStartDate,
-} from '../../queries/evaluation-settings';
+import { pointsSinceText } from '../../lib/points-period';
+import { usePointsStartDate } from '../../queries/evaluation-settings';
 import {
   usePromotionProgressState,
   type PromotionState,

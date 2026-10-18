@@ -1,10 +1,8 @@
 import { Panel } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { formatPoints } from '../../lib/format';
-import {
-  pointsSinceText,
-  usePointsStartDate,
-} from '../../queries/evaluation-settings';
+import { pointsSinceText } from '../../lib/points-period';
+import { usePointsStartDate } from '../../queries/evaluation-settings';
 import { useMyRoleLabel } from '../../queries/my-role-label';
 import { useMyPoints } from '../../queries/points';
 

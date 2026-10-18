@@ -27,8 +27,7 @@ vi.mock('../../queries/leadership', () => ({
 vi.mock('../../queries/task-tabs', () => ({
   useTaskLeadership: () => ({ data: true }),
 }));
-vi.mock('../../queries/evaluation-settings', async (importActual) => ({
-  ...(await importActual<typeof import('../../queries/evaluation-settings')>()),
+vi.mock('../../queries/evaluation-settings', () => ({
   usePointsStartDate: () => state.pointsStart,
 }));
 import MemberTrackerScreen from './MemberTrackerScreen';

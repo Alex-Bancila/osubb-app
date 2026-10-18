@@ -2,10 +2,8 @@ import { Link } from 'react-router';
 import { cn } from 'cn';
 import { focusRingClass } from '../../components/layout';
 import { formatPoints, pointWord } from '../../lib/format';
-import {
-  pointsSinceText,
-  usePointsStartDate,
-} from '../../queries/evaluation-settings';
+import { pointsSinceText } from '../../lib/points-period';
+import { usePointsStartDate } from '../../queries/evaluation-settings';
 import { useMyRoleLabel } from '../../queries/my-role-label';
 import { useMyPoints } from '../../queries/points';
 

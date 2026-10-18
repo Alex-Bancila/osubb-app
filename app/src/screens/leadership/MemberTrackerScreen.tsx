@@ -19,6 +19,7 @@ import { MemberAvatar } from '../../components/ui/combobox';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
 import { formatBucharestShortDay } from '../../lib/calendar-time';
 import { formatPoints, pointWord } from '../../lib/format';
+import { pointsPeriodText } from '../../lib/points-period';
 import { isUuid } from '../../lib/ids';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import {
@@ -26,10 +27,7 @@ import {
   type WorkFilterParams,
   type WorkFilterValue,
 } from '../../lib/work-filter';
-import {
-  pointsPeriodText,
-  usePointsStartDate,
-} from '../../queries/evaluation-settings';
+import { usePointsStartDate } from '../../queries/evaluation-settings';
 import {
   useLeadershipFilters,
   useLeadershipMemberTasks,

@@ -46,8 +46,7 @@ vi.mock('../../queries/reference', () => ({
 }));
 
 // R58: the Points Start Date is a settings read; the test hands it over.
-vi.mock('../../queries/evaluation-settings', async (importActual) => ({
-  ...(await importActual<typeof import('../../queries/evaluation-settings')>()),
+vi.mock('../../queries/evaluation-settings', () => ({
   usePointsStartDate: () => state.startDate,
 }));
 

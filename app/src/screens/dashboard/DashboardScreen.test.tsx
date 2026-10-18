@@ -73,8 +73,7 @@ vi.mock('../../queries/org-settings', () => ({
 }));
 vi.mock('../../queries/points', () => ({ useMyPoints: hooks.useMyPoints }));
 // R58: the Points Start Date beside the total; null until BC sets one.
-vi.mock('../../queries/evaluation-settings', async (importActual) => ({
-  ...(await importActual<typeof import('../../queries/evaluation-settings')>()),
+vi.mock('../../queries/evaluation-settings', () => ({
   usePointsStartDate: () => hooks.pointsStartDate.value,
 }));
 // The shell's badge reads, which the tiles share.

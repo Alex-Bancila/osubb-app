@@ -87,10 +87,7 @@ vi.mock('../../queries/work-filter-options', () => ({
   }),
 }));
 vi.mock('../../queries/points', () => ({ useMyPoints: hooks.useMyPoints }));
-vi.mock('../../queries/evaluation-settings', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('../../queries/evaluation-settings')
-  >()),
+vi.mock('../../queries/evaluation-settings', () => ({
   usePointsStartDate: () => hooks.pointsStartDate,
 }));
 vi.mock('../../queries/profile', () => ({

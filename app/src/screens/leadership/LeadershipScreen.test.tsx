@@ -38,8 +38,7 @@ vi.mock('../../queries/reference', () => ({ useGroups: state.groups }));
 const pointsStart = vi.hoisted(() => ({
   value: null as string | null | undefined,
 }));
-vi.mock('../../queries/evaluation-settings', async (importActual) => ({
-  ...(await importActual<typeof import('../../queries/evaluation-settings')>()),
+vi.mock('../../queries/evaluation-settings', () => ({
   usePointsStartDate: () => pointsStart.value,
 }));
 const viewer = '35400000-0000-0000-0000-000000000009';
