@@ -144,7 +144,7 @@ Migrations dated after `main`'s newest; every `create or replace` body restated 
 
 ## Later (not in this design)
 
-- **The university backfill script** (Alex: "I will come back with this later"): reads a sheet of Members and universities and writes `profiles.university` through the service role, like `scripts/import-legacy-tasks.mjs`. Needs PR 1 merged.
+- **The university backfill script** (Alex: "I will come back with this later"): reads a sheet of Members and universities and writes `profiles.university` through the service role, like `scripts/import-legacy-tasks.mjs`. It normalises cedilla spellings (ş/ţ, U+015F/U+0163) and "UBB" aliases to `private.ubb_university()`'s exact value before writing. Needs PR 1 merged.
 - **A voter provisioned directly** by `provision_profile` or the volunteer CSV import is outside the Drept de Vot trigger (it guards `update of role`, not inserts) until the import carries the university.
 - Recruți above the line are not listed anywhere; BC promotes Recrut → Voluntar by hand without a hint from the run. Could become a third list if asked.
 - A multi-select in Roluri for promoting a recruitment cohort at once was mentioned as the replacement for the calendar rule; not requested yet.
