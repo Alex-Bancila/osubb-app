@@ -186,6 +186,14 @@ insert into promotion_candidates (role_evaluation_id, member_id, task_points, te
          (values ('ffffffff-0000-0000-0000-000000000006'::uuid),
                  ('eeeeeeee-0000-0000-0000-000000000156'::uuid)) as member (id)
    where run.name = 'rls-role-evaluation';
+-- R58: Retention Signals are stored and read by live level >= 6 only. The
+-- Signal about the claimless uid is the one an own-row limb would expose.
+insert into retention_signals (kind, member_id, role_at_listing, reason, task_points, threshold_used, role_evaluation_id)
+  select 'voluntar_activ', member.id, 'activ', 'below_line', 10, 30, run.id
+    from role_evaluations as run,
+         (values ('ffffffff-0000-0000-0000-000000000006'::uuid),
+                 ('eeeeeeee-0000-0000-0000-000000000156'::uuid)) as member (id)
+   where run.name = 'rls-role-evaluation';
 -- #991: the volunteer import's record has no policy at all; the row owned by
 -- the claimless uid is the one a self limb would have exposed.
 insert into member_imports (member_id, sheet_email, sheet_row, imported_by) values

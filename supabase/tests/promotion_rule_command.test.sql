@@ -3,8 +3,8 @@
 -- over private.update_promotion_rule_impl -- BC or the Moderator sets one
 -- Promotion Rule's tenure and on/off flag together, every changed value
 -- logged in promotion_threshold_changes (field tenure / enabled, naming the
--- rule); the daily job and a Voluntar Activ Role Evaluation reading the
--- edited values.
+-- rule); the daily job reading the edited values -- and, since R58, a
+-- Voluntar Activ Role Evaluation no longer reading them.
 --
 -- In order: held-lock probes of (47, 1) and (52, 1), first -- before this transaction
 -- takes the lock or writes a row the remote session would then wait on
@@ -22,9 +22,10 @@
 -- the Bucharest calendar -- short of 6 months, past 2.
 --   R1 recrut j3 -- promoted by the daily job once the time rule asks 2
 --     months and is on.
---   V1 voluntar j3, 20 Task Points two days ago -- ranked and a Promotion
---     Candidate (threshold 15) once the top_percent rule asks 2 months and
---     is on; not ranked at 6 months.
+--   V1 voluntar j3, 20 Task Points two days ago -- since R58 a Promotion
+--     Candidate of every run whose Membership Cutoff Date is on or after
+--     j3, whatever the top_percent rule says (the only ranked Member, so the
+--     line is 20).
 --
 -- Mutation guards (run 2026-09-30 as in-transaction redefinitions of
 -- private.update_promotion_rule_impl, reverted after), each turning the
@@ -437,31 +438,35 @@ select is(
   (select role::text from public.profiles where id = '93500000-0000-0000-0000-000000000011'), 'voluntar',
   'the daily job at 2 months promotes R1 to Voluntar');
 
--- ==================== 11. A Role Evaluation reads the edited top_percent rule ====================
--- V1 joined three months ago with 20 Task Points (threshold 15).
+-- ==================== 11. A Role Evaluation no longer reads the top_percent rule (R58) ====================
+-- V1 joined three months ago with 20 Task Points. Since R58 a run is given
+-- its Membership Cutoff Date; the rule's tenure and on/off flag play no part.
 
 select pg_temp.test_login_leadership('93500000-0000-0000-0000-000000000001');
 select lives_ok($$ select public.update_promotion_rule((select top_rule from fx935), 6, true) $$,
   'BC puts the top_percent rule back at 6 months');
 select results_eq(
   $$ select candidates from public.run_role_evaluation('voluntar_activ', (select d_from from fx935),
-                                                      (select d_to from fx935), 'Evaluare reguli 6 luni #935') $$,
-  $$ values (0) $$,
-  'a Voluntar Activ run at 6 months lists no candidate: V1 has three months');
-select lives_ok($$ select public.update_promotion_rule((select top_rule from fx935), 2, true) $$,
-  'BC lowers the top_percent rule to 2 months');
-select results_eq(
-  $$ select candidates from public.run_role_evaluation('voluntar_activ', (select d_from from fx935),
-                                                      (select d_to from fx935), 'Evaluare reguli 2 luni #935') $$,
+                                                      (select d_to from fx935), 'Evaluare reguli 6 luni #935',
+                                                      1, 35, (select j3 from fx935)) $$,
   $$ values (1) $$,
-  'a Voluntar Activ run at 2 months lists V1 as a Promotion Candidate');
-select lives_ok($$ select public.update_promotion_rule((select top_rule from fx935), 2, false) $$,
+  'a Voluntar Activ run under a cutoff of j3 lists V1, though the rule asks 6 months and V1 has three: the run reads the cutoff, not the rule');
+select lives_ok($$ select public.update_promotion_rule((select top_rule from fx935), 6, false) $$,
   'BC switches the top_percent rule off');
 select results_eq(
   $$ select candidates from public.run_role_evaluation('voluntar_activ', (select d_from from fx935),
-                                                      (select d_to from fx935), 'Evaluare reguli oprită #935') $$,
+                                                      (select d_to from fx935), 'Evaluare reguli oprită #935',
+                                                      1, 35, (select j3 from fx935)) $$,
+  $$ values (1) $$,
+  'a Voluntar Activ run with the rule off still lists V1: the rule''s on/off flag no longer gates a run');
+select lives_ok($$ select public.update_promotion_rule((select top_rule from fx935), 2, true) $$,
+  'BC turns the top_percent rule on again at 2 months');
+select results_eq(
+  $$ select candidates from public.run_role_evaluation('voluntar_activ', (select d_from from fx935),
+                                                      (select d_to from fx935), 'Evaluare reguli limită #935',
+                                                      1, 35, (select j3 - 1 from fx935)) $$,
   $$ values (0) $$,
-  'a Voluntar Activ run with the rule off lists no candidate, though V1 holds the tenure and the threshold');
+  'a cutoff the day before V1 joined lists nobody, though the rule at 2 months and on would have');
 reset role;
 
 select * from finish();

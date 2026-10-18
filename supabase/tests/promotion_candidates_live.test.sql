@@ -352,7 +352,8 @@ select pg_temp.test_login_leadership('98300000-0000-0000-0000-000000000001');
 select lives_ok(
   $$ insert into run983
      select * from public.run_role_evaluation('voluntar_activ',
-       (select today from fx983) - 30, (select today from fx983) - 1, 'Evaluare #983') $$,
+       (select today from fx983) - 30, (select today from fx983) - 1, 'Evaluare #983',
+       1, 35, (select today from fx983) - 1) $$,
   'BC runs a Voluntar Activ Role Evaluation over the thirty days up to yesterday');
 reset role;
 
@@ -363,7 +364,7 @@ select results_eq(
       order by candidate.id $$,
   $$ values (true, 'superseded', '98300000-0000-0000-0000-000000000001'::uuid, 15),
             (false, null::text, null::uuid, 15) $$,
-  'the run supersedes the live row (by BC, as any open row) and lists the Voluntar from its range: a run row carrying the threshold used');
+  'the run supersedes the live row (by BC, as any open row) and lists the Voluntar from its range: a run row carrying the line it computed (R58: 15, the only ranked Member''s Task Points)');
 select is(
   (select role_evaluation_id from pg_temp.open983('98300000-0000-0000-0000-000000000013')),
   (select role_evaluation_id from run983),

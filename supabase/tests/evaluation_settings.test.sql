@@ -49,8 +49,8 @@ select is((select relrowsecurity from pg_class where oid = 'public.evaluation_se
   'evaluation_settings has RLS enabled in the migration that creates it (house rule 2)');
 select columns_are('public', 'evaluation_settings',
   array['id', 'eligibility_floor', 'membership_cutoff', 'points_start_date',
-        'created_at', 'updated_at', 'updated_by'],
-  'the row holds the three settings, its timestamps and who last changed it');
+        'created_at', 'updated_at', 'updated_by', 'activ_percent', 'vot_percent'],
+  'the row holds the three settings, its timestamps, who last changed it and, since Portofoliu Interne (R58 section C), the two shares x and y');
 select is(
   (select count(*) from pg_attribute as attribute
      where attribute.attrelid = 'public.evaluation_settings'::regclass

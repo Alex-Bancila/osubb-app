@@ -4,7 +4,8 @@
 -- Before #933 provisioning never wrote joined_at, and a null joined_at holds
 -- no tenure in either consumer: the daily Recrut -> Voluntar job
 -- (private.apply_promotions over private.detect_promotions) and the Promotion
--- Candidate cohort of a Role Evaluation (private.role_evaluation_rows). This
+-- Candidate list of a Role Evaluation (private.role_evaluation_rows; since R58
+-- a Voluntar is listable by joined_at against the Membership Cutoff Date). This
 -- suite provisions Members exactly as invite-member and csv-import do and
 -- proves both consumers now see them. The backfill of existing profiles is
 -- proven by supabase/tests/provision_joined_at_upgrade.test.sh, which replays
@@ -21,8 +22,8 @@
 -- each names the assertions that turned red):
 --   * the coalesce replaced by null (joined_at left null, the pre-#933
 --     body) -> "a Member provisioned without a date joins on the
---     provisioning day", "a Voluntar provisioned today enters the Promotion
---     Candidate cohort once the tenure is reached", "a Recrut provisioned
+--     provisioning day", "a Voluntar provisioned today is listable as a
+--     Promotion Candidate once the cutoff reaches the provisioning day", "a Recrut provisioned
 --     today is promoted by the daily job once the rule's tenure is reached",
 --     and the two given-date assertions below;
 --   * coalesce(p_joined_at, ...) replaced by the bare Bucharest date ->
@@ -81,24 +82,25 @@ select is((select joined_at from public.profiles where id = pg_temp.i933(2)),
           'a given join date is kept');
 
 -- ==================== The Promotion Candidate cohort ====================
--- The top_percent rule's tenure is 6 months: I3 is under it today and holds
--- it on joined_at + 6 months, the shifted evaluation date.
+-- R58: the tenure rule is gone; a Voluntar is listable when joined_at is on or
+-- before the Membership Cutoff Date a Voluntar Activ run uses. I3 joined today:
+-- not listable under a cutoff of yesterday, listable under one of today -- and
+-- never with joined_at null.
 
 select is(
-  (select count(*) from private.role_evaluation_rows(
+  (select ranked.listable from private.role_evaluation_rows(
      'voluntar_activ', (select on_date - 30 from today933), (select on_date from today933),
-     (select on_date from today933)) as ranked
+     1, 35, (select on_date - 1 from today933)) as ranked
     where ranked.member_id = pg_temp.i933(3)),
-  0::bigint,
-  'a Voluntar provisioned today is not a Promotion Candidate before the tenure');
-select results_eq(
-  format($$select ranked.tenure_since from private.role_evaluation_rows(
-             'voluntar_activ', %L::date, %L::date, %L::date) as ranked
-           where ranked.member_id = %L::uuid$$,
-         (select on_date - 30 from today933), (select on_date from today933),
-         (select (on_date + interval '6 months')::date from today933), pg_temp.i933(3)),
-  format($$values (%L::date)$$, (select (on_date + interval '6 months')::date from today933)),
-  'a Voluntar provisioned today enters the Promotion Candidate cohort once the tenure is reached');
+  false,
+  'a Voluntar provisioned today is not listable as a Promotion Candidate under a cutoff before the provisioning day');
+select is(
+  (select ranked.listable from private.role_evaluation_rows(
+     'voluntar_activ', (select on_date - 30 from today933), (select on_date from today933),
+     1, 35, (select on_date from today933)) as ranked
+    where ranked.member_id = pg_temp.i933(3)),
+  true,
+  'a Voluntar provisioned today is listable as a Promotion Candidate once the cutoff reaches the provisioning day');
 
 -- ==================== The daily Recrut -> Voluntar job ====================
 

@@ -33,8 +33,8 @@
 --     red (the reversal falls outside a created_at filter, so the award
 --     leaks through uncancelled);
 --   * private.role_evaluation_rows' upper bound changed from
---     `(p_period_to + 1)::timestamp at time zone 'Europe/Bucharest'` to
---     `p_period_to::timestamp at time zone 'Europe/Bucharest'` (or `<` to
+--     `(p_to + 1)::timestamp at time zone 'Europe/Bucharest'` to
+--     `p_to::timestamp at time zone 'Europe/Bucharest'` (or `<` to
 --     `<=`) -> "EdgeNext 826, credited at 00:00 Bucharest the day after
 --     period_to, is excluded" goes red.
 begin;
@@ -43,7 +43,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(46);
+select plan(50);
 
 -- ==================== Fixtures ====================
 
@@ -110,8 +110,9 @@ select is(
   'the only policy is role_evaluations_read, for select -- no client write policy exists');
 select columns_are('public', 'role_evaluations',
   array['id', 'kind', 'name', 'period_from', 'period_to', 'run_by', 'run_at',
-        'threshold_used', 'threshold_computed', 'ranked_count'],
-  'role_evaluations carries kind, name, the Period bounds, who ran it and when, the threshold used and computed, and ranked_count');
+        'threshold_used', 'threshold_computed', 'ranked_count',
+        'eligibility_floor', 'percent_used', 'membership_cutoff', 'evaluated_count'],
+  'role_evaluations carries kind, name, the Period bounds, who ran it and when, the threshold used and computed, ranked_count and, since R58, the Eligibility Floor, share and Membership Cutoff Date it ranked with and evaluated_count');
 
 select throws_ok(
   $$ insert into public.role_evaluations
@@ -148,6 +149,30 @@ select throws_ok(
              '82600000-0000-0000-0000-000000000001', 30, -1) $$,
   '23514', 'new row for relation "role_evaluations" violates check constraint "role_evaluations_ranked_count_ck"',
   'role_evaluations_ranked_count_ck: a negative ranked_count is rejected');
+-- R58: the values a run ranked with, and how many it evaluated.
+select throws_ok(
+  $$ insert into public.role_evaluations
+       (kind, name, period_from, period_to, run_by, threshold_used, ranked_count, eligibility_floor)
+     values ('voluntar_activ', 'Prag zero 826', '2028-02-01', '2028-02-28',
+             '82600000-0000-0000-0000-000000000001', 30, 5, 0) $$,
+  '23514', 'new row for relation "role_evaluations" violates check constraint "role_evaluations_floor_ck"',
+  'role_evaluations_floor_ck: an Eligibility Floor below 1 is rejected');
+select throws_ok(
+  $$ insert into public.role_evaluations
+       (kind, name, period_from, period_to, run_by, threshold_used, ranked_count, percent_used)
+     values ('voluntar_activ', 'Procent 101 826', '2028-02-01', '2028-02-28',
+             '82600000-0000-0000-0000-000000000001', 30, 5, 101) $$,
+  '23514', 'new row for relation "role_evaluations" violates check constraint "role_evaluations_percent_used_ck"',
+  'role_evaluations_percent_used_ck: a share above 100 is rejected');
+select throws_ok(
+  $$ insert into public.role_evaluations
+       (kind, name, period_from, period_to, run_by, threshold_used, ranked_count, evaluated_count)
+     values ('voluntar_activ', 'Evaluati putini 826', '2028-02-01', '2028-02-28',
+             '82600000-0000-0000-0000-000000000001', 30, 5, 4) $$,
+  '23514', 'new row for relation "role_evaluations" violates check constraint "role_evaluations_evaluated_count_ck"',
+  'role_evaluations_evaluated_count_ck: a run never ranks more Members than it evaluated');
+select col_is_null('public', 'role_evaluations', 'threshold_used',
+  'threshold_used is nullable since R58: a kind''s first run needs no Promotion Threshold in force');
 
 -- No overlap or uniqueness rule (R28): a correction run over the same, or an
 -- overlapping, span is legitimate -- the threshold chain follows run_at, not
@@ -320,7 +345,8 @@ select is(
 -- [period_from, period_to] converts to the half-open Bucharest instants
 -- [period_from at 00:00, (period_to + 1) at 00:00) -- an award at 23:59
 -- Bucharest on period_to is inside; one at 00:00 Bucharest the next day is
--- not.
+-- not. R58: the core takes the run's Floor, share and cutoff too -- Floor 1,
+-- 35 % and a cutoff on period_to here; the range rule does not depend on them.
 
 insert into public.tasks
   (title, description, deadline, group_id, status, difficulty, rating,
@@ -342,12 +368,12 @@ select pg_temp.test_credit_task(task.id, '82600000-0000-0000-0000-000000000015',
   from public.tasks as task where task.title = 'EdgeNext 826';
 
 select is(
-  (select task_points from private.role_evaluation_rows('voluntar_activ', '2028-05-01', '2028-05-10', '2028-05-10')
+  (select task_points from private.role_evaluation_rows('voluntar_activ', '2028-05-01', '2028-05-10', 1, 35, '2028-05-10')
     where member_id = '82600000-0000-0000-0000-000000000014'),
   6,
   'Edge 826, credited at 23:59 Bucharest on period_to, is inside the range');
 select is(
-  (select task_points from private.role_evaluation_rows('voluntar_activ', '2028-05-01', '2028-05-10', '2028-05-10')
+  (select task_points from private.role_evaluation_rows('voluntar_activ', '2028-05-01', '2028-05-10', 1, 35, '2028-05-10')
     where member_id = '82600000-0000-0000-0000-000000000015'),
   0,
   'EdgeNext 826, credited at 00:00 Bucharest the day after period_to, is excluded');
@@ -402,8 +428,8 @@ select is(has_sequence_privilege('authenticated', 'public.promotion_threshold_ch
   'authenticated cannot allocate a promotion_threshold_changes id');
 
 select pg_temp.test_login_leadership('82600000-0000-0000-0000-000000000001');
-select is((select count(*) from public.promotion_threshold_changes), 2::bigint,
-  'BC (live level >= 6) reads both threshold changes');
+select is((select count(*) from public.promotion_threshold_changes), 4::bigint,
+  'BC (live level >= 6) reads every change: both threshold changes and R58''s two day-one share changes (source migration)');
 reset role;
 
 select pg_temp.test_login_leadership('82600000-0000-0000-0000-000000000005');

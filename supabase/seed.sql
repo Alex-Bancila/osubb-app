@@ -121,7 +121,8 @@ $$;
 -- #901: Role Evaluations and Role history before the demo profiles. None of
 -- `role_evaluations.run_by`, `promotion_candidates.member_id`/`decided_by`,
 -- `promotion_threshold_changes.changed_by`, `promotion_thresholds.updated_by`,
--- `org_settings.updated_by`, `evaluation_settings.updated_by` (R58) or
+-- `org_settings.updated_by`, `evaluation_settings.updated_by` (R58),
+-- `retention_signals.role_evaluation_id`/`member_id` (R58) or
 -- `role_history.member_id`/`changed_by` has an
 -- `on delete` clause, so a demo persona who ran an Evaluation, edited a
 -- threshold or a share, or was promoted (by BC, or by the daily
@@ -164,6 +165,17 @@ delete from promotion_candidates candidate
     or exists (select 1 from profiles p
                 where p.email like '%@demo.osubb'
                   and p.id in (candidate.member_id, candidate.decided_by));
+
+-- R58: a stored Retention Signal names its run and its Member, as a Candidate
+-- does.
+delete from retention_signals signal
+ where exists (select 1
+                 from role_evaluations evaluation
+                 join profiles runner on runner.id = evaluation.run_by
+                where evaluation.id = signal.role_evaluation_id
+                  and runner.email like '%@demo.osubb')
+    or exists (select 1 from profiles p
+                where p.email like '%@demo.osubb' and p.id = signal.member_id);
 
 delete from promotion_threshold_changes change
  where exists (select 1
