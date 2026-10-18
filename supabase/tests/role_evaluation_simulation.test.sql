@@ -146,16 +146,15 @@ select is(
 select pg_temp.test_login_leadership(pg_temp.r58('BC'));
 select results_eq(
   $$ select kind, percent, changed_at is not null, changed_by from public.evaluation_percents() $$,
-  $$ values ('voluntar_activ'::text, 35, true, null::uuid), ('adunarea_generala'::text, 25, true, null::uuid) $$,
-  'after reset evaluation_percents() reads x 35 and y 25 from evaluation_settings, last changed by the migration (no Member)');
+  $$ values ('voluntar_activ'::text, 35, true, null::uuid), ('adunarea_generala'::text, 25, false, null::uuid) $$,
+  'after reset evaluation_percents() reads x 35 and y 25 from evaluation_settings; x was last changed by the migration (no Member), y never (Ruling 16)');
 reset role;
 select results_eq(
   $$ select kind, from_value, to_value, source, changed_by, role_evaluation_id
        from public.promotion_threshold_changes
       where field = 'percent' order by kind desc $$,
-  $$ values ('voluntar_activ'::text, 30, 35, 'migration'::text, null::uuid, null::bigint),
-            ('adunarea_generala'::text, 25, 25, 'migration'::text, null::uuid, null::bigint) $$,
-  'the day-one change is logged once per share: x from the top_percent rule''s 30 and y from the org setting''s 25, to 35 and 25, source migration');
+  $$ values ('voluntar_activ'::text, 30, 35, 'migration'::text, null::uuid, null::bigint) $$,
+  'the day-one change is logged only where a share moves (Ruling 16): x from the top_percent rule''s 30 to 35, source migration; y, already 25 in the org setting, is not logged');
 select is((select count(*) from public.org_settings where key = 'vote_retention_percent'), 0::bigint,
   'org_settings holds no vote_retention_percent: y lives in evaluation_settings.vot_percent');
 
@@ -378,7 +377,7 @@ select results_eq(
                          || ':' || pg_temp.r58('C') $$,
   $$ values ('Candidat la promovare: Voluntar C R58'::text,
              'Voluntar C R58 are 50 puncte de task în evaluarea „Evaluare S1” (01.03.2026–30.09.2026), '
-             || 'cel puțin pragul de 40 puncte, intrat în OSUBB până la 01.03.2026. Nu este promovat automat: '
+             || 'cel puțin pragul de promovare de 40 puncte, intrat în OSUBB până la 01.03.2026. Nu este promovat automat: '
              || 'îl poți promova în Voluntar Activ din panoul de roluri sau respinge din Portofoliu Interne.') $$,
   'the Candidate''s Notification names the line computed and the cutoff, never a tenure');
 select results_eq(

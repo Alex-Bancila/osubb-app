@@ -20,7 +20,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(62);
+select plan(63);
 
 -- Personas: 1 BC, 2 Moderator, 3 BCE, 4 Voluntar cu Drept de Vot (level 3),
 -- 5 Voluntar (member of Root #1012: requester, applicant, RSVPs),
@@ -93,6 +93,9 @@ select is(private.notification_subject(null, 'promotion_candidate:12:' || pg_tem
 select is(private.notification_subject(null, 'retention_signal:12:' || pg_temp.u1012(5)::text, null),
   'retention_signal:' || pg_temp.u1012(5)::text,
   'a Retention Signal is about retention_signal:<member>');
+select is(private.notification_subject(null, 'retention_signal:live:' || pg_temp.u1012(5)::text, null),
+  'retention_signal:' || pg_temp.u1012(5)::text,
+  'a live Universitate Retention Signal (R58) is about the same retention_signal:<member>');
 select is(private.notification_subject(null, null, '/tracker/31'), 'task:31',
   'a row linked before #843 (/tracker/<id>) is about its Task');
 select is(private.notification_subject(null, null, '/anunturi?anunt=8'), 'announcement:8',

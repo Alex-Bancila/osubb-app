@@ -263,7 +263,7 @@ select throws_ok(
   'promotion_threshold_changes_subject_ck: nor does a date change');
 select throws_ok(
   format($$ insert into public.promotion_threshold_changes (field, to_value, source, changed_by, promotion_rule_id)
-            values ('floor', 5, 'manual', %L, (select min(id) from public.promotion_rules)) $$, pg_temp.u582(1)),
+            values ('floor', 5, 'manual', %L, 1) $$, pg_temp.u582(1)),
   '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_subject_ck"',
   'promotion_threshold_changes_subject_ck: nor does it name a Promotion Rule');
 select throws_ok(

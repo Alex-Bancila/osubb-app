@@ -428,8 +428,8 @@ select is(has_sequence_privilege('authenticated', 'public.promotion_threshold_ch
   'authenticated cannot allocate a promotion_threshold_changes id');
 
 select pg_temp.test_login_leadership('82600000-0000-0000-0000-000000000001');
-select is((select count(*) from public.promotion_threshold_changes), 4::bigint,
-  'BC (live level >= 6) reads every change: both threshold changes and R58''s two day-one share changes (source migration)');
+select is((select count(*) from public.promotion_threshold_changes), 3::bigint,
+  'BC (live level >= 6) reads every change: both threshold changes and R58''s day-one change of x (source migration; y, already 25, is not logged -- Ruling 16)');
 reset role;
 
 select pg_temp.test_login_leadership('82600000-0000-0000-0000-000000000005');

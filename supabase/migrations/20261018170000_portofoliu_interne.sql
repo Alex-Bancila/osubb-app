@@ -20,6 +20,19 @@
 --      and the seven-argument public.run_role_evaluation (the finalised run).
 --   5. public.role_evaluation_ranking(role_evaluation_id): the ranking of a
 --      recorded run, recomputed from its own values.
+--   6. (The Retention Signals table is section 0: the run of section 4
+--      writes it, so it comes first.)
+--   7. The live Universitate Signal: private.refresh_university_signals on
+--      every write of a Profile's university or status; a Role change closes
+--      a Member's open Signals; Notification subjects for the live key.
+--   8. The live Promotion Candidates read the Membership Cutoff Date instead
+--      of the Promotion Rule's tenure, from no earlier than the Points Start
+--      Date (as my_role_evaluation_standing now counts), and refresh on
+--      every write of the evaluation settings.
+--   9. Day one and the drops: the latest run of each kind has its Retention
+--      Signals stored; the daily job, its two functions, the Promotion Rule
+--      command and public.promotion_rules are dropped; the change log keeps
+--      the rules' tenure and on/off rows as history.
 
 -- ---------------------------------------------------------------------------
 -- 0. Retention Signals, stored.
@@ -112,9 +125,10 @@ comment on policy retention_signals_read on public.retention_signals is
 -- x lived on the top_percent Promotion Rule and y in org_settings because x
 -- once defined that rule (R30); R58 drops the Promotion Rules, so both move
 -- into the evaluation settings row. Seeded from their homes, then set to
--- R58's day-one values, 35 and 25, each logged once as the migration's
--- change (decision 14) -- y is logged even where it was 25 already, so the
--- history says when R58 fixed it.
+-- R58's day-one values, 35 and 25 (decision 14), each logged as the
+-- migration's change only where the value actually moves (Ruling 16: no
+-- writer logs a change that changes nothing) -- on a fresh database x moves
+-- 30 -> 35 and is logged, y is 25 already and is not.
 alter table public.evaluation_settings
   add column activ_percent integer not null default 35,
   add column vot_percent integer not null default 25,
@@ -133,11 +147,13 @@ update public.evaluation_settings as setting
 insert into public.promotion_threshold_changes (kind, field, from_value, to_value, source)
 select 'voluntar_activ', 'percent', setting.activ_percent, 35, 'migration'
   from public.evaluation_settings as setting
- where setting.id = 1;
+ where setting.id = 1
+   and setting.activ_percent <> 35;
 insert into public.promotion_threshold_changes (kind, field, from_value, to_value, source)
 select 'adunarea_generala', 'percent', setting.vot_percent, 25, 'migration'
   from public.evaluation_settings as setting
- where setting.id = 1;
+ where setting.id = 1
+   and setting.vot_percent <> 25;
 
 update public.evaluation_settings
    set activ_percent = 35,
@@ -795,7 +811,7 @@ begin
       perform private.notify(
         v_leaders, 'system',
         format('Candidat la promovare: %s', v_row.member_name),
-        format('%s are %s puncte de task în evaluarea „%s” (%s), cel puțin pragul de %s puncte, '
+        format('%s are %s puncte de task în evaluarea „%s” (%s), cel puțin pragul de promovare de %s puncte, '
                'intrat în OSUBB până la %s. Nu este promovat automat: îl poți promova în Voluntar Activ '
                'din panoul de roluri sau respinge din Portofoliu Interne.',
                v_row.member_name, v_row.task_points, v_name, v_span, v_line,
@@ -1065,3 +1081,545 @@ revoke execute on function public.role_evaluation_ranking(bigint)
   from public, anon, authenticated, service_role;
 grant execute on function private.role_evaluation_ranking_impl(bigint) to authenticated;
 grant execute on function public.role_evaluation_ranking(bigint) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 7. The live Universitate Signal.
+-- ---------------------------------------------------------------------------
+-- R58 decisions 10 and 16: the one live Retention Signal. Only a UBB student
+-- may hold Drept de Vot (section A); a voter whose Universitate is known and
+-- is not Universitatea Babeș-Bolyai holds one open not_ubb_student Signal of
+-- the Adunarea Generală kind, raised the moment the value -- or the holder's
+-- status -- changes, not at the next run. Unknown (null) opens nothing:
+-- every voter is null until the backfill (Review Focus 1), and null never
+-- counts as UBB or as not UBB. The refresh re-reads every voter, so a voter a
+-- provisioning insert left at another university is caught by the next
+-- write. The Signal closes as resolved when its fact reverses and as
+-- role_changed when BC changes the Role (the role_history trigger below).
+create function private.refresh_university_signals()
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_leaders     uuid[];
+  v_ag_group_id bigint;
+  v_opened      integer := 0;
+  v_row         record;
+begin
+  -- 1. The fact reversed: every open live Signal whose holder no longer
+  --    qualifies -- UBB again, unknown again, no longer activ (or no longer
+  --    a voter, which the role_history trigger has normally closed first) --
+  --    closes as resolved.
+  update public.retention_signals as signal
+     set closed_at = now(),
+         closed_as = 'resolved'
+   where signal.reason = 'not_ubb_student'
+     and signal.closed_at is null
+     and not exists (select 1
+                       from public.profiles as holder
+                      where holder.id = signal.member_id
+                        and holder.status = 'activ'
+                        and holder.role = 'vot'
+                        and holder.university is not null
+                        and holder.university is distinct from private.ubb_university());
+
+  -- 2. Every qualifying voter with no open live Signal gets one, and the
+  --    run's Signal recipients are told once: BC, the Moderator and the
+  --    Adunarea Generală's Group Responsibles at level 5 or above -- the
+  --    level /tracker/membru/<id> requires (#843, D11) -- never the voter.
+  select array_agg(profile.id order by profile.id) into v_leaders
+    from public.profiles as profile
+    join public.roles as role on role.id = profile.role
+   where profile.status = 'activ'
+     and role.level >= 6;
+
+  select case when setting.value ~ '^[1-9][0-9]{0,17}$' then setting.value::bigint end
+    into v_ag_group_id
+    from public.org_settings as setting
+   where setting.key = 'adunarea_generala_group_id';
+
+  for v_row in
+    select profile.id as member_id,
+           profile.university,
+           coalesce(profile.nickname, profile.full_name) as member_name
+      from public.profiles as profile
+     where profile.status = 'activ'
+       and profile.role = 'vot'
+       -- Review Focus 1: the explicit null guard, ahead of a comparison that
+       -- would otherwise count an unknown Universitate as not UBB.
+       and profile.university is not null
+       and profile.university is distinct from private.ubb_university()
+       and not exists (select 1
+                         from public.retention_signals as signal
+                        where signal.member_id = profile.id
+                          and signal.kind = 'adunarea_generala'
+                          and signal.reason = 'not_ubb_student'
+                          and signal.closed_at is null)
+     order by profile.id
+  loop
+    -- Idempotent against retention_signals_open_uidx: a concurrent refresh
+    -- may have opened it first, and only a row actually written is told.
+    insert into public.retention_signals (kind, member_id, role_at_listing, reason)
+    values ('adunarea_generala', v_row.member_id, 'vot', 'not_ubb_student')
+    on conflict (kind, member_id, reason) where closed_at is null do nothing;
+    if not found then
+      continue;
+    end if;
+    v_opened := v_opened + 1;
+
+    perform private.notify(
+      array(select recipient.id
+              from (select unnest(v_leaders)
+                    union
+                    select held.member_id
+                      from public.group_members as held
+                     where held.group_id = v_ag_group_id
+                       and held.group_role = 'responsible') as recipient (id)
+             where recipient.id <> v_row.member_id
+               and coalesce(private.actor_level(recipient.id), -1) >= 5
+             order by recipient.id),
+      'system',
+      format('Semnal de retenție: %s', v_row.member_name),
+      format('%s nu mai este student UBB (%s). Drept de Vot cere calitatea de student UBB; '
+             'rolul nu se retrage automat: decizia îi aparține BC.',
+             v_row.member_name, v_row.university),
+      null, 'retention_signal:live:' || v_row.member_id::text,
+      null, '/tracker/membru/' || v_row.member_id::text);
+  end loop;
+
+  return v_opened;
+end;
+$$;
+
+comment on function private.refresh_university_signals() is
+  'R58 (sections A and C, decisions 10 and 16): the live Universitate Retention Signal. First closes as resolved every open not_ubb_student Signal whose holder no longer qualifies -- Universitatea Babeș-Bolyai again, unknown again (null), no longer activ, or no longer a Voluntar cu Drept de Vot. Then opens one Signal (kind adunarea_generala, role_at_listing vot, no run and no numbers) for every live active vot holder whose university is known (not null) and is not private.ubb_university() and who holds none open -- idempotent against retention_signals_open_uidx -- and, per row actually opened, tells the run''s Signal recipients once: every live BC and Moderator and the Adunarea Generală''s Group Responsibles at level 5 or above (#843 D11), never the holder (dedupe key retention_signal:live:<member>, link /tracker/membru/<member>). An unknown Universitate opens nothing (Review Focus 1). Returns the number opened. Called after every write of profiles.university or profiles.status (profiles_refresh_university_signals) and once by the migration that created it. Executable by nobody.';
+
+revoke execute on function private.refresh_university_signals()
+  from public, anon, authenticated, service_role;
+
+create function private.refresh_university_signals_on_write()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform private.refresh_university_signals();
+  return null;
+end;
+$$;
+
+comment on function private.refresh_university_signals_on_write() is
+  'R58: statement-trigger body of profiles_refresh_university_signals -- calls private.refresh_university_signals() after an update of profiles.university (BC''s edit, the backfill) or profiles.status (a voter deactivated or reactivated). Granted to nobody.';
+
+revoke execute on function private.refresh_university_signals_on_write()
+  from public, anon, authenticated, service_role;
+
+-- Named columns: a role change is the role_history trigger's, and a write of
+-- any other column cannot change who qualifies.
+create trigger profiles_refresh_university_signals
+after update of university, status on public.profiles
+for each statement execute function private.refresh_university_signals_on_write();
+
+-- The rule applies to the state it finds: a voter BC already moved to another
+-- university between the Universitate column and this migration is
+-- signalled now, not at the next write.
+select private.refresh_university_signals();
+
+-- A Role change closes the Member's open Retention Signals. Restated from
+-- main's body (20260927220000_role_evaluations.sql, section 16) with the
+-- Signal close added after the Candidate close.
+create or replace function private.close_promotion_candidates()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_from_level integer;
+  v_to_level   integer;
+begin
+  if new.from_role = 'voluntar' and new.to_role is distinct from 'voluntar' then
+    select role.level into v_from_level from public.roles as role where role.id::text = new.from_role;
+    select role.level into v_to_level from public.roles as role where role.id::text = new.to_role;
+
+    update public.promotion_candidates as candidate
+       set decision = case when v_to_level > v_from_level then 'promoted' else 'superseded' end,
+           decided_at = now(),
+           decided_by = new.changed_by
+     where candidate.member_id = new.member_id
+       and candidate.decision is null;
+  end if;
+
+  -- R58: a Role change closes every open Retention Signal of the Member, of
+  -- either kind and for any reason: BC has decided. A status change writes a
+  -- role_history row with the Role unchanged, and closes nothing here.
+  if new.to_role is distinct from new.from_role then
+    update public.retention_signals as signal
+       set closed_at = now(),
+           closed_as = 'role_changed'
+     where signal.member_id = new.member_id
+       and signal.closed_at is null;
+  end if;
+  return null;
+end;
+$function$;
+
+comment on function private.close_promotion_candidates() is
+  '#826, extended by R58: trigger body of role_history_close_promotion_candidates. When a role_history row moves a Member off Voluntar, their undecided Promotion Candidate row closes: promoted when the new Role is higher (decided_by = the BC who changed it, changed_by), superseded otherwise. Since R58 every Role change (to_role distinct from from_role; a status change, which keeps the Role, is not one) also closes every open Retention Signal of the Member -- of either kind, for any reason -- as role_changed: BC has decided. Granted to nobody.';
+
+-- A live Signal's Notification is about retention_signal:<member>, as a
+-- run's is. Restated from 20261014160759_reminders.sql with the
+-- retention_signal pattern widened to the live key.
+create or replace function private.notification_subject(p_task_id bigint, p_dedupe_key text, p_link text)
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO ''
+AS $function$
+  select coalesce(
+    'task:' || p_task_id::text,
+    case
+      when p_dedupe_key ~ '^task:[0-9]+(:|$)'
+        then 'task:' || substring(p_dedupe_key from '^task:([0-9]+)')
+      when p_dedupe_key ~ '^event:[0-9]+(:|$)'
+        then 'event:' || substring(p_dedupe_key from '^event:([0-9]+)')
+      -- R53: a Termen reminder (announcement:<id>:termen:<date>) is about its
+      -- Announcement too, a Deal's included, whose link maps to no subject.
+      when p_dedupe_key ~ '^announcement:[0-9]+(:|$)'
+        then 'announcement:' || substring(p_dedupe_key from '^announcement:([0-9]+)')
+      when p_dedupe_key ~ '^request:[0-9]+$'
+        then 'completed_work_request:' || substring(p_dedupe_key from '^request:([0-9]+)$')
+      when p_dedupe_key ~ '^application:[0-9]+$'
+        then 'group_application:' || substring(p_dedupe_key from '^application:([0-9]+)$')
+      when p_dedupe_key ~ '^promotion_candidate:(live|[0-9]+):[0-9a-f-]{36}$'
+        then 'promotion_candidate:' || substring(p_dedupe_key from '([0-9a-f-]{36})$')
+      when p_dedupe_key ~ '^retention_signal:(live|[0-9]+):[0-9a-f-]{36}$'
+        then 'retention_signal:' || substring(p_dedupe_key from '([0-9a-f-]{36})$')
+    end,
+    case
+      when p_link ~ '^/tracker\?task=[0-9]+$'
+        then 'task:' || substring(p_link from '^/tracker\?task=([0-9]+)$')
+      when p_link ~ '^/tracker/[0-9]+$'
+        then 'task:' || substring(p_link from '^/tracker/([0-9]+)$')
+      when p_link ~ '^/calendar\?event=[0-9]+$'
+        then 'event:' || substring(p_link from '^/calendar\?event=([0-9]+)$')
+      when p_link ~ '^/anunturi\?anunt=[0-9]+$'
+        then 'announcement:' || substring(p_link from '^/anunturi\?anunt=([0-9]+)$')
+    end
+  );
+$function$;
+
+comment on function private.notification_subject(bigint, text, text) is
+  '#1012 (R37), extended by R53 and R58: the subject a Notification row is about, from its task_id (task:<id>), else its dedupe key (task:/event:<id>:<field>, announcement:<id> and its Termen reminders announcement:<id>:termen:<date>, request:<id> -> completed_work_request:<id>, application:<id> -> group_application:<id>, promotion_candidate:<run|live>:<member> -> promotion_candidate:<member>, retention_signal:<run|live>:<member> -> retention_signal:<member>), else its link (/tracker?task=, /tracker/<id>, /calendar?event=, /anunturi?anunt=), else null. Pure; used by the insert trigger and the backfill. Executable by no client role.';
+
+-- ---------------------------------------------------------------------------
+-- 8. The live Promotion Candidates read the Membership Cutoff Date.
+-- ---------------------------------------------------------------------------
+-- R58 decisions 6 and 15: the tenure rule (joined_at + the top_percent
+-- rule's months, checked against today) and the rule's on/off flag go; a
+-- Voluntar may be listed when they joined on or before the Membership Cutoff
+-- Date, and nobody is listed while it is unset. tenure_since records the join
+-- date measured. Ruling 17: the window opens no earlier than the Points Start
+-- Date, so a Voluntar is never listed for points no total shows. A write of
+-- the evaluation settings -- the cutoff, the Points Start Date, a run's
+-- write-through -- refreshes the list at once (Review Focus 4), in place of
+-- a write of the Promotion Rules. Restated from
+-- 20261002120000_live_promotion_candidates.sql; the shared try-lock stays.
+create or replace function private.refresh_promotion_candidates()
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+#variable_conflict use_column
+declare
+  v_since     date;
+  v_last_run  timestamptz;
+  v_cutoff    date;
+  v_start     date;
+  v_by_start  boolean;
+  v_threshold integer;
+  v_rows      jsonb;
+  v_leaders   uuid[];
+  v_listed    integer := 0;
+  v_row       record;
+begin
+  -- A run or a threshold edit holds (47, 1) exclusively: it re-lists from
+  -- its range and calls this last. Shared, so concurrent writers refresh
+  -- side by side; never wait here (the header says why).
+  if not pg_catalog.pg_try_advisory_xact_lock_shared(47, 1) then
+    return 0;
+  end if;
+
+  -- The window: the day after the latest Voluntar Activ run's period_to,
+  -- exactly as my_role_evaluation_standing counts a Member's own points.
+  select run.period_to + 1, run.run_at into v_since, v_last_run
+    from public.role_evaluations as run
+   where run.kind = 'voluntar_activ'
+   order by run.run_at desc, run.id desc
+   limit 1;
+
+  -- R58: the Membership Cutoff Date replaces the rule's tenure. Ruling 17:
+  -- the window opens no earlier than the Points Start Date -- the later of
+  -- the two (greatest ignores a null), and the Notification names whichever
+  -- opened it.
+  select setting.membership_cutoff, setting.points_start_date
+    into v_cutoff, v_start
+    from public.evaluation_settings as setting
+   where setting.id = 1;
+  v_by_start := v_start is not null and (v_since is null or v_start > v_since);
+  v_since := greatest(v_since, v_start);
+
+  select setting.threshold into v_threshold
+    from public.promotion_thresholds as setting
+   where setting.kind = 'voluntar_activ';
+
+  -- The eligible set, read once: live active Voluntars who joined on or
+  -- before the Membership Cutoff Date, at or above the threshold in force
+  -- since the window opened. Nobody while the cutoff or the threshold is
+  -- unset.
+  if v_cutoff is not null and v_threshold is not null then
+    select coalesce(jsonb_agg(to_jsonb(eligible)), '[]'::jsonb) into v_rows
+      from (
+        select profile.id as member_id,
+               earned.task_points,
+               profile.joined_at as tenure_since
+          from public.profiles as profile
+          join private.task_points_in_range(
+                 coalesce(v_since::timestamp at time zone 'Europe/Bucharest', '-infinity'::timestamptz),
+                 'infinity'::timestamptz) as earned on earned.member_id = profile.id
+         where profile.status = 'activ'
+           and profile.role = 'voluntar'
+           and profile.joined_at is not null
+           and profile.joined_at <= v_cutoff
+           and earned.task_points >= v_threshold
+         order by profile.id
+      ) as eligible;
+  else
+    v_rows := '[]'::jsonb;
+  end if;
+
+  -- (a) A live row whose Voluntar no longer qualifies is superseded by
+  --     nobody. A Member who left Voluntar is the role_history trigger's.
+  update public.promotion_candidates as candidate
+     set decision = 'superseded',
+         decided_at = now(),
+         decided_by = null
+   where candidate.role_evaluation_id is null
+     and candidate.decision is null
+     and exists (select 1
+                   from public.profiles as profile
+                  where profile.id = candidate.member_id
+                    and profile.role = 'voluntar')
+     and not exists (select 1
+                       from jsonb_to_recordset(v_rows) as eligible (member_id uuid)
+                      where eligible.member_id = candidate.member_id);
+
+  -- (b) Each eligible Member with no open row and no live rejection since
+  --     the window opened gets a live row and one Notification per leader.
+  --     The key is per Member: a Member listed, unlisted and listed again
+  --     while the first Notification is unread rewrites it, not a pile.
+  select array_agg(profile.id order by profile.id) into v_leaders
+    from public.profiles as profile
+    join public.roles as role on role.id = profile.role
+   where profile.status = 'activ'
+     and role.level >= 6;
+
+  for v_row in
+    select eligible.member_id,
+           eligible.task_points,
+           eligible.tenure_since,
+           coalesce(member.nickname, member.full_name) as member_name
+      from jsonb_to_recordset(v_rows) as eligible (member_id uuid, task_points integer, tenure_since date)
+      join public.profiles as member on member.id = eligible.member_id
+     where not exists (select 1
+                         from public.promotion_candidates as open
+                        where open.member_id = eligible.member_id
+                          and open.decision is null)
+       and not exists (select 1
+                         from public.promotion_candidates as refused
+                        where refused.member_id = eligible.member_id
+                          and refused.role_evaluation_id is null
+                          and refused.decision = 'rejected'
+                          and refused.created_at >= coalesce(v_last_run, '-infinity'::timestamptz))
+     order by eligible.member_id
+  loop
+    -- Idempotent against promotion_candidates_open_member_uidx: a concurrent
+    -- refresh may have listed the Member first, and only a row actually
+    -- written is notified.
+    insert into public.promotion_candidates (role_evaluation_id, member_id, task_points, tenure_since, threshold_used)
+    values (null, v_row.member_id, v_row.task_points, v_row.tenure_since, v_threshold)
+    on conflict (member_id) where decision is null do nothing;
+    if not found then
+      continue;
+    end if;
+    v_listed := v_listed + 1;
+
+    perform private.notify(
+      v_leaders, 'system',
+      format('Candidat la promovare: %s', v_row.member_name),
+      format('%s are %s puncte de task %s, cel puțin pragul de promovare de %s puncte, intrat în '
+             'OSUBB până la %s. Nu este promovat automat: îl poți promova în Voluntar Activ din '
+             'panoul de roluri sau respinge din Portofoliu Interne.',
+             v_row.member_name, v_row.task_points,
+             case when v_since is null then 'în total'
+                  when v_by_start then 'de la ' || pg_catalog.to_char(v_since, 'DD.MM.YYYY')
+                  else 'de la ultima evaluare Voluntar Activ (din '
+                       || pg_catalog.to_char(v_since, 'DD.MM.YYYY') || ')' end,
+             v_threshold, pg_catalog.to_char(v_cutoff, 'DD.MM.YYYY')),
+      null, 'promotion_candidate:live:' || v_row.member_id::text,
+      null, '/administrare/portofoliu-interne');
+  end loop;
+
+  return v_listed;
+end;
+$function$;
+
+comment on function private.refresh_promotion_candidates() is
+  '#983 (ruling R35), rebuilt by R58: the Promotion Candidate list between Role Evaluations. Reads the eligible set -- live active Voluntars who joined on or before evaluation_settings.membership_cutoff (the Membership Cutoff Date) whose net Task Points since the window opened reach the Voluntar Activ threshold in force; nobody while the cutoff or the threshold is unset. The window opens on the later of the day after the latest Voluntar Activ run''s period_to and the Points Start Date (Ruling 17), and from the beginning while neither exists -- the window my_role_evaluation_standing counts. Then supersedes the open live rows of Voluntars who no longer qualify (decided_by null; a Member who left Voluntar is the role_history trigger''s) and lists each eligible Member with no open row and no live rejection since the last run: a promotion_candidates row with role_evaluation_id null and tenure_since = joined_at, and one Notification per live BC/Moderator (dedupe key promotion_candidate:live:<member>, link /administrare/portofoliu-interne) naming the points since the window opened, the line and the cutoff. Returns the number listed. Takes pg_try_advisory_xact_lock_shared(47, 1) -- shared, so concurrent writers refresh side by side, and the insert is idempotent against the one-open-row index -- and returns 0 at once while a run, a threshold edit or an evaluation-settings edit holds the lock exclusively. Called by the statement triggers on points_ledger, promotion_thresholds, evaluation_settings and profiles, and last by run_role_evaluation_impl. Executable by nobody.';
+
+comment on function private.refresh_promotion_candidates_on_write() is
+  '#983, R58: statement-trigger body -- calls private.refresh_promotion_candidates() after a write to points_ledger (an award or a reversal), promotion_thresholds (the line), evaluation_settings (the Membership Cutoff Date, the Points Start Date and a run''s write-through; R58 moved this trigger here from the dropped promotion_rules) or profiles (any update -- role, status and joined_at are what matter). Granted to nobody.';
+
+drop trigger promotion_rules_refresh_promotion_candidates on public.promotion_rules;
+
+create trigger evaluation_settings_refresh_promotion_candidates
+after update on public.evaluation_settings
+for each statement execute function private.refresh_promotion_candidates_on_write();
+
+-- Ruling 17: a Member's own standing counts the same window -- from no
+-- earlier than the Points Start Date, for either kind. Restated from
+-- 20260927220000_role_evaluations.sql.
+create or replace function private.my_role_evaluation_standing_impl(p_kind text)
+ RETURNS TABLE(since date, task_points integer, threshold integer)
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+#variable_conflict use_column
+declare
+  v_caller uuid;
+  v_since  date;
+begin
+  if not (coalesce(public.auth_is_member(), false) and private.caller_level() >= 0) then
+    return;
+  end if;
+  if p_kind is null or p_kind not in ('voluntar_activ', 'adunarea_generala') then
+    raise sqlstate 'PT400' using message = 'invalid_role_evaluation_kind';
+  end if;
+  v_caller := auth.uid();
+
+  select run.period_to + 1 into v_since
+    from public.role_evaluations as run
+   where run.kind = p_kind
+   order by run.run_at desc, run.id desc
+   limit 1;
+
+  -- Ruling 17 (R58): the window opens no earlier than the Points Start Date,
+  -- the later of the two (greatest ignores a null).
+  v_since := greatest(v_since, (select setting.points_start_date
+                                  from public.evaluation_settings as setting
+                                 where setting.id = 1));
+
+  return query
+  select v_since,
+         coalesce((select earned.task_points
+                     from private.task_points_in_range(
+                            coalesce(v_since::timestamp at time zone 'Europe/Bucharest', '-infinity'::timestamptz),
+                            'infinity'::timestamptz) as earned
+                    where earned.member_id = v_caller), 0),
+         (select setting.threshold
+            from public.promotion_thresholds as setting
+           where setting.kind = p_kind);
+end;
+$function$;
+
+comment on function private.my_role_evaluation_standing_impl(text) is
+  '#826, Ruling 17 (R58): body of public.my_role_evaluation_standing. For the caller only: since = the later of the day after the period_to of the kind''s latest Role Evaluation (by run_at) and the Points Start Date (null while neither exists), task_points = the caller''s net Task Points from Evaluations since then (all time when since is null), threshold = the kind''s Promotion Threshold in force. Nothing without organization claims or a live activ Profile; PT400 invalid_role_evaluation_kind.';
+comment on function public.my_role_evaluation_standing(text) is
+  '#826 (for #634''s Profil progress), Ruling 17 (R58): one row for the caller -- since (the later of the day after the kind''s last Role Evaluation''s period_to and the Points Start Date; null while neither exists), task_points (own net Task Points since then, or all time) and threshold (the kind''s Promotion Threshold in force, null while unset) -- the window the live Promotion Candidates count too. Never another Member''s points and no rank (R6). Nothing for a claimless or deactivated session; PT400 invalid_role_evaluation_kind.';
+
+-- ---------------------------------------------------------------------------
+-- 9. Day one, and the drops.
+-- ---------------------------------------------------------------------------
+-- (a) Ruling 14: the latest run of each kind has its Retention Signals
+-- stored. Before R58 they were not rows: the page derived them from the
+-- ranking, and the run told BC once per Signal. Those Notifications
+-- (retention_signal:<run>:<member>) are the exact record of what was raised,
+-- so each Member they name becomes one open below_line row of the run: the
+-- Member's current Role, their Task Points over the run's Evaluation Period
+-- (0 when nothing touched them), the line the run measured against, and the
+-- run's instant. A database with no run gets nothing.
+-- retention_signals_day_one_upgrade.test.sh replays this block.
+do $$
+declare
+  v_run record;
+begin
+  for v_run in
+    select distinct on (run.kind)
+           run.id, run.kind, run.period_from, run.period_to, run.threshold_used, run.run_at
+      from public.role_evaluations as run
+     order by run.kind, run.run_at desc, run.id desc
+  loop
+    insert into public.retention_signals (
+      kind, member_id, role_at_listing, reason, task_points, threshold_used, role_evaluation_id, created_at
+    )
+    select v_run.kind, member.id, member.role, 'below_line', coalesce(earned.task_points, 0),
+           v_run.threshold_used, v_run.id, v_run.run_at
+      from public.profiles as member
+      left join private.task_points_in_range(
+             (v_run.period_from::timestamp at time zone 'Europe/Bucharest'),
+             ((v_run.period_to + 1)::timestamp at time zone 'Europe/Bucharest')) as earned
+        on earned.member_id = member.id
+     where member.id::text in (
+             select split_part(notification.dedupe_key, ':', 3)
+               from public.notifications as notification
+              where notification.dedupe_key ~ ('^retention_signal:' || v_run.id::text || ':[0-9a-f-]{36}$'))
+     order by member.id;
+  end loop;
+end $$;
+
+-- (b) Nothing promotes by the calendar (decision 5): the daily job goes.
+select cron.unschedule('osubb-apply-promotions')
+ where exists (select 1 from cron.job where jobname = 'osubb-apply-promotions');
+
+-- (c) The job's two functions, its detection, and the Promotion Rule command.
+drop function private.apply_promotions();
+drop function private.apply_promotion(uuid, public.member_role, public.member_role, text);
+drop function private.detect_promotions();
+drop function public.update_promotion_rule(bigint, integer, boolean);
+drop function private.update_promotion_rule_impl(bigint, integer, boolean);
+
+-- (d) The change log keeps the rules' tenure and on/off rows as history:
+-- promotion_rule_id stays, a plain bigint naming a rule no table holds.
+alter table public.promotion_threshold_changes
+  drop constraint promotion_threshold_changes_promotion_rule_id_fkey;
+
+-- (e) Both Promotion Rules: x moved to evaluation_settings (section 1), the
+-- tenure to the Membership Cutoff Date (section 8), and Recrut -> Voluntar is
+-- BC's by hand.
+drop table public.promotion_rules;
+
+-- (f) What still described the rules.
+comment on table public.promotion_threshold_changes is
+  '#826 (ruling R28), extended by #866 (ruling R30), #935 and R58: every change of a Promotion Threshold, of a kind''s top share or of an evaluation setting -- and, kept as history, of the retired Promotion Rules'' tenure or on/off flag. field threshold: source manual (BC or the Moderator through set_promotion_threshold; changed_by) or role_evaluation (the value a run computed, handed over; role_evaluation_id). field percent: values 1-100 (x, evaluation_settings.activ_percent; y, evaluation_settings.vot_percent); source manual (set_evaluation_percent; changed_by), role_evaluation (the share a finalised run used, written through; role_evaluation_id) or migration (R58''s day-one change of a share that moved). field tenure / enabled: history only -- written, source manual, by update_promotion_rule until R58 dropped it with the Promotion Rules; they name promotion_rule_id (the dropped rule''s id, a plain number) instead of a kind; tenure in whole months 0-120, enabled 0 (off) or 1 (on). field floor (the Eligibility Floor, Prag minim: a number >= 1 in to_value) / cutoff (the Membership Cutoff Date, Data limită de intrare) / points_start (the Points Start Date, Data de început a punctajului), the last two dates in from_date / to_date with no number: source manual through the evaluation-settings commands or migration, and for floor and cutoff also role_evaluation (a finalised run writes the values it used); a run never writes points_start. from_value / from_date is the value before (null for a threshold, a share or a setting never set; a tenure or enabled row always carries from_value). Read by live level >= 6 only; written by the commands, a finalised run and the R58 migrations.';
+comment on column public.promotion_threshold_changes.field is
+  '#866 (ruling R30), extended by #935 and R58: which value changed. threshold (the Promotion Threshold of kind, Task Points; a hand edit or a run''s hand-over) or percent (the kind''s top share: x, evaluation_settings.activ_percent, for voluntar_activ; y, evaluation_settings.vot_percent, for adunarea_generala; 1-100; a hand edit, the share a finalised run wrote through, or the day-one change a migration made) name a kind; tenure (a Promotion Rule''s min_tenure_months, whole months 0-120) or enabled (its on/off flag, 0 off and 1 on, always a flip) name promotion_rule_id, were always manual and are history since R58 dropped the Promotion Rules; floor (the Eligibility Floor, Prag minim: Task Points >= 1, in to_value), cutoff (the Membership Cutoff Date, Data limită de intrare) and points_start (the Points Start Date, Data de început a punctajului), the last two dates in from_date / to_date, name neither (evaluation_settings). Defaults to threshold, the only value before R30.';
+comment on column public.promotion_threshold_changes.kind is
+  '#826: the Role Evaluation kind whose threshold or share changed (field threshold or percent). Null for a Promotion Rule edit (field tenure or enabled, #935; history since R58), which names promotion_rule_id instead, and for a settings change (field floor, cutoff or points_start, R58).';
+comment on column public.promotion_threshold_changes.promotion_rule_id is
+  '#935, R58: the Promotion Rule whose tenure or on/off flag changed (field tenure or enabled); null for every other field. R58 dropped public.promotion_rules and this column''s foreign key with it: the id is kept as a plain number, so the history still says which rule a row was about (the time rule moved Recrut -> Voluntar, the top_percent rule Voluntar -> Voluntar Activ).';
+
+comment on table public.promotion_candidates is
+  '#826 (ruling R28), #983 (R35), R58: a Voluntar who joined on or before the Membership Cutoff Date (before R58: who held the required tenure) and whose Task Points reached the Voluntar Activ Promotion Threshold -- at a Role Evaluation (role_evaluation_id set, measured against the line the run computed) or, between runs, the moment they qualified (role_evaluation_id null, written by private.refresh_promotion_candidates) -- never promoted automatically. decision null while BC has not decided; promoted when the Member leaves Voluntar upward (the role_history trigger, decided_by the BC who changed the Role), rejected by public.reject_promotion_candidate (with BC''s reason), superseded by the next Voluntar Activ run, by leaving Voluntar any other way, or -- a live row only -- by no longer qualifying (decided_by null). At most one undecided row per Member. BC and the Moderator read every row; a Member reads their own. Named role_evaluation_id, not evaluation_id: points_ledger.evaluation_id already means a Task''s Evaluation.';
+comment on column public.promotion_candidates.tenure_since is
+  '#826, R58: the join date measured -- profiles.joined_at when the row was listed, judged against the Membership Cutoff Date. Before R58, the day the Voluntar reached the top_percent rule''s tenure (joined_at plus its months); the name is kept for those rows.';
+comment on table public.promotion_thresholds is
+  '#826 (ruling R28), R58: the Promotion Threshold in force per Role Evaluation kind -- voluntar_activ (a Voluntar who joined on or before the Membership Cutoff Date and reaches it between runs becomes a live Promotion Candidate) and adunarea_generala. A finalised run measures its own Candidates and Retention Signals against the line it computes and hands that line over; this value is in force until the kind''s next run. Null until BC enters the first value or a run computes one. BC or the Moderator edits it at any time (public.set_promotion_threshold). Every change is logged in promotion_threshold_changes. Every live active Member reads it; no client writes it directly.';
+
+comment on column public.profiles.joined_at is
+  'Exact join date; the Membership Cutoff Date (R58) is measured against it -- a Voluntar who joined on or before it may be listed as a Promotion Candidate (before R58, tenure for Recrut -> Voluntar and the Promotion Candidate cohort counted from it). provision_profile stamps it (#933): the given date, otherwise the provisioning day on the Europe/Bucharest calendar. #160 backfilled known members as January 1 of joined_year; #933 backfilled the rest from the Europe/Bucharest date of profiles.created_at. BC edits historical dates (#932). Null only for a profile inserted outside provision_profile without one.';
+comment on function public.provision_profile(uuid, text, text, public.member_role, bigint[], uuid, date) is
+  'Atomically provisions an invited auth user (ADR-0003, #602): the profiles row, then one Appointment per p_group_ids Group through private.appoint_group_member -- the ONE insert path into public.group_members (rulings R6/R27), which carries every roster invariant and writes the new Member''s Appointment Notification. The profile''s joined_at (#933) is p_joined_at when given, otherwise the provisioning day on the Europe/Bucharest calendar, so the Membership Cutoff Date (R58) measures the Member from the day they joined. p_appointed_by is the inviting BC or Moderator, whose live level >= 6 the Edge Function verifies from the database, and it reaches the core as p_actor, so the Notification is attributed to them (and private.notify drops the actor, so provisioning somebody as their own appointer notifies nobody). Rank ceiling (security pass 2026-09-27, H1; widened by ruling R31, #917): a bc or moderator profile is provisioned only when p_appointed_by is a live activ BC or Moderator (level 6 and up, read FOR SHARE) -- the actor set_member_role accepts -- or, for the bootstrap, when p_appointed_by is null, the role is moderator and no activ Moderator exists yet; anything else is 42501 member_manage_forbidden before anything is written. Groups are appointed in ascending id order with duplicates collapsed, so the FOR NO KEY UPDATE locks the core takes can never deadlock two concurrent calls. Any refusal from the core -- group_archived, group_member_not_eligible, group_member_below_min_level, automatic_group_has_no_roster_members, already_group_member, or the non-disclosing group_manage_forbidden for an unknown id -- fails the WHOLE call as PT400 carrying the core''s own reason string, so no half-placed Member survives. Writes no legacy membership table: #590 drops both. Service-role only; shared by the single-invite and CSV-import flows and the production bootstrap.';

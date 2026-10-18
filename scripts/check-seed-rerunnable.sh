@@ -310,20 +310,23 @@ fi
 echo "seed.sql applied twice, same data: $before"
 
 # ==================== #901: re-seed after a Role Evaluation ====================
-# On staging, testers run Role Evaluations as the demo personas, and the daily
-# osubb-apply-promotions job promotes the demo Recrut. Every row that leaves
-# behind (a run, its Promotion Candidates and Notifications, threshold and
-# share changes, R58's stored Retention Signals, role_history) names a demo
-# profile without `on delete`, so
+# On staging, testers run Role Evaluations as the demo personas (before R58 the
+# daily osubb-apply-promotions job also promoted the demo Recrut) and edit a
+# demo voter's Universitate. Every row that leaves behind (a run, its
+# Promotion Candidates and Notifications, threshold and share changes, R58's
+# stored Retention Signals -- a live Universitate one included --,
+# role_history) names a demo profile without `on delete`, so
 # the seed's cleanup must remove it before the demo cohort. This lives here,
 # not in demo_seed.test.sql, because `supabase test db` mounts only
 # supabase/tests: a pgTAP suite cannot apply seed.sql. One transaction, rolled
 # back: the demo Moderator edits the Drept de Vot share, runs one Evaluation of
 # each kind (R58: with the Floor, share and cutoff a Simulation shows), then
 # edits both thresholds, the Prag minim and an organization setting -- after the
-# runs, since a run writes its values through with no author -- and changes a
-# demo Member's Role; a non-demo run with its Candidate and Retention Signal and
-# a non-demo threshold change stand in for real data.
+# runs, since a run writes its values through with no author -- moves the demo
+# voter and the non-demo voter to another university (R58: a live Retention
+# Signal each) and changes a demo Member's Role; a non-demo run with its
+# Candidate and Retention Signal, the non-demo voter's live Signal and a
+# non-demo threshold change stand in for real data.
 evaluation_fixture=$(cat <<'SQL'
 select set_config('request.jwt.claims', jsonb_build_object(
          'sub', p.id, 'role', 'authenticated',
@@ -346,6 +349,8 @@ select 1 from public.set_promotion_threshold('adunarea_generala',
 select 1 from public.set_eligibility_floor(
   coalesce((select eligibility_floor from evaluation_settings where id = 1), 0) + 1);
 select 1 from public.set_org_setting('adherence_form_url', 'https://forms.example.org/demo-901');
+update profiles set university = 'Universitatea Tehnică din Cluj-Napoca'
+ where id in ('d0000000-0000-0000-0000-000000000004', 'e2750000-0000-0000-0000-000000000001');
 select 1 from public.set_member_role('d0000000-0000-0000-0000-000000000002', 'activ', 'Probă #901');
 reset role;
 select set_config('request.jwt.claims', '', true) is not null;
@@ -364,23 +369,24 @@ insert into notifications (member_id, kind, title, dedupe_key)
 select 'e2750000-0000-0000-0000-000000000001', 'system', 'Candidat la promovare #901',
        'promotion_candidate:' || id || ':e2750000-0000-0000-0000-000000000001'
   from role_evaluations where name = 'Evaluare reală #901';
-select 'evaluation-before:' || format('%s:%s:%s:%s:%s',
+select 'evaluation-before:' || format('%s:%s:%s:%s:%s:%s',
   (select count(*) from role_evaluations e join profiles p on p.id = e.run_by
     where p.email like '%@demo.osubb' and e.name like '%demo #901'),
   (select count(*) from role_history h join profiles p on p.id = h.changed_by
     where p.email like '%@demo.osubb' and h.reason = 'Probă #901'),
   (select count(*) from promotion_thresholds t join profiles p on p.id = t.updated_by where p.email like '%@demo.osubb'),
   (select count(*) from org_settings s join profiles p on p.id = s.updated_by where p.email like '%@demo.osubb'),
-  (select count(*) from evaluation_settings s join profiles p on p.id = s.updated_by where p.email like '%@demo.osubb'));
+  (select count(*) from evaluation_settings s join profiles p on p.id = s.updated_by where p.email like '%@demo.osubb'),
+  (select count(*) from retention_signals where reason = 'not_ubb_student' and closed_at is null));
 SQL
 )
 evaluation_check=$(cat <<'SQL'
-select 'evaluation-after:' || format('%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s',
+select 'evaluation-after:' || format('%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s',
   (select count(*) from profiles where email like '%@demo.osubb'),
   (select count(*) from role_evaluations e join profiles p on p.id = e.run_by where p.email like '%@demo.osubb'),
   (select count(*) from role_history h join profiles p on p.id in (h.member_id, h.changed_by) where p.email like '%@demo.osubb'),
   (select count(*) from notifications where dedupe_key ~ '^(promotion_candidate|retention_signal):'
-                                         and split_part(dedupe_key, ':', 2) not in (select id::text from role_evaluations)),
+                                         and split_part(dedupe_key, ':', 2) not in (select id::text from role_evaluations union all select 'live')),
   (select count(*) from role_evaluations where run_by = 'e2750000-0000-0000-0000-000000000001' and name = 'Evaluare reală #901'),
   (select count(*) from promotion_threshold_changes where changed_by = 'e2750000-0000-0000-0000-000000000001' and to_value = 7),
   (select count(*) from promotion_thresholds where threshold is not null),
@@ -388,7 +394,9 @@ select 'evaluation-after:' || format('%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s',
   (select count(*) from notifications where member_id = 'e2750000-0000-0000-0000-000000000001'
                                         and title = 'Candidat la promovare #901'),
   (select count(*) from evaluation_settings s join profiles p on p.id = s.updated_by where p.email like '%@demo.osubb'),
-  (select count(*) from retention_signals where member_id = 'e2750000-0000-0000-0000-000000000001' and task_points = 0));
+  (select count(*) from retention_signals where member_id = 'e2750000-0000-0000-0000-000000000001' and task_points = 0),
+  (select count(*) from retention_signals where member_id = 'e2750000-0000-0000-0000-000000000001'
+                                          and reason = 'not_ubb_student' and closed_at is null));
 SQL
 )
 out=$({
@@ -402,17 +410,18 @@ out=$({
   exit 1
 }
 case "$out" in
-  *evaluation-before:2:1:2:1:1*) ;;
-  *) echo "::error::The Role Evaluation fixture did not build its demo rows (expected evaluation-before:2:1:2:1:1): $(printf '%s' "$out" | grep -m1 'evaluation-before' || printf '%s' "$out" | tail -3)" >&2; exit 1 ;;
+  *evaluation-before:2:1:2:1:1:2*) ;;
+  *) echo "::error::The Role Evaluation fixture did not build its demo rows (expected evaluation-before:2:1:2:1:1:2): $(printf '%s' "$out" | grep -m1 'evaluation-before' || printf '%s' "$out" | tail -3)" >&2; exit 1 ;;
 esac
 # 8 demo Members back; no demo run, demo role_history or orphaned Candidate /
 # Retention Signal Notification left; the non-demo run and threshold change
 # kept with its Candidate and Notification; both thresholds keep their values;
 # no evaluation_settings row names a demo Member any more (R58: the demo
 # Moderator set the Prag minim above, so its updated_by named one before); the
-# non-demo run's Retention Signal is kept (R58).
+# non-demo run's Retention Signal is kept (R58), and so is the non-demo voter's
+# live Universitate Signal (a `live` key names no run, so it is no orphan).
 case "$out" in
-  *evaluation-after:8:0:0:0:1:1:2:1:1:0:1*) ;;
-  *) echo "::error::Re-seeding after a Role Evaluation left the wrong rows (expected evaluation-after:8:0:0:0:1:1:2:1:1:0:1): $(printf '%s' "$out" | grep -m1 'evaluation-after' || printf '%s' "$out" | tail -3)" >&2; exit 1 ;;
+  *evaluation-after:8:0:0:0:1:1:2:1:1:0:1:1*) ;;
+  *) echo "::error::Re-seeding after a Role Evaluation left the wrong rows (expected evaluation-after:8:0:0:0:1:1:2:1:1:0:1:1): $(printf '%s' "$out" | grep -m1 'evaluation-after' || printf '%s' "$out" | tail -3)" >&2; exit 1 ;;
 esac
 echo "seed.sql re-runs after the demo Moderator ran a Role Evaluation of each kind."

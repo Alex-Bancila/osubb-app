@@ -346,11 +346,10 @@ select ok(
   pg_get_functiondef('private.role_evaluation_rows(text, date, date, integer, integer, date)'::regprocedure)
     !~ 'promotion_rules|org_settings|min_tenure_months',
   'the core reads no Promotion Rule and no organization setting');
-delete from public.promotion_rules where kind = 'top_percent';
 select results_eq(
   $$ select * from private.role_evaluation_rows('voluntar_activ', '2005-01-01', '2005-06-30', 5, 25, '2004-07-01') $$,
   $$ select * from full826_va order by task_points desc, member_id $$,
-  'with the top_percent rule gone the ranking is unchanged');
+  'with the Promotion Rules dropped (R58) the ranking is unchanged: it is a function of its arguments and the ledger');
 
 select * from finish();
 rollback;

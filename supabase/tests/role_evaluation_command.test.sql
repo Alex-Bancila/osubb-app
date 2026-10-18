@@ -13,8 +13,8 @@
 -- per recipient); a rejection and a hand edit, then a run over overlapping
 -- days where the rejected Voluntar reappears and the previous undecided
 -- candidate is superseded; a run under a hand-set threshold that measures
--- against its own line; the retired rule switch; the Adunarea Generală kind;
--- a run that ranks nobody hands nothing over; the transactional proof.
+-- against its own line; no Promotion Rule gates a run; the Adunarea Generală
+-- kind; a run that ranks nobody hands nothing over; the transactional proof.
 --
 -- Fixtures (fixture prefix 82600000-), written as the owner inside this
 -- rolled-back transaction. Every live active ladder holder the demo seed
@@ -38,15 +38,19 @@
 --     and G2 is below the line. G1 is also the Adunarea Generală Group's
 --     Responsible.
 --
--- Mutation guards, run 2026-09-27 against main's body and still standing
--- under R58 (the run's own R58 rules -- the line, the Floor and the cutoff --
--- are guarded by role_evaluation_simulation.test.sql's mutations):
+-- Mutation guards, first run 2026-09-27 against main's body and re-run
+-- 2026-10-18 against R58's (scratch copies of this file that redefine
+-- private.run_role_evaluation_impl after the fixture, inside the rolled-back
+-- transaction; the run's own R58 rules -- the line, the Floor and the cutoff
+-- -- are guarded by role_evaluation_simulation.test.sql's mutations):
 --   * the candidate insert removed -> "the Voluntar Activ run writes one
 --     Promotion Candidate per listable Voluntar inside the line";
---   * apply_promotion called for each candidate -> "a Promotion Candidate is
---     not promoted";
+--   * the candidate loop also writing the Member's Role (in 2026-09 the
+--     mutation called #52's apply_promotion, which R58 dropped) -> "a
+--     Promotion Candidate is not promoted";
 --   * the supersede update removed -> "the next run supersedes the undecided
---     candidate" (the new candidate then trips the one-open index);
+--     candidate" (the new candidate then trips the one-open index and the
+--     run fails);
 --   (The held-lock probe runs in a remote session, which sees only committed
 --   code, so it was not run as a mutation: without the (47, 1) call the
 --   remote run meets no held lock and completes, so the probe discriminates.)
@@ -166,7 +170,6 @@ update public.profiles set status = 'inactiv'
    and role in ('recrut', 'voluntar', 'activ', 'vot')
    and id::text not like '82600000-%';
 
-update public.promotion_rules set min_tenure_months = 6, enabled = true;
 update public.org_settings set value = null where key = 'adherence_form_url';
 update public.promotion_thresholds set threshold = 20 where kind = 'voluntar_activ';
 update public.promotion_thresholds set threshold = null where kind = 'adunarea_generala';
@@ -424,7 +427,7 @@ select results_eq(
   $$ select 'system', 'Candidat la promovare: Vali',
             'Vali are 20 puncte de task în evaluarea „Semestrul I #826” ('
             || to_char(d_from, 'DD.MM.YYYY') || '–' || to_char(d_to, 'DD.MM.YYYY')
-            || '), cel puțin pragul de 15 puncte, intrat în OSUBB până la ' || to_char(d_to, 'DD.MM.YYYY')
+            || '), cel puțin pragul de promovare de 15 puncte, intrat în OSUBB până la ' || to_char(d_to, 'DD.MM.YYYY')
             || '. Nu este promovat automat: '
             || 'îl poți promova în Voluntar Activ din panoul de roluri sau respinge din Portofoliu Interne.',
             '/administrare/portofoliu-interne'
@@ -539,19 +542,18 @@ select is(
   2::bigint,
   'the earlier undecided candidates were superseded; the run''s two are the only open ones');
 
--- ==================== 9. The Promotion Rule's switch is retired ====================
--- R58: a run lists its Candidates whatever the top_percent rule says.
+-- ==================== 9. No Promotion Rule gates a run ====================
+-- R58 dropped the Promotion Rules: a run lists its Candidates by its own
+-- values (the line it computes, the cutoff), with no rule to switch off.
 
-update public.promotion_rules set enabled = false where kind = 'top_percent';
 reset role;
 select pg_temp.test_login_leadership('82600000-0000-0000-0000-000000000001');
-select lives_ok(pg_temp.va826('va4', 'Regula oprită #826'), 'BC runs with the top_percent rule disabled');
+select lives_ok(pg_temp.va826('va4', 'Fără regulă #826'), 'BC runs again with the same values');
 reset role;
 select results_eq(
   $$ select candidates, retention_signals from runs826 where label = 'va4' $$,
   $$ values (2, 3) $$,
-  'with the top_percent rule disabled a run still lists its Promotion Candidates: the rule plays no part in a run');
-update public.promotion_rules set enabled = true where kind = 'top_percent';
+  'the run lists the same Promotion Candidates and Signals: its values alone decide, no Promotion Rule exists to gate it');
 
 -- ==================== 10. The Adunarea Generală kind ====================
 

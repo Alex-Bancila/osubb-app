@@ -125,7 +125,7 @@ $$;
 -- `retention_signals.role_evaluation_id`/`member_id` (R58) or
 -- `role_history.member_id`/`changed_by` has an
 -- `on delete` clause, so a demo persona who ran an Evaluation, edited a
--- threshold or a share, or was promoted (by BC, or by the daily
+-- threshold or a share, or was promoted (by BC; before R58 also by the daily
 -- osubb-apply-promotions time rule) pins the demo cohort. Demo-owned here
 -- means: a run a demo account ran, with its Candidates, threshold hand-overs
 -- and Notifications; a Candidate or Role change of a demo Member or decided by
@@ -135,7 +135,8 @@ $$;
 --
 -- The Candidate and Retention Signal Notifications carry no foreign key:
 -- their dedupe key `<kind>:<run>:<member>` names the run and the Member; a
--- Candidate listed between runs (#983) carries `live` in place of the run.
+-- Candidate listed between runs (#983) and the live Universitate Signal (R58)
+-- carry `live` in place of the run.
 delete from notifications notification
  where notification.dedupe_key ~ '^(promotion_candidate|retention_signal):([0-9]+|live):[0-9a-f-]{36}$'
    and (split_part(notification.dedupe_key, ':', 2) in (
@@ -167,7 +168,7 @@ delete from promotion_candidates candidate
                   and p.id in (candidate.member_id, candidate.decided_by));
 
 -- R58: a stored Retention Signal names its run and its Member, as a Candidate
--- does.
+-- does. A live Universitate Signal (no run) goes by its Member.
 delete from retention_signals signal
  where exists (select 1
                  from role_evaluations evaluation
