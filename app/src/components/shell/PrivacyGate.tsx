@@ -128,8 +128,17 @@ export function PrivacyGate({ children }: { children: ReactElement }) {
           // The version of the text on screen, not the one just read: a build
           // newer than the server's version (the text shipped before its
           // migration ran) is answered stale instead of recording what the
-          // server does not yet ask for.
-          onClick={() => acknowledge.mutate(PRIVACY_NOTICE_VERSION)}
+          // server does not yet ask for. When the server writes the same
+          // number differently (1.2.0 for this 1.2), its exact string is what
+          // acknowledge_privacy_notice compares, so that is what is sent.
+          onClick={() =>
+            acknowledge.mutate(
+              compareNoticeVersions(currentVersion, PRIVACY_NOTICE_VERSION) ===
+                0
+                ? currentVersion
+                : PRIVACY_NOTICE_VERSION,
+            )
+          }
         >
           {acknowledge.isPending && (
             <LoaderCircle

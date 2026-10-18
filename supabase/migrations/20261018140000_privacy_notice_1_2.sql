@@ -22,6 +22,7 @@
 -- updated_at trigger stamps the change. No function, grant or policy changes.
 
 update public.org_settings
-   set value = '1.2'
+   set value = '1.2',
+       updated_by = null
  where key = 'privacy_notice_version'
    and pg_catalog.string_to_array(value, '.')::integer[] < array[1, 2];

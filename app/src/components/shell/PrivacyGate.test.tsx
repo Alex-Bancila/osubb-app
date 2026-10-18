@@ -263,7 +263,8 @@ it('never locks the Member out when the server is ahead: "Mai târziu" opens the
   expect(db.rpc).not.toHaveBeenCalled();
 });
 
-it('compares versions as numbers: 1.10 is ahead of the 1.2 bundle, 1.2.0 is not', async () => {
+it('compares versions as numbers: 1.10 is ahead of the 1.2 bundle, 1.2.0 is not and is acknowledged as the server wrote it', async () => {
+  const user = userEvent.setup();
   db.version = '1.10';
   const first = show();
   expect(await screen.findByRole('heading', NEW_VERSION)).toBeVisible();
@@ -274,6 +275,16 @@ it('compares versions as numbers: 1.10 is ahead of the 1.2 bundle, 1.2.0 is not'
   // Equal to the bundle: the notice itself.
   expect(await screen.findByRole('button', BUTTON)).toBeVisible();
   expect(screen.queryByRole('heading', NEW_VERSION)).toBeNull();
+  // The server compares the exact string, so 1.2.0 is what gets recorded.
+  db.rpc.mockImplementation(async () => {
+    db.acknowledged = ['1.2.0'];
+    return { data: {}, error: null };
+  });
+  await user.click(screen.getByRole('button', BUTTON));
+  expect(db.rpc).toHaveBeenCalledWith('acknowledge_privacy_notice', {
+    p_version: '1.2.0',
+  });
+  expect(await screen.findByRole('heading', { name: 'Acasă' })).toBeVisible();
 });
 
 it('shows the reload step when the server moves ahead while the app is open', async () => {
