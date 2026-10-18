@@ -136,6 +136,11 @@ const FAMILIES_BY_TABLE: ReadonlyMap<string, readonly Prefix[]> = new Map<
   ['promotion_rules', [keys.evaluation.all, keys.points.all]],
   ['promotion_thresholds', [keys.evaluation.all]],
   ['promotion_threshold_changes', [keys.evaluation.all]],
+  /* R58: the Points Start Date moves every total on the page. */
+  [
+    'evaluation_settings',
+    [keys.evaluation.all, keys.points.all, keys.campaigns.all],
+  ],
 ]);
 
 /**

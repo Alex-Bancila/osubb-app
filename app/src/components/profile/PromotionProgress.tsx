@@ -3,6 +3,10 @@ import { Panel } from '../layout';
 import { ErrorState, Loading } from '../states';
 import { formatPointCount, formatPoints, pointWord } from '../../lib/format';
 import {
+  pointsSinceText,
+  usePointsStartDate,
+} from '../../queries/evaluation-settings';
+import {
   usePromotionProgressState,
   type PromotionState,
   type View,
@@ -45,6 +49,10 @@ import {
  * `PromotionPanel` renders one that does — its loading and error states
  * inside the box — so a `PageGrid` cell is never `null`.
  *
+ * R58: once BC has set a Points Start Date, the total says from when it counts
+ * (`din 01.09.2026`) — under the number when the panel leads with it, beside
+ * the bar's or the reference's figure when that figure is the total.
+ *
  * Read-only and never a leaderboard: no rank, no other Member's points (R6).
  */
 
@@ -64,11 +72,16 @@ export function PromotionPanel({
   // Before any Role Evaluation the figure below is the total already.
   const figureIsTotal = view !== null && view.kind !== 'tenure' && !view.since;
   const showTotal = totalPoints !== undefined && !figureIsTotal;
+  const startedText = pointsSinceText(usePointsStartDate());
   return (
     <Panel title={title}>
       <div data-testid="promotion-progress" className="flex flex-col gap-3">
         {showTotal && <PointsTotal points={totalPoints} />}
-        <PromotionBody state={state} />
+        <PromotionBody
+          state={state}
+          // Only where the bar's or the reference's figure is the total.
+          startedText={figureIsTotal ? startedText : null}
+        />
       </div>
     </Panel>
   );
@@ -80,27 +93,44 @@ export function PromotionProgress() {
   return state.kind === 'hidden' ? null : <PromotionPanel state={state} />;
 }
 
-/** The Member's total, the page's one "points" figure. */
+/**
+ * The Member's total, the page's one "points" figure — and, once BC has set a
+ * Points Start Date (R58), from when it counts, on a line under the number.
+ */
 export function PointsTotal({ points }: { points: number }) {
+  const since = pointsSinceText(usePointsStartDate());
   return (
-    <p
-      className="m-0 flex flex-wrap items-baseline gap-2 leading-none"
-      data-testid="points-total"
-    >
-      <span className="text-[length:var(--fs-2xl)] font-extrabold tracking-[-0.02em] text-foreground tabular-nums">
-        {formatPoints(points)}
-      </span>
-      <span className="text-base font-semibold text-muted-foreground">
-        {pointWord(points)}
-      </span>
-    </p>
+    <div className="flex flex-col gap-1.5">
+      <p
+        className="m-0 flex flex-wrap items-baseline gap-2 leading-none"
+        data-testid="points-total"
+      >
+        <span className="text-[length:var(--fs-2xl)] font-extrabold tracking-[-0.02em] text-foreground tabular-nums">
+          {formatPoints(points)}
+        </span>
+        <span className="text-base font-semibold text-muted-foreground">
+          {pointWord(points)}
+        </span>
+      </p>
+      {since && (
+        <p
+          className="m-0 text-sm text-muted-foreground"
+          data-testid="points-since"
+        >
+          {since}
+        </p>
+      )}
+    </div>
   );
 }
 
 function PromotionBody({
   state,
+  startedText,
 }: {
   state: Exclude<PromotionState, { kind: 'hidden' }>;
+  /** `din 01.09.2026`, when the figure below is the total and a start is set. */
+  startedText: string | null;
 }): ReactNode {
   if (state.kind === 'loading') {
     return <Loading label="Se încarcă progresul…" />;
@@ -129,10 +159,11 @@ function PromotionBody({
           points={view.points}
           threshold={view.threshold}
           since={view.since}
+          startedText={startedText}
         />
       );
     case 'reference':
-      return <Reference view={view} />;
+      return <Reference view={view} startedText={startedText} />;
   }
 }
 
@@ -174,8 +205,10 @@ function CountStartsLater({
 
 function Reference({
   view,
+  startedText,
 }: {
   view: Extract<NonNullable<View>, { kind: 'reference' }>;
+  startedText: string | null;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -191,7 +224,9 @@ function Reference({
         </span>
         <span className="text-sm font-semibold text-muted-foreground">
           {pointWord(view.points)}
-          {view.since && ` ${sinceText(view.since)}`}
+          {view.since
+            ? ` ${sinceText(view.since)}`
+            : startedText && ` ${startedText}`}
         </span>
       </p>
       <p className="m-0 text-sm text-muted-foreground">
@@ -205,10 +240,12 @@ function ThresholdBar({
   points,
   threshold,
   since,
+  startedText,
 }: {
   points: number;
   threshold: number;
   since: string | null;
+  startedText: string | null;
 }) {
   // Reaching the threshold makes a Promotion Candidate at once (#983); BC
   // decides. "At" counts as past it.
@@ -221,6 +258,9 @@ function ThresholdBar({
     ? Number(reached)
     : Math.min(Math.max(points, 0), threshold);
   const percent = (shown / max) * 100;
+  // From the last Role Evaluation, else from the Points Start Date when the
+  // figure is the total.
+  const period = since ? sinceText(since) : startedText;
 
   return (
     <div className="flex flex-col gap-3">
@@ -228,9 +268,7 @@ function ThresholdBar({
         <span className="font-semibold text-foreground">
           {formatPoints(points)} / {formatPointCount(threshold)}
         </span>
-        {since && (
-          <span className="text-muted-foreground">{sinceText(since)}</span>
-        )}
+        {period && <span className="text-muted-foreground">{period}</span>}
       </div>
       <div
         role="progressbar"

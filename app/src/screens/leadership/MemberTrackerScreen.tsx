@@ -27,6 +27,10 @@ import {
   type WorkFilterValue,
 } from '../../lib/work-filter';
 import {
+  pointsSinceText,
+  usePointsStartDate,
+} from '../../queries/evaluation-settings';
+import {
   useLeadershipFilters,
   useLeadershipMemberTasks,
   useLeadershipMemberTotal,
@@ -181,17 +185,20 @@ function AssignmentRecord({ task }: { task: MemberTask }) {
  * chosen, and the period the Evaluations fall in — not the deadline range the
  * Assignment list reads.
  */
-function totalScope(value: WorkFilterValue): string {
+function totalScope(
+  value: WorkFilterValue,
+  pointsStartDate: string | null | undefined,
+): string {
   const from = value.from && formatDayMonthYear(value.from);
   const to = value.to && formatDayMonthYear(value.to);
-  const period =
+  // No **De la**: the server counts from the Points Start Date (R58). An
+  // explicit one, even before it, is the lookback and the range it is.
+  const begin = from ? `din ${from}` : pointsSinceText(pointsStartDate);
+  const range =
     from && to
-      ? `acordate între ${from} și ${to}`
-      : from
-        ? `acordate din ${from}`
-        : to
-          ? `acordate până la ${to}`
-          : null;
+      ? `între ${from} și ${to}`
+      : [begin, to && `până la ${to}`].filter(Boolean).join(' ');
+  const period = range ? `acordate ${range}` : null;
   const narrowed =
     chosenGroupId(value) !== undefined || value.campaignId !== undefined;
   if (!narrowed && !period) return WHOLE_RECORD;
@@ -217,7 +224,7 @@ function MemberTotal({
   params: WorkFilterParams | null;
 }) {
   const total = useLeadershipMemberTotal(memberId, params);
-  const scope = totalScope(value);
+  const scope = totalScope(value, usePointsStartDate());
   return (
     <section
       aria-label="Puncte"

@@ -87,7 +87,7 @@ describe('the Role Evaluation reads (#827 over #826)', () => {
     expect(db.calls).toContainEqual([
       'promotion_threshold_changes',
       'select',
-      'id, kind, field, promotion_rule_id, from_value, to_value, source, changed_by, role_evaluation_id, changed_at',
+      'id, kind, field, promotion_rule_id, from_value, to_value, from_date, to_date, source, changed_by, role_evaluation_id, changed_at',
     ]);
     expect(db.calls).toContainEqual([
       'promotion_threshold_changes',

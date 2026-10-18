@@ -16,6 +16,8 @@ const state = vi.hoisted(() => ({
     error: null as Error | null,
     refetch: vi.fn(),
   },
+  /** The Points Start Date (R58): null until BC sets one. */
+  startDate: null as string | null | undefined,
   enabled: [] as boolean[],
   roles: [] as (string | undefined)[],
 }));
@@ -41,6 +43,12 @@ vi.mock('../../queries/reference', () => ({
       ['bc', { name: 'BC', level: 6 }],
     ]),
   }),
+}));
+
+// R58: the Points Start Date is a settings read; the test hands it over.
+vi.mock('../../queries/evaluation-settings', async (importActual) => ({
+  ...(await importActual<typeof import('../../queries/evaluation-settings')>()),
+  usePointsStartDate: () => state.startDate,
 }));
 
 vi.mock('../../queries/promotion-progress', () => ({
@@ -106,6 +114,7 @@ describe('PromotionProgress (#634)', () => {
     state.progress.refetch.mockClear();
     state.enabled = [];
     state.roles = [];
+    state.startDate = null;
   });
 
   afterEach(() => {
@@ -421,6 +430,9 @@ describe('PromotionProgress (#634)', () => {
 
 // #859 (B38): Profil's one points panel carries the total, once.
 describe('PromotionPanel with the total', () => {
+  beforeEach(() => {
+    state.startDate = null;
+  });
   afterEach(cleanup);
 
   it('after a Role Evaluation: the total leads, the bar says when its count started', () => {
@@ -477,5 +489,85 @@ describe('PromotionPanel with the total', () => {
     expect(
       screen.getByRole('heading', { name: 'Punctaj și promovare' }),
     ).toBeInTheDocument();
+  });
+});
+
+// R58: from when the total counts, once BC has set a Points Start Date.
+describe('the Points Start Date beside the total', () => {
+  beforeEach(() => {
+    state.startDate = null;
+  });
+  afterEach(cleanup);
+
+  const afterEvaluation = {
+    kind: 'view',
+    view: { kind: 'bar', points: 5, threshold: 30, since: '1 iulie 2026' },
+  } as const;
+
+  it('PointsTotal says from when under the number', () => {
+    state.startDate = '2026-09-01';
+    render(<PromotionPanel state={afterEvaluation} totalPoints={20} />);
+
+    expect(screen.getByTestId('points-total')).toHaveTextContent('20de puncte');
+    expect(screen.getByTestId('points-since')).toHaveTextContent(
+      /^din 01\.09\.2026$/,
+    );
+    // Under the number, not beside it.
+    expect(
+      screen
+        .getByTestId('points-total')
+        .compareDocumentPosition(screen.getByTestId('points-since')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByTestId('points-total')).not.toHaveTextContent('din');
+  });
+
+  it.each([null, undefined])(
+    'says nothing while the date is %s',
+    (startDate) => {
+      state.startDate = startDate;
+      render(<PromotionPanel state={afterEvaluation} totalPoints={20} />);
+
+      expect(screen.getByTestId('points-total')).toBeInTheDocument();
+      expect(screen.queryByTestId('points-since')).not.toBeInTheDocument();
+    },
+  );
+
+  it('names it beside the bar when the bar figure is the total', () => {
+    state.startDate = '2026-09-01';
+    render(
+      <PromotionPanel
+        state={{
+          kind: 'view',
+          view: { kind: 'bar', points: 12, threshold: 30, since: null },
+        }}
+        totalPoints={12}
+      />,
+    );
+
+    expect(screen.queryByTestId('points-total')).not.toBeInTheDocument();
+    expect(screen.getByText('12 / 30 de puncte')).toBeInTheDocument();
+    expect(screen.getByText('din 01.09.2026')).toBeInTheDocument();
+  });
+
+  it('names it beside the reference figure when that figure is the total', () => {
+    state.startDate = '2026-09-01';
+    render(
+      <PromotionPanel
+        state={{
+          kind: 'view',
+          view: {
+            kind: 'reference',
+            points: 12,
+            threshold: 30,
+            since: null,
+            startsLater: false,
+          },
+        }}
+        totalPoints={12}
+      />,
+    );
+
+    expect(screen.getByText('puncte din 01.09.2026')).toBeInTheDocument();
   });
 });
