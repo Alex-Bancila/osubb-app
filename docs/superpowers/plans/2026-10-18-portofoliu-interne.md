@@ -555,7 +555,7 @@ create trigger profiles_refresh_university_signals after update of university, s
 -- create trigger evaluation_settings_refresh_promotion_candidates after update on public.evaluation_settings for each statement execute function private.refresh_promotion_candidates_on_write();
 
 -- Section 9: the drops and the day-one data.
--- insert into retention_signals the Signals of the latest run of each kind, from the OLD core (still present until this section): kind, member_id, role, 'below_line', task_points, run.threshold_used, run.id, created_at = run.run_at.
+-- insert into retention_signals the Signals of the latest run of each kind (ledger Ruling 14: the old core is already gone by this section): one row per distinct member named by a notifications row whose dedupe_key matches '^retention_signal:' || run.id || ':' -- kind, member_id, the Member's current role as role_at_listing, reason 'below_line', task_points from private.task_points_in_range over the run's period, run.threshold_used, run.id, created_at = run.run_at.
 -- select cron.unschedule('osubb-apply-promotions');
 -- drop function private.apply_promotions(); drop function private.apply_promotion(uuid, member_role, member_role, text); drop function private.detect_promotions();
 -- drop function public.update_promotion_rule(bigint, integer, boolean); drop function private.update_promotion_rule_impl(bigint, integer, boolean);
@@ -567,7 +567,7 @@ create trigger profiles_refresh_university_signals after update of university, s
 
 - [ ] **Step 2: Watch it fail.**
 
-- [ ] **Step 3: Sections 6–9** as in Interfaces. Section 9's data move runs before the drops, in one `do $$ … $$` block that calls the old four-argument core per latest run.
+- [ ] **Step 3: Sections 6–9** as in Interfaces. Section 9's data move runs before the drops, in one `do $$ … $$` block that reads the latest run per kind, its retention_signal notifications and `private.task_points_in_range` (Ruling 14).
 
 - [ ] **Step 4: Fixed references.** `promotion_candidates_live.test.sql`: the `promotion_rules` writes become `set_membership_cutoff` / `evaluation_settings` updates; the `has_trigger` on `promotion_rules` becomes the `evaluation_settings` one; the body text pin. `provision_joined_at.test.sql`: remove the `apply_promotions` calls and their assertions (plan down). `legacy_task_import.test.sql:129`: the `promotion_rules` update becomes an `evaluation_settings` update (or goes if #1074 removed the suite first). `retired_surface.test.sql`: `hasnt_` pins for `promotion_rules`, `update_promotion_rule`, `apply_promotions`, `apply_promotion`, `detect_promotions`, `role_evaluation_ranking(text,date,date)`, `run_role_evaluation(text,date,date,text)`. `notification_read_rules.test.sql`: a `live` retention case. `live_changes.test.sql`: nothing to exclude; `rls_deny_by_default.test.sql`: a `retention_signals` fixture row. `seed.sql:137-155`: the regex already allows `live`; add a `delete from retention_signals` by demo member before the `role_evaluations` delete. `check-seed-rerunnable.sh:369-370`: the orphan count accepts a `live` second segment for `retention_signal` too. `tracker_grants.test.sql`: drop the public row of `update_promotion_rule` and the private rows of `apply_promotions`, `apply_promotion`, `detect_promotions`, `update_promotion_rule_impl`; add `refresh_university_signals` (`none`), `refresh_university_signals_on_write` (`trigger`); count `257`. Delete `apply_promotions.test.sql`, `detect_promotions.test.sql`, `promotion_rule_command.test.sql`; split `promotion_rules.test.sql`.
 
