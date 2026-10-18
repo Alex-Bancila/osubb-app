@@ -14,9 +14,13 @@
 --      set_membership_cutoff, set_points_start_date, each a wrapper over a
 --      private _impl) and private.points_floor(), the instant the Points
 --      Start Date begins.
+--   4. The Points Start Date in every total: my_points, Clasament, the
+--      Department Cup and the Campaign totals and reports count only the Task
+--      Points of Evaluations on or after it (Clasament alone may look back).
 --
 -- The row is reference data seeded here (house rule 6), never by seed.sql.
--- Nothing reads the three values yet; the readers that apply them follow.
+-- Nothing reads the Eligibility Floor or the Membership Cutoff Date yet; the
+-- readers that apply them follow.
 
 -- ---------------------------------------------------------------------------
 -- 1. The settings row.
@@ -456,3 +460,409 @@ comment on function private.points_floor() is
 
 revoke execute on function private.points_floor()
   from public, anon, authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- 4. The Points Start Date in every total.
+-- ---------------------------------------------------------------------------
+-- The date is applied inside the SQL readers, never by a client (spec section
+-- D): the Personal Score (my_points), Clasament (leadership_leaderboard_impl),
+-- the Department Cup (department_cup_rows) and the Campaign totals and reports
+-- (campaign_totals_impl, campaign_report_impl) count only the Task Points of
+-- Task Evaluations at or after private.points_floor(). Each is restated here
+-- from its latest definition with that one change; signatures, wrappers and
+-- grants stay as they were. Untouched on purpose: task_points_in_range (a Role
+-- Evaluation names its own period), my_role_evaluation_standing,
+-- refresh_promotion_candidates and every stake or reconciliation sum
+-- (task_points_at_stake, delete_tasks_effect, group_delete_summary), which
+-- count what a Task holds, not what a Member is shown.
+--
+-- Clasament alone may look back: an explicit "De la" (p_from) wins over the
+-- date, even an earlier one, and the Department Cup, which that page reads
+-- under the same Work Filter, follows it. A Campaign number never looks back.
+--
+-- points_floor() has a SET clause, so the planner never inlines it and a bare
+-- call in a WHERE would run once per ledger row. The SQL readers therefore ask
+-- for it as a scalar subquery, (select private.points_floor()), which Postgres
+-- evaluates once; the plpgsql Campaign readers bind it to a local first.
+
+-- The Personal Score. The view is security invoker and points_floor() is
+-- granted to nobody, so the view reads the setting row itself (every live
+-- Member may read it) and turns the date into the same Europe/Bucharest
+-- midnight; an unreadable or unset row is -infinity, i.e. no floor. The bound
+-- sits in the left join's ON clause so a Member with nothing left to count
+-- keeps their zero row. A Sanction has no Evaluation and counts by its own
+-- created_at. A task or task_reversal row counts through its Evaluation, which
+-- an award and its reversal share; one whose Task was deleted for good has
+-- lost its Evaluation (task_id and evaluation_id are nulled together) and
+-- never counts -- the pair nets to zero, and a reversal dated "now" must not
+-- count while its award, dated before the floor, does not.
+create or replace view public.my_points
+with (security_invoker = on) as
+ select p.id as member_id,
+        coalesce(sum(l.delta), 0::bigint)::integer as points
+   from public.profiles as p
+  cross join (
+        select coalesce(
+                 (select (setting.points_start_date::timestamp at time zone 'Europe/Bucharest')
+                    from public.evaluation_settings as setting
+                   where setting.id = 1),
+                 '-infinity'::timestamptz) as starts_at
+       ) as bound
+   left join (public.points_ledger as l
+              left join public.task_evaluations as evaluation on evaluation.id = l.evaluation_id)
+     on l.member_id = p.id
+    and (
+          (l.evaluation_id is not null and evaluation.evaluated_at >= bound.starts_at)
+       or (l.reason not in ('task', 'task_reversal') and l.created_at >= bound.starts_at)
+        )
+  where public.auth_is_member()
+    and p.id = (select auth.uid())
+    and p.status = 'activ'
+  group by p.id;
+
+comment on view public.my_points is
+  'The current active member''s complete personal points total, counted from the Points Start Date (R58: evaluation_settings.points_start_date, read through its Europe/Bucharest midnight; no date set means the whole ledger). Identity comes from auth.uid(); task points and sanctions are both included. A task or task_reversal row counts when its Evaluation (task_evaluations.evaluated_at through points_ledger.evaluation_id, shared by an award and its reversal) falls on or after that instant; a Sanction, which has no Evaluation, counts when its own created_at does. A row whose Task was deleted for good has no Evaluation left and never counts (the award and its reversal net to zero). A Member with nothing left to count still gets their zero row. This security-invoker view intentionally exposes at most one row and never accepts a member ID from the client.';
+
+-- Clasament.
+create or replace function private.leadership_leaderboard_impl(
+  p_group_id    bigint,
+  p_campaign_id bigint,
+  p_from        timestamptz,
+  p_to          timestamptz,
+  p_preferred   boolean
+)
+returns table (member_id uuid, full_name text, nickname text, points integer, rank integer)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select private.require_date_range(p_from, p_to);
+
+  with gate as (
+    -- One row for a live, active BCE+ caller; none otherwise, which empties
+    -- both branches below (no rows, never an error).
+    select 1 as allowed
+     where public.auth_level() >= 5
+       and (select private.caller_level()) >= 5
+       and exists (
+         select 1
+           from public.profiles as caller
+          where caller.id = (select auth.uid())
+            and caller.status = 'activ'
+       )
+  ),
+  muted as (
+    -- R43: the caller's muted Groups, judged once -- the rows they unselected
+    -- that private.group_muted_for still honours -- for the preferred view only.
+    select unselected.group_id
+      from gate
+     cross join public.member_group_unselected as unselected
+     where coalesce(p_preferred, false)
+       and unselected.member_id = (select auth.uid())
+       and private.group_muted_for(unselected.group_id, unselected.member_id)
+  ),
+  task_points as (
+    select entry.member_id as member_id,
+           sum(entry.delta)::int as points
+      from gate
+     cross join public.points_ledger as entry
+      join public.task_evaluations as evaluation on evaluation.id = entry.evaluation_id
+      join public.tasks as task on task.id = entry.task_id
+      join public.groups as task_group on task_group.id = task.group_id
+     where entry.reason in ('task', 'task_reversal')
+       and (p_group_id is null or task_group.path @> array[p_group_id])
+       and (p_campaign_id is null or task.campaign_id = p_campaign_id)
+       -- R58: the lower bound is the caller's "De la" -- even one earlier than
+       -- the Points Start Date, which is how Clasament looks back -- or, when
+       -- there is none, the Points Start Date itself (null while unset, and
+       -- then everything counts). Read once per query as a scalar subquery:
+       -- a bare call would run once per ledger row.
+       and evaluation.evaluated_at >= coalesce(p_from, (select private.points_floor()), '-infinity'::timestamptz)
+       and (p_to is null or evaluation.evaluated_at < p_to)
+       -- R43: the preferred view counts only the Tasks of the caller's selected
+       -- Groups (the Task's own Group); empty unless p_preferred.
+       and task.group_id not in (select muted.group_id from muted)
+     group by entry.member_id
+  ),
+  roster as (
+    -- Unfiltered: every active Member.
+    select member.id as member_id
+      from gate
+     cross join public.profiles as member
+     where p_group_id is null
+       and member.status = 'activ'
+    union
+    -- A Group filter: the active members of that Group's subtree (#929, R32) --
+    -- roster rows, Automatic Membership and the membri de drept, from the one
+    -- member set. The Role filter below keeps BCE, BC and the Moderator out.
+    select member_set.member_id
+      from gate
+     cross join public.groups as roster_group
+     cross join lateral private.group_member_set(roster_group.id) as member_set
+      join public.profiles as member on member.id = member_set.member_id
+     where p_group_id is not null
+       and roster_group.path @> array[p_group_id]
+       and member.status = 'activ'
+  ),
+  board as (
+    select roster.member_id from roster
+    union
+    select task_points.member_id from task_points
+  )
+  select member.id,
+         member.full_name,
+         member.nickname,
+         coalesce(scored.points, 0),
+         rank() over (order by coalesce(scored.points, 0) desc)::int
+    from board
+    join public.profiles as member on member.id = board.member_id
+    left join task_points as scored on scored.member_id = board.member_id
+   -- #907 (amending ruling 1 of 2026-09-28, #843): only the Roles below BCE
+   -- are ranked. rank() runs after this filter, so the ranks stay contiguous
+   -- without BCE, BC and the Moderator.
+   where member.role in ('recrut', 'voluntar', 'activ', 'vot')
+   order by coalesce(scored.points, 0) desc, member.full_name asc;
+$$;
+
+comment on function private.leadership_leaderboard_impl(bigint, bigint, timestamptz, timestamptz, boolean) is
+  'Group-subtree Leaderboard body. Rows are every active Member below BCE (Recrut, Voluntar, Voluntar Activ, Voluntar cu Drept de Vot) -- with a Group filter, the active members of that Group''s subtree by private.group_member_set (roster rows and Automatic Membership, so the Adunarea Generala lists its level-3 Members, #929) -- plus every Member below BCE who earned Task Points under the filter, whatever their status (#907). BCE, BC and the Moderator are never rows, whatever the filter. Points follow the Task Group, never the Member roster; Cup participation settings do not restrict the board; a Campaign or a date range narrows the points, never the Members. The date range (#677) reads the award instant -- task_evaluations.evaluated_at through points_ledger.evaluation_id, for a credit and its reversal alike -- half-open [p_from, p_to); PT400 invalid_date_range first when p_to < p_from. R58: with no p_from the range begins at the Points Start Date (private.points_floor(), asked once per query; no date set means no floor), and an explicit p_from -- even one earlier -- is honoured, which is how Clasament''s Work Filter looks back. p_preferred (R43, Grupuri preferate) counts only the points of Tasks whose own Group the caller has not unselected (private.group_muted_for); the Members listed are unchanged.';
+
+-- The Department Cup.
+create or replace function private.department_cup_rows(
+  p_campaign_id bigint,
+  p_from        timestamptz,
+  p_to          timestamptz
+)
+returns table (group_id bigint, name text, points integer, members bigint)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select private.require_date_range(p_from, p_to);
+
+  with task_points as (
+    select cup.id as cup_group_id, sum(entry.delta)::int as points
+      from public.points_ledger as entry
+      join public.task_evaluations as evaluation on evaluation.id = entry.evaluation_id
+      join public.tasks as task on task.id = entry.task_id
+      join public.groups as task_group on task_group.id = task.group_id
+      join lateral (
+        select competing.id, ancestor.depth
+          from unnest(task_group.path) with ordinality as ancestor(id, depth)
+          join public.groups as competing on competing.id = ancestor.id and competing.competes_in_cup
+         order by ancestor.depth desc
+         limit 1
+      ) as cup on true
+     where entry.reason in ('task', 'task_reversal')
+       and (p_campaign_id is null or task.campaign_id = p_campaign_id)
+       -- R58: the Cup is read from Clasament's Work Filter, so it follows the
+       -- same lower bound: the caller's "De la" (the lookback), else the Points
+       -- Start Date (null while unset, and then everything counts). Read once
+       -- per query as a scalar subquery, never once per ledger row.
+       and evaluation.evaluated_at >= coalesce(p_from, (select private.points_floor()), '-infinity'::timestamptz)
+       and (p_to is null or evaluation.evaluated_at < p_to)
+       and not exists (
+         select 1 from unnest(task_group.path) with ordinality as link(id, depth)
+           join public.groups as node on node.id = link.id
+          where link.depth > cup.depth and not node.counts_toward_parent_cup)
+     group by cup.id
+  ), active_members as (
+    select membership.group_id, count(*)::bigint as members
+      from public.group_members as membership
+      join public.profiles as member on member.id = membership.member_id
+     where member.status = 'activ'
+     group by membership.group_id
+  )
+  select grp.id, grp.name,
+         coalesce(task_points.points, 0), coalesce(active_members.members, 0)
+    from public.groups as grp
+    left join task_points on task_points.cup_group_id = grp.id
+    left join active_members on active_members.group_id = grp.id
+   where public.auth_level() >= 5
+     and (select private.caller_level()) >= 5
+     and exists (
+       select 1
+         from public.profiles as caller
+        where caller.id = (select auth.uid())
+          and caller.status = 'activ'
+     )
+     and grp.competes_in_cup
+     -- #861 (Audit D-10): an archived Group has left the Cup.
+     and grp.status = 'active'
+   order by coalesce(task_points.points, 0) desc, grp.name asc;
+$$;
+
+comment on function private.department_cup_rows(bigint, timestamptz, timestamptz) is
+  'Live BCE+ Cup rows from active competing Group settings -- an archived Group has left the Cup (#861, Audit D-10). Task/reversal ledger points reach the nearest competing ancestor only when every lower link counts. Members are the active explicit roster of the competitor itself. The date range (#677) reads the award instant -- task_evaluations.evaluated_at through points_ledger.evaluation_id -- half-open [p_from, p_to); PT400 invalid_date_range first when p_to < p_from. R58: with no p_from the range begins at the Points Start Date (private.points_floor(), asked once per query; no date set means no floor), and an explicit p_from -- even one earlier -- is honoured, so the Cup read beside Clasament''s Work Filter looks back with it.';
+
+-- A Campaign's report.
+create or replace function private.campaign_report_impl(
+  p_campaign_id bigint,
+  p_from        timestamptz,
+  p_to          timestamptz
+)
+returns table (member_id uuid, full_name text, nickname text, tasks_completed integer, points integer)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_floor timestamptz;
+begin
+  perform private.require_date_range(p_from, p_to);
+  perform private.require_campaign_report_access(p_campaign_id);
+
+  -- R58: the Points Start Date (null while unset), asked for once. A Campaign
+  -- number never looks back past it, whatever "De la" the caller sends.
+  v_floor := private.points_floor();
+
+  return query
+  with campaign_tasks as (
+    select task.id, task.status
+      from public.tasks as task
+     where task.campaign_id = p_campaign_id
+  ),
+  -- Every Member who ever held the Executor Assignment on a Campaign Task
+  -- (ruling 3) -- Assignment History, not the ledger, so a give-up or an
+  -- unfulfilled/cancelled outcome still leaves the volunteer on the report.
+  -- The date range narrows the numbers, never the roster.
+  executors as (
+    select distinct assignment.member_id
+      from public.task_assignments as assignment
+      join campaign_tasks as ct on ct.id = assignment.task_id
+  ),
+  -- Net ledger rows per (member, Task) awarded inside the range: the range
+  -- reads the Evaluation's instant, which a credit and its reversal share,
+  -- so a reversed award nets to zero in every range (#677). R58: and never
+  -- before the Points Start Date.
+  ledger_rows as (
+    select entry.member_id, entry.task_id, entry.delta
+      from public.points_ledger as entry
+      join campaign_tasks as ct on ct.id = entry.task_id
+      join public.task_evaluations as evaluation on evaluation.id = entry.evaluation_id
+     where entry.reason in ('task', 'task_reversal')
+       and (p_from is null or evaluation.evaluated_at >= p_from)
+       and (v_floor is null or evaluation.evaluated_at >= v_floor)
+       and (p_to is null or evaluation.evaluated_at < p_to)
+  ),
+  -- One row per (member, Task): the member's NET ledger contribution to that
+  -- Task -- both points and tasks_completed are derived from this single
+  -- number, never from ledger row counts (#625 fix round 1).
+  member_task_net as (
+    select ledger_rows.member_id, ledger_rows.task_id,
+           sum(ledger_rows.delta)::int as net_points
+      from ledger_rows
+     group by ledger_rows.member_id, ledger_rows.task_id
+  ),
+  points_by_member as (
+    select member_task_net.member_id, sum(member_task_net.net_points)::int as points
+      from member_task_net
+     group by member_task_net.member_id
+  ),
+  -- A completed Task counts toward tasks_completed only where the member's
+  -- OWN net on it inside the range is positive.
+  completed_by_member as (
+    select member_task_net.member_id,
+           count(*)::int as tasks_completed
+      from member_task_net
+      join campaign_tasks as ct
+        on ct.id = member_task_net.task_id and ct.status = 'completed'
+     where member_task_net.net_points > 0
+     group by member_task_net.member_id
+  )
+  select executors.member_id,
+         profile.full_name,
+         profile.nickname,
+         coalesce(completed_by_member.tasks_completed, 0),
+         coalesce(points_by_member.points, 0)
+    from executors
+    join public.profiles as profile on profile.id = executors.member_id
+    left join points_by_member on points_by_member.member_id = executors.member_id
+    left join completed_by_member on completed_by_member.member_id = executors.member_id
+   order by coalesce(points_by_member.points, 0) desc, profile.full_name asc;
+end;
+$$;
+
+comment on function private.campaign_report_impl(bigint, timestamptz, timestamptz) is
+  'One row per volunteer who ever held the Executor Assignment on a Task of this Campaign (Assignment History, not the ledger -- ruling 3); the date range never removes a volunteer. points is each member''s net points_ledger sum over the Campaign''s Tasks awarded in [p_from, p_to) -- the award instant is task_evaluations.evaluated_at through points_ledger.evaluation_id, shared by a credit and its reversal (#677, R13); tasks_completed counts only a completed Task on which that member''s OWN in-range net is positive. R58: the range never begins before the Points Start Date (private.points_floor(), asked once; no date set means no floor), whatever p_from says -- a Campaign report has no lookback -- so points and tasks_completed both count from it. PT400 invalid_date_range when p_to < p_from, checked first; then PT404 campaign_not_found for an unknown Campaign, checked before authority (ruling 2); 42501 campaign_report_forbidden for a claimless/inactive caller or one private.can_manage_group_work refuses.';
+
+-- A Campaign's totals.
+create or replace function private.campaign_totals_impl(
+  p_campaign_id bigint,
+  p_from        timestamptz,
+  p_to          timestamptz
+)
+returns table (tasks_total integer, tasks_completed integer, points_total integer)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_floor timestamptz;
+begin
+  perform private.require_date_range(p_from, p_to);
+  perform private.require_campaign_report_access(p_campaign_id);
+
+  -- R58: the Points Start Date (null while unset), asked for once. A Campaign
+  -- number never looks back past it, whatever "De la" the caller sends.
+  v_floor := private.points_floor();
+
+  return query
+  with campaign_tasks as (
+    select task.id, task.status
+      from public.tasks as task
+     where task.campaign_id = p_campaign_id
+  ),
+  -- The instant a completed Task's completion was awarded: its live
+  -- (un-reversed) completed Evaluation. A completed Task without one -- an
+  -- Umbrella, which is never evaluated -- has no award instant: it counts
+  -- when no bound is set (the unbounded result is unchanged) and never
+  -- inside a bounded range, whose predicates a null instant cannot satisfy.
+  -- R58: the Points Start Date is such a bound once it is set.
+  completed_tasks as (
+    select ct.id,
+           (select max(evaluation.evaluated_at)
+              from public.task_evaluations as evaluation
+             where evaluation.task_id = ct.id
+               and evaluation.outcome = 'completed'
+               and evaluation.reversed_at is null) as awarded_at
+      from campaign_tasks as ct
+     where ct.status = 'completed'
+  ),
+  ledger_total as (
+    select coalesce(sum(entry.delta), 0)::int as points_total
+      from public.points_ledger as entry
+      join campaign_tasks as ct on ct.id = entry.task_id
+      join public.task_evaluations as evaluation on evaluation.id = entry.evaluation_id
+     where entry.reason in ('task', 'task_reversal')
+       and (p_from is null or evaluation.evaluated_at >= p_from)
+       and (v_floor is null or evaluation.evaluated_at >= v_floor)
+       and (p_to is null or evaluation.evaluated_at < p_to)
+  )
+  select
+    (select count(*) from campaign_tasks)::int,
+    (select count(*)
+       from completed_tasks
+      where (p_from is null or completed_tasks.awarded_at >= p_from)
+        and (v_floor is null or completed_tasks.awarded_at >= v_floor)
+        and (p_to is null or completed_tasks.awarded_at < p_to))::int,
+    (select ledger_total.points_total from ledger_total);
+end;
+$$;
+
+comment on function private.campaign_totals_impl(bigint, timestamptz, timestamptz) is
+  'tasks_total/tasks_completed/points_total for one Campaign -- every Task (any kind) carrying campaign_id = p_campaign_id, points summed off the points_ledger rows private.evaluate_task writes exactly as private.campaign_report_impl does. The date range (#677) follows the award instant: points_total sums ledger rows whose Evaluation (task_evaluations.evaluated_at via points_ledger.evaluation_id) falls in [p_from, p_to); tasks_completed counts completed Tasks whose live completed Evaluation falls in it (a completed Umbrella, never evaluated, counts only when no bound and no Points Start Date is set); tasks_total ignores the range and stays the whole Campaign (R13 speaks of points only). R58: neither points_total nor tasks_completed counts before the Points Start Date (private.points_floor(), asked once; no date set means no floor), whatever p_from says. PT400 invalid_date_range first when p_to < p_from; then the same PT404/42501 preamble as private.campaign_report_impl -- both share private.require_campaign_report_access.';
+
+-- The public wrappers are unchanged; only what they document gains the rule.
+comment on function public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz, boolean) is
+  'Live BCE+ Task-points Leaderboard filtered by Group subtree, Campaign and award date range (#677: [p_from, p_to) on the Evaluation instant, either bound optional; PT400 invalid_date_range when p_to < p_from). Lists every active Member below BCE, at 0 points when they earned nothing (with a Group filter, the Members of that Group''s subtree), and retains inactive earners (#907). Never ranks BCE, BC or the Moderator (ruling 1 of 2026-09-28, amended by #907). Zero/negative totals, shared ranks on ties, and stable points-descending/name ordering. R58: with no p_from the range begins at the Points Start Date (Data de început a punctajului); an explicit earlier p_from reads the real numbers (the lookback, Clasament only). Returns the Nickname beside the full name. p_preferred (R43) counts only the points earned in the Groups the caller keeps selected in Grupuri preferate.';
+comment on function public.department_cup(bigint, timestamptz, timestamptz) is
+  'Campaign- and award-date-filtered Group Cup standings as (group_id, name, points, members); the date range is [p_from, p_to) on the Evaluation instant, either bound optional (#677). Failed leadership gates return no rows; an inverted range is PT400 invalid_date_range. R58: with no p_from the range begins at the Points Start Date; an explicit earlier p_from looks back.';
+comment on function public.campaign_totals(bigint, timestamptz, timestamptz) is
+  'Whole-Campaign totals (tasks_total, tasks_completed, points_total). With a date range, points_total and tasks_completed follow the award instant in [p_from, p_to) and tasks_total stays the whole Campaign (#677, R13). R58: points_total and tasks_completed never count before the Points Start Date, whatever p_from says. Same authority and error shape as public.campaign_report.';
+comment on function public.campaign_report(bigint, timestamptz, timestamptz) is
+  'Per-volunteer Campaign report (member_id, full_name, nickname, tasks_completed, points), optionally narrowed to points awarded in [p_from, p_to) (#677, R13) and never counted before the Points Start Date (R58), whatever p_from says; callable only by whoever manages work in the Campaign''s Group, or BC/Moderator (private.can_manage_group_work). PT400 invalid_date_range when p_to < p_from; PT404 campaign_not_found for an unknown Campaign; 42501 campaign_report_forbidden otherwise.';
