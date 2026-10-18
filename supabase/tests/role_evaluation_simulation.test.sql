@@ -48,7 +48,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(65);
+select plan(67);
 
 \ir _r58_fixtures.psql
 
@@ -235,6 +235,11 @@ select throws_ok($$ select * from public.simulate_role_evaluation('voluntar_acti
 select throws_ok($$ select * from public.simulate_role_evaluation('voluntar_activ', '2026-03-01', '2026-09-30', 10, 35) $$,
   'PT400', 'membership_cutoff_not_set', 'the Voluntar Activ kind without a cutoff is membership_cutoff_not_set');
 select throws_ok(
+  format($$ select * from public.simulate_role_evaluation('voluntar_activ', '2026-03-01', '2026-09-30', 10, 35, %L) $$,
+         (now() at time zone 'Europe/Bucharest')::date + 1),
+  'PT400', 'invalid_membership_cutoff',
+  'a cutoff tomorrow is invalid_membership_cutoff -- the value set_membership_cutoff would refuse');
+select throws_ok(
   format($$ select * from public.simulate_role_evaluation('voluntar_activ', '2026-03-01', %L, 10, 35, '2026-03-01') $$,
          (now() at time zone 'Europe/Bucharest')::date + 1),
   'PT400', 'date_range_in_future', 'an Evaluation Period ending tomorrow is date_range_in_future');
@@ -346,9 +351,14 @@ select is(
   'one Notification key per Candidate and per Signal, in main''s shapes');
 select is(
   (select array_agg(distinct link) from public.notifications
-    where dedupe_key like '%:' || (select role_evaluation_id from runs58 where label = 's1') || ':%'),
+    where dedupe_key like 'promotion_candidate:' || (select role_evaluation_id from runs58 where label = 's1') || ':%'),
   array['/administrare/portofoliu-interne'],
-  'every one of them links to Portofoliu Interne');
+  'a Candidate''s Notification links to Portofoliu Interne, which its readers -- BC and the Moderator -- open');
+select is(
+  (select bool_and(link = '/tracker/membru/' || split_part(dedupe_key, ':', 3)) from public.notifications
+    where dedupe_key like 'retention_signal:' || (select role_evaluation_id from runs58 where label = 's1') || ':%'),
+  true,
+  'a Signal''s Notification links to the Member''s tracker page, which an Adunarea Generală Responsible at level 5 can open');
 select is(
   (select array_agg(member_id order by member_id) from public.notifications
     where dedupe_key = 'promotion_candidate:' || (select role_evaluation_id from runs58 where label = 's1')
@@ -369,7 +379,7 @@ select results_eq(
   $$ values ('Candidat la promovare: Voluntar C R58'::text,
              'Voluntar C R58 are 50 puncte de task în evaluarea „Evaluare S1” (01.03.2026–30.09.2026), '
              || 'cel puțin pragul de 40 puncte, intrat în OSUBB până la 01.03.2026. Nu este promovat automat: '
-             || 'îl poți promova în Voluntar Activ din panoul de roluri sau respinge din Evaluări de rol.') $$,
+             || 'îl poți promova în Voluntar Activ din panoul de roluri sau respinge din Portofoliu Interne.') $$,
   'the Candidate''s Notification names the line computed and the cutoff, never a tenure');
 select results_eq(
   $$ select title, body from public.notifications

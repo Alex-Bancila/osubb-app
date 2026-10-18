@@ -22,7 +22,8 @@
 -- The Evaluation Period is [today - 30, today - 1] in Bucharest days; every
 -- award is dated two days ago, inside it. The Voluntar Activ runs use the
 -- Eligibility Floor 5, the share 50 % and the cutoff today - 1; the
--- Adunarea Generală runs the Floor 5 and 25 %.
+-- Adunarea Generală runs 25 % and the Floor 5, except the one in section 10
+-- (Floor 1).
 --   R1 recrut 100, V3 voluntar joined today 50, A1 activ 25, V1 voluntar 20,
 --   V4 voluntar 15, A2 activ 15, G1 vot 12, V2 voluntar 10, A3 activ 5,
 --   G2 vot 3 (below the Floor).
@@ -32,8 +33,10 @@
 --     (V3 joined after the cutoff; R1 is a Recrut). Signals: A3 and G1 below
 --     the line, G2 below the Floor; A2 at exactly 15 is not one. The threshold
 --     in force before the first run is 20: V4 is listed below it.
---   Adunarea Generală kind: G1 ranked alone (G2 below the Floor), share 1,
---     line 12. G1 is also the Adunarea Generală Group's Responsible.
+--   Adunarea Generală kind: at Floor 5 G1 is ranked alone (G2 below the
+--     Floor), share 1, line 12; at Floor 1 both are ranked, share 1, line 12,
+--     and G2 is below the line. G1 is also the Adunarea Generală Group's
+--     Responsible.
 --
 -- Mutation guards, run 2026-09-27 against main's body and still standing
 -- under R58 (the run's own R58 rules -- the line, the Floor and the cutoff --
@@ -54,7 +57,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(67);
+select plan(69);
 
 -- ==================== 1. The lock ====================
 -- A held-lock probe, as #52's suite probes (52, 1): a run must wait on
@@ -292,6 +295,9 @@ select throws_ok($$ select * from public.run_role_evaluation('voluntar_activ', c
   'PT400', 'invalid_percent', 'a share above 100 is invalid_percent, before the gate');
 select throws_ok($$ select * from public.run_role_evaluation('voluntar_activ', current_date - 2, current_date - 1, 'Evaluare', 5, 50) $$,
   'PT400', 'membership_cutoff_not_set', 'a Voluntar Activ run without a cutoff is membership_cutoff_not_set, before the gate');
+select throws_ok($$ select * from public.run_role_evaluation('voluntar_activ', current_date - 2, current_date - 1, 'Evaluare', 5, 50, current_date + 2) $$,
+  'PT400', 'invalid_membership_cutoff',
+  'a cutoff after today is invalid_membership_cutoff, before the gate -- a run never writes through a date set_membership_cutoff would refuse');
 
 -- ==================== 4. The gate ====================
 
@@ -420,7 +426,7 @@ select results_eq(
             || to_char(d_from, 'DD.MM.YYYY') || '–' || to_char(d_to, 'DD.MM.YYYY')
             || '), cel puțin pragul de 15 puncte, intrat în OSUBB până la ' || to_char(d_to, 'DD.MM.YYYY')
             || '. Nu este promovat automat: '
-            || 'îl poți promova în Voluntar Activ din panoul de roluri sau respinge din Evaluări de rol.',
+            || 'îl poți promova în Voluntar Activ din panoul de roluri sau respinge din Portofoliu Interne.',
             '/administrare/portofoliu-interne'
        from fx826 $$,
   'the candidate Notification names the Member by Nickname, the points, the run, its dates, the line computed and the cutoff');
@@ -444,7 +450,7 @@ select is(
     where member_id = '82600000-0000-0000-0000-000000000031'
       and dedupe_key like 'retention_signal:%'),
   0::bigint,
-  '#843 (D11): an Adunarea Generală Responsible below level 5 gets no Retention Signal');
+  '#843 (D11): an Adunarea Generală Responsible below level 5 gets no Retention Signal -- /tracker/membru/<id> would turn them away');
 select results_eq(
   $$ select title, body, link from public.notifications
       where member_id = '82600000-0000-0000-0000-000000000001'
@@ -454,9 +460,9 @@ select results_eq(
             'Ana (Voluntar Activ) are 5 puncte de task în evaluarea „Semestrul I #826” ('
             || to_char(d_from, 'DD.MM.YYYY') || '–' || to_char(d_to, 'DD.MM.YYYY')
             || '), sub pragul de promovare de 15 puncte. Rolul nu se retrage automat: decizia îi aparține BC.',
-            '/administrare/portofoliu-interne'
+            '/tracker/membru/82600000-0000-0000-0000-000000000023'
        from fx826 $$,
-  'the Retention Signal names the Member, the Role at risk, the points, the run and the line computed');
+  'the Retention Signal names the Member, the Role at risk, the points, the run and the line computed, and links to the Member''s tracker page');
 select is((select role::text from public.profiles where id = '82600000-0000-0000-0000-000000000023'), 'activ',
   'a Retention Signal changes no Role');
 
@@ -554,7 +560,7 @@ select pg_temp.test_login_leadership('82600000-0000-0000-0000-000000000001');
 select lives_ok($$ select public.set_promotion_threshold('adunarea_generala', 10) $$,
   'BC edits the Adunarea Generală threshold by hand');
 select lives_ok(
-  format($$ insert into runs826 select 'ag1', * from public.run_role_evaluation('adunarea_generala', %L, %L, 'AG #826', 5, 25) $$,
+  format($$ insert into runs826 select 'ag1', * from public.run_role_evaluation('adunarea_generala', %L, %L, 'AG #826', 1, 25) $$,
          (select d_from from fx826), (select d_to from fx826)),
   'BC runs an Adunarea Generală Role Evaluation');
 reset role;
@@ -563,8 +569,8 @@ select results_eq(
             run.threshold_computed, run.membership_cutoff
        from runs826 as r join public.role_evaluations as run on run.id = r.role_evaluation_id
       where r.label = 'ag1' $$,
-  $$ values (0, 1, 1, 2, 10, 12, null::date) $$,
-  'the Adunarea Generală kind evaluates only the two Voluntar cu Drept de Vot holders, ranks the one at the Floor, lists no candidate, signals the other and computes 12 (top 25 % of one); it has no cutoff');
+  $$ values (0, 1, 2, 2, 10, 12, null::date) $$,
+  'the Adunarea Generală kind (Floor 1) ranks only the two Voluntar cu Drept de Vot holders, lists no candidate, signals the one below the line and computes 12 (top 25 % of two); it has no cutoff');
 select is(
   (select count(*) from public.promotion_candidates
     where role_evaluation_id = (select role_evaluation_id from runs826 where label = 'ag1')),
@@ -574,7 +580,19 @@ select is(
      select distinct dedupe_key from public.notifications
       where dedupe_key like 'retention_signal:' || (select role_evaluation_id from runs826 where label = 'ag1') || ':%') as k),
   array['82600000-0000-0000-0000-000000000032'::uuid],
-  'the Adunarea Generală Retention Signal is about the Voluntar cu Drept de Vot below the Floor');
+  'the Adunarea Generală Retention Signal is about the Voluntar cu Drept de Vot below the line');
+select results_eq(
+  $$ select title, body, link from public.notifications
+      where member_id = '82600000-0000-0000-0000-000000000001'
+        and dedupe_key = 'retention_signal:' || (select role_evaluation_id from runs826 where label = 'ag1')
+                         || ':82600000-0000-0000-0000-000000000032' $$,
+  $$ select 'Semnal de retenție: Vot Doi',
+            'Vot Doi (Voluntar cu Drept de Vot) are 3 puncte de task în evaluarea „AG #826” ('
+            || to_char(d_from, 'DD.MM.YYYY') || '–' || to_char(d_to, 'DD.MM.YYYY')
+            || '), sub pragul Adunării Generale de 12 puncte. Rolul nu se retrage automat: decizia îi aparține BC.',
+            '/tracker/membru/82600000-0000-0000-0000-000000000032'
+       from fx826 $$,
+  'an Adunarea Generală Signal below the line names the Adunarea Generală''s line, not the Promotion Threshold');
 select is((select threshold from public.promotion_thresholds where kind = 'adunarea_generala'), 12,
   'the Adunarea Generală line computed by the run is in force until its next run');
 

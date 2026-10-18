@@ -559,6 +559,10 @@ begin
   if p_kind = 'voluntar_activ' and p_cutoff is null then
     raise sqlstate 'PT400' using message = 'membership_cutoff_not_set';
   end if;
+  -- A cutoff is a day that has begun (set_membership_cutoff's rule).
+  if p_cutoff > (now() at time zone 'Europe/Bucharest')::date then
+    raise sqlstate 'PT400' using message = 'invalid_membership_cutoff';
+  end if;
 
   -- 2. The gate: claims and a live activ Profile, then BC or Moderator --
   --    the run's gate, since a Simulation shows every Member's standing.
@@ -592,7 +596,7 @@ end;
 $$;
 
 comment on function private.simulate_role_evaluation_impl(text, date, date, integer, integer, date) is
-  'R58: body of public.simulate_role_evaluation. PT400 invalid_role_evaluation_kind / invalid_date_range / date_range_in_future (p_to after today in Europe/Bucharest) / invalid_eligibility_floor / invalid_percent / membership_cutoff_not_set before the gate; private.require_active_member() and live level >= 6, every refusal 42501 role_evaluation_manage_forbidden; then every row of private.role_evaluation_rows with the given values. Stable: it takes no lock and writes nothing.';
+  'R58: body of public.simulate_role_evaluation. PT400 invalid_role_evaluation_kind / invalid_date_range / date_range_in_future (p_to after today in Europe/Bucharest) / invalid_eligibility_floor / invalid_percent / membership_cutoff_not_set / invalid_membership_cutoff (a cutoff after today) before the gate; private.require_active_member() and live level >= 6, every refusal 42501 role_evaluation_manage_forbidden; then every row of private.role_evaluation_rows with the given values. Stable: it takes no lock and writes nothing.';
 
 create function public.simulate_role_evaluation(
   p_kind text, p_from date, p_to date, p_floor integer, p_percent integer, p_cutoff date default null)
@@ -610,7 +614,7 @@ as $$
 $$;
 
 comment on function public.simulate_role_evaluation(text, date, date, integer, integer, date) is
-  'R58 (Simulare): BC or the Moderator ranks one Role Evaluation kind over [p_from, p_to] (inclusive Bucharest days, ending today at the latest) with the Eligibility Floor p_floor, the share p_percent and, for voluntar_activ, the Membership Cutoff Date p_cutoff -- and writes nothing: no run, no Promotion Candidate, no Retention Signal, no Notification, no setting. One row per evaluated Member: role, task_points, ranked (at or above the Floor), rank, evaluated_count, ranked_count, share_size, the line, inside (at or above it) and listable (a Voluntar who joined on or before the cutoff). The would-be Promotion Candidates are the rows listable and inside; the would-be Retention Signals are the holders (activ and vot for voluntar_activ, vot for adunarea_generala) not inside. public.run_role_evaluation with the same values records exactly these rows. 42501 role_evaluation_manage_forbidden; PT400 invalid_role_evaluation_kind, invalid_date_range, date_range_in_future, invalid_eligibility_floor, invalid_percent, membership_cutoff_not_set.';
+  'R58 (Simulare): BC or the Moderator ranks one Role Evaluation kind over [p_from, p_to] (inclusive Bucharest days, ending today at the latest) with the Eligibility Floor p_floor, the share p_percent and, for voluntar_activ, the Membership Cutoff Date p_cutoff -- and writes nothing: no run, no Promotion Candidate, no Retention Signal, no Notification, no setting. One row per evaluated Member: role, task_points, ranked (at or above the Floor), rank, evaluated_count, ranked_count, share_size, the line, inside (at or above it) and listable (a Voluntar who joined on or before the cutoff). The would-be Promotion Candidates are the rows listable and inside; the would-be Retention Signals are the holders (activ and vot for voluntar_activ, vot for adunarea_generala) not inside. public.run_role_evaluation with the same values records exactly these rows. 42501 role_evaluation_manage_forbidden; PT400 invalid_role_evaluation_kind, invalid_date_range, date_range_in_future, invalid_eligibility_floor, invalid_percent, membership_cutoff_not_set, invalid_membership_cutoff (a cutoff after today).';
 
 revoke execute on function private.simulate_role_evaluation_impl(text, date, date, integer, integer, date)
   from public, anon, authenticated, service_role;
@@ -682,6 +686,11 @@ begin
   end if;
   if p_kind = 'voluntar_activ' and p_cutoff is null then
     raise sqlstate 'PT400' using message = 'membership_cutoff_not_set';
+  end if;
+  -- A cutoff is a day that has begun, as set_membership_cutoff demands of
+  -- the value this run writes through.
+  if p_cutoff > v_today then
+    raise sqlstate 'PT400' using message = 'invalid_membership_cutoff';
   end if;
   -- The Adunarea Generală kind has no Membership Cutoff Date: one passed
   -- with it is neither used nor recorded.
@@ -788,7 +797,7 @@ begin
         format('Candidat la promovare: %s', v_row.member_name),
         format('%s are %s puncte de task în evaluarea „%s” (%s), cel puțin pragul de %s puncte, '
                'intrat în OSUBB până la %s. Nu este promovat automat: îl poți promova în Voluntar Activ '
-               'din panoul de roluri sau respinge din Evaluări de rol.',
+               'din panoul de roluri sau respinge din Portofoliu Interne.',
                v_row.member_name, v_row.task_points, v_name, v_span, v_line,
                pg_catalog.to_char(v_cutoff, 'DD.MM.YYYY')),
         null, 'promotion_candidate:' || v_run_id::text || ':' || v_row.member_id::text,
@@ -804,7 +813,11 @@ begin
   --    below_line when ranked under it, below_floor when under the Floor
   --    (and always when nobody was ranked, so no line exists). Nothing
   --    changes; BC, the Moderator and the Adunarea Generală's Group
-  --    Responsibles at level 5 or above are told (#843, D11's recipients).
+  --    Responsibles are told -- but only those at level 5 or above, the
+  --    level /tracker/membru/<id> requires (#843, D11): a Responsible below it
+  --    would be sent to a page that turns them away. The link stays the
+  --    Member's tracker page, which they can open; Portofoliu Interne is BC's
+  --    and the Moderator's only.
   update public.retention_signals as signal
      set closed_at = now(),
          closed_as = 'superseded'
@@ -856,12 +869,14 @@ begin
       format('%s (%s) are %s puncte de task în evaluarea „%s” (%s), %s. '
              'Rolul nu se retrage automat: decizia îi aparține BC.',
              v_row.member_name, v_row.role_name, v_row.task_points, v_name, v_span,
-             case when v_row.ranked
-                  then format('sub pragul de promovare de %s puncte', v_line)
-                  else format('sub pragul minim de %s puncte', p_floor)
+             case when not v_row.ranked
+                  then format('sub pragul minim de %s puncte', p_floor)
+                  when p_kind = 'adunarea_generala'
+                  then format('sub pragul Adunării Generale de %s puncte', v_line)
+                  else format('sub pragul de promovare de %s puncte', v_line)
              end),
       null, 'retention_signal:' || v_run_id::text || ':' || v_row.member_id::text,
-      null, '/administrare/portofoliu-interne');
+      null, '/tracker/membru/' || v_row.member_id::text);
   end loop;
 
   -- 8. The hand-over: the line this run computed is in force until the
@@ -931,7 +946,7 @@ end;
 $function$;
 
 comment on function private.run_role_evaluation_impl(text, date, date, text, integer, integer, date) is
-  '#826 (ruling R28), #983, rebuilt by R58 (section C): body of public.run_role_evaluation. Ranks the kind''s population over [p_from, p_to] (Europe/Bucharest days, p_to not after today) with the Eligibility Floor, the share and (voluntar_activ) the Membership Cutoff Date given -- private.role_evaluation_rows, the Simulation''s rows -- and records the run with those values, the counts, the Promotion Threshold in force before (threshold_used, may be null) and the line computed (threshold_computed, null when nobody reached the Floor). Voluntar Activ kind: supersedes every undecided Promotion Candidate, then lists every listable Voluntar inside the line, measured against it. Supersedes the kind''s open below_line / below_floor Retention Signals, then stores one per holder not inside (below_line when ranked, below_floor when not). One Notification per Candidate and per Signal (/administrare/portofoliu-interne). Hands the line over when there is one and it differs; writes the Floor, the share and the cutoff used into evaluation_settings when they differ, each logged with source role_evaluation naming the run; then calls private.refresh_promotion_candidates() (#983). PT400 invalid_role_evaluation_kind / invalid_role_evaluation_name / name_too_short / name_too_long / invalid_date_range / date_range_in_future / invalid_eligibility_floor / invalid_percent / membership_cutoff_not_set before the gate; 42501 role_evaluation_manage_forbidden below BC. Serialised on pg_advisory_xact_lock(47, 1), then the kind''s promotion_thresholds row, then the evaluation_settings row, then the population''s Profiles for key share.';
+  '#826 (ruling R28), #983, rebuilt by R58 (section C): body of public.run_role_evaluation. Ranks the kind''s population over [p_from, p_to] (Europe/Bucharest days, p_to not after today) with the Eligibility Floor, the share and (voluntar_activ) the Membership Cutoff Date given -- private.role_evaluation_rows, the Simulation''s rows -- and records the run with those values, the counts, the Promotion Threshold in force before (threshold_used, may be null) and the line computed (threshold_computed, null when nobody reached the Floor). Voluntar Activ kind: supersedes every undecided Promotion Candidate, then lists every listable Voluntar inside the line, measured against it. Supersedes the kind''s open below_line / below_floor Retention Signals, then stores one per holder not inside (below_line when ranked, below_floor when not). One Notification per Candidate (to BC and the Moderator, linking /administrare/portofoliu-interne) and per Signal (to BC, the Moderator and the Adunarea Generală''s Group Responsibles at level 5 or above, linking /tracker/membru/<member>). Hands the line over when there is one and it differs; writes the Floor, the share and the cutoff used into evaluation_settings when they differ, each logged with source role_evaluation naming the run; then calls private.refresh_promotion_candidates() (#983). PT400 invalid_role_evaluation_kind / invalid_role_evaluation_name / name_too_short / name_too_long / invalid_date_range / date_range_in_future / invalid_eligibility_floor / invalid_percent / membership_cutoff_not_set / invalid_membership_cutoff (a cutoff after today in Europe/Bucharest, the value set_membership_cutoff would refuse) before the gate; 42501 role_evaluation_manage_forbidden below BC. Serialised on pg_advisory_xact_lock(47, 1), then the kind''s promotion_thresholds row, then the evaluation_settings row, then the population''s Profiles for key share.';
 
 create function public.run_role_evaluation(
   p_kind text, p_from date, p_to date, p_name text, p_floor integer, p_percent integer, p_cutoff date default null)
@@ -944,7 +959,7 @@ as $$
 $$;
 
 comment on function public.run_role_evaluation(text, date, date, text, integer, integer, date) is
-  '#826 (ruling R28), rebuilt by R58 (Finalizează): BC or the Moderator records a Role Evaluation of one kind (voluntar_activ or adunarea_generala) over the Evaluation Period [p_from, p_to] (inclusive Bucharest days, ending today at the latest), named p_name (3..120 characters), with the Eligibility Floor p_floor (>= 1), the share p_percent (1-100) and, for voluntar_activ, the Membership Cutoff Date p_cutoff -- the values a Simulation showed. It ranks every eligible Member of the kind in one ranking, stores the run with those values, the line it computed and the threshold in force before, lists the Promotion Candidates (voluntar_activ: Voluntars who joined on or before the cutoff and are inside the line -- never promoted) and stores the Retention Signals (holders not inside the line, or below the Floor), notifies BC and the Moderator of each, hands the line over as the kind''s Promotion Threshold, and makes the Floor, share and cutoff it used the settings in force (each change logged naming the run). A run that ranked nobody records no line, hands nothing over, lists nobody and signals every holder below the Floor. No Role changes. 42501 role_evaluation_manage_forbidden; PT400 invalid_role_evaluation_kind, invalid_role_evaluation_name, name_too_short, name_too_long, invalid_date_range, date_range_in_future, invalid_eligibility_floor, invalid_percent, membership_cutoff_not_set. Returns (role_evaluation_id, candidates, retention_signals).';
+  '#826 (ruling R28), rebuilt by R58 (Finalizează): BC or the Moderator records a Role Evaluation of one kind (voluntar_activ or adunarea_generala) over the Evaluation Period [p_from, p_to] (inclusive Bucharest days, ending today at the latest), named p_name (3..120 characters), with the Eligibility Floor p_floor (>= 1), the share p_percent (1-100) and, for voluntar_activ, the Membership Cutoff Date p_cutoff -- the values a Simulation showed. It ranks every eligible Member of the kind in one ranking, stores the run with those values, the line it computed and the threshold in force before, lists the Promotion Candidates (voluntar_activ: Voluntars who joined on or before the cutoff and are inside the line -- never promoted) and stores the Retention Signals (holders not inside the line, or below the Floor), notifies BC and the Moderator of each Candidate and, with the Adunarea Generală''s Group Responsibles at level 5 or above, of each Signal, hands the line over as the kind''s Promotion Threshold, and makes the Floor, share and cutoff it used the settings in force (each change logged naming the run). A run that ranked nobody records no line, hands nothing over, lists nobody and signals every holder below the Floor. No Role changes. 42501 role_evaluation_manage_forbidden; PT400 invalid_role_evaluation_kind, invalid_role_evaluation_name, name_too_short, name_too_long, invalid_date_range, date_range_in_future, invalid_eligibility_floor, invalid_percent, membership_cutoff_not_set, invalid_membership_cutoff (a cutoff after today). Returns (role_evaluation_id, candidates, retention_signals).';
 
 revoke execute on function private.run_role_evaluation_impl(text, date, date, text, integer, integer, date)
   from public, anon, authenticated, service_role;
