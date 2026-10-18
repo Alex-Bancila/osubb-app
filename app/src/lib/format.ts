@@ -137,3 +137,17 @@ export function formatDayMonthYear(iso: string | null): string | null {
     year: 'numeric',
   }).format(date);
 }
+
+/**
+ * `2026-02-01` as `01.02.2026`, the calendar day as the Notifications write
+ * it; null for a missing or malformed one.
+ */
+export function formatDayOrNull(iso: string | null | undefined): string | null {
+  const match = iso?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? `${match[3]}.${match[2]}.${match[1]}` : null;
+}
+
+/** `formatDayOrNull`, with `—` in place of a missing or malformed day. */
+export function formatDay(iso: string | null | undefined): string {
+  return formatDayOrNull(iso) ?? '—';
+}

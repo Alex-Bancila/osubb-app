@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -34,6 +34,14 @@ vi.mock('../../queries/leadership', () => ({
   useLeaderboardIdentities: state.identities,
 }));
 vi.mock('../../queries/reference', () => ({ useGroups: state.groups }));
+// R58: the Points Start Date, null until BC sets one.
+const pointsStart = vi.hoisted(() => ({
+  value: null as string | null | undefined,
+}));
+vi.mock('../../queries/evaluation-settings', async (importActual) => ({
+  ...(await importActual<typeof import('../../queries/evaluation-settings')>()),
+  usePointsStartDate: () => pointsStart.value,
+}));
 const viewer = '35400000-0000-0000-0000-000000000009';
 vi.mock('../../lib/auth', () => ({
   useAuth: () => ({ session: { user: { id: viewer } } }),
@@ -105,6 +113,7 @@ const cupPanel = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  pointsStart.value = null;
   state.access.mockReturnValue({ data: true });
   state.identities.mockReturnValue({ data: undefined });
   state.board.mockImplementation((filters) => ({
@@ -328,6 +337,61 @@ it('sends the Cup its Campaign and range from the URL, never the Group', () => {
   expect(
     screen.getByText(
       'Campania Bun venit · puncte acordate între 1 septembrie 2026 și 30 septembrie 2026',
+    ),
+  ).toBeInTheDocument();
+});
+
+// R58: with no range the Cup counts from the Points Start Date, not "toată
+// perioada"; the filter itself is never prefilled (the server floors).
+it('says the Cup counts from the Points Start Date when no range is chosen', () => {
+  pointsStart.value = '2026-09-01';
+  renderPage('?vedere=cupa');
+  expect(state.cup).toHaveBeenLastCalledWith({});
+  expect(
+    screen.getByText('Toate campaniile · puncte acordate din 01.09.2026'),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(/toată perioada/)).not.toBeInTheDocument();
+});
+
+it('keeps saying "toată perioada" while no Points Start Date is set', () => {
+  renderPage('?vedere=cupa');
+  expect(
+    screen.getByText('Toate campaniile · toată perioada'),
+  ).toBeInTheDocument();
+});
+
+it('names only the Campaign while the Points Start Date is not known yet', () => {
+  pointsStart.value = undefined;
+  renderPage('?vedere=cupa&campanie=3');
+  // Neither "toată perioada" nor a start the settings have not confirmed.
+  expect(screen.getByText('Campania Bun venit')).toBeInTheDocument();
+  expect(screen.queryByText(/perioada|acordate/)).not.toBeInTheDocument();
+  // The range the Member chose is theirs whether or not the date is known.
+  cleanup();
+  renderPage('?vedere=cupa&de_la=2026-08-01');
+  expect(
+    screen.getByText('Toate campaniile · puncte acordate din 1 august 2026'),
+  ).toBeInTheDocument();
+});
+
+it('reads an explicit De la earlier than the start as the range it is, the lookback', () => {
+  pointsStart.value = '2026-09-01';
+  renderPage('?vedere=cupa&de_la=2026-08-01');
+  expect(state.cup).toHaveBeenLastCalledWith({
+    p_from: '2026-07-31T21:00:00.000Z',
+  });
+  expect(
+    screen.getByText('Toate campaniile · puncte acordate din 1 august 2026'),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(/01\.09\.2026/)).not.toBeInTheDocument();
+});
+
+it('names the start as the beginning of a range that has only an end', () => {
+  pointsStart.value = '2026-09-01';
+  renderPage('?vedere=cupa&pana_la=2026-09-30');
+  expect(
+    screen.getByText(
+      'Toate campaniile · puncte acordate din 01.09.2026 până la 30 septembrie 2026',
     ),
   ).toBeInTheDocument();
 });

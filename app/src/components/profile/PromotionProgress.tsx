@@ -3,6 +3,10 @@ import { Panel } from '../layout';
 import { ErrorState, Loading } from '../states';
 import { formatPointCount, formatPoints, pointWord } from '../../lib/format';
 import {
+  pointsSinceText,
+  usePointsStartDate,
+} from '../../queries/evaluation-settings';
+import {
   usePromotionProgressState,
   type PromotionState,
   type View,
@@ -45,6 +49,13 @@ import {
  * `PromotionPanel` renders one that does — its loading and error states
  * inside the box — so a `PageGrid` cell is never `null`.
  *
+ * R58: once BC has set a Points Start Date, the total says from when it counts
+ * (`din 01.09.2026`) under the number. The figure below is the Member's
+ * standing (`my_role_evaluation_standing`), which the date does not floor
+ * (ruling 17: PR 3 floors it with the live-candidate window), so with a date
+ * set it is never taken for the total: the panel leads with the floored total
+ * and the bar or the reference keeps its own figure, unlabelled.
+ *
  * Read-only and never a leaderboard: no rank, no other Member's points (R6).
  */
 
@@ -61,8 +72,11 @@ export function PromotionPanel({
   // A Voluntar Activ or a Voluntar cu Drept de Vot has no promotion to show
   // here, only their points against the reference threshold.
   const title = view?.kind === 'reference' ? 'Punctaj' : 'Punctaj și promovare';
-  // Before any Role Evaluation the figure below is the total already.
-  const figureIsTotal = view !== null && view.kind !== 'tenure' && !view.since;
+  const hasStartDate = pointsSinceText(usePointsStartDate()) !== null;
+  // Before any Role Evaluation, and while no Points Start Date floors the
+  // total, the figure below is the total already.
+  const figureIsTotal =
+    view !== null && view.kind !== 'tenure' && !view.since && !hasStartDate;
   const showTotal = totalPoints !== undefined && !figureIsTotal;
   return (
     <Panel title={title}>
@@ -80,20 +94,34 @@ export function PromotionProgress() {
   return state.kind === 'hidden' ? null : <PromotionPanel state={state} />;
 }
 
-/** The Member's total, the page's one "points" figure. */
+/**
+ * The Member's total, the page's one "points" figure — and, once BC has set a
+ * Points Start Date (R58), from when it counts, on a line under the number.
+ */
 export function PointsTotal({ points }: { points: number }) {
+  const since = pointsSinceText(usePointsStartDate());
   return (
-    <p
-      className="m-0 flex flex-wrap items-baseline gap-2 leading-none"
-      data-testid="points-total"
-    >
-      <span className="text-[length:var(--fs-2xl)] font-extrabold tracking-[-0.02em] text-foreground tabular-nums">
-        {formatPoints(points)}
-      </span>
-      <span className="text-base font-semibold text-muted-foreground">
-        {pointWord(points)}
-      </span>
-    </p>
+    <div className="flex flex-col gap-1.5">
+      <p
+        className="m-0 flex flex-wrap items-baseline gap-2 leading-none"
+        data-testid="points-total"
+      >
+        <span className="text-[length:var(--fs-2xl)] font-extrabold tracking-[-0.02em] text-foreground tabular-nums">
+          {formatPoints(points)}
+        </span>
+        <span className="text-base font-semibold text-muted-foreground">
+          {pointWord(points)}
+        </span>
+      </p>
+      {since && (
+        <p
+          className="m-0 text-sm text-muted-foreground"
+          data-testid="points-since"
+        >
+          {since}
+        </p>
+      )}
+    </div>
   );
 }
 

@@ -88,7 +88,12 @@ export function usePromotionThresholds() {
  * a hand edit or a run's hand-over), a kind's top share (`field` percent,
  * always a hand edit; #866, ruling R30), or a Promotion Rule's tenure in
  * months (`field` tenure) or on/off state (`field` enabled, 0 off and 1 on) —
- * always a hand edit, naming the rule instead of a kind (#935).
+ * always a hand edit, naming the rule instead of a kind (#935). Since R58 also
+ * the three evaluation settings, naming neither a kind nor a rule: the
+ * Eligibility Floor (`field` floor, a number in `to_value`) and the two dates
+ * (`field` cutoff and points_start, the day moved to in `to_date` and the day
+ * before in `from_date`, with no number). `source` is also `migration` for a
+ * change a migration made.
  */
 export type ThresholdChange = {
   id: number;
@@ -96,7 +101,11 @@ export type ThresholdChange = {
   field: string;
   promotion_rule_id: number | null;
   from_value: number | null;
-  to_value: number;
+  /** Null exactly for a date field (cutoff, points_start). */
+  to_value: number | null;
+  /** The day before and after a date field's change; null for the others. */
+  from_date: string | null;
+  to_date: string | null;
   source: string;
   changed_by: string | null;
   role_evaluation_id: number | null;
@@ -109,7 +118,7 @@ export async function fetchThresholdChanges(): Promise<ThresholdChange[]> {
     supabase
       .from('promotion_threshold_changes')
       .select(
-        'id, kind, field, promotion_rule_id, from_value, to_value, source, changed_by, role_evaluation_id, changed_at',
+        'id, kind, field, promotion_rule_id, from_value, to_value, from_date, to_date, source, changed_by, role_evaluation_id, changed_at',
       )
       .order('changed_at', { ascending: false })
       .order('id', { ascending: false })

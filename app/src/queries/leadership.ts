@@ -2,7 +2,8 @@ import { skipToken, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
-import type { WorkFilterParams } from '../lib/work-filter';
+import { rangeBounds, type WorkFilterParams } from '../lib/work-filter';
+import { fetchEvaluationSettings } from './evaluation-settings';
 import { keys } from './keys';
 import {
   primaryGroupOf,
@@ -67,6 +68,11 @@ export function fetchLeadershipLeaderboard(filters: LeadershipFilters) {
  * Moderator), or no ledger row in the filter — gets the sum of the same
  * ledger rows read directly. Each join is added only for the level that
  * needs it, so the sum is the board's own (0 where it would list 0).
+ *
+ * R58: with no `p_from` the board counts from the Points Start Date, so the
+ * sum does too — the date's Bucharest midnight, the same instant the server
+ * computes — while an explicit `p_from`, even one before it, is honoured as
+ * the board honours it (Clasament's lookback).
  */
 export async function fetchLeadershipMemberTotal(
   memberId: string,
@@ -80,9 +86,11 @@ export async function fetchLeadershipMemberTotal(
   const [listed] = ranked.data;
   if (listed) return listed.points;
 
+  // Named apart from the page callback's `from` and `to` offsets below.
+  const since = filters.p_from ?? (await pointsFloor());
   const byGroup = filters.p_group_id !== undefined;
   const byTask = byGroup || filters.p_campaign_id !== undefined;
-  const byInstant = filters.p_from !== undefined || filters.p_to !== undefined;
+  const byInstant = since !== undefined || filters.p_to !== undefined;
   const select = [
     'delta',
     byInstant && 'task_evaluations!inner(evaluated_at)',
@@ -96,8 +104,8 @@ export async function fetchLeadershipMemberTotal(
       .select(select)
       .eq('member_id', memberId)
       .in('reason', ['task', 'task_reversal']);
-    if (filters.p_from !== undefined)
-      query = query.gte('task_evaluations.evaluated_at', filters.p_from);
+    if (since !== undefined)
+      query = query.gte('task_evaluations.evaluated_at', since);
     if (filters.p_to !== undefined)
       query = query.lt('task_evaluations.evaluated_at', filters.p_to);
     if (filters.p_campaign_id !== undefined)
@@ -110,6 +118,17 @@ export async function fetchLeadershipMemberTotal(
       .overrideTypes<{ delta: number }[], { merge: false }>();
   });
   return rows.reduce((total, row) => total + row.delta, 0);
+}
+/**
+ * The instant the Points Start Date begins — its Bucharest midnight — or
+ * `undefined` while no date is set, when every total counts from the
+ * beginning. A failed read fails the total rather than summing everything.
+ */
+async function pointsFloor(): Promise<string | undefined> {
+  const { pointsStartDate } = await fetchEvaluationSettings();
+  return pointsStartDate
+    ? rangeBounds({ from: pointsStartDate }).p_from
+    : undefined;
 }
 export function fetchLeadershipCup(filters: CupFilters) {
   return pages<CupRow>((from, to) =>

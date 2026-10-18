@@ -22,7 +22,7 @@ import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
 import { useAuth } from '../../lib/auth';
-import { formatDayMonthYear, formatPoints } from '../../lib/format';
+import { formatPoints } from '../../lib/format';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import {
   WORK_FILTER_KEYS,
@@ -30,6 +30,10 @@ import {
   type WorkFilterLevels,
   type WorkFilterValue,
 } from '../../lib/work-filter';
+import {
+  pointsPeriodText,
+  usePointsStartDate,
+} from '../../queries/evaluation-settings';
 import {
   useLeaderboardIdentities,
   useLeadershipLeaderboard,
@@ -352,26 +356,25 @@ function CupBoard({ rows }: { rows: CupRow[] }) {
   );
 }
 
-/** What the Cup counts under the current filter: its Campaign and range. */
+/**
+ * What the Cup counts under the current filter: its Campaign and range. With
+ * no **De la** the server counts from the Points Start Date (R58), so the
+ * caption says so; an explicit **De la** — even one before it, the lookback —
+ * is the range it is. While the date is unknown the caption names the
+ * Campaign alone (see `pointsPeriodText`).
+ */
 function cupScope(
   value: WorkFilterValue,
   campaignName: string | undefined,
+  pointsStartDate: string | null | undefined,
 ): string {
   const campaign =
     value.campaignId === undefined
       ? 'Toate campaniile'
       : `Campania ${campaignName ?? `#${value.campaignId}`}`;
-  const from = value.from && formatDayMonthYear(value.from);
-  const to = value.to && formatDayMonthYear(value.to);
-  const period =
-    from && to
-      ? `puncte acordate între ${from} și ${to}`
-      : from
-        ? `puncte acordate din ${from}`
-        : to
-          ? `puncte acordate până la ${to}`
-          : 'toată perioada';
-  return `${campaign} · ${period}`;
+  const range = pointsPeriodText(value, pointsStartDate);
+  if (range === undefined) return campaign;
+  return `${campaign} · ${range ? `puncte acordate ${range}` : 'toată perioada'}`;
 }
 
 // An inverted range sends nothing (#678): the reads wait for a valid one.
@@ -389,6 +392,7 @@ function LeadershipContent() {
   const levels = LEVELS[view];
   const { value, params } = useWorkFilter(levels);
   const options = useLeadershipFilters();
+  const pointsStartDate = usePointsStartDate();
   // R43: the members' board opens on the preferred Groups' points (the Cup
   // ranks Groups, so it is never narrowed by them).
   const preferred = usePreferredGroups();
@@ -468,6 +472,7 @@ function LeadershipContent() {
             options.data?.campaigns.find(
               (campaign) => campaign.id === value.campaignId,
             )?.name,
+            pointsStartDate,
           )}
           // The same frame as the members' board, so the toggle moves nothing.
           flush={Boolean(params && cup.data?.length)}

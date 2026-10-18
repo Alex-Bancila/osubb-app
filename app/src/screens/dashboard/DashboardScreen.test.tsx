@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,6 +32,7 @@ const hooks = vi.hoisted(() => ({
   useMyGroupRoles: vi.fn(),
   useAwaitingMyReview: vi.fn(),
   useMyPoints: vi.fn(),
+  pointsStartDate: { value: null as string | null | undefined },
   usePendingDecisions: vi.fn(),
   useUnreadAnnouncementsCount: vi.fn(),
   useUnreadNotificationCount: vi.fn(),
@@ -71,6 +72,11 @@ vi.mock('../../queries/org-settings', () => ({
   useOrgSettings: () => ({ data: undefined }),
 }));
 vi.mock('../../queries/points', () => ({ useMyPoints: hooks.useMyPoints }));
+// R58: the Points Start Date beside the total; null until BC sets one.
+vi.mock('../../queries/evaluation-settings', async (importActual) => ({
+  ...(await importActual<typeof import('../../queries/evaluation-settings')>()),
+  usePointsStartDate: () => hooks.pointsStartDate.value,
+}));
 // The shell's badge reads, which the tiles share.
 vi.mock('../../queries/request-decisions', () => ({
   usePendingDecisions: hooks.usePendingDecisions,
@@ -251,6 +257,7 @@ beforeEach(() => {
     role: 'voluntar',
   };
   hooks.useMyPoints.mockReturnValue(query(12));
+  hooks.pointsStartDate.value = null;
   hooks.useAwaitingMyReview.mockReturnValue(query({ task: null, count: 0 }));
   hooks.useMyTasks.mockReturnValue(query([]));
   hooks.useEventsInRange.mockReturnValue(query([]));
@@ -350,6 +357,32 @@ describe('what each viewer sees', () => {
     expect(hooks.useAwaitingMyReview).not.toHaveBeenCalledWith(true);
     expect(hooks.usePendingDecisions).not.toHaveBeenCalled();
     expectNoBoards();
+  });
+
+  it('names the Points Start Date after the Role once BC has set one (R58)', () => {
+    hooks.useMyPoints.mockReturnValue(query(14));
+    hooks.pointsStartDate.value = '2026-09-01';
+    renderDashboard();
+    const stat = screen.getByRole('link', { name: /14\s*puncte/ });
+    expect(stat).toHaveTextContent('14puncte·voluntar·din 01.09.2026');
+    expect(stat.querySelector('[data-slot="points-since"]')).toHaveTextContent(
+      /^din 01\.09\.2026$/,
+    );
+  });
+
+  it('says nothing about a start while none is set or it is still loading (R58)', () => {
+    renderDashboard();
+    expect(
+      screen
+        .getByRole('link', { name: /12\s*puncte/ })
+        .querySelector('[data-slot="points-since"]'),
+    ).toBeNull();
+    cleanup();
+    hooks.pointsStartDate.value = undefined;
+    renderDashboard();
+    expect(
+      screen.getByRole('link', { name: /12\s*puncte/ }),
+    ).not.toHaveTextContent('din');
   });
 
   it('a Responsabil below BCE: the stat, their own Tasks and what they decide', () => {
