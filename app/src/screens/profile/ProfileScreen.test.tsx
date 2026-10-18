@@ -78,7 +78,10 @@ vi.mock('../../lib/auth', () => ({
 
 // R58: BC and the Moderator hold `manageRoles`, which is what lets them write
 // their own Universitate from the pencil; everyone else reads it.
-const capabilityMock = vi.hoisted(() => ({ manageRoles: false }));
+// `undefined` is the capabilities query not answered yet (or failed).
+const capabilityMock = vi.hoisted(() => ({
+  manageRoles: false as boolean | undefined,
+}));
 vi.mock('../../lib/capabilities', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/capabilities')>()),
   useCapability: (name: string) => ({
@@ -1414,6 +1417,31 @@ describe('ProfileScreen', () => {
 
     it('keeps Universitate out of the sheet for a Voluntar, who keeps the hint on the row (R58)', async () => {
       const user = userEvent.setup();
+      render(<ProfileScreen />, { wrapper: wrapper() });
+
+      const row = screen.getByText('Universitate').closest('li');
+      expect(
+        within(row as HTMLElement).getByRole('button', {
+          name: 'Despre universitate',
+        }),
+      ).toBeInTheDocument();
+
+      await user.click(
+        screen.getByRole('button', { name: 'Editează datele personale' }),
+      );
+      const sheet = screen.getByRole('dialog');
+      expect(
+        within(sheet).queryByRole('combobox', { name: 'Universitate' }),
+      ).toBeNull();
+      expect(within(sheet).queryByText('Universitate')).toBeNull();
+    });
+
+    it('offers no Universitate field while the capability is unknown, even to a BC member: it fails closed (R58)', async () => {
+      const user = userEvent.setup();
+      authMock.claims = { member_role: 'bc', member_level: 6, group_ids: [] };
+      // The capabilities query has not answered (or failed): `data` is absent.
+      capabilityMock.manageRoles = undefined;
+      setTestProfile({ ...mockProfile, role: 'bc' });
       render(<ProfileScreen />, { wrapper: wrapper() });
 
       const row = screen.getByText('Universitate').closest('li');

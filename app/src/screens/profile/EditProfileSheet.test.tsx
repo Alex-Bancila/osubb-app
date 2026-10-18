@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import type { ReactNode } from 'react';
@@ -605,7 +605,7 @@ describe('EditProfileSheet', () => {
       expect(screen.queryByText(/nu am putut salva universitatea/i)).toBeNull();
     });
 
-    it('keeps the sheet open when the profile is refused, and shows its reason where it lands today', async () => {
+    it('keeps the sheet open when the profile is refused, shows its reason where it lands today, and never writes the Universitate', async () => {
       const user = userEvent.setup();
       const onClose = vi.fn();
       updateProfileMock.mockRejectedValueOnce({
@@ -623,6 +623,36 @@ describe('EditProfileSheet', () => {
         /Porecla este deja folosită de alt membru\. Alege alta\./,
       );
       expect(onClose).not.toHaveBeenCalled();
+      // The profile is saved first: its refusal leaves the Universitate alone.
+      expect(updateProfileMock).toHaveBeenCalledTimes(1);
+      expect(updateUniversityMock).not.toHaveBeenCalled();
+    });
+
+    it('writes the Universitate only after the profile is saved', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      let saveProfile: () => void = () => {};
+      updateProfileMock.mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          saveProfile = resolve;
+        }),
+      );
+      renderSheet(sampleProfile, onClose, true);
+
+      await chooseOption(user, university(), 'Universitatea Sapientia');
+      await save();
+
+      // The profile write is still out: nothing else is written beside it.
+      expect(updateProfileMock).toHaveBeenCalledTimes(1);
+      expect(updateUniversityMock).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+
+      saveProfile();
+      await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+      expect(updateUniversityMock).toHaveBeenCalledWith({
+        memberId: 'p1',
+        university: 'Universitatea Sapientia',
+      });
     });
 
     it('is a field of the sheet with a visible label, and passes the accessibility check', async () => {

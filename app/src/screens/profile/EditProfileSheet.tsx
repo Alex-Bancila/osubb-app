@@ -109,30 +109,31 @@ function EditProfileForm({
       : undefined;
     if (!values || universityValue === null) return;
 
-    // The Universitate is written beside the profile, and the sheet closes
-    // only when both are saved; each refusal lands where its field is.
-    const [profileResult, universityResult] = await Promise.allSettled([
-      updateMutation.mutateAsync({
+    // The profile first, then the Universitate, one write after the other: a
+    // taken Nickname is the refusal a member can really meet, and it stops the
+    // save before the Universitate is touched. The sheet closes only when both
+    // are saved; each refusal lands where its field is.
+    try {
+      await updateMutation.mutateAsync({
         nickname: values.nickname,
         phone: values.phone,
         avatarColor: values.avatarColor,
-      }),
-      universityValue
-        ? universityMutation.mutateAsync({
-            memberId: profile.id,
-            university: universityValue.university,
-          })
-        : Promise.resolve(),
-    ]);
-    if (profileResult.status === 'rejected')
-      form.fail(profileResult.reason, 'Nu am putut salva modificările.');
-    if (universityResult.status === 'rejected')
-      universityForm.fail(universityResult.reason, UNIVERSITY_SAVE_FAILED);
-    if (
-      profileResult.status === 'rejected' ||
-      universityResult.status === 'rejected'
-    )
+      });
+    } catch (err) {
+      form.fail(err, 'Nu am putut salva modificările.');
       return;
+    }
+    if (universityValue) {
+      try {
+        await universityMutation.mutateAsync({
+          memberId: profile.id,
+          university: universityValue.university,
+        });
+      } catch (err) {
+        universityForm.fail(err, UNIVERSITY_SAVE_FAILED);
+        return;
+      }
+    }
     onSaved?.();
     onClose();
   };
