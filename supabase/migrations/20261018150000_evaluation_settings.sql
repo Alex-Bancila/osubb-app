@@ -16,7 +16,10 @@
 --      Start Date begins.
 --   4. The Points Start Date in every total: my_points, Clasament, the
 --      Department Cup and the Campaign totals and reports count only the Task
---      Points of Evaluations on or after it (Clasament alone may look back).
+--      Points of Evaluations on or after it (Clasament and Tracker membru, its
+--      figure for one Member, may look back).
+--   5. The award instant, enforced: a `task` ledger row is refused unless it is
+--      dated by its Evaluation's evaluated_at (the rule my_points relies on).
 --
 -- The row is reference data seeded here (house rule 6), never by seed.sql.
 -- Nothing reads the Eligibility Floor or the Membership Cutoff Date yet; the
@@ -476,9 +479,10 @@ revoke execute on function private.points_floor()
 -- (task_points_at_stake, delete_tasks_effect, group_delete_summary), which
 -- count what a Task holds, not what a Member is shown.
 --
--- Clasament alone may look back: an explicit "De la" (p_from) wins over the
--- date, even an earlier one, and the Department Cup, which that page reads
--- under the same Work Filter, follows it. A Campaign number never looks back.
+-- Clasament and Tracker membru (its figure for one Member) may look back: an
+-- explicit "De la" (p_from) wins over the date, even an earlier one, and the
+-- Department Cup, which that page reads under the same Work Filter, follows it.
+-- A Campaign number never looks back.
 -- campaign_totals counts a completed Umbrella (it has no Evaluation) by its own
 -- completion instant against the Points Start Date alone; an explicit p_from or
 -- p_to still leaves an Umbrella out, as #677 documents.
@@ -502,13 +506,14 @@ revoke execute on function private.points_floor()
 -- (many times the old cost) and coupling the Personal Score to them. Every
 -- writer sets the `task` row's created_at equal to its Evaluation's
 -- evaluated_at (evaluate_task, the Legacy Import and the #317 backfill; the
--- invariant is pinned by points_start_date.test.sql), and a task_reversal
--- shares its award's evaluation_id and member, so a window over evaluation_id
--- gives an award and its reversal the same instant and they count or not
--- together. A pair whose Task was deleted for good has lost its evaluation_id
--- (task_id and evaluation_id are nulled together), fails both arms below and
--- never counts: it nets to zero, and a reversal dated "now" must not count
--- while its award, dated before the floor, does not.
+-- invariant is enforced by points_ledger_guard_award_instant, section 5, and
+-- pinned by points_start_date.test.sql), and a task_reversal shares its award's
+-- evaluation_id and member, so a window over evaluation_id gives an award and
+-- its reversal the same instant and they count or not together. A pair whose
+-- Task was deleted for good has lost its evaluation_id (task_id and
+-- evaluation_id are nulled together), fails both arms below and never counts:
+-- it nets to zero, and a reversal dated "now" must not count while its award,
+-- dated before the floor, does not.
 create or replace view public.my_points
 with (security_invoker = on) as
  select p.id as member_id,
@@ -540,7 +545,7 @@ with (security_invoker = on) as
   group by p.id;
 
 comment on view public.my_points is
-  'The current active member''s complete personal points total, counted from the Points Start Date (R58: evaluation_settings.points_start_date, read through its Europe/Bucharest midnight; no date set means the whole ledger). Identity comes from auth.uid(); task points and sanctions are both included. A task or task_reversal row counts when its award instant falls on or after that instant. The award instant is read from the Member''s own ledger rows, never through task_evaluations: the task row''s created_at is the Evaluation''s evaluated_at by every writer''s invariant (pinned by points_start_date.test.sql), and a task_reversal shares the award''s evaluation_id, so an award and its reversal count or not together; a security-invoker view that joined task_evaluations would pay the Task visibility policies on every read and depend on them. A Sanction, which has no Evaluation, counts when its own created_at does. A row whose Task was deleted for good has no Evaluation left and never counts (the award and its reversal net to zero). A Member with nothing left to count still gets their zero row. This security-invoker view intentionally exposes at most one row and never accepts a member ID from the client.';
+  'The current active member''s complete personal points total, counted from the Points Start Date (R58: evaluation_settings.points_start_date, read through its Europe/Bucharest midnight; no date set means the whole ledger). Identity comes from auth.uid(); task points and sanctions are both included. A task or task_reversal row counts when its award instant falls on or after that instant. The award instant is read from the Member''s own ledger rows, never through task_evaluations: the task row''s created_at is the Evaluation''s evaluated_at by every writer''s invariant (enforced by the points_ledger_guard_award_instant trigger and pinned by points_start_date.test.sql), and a task_reversal shares the award''s evaluation_id, so an award and its reversal count or not together; a security-invoker view that joined task_evaluations would pay the Task visibility policies on every read and depend on them. A Sanction, which has no Evaluation, counts when its own created_at does. A row whose Task was deleted for good has no Evaluation left and never counts (the award and its reversal net to zero). A Member with nothing left to count still gets their zero row. This security-invoker view intentionally exposes at most one row and never accepts a member ID from the client.';
 
 -- Clasament.
 create or replace function private.leadership_leaderboard_impl(
@@ -885,10 +890,62 @@ comment on function private.campaign_totals_impl(bigint, timestamptz, timestampt
 
 -- The public wrappers are unchanged; only what they document gains the rule.
 comment on function public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz, boolean) is
-  'Live BCE+ Task-points Leaderboard filtered by Group subtree, Campaign and award date range (#677: [p_from, p_to) on the Evaluation instant, either bound optional; PT400 invalid_date_range when p_to < p_from). Lists every active Member below BCE, at 0 points when they earned nothing (with a Group filter, the Members of that Group''s subtree), and retains inactive earners (#907). Never ranks BCE, BC or the Moderator (ruling 1 of 2026-09-28, amended by #907). Zero/negative totals, shared ranks on ties, and stable points-descending/name ordering. R58: with no p_from the range begins at the Points Start Date (Data de început a punctajului); an explicit earlier p_from reads the real numbers (the lookback, Clasament only). Returns the Nickname beside the full name. p_preferred (R43) counts only the points earned in the Groups the caller keeps selected in Grupuri preferate.';
+  'Live BCE+ Task-points Leaderboard filtered by Group subtree, Campaign and award date range (#677: [p_from, p_to) on the Evaluation instant, either bound optional; PT400 invalid_date_range when p_to < p_from). Lists every active Member below BCE, at 0 points when they earned nothing (with a Group filter, the Members of that Group''s subtree), and retains inactive earners (#907). Never ranks BCE, BC or the Moderator (ruling 1 of 2026-09-28, amended by #907). Zero/negative totals, shared ranks on ties, and stable points-descending/name ordering. R58: with no p_from the range begins at the Points Start Date (Data de început a punctajului); an explicit earlier p_from reads the real numbers (the lookback, shared by Clasament and Tracker membru). Returns the Nickname beside the full name. p_preferred (R43) counts only the points earned in the Groups the caller keeps selected in Grupuri preferate.';
 comment on function public.department_cup(bigint, timestamptz, timestamptz) is
   'Campaign- and award-date-filtered Group Cup standings as (group_id, name, points, members); the date range is [p_from, p_to) on the Evaluation instant, either bound optional (#677). Failed leadership gates return no rows; an inverted range is PT400 invalid_date_range. R58: with no p_from the range begins at the Points Start Date; an explicit earlier p_from looks back.';
 comment on function public.campaign_totals(bigint, timestamptz, timestamptz) is
   'Whole-Campaign totals (tasks_total, tasks_completed, points_total). With a date range, points_total and tasks_completed follow the award instant in [p_from, p_to) and tasks_total stays the whole Campaign (#677, R13). R58: points_total and tasks_completed never count before the Points Start Date, whatever p_from says. Same authority and error shape as public.campaign_report.';
 comment on function public.campaign_report(bigint, timestamptz, timestamptz) is
   'Per-volunteer Campaign report (member_id, full_name, nickname, tasks_completed, points), optionally narrowed to points awarded in [p_from, p_to) (#677, R13) and never counted before the Points Start Date (R58), whatever p_from says; callable only by whoever manages work in the Campaign''s Group, or BC/Moderator (private.can_manage_group_work). PT400 invalid_date_range when p_to < p_from; PT404 campaign_not_found for an unknown Campaign; 42501 campaign_report_forbidden otherwise.';
+
+-- ---------------------------------------------------------------------------
+-- 5. The award instant, enforced.
+-- ---------------------------------------------------------------------------
+-- my_points (section 4) reads a Task's award instant from the `task` ledger
+-- row's created_at, never through task_evaluations, and so relies on every
+-- writer dating that row by its Evaluation's evaluated_at. That held by
+-- convention -- evaluate_task, the Legacy Import, the #317 backfill and the
+-- fixtures all do it -- and a writer that forgot would silently move a Task
+-- across the Points Start Date in the Personal Score alone. Ruling 18 makes it
+-- a rule of the table: a `task` row naming an Evaluation is refused unless it
+-- is dated by that Evaluation's instant. Only inserts are guarded; the ledger
+-- is append-only, and a task_reversal row is dated by its own reversal (the
+-- view reads the award's instant for the pair).
+create function private.guard_ledger_award_instant()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_evaluated_at timestamptz;
+begin
+  if new.reason = 'task' and new.evaluation_id is not null then
+    select evaluation.evaluated_at
+      into v_evaluated_at
+      from public.task_evaluations as evaluation
+     where evaluation.id = new.evaluation_id;
+
+    if new.created_at is distinct from v_evaluated_at then
+      raise exception using
+        errcode = '23514',
+        message = 'ledger_award_instant_mismatch',
+        detail = format('The task ledger row is dated %s but Evaluation %s was made at %s.',
+                        new.created_at, new.evaluation_id, v_evaluated_at),
+        hint = 'Date a task ledger row by its Evaluation''s evaluated_at; public.my_points reads the award instant from it.';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger points_ledger_guard_award_instant
+  before insert on public.points_ledger
+  for each row
+  execute function private.guard_ledger_award_instant();
+
+revoke all on function private.guard_ledger_award_instant()
+  from public, anon, authenticated, service_role;
+
+comment on function private.guard_ledger_award_instant() is
+  'R58 ruling 18: BEFORE INSERT on public.points_ledger. A `task` row that names an Evaluation must carry created_at equal to that Evaluation''s evaluated_at, else 23514 ledger_award_instant_mismatch. public.my_points reads a Task''s award instant from the task row''s created_at instead of joining task_evaluations (which its security-invoker reader would pay the Task visibility policies for), so the equality is made a rule of the table rather than a habit of every writer. Other reasons, and rows without an Evaluation, are outside it.';

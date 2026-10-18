@@ -63,8 +63,8 @@ select task.id, assignment.id, 'legacy_migration', null, 'completed', 3, 4, 6,
   join public.task_assignments as assignment on assignment.task_id = task.id
  where task.title = 'Importat LI';
 set local session_replication_role = 'origin';
-insert into public.points_ledger (member_id, delta, reason, task_id, evaluation_id)
-select pg_temp.g521_uid(5), 6, 'task', evaluation.task_id, evaluation.id
+insert into public.points_ledger (member_id, delta, reason, task_id, evaluation_id, created_at)
+select pg_temp.g521_uid(5), 6, 'task', evaluation.task_id, evaluation.id, evaluation.evaluated_at
   from public.task_evaluations as evaluation
   join public.tasks as task on task.id = evaluation.task_id
  where task.title = 'Importat LI';
