@@ -330,12 +330,14 @@ select throws_ok(
      values ('voluntar_activ', 'percent', 40, 101, 'manual', '86600000-0000-0000-0000-000000000001') $$,
   '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_percent_shape_ck"',
   'promotion_threshold_changes_percent_shape_ck: a share above 100 cannot be logged');
-select throws_ok(
+-- R58 retired the rule that only BC changes a share: a finalised run writes the
+-- share it used through to the settings, so a percent row may carry source
+-- role_evaluation (evaluation_settings.test.sql owns the new sources).
+select lives_ok(
   $$ insert into public.promotion_threshold_changes (kind, field, from_value, to_value, source, role_evaluation_id)
      values ('voluntar_activ', 'percent', 40, 45, 'role_evaluation',
              (select id from public.role_evaluations where name = 'Evaluare fixture #866')) $$,
-  '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_percent_shape_ck"',
-  'promotion_threshold_changes_percent_shape_ck: a Role Evaluation never changes a share');
+  'promotion_threshold_changes_percent_shape_ck: a Role Evaluation may write a share through (R58)');
 select throws_ok(
   $$ insert into public.promotion_threshold_changes (kind, field, from_value, to_value, source, changed_by)
      values ('voluntar_activ', 'bogus', 40, 45, 'manual', '86600000-0000-0000-0000-000000000001') $$,

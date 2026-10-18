@@ -18,7 +18,8 @@ import { Button } from '../../components/ui/button';
 import { MemberAvatar } from '../../components/ui/combobox';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
 import { formatBucharestShortDay } from '../../lib/calendar-time';
-import { formatDayMonthYear, formatPoints, pointWord } from '../../lib/format';
+import { formatPoints, pointWord } from '../../lib/format';
+import { pointsPeriodText } from '../../lib/points-period';
 import { isUuid } from '../../lib/ids';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import {
@@ -26,6 +27,7 @@ import {
   type WorkFilterParams,
   type WorkFilterValue,
 } from '../../lib/work-filter';
+import { usePointsStartDate } from '../../queries/evaluation-settings';
 import {
   useLeadershipFilters,
   useLeadershipMemberTasks,
@@ -181,20 +183,19 @@ function AssignmentRecord({ task }: { task: MemberTask }) {
  * chosen, and the period the Evaluations fall in — not the deadline range the
  * Assignment list reads.
  */
-function totalScope(value: WorkFilterValue): string {
-  const from = value.from && formatDayMonthYear(value.from);
-  const to = value.to && formatDayMonthYear(value.to);
-  const period =
-    from && to
-      ? `acordate între ${from} și ${to}`
-      : from
-        ? `acordate din ${from}`
-        : to
-          ? `acordate până la ${to}`
-          : null;
+function totalScope(
+  value: WorkFilterValue,
+  pointsStartDate: string | null | undefined,
+): string {
+  // No **De la**: the server counts from the Points Start Date (R58). An
+  // explicit one, even before it, is the lookback and the range it is.
+  const range = pointsPeriodText(value, pointsStartDate);
+  const period = range ? `acordate ${range}` : null;
   const narrowed =
     chosenGroupId(value) !== undefined || value.campaignId !== undefined;
-  if (!narrowed && !period) return WHOLE_RECORD;
+  // `range` is undefined while the date is unknown: claim nothing, not even
+  // "everything".
+  if (!narrowed && !period) return range === undefined ? '' : WHOLE_RECORD;
   return [narrowed && 'din filtrele alese', period].filter(Boolean).join(' · ');
 }
 
@@ -217,7 +218,7 @@ function MemberTotal({
   params: WorkFilterParams | null;
 }) {
   const total = useLeadershipMemberTotal(memberId, params);
-  const scope = totalScope(value);
+  const scope = totalScope(value, usePointsStartDate());
   return (
     <section
       aria-label="Puncte"

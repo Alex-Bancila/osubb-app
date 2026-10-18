@@ -2,7 +2,9 @@ import { expect, it } from 'vitest';
 import {
   formatMonthCount,
   formatDate,
+  formatDay,
   formatDayMonthYear,
+  formatDayOrNull,
   formatLongDate,
   formatTaskCount,
 } from './format';
@@ -33,6 +35,23 @@ it('formats a milestone date with day, month and year', () => {
   expect(formatDayMonthYear('2024-03-12')).toBe('12 martie 2024');
   expect(formatDayMonthYear(null)).toBeNull();
   expect(formatDayMonthYear('2026-02-30')).toBeNull();
+});
+
+it('writes a calendar day dotted, as the Notifications do, and a dash for none', () => {
+  expect(formatDay('2026-09-01')).toBe('01.09.2026');
+  expect(formatDay('2026-12-31')).toBe('31.12.2026');
+  expect(formatDay(null)).toBe('—');
+  expect(formatDay(undefined)).toBe('—');
+  expect(formatDay('')).toBe('—');
+  expect(formatDay('1 septembrie')).toBe('—');
+});
+
+it('hands back null, not a dash, for a day it cannot write', () => {
+  expect(formatDayOrNull('2026-09-01')).toBe('01.09.2026');
+  expect(formatDayOrNull(null)).toBeNull();
+  expect(formatDayOrNull(undefined)).toBeNull();
+  expect(formatDayOrNull('')).toBeNull();
+  expect(formatDayOrNull('—')).toBeNull();
 });
 
 it('counts Tasks with the Romanian plural', () => {

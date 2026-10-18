@@ -629,6 +629,32 @@ const REASON_COPY = new Map<string, string>([
   ],
   // set_org_setting refuses y: only set_evaluation_percent writes it.
   ['org_setting_not_settable', 'Setarea se schimbă din Evaluări de rol.'],
+  /* The evaluation settings (R58): the Eligibility Floor, the Membership
+     Cutoff and the Points Start Date, and the runs that need the first two. */
+  [
+    'invalid_eligibility_floor',
+    'Pragul minim este un număr întreg de cel puțin 1.',
+  ],
+  [
+    'invalid_membership_cutoff',
+    'Data limită de intrare este o zi de cel târziu azi.',
+  ],
+  [
+    'invalid_points_start_date',
+    'Data de început a punctajului este o zi de cel târziu azi.',
+  ],
+  [
+    'evaluation_settings_manage_forbidden',
+    'Doar BC și Moderatorul pot schimba setările evaluărilor.',
+  ],
+  [
+    'eligibility_floor_not_set',
+    'Setează pragul minim înainte de a rula o evaluare.',
+  ],
+  [
+    'membership_cutoff_not_set',
+    'Setează data limită de intrare înainte de a rula evaluarea Voluntar Activ.',
+  ],
   [
     'promotion_candidate_manage_forbidden',
     'Doar BC și Moderatorul pot decide asupra candidaților.',

@@ -44,6 +44,7 @@ import { SwitchRow } from '../../components/ui/switch';
 import { bucharestDayKey } from '../../lib/calendar-time';
 import { describeFailure } from '../../lib/command-reasons';
 import {
+  formatDay,
   formatMonthCount,
   formatPointCount,
   formatPoints,
@@ -96,7 +97,6 @@ import { ReceiptTurnScope } from '../tracker/ReceiptTurnScope';
 import {
   computedThresholdText,
   defaultRangeStart,
-  formatDay,
   formatInstantDay,
   promoteHref,
   runConsequences,
@@ -1208,11 +1208,20 @@ function TenureRulesPanel({
 /* Istoricul modificărilor                                                   */
 /* ------------------------------------------------------------------------ */
 
-/** The log's subject: a kind (threshold, share) or a rule (tenure, on/off). */
+/** The log's subject for an evaluation setting (R58), which names no kind. */
+const SETTING_LABEL: Record<string, string> = {
+  floor: 'Prag minim',
+  cutoff: 'Data limită de intrare',
+  points_start: 'Data de început a punctajului',
+};
+
+/** The log's subject: a kind (threshold, share), a rule (tenure, on/off) or a setting. */
 function changeSubject(
   change: ThresholdChange,
   rules: readonly PromotionRule[] | undefined,
 ): string {
+  const setting = SETTING_LABEL[change.field];
+  if (setting) return setting;
   if (change.promotion_rule_id !== null) {
     const rule = rules?.find((row) => row.id === change.promotion_rule_id);
     const name = rule ? ruleLabel(rule) : 'Regulă de promovare';
@@ -1239,9 +1248,13 @@ function tenureChanges(
 function changeValues(change: ThresholdChange): string {
   switch (change.field) {
     case 'percent':
-      return `${change.from_value ?? '—'} % → ${change.to_value} %`;
+      return `${change.from_value ?? '—'} % → ${change.to_value ?? '—'} %`;
     case 'tenure':
-      return `${change.from_value === null ? '—' : formatMonthCount(change.from_value)} → ${formatMonthCount(change.to_value)}`;
+      return `${change.from_value === null ? '—' : formatMonthCount(change.from_value)} → ${change.to_value === null ? '—' : formatMonthCount(change.to_value)}`;
+    // The two dates carry no number: the day before and the day after, `—` for none.
+    case 'cutoff':
+    case 'points_start':
+      return `${formatDay(change.from_date)} → ${formatDay(change.to_date)}`;
     case 'enabled': {
       const state = (value: number | null) =>
         value === 1 ? 'pornită' : 'oprită';
@@ -1250,7 +1263,7 @@ function changeValues(change: ThresholdChange): string {
     default:
       return `${
         change.from_value === null ? 'nesetat' : formatPoints(change.from_value)
-      } → ${formatPoints(change.to_value)}`;
+      } → ${change.to_value === null ? '—' : formatPoints(change.to_value)}`;
   }
 }
 

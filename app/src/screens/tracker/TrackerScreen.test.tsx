@@ -33,6 +33,8 @@ const hooks = vi.hoisted(() => ({
   useManagedTasks: vi.fn(),
   useAllTasks: vi.fn(),
   useMyPoints: vi.fn(),
+  /** The Points Start Date (R58): null until BC sets one. */
+  pointsStartDate: null as string | null | undefined,
   useTaskQueue: vi.fn(),
   usePendingDecisions: vi.fn(),
   join: vi.fn(),
@@ -85,6 +87,9 @@ vi.mock('../../queries/work-filter-options', () => ({
   }),
 }));
 vi.mock('../../queries/points', () => ({ useMyPoints: hooks.useMyPoints }));
+vi.mock('../../queries/evaluation-settings', () => ({
+  usePointsStartDate: () => hooks.pointsStartDate,
+}));
 vi.mock('../../queries/profile', () => ({
   useMyProfile: () => ({ data: { role: 'vot' } }),
 }));
@@ -240,6 +245,7 @@ function noFinished() {
   };
 }
 beforeEach(() => {
+  hooks.pointsStartDate = null;
   listReads.finished.mockReset();
   listReads.finished.mockReturnValue(noFinished());
   listReads.prefetch.mockReset();
@@ -674,6 +680,27 @@ describe('My tasks screen', () => {
       score.compareDocumentPosition(screen.getByRole('article')) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  it('says from when the Personal Score counts once a Points Start Date is set (R58)', () => {
+    query({ data: [taskRow()] });
+    hooks.pointsStartDate = '2026-09-01';
+    render(<TrackerScreen />, { wrapper: Router });
+    const score = screen.getByRole('region', { name: 'Punctajul meu' });
+    expect(score).toHaveTextContent('12puncte');
+    expect(score.querySelector('[data-slot="points-since"]')).toHaveTextContent(
+      /^din 01\.09\.2026$/,
+    );
+  });
+
+  it('says nothing about a start while none is set (R58)', () => {
+    query({ data: [taskRow()] });
+    render(<TrackerScreen />, { wrapper: Router });
+    expect(
+      screen
+        .getByRole('region', { name: 'Punctajul meu' })
+        .querySelector('[data-slot="points-since"]'),
+    ).toBeNull();
   });
 
   it('shows the Personal Score loading and retry states', async () => {

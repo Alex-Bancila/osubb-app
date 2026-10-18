@@ -2,6 +2,8 @@ import { Link } from 'react-router';
 import { cn } from 'cn';
 import { focusRingClass } from '../../components/layout';
 import { formatPoints, pointWord } from '../../lib/format';
+import { pointsSinceText } from '../../lib/points-period';
+import { usePointsStartDate } from '../../queries/evaluation-settings';
 import { useMyRoleLabel } from '../../queries/my-role-label';
 import { useMyPoints } from '../../queries/points';
 
@@ -14,7 +16,9 @@ import { useMyPoints } from '../../queries/points';
  *
  * Nothing shows until the total has arrived, and nothing on a failed read:
  * a stat is not worth an error on the greeting, and Profil has the details.
- * No rank: the ranking lives on Clasament (ADR-0007).
+ * No rank: the ranking lives on Clasament (ADR-0007). Once BC has set a
+ * Points Start Date (R58) the line ends with it: **14 puncte · Voluntar · din
+ * 01.09.2026**.
  */
 export default function PointsStat() {
   const points = useMyPoints();
@@ -22,6 +26,7 @@ export default function PointsStat() {
      with the enum value as the fallback while it loads (#963: the Board
      Title for a member who holds one). */
   const roleLabel = useMyRoleLabel();
+  const since = pointsSinceText(usePointsStartDate());
 
   if (points.data === undefined) return null;
 
@@ -56,6 +61,19 @@ export default function PointsStat() {
               className="size-[7px] shrink-0 rounded-full bg-(--red)"
             />
             {roleLabel}
+          </span>
+        </>
+      )}
+      {since && (
+        <>
+          <span aria-hidden="true" className="text-muted-foreground">
+            ·
+          </span>
+          <span
+            data-slot="points-since"
+            className="text-sm font-medium text-muted-foreground"
+          >
+            {since}
           </span>
         </>
       )}
