@@ -16,7 +16,8 @@
 --      Start Date begins.
 --   4. The Points Start Date in every total: my_points, Clasament, the
 --      Department Cup and the Campaign totals and reports count only the Task
---      Points of Evaluations on or after it (Clasament alone may look back).
+--      Points of Evaluations on or after it (Clasament and Tracker membru, its
+--      figure for one Member, may look back).
 --   5. The award instant, enforced: a `task` ledger row is refused unless it is
 --      dated by its Evaluation's evaluated_at (the rule my_points relies on).
 --
@@ -478,9 +479,10 @@ revoke execute on function private.points_floor()
 -- (task_points_at_stake, delete_tasks_effect, group_delete_summary), which
 -- count what a Task holds, not what a Member is shown.
 --
--- Clasament alone may look back: an explicit "De la" (p_from) wins over the
--- date, even an earlier one, and the Department Cup, which that page reads
--- under the same Work Filter, follows it. A Campaign number never looks back.
+-- Clasament and Tracker membru (its figure for one Member) may look back: an
+-- explicit "De la" (p_from) wins over the date, even an earlier one, and the
+-- Department Cup, which that page reads under the same Work Filter, follows it.
+-- A Campaign number never looks back.
 -- campaign_totals counts a completed Umbrella (it has no Evaluation) by its own
 -- completion instant against the Points Start Date alone; an explicit p_from or
 -- p_to still leaves an Umbrella out, as #677 documents.
@@ -888,7 +890,7 @@ comment on function private.campaign_totals_impl(bigint, timestamptz, timestampt
 
 -- The public wrappers are unchanged; only what they document gains the rule.
 comment on function public.leadership_leaderboard(bigint, bigint, timestamptz, timestamptz, boolean) is
-  'Live BCE+ Task-points Leaderboard filtered by Group subtree, Campaign and award date range (#677: [p_from, p_to) on the Evaluation instant, either bound optional; PT400 invalid_date_range when p_to < p_from). Lists every active Member below BCE, at 0 points when they earned nothing (with a Group filter, the Members of that Group''s subtree), and retains inactive earners (#907). Never ranks BCE, BC or the Moderator (ruling 1 of 2026-09-28, amended by #907). Zero/negative totals, shared ranks on ties, and stable points-descending/name ordering. R58: with no p_from the range begins at the Points Start Date (Data de început a punctajului); an explicit earlier p_from reads the real numbers (the lookback, Clasament only). Returns the Nickname beside the full name. p_preferred (R43) counts only the points earned in the Groups the caller keeps selected in Grupuri preferate.';
+  'Live BCE+ Task-points Leaderboard filtered by Group subtree, Campaign and award date range (#677: [p_from, p_to) on the Evaluation instant, either bound optional; PT400 invalid_date_range when p_to < p_from). Lists every active Member below BCE, at 0 points when they earned nothing (with a Group filter, the Members of that Group''s subtree), and retains inactive earners (#907). Never ranks BCE, BC or the Moderator (ruling 1 of 2026-09-28, amended by #907). Zero/negative totals, shared ranks on ties, and stable points-descending/name ordering. R58: with no p_from the range begins at the Points Start Date (Data de început a punctajului); an explicit earlier p_from reads the real numbers (the lookback, shared by Clasament and Tracker membru). Returns the Nickname beside the full name. p_preferred (R43) counts only the points earned in the Groups the caller keeps selected in Grupuri preferate.';
 comment on function public.department_cup(bigint, timestamptz, timestamptz) is
   'Campaign- and award-date-filtered Group Cup standings as (group_id, name, points, members); the date range is [p_from, p_to) on the Evaluation instant, either bound optional (#677). Failed leadership gates return no rows; an inverted range is PT400 invalid_date_range. R58: with no p_from the range begins at the Points Start Date; an explicit earlier p_from looks back.';
 comment on function public.campaign_totals(bigint, timestamptz, timestamptz) is

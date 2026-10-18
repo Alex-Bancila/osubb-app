@@ -10,8 +10,8 @@
 --   2. BC sets the date; the Personal Score (my_points) follows it, a Sanction
 --      by its own date, and a Member with nothing left to count keeps a zero row.
 --   3. Clasament and the Department Cup follow it, and an explicit "De la" in
---      Clasament's Work Filter may look back past it (the lookback), an explicit
---      later one is honoured.
+--      Clasament's Work Filter (and Tracker membru's, its figure for one Member)
+--      may look back past it (the lookback), an explicit later one is honoured.
 --   4. Campaign totals and reports follow it with no lookback, tasks_completed
 --      included; a completed Umbrella (no Evaluation) counts by its completion
 --      against the date, and an explicit range still leaves it out.
