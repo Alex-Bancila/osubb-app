@@ -52,7 +52,7 @@ import {
 } from '../../queries/reference';
 import EditProfileSheet from './EditProfileSheet';
 import { JoiningSection } from './JoiningSection';
-import { PHONE_HINT } from './profile-copy';
+import { PHONE_HINT, UNIVERSITY_HINT } from './profile-copy';
 import { PushDeviceCard } from './PushDeviceCard';
 import { PreferredGroupsCard } from './PreferredGroupsCard';
 import { RoleTimeline } from './RoleTimeline';
@@ -406,7 +406,14 @@ export default function ProfileScreen() {
                       )}
                     </SettingRow>
                     {/* R58: BC sets it on the Member's page; here it is read-only. */}
-                    <SettingRow label="Universitate">
+                    <SettingRow
+                      label="Universitate"
+                      hint={
+                        <InfoHint label="Despre universitate">
+                          {UNIVERSITY_HINT}
+                        </InfoHint>
+                      }
+                    >
                       {profile.university ? (
                         <span className="wrap-anywhere">
                           {profile.university}

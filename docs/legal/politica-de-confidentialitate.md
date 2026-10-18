@@ -26,7 +26,7 @@ Operatorul datelor este organizația Studenților din Universitatea Babeș-Bolya
 
 **Date de identificare și contact.** Numele complet, numărul de telefon și adresa de email, colectate de către Biroul de Conducere prin intermediul bazei de date a voluntarilor sau a formularului de recrutare. Opțional, un pseudonim, pe care îl poți completa tu în Profil.
 
-**Apartenența la organizație.** Rolul (Recrut, Voluntar, Voluntar Activ, Voluntar cu Drept de Vot, BCE, BC, Moderator), statutul de membru (activ/inactiv), data intrării în organizație, universitatea la care studiezi, grupurile și departamentele din care faci parte, funcțiile de conducere în grupuri și istoricul schimbărilor de rol, cu cine le-a făcut și când.
+**Apartenența la organizație.** Rolul (Recrut, Voluntar, Voluntar Activ, Voluntar cu Drept de Vot, BCE, BC, Moderator), statutul de membru (activ/inactiv), data intrării în organizație, universitatea la care studiezi (doar un student UBB poate primi Drept de Vot), grupurile și departamentele din care faci parte, funcțiile de conducere în grupuri și istoricul schimbărilor de rol, cu cine le-a făcut și când.
 
 **Activitatea în aplicație.**
 

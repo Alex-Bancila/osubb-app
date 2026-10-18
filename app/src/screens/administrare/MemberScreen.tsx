@@ -466,15 +466,19 @@ function UniversityRow({ member }: { member: AdminMember }) {
   const [message, setMessage] = useState<string | null>(null);
   const turn = useReceiptTurn();
   const change = useUpdateMemberUniversity();
+  const chosen =
+    draft.option === OTHER_UNIVERSITY ? draft.other.trim() : draft.option;
+  // The hook hides a refusal once the value at the field it was shown under
+  // changes, and that field is `university`, not the draft's `option` and
+  // `other`: the values it reads carry the chosen name under that key.
+  const validated = { ...draft, university: chosen };
   const form = useFormValidation(
     memberUniversitySchema,
-    draft,
+    validated,
     universityFieldForReason,
   );
   const editButton = useRef<HTMLButtonElement>(null);
   const wasEditing = useRef(false);
-  const chosen =
-    draft.option === OTHER_UNIVERSITY ? draft.other.trim() : draft.option;
 
   // Back from the editor, focus returns to the button that opened it.
   useEffect(() => {

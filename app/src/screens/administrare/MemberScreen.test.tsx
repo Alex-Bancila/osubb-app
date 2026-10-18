@@ -1044,6 +1044,11 @@ it('refuses a typed university under 2 characters under its field, and puts a re
 
   state.university.mockRejectedValue(new Error('permission denied'));
   await user.type(name, 'bc');
+  // The message was about "A": typing a valid name hides it before any blur
+  // or submit.
+  expect(
+    screen.queryByText('Universitatea are între 2 și 120 de caractere.'),
+  ).toBeNull();
   await user.click(screen.getByRole('button', { name: 'Salvează' }));
   expect(
     screen.getByText(

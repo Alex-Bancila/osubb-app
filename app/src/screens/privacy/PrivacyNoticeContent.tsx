@@ -197,9 +197,10 @@ export function PrivacyNoticeContent() {
           <Term>Apartenența la organizație.</Term> Rolul (Recrut, Voluntar,
           Voluntar Activ, Voluntar cu Drept de Vot, BCE, BC, Moderator),
           statutul de membru (activ/inactiv), data intrării în organizație,
-          universitatea la care studiezi, grupurile și departamentele din care
-          faci parte, funcțiile de conducere în grupuri și istoricul
-          schimbărilor de rol, cu cine le-a făcut și când.
+          universitatea la care studiezi (doar un student UBB poate primi Drept
+          de Vot), grupurile și departamentele din care faci parte, funcțiile de
+          conducere în grupuri și istoricul schimbărilor de rol, cu cine le-a
+          făcut și când.
         </p>
         <div className="space-y-2.5">
           <p>

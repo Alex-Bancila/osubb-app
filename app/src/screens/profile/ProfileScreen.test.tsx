@@ -431,6 +431,18 @@ describe('ProfileScreen', () => {
       ),
     ).toBeVisible();
     await userEvent.keyboard('{Escape}');
+    // The Universitate is BC's to write (R58): the "i" beside it says whom a
+    // Member asks when it is missing or wrong.
+    expect(screen.queryByText(/universitatea o completează BC/i)).toBeNull();
+    await userEvent.click(
+      within(contact).getByRole('button', { name: 'Despre universitate' }),
+    );
+    expect(
+      await screen.findByText(
+        'Universitatea o completează BC. Dacă nu este corectă, scrie-i Coordonatorului IT.',
+      ),
+    ).toBeVisible();
+    await userEvent.keyboard('{Escape}');
 
     // Edit button
     expect(
