@@ -304,7 +304,7 @@ create table public.evaluation_settings (
 
 - Modify: the migration (section 3)
 - Create: `supabase/tests/evaluation_settings_commands.test.sql`
-- Modify: `supabase/tests/tracker_grants.test.sql` (public rows for the three commands; private rows for the three `_impl`s and `points_floor`; count `258`)
+- Modify: `supabase/tests/tracker_grants.test.sql` (public rows for the three commands; private rows for the three `_impl`s and `points_floor`; count `258`), `scripts/check-seed-rerunnable.sh:334-338,361-362` (Step 4b)
 
 **Interfaces:**
 
@@ -329,6 +329,8 @@ Order inside each `_impl`: 1. `PT400 invalid_eligibility_floor` (null or < 1) / 
 - [ ] **Step 3: Migration section 3**, the six functions and `points_floor`, with comments and grants. Model the gate on `private.set_promotion_threshold_impl` (main: `20260927220000_role_evaluations.sql:895-951`).
 
 - [ ] **Step 4: Rosters.** `tracker_grants.test.sql`: public rows `('set_eligibility_floor', 'p_points integer', false, true, false, false)`, `('set_membership_cutoff', 'p_date date', …)`, `('set_points_start_date', 'p_date date', …)`; private rows for the three `_impl`s (`impl`) and `('points_floor', '', 'none')`; count `258`.
+
+- [ ] **Step 4b: Seed protection** (review of Task 4, minor 7). In `scripts/check-seed-rerunnable.sh`, beside the demo calls at :334-338 add `select public.set_eligibility_floor(1);` as the demo BC persona (so `evaluation_settings.updated_by` names a demo Member before the seed re-runs), and beside the two counters at :361-362 add a third that counts `evaluation_settings` rows whose `updated_by` is a demo Member after the re-run (expected 0). Removing `seed.sql`'s `evaluation_settings` update must then fail the script.
 
 - [ ] **Step 5: Run green** on the suite and `tracker_grants.test.sql`.
 
