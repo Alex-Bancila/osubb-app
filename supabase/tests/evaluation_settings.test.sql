@@ -14,7 +14,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(48);
+select plan(55);
 
 -- ==================== Fixtures — prefix 58582000-… ====================
 -- 1 bc; 2 voluntar; 3 deactivated voluntar holding a still-valid token.
@@ -192,6 +192,27 @@ select lives_ok(
             values ('voluntar_activ', 'threshold', 30, 25, 'role_evaluation', %s) $$,
          (select re1 from fx582)),
   'a run''s hand-over of a threshold still logs as before');
+-- The new sources reach the shares and the settings a finalised run writes.
+select lives_ok(
+  $$ insert into public.promotion_threshold_changes (kind, field, from_value, to_value, source)
+     values ('voluntar_activ', 'percent', 40, 35, 'migration'),
+            ('adunarea_generala', 'percent', 30, 25, 'migration') $$,
+  'the day-one change of the shares is a migration''s: percent_shape_ck no longer demands source manual');
+select lives_ok(
+  format($$ insert into public.promotion_threshold_changes (kind, field, from_value, to_value, source, role_evaluation_id)
+            values ('voluntar_activ', 'percent', 35, 40, 'role_evaluation', %s) $$,
+         (select re1 from fx582)),
+  'a finalised run writes the share it used through: a percent row of source role_evaluation names its run');
+select lives_ok(
+  format($$ insert into public.promotion_threshold_changes (field, from_value, to_value, source, role_evaluation_id)
+            values ('floor', 5, 8, 'role_evaluation', %s) $$,
+         (select re1 from fx582)),
+  'and the Prag minim it used');
+select lives_ok(
+  format($$ insert into public.promotion_threshold_changes (field, from_date, to_date, source, role_evaluation_id)
+            values ('cutoff', '2026-09-01', '2026-09-15', 'role_evaluation', %s) $$,
+         (select re1 from fx582)),
+  'and the Data limită de intrare');
 
 -- Each refusal names its constraint (conventions section 8, ruling 23).
 select throws_ok(
@@ -240,15 +261,30 @@ select throws_ok(
   '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_subject_ck"',
   'promotion_threshold_changes_subject_ck: nor does a date change');
 select throws_ok(
+  format($$ insert into public.promotion_threshold_changes (field, to_value, source, changed_by, promotion_rule_id)
+            values ('floor', 5, 'manual', %L, (select min(id) from public.promotion_rules)) $$, pg_temp.u582(1)),
+  '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_subject_ck"',
+  'promotion_threshold_changes_subject_ck: nor does it name a Promotion Rule');
+select throws_ok(
   format($$ insert into public.promotion_threshold_changes (field, to_value, source, changed_by)
             values ('bogus', 5, 'manual', %L) $$, pg_temp.u582(1)),
   '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_field_ck"',
   'promotion_threshold_changes_field_ck: the field is one of the seven');
 select throws_ok(
-  format($$ insert into public.promotion_threshold_changes (field, from_date, to_date, source, changed_by)
-            values ('points_start', null, '2026-10-01', 'run', %L) $$, pg_temp.u582(1)),
+  format($$ insert into public.promotion_threshold_changes (field, to_value, source, changed_by)
+            values ('floor', 5, 'run', %L) $$, pg_temp.u582(1)),
   '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_source_ck"',
   'promotion_threshold_changes_source_ck: a run is source role_evaluation; there is no source "run"');
+select throws_ok(
+  format($$ insert into public.promotion_threshold_changes (field, from_date, to_date, source, role_evaluation_id)
+            values ('points_start', null, '2026-10-01', 'role_evaluation', %s) $$, (select re1 from fx582)),
+  '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_points_start_source_ck"',
+  'promotion_threshold_changes_points_start_source_ck: a run never writes the Data de început a punctajului');
+select throws_ok(
+  $$ insert into public.promotion_threshold_changes (kind, field, to_value, source)
+     values ('voluntar_activ', 'percent', 101, 'migration') $$,
+  '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_percent_shape_ck"',
+  'promotion_threshold_changes_percent_shape_ck: a migration''s share is still a whole 1-100');
 select throws_ok(
   format($$ insert into public.promotion_threshold_changes (field, to_value, source, changed_by)
             values ('floor', 5, 'migration', %L) $$, pg_temp.u582(1)),
