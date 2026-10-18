@@ -33,7 +33,7 @@
   - `invalid_points_start_date` → `Data de început a punctajului este o zi de cel târziu azi.`
   - `evaluation_settings_manage_forbidden` → `Doar BC și Moderatorul pot schimba setările evaluărilor.`
   - `role_evaluation_not_found` → `Evaluarea nu mai există. Reîncarcă pagina.`
-  - `org_setting_not_settable` keeps its key; its copy becomes `Setarea se schimbă din Portofoliu Interne.`
+  - `org_setting_not_settable` keeps its key; its copy becomes `Setarea se schimbă din Portofoliu Interne.` — in PR 3 (Task 12, with the rename); PR 2 keeps `din Evaluări de rol` (CodeRabbit on #1078).
 - **Shipping.** One branch and one PR per part; the body carries the spec link and `🤖 Generated with [Claude Code](https://claude.com/claude-code)`. A review (`@coderabbitai review`; when its quota means a long wait, a fresh-context reviewer instead, with the notes posted on the PR), then merge on green CI with `gh pr merge --merge --delete-branch`, then check the staging push with `gh run list --commit <merge sha>`. Commits end with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. Nothing is pushed or merged without Alex's go-ahead on the PR.
 
 ## Review Focus
