@@ -6,7 +6,8 @@
 -- trigger set, the read policy and the absence of a client write path) and the
 -- widened public.promotion_threshold_changes (the three new fields, the date
 -- pair, the `migration` source and the shapes that keep a date row and a
--- number row apart). The three commands arrive with the next task.
+-- number row apart). The three commands and points_floor() have their own
+-- suite (evaluation_settings_commands.test.sql).
 -- Runs in one transaction and rolls back.
 begin;
 \set osubb_test_suite true

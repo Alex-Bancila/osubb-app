@@ -10,10 +10,13 @@
 --   2. public.promotion_threshold_changes learns the three new fields, a pair
 --      of date columns and the `migration` source, and its share rule admits
 --      the writes of a migration and of a run.
+--   3. The three commands that set the values (set_eligibility_floor,
+--      set_membership_cutoff, set_points_start_date, each a wrapper over a
+--      private _impl) and private.points_floor(), the instant the Points
+--      Start Date begins.
 --
 -- The row is reference data seeded here (house rule 6), never by seed.sql.
--- Nothing reads or writes the three values yet; the commands that set them
--- and the readers that apply them follow in this file.
+-- Nothing reads the three values yet; the readers that apply them follow.
 
 -- ---------------------------------------------------------------------------
 -- 1. The settings row.
@@ -177,3 +180,279 @@ comment on column public.promotion_threshold_changes.to_date is
 
 comment on table public.promotion_threshold_changes is
   '#826 (ruling R28), extended by #866 (ruling R30), #935 and R58: every change of a Promotion Threshold, of a kind''s top share, of a Promotion Rule''s tenure or on/off flag, or of an evaluation setting. field threshold: source manual (BC or the Moderator through set_promotion_threshold; changed_by) or role_evaluation (the value a run computed, handed over; role_evaluation_id). field percent: values 1-100; source manual (set_evaluation_percent; changed_by), role_evaluation (the share a finalised run used, written through; role_evaluation_id) or migration (the day-one change of x and y). field tenure / enabled: source manual only, through update_promotion_rule, naming promotion_rule_id instead of a kind; tenure in whole months 0-120, enabled 0 (off) or 1 (on). field floor (the Eligibility Floor, Prag minim: a number >= 1 in to_value) / cutoff (the Membership Cutoff Date, Data limită de intrare) / points_start (the Points Start Date, Data de început a punctajului), the last two dates in from_date / to_date with no number: source manual through the evaluation-settings commands or migration, and for floor and cutoff also role_evaluation (a finalised run writes the values it used); a run never writes points_start. from_value / from_date is the value before (null for a threshold, a share or a setting never set; a tenure or enabled row always carries from_value). Read by live level >= 6 only; written by the commands, a finalised run and the R58 migrations.';
+
+-- ---------------------------------------------------------------------------
+-- 3. The commands that set the three values.
+-- ---------------------------------------------------------------------------
+-- One command per value, in the shape of set_promotion_threshold: the argument
+-- is judged first (it is malformed for every caller), then the gate -- claims
+-- and a live activ Profile, then live level >= 6, BC or the Moderator, every
+-- refusal 42501 evaluation_settings_manage_forbidden -- then (47, 1), the lock
+-- every Role Evaluation write takes, then the one row for no key update, so a
+-- run that writes a value through and a hand edit are serialised. An unchanged
+-- value is PT409 nothing_to_update; a changed one is written with updated_by
+-- and logged once in promotion_threshold_changes, source manual. "Today" in the
+-- two date checks is today in Bucharest, the organisation's calendar, whatever
+-- the database clock's zone.
+
+create function private.set_eligibility_floor_impl(p_points integer)
+returns public.evaluation_settings
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor   uuid;
+  v_current public.evaluation_settings%rowtype;
+  v_from    integer;
+begin
+  -- 1. Malformed for every caller (evaluation_settings_floor_ck).
+  if p_points is null or p_points < 1 then
+    raise sqlstate 'PT400' using message = 'invalid_eligibility_floor';
+  end if;
+
+  -- 2. The gate: claims and a live activ Profile, then BC or Moderator.
+  begin
+    v_actor := private.require_active_member();
+  exception when insufficient_privilege then
+    raise exception using errcode = '42501', message = 'evaluation_settings_manage_forbidden';
+  end;
+  if coalesce(private.actor_level(v_actor), -1) < 6 then
+    raise exception using errcode = '42501', message = 'evaluation_settings_manage_forbidden';
+  end if;
+
+  -- 3. Serialised with every run and threshold edit, in their lock order:
+  -- (47, 1), then the row.
+  perform pg_catalog.pg_advisory_xact_lock(47, 1);
+  select * into v_current
+    from public.evaluation_settings as setting
+   where setting.id = 1
+   for no key update;
+
+  -- 4. State. Editable at any time.
+  if v_current.eligibility_floor is not distinct from p_points then
+    raise sqlstate 'PT409' using message = 'nothing_to_update';
+  end if;
+
+  -- 5. Write, and audit.
+  v_from := v_current.eligibility_floor;
+  update public.evaluation_settings
+     set eligibility_floor = p_points,
+         updated_by = v_actor
+   where id = 1
+  returning * into v_current;
+
+  insert into public.promotion_threshold_changes (
+    field, from_value, to_value, source, changed_by
+  ) values (
+    'floor', v_from, p_points, 'manual', v_actor
+  );
+
+  return v_current;
+end;
+$$;
+
+comment on function private.set_eligibility_floor_impl(integer) is
+  'R58: body of public.set_eligibility_floor. PT400 invalid_eligibility_floor (null or below 1) before the gate; private.require_active_member() and live level >= 6, every refusal 42501 evaluation_settings_manage_forbidden; pg_advisory_xact_lock(47, 1), shared with run_role_evaluation, then the evaluation_settings row for no key update; PT409 nothing_to_update for an unchanged value. Writes eligibility_floor with updated_by and one manual promotion_threshold_changes row (field floor: from_value, to_value, changed_by).';
+
+create function public.set_eligibility_floor(p_points integer)
+returns public.evaluation_settings
+language sql
+security invoker
+set search_path = ''
+as $$
+  select * from private.set_eligibility_floor_impl(p_points);
+$$;
+
+comment on function public.set_eligibility_floor(integer) is
+  'R58: BC or the Moderator sets the Eligibility Floor (Prag minim) -- the Task Points a Member must reach in the Evaluation Period to be ranked at all, a whole number >= 1 -- at any time. Every change is logged in promotion_threshold_changes (field floor) with its author. 42501 evaluation_settings_manage_forbidden; PT400 invalid_eligibility_floor; PT409 nothing_to_update. Returns the evaluation_settings row.';
+
+revoke execute on function private.set_eligibility_floor_impl(integer)
+  from public, anon, authenticated, service_role;
+revoke execute on function public.set_eligibility_floor(integer)
+  from public, anon, authenticated, service_role;
+grant execute on function private.set_eligibility_floor_impl(integer) to authenticated;
+grant execute on function public.set_eligibility_floor(integer) to authenticated;
+
+create function private.set_membership_cutoff_impl(p_date date)
+returns public.evaluation_settings
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor   uuid;
+  v_current public.evaluation_settings%rowtype;
+  v_from    date;
+begin
+  -- 1. Malformed for every caller: no date, or a day that has not begun in
+  -- Bucharest.
+  if p_date is null or p_date > (now() at time zone 'Europe/Bucharest')::date then
+    raise sqlstate 'PT400' using message = 'invalid_membership_cutoff';
+  end if;
+
+  -- 2. The gate: claims and a live activ Profile, then BC or Moderator.
+  begin
+    v_actor := private.require_active_member();
+  exception when insufficient_privilege then
+    raise exception using errcode = '42501', message = 'evaluation_settings_manage_forbidden';
+  end;
+  if coalesce(private.actor_level(v_actor), -1) < 6 then
+    raise exception using errcode = '42501', message = 'evaluation_settings_manage_forbidden';
+  end if;
+
+  -- 3. Serialised with every run and threshold edit, in their lock order:
+  -- (47, 1), then the row.
+  perform pg_catalog.pg_advisory_xact_lock(47, 1);
+  select * into v_current
+    from public.evaluation_settings as setting
+   where setting.id = 1
+   for no key update;
+
+  -- 4. State. Editable at any time.
+  if v_current.membership_cutoff is not distinct from p_date then
+    raise sqlstate 'PT409' using message = 'nothing_to_update';
+  end if;
+
+  -- 5. Write, and audit.
+  v_from := v_current.membership_cutoff;
+  update public.evaluation_settings
+     set membership_cutoff = p_date,
+         updated_by = v_actor
+   where id = 1
+  returning * into v_current;
+
+  insert into public.promotion_threshold_changes (
+    field, from_date, to_date, source, changed_by
+  ) values (
+    'cutoff', v_from, p_date, 'manual', v_actor
+  );
+
+  return v_current;
+end;
+$$;
+
+comment on function private.set_membership_cutoff_impl(date) is
+  'R58: body of public.set_membership_cutoff. PT400 invalid_membership_cutoff (null, or after today in Europe/Bucharest) before the gate; private.require_active_member() and live level >= 6, every refusal 42501 evaluation_settings_manage_forbidden; pg_advisory_xact_lock(47, 1), shared with run_role_evaluation, then the evaluation_settings row for no key update; PT409 nothing_to_update for an unchanged date. Writes membership_cutoff with updated_by and one manual promotion_threshold_changes row (field cutoff: from_date, to_date, changed_by; no number).';
+
+create function public.set_membership_cutoff(p_date date)
+returns public.evaluation_settings
+language sql
+security invoker
+set search_path = ''
+as $$
+  select * from private.set_membership_cutoff_impl(p_date);
+$$;
+
+comment on function public.set_membership_cutoff(date) is
+  'R58: BC or the Moderator sets the Membership Cutoff Date (Data limită de intrare) -- a Voluntar who joined on or before it can be listed as a Promotion Candidate in the Voluntar Activ kind -- to a day that is not after today in Bucharest, at any time. Every change is logged in promotion_threshold_changes (field cutoff) with its author. 42501 evaluation_settings_manage_forbidden; PT400 invalid_membership_cutoff; PT409 nothing_to_update. Returns the evaluation_settings row.';
+
+revoke execute on function private.set_membership_cutoff_impl(date)
+  from public, anon, authenticated, service_role;
+revoke execute on function public.set_membership_cutoff(date)
+  from public, anon, authenticated, service_role;
+grant execute on function private.set_membership_cutoff_impl(date) to authenticated;
+grant execute on function public.set_membership_cutoff(date) to authenticated;
+
+create function private.set_points_start_date_impl(p_date date)
+returns public.evaluation_settings
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor   uuid;
+  v_current public.evaluation_settings%rowtype;
+  v_from    date;
+begin
+  -- 1. Malformed for every caller: no date, or a day that has not begun in
+  -- Bucharest.
+  if p_date is null or p_date > (now() at time zone 'Europe/Bucharest')::date then
+    raise sqlstate 'PT400' using message = 'invalid_points_start_date';
+  end if;
+
+  -- 2. The gate: claims and a live activ Profile, then BC or Moderator.
+  begin
+    v_actor := private.require_active_member();
+  exception when insufficient_privilege then
+    raise exception using errcode = '42501', message = 'evaluation_settings_manage_forbidden';
+  end;
+  if coalesce(private.actor_level(v_actor), -1) < 6 then
+    raise exception using errcode = '42501', message = 'evaluation_settings_manage_forbidden';
+  end if;
+
+  -- 3. Serialised with every run and threshold edit, in their lock order:
+  -- (47, 1), then the row.
+  perform pg_catalog.pg_advisory_xact_lock(47, 1);
+  select * into v_current
+    from public.evaluation_settings as setting
+   where setting.id = 1
+   for no key update;
+
+  -- 4. State. Editable at any time.
+  if v_current.points_start_date is not distinct from p_date then
+    raise sqlstate 'PT409' using message = 'nothing_to_update';
+  end if;
+
+  -- 5. Write, and audit.
+  v_from := v_current.points_start_date;
+  update public.evaluation_settings
+     set points_start_date = p_date,
+         updated_by = v_actor
+   where id = 1
+  returning * into v_current;
+
+  insert into public.promotion_threshold_changes (
+    field, from_date, to_date, source, changed_by
+  ) values (
+    'points_start', v_from, p_date, 'manual', v_actor
+  );
+
+  return v_current;
+end;
+$$;
+
+comment on function private.set_points_start_date_impl(date) is
+  'R58: body of public.set_points_start_date. PT400 invalid_points_start_date (null, or after today in Europe/Bucharest) before the gate; private.require_active_member() and live level >= 6, every refusal 42501 evaluation_settings_manage_forbidden; pg_advisory_xact_lock(47, 1), shared with run_role_evaluation, then the evaluation_settings row for no key update; PT409 nothing_to_update for an unchanged date. Writes points_start_date with updated_by and one manual promotion_threshold_changes row (field points_start: from_date, to_date, changed_by; no number).';
+
+create function public.set_points_start_date(p_date date)
+returns public.evaluation_settings
+language sql
+security invoker
+set search_path = ''
+as $$
+  select * from private.set_points_start_date_impl(p_date);
+$$;
+
+comment on function public.set_points_start_date(date) is
+  'R58: BC or the Moderator sets the Points Start Date (Data de început a punctajului) -- the first Europe/Bucharest day whose Task Points count in any total; earlier points stay in the ledger and count for nothing -- to a day that is not after today in Bucharest, at any time, earlier or later than the one in force. Every change is logged in promotion_threshold_changes (field points_start) with its author; a Role Evaluation run never writes it. 42501 evaluation_settings_manage_forbidden; PT400 invalid_points_start_date; PT409 nothing_to_update. Returns the evaluation_settings row.';
+
+revoke execute on function private.set_points_start_date_impl(date)
+  from public, anon, authenticated, service_role;
+revoke execute on function public.set_points_start_date(date)
+  from public, anon, authenticated, service_role;
+grant execute on function private.set_points_start_date_impl(date) to authenticated;
+grant execute on function public.set_points_start_date(date) to authenticated;
+
+-- The instant the Points Start Date begins: its Bucharest midnight, or null
+-- while no date is set (every total then counts from the beginning). The
+-- SQL readers of the Personal Score, Clasament, the Department Cup and the
+-- Campaign totals compare the time points were earned against it, so the zone
+-- is applied once, here, never by a client and never by the session's own zone.
+create function private.points_floor()
+returns timestamptz
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select (setting.points_start_date::timestamp at time zone 'Europe/Bucharest')
+    from public.evaluation_settings as setting
+   where setting.id = 1
+$$;
+
+comment on function private.points_floor() is
+  'R58: the instant the Points Start Date begins -- points_start_date at midnight in Europe/Bucharest, independent of the session time zone -- or null while no date is set, when every total counts from the beginning. Read by the SQL readers of the Personal Score, Clasament, the Department Cup and the Campaign totals, which count only the Task Points earned at or after it; granted to nobody, since only security-definer bodies call it.';
+
+revoke execute on function private.points_floor()
+  from public, anon, authenticated, service_role;
