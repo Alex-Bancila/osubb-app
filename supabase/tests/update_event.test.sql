@@ -122,7 +122,8 @@ reset role;
 -- to 3, so members 3-6 are promoted to Drept de Vot first and member 2 (voluntar,
 -- the old Group's Manager) stays below it: 2 must hear nothing about an Event it
 -- can no longer read.
-update public.profiles set role='vot' where id in ('24800000-0000-0000-0000-000000000003','24800000-0000-0000-0000-000000000004','24800000-0000-0000-0000-000000000005','24800000-0000-0000-0000-000000000006');
+-- R58: Drept de Vot goes to a UBB student only, so the Universitate is set with it.
+update public.profiles set role='vot', university=private.ubb_university() where id in ('24800000-0000-0000-0000-000000000003','24800000-0000-0000-0000-000000000004','24800000-0000-0000-0000-000000000005','24800000-0000-0000-0000-000000000006');
 -- R53: only this move's notices are unread from here.
 update public.notifications set read=true where member_id::text like '24800000-%';
 select pg_temp.test_login_leadership('24800000-0000-0000-0000-000000000001');

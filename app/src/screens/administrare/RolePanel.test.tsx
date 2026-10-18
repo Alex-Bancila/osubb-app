@@ -31,6 +31,7 @@ vi.mock('../../queries/member-role-management', () => ({
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { BackLink } from '../../components/layout';
 import { chooseOption } from '../../test/select';
+import { UBB } from '../../lib/universities';
 import { RolePanel } from './RolePanel';
 import { optionsOf } from './select-test-options';
 
@@ -109,6 +110,8 @@ const people = [
     level: 5,
     status: 'activ',
     avatarColor: null,
+    // Only a UBB student may be granted Drept de Vot (R58).
+    university: UBB,
   },
   {
     memberId: 'protected',
@@ -487,6 +490,74 @@ it('puts the two field groups, the reason and the two save buttons in one style 
   expect(screen.getByLabelText('Motiv (opțional)').parentElement).toHaveClass(
     'sm:col-span-2',
   );
+});
+
+it('offers Drept de Vot only to a UBB student', async () => {
+  const student = (
+    memberId: string,
+    name: string,
+    university: string | null,
+  ) => ({
+    memberId,
+    name,
+    roleId: 'voluntar',
+    roleLabel: 'Voluntar',
+    level: 1,
+    status: 'activ',
+    avatarColor: null,
+    university,
+  });
+  state.members.mockReturnValue({
+    data: [
+      people[0],
+      student('s-ubb', 'Student UBB', UBB),
+      student(
+        's-other',
+        'Student Tehnică',
+        'Universitatea Tehnică din Cluj-Napoca',
+      ),
+      student('s-typed', 'Student București', 'Universitatea din București'),
+      student('s-none', 'Student Necunoscut', null),
+    ],
+    isPending: false,
+    isError: false,
+  });
+  const NOTE = 'Doar un student UBB poate primi Drept de Vot.';
+  const user = userEvent.setup();
+  renderPanel();
+
+  // A UBB student: the option can be chosen, and nothing explains a refusal.
+  await pick(user, 'Student UBB');
+  const forUbb = await optionsOf(user, roleField());
+  expect(forUbb.find((o) => o.text === 'Voluntar cu Drept de Vot')).toEqual({
+    text: 'Voluntar cu Drept de Vot',
+    disabled: false,
+  });
+  expect(screen.queryByText(NOTE)).toBeNull();
+
+  // Any other university, typed or listed, and one never recorded: the option
+  // stays in the list -- BC sees what is missing -- but cannot be chosen.
+  for (const name of [
+    'Student Tehnică',
+    'Student București',
+    'Student Necunoscut',
+  ]) {
+    await pick(user, name);
+    const options = await optionsOf(user, roleField());
+    expect(options.find((o) => o.text === 'Voluntar cu Drept de Vot')).toEqual({
+      text: 'Voluntar cu Drept de Vot',
+      disabled: true,
+    });
+    // Every other rank is as before.
+    expect(options.filter((o) => o.disabled).map((o) => o.text)).toEqual([
+      'Voluntar cu Drept de Vot',
+    ]);
+    expect(screen.getByText(NOTE)).toBeVisible();
+  }
+
+  // And back to a student: the note goes, the option is open again.
+  await pick(user, 'Student UBB');
+  expect(screen.queryByText(NOTE)).toBeNull();
 });
 
 it('shows explicit archived and automatic Groups before a demotion and sends the audited Role command', async () => {

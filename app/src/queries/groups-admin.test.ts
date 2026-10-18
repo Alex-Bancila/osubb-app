@@ -416,6 +416,47 @@ it('names an appointable BC or BCE member by their Board Title, the Level stayin
   ]);
 });
 
+it("carries each appointable Member's Universitate, for the Drept de Vot choice (R58)", async () => {
+  const selects: string[] = [];
+  const builder = (rows: unknown[]) => {
+    const chain = {
+      select: (columns: string) => {
+        selects.push(columns);
+        return chain;
+      },
+      order: () => chain,
+      range: (from: number) =>
+        Promise.resolve({ data: from === 0 ? rows : [], error: null }),
+    };
+    return chain;
+  };
+  const person = (id: string, university: string | null) => ({
+    id,
+    full_name: id.toUpperCase(),
+    nickname: null,
+    status: 'activ',
+    avatar_color: null,
+    role: 'voluntar',
+    board_title: null,
+    university,
+  });
+  api.from.mockImplementation((table: string) =>
+    builder(
+      table === 'roles'
+        ? [{ id: 'voluntar', name: 'Voluntar', level: 1 }]
+        : [person('a', 'Universitatea Babeș-Bolyai'), person('b', null)],
+    ),
+  );
+  const members = await fetchAppointableMembers();
+  expect(selects).toContainEqual(expect.stringContaining('university'));
+  expect(
+    members.map(({ memberId, university }) => ({ memberId, university })),
+  ).toEqual([
+    { memberId: 'a', university: 'Universitatea Babeș-Bolyai' },
+    { memberId: 'b', university: null },
+  ]);
+});
+
 function myGroup(id: number, role: string): MyGroup {
   return {
     id,

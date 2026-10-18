@@ -16,9 +16,9 @@ import type { ReactNode } from 'react';
  * app older than the server's version (a tab left open across a Release)
  * offers a reload instead — see `PrivacyGate`.
  */
-export const PRIVACY_NOTICE_VERSION = '1.1';
+export const PRIVACY_NOTICE_VERSION = '1.2';
 /** The effective date as the document writes it (dd.mm.yyyy). */
-export const PRIVACY_NOTICE_DATE = '02.10.2026';
+export const PRIVACY_NOTICE_DATE = '18.10.2026';
 export const PRIVACY_NOTICE_TITLE =
   'Politica de confidențialitate a aplicației OSUBB';
 
@@ -197,7 +197,8 @@ export function PrivacyNoticeContent() {
           <Term>Apartenența la organizație.</Term> Rolul (Recrut, Voluntar,
           Voluntar Activ, Voluntar cu Drept de Vot, BCE, BC, Moderator),
           statutul de membru (activ/inactiv), data intrării în organizație,
-          grupurile și departamentele din care faci parte, funcțiile de
+          universitatea la care studiezi (doar un student UBB poate primi Drept
+          de Vot), grupurile și departamentele din care faci parte, funcțiile de
           conducere în grupuri și istoricul schimbărilor de rol, cu cine le-a
           făcut și când.
         </p>
@@ -268,8 +269,9 @@ export function PrivacyNoticeContent() {
         <List>
           <li>
             <Term>Orice membru</Term> vede numele și pseudonimul tău, rolul,
-            data intrării în organizație, grupurile din care faci parte, și te
-            poate vedea în clasament, dacă rolul lui permite clasamentul.
+            data intrării în organizație, universitatea, grupurile din care faci
+            parte, și te poate vedea în clasament, dacă rolul lui permite
+            clasamentul.
           </li>
           <li>
             <Term>Coordonatorii grupurilor tale</Term> văd taskurile tale din
@@ -417,10 +419,14 @@ export function PrivacyNoticeContent() {
       <footer className="space-y-2 border-t pt-6 text-sm text-muted-foreground italic">
         <p>
           Versiunea {PRIVACY_NOTICE_VERSION} —{' '}
-          <time dateTime={DATE_TIME}>{PRIVACY_NOTICE_DATE}</time>. Corectează
-          textul după aplicația de la lansare: pseudonimul, promovarea la
-          Voluntar Activ decisă de BC, evaluările de rol, rezumatul zilnic pe
-          email și cine vede ce date.
+          <time dateTime={DATE_TIME}>{PRIVACY_NOTICE_DATE}</time>. Adaugă
+          universitatea la care studiezi, vizibilă oricărui membru.
+        </p>
+        <p>
+          Versiunea 1.1 — <time dateTime="2026-10-02">02.10.2026</time>.
+          Corectează textul după aplicația de la lansare: pseudonimul,
+          promovarea la Voluntar Activ decisă de BC, evaluările de rol,
+          rezumatul zilnic pe email și cine vede ce date.
         </p>
         <p>
           Versiunea 1.0 — aprobată pe{' '}

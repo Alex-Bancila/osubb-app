@@ -268,7 +268,10 @@ reset role;
 -- Back as the owner: the seed, provision_profile() and the future promotion
 -- job (#52) carry no member_level, so a level check alone would have blocked
 -- exactly the callers that are supposed to set roles.
-update profiles set role = 'vot' where id = 'e1000000-0000-0000-0000-0000000000e1';
+-- R58: a Role change into vot also needs the Universitate to be UBB, set in
+-- the same statement.
+update profiles set role = 'vot', university = private.ubb_university()
+ where id = 'e1000000-0000-0000-0000-0000000000e1';
 select is(
   (select role::text from profiles where id = 'e1000000-0000-0000-0000-0000000000e1'),
   'vot', 'a server-side caller (no claims, not a client role) still sets roles');

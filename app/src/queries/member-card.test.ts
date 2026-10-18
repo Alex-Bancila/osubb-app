@@ -12,6 +12,7 @@ const row = {
   role: 'activ',
   board_title: null,
   joined_at: '2024-03-12',
+  university: null,
   avatar_color: null,
   primary_group_id: 1,
   primary_group_name: 'Educațional',
@@ -164,6 +165,18 @@ it('turns the row into the card: role name, Group labels and roles, contact gate
     },
   ]);
   expect(toMemberCardData({ card: null, contact: null })).toBeNull();
+});
+
+it('carries the Universitate (R58): as stored, or none', () => {
+  expect(
+    toMemberCardData({
+      card: { ...row, university: 'Universitatea Babeș-Bolyai' },
+      contact: null,
+    }),
+  ).toMatchObject({ university: 'Universitatea Babeș-Bolyai' });
+  expect(toMemberCardData({ card: row, contact: null })).toMatchObject({
+    university: null,
+  });
 });
 
 it('names a BC or BCE member by their Board Title and keeps the rank beside it (#963)', () => {

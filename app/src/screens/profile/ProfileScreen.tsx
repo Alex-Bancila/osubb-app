@@ -52,7 +52,7 @@ import {
 } from '../../queries/reference';
 import EditProfileSheet from './EditProfileSheet';
 import { JoiningSection } from './JoiningSection';
-import { PHONE_HINT } from './profile-copy';
+import { PHONE_HINT, UNIVERSITY_HINT } from './profile-copy';
 import { PushDeviceCard } from './PushDeviceCard';
 import { PreferredGroupsCard } from './PreferredGroupsCard';
 import { RoleTimeline } from './RoleTimeline';
@@ -93,7 +93,7 @@ const TAB_OF_ANCHOR: Record<string, ProfileTab> = {
  *   name under it when they differ), the Role chip, the Adunarea Generală
  *   badge and "Membru din …", with two icon buttons — the pencil that opens
  *   Editează profilul, and the theme.
- * - **Cont**: Date de contact; the points panel — Punctaj și promovare, which
+ * - **Cont**: Date personale; the points panel — Punctaj și promovare, which
  *   carries the total, or Punctaj personal when there is no promotion to show
  *   (B38) — or, from level 5, Funcția în OSUBB (BC and BCE have no points,
  *   B45); Grupurile mele; and Parcursul organizațional from its second Role
@@ -363,7 +363,7 @@ export default function ProfileScreen() {
             <PageGrid columns={2}>
               <div className={stackClass}>
                 <Panel
-                  title="Date de contact"
+                  title="Date personale"
                   control={
                     // A pencil fits beside the title at every width; the
                     // labelled button it replaces took a row of the box.
@@ -371,8 +371,8 @@ export default function ProfileScreen() {
                       variant="outline"
                       size="icon"
                       onClick={openEdit}
-                      aria-label="Editează datele de contact"
-                      title="Editează datele de contact"
+                      aria-label="Editează datele personale"
+                      title="Editează datele personale"
                     >
                       <Pencil aria-hidden="true" />
                     </Button>
@@ -402,6 +402,25 @@ export default function ProfileScreen() {
                       ) : (
                         <span className="text-muted-foreground italic">
                           Necompletat
+                        </span>
+                      )}
+                    </SettingRow>
+                    {/* R58: BC sets it on the Member's page; here it is read-only. */}
+                    <SettingRow
+                      label="Universitate"
+                      hint={
+                        <InfoHint label="Despre universitate">
+                          {UNIVERSITY_HINT}
+                        </InfoHint>
+                      }
+                    >
+                      {profile.university ? (
+                        <span className="wrap-anywhere">
+                          {profile.university}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground italic">
+                          Necompletată
                         </span>
                       )}
                     </SettingRow>

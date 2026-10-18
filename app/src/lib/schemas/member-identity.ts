@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { bucharestDayKey } from '../calendar-time';
 import { parseLocalDate } from '../format';
+import { charLength, trimText } from '../normalize';
+import { OTHER_UNIVERSITY } from '../universities';
 import { memberNicknameSchema } from './nickname';
 import { emailSchema } from './profile';
 import { requiredText } from './text';
@@ -97,3 +99,30 @@ export const joinedAtFieldForReason: Readonly<Record<string, string>> = {
   joined_at_invalid: 'joinedAt',
   joined_at_in_future: 'joinedAt',
 };
+
+/**
+ * A Member's Universitate (ruling R58): either an entry of the list or, under
+ * "Altă universitate", a typed name -- trimmed, then 2-120 characters, as
+ * `profiles_university_length_ck` measures it. The draft is the select's value
+ * and the typed name; the output is the one `university` the column stores.
+ * The typed name belongs to the field a refusal is shown under.
+ */
+export const memberUniversitySchema = z
+  .object({ option: z.string(), other: z.string() })
+  .transform(({ option, other }, ctx) => {
+    const university = option === OTHER_UNIVERSITY ? trimText(other) : option;
+    const length = charLength(university);
+    if (length < 2 || length > 120) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['university'],
+        message: 'invalid_university',
+      });
+      return z.NEVER;
+    }
+    return { university };
+  });
+
+/** Where each reason about a Universitate is shown. */
+export const universityFieldForReason: Readonly<Record<string, 'university'>> =
+  { invalid_university: 'university' };

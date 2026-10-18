@@ -92,6 +92,8 @@ function MemberCardBody({
       ? fullName
       : null;
   const joined = data ? memberSinceLabel(data.joinedAt) : null;
+  // R58: the Universitate follows the join date on the same line.
+  const university = data?.university ?? null;
   // A Board Title names the Role (#963); the rank stays beside it.
   const rank =
     data?.rankLabel && data.rankLabel !== data.roleLabel
@@ -131,10 +133,15 @@ function MemberCardBody({
           {joined && (
             <span className="flex items-center gap-1.5">
               <CalendarIcon aria-hidden="true" className="size-3.5 shrink-0" />
-              <span>{joined}</span>
+              <span className="wrap-anywhere">
+                {university ? `${joined} · ${university}` : joined}
+              </span>
             </span>
           )}
-          {!data?.roleLabel && !rank && !subtitle && !joined && (
+          {!joined && university && (
+            <span className="wrap-anywhere">{university}</span>
+          )}
+          {!data?.roleLabel && !rank && !subtitle && !joined && !university && (
             <span>Profil de membru</span>
           )}
         </SheetDescription>

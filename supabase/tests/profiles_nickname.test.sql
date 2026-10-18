@@ -36,8 +36,8 @@ select is(
     where attribute.attrelid = 'public.profiles_directory'::regclass
       and attribute.attnum > 0 and not attribute.attisdropped),
   array['id', 'full_name', 'role', 'status', 'avatar_color',
-        'created_at', 'joined_at', 'nickname', 'board_title'],
-  'profiles_directory carries nickname beside full_name (#936: tier and joined_year dropped)');
+        'created_at', 'joined_at', 'nickname', 'board_title', 'university'],
+  'profiles_directory carries nickname beside full_name (#936: tier and joined_year dropped; R58 appends university)');
 
 -- ==================== Fixtures — prefix 67500000-… ====================
 

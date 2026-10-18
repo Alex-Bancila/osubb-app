@@ -249,6 +249,9 @@ select results_eq(
   'a decided row is left as it was, and another Member''s open row is untouched');
 
 -- A role_history row that does not leave Voluntar closes nothing.
+-- R58: Drept de Vot goes to a UBB student only.
+update public.profiles set university = private.ubb_university()
+ where id = '82610000-0000-0000-0000-000000000004';
 select pg_temp.test_login_leadership('82610000-0000-0000-0000-000000000001');
 select lives_ok($$ select public.set_member_role('82610000-0000-0000-0000-000000000004', 'vot') $$,
   'BC grants Drept de Vot to a Voluntar Activ');

@@ -53,8 +53,12 @@ The short name a Member chooses for themselves, shown wherever the application n
 _Avoid_: Display name, alias, username, handle
 
 **Member Card**:
-The summary opened from any Member's name: Nickname, full name, Role, join date, and Groups. Contact details appear only to viewers already allowed to read them; Task Points and rank never appear.
+The summary opened from any Member's name: Nickname, full name, Role, join date, Universitate, and Groups. Contact details appear only to viewers already allowed to read them; Task Points and rank never appear.
 _Avoid_: Profile pop-up, tooltip, user card
+
+**Universitate**:
+The university a Member studies at, chosen from a list on which Universitatea Babeș-Bolyai is one entry among the others; every Member is a student somewhere. BC or the Moderator records it; the Member reads it in Profil, under Date personale, and on the Member Card. Only a Member whose Universitate is Universitatea Babeș-Bolyai may hold Voluntar cu Drept de Vot, a rule of the organization that never changes; an unknown Universitate never counts as UBB.
+_Avoid_: Faculty, school, "UBB student" as a flag, "Nu sunt student"
 
 **Group**:
 A named body of OSUBB people and work, created by BC or Moderator with its own name and settings. A Group holds one roster of Members with Group roles and one Minimum Level. Departments, Teams, Projects, and the Adunarea Generală are Groups; every Task Origin and Event Scope is a Group.
@@ -361,7 +365,7 @@ The automatic notice BC receives when a Role Evaluation ranks a Voluntar Activ (
 _Avoid_: Demotion, auto-demotion, downgrade
 
 **AG Eligibility**:
-The qualification every Voluntar Activ holds by Role, because that Role already required both tenure and the Voluntar Activ Promotion Threshold. Promotion to Voluntar Activ offers the adherence form; only BC's confirmation of it grants Drept de Vot and, through Automatic Membership, a seat in the Adunarea Generală. No threshold leads to Drept de Vot; the Adunarea Generală Promotion Threshold only measures who keeps it.
+The qualification a Voluntar Activ whose Universitate is Universitatea Babeș-Bolyai holds: the only two conditions for a seat in the Adunarea Generală. Promotion to Voluntar Activ offers the adherence form; only BC's confirmation of it grants Drept de Vot and, through Automatic Membership, a seat in the Adunarea Generală, and the application refuses that grant to anyone who is not a UBB student. No threshold leads to Drept de Vot; the Adunarea Generală Promotion Threshold only measures who keeps it.
 _Avoid_: Drept de Vot threshold
 
 **Vote Retention Threshold**:

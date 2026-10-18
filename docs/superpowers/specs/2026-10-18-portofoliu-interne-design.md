@@ -1,0 +1,150 @@
+# Portofoliu Interne — design
+
+- **Date:** 2026-10-18
+- **Decided by:** Alex Băncilă, in the grill session of 2026-10-18 (ruling R58)
+- **Status:** approved, not yet built. The university backfill script is a later request (R58 §Later).
+- **Amends:** ADR-0004 (amendment of 2026-10-18), rulings R20, R28, R30, R35 where they conflict; `CONTEXT.md` §Members and structure, §Task Tracker (points terms), §Governance.
+
+## The request
+
+> "Before anything we need to add the university to volunteers profile, because only volunteers that are students of BBU are able to become Voluntar cu Drept de Vot, this is a must and won't ever change. [...] Portofoliu Interne (calculul pragurilor) [...] will replace "Evaluari de rol" for good. [...] remove vechime it doesn't hold to how we work anymore. [...] a new button that sets the day when tasks add to the computation of visible points of volunteers. [...] I want you to keep the custom threshold [...] change from a fix number of months to a calendar selection that specifies the day in which the volunteer should have been member of osubb. [...] let the possibility to rerun the evaluations with different values and see the results before we set on a final evaluation."
+
+The document Alex pasted (Portofoliu Interne, calculul pragurilor): Prag Minim = (puncte ședințe departament + puncte ședințe generale) / 2, entered by hand; Evaluarea Membrilor Activi = the eligible Members' top 35 % (the 65th percentile); Evaluarea Membrilor cu Drept de Vot = the eligible Members' top 25 % (the 75th percentile), on condition of being Voluntar Activ and a UBB student; both shares stay editable.
+
+## Decisions (ruling R58)
+
+Each numbered point is one answer Alex gave, in the order asked. Where he answered "I like your recommendation", the recommendation is written out.
+
+1. **Two separate runs**, as today: the Voluntar Activ kind and the Adunarea Generală kind. They share one Eligibility Floor (Prag minim).
+2. **The Voluntar Activ run ranks everyone evaluated in one ranking**, not the Voluntar Activ cohort alone. R28's decision 2 (per-cohort share) is retired.
+3. **Populations.** The Voluntar Activ run ranks every active Member below BCE: Recrut, Voluntar, Voluntar Activ and Voluntar cu Drept de Vot. Recruți are ranked on purpose: they shape the percentile even though they cannot be listed. The Adunarea Generală run ranks only the Voluntar cu Drept de Vot holders, the members of the Adunarea Generală, and has no Membership Cutoff Date: being a UBB student and Voluntar Activ are the only conditions for that Group, so the run only finds who is not active enough. BCE, BC and the Moderator are never ranked, as on Clasament.
+4. **The Eligibility Floor is the entry gate.** A Member whose Task Points in the Evaluation Period are below it is not ranked and does not shape the percentile; the percentile is taken over the eligible Members alone. A Voluntar Activ or a voter below the Floor raises a Retention Signal just like one ranked below the line.
+5. **No promotion by the calendar, for good.** The automatic Recrut → Voluntar rule is dropped together with the months gate; BC promotes Recruți by hand in Roluri. The "Promovare după vechime" panel and both Promotion Rules go.
+6. **The Membership Cutoff Date is a setting**, editable from Portofoliu Interne at any time, every change audited, so that Voluntars who joined on or before it have the door to Voluntar Activ open before the first run under this model. Each Voluntar Activ run reads the date in force and records it on the run.
+7. **Simulation and finalisation.** The run form is prefilled from the settings in force (period, Eligibility Floor, the kind's share, the cutoff date for the Voluntar Activ kind). **Simulare** computes the ranking, the line, the would-be Candidates and Signals and shows them; it writes nothing. **Finalizează** records the Role Evaluation with the exact values shown, hands the computed line over, lists the Candidates, raises the Signals, sends the Notifications, and makes the values used (Floor, share, cutoff date) the settings in force, each as an audited change naming the run. Only finalised runs appear in history.
+8. **Every run is advisory.** It builds the list of Members who meet the line and the list of holders who no longer do; every Role change stays BC's hand (ADR-0004 decision 3 and the R28 amendment stand).
+9. **Universitate** is one field on the Profile, chosen from a list: Universitatea Babeș-Bolyai, the other Cluj universities, "Altă universitate" with a free-text name. There is **no "Nu sunt student"**: to be a Member of OSUBB one must be a student. Null means not yet known and never counts as UBB.
+10. **BC and the Moderator edit Universitate** (Administrare → Membri, beside the join date); the Member reads it in Profil and on the Member Card. Profil's "Date de contact" panel is renamed **"Date personale"** and shows it. The server **refuses granting Voluntar cu Drept de Vot** to anyone whose Universitate is not UBB, empty included. A voter whose Universitate changes away from UBB **raises a Retention Signal at once**, not only at the next run.
+11. **Points Start Date** (Data de început a punctajului): one setting on Portofoliu Interne, BC or Moderator, audited. Every points total counts only Task Points from Task Evaluations on or after it: Personal Score (Acasă, Profil, the progress toward the threshold), Clasament, Tracker membru, the Department Cup, Campaign totals and reports. Older Tasks keep their own points and stay in Taskuri încheiate. Role Evaluations ignore it (their period is explicit); the live Promotion Candidates already count since the last run. **Lookback only on Clasament:** an explicit "De la" in Clasament's Work Filter earlier than the Points Start Date reads the real numbers; nothing else ever sums before it.
+12. **Access: BC and the Moderator only** (`manageRoles`, as today). The tab is renamed Portofoliu Interne at `/administrare/portofoliu-interne`; `/administrare/evaluari` redirects there.
+13. **Names** (Romanian label, glossary term): Portofoliu Interne; Prag minim (Eligibility Floor); Prag de promovare / Prag Adunarea Generală (Promotion Threshold, the copy never says "prag" alone); Procentul (the kind's top share); Data limită de intrare (Membership Cutoff Date); Data de început a punctajului (Points Start Date); Simulare (Simulation); Finalizează records the Role Evaluation. The copy never calls the Evaluation Period a semester.
+14. **Day-one state.** Both Promotion Thresholds in force stay exactly as they are. x becomes 35 and y becomes 25, logged as changes naming this ruling. Prag minim, Data limită de intrare and Data de început a punctajului start empty: a run or a Simulation is refused until the Floor is set, nobody is listed live until a cutoff date is set, and every total counts from the beginning until a start date is set. Open Promotion Candidates and their rejections are kept; the latest run of each kind has its Retention Signals rebuilt as stored rows from its recorded ranking.
+15. **The lists react to the settings.** Setting or changing the cutoff date, a Promotion Threshold or a share re-evaluates the live Promotion Candidates at once; a Universitate change re-evaluates that voter's Retention Signal at once.
+16. **Retention Signals are not live on points.** Points-based Signals come only from a finalised run; the only live Signal is the Universitate one. A Signal closes when BC changes the Role, when the fact reverses (Universitate set back to UBB), or when the next run of its kind supersedes it.
+17. **A run measures against the line it computes.** A finalised run computes the Promotion Threshold from this period's eligible Members and measures its own Candidates and Signals against that line; that line is in force until the next run of its kind (the live Candidates between runs read it, BC may still edit it by hand). The previous line plays no part in the run: "the next run does not care at all about the last run". History keeps both numbers, in force before and computed.
+
+## What exists (main at b97e5725)
+
+| Piece                 | Today                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Role Evaluation       | `public.run_role_evaluation(p_kind, p_from, p_to, p_name)` writes at once: the run row, Promotion Candidates measured against `threshold_used` (the previous line), Notifications, the hand-over of `threshold_computed`. Ranking core `private.role_evaluation_rows(kind, from, to, on_date)`: per-Role cohorts, `share_size = ceil(percent × cohort / 100)`, Voluntars admitted by `joined_at + min_tenure_months`. No simulation. |
+| Retention Signals     | Not stored: the page derives them from `role_evaluation_ranking` (holders below `threshold_used`); the run notifies BC once per signal.                                                                                                                                                                                                                                                                                              |
+| Thresholds and shares | `promotion_thresholds` (one row per kind, every Member reads it, `set_promotion_threshold`); x = `promotion_rules.percent` of the `top_percent` rule, y = `org_settings.vote_retention_percent`, both through `set_evaluation_percent` (R30). Log: `promotion_threshold_changes` (fields threshold, percent, tenure, enabled).                                                                                                       |
+| Promotion Rules       | `promotion_rules`: `time` (Recrut → Voluntar, daily job `osubb-apply-promotions` via `private.apply_promotions` / `detect_promotions`) and `top_percent` (the months gate). Edited by `update_promotion_rule` (#935).                                                                                                                                                                                                                |
+| Live Candidates       | `private.refresh_promotion_candidates()` after writes to `points_ledger`, `promotion_thresholds`, `promotion_rules`, `profiles`, and daily (#983).                                                                                                                                                                                                                                                                                   |
+| Points totals         | `my_points` view (whole ledger), `leadership_leaderboard(group, campaign, from, to, preferred)`, `department_cup(campaign, from, to)`, `campaign_totals` / `campaign_report(campaign, from, to)`, `my_role_evaluation_standing(kind)` (since the last run). All read the whole ledger unless a range is passed.                                                                                                                      |
+| Profile               | `profiles.joined_at` (BC edits it by a guarded column update from Administrare → Membri); no university anywhere. `member_card(uuid)` returns the join date.                                                                                                                                                                                                                                                                         |
+| Page                  | `RoleEvaluationsScreen.tsx` (1 914 lines): Rulează, Praguri, Promovare după vechime, Istoricul modificărilor, Candidați la promovare, Semnale de retenție, Istoricul evaluărilor; tab "Evaluări de rol" at `/administrare/evaluari`, capability `manageRoles`.                                                                                                                                                                       |
+| Profil                | The "Date de contact" panel (`ProfileScreen.tsx`).                                                                                                                                                                                                                                                                                                                                                                                   |
+
+## Design
+
+### A. Universitate on the Profile
+
+- `profiles.university text null`, trimmed, 2–120 characters. The canonical UBB value is one constant, `Universitatea Babeș-Bolyai`, shared by the migration, the list the app offers and the rule. Any other text is another university.
+- Write path: the same guarded column update BC uses for `joined_at` (`grant update (university)`; `guard_profile_privileged_columns` keeps it to BC/Moderator). The service role writes it from the later backfill script.
+- Read: `profiles_directory`, `member_card` and the Profil self read carry it. The list the app offers (one module, `app/src/lib/universities.ts`): UBB first, then the Cluj universities (UTCN, USAMV, UMF, UAD, Academia de Muzică), then "Altă universitate" → a text field. A stored value outside the list shows as that text under "Altă universitate".
+- **The grant rule.** A `before update of role` trigger on `profiles` (`profiles_guard_vote_university`, firing when the Role becomes `vot`) refuses with `PT409 vote_requires_ubb_student` ("Doar un student UBB poate primi Drept de Vot.") unless `profiles.university = <canonical>`, so `set_member_role` and any other writer of a Role change meet one rule. Roluri disables the option with the same reason. The plan (2026-10-18) put the rule in the trigger rather than in `set_member_role` because `provision_profile` and the volunteer CSV import also create voters; those **inserts** stay outside the rule until the import carries the university (§Later), since the test fixtures that insert voters directly number in the dozens.
+- **The live Signal.** A statement trigger on `profiles` (university changes) calls the Retention Signal refresh (§C): a `vot` holder whose Universitate is known and is not UBB (null, unknown, opens nothing) gets one open live Signal of reason `not_ubb_student` and BC/Moderator one Notification; the Signal closes when the value returns to UBB or the Role changes.
+- Profil: the panel is titled **Date personale**; it shows Universitate read-only below the contact facts. The Member Card shows it after the join date.
+
+### B. Settings
+
+One row, `public.evaluation_settings` (`id smallint primary key check (id = 1)`):
+
+| Column                                   | Meaning                                                                                      | Null                                                                                             |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `eligibility_floor integer check (>= 1)` | Prag minim, shared by both kinds; at least 1, so a computed line is always a legal threshold | until BC sets it; a run or Simulation is refused meanwhile (`PT409 eligibility_floor_not_set`)   |
+| `membership_cutoff date`                 | Data limită de intrare, Voluntar Activ kind only                                             | until BC sets it; nobody is listed live meanwhile, a Voluntar Activ run or Simulation is refused |
+| `points_start_date date`                 | Data de început a punctajului                                                                | until BC sets it; every total counts from the beginning                                          |
+
+- Read by every live active Member (the same policy as `promotion_thresholds`): a Member may know the rules of their own promotion and from when their points count.
+- Three commands, one per value, BC/Moderator (`manage_roles`), lock `(47, 1)` then the row `for no key update`: `set_eligibility_floor(p_points)`, `set_membership_cutoff(p_date)`, `set_points_start_date(p_date)`. Each writes one row in the change log and the first two fire the Candidate refresh. `PT400 invalid_eligibility_floor`, `invalid_membership_cutoff` (in the future), `invalid_points_start_date` (in the future).
+- The shares x and y **move into this row** in PR 3 (`activ_percent`, `vot_percent`, 1–100), because dropping `promotion_rules` removes x's home and R30's reason for leaving them apart (x defined the rule) goes with it; `org_settings.vote_retention_percent` is deleted. `set_evaluation_percent` stays the one writer and `evaluation_percents()` the reader; a finalised run writes the share it used too (§C).
+- **The change log** `promotion_threshold_changes` grows three fields and a date pair: `field in ('threshold','percent','tenure','enabled','floor','cutoff','points_start')` (tenure/enabled rows stay readable as history), `from_date date`, `to_date date` for the two date fields (`to_value` null for them); `source in ('manual','role_evaluation','migration')` (the existing `role_evaluation` value names a run's write; `migration` names the day-one x/y change). The log panel renders each field with its own words.
+
+### C. The ranking core, Simulation and the finalised run
+
+`private.role_evaluation_rows(p_kind, p_from, p_to, p_floor, p_percent, p_cutoff)` replaces the four-argument core:
+
+- population: `voluntar_activ` → active Members with Level < 5; `adunarea_generala` → active `vot` holders;
+- `task_points` = `private.task_points_in_range` over the period (0 when nothing touched them);
+- `ranked = task_points >= p_floor`; only ranked rows get `rank()` (ties share it) in **one** cohort; `eligible_count` = ranked rows; `share_size = ceil(p_percent × eligible_count / 100)`; `line` = the Task Points of the `share_size`-th ranked row in points-descending order (ties at the boundary are inside, as #49's rule already reads); `inside = ranked and task_points >= line`;
+- `listable` (Voluntar Activ kind) = `role = 'voluntar' and joined_at <= p_cutoff`;
+- rows carry `member_id, role, task_points, ranked, rank, eligible_count, share_size, line, inside, listable`.
+
+Outcomes of a kind, from those rows and the line computed:
+
+| Kind              | Promotion Candidate   | Retention Signal                                                                                               |
+| ----------------- | --------------------- | -------------------------------------------------------------------------------------------------------------- |
+| voluntar_activ    | `listable and inside` | `role in ('activ','vot') and not inside` (below the line or unranked)                                          |
+| adunarea_generala | none                  | `not inside`, plus every voter whose Universitate is known and not UBB (`not_ubb_student`; null opens nothing) |
+
+- **`public.simulate_role_evaluation(p_kind, p_from, p_to, p_floor, p_percent, p_cutoff)`**: `stable`, BC/Moderator only, returns the rows above plus `line` and the counts; writes nothing. The page shows the would-be line, Candidates, Signals and the full ranking.
+- **`public.run_role_evaluation(p_kind, p_from, p_to, p_name, p_floor, p_percent, p_cutoff)`**: under `(47, 1)`, the kind's `promotion_thresholds` row `for no key update`, the population's Profiles `for key share`: inserts the `role_evaluations` row (new columns `eligibility_floor`, `percent_used`, `membership_cutoff`, `eligible_count`; `threshold_used` keeps the line in force before, `threshold_computed` the line of this run), supersedes the kind's open Candidates and Signals, inserts Candidates and Signals measured against `threshold_computed`, notifies BC/Moderator once per row, hands `threshold_computed` over as the threshold in force (source `role_evaluation`), writes the Floor, share and cutoff used into the settings when they differ (source `role_evaluation`, naming the run), then calls the Candidate refresh. A computed line is never below the Floor, which is at least 1, so the "below 1 not handed over" rule of R28 has nothing left to guard and goes; a run that ranked nobody (`ranked_count = 0`) has no line (`threshold_computed` null), hands nothing over, lists no Candidate, and raises a `below_floor` Signal for every holder.
+- `public.role_evaluation_ranking(p_role_evaluation_id)` recomputes a recorded run's rows with the run's own stored values (the ranking is a function of the ledger and the parameters; a later reversal moves it, as today). The (kind, from, to) signature goes.
+- `my_role_evaluation_standing(kind)` keeps its meaning (points since the day after the latest run of the kind, the threshold in force), reading the new tables.
+- **`public.retention_signals`**: `id, kind, member_id, role_at_listing, reason in ('below_line','below_floor','not_ubb_student'), task_points, threshold_used, role_evaluation_id null (live), created_at, closed_at, closed_as in ('role_changed','superseded','resolved')`, one open row per (kind, member, reason) (partial unique index), RLS read to `manage_roles`, written only by the run, the Universitate refresh and the `role_history` trigger (as `promotion_candidates` already is). The page's Semnale de retenție panel reads it instead of deriving from the ranking.
+- `private.refresh_promotion_candidates()` reads the cutoff from `evaluation_settings` (no rule, no months) and lists nobody while it is null; its triggers move from `promotion_rules` to `evaluation_settings`. The daily job and `private.apply_promotions` / `detect_promotions` are dropped (nothing promotes by the calendar; the refresh needs no daily tick once tenure is gone). `promotion_rules` and `update_promotion_rule` are dropped; the log's tenure/enabled rows remain readable with `promotion_rule_id` kept as a plain bigint.
+
+### D. The Points Start Date in every total
+
+The floor is applied inside the readers, never by the client:
+
+- `my_points` and every self total → `evaluated_at >= start` through `points_ledger.evaluation_id` (a Sanction has no Evaluation: counted from `created_at >= start`);
+- `leadership_leaderboard_impl`, `department_cup_rows`, `campaign_totals_impl`, `campaign_report_impl`: `p_from := greatest(p_from, start)` **except** that `leadership_leaderboard` honours an explicit `p_from` earlier than the start (R58 §11, Clasament only). Since `department_cup` is read from the Clasament page under the same Work Filter, the plan decides whether the Cup follows the same filter there; Alex asked for the lookback "on clasament", so the Cup on that page may follow it and nothing elsewhere does.
+- The client reads `evaluation_settings.points_start_date` directly (the row is readable by every Member) so Acasă and Profil can say "din 01.10.2026" beside the Personal Score and Clasament's caption can say from when it counts; SQL readers use `private.points_floor()`. Clasament's Work Filter is not prefilled: an explicit "De la" is the lookback.
+- Tracker membru and the Group/Member points surfaces read through the same functions.
+
+### E. The page
+
+`/administrare/portofoliu-interne`, tab **Portofoliu Interne** (icon stays `ClipboardCheck`), `manageRoles`; `/administrare/evaluari` → redirect. Panels, laptop two columns / phone one:
+
+1. **Rulează o evaluare** — kind, De la / Până la, Nume, Prag minim, Procent, Data limită de intrare (Voluntar Activ only), prefilled from the settings in force; **Simulează** then the result card (line, eligible / ranked counts, Candidates, Signals, the full ranking in a sheet) with **Finalizează** and a confirmation naming the consequences, and **Modifică valorile** back to the form.
+2. **Setări** — Prag minim, Data limită de intrare, Data de început a punctajului, Procentul Voluntar Activ, Procentul Adunarea Generală, each a `SettingRow` with its last change; Praguri în vigoare (the two Promotion Thresholds, still hand-editable).
+3. **Candidați la promovare** and **Semnale de retenție** (from the stored rows, with the reason: sub prag, sub prag minim, nu mai e student UBB), unchanged links to Roluri.
+4. **Istoricul evaluărilor** — each run with its values (period, Floor, share, cutoff, line in force before, line computed, eligible / ranked counts) and the ranking sheet.
+5. **Istoricul modificărilor** — the log, every field with its own words.
+
+### F. Copy (Romanian)
+
+- Tab and page: `Portofoliu Interne`. Form: `Prag minim`, `Procent`, `Data limită de intrare`, `Simulează`, `Finalizează`, `Modifică valorile`. Settings: `Data de început a punctajului`. Thresholds: `Prag de promovare` (Voluntar Activ), `Prag Adunarea Generală`.
+- Simulation card: `Simulare, nimic nu a fost salvat.` Confirmation of Finalizează (Voluntar Activ): `Clasăm punctele de task primite între {from} și {to} de toți membrii sub BCE care au cel puțin {floor}. Pragul de promovare devine punctele ultimului membru din primii {x}%: {line}. Voluntarii intrați până la {cutoff} care îl ating devin candidați la promovare; Voluntarii Activi și Voluntarii cu Drept de Vot sub el, sau sub pragul minim, devin semnale de retenție. Nimeni nu este promovat sau retrogradat automat.` The Adunarea Generală text mirrors it over the voters with `{y}%` and `Prag Adunarea Generală`.
+- Reasons: `eligibility_floor_not_set` → `Setează pragul minim înainte de a rula o evaluare.`; `membership_cutoff_not_set` → `Setează data limită de intrare înainte de a rula evaluarea Voluntar Activ.`; `vote_requires_ubb_student` → `Doar un student UBB poate primi Drept de Vot.`; `invalid_university` → `Alege universitatea din listă sau scrie-o.`
+- Personal Score: `Punctaj din {date}` when a Points Start Date is set.
+- Profil panel: `Date personale`; field `Universitate`.
+
+### G. Tests (pgTAP and vitest, same PRs)
+
+- Ranking: Recruți shape the percentile; a Member below the Floor is unranked and raises a Signal when a holder; one cohort, not per Role; ties at the boundary inside; the Adunarea Generală kind ranks voters only and ignores the cutoff; a Voluntar who joined after the cutoff is ranked but never listed.
+- Simulation writes nothing (row counts of every table unchanged, no Notification); Finalizează writes the run, Candidates and Signals against `threshold_computed`, hands it over, writes the settings used with source `role_evaluation`.
+- Settings commands: authority, ranges, log rows, the Candidate refresh after a cutoff change (a Voluntar appears/disappears), refusal of a run while the Floor or cutoff is null.
+- Universitate: the grant refusal, the live Signal on change and its close on reversal or Role change, the column guard, the Member Card and Profil reads.
+- Points Start Date: `my_points`, Clasament, Cup, Campaign totals floor at the date; Clasament's explicit earlier `p_from` looks back; Role Evaluations ignore it.
+- Drop acceptance by mutation: the daily job, `promotion_rules`, `update_promotion_rule`, the four-argument core and the (kind, from, to) ranking are gone (`conventions.test.sql` / the grants roster).
+- App: the renamed tab and redirect, the form prefill, Simulează → result → Finalizează, the settings rows, the Signals panel reasons, "Date personale", the Universitate list with "Altă universitate", `Punctaj din {date}`.
+
+## PR split (decided by the plan, `docs/superpowers/plans/2026-10-18-portofoliu-interne.md`)
+
+1. **Universitate** — column, guard, the trigger rule, list, Administrare → Membri editor, Profil "Date personale", Member Card, Privacy Notice 1.2 (a new personal-data field bumps the notice by the project's own rule). Independent; ships first so the backfill script can run.
+2. **Settings and the Points Start Date** — `evaluation_settings`, the three commands, the log fields, the floor in every points reader, Acasă/Profil/Clasament copy.
+3. **Portofoliu Interne** — the new core, `simulate_role_evaluation`, the rebuilt `run_role_evaluation`, `retention_signals`, the live Universitate Signal, the shares moved home, the drops (rules, daily job, tenure), day-one data moves (x = 35, y = 25, rebuilt Signals), **and** the page: rename, redirect, the rebuilt screen. One PR, because the old screen cannot compile against the new backend once `promotion_rules` and the four-argument run are gone.
+
+Migrations dated after `main`'s newest; every `create or replace` body restated from `main`'s latest (`pg_get_functiondef`).
+
+## Later (not in this design)
+
+- **The university backfill script** (Alex: "I will come back with this later"): reads a sheet of Members and universities and writes `profiles.university` through the service role, like `scripts/import-legacy-tasks.mjs`. It normalises cedilla spellings (ş/ţ, U+015F/U+0163) and "UBB" aliases to `private.ubb_university()`'s exact value before writing. Needs PR 1 merged.
+- **A voter provisioned directly** by `provision_profile` or the volunteer CSV import is outside the Drept de Vot trigger (it guards `update of role`, not inserts) until the import carries the university.
+- Recruți above the line are not listed anywhere; BC promotes Recrut → Voluntar by hand without a hint from the run. Could become a third list if asked.
+- A multi-select in Roluri for promoting a recruitment cohort at once was mentioned as the replacement for the calendar rule; not requested yet.

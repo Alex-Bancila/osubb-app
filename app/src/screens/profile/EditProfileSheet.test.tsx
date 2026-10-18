@@ -40,6 +40,7 @@ const sampleProfile: MyProfile = {
   status: 'activ',
   avatar_color: '#284C93',
   joined_at: '2025-01-01',
+  university: null,
   email: 'ana@osubb.ro',
   phone: '0711223344',
 };

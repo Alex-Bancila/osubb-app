@@ -42,24 +42,33 @@ import { FieldError } from '../../components/ui/field';
 import { FormSheet, FormSheetFooter } from '../../components/ui/form-sheet';
 import { InfoHint } from '../../components/ui/info-hint';
 import { Input } from '../../components/ui/input';
+import { Select } from '../../components/ui/select';
 import { useAuth } from '../../lib/auth';
 import { useCapabilities, type Capabilities } from '../../lib/capabilities';
 import { safeHexColor } from '../../lib/color';
 import { memberEditRights } from '../../lib/member-edit-rights';
 import { formatDayMonthYear, formatPoints, initials } from '../../lib/format';
 import { isUuid } from '../../lib/ids';
+import {
+  OTHER_UNIVERSITY,
+  UNIVERSITIES,
+  universityOption,
+} from '../../lib/universities';
 import { bucharestDayKey } from '../../lib/calendar-time';
 import {
   fieldForReason,
   joinedAtFieldForReason,
   memberIdentitySchema,
   memberJoinedAtSchema,
+  memberUniversitySchema,
+  universityFieldForReason,
 } from '../../lib/schemas/member-identity';
 import { useFormValidation } from '../../lib/use-form-validation';
 import {
   useAdminMember,
   useUpdateMemberIdentity,
   useUpdateMemberJoinedAt,
+  useUpdateMemberUniversity,
   type AdminMember,
   type LedgerRow,
 } from '../../queries/admin-member';
@@ -80,6 +89,8 @@ const SAVE_FAILED =
   'Nu am putut salva numele. Verifică permisiunile și reîncearcă.';
 const JOINED_SAVE_FAILED =
   'Nu am putut salva data intrării. Verifică permisiunile și reîncearcă.';
+const UNIVERSITY_SAVE_FAILED =
+  'Nu am putut salva universitatea. Verifică permisiunile și reîncearcă.';
 const IDENTITY_FORM_ID = 'member-identity-form';
 
 /** The page's tabs, by their `?tab=` value — as Profil's. */
@@ -254,6 +265,43 @@ function hasGroupRole(group: MemberCardGroup) {
 }
 
 /**
+ * The Salvează / Renunță of a row's inline editor. Neither is filled: a page
+ * keeps one filled button.
+ */
+function RowEditorButtons({
+  pending,
+  unchanged,
+  onCancel,
+}: {
+  pending: boolean;
+  /** The draft is what is stored: there is nothing to save. */
+  unchanged: boolean;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button
+        type="submit"
+        variant="outline"
+        className="flex-1 sm:flex-none"
+        disabled={pending || unchanged}
+      >
+        {pending ? 'Se salvează…' : 'Salvează'}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        className="flex-1 sm:flex-none"
+        disabled={pending}
+        onClick={onCancel}
+      >
+        Renunță
+      </Button>
+    </div>
+  );
+}
+
+/**
  * "Data intrării" for BC and the Moderator (#932): the date tenure counts
  * from, as a row whose pencil opens a date (the app's `DatePicker`) with
  * Salvează / Renunță in place. The picker has no upper bound, so a day in the
@@ -337,29 +385,14 @@ function JoinDateRow({ member }: { member: AdminMember }) {
           </div>
           <FieldError {...form.errorProps('joinedAt')} />
           <FieldError>{form.formError}</FieldError>
-          {/* Neither is filled: a page keeps one filled button. */}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="submit"
-              variant="outline"
-              className="flex-1 sm:flex-none"
-              disabled={change.isPending || draft === (member.joinedAt ?? '')}
-            >
-              {change.isPending ? 'Se salvează…' : 'Salvează'}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="flex-1 sm:flex-none"
-              disabled={change.isPending}
-              onClick={() => {
-                setDraft(member.joinedAt ?? '');
-                setEditing(false);
-              }}
-            >
-              Renunță
-            </Button>
-          </div>
+          <RowEditorButtons
+            pending={change.isPending}
+            unchanged={draft === (member.joinedAt ?? '')}
+            onCancel={() => {
+              setDraft(member.joinedAt ?? '');
+              setEditing(false);
+            }}
+          />
         </form>
       ) : (
         <span
@@ -388,6 +421,163 @@ function JoinDateRow({ member }: { member: AdminMember }) {
         <p className="m-0 basis-full text-sm text-muted-foreground">
           Fără ea, membrul nu acumulează vechime pentru promovări.
         </p>
+      )}
+      {message && !editing && turn.current && (
+        <p role="status" className="m-0 basis-full text-sm font-medium">
+          {message}
+        </p>
+      )}
+    </li>
+  );
+}
+
+/**
+ * The select's draft for a stored Universitate: its list entry, or "Altă
+ * universitate" with the stored name as the free text.
+ */
+function universityDraft(university: string | null) {
+  const option = universityOption(university) ?? '';
+  return {
+    option,
+    other: option === OTHER_UNIVERSITY ? (university ?? '') : '',
+  };
+}
+
+/** The Universitate select's entries: the list, then the free-text one. */
+const UNIVERSITY_CHOICES = [
+  ...UNIVERSITIES.map((name) => ({ value: name, label: name })),
+  { value: OTHER_UNIVERSITY, label: 'Altă universitate' },
+];
+
+/**
+ * "Universitate" for BC and the Moderator (R58), beside the join date: a row
+ * whose pencil opens the app's `Select` of the universities of Cluj, with
+ * "Altă universitate" opening a text field for any other name, and Salvează /
+ * Renunță in place. Only a student of Universitatea Babeș-Bolyai may be
+ * granted Drept de Vot, which the Roluri panel reads from this. The write is
+ * `profiles_update_self` plus the column grant; the privileged-column guard
+ * refuses anyone below level 6 whatever the browser sends. Mounted behind
+ * `memberEditRights(...).profile`, like the join date.
+ */
+function UniversityRow({ member }: { member: AdminMember }) {
+  const nameId = useId();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(universityDraft(member.university));
+  const [message, setMessage] = useState<string | null>(null);
+  const turn = useReceiptTurn();
+  const change = useUpdateMemberUniversity();
+  const chosen =
+    draft.option === OTHER_UNIVERSITY ? draft.other.trim() : draft.option;
+  // The hook hides a refusal once the value at the field it was shown under
+  // changes, and that field is `university`, not the draft's `option` and
+  // `other`: the values it reads carry the chosen name under that key.
+  const validated = { ...draft, university: chosen };
+  const form = useFormValidation(
+    memberUniversitySchema,
+    validated,
+    universityFieldForReason,
+  );
+  const editButton = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(false);
+
+  // Back from the editor, focus returns to the button that opened it.
+  useEffect(() => {
+    if (wasEditing.current && !editing) editButton.current?.focus();
+    wasEditing.current = editing;
+  }, [editing]);
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    if (change.isPending) return;
+    const values = form.validate();
+    if (!values) return;
+    try {
+      await change.mutateAsync({
+        memberId: member.memberId,
+        university: values.university,
+      });
+      setMessage('Universitatea a fost salvată.');
+      turn.claim();
+      setEditing(false);
+    } catch (failure) {
+      form.fail(failure, UNIVERSITY_SAVE_FAILED);
+    }
+  }
+
+  return (
+    <li
+      data-slot="university"
+      className="flex min-h-11 flex-wrap items-center justify-between gap-x-4 gap-y-1 py-1.5"
+    >
+      <span className="text-sm text-muted-foreground">Universitate</span>
+      {editing ? (
+        <form noValidate onSubmit={save} className="grid w-full max-w-md gap-3">
+          <Select
+            aria-label="Universitate"
+            value={draft.option}
+            placeholder="Alege universitatea"
+            options={UNIVERSITY_CHOICES}
+            disabled={change.isPending}
+            autoFocus
+            onValueChange={(option) => {
+              setDraft({ ...draft, option });
+              // A refusal was about the old choice.
+              form.reset();
+            }}
+          />
+          {draft.option === OTHER_UNIVERSITY && (
+            <div className="grid gap-1.5">
+              <label htmlFor={nameId} className={labelClass}>
+                Numele universității
+              </label>
+              <Input
+                id={nameId}
+                value={draft.other}
+                disabled={change.isPending}
+                onChange={(event) =>
+                  setDraft({ ...draft, other: event.target.value })
+                }
+                {...form.field('university')}
+              />
+            </div>
+          )}
+          <FieldError {...form.errorProps('university')} />
+          <FieldError>{form.formError}</FieldError>
+          <RowEditorButtons
+            pending={change.isPending}
+            unchanged={chosen === (member.university ?? '')}
+            onCancel={() => {
+              setDraft(universityDraft(member.university));
+              form.reset();
+              setEditing(false);
+            }}
+          />
+        </form>
+      ) : (
+        <span
+          data-slot="setting-value"
+          className="flex min-w-0 items-center gap-2 text-sm font-medium"
+        >
+          {member.university ? (
+            <span className="wrap-anywhere">{member.university}</span>
+          ) : (
+            <Unset>Necompletată</Unset>
+          )}
+          <Button
+            ref={editButton}
+            variant="outline"
+            size="icon"
+            aria-label="Editează universitatea"
+            title="Editează universitatea"
+            onClick={() => {
+              setMessage(null);
+              setDraft(universityDraft(member.university));
+              setEditing(true);
+            }}
+          >
+            <Pencil aria-hidden="true" />
+          </Button>
+        </span>
       )}
       {message && !editing && turn.current && (
         <p role="status" className="m-0 basis-full text-sm font-medium">
@@ -459,6 +649,9 @@ function AccountPanel({
         {/* BC and the Moderator set the date tenure counts from (#932); for
             anyone else it is the header's "Membru din", when there is one. */}
         {canEdit && <JoinDateRow member={member} />}
+        {/* R58: BC and the Moderator set the university; Profil and the
+            Member Card show it to everyone else. */}
+        {canEdit && <UniversityRow member={member} />}
         {member.contact?.email && (
           <FactRow label="E-mail">
             <span className="break-all">{member.contact.email}</span>

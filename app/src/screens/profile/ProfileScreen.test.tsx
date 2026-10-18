@@ -85,6 +85,7 @@ const profileMocks = vi.hoisted(() => {
     status: 'activ' as const,
     avatar_color: '#ED2025' as string | null,
     joined_at: '2024-10-01',
+    university: 'Universitatea Babeș-Bolyai' as string | null,
     email: 'maria@osubb.ro',
     phone: '0722334455' as string | null,
   };
@@ -400,11 +401,15 @@ describe('ProfileScreen', () => {
     // Membership Status is NOT shown (ruling R2)
     expect(screen.queryByText('Activ')).not.toBeInTheDocument();
 
-    // Contact
-    const contact = screen.getByRole('region', { name: 'Date de contact' });
+    // Contact and Universitate (R58)
+    const contact = screen.getByRole('region', { name: 'Date personale' });
     expect(within(contact).getByText('E-mail')).toBeInTheDocument();
     expect(within(contact).getByText('maria@osubb.ro')).toBeInTheDocument();
     expect(within(contact).getByText('Telefon')).toBeInTheDocument();
+    expect(within(contact).getByText('Universitate')).toBeInTheDocument();
+    expect(
+      within(contact).getByText('Universitatea Babeș-Bolyai'),
+    ).toBeInTheDocument();
     // #824: no email form on the page itself; it lives in the sheet.
     expect(screen.queryByLabelText('Adresa nouă')).not.toBeInTheDocument();
     expect(
@@ -423,6 +428,18 @@ describe('ProfileScreen', () => {
     expect(
       await screen.findByText(
         /numărul de telefon este vizibil doar pentru tine, BCE și BC./i,
+      ),
+    ).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    // The Universitate is BC's to write (R58): the "i" beside it says whom a
+    // Member asks when it is missing or wrong.
+    expect(screen.queryByText(/universitatea o completează BC/i)).toBeNull();
+    await userEvent.click(
+      within(contact).getByRole('button', { name: 'Despre universitate' }),
+    );
+    expect(
+      await screen.findByText(
+        'Universitatea o completează BC. Dacă nu este corectă, scrie-i Coordonatorului IT.',
       ),
     ).toBeVisible();
     await userEvent.keyboard('{Escape}');
@@ -1013,6 +1030,21 @@ describe('ProfileScreen', () => {
     expect(screen.getByText('Necompletat')).toBeInTheDocument();
   });
 
+  it('says Necompletată, in italics, when the Universitate was never recorded (R58)', () => {
+    setTestProfile({
+      ...mockProfile,
+      university: null,
+    });
+
+    render(<ProfileScreen />, { wrapper: wrapper() });
+
+    const row = screen.getByText('Universitate').closest('li') as HTMLElement;
+    expect(row).toHaveTextContent('UniversitateNecompletată');
+    expect(within(row).getByText('Necompletată')).toHaveClass('italic');
+    // Read-only: BC sets it on the Member's page, not the Member.
+    expect(screen.queryByRole('textbox', { name: /universitate/i })).toBeNull();
+  });
+
   it('mounts the Role timeline from its second Role row (#633, #859 B39)', () => {
     roleHistoryMock.data = [
       {
@@ -1069,12 +1101,12 @@ describe('ProfileScreen', () => {
         grid.getAttribute('data-columns'),
       );
 
-    it('below BCE, Cont holds Date de contact over Grupurile mele beside the points panel', () => {
+    it('below BCE, Cont holds Date personale over Grupurile mele beside the points panel', () => {
       promotionMock.state = { kind: 'loading' };
       render(<ProfileScreen />, { wrapper: wrapper() });
 
       expect(panelNames()).toEqual([
-        'Date de contact',
+        'Date personale',
         'Grupurile mele',
         'Punctaj și promovare',
       ]);
@@ -1149,7 +1181,7 @@ describe('ProfileScreen', () => {
         HTMLElement,
       ];
       expect(
-        within(left).getByRole('region', { name: 'Date de contact' }),
+        within(left).getByRole('region', { name: 'Date personale' }),
       ).toBeInTheDocument();
       expect(
         within(left).getByRole('region', { name: 'Grupurile mele' }),
@@ -1181,7 +1213,7 @@ describe('ProfileScreen', () => {
       setTestProfile({ ...mockProfile, role: 'bc' });
       const { unmount } = render(<ProfileScreen />, { wrapper: wrapper() });
 
-      expect(panelNames()).toEqual(['Date de contact', 'Funcția în OSUBB']);
+      expect(panelNames()).toEqual(['Date personale', 'Funcția în OSUBB']);
       expect(gridColumns()).toEqual(['2']);
       expect(screen.getByText('Biroul de Conducere')).toBeInTheDocument();
       expect(screen.queryByText(/punctaj/i)).not.toBeInTheDocument();
@@ -1312,12 +1344,12 @@ describe('ProfileScreen', () => {
       ).toBeInTheDocument();
     });
 
-    it('the pencil on Date de contact opens the sheet with the email change inside', async () => {
+    it('the pencil on Date personale opens the sheet with the email change inside', async () => {
       const user = userEvent.setup();
       render(<ProfileScreen />, { wrapper: wrapper() });
 
       const pencil = screen.getByRole('button', {
-        name: 'Editează datele de contact',
+        name: 'Editează datele personale',
       });
       // An icon button in the block's header, not a full-width one in its box.
       expect(pencil).toHaveTextContent('');
@@ -1409,7 +1441,7 @@ describe('ProfileScreen', () => {
       expect(screen.getAllByRole('tabpanel')).toHaveLength(1);
       expect(
         within(screen.getByRole('tabpanel')).getByRole('region', {
-          name: 'Date de contact',
+          name: 'Date personale',
         }),
       ).toBeInTheDocument();
       expect(
@@ -1427,7 +1459,7 @@ describe('ProfileScreen', () => {
         screen.getByRole('region', { name: 'Notificări pe acest dispozitiv' }),
       ).toBeInTheDocument();
       expect(
-        screen.queryByRole('region', { name: 'Date de contact' }),
+        screen.queryByRole('region', { name: 'Date personale' }),
       ).not.toBeInTheDocument();
     });
 
@@ -1464,7 +1496,7 @@ describe('ProfileScreen', () => {
       await user.click(screen.getByRole('tab', { name: 'Cont' }));
       expect(search()).toBe('?tab=cont');
       expect(
-        screen.getByRole('region', { name: 'Date de contact' }),
+        screen.getByRole('region', { name: 'Date personale' }),
       ).toBeInTheDocument();
     });
 
@@ -1482,11 +1514,12 @@ describe('ProfileScreen', () => {
     it('shows contact data as rows: the name on the left, the value on the right', () => {
       render(<ProfileScreen />, { wrapper: wrapper() });
 
-      const contact = screen.getByRole('region', { name: 'Date de contact' });
+      const contact = screen.getByRole('region', { name: 'Date personale' });
       const rows = contact.querySelectorAll('[data-slot="setting-row"]');
       expect(Array.from(rows, (row) => row.textContent)).toEqual([
         'E-mailmaria@osubb.ro',
         'Telefon0722334455',
+        'UniversitateUniversitatea Babeș-Bolyai',
       ]);
       for (const row of rows) {
         expect(row).toHaveClass('justify-between', 'min-h-11');

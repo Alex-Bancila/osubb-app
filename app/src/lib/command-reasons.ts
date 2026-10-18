@@ -506,6 +506,13 @@ const REASON_COPY = new Map<string, string>([
   ['joined_at_required', 'Alege data intrării.'],
   ['joined_at_invalid', 'Alege o dată din calendar.'],
   ['joined_at_in_future', 'Data intrării nu poate fi în viitor.'],
+  // R58: the Universitate BC sets on a Member's page; only a UBB student is
+  // granted Drept de Vot (`profiles_guard_vote_university`, PT409).
+  ['invalid_university', 'Universitatea are între 2 și 120 de caractere.'],
+  [
+    'vote_requires_ubb_student',
+    'Doar un student UBB poate primi Drept de Vot.',
+  ],
   ['invalid_avatar_color', 'Alege o culoare din listă.'],
   ['email_invalid', 'Scrie o adresă de email validă.'],
   // #632: the new sign-in address is the one the Member already has.

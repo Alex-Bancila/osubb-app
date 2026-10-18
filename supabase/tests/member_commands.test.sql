@@ -305,6 +305,9 @@ select is(
   (select count(*) from notifications
     where member_id = '58000000-0000-0000-0000-000000000002'),
   0::bigint, 'the Role command never echoes a Notification to its actor');
+-- R58: a Role change into vot needs the Member's Universitate to be UBB.
+update public.profiles set university = private.ubb_university()
+ where id = '58000000-0000-0000-0000-000000000006';
 select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000002');
 
 select throws_ok(
@@ -657,6 +660,9 @@ reset role;
 select is((select reason from public.role_history
   where member_id = '61200000-0000-0000-0000-000000000001'
   order by id desc limit 1), 'Decizie motivată', 'role reason case 1 is trimmed or uses the fallback');
+-- R58: the Member must be a UBB student before Drept de Vot.
+update public.profiles set university = private.ubb_university()
+ where id = '61200000-0000-0000-0000-000000000001';
 select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000002');
 select is((select role::text from public.set_member_role(
   '61200000-0000-0000-0000-000000000001', 'vot', null)),

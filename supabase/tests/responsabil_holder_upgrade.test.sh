@@ -21,6 +21,9 @@ drop policy profiles_update_self on public.profiles;
 -- #983: the Promotion Candidate refresh compares profiles.role with today's
 -- enum, so the update below would fail against the old one; local too.
 drop trigger profiles_refresh_promotion_candidates on public.profiles;
+-- R58: the Drept de Vot university guard fires on `update of role` with a WHEN
+-- clause on profiles.role, so it pins the column type too; local as well.
+drop trigger profiles_guard_vote_university on public.profiles;
 create type pg_temp.pre593_member_role as enum ('recrut','voluntar','activ','vot','responsabil','bce','bc','moderator');
 alter table public.profiles alter column role drop default;
 alter table public.profiles alter column role type pg_temp.pre593_member_role using role::text::pg_temp.pre593_member_role;

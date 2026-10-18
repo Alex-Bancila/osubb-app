@@ -10,7 +10,8 @@ import { resolveGroupRoleLabel, useGroups, useRoles } from './reference';
 /**
  * The Member Card (CONTEXT.md; ruling R6 of the 2026-09-23 grill): what any
  * active Member may see of a colleague — Nickname, full name, Role (named by
- * their Board Title when they hold one, #963), join date and Groups — plus
+ * their Board Title when they hold one, #963), join date, Universitate (R58)
+ * and Groups — plus
  * contact details for the viewers already allowed them.
  *
  * Two reads, neither of which the browser decides:
@@ -50,6 +51,11 @@ export type MemberCardData = {
   rankLabel: string | null;
   /** `YYYY-MM-DD`, or null when the join date was never recorded. */
   joinedAt: string | null;
+  /**
+   * The Universitate (R58): a name from the app's list or one BC typed, null
+   * until it is known.
+   */
+  university: string | null;
   avatarColor: string | null;
   primaryGroup: {
     id: number;
@@ -71,6 +77,8 @@ type CardRow = {
   /** The Board Title (#963), null for anyone who holds none. */
   board_title: string | null;
   joined_at: string | null;
+  /** The Universitate (R58), null until BC records it. */
+  university: string | null;
   avatar_color: string | null;
   primary_group_id: number | null;
   primary_group_name: string | null;
@@ -163,6 +171,7 @@ export function toMemberCardData(
     roleLabel: rankLabel && memberRoleLabel(rankLabel, card.board_title),
     rankLabel,
     joinedAt: card.joined_at,
+    university: card.university ?? null,
     avatarColor: card.avatar_color,
     primaryGroup:
       card.primary_group_id !== null && card.primary_group_name
