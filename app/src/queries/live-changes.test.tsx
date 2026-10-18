@@ -112,6 +112,37 @@ describe('live change signals (#961)', () => {
     expect(invalidate).not.toHaveBeenCalledWith({ queryKey: keys.tasks.all });
   });
 
+  // R58: Retention Signals are stored rows the page reads, not a derivation.
+  it('a change of the Retention Signals refreshes the evaluation family and nothing else', async () => {
+    const { invalidate } = setup();
+    const { onChange } = await joined();
+
+    act(() =>
+      onChange({ payload: { table: 'retention_signals', op: 'INSERT' } }),
+    );
+
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: keys.evaluation.all,
+      }),
+    );
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: keys.points.all });
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: keys.tasks.all });
+  });
+
+  // R58 dropped the Promotion Rules: their table is no longer a signal.
+  it('no longer watches promotion_rules', async () => {
+    const { invalidate } = setup();
+    const { onChange } = await joined();
+
+    act(() =>
+      onChange({ payload: { table: 'promotion_rules', op: 'UPDATE' } }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
   it('ignores a table it does not know and a message without one', async () => {
     const { invalidate } = setup();
     const { onChange } = await joined();

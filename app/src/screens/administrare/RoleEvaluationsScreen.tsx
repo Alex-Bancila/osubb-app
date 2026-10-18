@@ -39,8 +39,6 @@ import { FieldError } from '../../components/ui/field';
 import { InfoHint } from '../../components/ui/info-hint';
 import { Input, Textarea } from '../../components/ui/input';
 import { SegmentedRadio } from '../../components/ui/segmented-radio';
-import { Badge } from '../../components/ui/badge';
-import { SwitchRow } from '../../components/ui/switch';
 import { bucharestDayKey } from '../../lib/calendar-time';
 import { describeFailure } from '../../lib/command-reasons';
 import {
@@ -52,8 +50,6 @@ import {
 import {
   percentFieldForReason,
   percentSchema,
-  promotionRuleFieldForReason,
-  promotionRuleSchema,
   rejectionFieldForReason,
   rejectionSchema,
   runFieldForReason,
@@ -63,6 +59,7 @@ import {
   type RoleEvaluationKind,
 } from '../../lib/schemas/role-evaluation';
 import { useFormValidation } from '../../lib/use-form-validation';
+import { useEvaluationSettings } from '../../queries/evaluation-settings';
 import { useMemberIdentities } from '../../queries/member-identities';
 import {
   NO_SUBJECTS,
@@ -72,10 +69,9 @@ import {
 import {
   latestRun,
   percentText,
-  retentionSignals,
+  simulationOutcome,
   useEvaluationPercents,
   usePromotionCandidates,
-  usePromotionRules,
   usePromotionThresholds,
   useRoleEvaluationCommand,
   useRoleEvaluationRanking,
@@ -83,7 +79,6 @@ import {
   useThresholdChanges,
   type EvaluationPercent,
   type PromotionCandidate,
-  type PromotionRule,
   type PromotionThreshold,
   type RoleEvaluation,
   type RoleEvaluationCommand,
@@ -107,14 +102,6 @@ const KINDS: readonly RoleEvaluationKind[] = [
   'voluntar_activ',
   'adunarea_generala',
 ];
-
-/**
- * What the page's Tip switch offers: the two Role Evaluation kinds, and the
- * promotion no evaluation runs — Recrut → Voluntar, by tenure alone.
- */
-const TENURE_VIEW = 'vechime';
-type View = RoleEvaluationKind | typeof TENURE_VIEW;
-const TENURE_VIEW_LABEL = 'Vechime';
 
 /** The kind as the tab names it. */
 const KIND_LABEL: Record<string, string> = {
@@ -147,6 +134,11 @@ function rangeText(run: Pick<RoleEvaluation, 'period_from' | 'period_to'>) {
 }
 
 type Identities = Map<string, MemberIdentity> | undefined;
+
+/** A points figure, or `—` for a line a run had none to show (R58). */
+function pointsOrDash(points: number | null): string {
+  return points === null ? '—' : formatPoints(points);
+}
 
 /** A name button for a Member the identities read may not have answered yet. */
 function Name({
@@ -212,14 +204,26 @@ function RunPanel({
   // One receipt at a time across the tab (F-11).
   const turn = useReceiptTurn();
   const schema = useMemo(() => runSchema(today), [today]);
-  const form = useFormValidation(
-    schema,
-    { kind, from, to, name },
-    runFieldForReason,
-  );
+  // R58: a run takes the Prag minim, the kind's share and the cutoff in force;
+  // Portofoliu Interne is where they are edited and a run is simulated first.
+  const settings = useEvaluationSettings().data;
+  const input = {
+    kind,
+    from,
+    to,
+    name,
+    floor: String(settings?.eligibilityFloor ?? ''),
+    percent: String(
+      (kind === 'voluntar_activ'
+        ? settings?.activPercent
+        : settings?.votPercent) ?? '',
+    ),
+    cutoff: settings?.membershipCutoff ?? '',
+  };
+  const form = useFormValidation(schema, input, runFieldForReason);
   const threshold =
     thresholds.find((row) => row.kind === kind)?.threshold ?? null;
-  const parsed = schema.safeParse({ kind, from, to, name });
+  const parsed = schema.safeParse(input);
   // Each date is checked when the member leaves its field (the picker does
   // not count opening its calendar as leaving) and ends today.
   const fromField = form.field('from');
@@ -247,13 +251,7 @@ function RunPanel({
     if (!parsed.success) return;
     const values = parsed.data;
     try {
-      const result = await onRun({
-        kind: 'run',
-        evaluationKind: values.kind,
-        from: values.from,
-        to: values.to,
-        name: values.name,
-      });
+      const result = await onRun({ kind: 'run', values });
       setConfirming(false);
       setMessage(
         runResultText({
@@ -401,16 +399,6 @@ function RunPanel({
 /* ------------------------------------------------------------------------ */
 /* Praguri                                                                   */
 /* ------------------------------------------------------------------------ */
-
-/** The Role Evaluation kind a Promotion Rule feeds; `null` for none. */
-function ruleEvaluationKind(
-  rule: Pick<PromotionRule, 'kind'>,
-): RoleEvaluationKind | null {
-  // `time` is the daily job's (Recrut → Voluntar): no evaluation reads it.
-  // `top_percent` is the tenure `run_role_evaluation` asks of a Voluntar
-  // Activ candidate.
-  return rule.kind === 'time' ? null : 'voluntar_activ';
-}
 
 /**
  * Where focus goes around an in-place editor: to its field when it opens,
@@ -806,270 +794,7 @@ function ThresholdRow({
   );
 }
 
-/* ------------------------------------------------------------------------ */
-/* Reguli de promovare (#935): each rule's tenure and on/off                 */
-/* ------------------------------------------------------------------------ */
-
-/** The Roles a Promotion Rule joins, as the tab names them. */
-const ROLE_NAME: Record<string, string> = {
-  recrut: 'Recrut',
-  voluntar: 'Voluntar',
-  activ: 'Voluntar Activ',
-  vot: 'Voluntar cu Drept de Vot',
-};
-
-function ruleLabel(rule: Pick<PromotionRule, 'fromRole' | 'toRole'>): string {
-  return `${ROLE_NAME[rule.fromRole] ?? rule.fromRole} → ${ROLE_NAME[rule.toRole] ?? rule.toRole}`;
-}
-
-/**
- * What each rule does, on and off, and when an edit takes effect — checked
- * against the daily job (`time`) and `run_role_evaluation` (`top_percent`).
- */
-type RuleText = { on: string; off: string; applies: string };
-
-const TIME_RULE_TEXT: RuleText = {
-  on: 'Zilnic, fiecare Recrut care a împlinit vechimea devine automat Voluntar.',
-  off: 'Oprită: niciun Recrut nu mai devine Voluntar automat.',
-  applies: 'Se aplică de la următoarea rulare zilnică.',
-};
-
-const TOP_PERCENT_RULE_TEXT: RuleText = {
-  on: 'Un Voluntar cu această vechime devine candidat la promovare de îndată ce ajunge la prag, și la fiecare evaluare Voluntar Activ.',
-  off: 'Oprită: nimeni nu mai devine candidat la promovare.',
-  applies:
-    'Se aplică imediat listei de candidați și de la următoarea evaluare Voluntar Activ; evaluările rulate nu se recalculează.',
-};
-
-function ruleText(kind: string): RuleText {
-  return kind === 'time' ? TIME_RULE_TEXT : TOP_PERCENT_RULE_TEXT;
-}
-
-const RULE_SAVE_FAILED = 'Nu am putut salva regula. Reîncearcă.';
-
-/**
- * One Promotion Rule as a row: its tenure is the value, a chip says whether
- * it is on, and what it does when on sits behind the "i". While it is off,
- * what that stops stays on the row. Nothing changes from the row itself: the
- * pencil opens #923's editor — the tenure and the on/off switch with Salvează
- * (only once something changed) and Renunță; focus goes back to the pencil
- * and the receipt is announced.
- */
-function RuleRow({
-  rule,
-  lastChange,
-  identities,
-  disabled,
-  onRun,
-}: {
-  rule: PromotionRule;
-  /** The rule's latest change in the log, if any. */
-  lastChange: ThresholdChange | undefined;
-  identities: Identities;
-  disabled: boolean;
-  onRun: Run;
-}) {
-  const labelId = useId();
-  const monthsId = useId();
-  const hintId = useId();
-  const label = ruleLabel(rule);
-  const text = ruleText(rule.kind);
-  const [editing, setEditing] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [months, setMonths] = useState('');
-  const [enabled, setEnabled] = useState(rule.enabled);
-  const [pending, setPending] = useState(false);
-  // Opening focuses the tenure; closing returns focus to the pencil (#923).
-  const editButton = useEditorFocus(editing, monthsId);
-  const form = useFormValidation(
-    promotionRuleSchema,
-    { months, enabled },
-    promotionRuleFieldForReason,
-  );
-
-  const changed =
-    months.trim() !== String(rule.tenureMonths) || enabled !== rule.enabled;
-
-  function open() {
-    setMonths(String(rule.tenureMonths));
-    setEnabled(rule.enabled);
-    setSaved(false);
-    form.reset();
-    setEditing(true);
-  }
-
-  async function save(event: FormEvent) {
-    event.preventDefault();
-    const values = form.validate();
-    if (!values) return;
-    setPending(true);
-    try {
-      await onRun({
-        kind: 'rule',
-        ruleId: rule.id,
-        tenureMonths: values.months,
-        enabled: values.enabled,
-      });
-      setSaved(true);
-      setEditing(false);
-    } catch (failure) {
-      form.fail(failure, RULE_SAVE_FAILED);
-    } finally {
-      setPending(false);
-    }
-  }
-
-  const busy = disabled || pending;
-  return (
-    <SettingRow
-      data-rule={rule.kind}
-      aria-labelledby={labelId}
-      labelId={labelId}
-      label={label}
-      editing={editing}
-      hint={
-        !editing && (
-          <InfoHint label={`Despre regula ${label}`}>{text.on}</InfoHint>
-        )
-      }
-      value={
-        <>
-          <span className="sr-only">Vechime cerută: </span>
-          {formatMonthCount(rule.tenureMonths)}
-        </>
-      }
-      controls={
-        !editing && (
-          <>
-            <Button
-              ref={editButton}
-              type="button"
-              variant="outline"
-              size="icon"
-              disabled={busy}
-              onClick={open}
-              aria-label={`Editează regula ${label}`}
-              title="Editează regula"
-            >
-              <Pencil aria-hidden="true" />
-            </Button>
-            {/* The state, not a control: a rule turns on or off only in
-                its editor, with Salvează. */}
-            <Badge
-              variant={rule.enabled ? 'outline' : 'secondary'}
-              data-slot="rule-state"
-            >
-              {rule.enabled ? 'Pornită' : 'Oprită'}
-            </Badge>
-          </>
-        )
-      }
-    >
-      {/* What an off rule stops is read before anything else is decided. */}
-      {!rule.enabled && !editing && (
-        <p className="m-0 text-sm text-muted-foreground">{text.off}</p>
-      )}
-      {lastChange?.changed_by && !editing && (
-        <p className="m-0 flex flex-wrap items-center gap-x-1 text-sm text-muted-foreground">
-          schimbată de
-          <Name memberId={lastChange.changed_by} identities={identities} />
-        </p>
-      )}
-      {/* Always mounted, so the receipt is announced when it appears. */}
-      <p role="status" className="m-0 text-sm font-medium empty:hidden">
-        {saved && !editing ? 'Regula a fost salvată.' : null}
-      </p>
-      {editing && (
-        <form
-          onSubmit={save}
-          noValidate
-          aria-labelledby={labelId}
-          className="grid gap-3"
-        >
-          <div className="grid gap-1.5">
-            <label htmlFor={monthsId} className="text-sm font-medium">
-              Vechime cerută
-            </label>
-            <div className="relative w-32">
-              <Input
-                id={monthsId}
-                type="number"
-                inputMode="numeric"
-                min={0}
-                max={120}
-                step={1}
-                className="pr-12"
-                value={months}
-                disabled={busy}
-                onChange={(event) => setMonths(event.target.value)}
-                {...form.field('months', hintId)}
-              />
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground"
-              >
-                luni
-              </span>
-            </div>
-            <p id={hintId} className="m-0 text-sm text-muted-foreground">
-              Luni întregi de la data intrării în OSUBB, de la 0 la 120.{' '}
-              {text.applies}
-            </p>
-            <FieldError {...form.errorProps('months')} />
-          </div>
-          <div {...form.slot('enabled')}>
-            <SwitchRow
-              label="Regula este pornită"
-              description={enabled ? text.on : text.off}
-              checked={enabled}
-              disabled={busy}
-              onCheckedChange={(next) => setEnabled(next)}
-            />
-            <FieldError {...form.errorProps('enabled')} />
-          </div>
-          <FieldError>{form.formError}</FieldError>
-          <div className="flex flex-wrap gap-2">
-            <EditorActions
-              disabled={busy}
-              canSave={changed}
-              onCancel={() => setEditing(false)}
-            />
-          </div>
-        </form>
-      )}
-    </SettingRow>
-  );
-}
-
-/** The Promotion Rules of one place on the tab, each a `RuleRow`. */
-function RuleRows({
-  rules,
-  changes,
-  identities,
-  disabled,
-  onRun,
-}: {
-  rules: readonly PromotionRule[];
-  changes: readonly ThresholdChange[] | undefined;
-  identities: Identities;
-  disabled: boolean;
-  onRun: Run;
-}) {
-  return rules.map((rule) => (
-    <RuleRow
-      key={rule.id}
-      rule={rule}
-      lastChange={changes?.find(
-        (change) => change.promotion_rule_id === rule.id,
-      )}
-      identities={identities}
-      disabled={disabled}
-      onRun={onRun}
-    />
-  ));
-}
-
-/** Whoever changed a threshold, a share or a rule, for the names beside them. */
+/** Whoever changed a threshold, a share or a setting, for the names beside them. */
 function useChangeAuthors(changes: readonly ThresholdChange[] | undefined) {
   const memberIds = useMemo(
     () =>
@@ -1082,10 +807,9 @@ function useChangeAuthors(changes: readonly ThresholdChange[] | undefined) {
 }
 
 /**
- * The chosen kind's numbers, and only its: the Promotion Threshold in force,
- * the share the next one is computed from and, for Voluntar Activ, the
- * Promotion Rule its candidates must meet. The other kind's are one tap away
- * on the page's Tip switch, never beside these.
+ * The chosen kind's numbers, and only its: the Promotion Threshold in force
+ * and the share the next one is computed from. The other kind's are one tap
+ * away on the page's Tip switch, never beside these.
  */
 function ThresholdsPanel({
   kind,
@@ -1102,22 +826,17 @@ function ThresholdsPanel({
 }) {
   const changes = useThresholdChanges();
   const percents = useEvaluationPercents();
-  const rules = usePromotionRules();
   const identities = useChangeAuthors(changes.data);
   const runName = (id: number | null) =>
     evaluations.find((run) => run.id === id)?.name ?? '…';
-  const kindRules = (rules.data ?? []).filter(
-    (rule) => ruleEvaluationKind(rule) === kind,
-  );
 
   return (
     <Panel
       title="Praguri"
       control={
         <InfoHint label="Despre praguri">
-          Punctele de task cu care evaluarea compară membrii, procentul din
-          clasament din care calculează pragul următor și vechimea cerută unui
-          candidat la promovare.
+          Punctele de task cu care evaluarea compară membrii și procentul din
+          clasament din care calculează pragul următor.
         </InfoHint>
       }
     >
@@ -1141,65 +860,7 @@ function ThresholdsPanel({
           disabled={disabled}
           onRun={onRun}
         />
-        <RuleRows
-          rules={kindRules}
-          changes={changes.data}
-          identities={identities}
-          disabled={disabled}
-          onRun={onRun}
-        />
       </ul>
-      {/* Only Voluntar Activ has a rule to wait for or to miss. */}
-      {kind === 'voluntar_activ' &&
-        (rules.isPending ? (
-          <Loading label="Se încarcă regulile de promovare…" />
-        ) : rules.isError ? (
-          <ErrorState
-            text="Nu am putut încărca regulile de promovare."
-            onRetry={() => void rules.refetch()}
-          />
-        ) : null)}
-    </Panel>
-  );
-}
-
-/**
- * The Promotion Rules no Role Evaluation reads — Recrut → Voluntar, which the
- * daily job applies by tenure alone — the page's content under Vechime, the
- * Tip switch's third choice.
- */
-function TenureRulesPanel({
-  disabled,
-  onRun,
-}: {
-  disabled: boolean;
-  onRun: Run;
-}) {
-  const rules = usePromotionRules();
-  const changes = useThresholdChanges();
-  const identities = useChangeAuthors(changes.data);
-  return (
-    <Panel title="Promovare după vechime">
-      {rules.isPending ? (
-        <Loading label="Se încarcă regulile de promovare…" />
-      ) : rules.isError ? (
-        <ErrorState
-          text="Nu am putut încărca regulile de promovare."
-          onRetry={() => void rules.refetch()}
-        />
-      ) : (
-        <ul className={rowListClass}>
-          <RuleRows
-            rules={rules.data.filter(
-              (rule) => ruleEvaluationKind(rule) === null,
-            )}
-            changes={changes.data}
-            identities={identities}
-            disabled={disabled}
-            onRun={onRun}
-          />
-        </ul>
-      )}
     </Panel>
   );
 }
@@ -1215,33 +876,18 @@ const SETTING_LABEL: Record<string, string> = {
   points_start: 'Data de început a punctajului',
 };
 
-/** The log's subject: a kind (threshold, share), a rule (tenure, on/off) or a setting. */
-function changeSubject(
-  change: ThresholdChange,
-  rules: readonly PromotionRule[] | undefined,
-): string {
+/**
+ * The log's subject: a kind (threshold, share), a setting or — history since
+ * R58 dropped the Promotion Rules — a rule's tenure or on/off state.
+ */
+function changeSubject(change: ThresholdChange): string {
   const setting = SETTING_LABEL[change.field];
   if (setting) return setting;
   if (change.promotion_rule_id !== null) {
-    const rule = rules?.find((row) => row.id === change.promotion_rule_id);
-    const name = rule ? ruleLabel(rule) : 'Regulă de promovare';
-    return `${name} · ${change.field === 'enabled' ? 'stare' : 'vechime'}`;
+    return `Regulă de promovare · ${change.field === 'enabled' ? 'stare' : 'vechime'}`;
   }
   const kind = change.kind ?? '';
   return `${KIND_LABEL[kind] ?? kind}${change.field === 'percent' ? ' · procent' : ''}`;
-}
-
-/** The log's rows: all of them, or only those of the given Promotion Rules. */
-function tenureChanges(
-  changes: readonly ThresholdChange[],
-  ruleIds: ReadonlySet<number> | undefined,
-): readonly ThresholdChange[] {
-  if (!ruleIds) return changes;
-  return changes.filter(
-    (change) =>
-      change.promotion_rule_id !== null &&
-      ruleIds.has(change.promotion_rule_id),
-  );
 }
 
 /** The log's before → after, in each value's own unit. */
@@ -1268,22 +914,16 @@ function changeValues(change: ThresholdChange): string {
 }
 
 /**
- * Every change of a threshold, a share or a rule, newest first — a record of
- * both kinds, each row naming its own. Under Vechime (`ruleIds`) it keeps to
- * the changes of those Promotion Rules. The page mounts it with the first
+ * Every change of a threshold, a share or a setting, newest first — a record
+ * of both kinds, each row naming its own. The page mounts it with the first
  * change it would show (B58).
  */
 function ChangeLogPanel({
   evaluations,
-  ruleIds,
 }: {
   evaluations: readonly RoleEvaluation[];
-  /** Only the changes of these Promotion Rules. */
-  ruleIds?: ReadonlySet<number>;
 }) {
   const changes = useThresholdChanges();
-  // Shared through the query cache: the log names each rule.
-  const rules = usePromotionRules();
   const identities = useChangeAuthors(changes.data);
   const runName = (id: number | null) =>
     evaluations.find((run) => run.id === id)?.name ?? '…';
@@ -1301,14 +941,13 @@ function ChangeLogPanel({
           className={cn(rowListClass, 'max-h-80 overflow-y-auto text-sm')}
           aria-label="Istoricul modificărilor"
         >
-          {tenureChanges(changes.data, ruleIds).map((change) => (
+          {changes.data.map((change) => (
             <li
               key={change.id}
               className="grid min-w-0 gap-0.5 py-2 first:pt-0 last:pb-0"
             >
               <span className="text-muted-foreground tabular-nums">
-                {formatInstantDay(change.changed_at)} ·{' '}
-                {changeSubject(change, rules.data)}
+                {formatInstantDay(change.changed_at)} · {changeSubject(change)}
               </span>
               <span className="flex min-w-0 flex-wrap items-center gap-x-1.5">
                 <span className="font-semibold tabular-nums">
@@ -1573,10 +1212,13 @@ function SignalsPanel({
   kind: RoleEvaluationKind;
   run: RoleEvaluation | undefined;
 }) {
-  const ranking = useRoleEvaluationRanking(run);
+  const ranking = useRoleEvaluationRanking(run?.id ?? null);
   const signals = useMemo(
-    () => (run && ranking.data ? retentionSignals(run, ranking.data) : []),
-    [run, ranking.data],
+    () =>
+      run && ranking.data
+        ? simulationOutcome(ranking.data, kind).signals.map(({ row }) => row)
+        : [],
+    [run, kind, ranking.data],
   );
   const identities = useMemberIdentities(
     signals.map((signal) => signal.memberId),
@@ -1595,7 +1237,7 @@ function SignalsPanel({
       {run && (
         <p className="m-0 text-sm text-muted-foreground tabular-nums">
           {run.name} · {rangeText(run)} · pragul{' '}
-          {formatPoints(run.threshold_used)}
+          {pointsOrDash(run.threshold_computed)}
         </p>
       )}
       {!run ? (
@@ -1633,8 +1275,10 @@ function SignalsPanel({
                 <Name memberId={signal.memberId} identities={identities.data} />
                 <p className="m-0 text-sm text-muted-foreground tabular-nums">
                   {HOLDER_LABEL[signal.role] ?? signal.role} ·{' '}
-                  {formatPointCount(signal.taskPoints)} · locul {signal.rank}{' '}
-                  din {signal.cohortSize}
+                  {formatPointCount(signal.taskPoints)} ·{' '}
+                  {signal.rank === null
+                    ? 'sub pragul minim'
+                    : `locul ${signal.rank} din ${signal.rankedCount}`}
                 </p>
               </ListRow>
             );
@@ -1695,7 +1339,7 @@ function historyColumns(
       accessorFn: (row) => row.threshold_used,
       header: 'Prag folosit',
       enableSorting: false,
-      cell: ({ row }) => formatPoints(row.original.threshold_used),
+      cell: ({ row }) => pointsOrDash(row.original.threshold_used),
     },
     {
       id: 'threshold_computed',
@@ -1759,7 +1403,7 @@ function HistoryPanel({
                 </span>
               </span>
               <span className="text-muted-foreground tabular-nums">
-                Prag folosit {formatPoints(run.threshold_used)} · prag calculat{' '}
+                Prag folosit {pointsOrDash(run.threshold_used)} · prag calculat{' '}
                 {computedThresholdText(run.threshold_computed)}
               </span>
             </li>
@@ -1779,35 +1423,18 @@ function HistoryPanel({
  *
  * One **Tip** switch at the top drives the page: the run form, the numbers in
  * Praguri and the results below are the chosen kind's, never both kinds' side
- * by side. Promotion Candidates exist for Voluntar Activ only. Its third
- * choice, **Vechime**, is the promotion no evaluation runs: the Recrut →
- * Voluntar rule and that rule's changes, with nothing of either kind beside
- * them. The two histories stay put under either kind. Mounted behind
- * `manageRoles`; every command decides again on the server (level 6).
+ * by side. Promotion Candidates exist for Voluntar Activ only. The two
+ * histories stay put under either kind. Mounted behind `manageRoles`; every
+ * command decides again on the server (level 6).
  */
 export default function RoleEvaluationsScreen() {
   const evaluations = useRoleEvaluations();
   const thresholds = usePromotionThresholds();
   // Read here too, so the page decides whether the log has a panel (B58).
   const changes = useThresholdChanges();
-  // Shared through the query cache: which changes are the tenure rules'.
-  const rules = usePromotionRules();
   const command = useRoleEvaluationCommand();
   const run: Run = (next) => command.mutateAsync(next);
-  const [view, setView] = useState<View>('voluntar_activ');
-  // The kind last looked at: its panels stay mounted, hidden, under Vechime,
-  // so a run's receipt or a half-written form is there on the way back.
   const [kind, setKind] = useState<RoleEvaluationKind>('voluntar_activ');
-  const tenure = view === TENURE_VIEW;
-  const tenureRuleIds = useMemo(
-    () =>
-      new Set(
-        (rules.data ?? [])
-          .filter((rule) => ruleEvaluationKind(rule) === null)
-          .map((rule) => rule.id),
-      ),
-    [rules.data],
-  );
 
   if (evaluations.isPending || thresholds.isPending)
     return <Loading label="Se încarcă evaluările de rol…" />;
@@ -1822,49 +1449,26 @@ export default function RoleEvaluationsScreen() {
       />
     );
   const hasLog = changes.isError || (changes.data?.length ?? 0) > 0;
-  const hasTenureLog =
-    changes.isError ||
-    tenureChanges(changes.data ?? [], tenureRuleIds).length > 0;
   return (
     <ReceiptTurnScope>
-      {/* A choice of three, drawn as segments; a long label wraps inside its
+      {/* A choice of two, drawn as segments; a long label wraps inside its
           segment, never past it (F-22). */}
-      <SegmentedRadio<View>
+      <SegmentedRadio<RoleEvaluationKind>
         aria-label="Tip"
         className="sm:max-w-xl"
-        options={[
-          ...KINDS.map((value) => ({ value, label: KIND_LABEL[value] })),
-          { value: TENURE_VIEW, label: TENURE_VIEW_LABEL },
-        ]}
-        value={view}
-        onValueChange={(next) => {
-          setView(next);
-          if (next !== TENURE_VIEW) setKind(next);
-        }}
+        options={KINDS.map((value) => ({ value, label: KIND_LABEL[value] }))}
+        value={kind}
+        onValueChange={setKind}
         disabled={command.isPending}
       />
-      {tenure && (
-        <PageGrid columns={1}>
-          <TenureRulesPanel disabled={command.isPending} onRun={run} />
-          {hasTenureLog && (
-            <ChangeLogPanel
-              evaluations={evaluations.data}
-              ruleIds={tenureRuleIds}
-            />
-          )}
-        </PageGrid>
-      )}
-      {/* `contents`: the kind's grids stay the page's own blocks. */}
-      <div hidden={tenure} className={tenure ? undefined : 'contents'}>
-        <KindView
-          kind={kind}
-          evaluations={evaluations.data}
-          thresholds={thresholds.data}
-          hasLog={hasLog}
-          disabled={command.isPending}
-          onRun={run}
-        />
-      </div>
+      <KindView
+        kind={kind}
+        evaluations={evaluations.data}
+        thresholds={thresholds.data}
+        hasLog={hasLog}
+        disabled={command.isPending}
+        onRun={run}
+      />
     </ReceiptTurnScope>
   );
 }

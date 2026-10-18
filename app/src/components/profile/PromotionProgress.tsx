@@ -16,25 +16,26 @@ import {
  * #634, #828 — where a Member stands before the next Role Evaluation
  * (ADR-0004 amended 2026-09-21; rulings R9, R13, R18, R28).
  *
- * Only the Recrut → Voluntar step is a date the tenure job keeps. Every other
- * step is BC's decision: reaching the Promotion Threshold makes a tenured
- * Voluntar a Promotion Candidate at once (#983) and at every Voluntar Activ
- * Role Evaluation, and nothing here promises a Role.
+ * Every step is BC's decision (R58 dropped the promotion by the calendar):
+ * reaching the Promotion Threshold makes a Voluntar who joined by the
+ * Membership Cutoff Date a Promotion Candidate at once (#983) and at every
+ * Voluntar Activ Role Evaluation, and nothing here promises a Role.
  *
- * Six states, one per rung:
- * - Recrut: the date the `time` rule makes them Voluntar; once that date has
- *   passed, that the next run applies it (#859 B43). No bar.
- * - Voluntar before the tenure date: the date they can become Voluntar Activ.
- *   Nothing about the threshold (R18).
- * - Voluntar with tenure: a bar from 0 to the Voluntar Activ Promotion
- *   Threshold in force, points counted since the last Voluntar Activ Role
- *   Evaluation (the total before any); past it, they are a candidate and BC
- *   has been told (#983).
+ * States, one per rung:
+ * - Recrut: nothing; BC promotes by hand in Roluri, so there is no date to
+ *   show.
+ * - Voluntar who joined after the Membership Cutoff Date: the day they must
+ *   have joined by. Nothing about the threshold (R18). With no cutoff set,
+ *   nothing at all.
+ * - Voluntar who joined by the cutoff: a bar from 0 to the Voluntar Activ
+ *   Promotion Threshold in force, points counted since the last Voluntar
+ *   Activ Role Evaluation (the total before any); past it, they are a
+ *   candidate and BC has been told (#983).
  * - Voluntar Activ: their points beside the Voluntar Activ threshold; a
  *   Voluntar cu Drept de Vot: beside the Adunarea Generală threshold — the
  *   reference the Retention Signal uses. No bar.
  * - Level ≥ 5: nothing at all (R13).
- * - No threshold in force for the kind: the tenure lines only; the bar and
+ * - No threshold in force for the kind: the cutoff line only; the bar and
  *   the reference are hidden, never faked.
  *
  * #859 (B38): Profil's one points panel. Given the Member's total, the panel

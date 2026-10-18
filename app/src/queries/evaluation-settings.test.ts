@@ -56,6 +56,8 @@ const SETTINGS_ROW = {
   eligibility_floor: 10,
   membership_cutoff: '2026-03-01',
   points_start_date: '2026-09-01',
+  activ_percent: 35,
+  vot_percent: 25,
   updated_at: '2026-10-18T09:00:00Z',
   updated_by: 'bc',
 };
@@ -72,13 +74,15 @@ describe('the evaluation settings read (R58)', () => {
       eligibilityFloor: 10,
       membershipCutoff: '2026-03-01',
       pointsStartDate: '2026-09-01',
+      activPercent: 35,
+      votPercent: 25,
       updatedAt: '2026-10-18T09:00:00Z',
       updatedBy: 'bc',
     });
     expect(db.calls).toContainEqual([
       'evaluation_settings',
       'select',
-      'eligibility_floor, membership_cutoff, points_start_date, updated_at, updated_by',
+      'eligibility_floor, membership_cutoff, points_start_date, activ_percent, vot_percent, updated_at, updated_by',
     ]);
     expect(db.calls).toContainEqual(['evaluation_settings', 'eq', 'id', 1]);
   });

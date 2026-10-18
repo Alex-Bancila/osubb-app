@@ -57,8 +57,8 @@ export const keys = {
       ['points', 'me', { memberId }] as const,
     standing: (memberId: string | undefined) =>
       ['points', 'standing', { memberId }] as const,
-    /* #634, #828: the Promotion Rules' tenure and my own standing for one
-       Role Evaluation kind (points since its last run, its threshold in
+    /* #634, #828: the Membership Cutoff Date (R58) and my own standing for
+       one Role Evaluation kind (points since its last run, its threshold in
        force). Under `points` so an Evaluation's invalidation moves the bar
        too. */
     promotionProgress: (memberId: string | undefined, kind: string) =>
@@ -354,9 +354,10 @@ export const keys = {
     member: (memberId: string, viewerId: string | undefined) =>
       ['privacy', 'member', { memberId, viewerId }] as const,
   },
-  /* Role Evaluations and what they decide (#826, #827; ruling R28): the runs,
-     the two Promotion Thresholds and their log, the open Promotion
-     Candidates, a run's ranking and the two shares x and y (#866). One
+  /* Role Evaluations and what they decide (#826, #827; ruling R28; R58): the
+     runs, the two Promotion Thresholds and their log, the open Promotion
+     Candidates, the open Retention Signals, a run's ranking and the two
+     shares x and y (#866). One
      `['evaluation']` prefix, so a run, a threshold or share edit or a
      rejection refreshes all of them at once. */
   evaluation: {
@@ -369,15 +370,15 @@ export const keys = {
       ['evaluation', 'threshold-changes', { memberId }] as const,
     candidates: (memberId: string | undefined) =>
       ['evaluation', 'candidates', { memberId }] as const,
-    ranking: (
-      range: { kind: string; from: string; to: string } | null,
-      memberId: string | undefined,
-    ) => ['evaluation', 'ranking', range, { memberId }] as const,
+    /* The ranking of one finalised run, recomputed from its recorded values
+       (R58); `null` while no run is chosen. A Simulation is not cached. */
+    ranking: (runId: number | null, memberId: string | undefined) =>
+      ['evaluation', 'ranking', runId, { memberId }] as const,
+    /* The open stored Retention Signals (R58). */
+    signals: (memberId: string | undefined) =>
+      ['evaluation', 'signals', { memberId }] as const,
     percents: (memberId: string | undefined) =>
       ['evaluation', 'percents', { memberId }] as const,
-    /* The two Promotion Rules: tenure and on/off (#935). */
-    rules: (memberId: string | undefined) =>
-      ['evaluation', 'rules', { memberId }] as const,
     /* The evaluation settings (R58): the Eligibility Floor, the Membership
        Cutoff and the Points Start Date. One row, read by every Member. */
     settings: (memberId: string | undefined) =>

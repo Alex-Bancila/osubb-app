@@ -22,10 +22,21 @@ const valid = {
   from: '2026-02-01',
   to: '2026-06-30',
   name: '  Semestrul II  ',
+  floor: ' 10 ',
+  percent: '35',
+  cutoff: '2026-03-01',
 };
 
-it('takes a Role Evaluation as run_role_evaluation checks it (#826)', () => {
-  expect(run.parse(valid)).toEqual({ ...valid, name: 'Semestrul II' });
+it('takes a Role Evaluation as run_role_evaluation checks it (#826, R58)', () => {
+  expect(run.parse(valid)).toEqual({
+    kind: 'voluntar_activ',
+    from: '2026-02-01',
+    to: '2026-06-30',
+    name: 'Semestrul II',
+    floor: 10,
+    percent: 35,
+    cutoff: '2026-03-01',
+  });
   expect(issues(run.safeParse({ ...valid, kind: 'altceva' }))).toEqual([
     'kind:invalid_role_evaluation_kind',
   ]);
@@ -57,6 +68,41 @@ it('needs both days, Până la not before De la and not after today', () => {
   expect(
     run.safeParse({ ...valid, from: '2026-09-28', to: '2026-09-28' }).success,
   ).toBe(true);
+});
+
+it('takes a Prag minim of a whole number, at least 1 (R58)', () => {
+  for (const floor of ['', '0', '-3', '2.5', 'abc', '2147483648'])
+    expect(issues(run.safeParse({ ...valid, floor })), floor).toEqual([
+      'floor:invalid_eligibility_floor',
+    ]);
+  expect(run.parse({ ...valid, floor: '1' }).floor).toBe(1);
+});
+
+it('takes a Procent from 1 to 100 (R58)', () => {
+  for (const percent of ['', '0', '-3', '2.5', 'abc', '101', '0100'])
+    expect(issues(run.safeParse({ ...valid, percent })), percent).toEqual([
+      'percent:invalid_percent',
+    ]);
+  expect(run.parse({ ...valid, percent: '1' }).percent).toBe(1);
+  expect(run.parse({ ...valid, percent: '100' }).percent).toBe(100);
+});
+
+it('needs a Data limită de intrare, not after today, for Voluntar Activ only (R58)', () => {
+  expect(issues(run.safeParse({ ...valid, cutoff: '' }))).toEqual([
+    'cutoff:membership_cutoff_not_set',
+  ]);
+  expect(issues(run.safeParse({ ...valid, cutoff: '2026-09-29' }))).toEqual([
+    'cutoff:invalid_membership_cutoff',
+  ]);
+  expect(run.parse({ ...valid, cutoff: '2026-09-28' }).cutoff).toBe(
+    '2026-09-28',
+  );
+  // The Adunarea Generală has no cutoff: whatever the field holds, the run
+  // carries none.
+  for (const cutoff of ['', '2026-03-01', '2027-01-01'])
+    expect(
+      run.parse({ ...valid, kind: 'adunarea_generala', cutoff }).cutoff,
+    ).toBeNull();
 });
 
 it('takes a whole threshold of at least 1', () => {

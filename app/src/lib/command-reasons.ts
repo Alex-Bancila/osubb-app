@@ -617,16 +617,6 @@ const REASON_COPY = new Map<string, string>([
     'evaluation_percent_manage_forbidden',
     'Doar BC și Moderatorul pot schimba procentele.',
   ],
-  /* The Promotion Rules' tenure and on/off (#935). */
-  [
-    'invalid_tenure_months',
-    'Vechimea este un număr întreg de luni, de la 0 la 120.',
-  ],
-  ['invalid_promotion_rule_enabled', 'Alege dacă regula este pornită.'],
-  [
-    'promotion_rule_manage_forbidden',
-    'Doar BC și Moderatorul pot schimba regulile de promovare.',
-  ],
   // set_org_setting refuses y: only set_evaluation_percent writes it.
   ['org_setting_not_settable', 'Setarea se schimbă din Portofoliu Interne.'],
   /* The evaluation settings (R58): the Eligibility Floor, the Membership
@@ -674,11 +664,8 @@ const REASON_COPY = new Map<string, string>([
     'candidate_rejection_reason_too_long',
     'Motivul are cel mult 500 de caractere.',
   ],
-  // Still raised by the ranking a run reads (`private.role_evaluation_rows`).
-  [
-    'promotion_rule_not_found',
-    'Regula de promovare nu mai este disponibilă. Reîncarcă pagina.',
-  ],
+  // The ranking of a recorded run (R58): the run was never there, or is gone.
+  ['role_evaluation_not_found', 'Evaluarea nu mai există. Reîncarcă pagina.'],
 
   /* ---- Organization settings (#681, #512) ---- */
   [

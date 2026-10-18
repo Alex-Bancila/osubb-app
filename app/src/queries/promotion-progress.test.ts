@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 type Result = { data: unknown; error: unknown };
 
 const db = vi.hoisted(() => ({
-  rules: { data: [], error: null } as Result,
+  settings: { data: null, error: null } as Result,
   standing: { data: null, error: null } as Result,
   calls: [] as unknown[][],
 }));
@@ -20,6 +20,7 @@ function builder(name: string, result: () => Result) {
       return chain;
     };
   }
+  chain.single = () => Promise.resolve(result());
   chain.maybeSingle = () => Promise.resolve(result());
   chain.then = (resolve: (value: Result) => unknown) => resolve(result());
   return chain;
@@ -29,7 +30,7 @@ vi.mock('../lib/supabase', () => ({
   supabase: {
     from: (table: string) => {
       db.calls.push(['from', table]);
-      return builder(table, () => db.rules);
+      return builder(table, () => db.settings);
     },
     rpc: (fn: string, args?: unknown) => {
       db.calls.push(['rpc', fn, args]);
@@ -45,25 +46,20 @@ vi.mock('../lib/auth', () => ({
 import {
   fetchPromotionProgress,
   roleEvaluationKindFor,
+  tenureState,
   usePromotionProgress,
 } from './promotion-progress';
 
-const RULES = [
-  {
-    from_role: 'recrut',
-    to_role: 'voluntar',
-    kind: 'time',
-    min_tenure_months: 6,
-    enabled: true,
-  },
-  {
-    from_role: 'voluntar',
-    to_role: 'activ',
-    kind: 'top_percent',
-    min_tenure_months: 4,
-    enabled: true,
-  },
-];
+/** The evaluation settings' one row (R58), the cutoff set. */
+const SETTINGS = {
+  eligibility_floor: 10,
+  membership_cutoff: '2026-03-01',
+  points_start_date: null,
+  activ_percent: 35,
+  vot_percent: 25,
+  updated_at: '2026-10-18T09:00:00Z',
+  updated_by: 'bc',
+};
 
 describe('roleEvaluationKindFor (#828, R28)', () => {
   it.each([
@@ -76,9 +72,45 @@ describe('roleEvaluationKindFor (#828, R28)', () => {
   });
 });
 
-describe('fetchPromotionProgress (#634, #826, #828)', () => {
+describe('tenureState (R58)', () => {
+  it('is met when the Member joined on or before the cutoff', () => {
+    expect(tenureState('2026-02-15', '2026-03-01')).toEqual({
+      cutoff: '2026-03-01',
+      joinedAt: '2026-02-15',
+      met: true,
+    });
+    // The cutoff day itself counts, as the server's `joined_at <= cutoff`.
+    expect(tenureState('2026-03-01', '2026-03-01').met).toBe(true);
+  });
+
+  it('is unmet when the Member joined after the cutoff', () => {
+    expect(tenureState('2026-03-02', '2026-03-01')).toEqual({
+      cutoff: '2026-03-01',
+      joinedAt: '2026-03-02',
+      met: false,
+    });
+  });
+
+  it('is unmet while no cutoff is set: nobody is listed meanwhile', () => {
+    expect(tenureState('2020-01-01', null)).toEqual({
+      cutoff: null,
+      joinedAt: '2020-01-01',
+      met: false,
+    });
+  });
+
+  it('is unmet for a Member with no join date', () => {
+    expect(tenureState(null, '2026-03-01')).toEqual({
+      cutoff: '2026-03-01',
+      joinedAt: null,
+      met: false,
+    });
+  });
+});
+
+describe('fetchPromotionProgress (#634, #826, #828, R58)', () => {
   beforeEach(() => {
-    db.rules = { data: RULES, error: null };
+    db.settings = { data: SETTINGS, error: null };
     db.standing = {
       data: { since: '2026-07-01', task_points: 12, threshold: 30 },
       error: null,
@@ -86,10 +118,9 @@ describe('fetchPromotionProgress (#634, #826, #828)', () => {
     db.calls = [];
   });
 
-  it('reads both rules and my own Voluntar Activ standing', async () => {
+  it('reads the Membership Cutoff Date and my own Voluntar Activ standing', async () => {
     await expect(fetchPromotionProgress('voluntar_activ')).resolves.toEqual({
-      voluntarTenureMonths: 6,
-      activTenureMonths: 4,
+      membershipCutoff: '2026-03-01',
       threshold: 30,
       since: '2026-07-01',
       points: 12,
@@ -99,9 +130,26 @@ describe('fetchPromotionProgress (#634, #826, #828)', () => {
       'my_role_evaluation_standing',
       { p_kind: 'voluntar_activ' },
     ]);
+    expect(db.calls).toContainEqual(['from', 'evaluation_settings']);
     expect(db.calls).not.toContainEqual(
       expect.arrayContaining(['evaluation_period_ranking']),
     );
+  });
+
+  it('reads no Promotion Rule: R58 dropped them', async () => {
+    await fetchPromotionProgress('voluntar_activ');
+    expect(db.calls).not.toContainEqual(['from', 'promotion_rules']);
+  });
+
+  it('a cutoff not yet set stays null', async () => {
+    db.settings = {
+      data: { ...SETTINGS, membership_cutoff: null },
+      error: null,
+    };
+
+    const result = await fetchPromotionProgress('voluntar_activ');
+    expect(result.membershipCutoff).toBeNull();
+    expect(result.points).toBe(12);
   });
 
   it('a Voluntar cu Drept de Vot reads the Adunarea Generală standing', async () => {
@@ -146,19 +194,6 @@ describe('fetchPromotionProgress (#634, #826, #828)', () => {
     });
   });
 
-  it('a disabled rule promises no tenure date', async () => {
-    db.rules = {
-      data: RULES.map((rule) =>
-        rule.kind === 'top_percent' ? { ...rule, enabled: false } : rule,
-      ),
-      error: null,
-    };
-
-    const result = await fetchPromotionProgress('voluntar_activ');
-    expect(result.voluntarTenureMonths).toBe(6);
-    expect(result.activTenureMonths).toBeNull();
-  });
-
   it('a threshold not yet entered stays null', async () => {
     db.standing = {
       data: { since: null, task_points: 3, threshold: null },
@@ -172,7 +207,7 @@ describe('fetchPromotionProgress (#634, #826, #828)', () => {
 
   it('throws a failed read', async () => {
     const error = { message: 'denied', code: '42501' };
-    db.rules = { data: null, error };
+    db.settings = { data: null, error };
 
     await expect(fetchPromotionProgress('voluntar_activ')).rejects.toBe(error);
   });
@@ -180,7 +215,7 @@ describe('fetchPromotionProgress (#634, #826, #828)', () => {
 
 describe('usePromotionProgress (#828)', () => {
   beforeEach(() => {
-    db.rules = { data: RULES, error: null };
+    db.settings = { data: SETTINGS, error: null };
     db.standing = {
       data: { since: null, task_points: 0, threshold: 50 },
       error: null,

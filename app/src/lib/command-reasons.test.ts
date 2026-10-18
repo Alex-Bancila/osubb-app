@@ -302,6 +302,8 @@ it.each([
     'membership_cutoff_not_set',
     'Setează data limită de intrare înainte de a rula evaluarea Voluntar Activ.',
   ],
+  // The ranking of a recorded run (R58): the run was deleted or never was.
+  ['role_evaluation_not_found', 'Evaluarea nu mai există. Reîncarcă pagina.'],
   [
     'promotion_candidate_manage_forbidden',
     'Doar BC și Moderatorul pot decide asupra candidaților.',
@@ -333,7 +335,6 @@ it.each([
   'name_too_short',
   'name_too_long',
   'reason_too_long',
-  'promotion_rule_not_found',
   'nothing_to_update',
   'invalid_org_setting_value',
   'org_settings_manage_forbidden',
@@ -358,20 +359,15 @@ it.each([
   expect(reasonCopy(reason)).toBeUndefined();
 });
 
-/* #935: update_promotion_rule brings promotion_rule_manage_forbidden back,
-   with its own words. */
+/* R58 dropped the Promotion Rules and update_promotion_rule with them: their
+   four refusals are no longer raised, so none keeps a copy. */
 it.each([
-  [
-    'invalid_tenure_months',
-    'Vechimea este un număr întreg de luni, de la 0 la 120.',
-  ],
-  ['invalid_promotion_rule_enabled', 'Alege dacă regula este pornită.'],
-  [
-    'promotion_rule_manage_forbidden',
-    'Doar BC și Moderatorul pot schimba regulile de promovare.',
-  ],
-])('has Romanian copy for the Promotion Rule reason %s', (reason, copy) => {
-  expect(reasonCopy(reason)).toBe(copy);
+  'invalid_tenure_months',
+  'invalid_promotion_rule_enabled',
+  'promotion_rule_manage_forbidden',
+  'promotion_rule_not_found',
+])('no longer carries the Promotion Rule reason %s (R58)', (reason) => {
+  expect(reasonCopy(reason)).toBeUndefined();
 });
 
 /* #698: the application form link's own words (the settings form renames
