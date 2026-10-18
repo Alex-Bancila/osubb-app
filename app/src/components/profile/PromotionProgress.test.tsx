@@ -533,41 +533,89 @@ describe('the Points Start Date beside the total', () => {
     },
   );
 
-  it('names it beside the bar when the bar figure is the total', () => {
-    state.startDate = '2026-09-01';
-    render(
-      <PromotionPanel
-        state={{
-          kind: 'view',
-          view: { kind: 'bar', points: 12, threshold: 30, since: null },
-        }}
-        totalPoints={12}
-      />,
-    );
+  // Ruling 17: the standing's figure (`my_role_evaluation_standing`) is not
+  // floored in PR 2, so with a date set it is never taken for the total.
+  const barBeforeAnyEvaluation = {
+    kind: 'view',
+    view: { kind: 'bar', points: 12, threshold: 30, since: null },
+  } as const;
+  const referenceBeforeAnyEvaluation = {
+    kind: 'view',
+    view: {
+      kind: 'reference',
+      points: 12,
+      threshold: 30,
+      since: null,
+      startsLater: false,
+    },
+  } as const;
 
-    expect(screen.queryByTestId('points-total')).not.toBeInTheDocument();
-    expect(screen.getByText('12 / 30 de puncte')).toBeInTheDocument();
-    expect(screen.getByText('din 01.09.2026')).toBeInTheDocument();
+  it('with a date, the floored total leads with its din line and the bar keeps its own figure unlabelled', () => {
+    state.startDate = '2026-09-01';
+    render(<PromotionPanel state={barBeforeAnyEvaluation} totalPoints={20} />);
+
+    expect(screen.getByTestId('points-total')).toHaveTextContent('20de puncte');
+    expect(screen.getByTestId('points-since').textContent).toBe(
+      'din 01.09.2026',
+    );
+    // The all-time figure, with no period beside it: the one `din` is the
+    // total's.
+    const figure = screen.getByText('12 / 30 de puncte');
+    expect(figure.parentElement).not.toHaveTextContent('din');
+    expect(screen.getByTestId('promotion-progress').textContent).toMatch(
+      /^20de puncte/,
+    );
+    expect(
+      screen.getByTestId('promotion-progress').textContent?.split('din'),
+    ).toHaveLength(2);
   });
 
-  it('names it beside the reference figure when that figure is the total', () => {
+  it('with a date, the floored total leads and the reference keeps its own figure unlabelled', () => {
     state.startDate = '2026-09-01';
     render(
-      <PromotionPanel
-        state={{
-          kind: 'view',
-          view: {
-            kind: 'reference',
-            points: 12,
-            threshold: 30,
-            since: null,
-            startsLater: false,
-          },
-        }}
-        totalPoints={12}
-      />,
+      <PromotionPanel state={referenceBeforeAnyEvaluation} totalPoints={20} />,
     );
 
-    expect(screen.getByText('puncte din 01.09.2026')).toBeInTheDocument();
+    expect(screen.getByTestId('points-total')).toHaveTextContent('20de puncte');
+    expect(screen.getByTestId('points-since').textContent).toBe(
+      'din 01.09.2026',
+    );
+    // The reference's own figure and word, with no period beside them.
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.getByText('puncte')).toBeInTheDocument();
+    expect(
+      screen.getByTestId('promotion-progress').textContent?.split('din'),
+    ).toHaveLength(2);
   });
+
+  it.each([null, undefined])(
+    'while the date is %s, the bar figure is still the total and prints no period',
+    (startDate) => {
+      state.startDate = startDate;
+      render(
+        <PromotionPanel state={barBeforeAnyEvaluation} totalPoints={12} />,
+      );
+
+      expect(screen.queryByTestId('points-total')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('points-since')).not.toBeInTheDocument();
+      expect(screen.getByText('12 / 30 de puncte')).toBeInTheDocument();
+      expect(screen.queryByText(/din 01/)).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([null, undefined])(
+    'while the date is %s, the reference figure is still the total',
+    (startDate) => {
+      state.startDate = startDate;
+      render(
+        <PromotionPanel
+          state={referenceBeforeAnyEvaluation}
+          totalPoints={12}
+        />,
+      );
+
+      expect(screen.queryByTestId('points-total')).not.toBeInTheDocument();
+      expect(screen.getByText('puncte')).toBeInTheDocument();
+    },
+  );
 });

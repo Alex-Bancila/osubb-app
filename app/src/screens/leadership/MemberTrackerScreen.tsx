@@ -18,7 +18,7 @@ import { Button } from '../../components/ui/button';
 import { MemberAvatar } from '../../components/ui/combobox';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
 import { formatBucharestShortDay } from '../../lib/calendar-time';
-import { formatDayMonthYear, formatPoints, pointWord } from '../../lib/format';
+import { formatPoints, pointWord } from '../../lib/format';
 import { isUuid } from '../../lib/ids';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import {
@@ -27,7 +27,7 @@ import {
   type WorkFilterValue,
 } from '../../lib/work-filter';
 import {
-  pointsSinceText,
+  pointsPeriodText,
   usePointsStartDate,
 } from '../../queries/evaluation-settings';
 import {
@@ -189,19 +189,15 @@ function totalScope(
   value: WorkFilterValue,
   pointsStartDate: string | null | undefined,
 ): string {
-  const from = value.from && formatDayMonthYear(value.from);
-  const to = value.to && formatDayMonthYear(value.to);
   // No **De la**: the server counts from the Points Start Date (R58). An
   // explicit one, even before it, is the lookback and the range it is.
-  const begin = from ? `din ${from}` : pointsSinceText(pointsStartDate);
-  const range =
-    from && to
-      ? `între ${from} și ${to}`
-      : [begin, to && `până la ${to}`].filter(Boolean).join(' ');
+  const range = pointsPeriodText(value, pointsStartDate);
   const period = range ? `acordate ${range}` : null;
   const narrowed =
     chosenGroupId(value) !== undefined || value.campaignId !== undefined;
-  if (!narrowed && !period) return WHOLE_RECORD;
+  // `range` is undefined while the date is unknown: claim nothing, not even
+  // "everything".
+  if (!narrowed && !period) return range === undefined ? '' : WHOLE_RECORD;
   return [narrowed && 'din filtrele alese', period].filter(Boolean).join(' · ');
 }
 

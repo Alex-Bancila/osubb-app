@@ -4,6 +4,7 @@ import {
   formatDate,
   formatDay,
   formatDayMonthYear,
+  formatDayOrNull,
   formatLongDate,
   formatTaskCount,
 } from './format';
@@ -43,6 +44,14 @@ it('writes a calendar day dotted, as the Notifications do, and a dash for none',
   expect(formatDay(undefined)).toBe('—');
   expect(formatDay('')).toBe('—');
   expect(formatDay('1 septembrie')).toBe('—');
+});
+
+it('hands back null, not a dash, for a day it cannot write', () => {
+  expect(formatDayOrNull('2026-09-01')).toBe('01.09.2026');
+  expect(formatDayOrNull(null)).toBeNull();
+  expect(formatDayOrNull(undefined)).toBeNull();
+  expect(formatDayOrNull('')).toBeNull();
+  expect(formatDayOrNull('—')).toBeNull();
 });
 
 it('counts Tasks with the Romanian plural', () => {

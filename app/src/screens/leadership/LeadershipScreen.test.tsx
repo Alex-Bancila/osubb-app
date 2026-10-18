@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -357,6 +357,20 @@ it('keeps saying "toată perioada" while no Points Start Date is set', () => {
   renderPage('?vedere=cupa');
   expect(
     screen.getByText('Toate campaniile · toată perioada'),
+  ).toBeInTheDocument();
+});
+
+it('names only the Campaign while the Points Start Date is not known yet', () => {
+  pointsStart.value = undefined;
+  renderPage('?vedere=cupa&campanie=3');
+  // Neither "toată perioada" nor a start the settings have not confirmed.
+  expect(screen.getByText('Campania Bun venit')).toBeInTheDocument();
+  expect(screen.queryByText(/perioada|acordate/)).not.toBeInTheDocument();
+  // The range the Member chose is theirs whether or not the date is known.
+  cleanup();
+  renderPage('?vedere=cupa&de_la=2026-08-01');
+  expect(
+    screen.getByText('Toate campaniile · puncte acordate din 1 august 2026'),
   ).toBeInTheDocument();
 });
 

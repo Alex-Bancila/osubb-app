@@ -624,6 +624,17 @@ it('keeps the whole-record sentence while no Points Start Date is set (R58)', ()
   expect(total()).toHaveTextContent('din toate taskurile');
   expect(scope()).toHaveClass('sr-only');
 });
+it('claims nothing about the period while the Points Start Date is not known yet (R58)', () => {
+  state.pointsStart = undefined;
+  const first = view();
+  // Not "din toate taskurile" either: the date may floor the total.
+  expect(total()).toHaveTextContent(/^12 pctpuncte$/);
+  expect(scope().textContent).toBe('');
+  first.unmount();
+  view(uid, '?grup=7');
+  expect(total()).toHaveTextContent(/^12 pctpuncte din filtrele alese$/);
+  expect(total()).not.toHaveTextContent('acordate');
+});
 it('joins the start to the filters chosen, and to a range that has only an end (R58)', () => {
   state.pointsStart = '2026-09-01';
   view(uid, '?grup=7&pana_la=2026-09-30');

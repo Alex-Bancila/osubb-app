@@ -22,7 +22,7 @@ import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
 import { useAuth } from '../../lib/auth';
-import { formatDayMonthYear, formatPoints } from '../../lib/format';
+import { formatPoints } from '../../lib/format';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import {
   WORK_FILTER_KEYS,
@@ -31,7 +31,7 @@ import {
   type WorkFilterValue,
 } from '../../lib/work-filter';
 import {
-  pointsSinceText,
+  pointsPeriodText,
   usePointsStartDate,
 } from '../../queries/evaluation-settings';
 import {
@@ -360,7 +360,8 @@ function CupBoard({ rows }: { rows: CupRow[] }) {
  * What the Cup counts under the current filter: its Campaign and range. With
  * no **De la** the server counts from the Points Start Date (R58), so the
  * caption says so; an explicit **De la** — even one before it, the lookback —
- * is the range it is.
+ * is the range it is. While the date is unknown the caption names the
+ * Campaign alone (see `pointsPeriodText`).
  */
 function cupScope(
   value: WorkFilterValue,
@@ -371,13 +372,8 @@ function cupScope(
     value.campaignId === undefined
       ? 'Toate campaniile'
       : `Campania ${campaignName ?? `#${value.campaignId}`}`;
-  const from = value.from && formatDayMonthYear(value.from);
-  const to = value.to && formatDayMonthYear(value.to);
-  const begin = from ? `din ${from}` : pointsSinceText(pointsStartDate);
-  const range =
-    from && to
-      ? `între ${from} și ${to}`
-      : [begin, to && `până la ${to}`].filter(Boolean).join(' ');
+  const range = pointsPeriodText(value, pointsStartDate);
+  if (range === undefined) return campaign;
   return `${campaign} · ${range ? `puncte acordate ${range}` : 'toată perioada'}`;
 }
 

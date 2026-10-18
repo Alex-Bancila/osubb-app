@@ -50,8 +50,11 @@ import {
  * inside the box — so a `PageGrid` cell is never `null`.
  *
  * R58: once BC has set a Points Start Date, the total says from when it counts
- * (`din 01.09.2026`) — under the number when the panel leads with it, beside
- * the bar's or the reference's figure when that figure is the total.
+ * (`din 01.09.2026`) under the number. The figure below is the Member's
+ * standing (`my_role_evaluation_standing`), which the date does not floor
+ * (ruling 17: PR 3 floors it with the live-candidate window), so with a date
+ * set it is never taken for the total: the panel leads with the floored total
+ * and the bar or the reference keeps its own figure, unlabelled.
  *
  * Read-only and never a leaderboard: no rank, no other Member's points (R6).
  */
@@ -69,19 +72,17 @@ export function PromotionPanel({
   // A Voluntar Activ or a Voluntar cu Drept de Vot has no promotion to show
   // here, only their points against the reference threshold.
   const title = view?.kind === 'reference' ? 'Punctaj' : 'Punctaj și promovare';
-  // Before any Role Evaluation the figure below is the total already.
-  const figureIsTotal = view !== null && view.kind !== 'tenure' && !view.since;
+  const hasStartDate = pointsSinceText(usePointsStartDate()) !== null;
+  // Before any Role Evaluation, and while no Points Start Date floors the
+  // total, the figure below is the total already.
+  const figureIsTotal =
+    view !== null && view.kind !== 'tenure' && !view.since && !hasStartDate;
   const showTotal = totalPoints !== undefined && !figureIsTotal;
-  const startedText = pointsSinceText(usePointsStartDate());
   return (
     <Panel title={title}>
       <div data-testid="promotion-progress" className="flex flex-col gap-3">
         {showTotal && <PointsTotal points={totalPoints} />}
-        <PromotionBody
-          state={state}
-          // Only where the bar's or the reference's figure is the total.
-          startedText={figureIsTotal ? startedText : null}
-        />
+        <PromotionBody state={state} />
       </div>
     </Panel>
   );
@@ -126,11 +127,8 @@ export function PointsTotal({ points }: { points: number }) {
 
 function PromotionBody({
   state,
-  startedText,
 }: {
   state: Exclude<PromotionState, { kind: 'hidden' }>;
-  /** `din 01.09.2026`, when the figure below is the total and a start is set. */
-  startedText: string | null;
 }): ReactNode {
   if (state.kind === 'loading') {
     return <Loading label="Se încarcă progresul…" />;
@@ -159,11 +157,10 @@ function PromotionBody({
           points={view.points}
           threshold={view.threshold}
           since={view.since}
-          startedText={startedText}
         />
       );
     case 'reference':
-      return <Reference view={view} startedText={startedText} />;
+      return <Reference view={view} />;
   }
 }
 
@@ -205,10 +202,8 @@ function CountStartsLater({
 
 function Reference({
   view,
-  startedText,
 }: {
   view: Extract<NonNullable<View>, { kind: 'reference' }>;
-  startedText: string | null;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -224,9 +219,7 @@ function Reference({
         </span>
         <span className="text-sm font-semibold text-muted-foreground">
           {pointWord(view.points)}
-          {view.since
-            ? ` ${sinceText(view.since)}`
-            : startedText && ` ${startedText}`}
+          {view.since && ` ${sinceText(view.since)}`}
         </span>
       </p>
       <p className="m-0 text-sm text-muted-foreground">
@@ -240,12 +233,10 @@ function ThresholdBar({
   points,
   threshold,
   since,
-  startedText,
 }: {
   points: number;
   threshold: number;
   since: string | null;
-  startedText: string | null;
 }) {
   // Reaching the threshold makes a Promotion Candidate at once (#983); BC
   // decides. "At" counts as past it.
@@ -258,9 +249,6 @@ function ThresholdBar({
     ? Number(reached)
     : Math.min(Math.max(points, 0), threshold);
   const percent = (shown / max) * 100;
-  // From the last Role Evaluation, else from the Points Start Date when the
-  // figure is the total.
-  const period = since ? sinceText(since) : startedText;
 
   return (
     <div className="flex flex-col gap-3">
@@ -268,7 +256,9 @@ function ThresholdBar({
         <span className="font-semibold text-foreground">
           {formatPoints(points)} / {formatPointCount(threshold)}
         </span>
-        {period && <span className="text-muted-foreground">{period}</span>}
+        {since && (
+          <span className="text-muted-foreground">{sinceText(since)}</span>
+        )}
       </div>
       <div
         role="progressbar"
