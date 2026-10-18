@@ -43,7 +43,10 @@ type Change = {
   field?: string;
   promotion_rule_id?: number | null;
   from_value: number | null;
-  to_value: number;
+  to_value: number | null;
+  /** The two dates (R58): the cutoff and the Points Start Date. */
+  from_date?: string | null;
+  to_date?: string | null;
   source: string;
   changed_by: string | null;
   role_evaluation_id: number | null;
@@ -910,6 +913,58 @@ it('puts each Promotion Rule where it belongs: the candidates’ rule with Volun
   await chooseKind(user, 'Adunarea Generală');
   expect(shownPanels()).toEqual(['Rulează o evaluare de rol', 'Praguri']);
   expect(screen.queryByRole('listitem', { name: /→/ })).toBeNull();
+});
+
+it('lists the three evaluation settings in the log in their own words (R58)', async () => {
+  db.runs = [RUN_VA];
+  db.changes = [
+    {
+      id: 3,
+      kind: null,
+      field: 'points_start',
+      from_value: null,
+      to_value: null,
+      from_date: '2026-09-01',
+      to_date: '2026-10-01',
+      source: 'manual',
+      changed_by: 'dan',
+      role_evaluation_id: null,
+      changed_at: '2026-10-18T08:00:00Z',
+    },
+    {
+      id: 2,
+      kind: null,
+      field: 'cutoff',
+      from_value: null,
+      to_value: null,
+      from_date: null,
+      to_date: '2026-03-01',
+      source: 'manual',
+      changed_by: 'dan',
+      role_evaluation_id: null,
+      changed_at: '2026-10-17T08:00:00Z',
+    },
+    {
+      id: 1,
+      kind: null,
+      field: 'floor',
+      from_value: null,
+      to_value: 12,
+      source: 'manual',
+      changed_by: 'dan',
+      role_evaluation_id: null,
+      changed_at: '2026-10-16T08:00:00Z',
+    },
+  ];
+  show();
+  const rows = within(await changeLog()).getAllByRole('listitem');
+  // A date change reads as the days, a missing value as a dash, and a
+  // setting names itself instead of a kind.
+  expect(rows.map((row) => row.textContent)).toEqual([
+    '18.10.2026 · Data de început a punctajului01.09.2026 → 01.10.2026·DIDănuț',
+    '17.10.2026 · Data limită de intrare— → 01.03.2026·DIDănuț',
+    '16.10.2026 · Prag minimnesetat → 12·DIDănuț',
+  ]);
 });
 
 it('keeps Vechime to the tenure rule’s own changes, and a kind’s log whole', async () => {

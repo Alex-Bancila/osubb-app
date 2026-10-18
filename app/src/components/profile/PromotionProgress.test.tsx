@@ -16,6 +16,8 @@ const state = vi.hoisted(() => ({
     error: null as Error | null,
     refetch: vi.fn(),
   },
+  /** The Points Start Date (R58): null until BC sets one. */
+  startDate: null as string | null | undefined,
   enabled: [] as boolean[],
   roles: [] as (string | undefined)[],
 }));
@@ -41,6 +43,11 @@ vi.mock('../../queries/reference', () => ({
       ['bc', { name: 'BC', level: 6 }],
     ]),
   }),
+}));
+
+// R58: the Points Start Date is a settings read; the test hands it over.
+vi.mock('../../queries/evaluation-settings', () => ({
+  usePointsStartDate: () => state.startDate,
 }));
 
 vi.mock('../../queries/promotion-progress', () => ({
@@ -106,6 +113,7 @@ describe('PromotionProgress (#634)', () => {
     state.progress.refetch.mockClear();
     state.enabled = [];
     state.roles = [];
+    state.startDate = null;
   });
 
   afterEach(() => {
@@ -421,6 +429,9 @@ describe('PromotionProgress (#634)', () => {
 
 // #859 (B38): Profil's one points panel carries the total, once.
 describe('PromotionPanel with the total', () => {
+  beforeEach(() => {
+    state.startDate = null;
+  });
   afterEach(cleanup);
 
   it('after a Role Evaluation: the total leads, the bar says when its count started', () => {
@@ -477,5 +488,150 @@ describe('PromotionPanel with the total', () => {
     expect(
       screen.getByRole('heading', { name: 'Punctaj și promovare' }),
     ).toBeInTheDocument();
+  });
+});
+
+// R58: from when the total counts, once BC has set a Points Start Date.
+describe('the Points Start Date beside the total', () => {
+  beforeEach(() => {
+    state.startDate = null;
+  });
+  afterEach(cleanup);
+
+  const afterEvaluation = {
+    kind: 'view',
+    view: { kind: 'bar', points: 5, threshold: 30, since: '1 iulie 2026' },
+  } as const;
+
+  it('PointsTotal says from when under the number', () => {
+    state.startDate = '2026-09-01';
+    render(<PromotionPanel state={afterEvaluation} totalPoints={20} />);
+
+    expect(screen.getByTestId('points-total')).toHaveTextContent('20de puncte');
+    expect(screen.getByTestId('points-since')).toHaveTextContent(
+      /^din 01\.09\.2026$/,
+    );
+    // Under the number, not beside it.
+    expect(
+      screen
+        .getByTestId('points-total')
+        .compareDocumentPosition(screen.getByTestId('points-since')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByTestId('points-total')).not.toHaveTextContent('din');
+  });
+
+  it.each([null, undefined])(
+    'says nothing while the date is %s',
+    (startDate) => {
+      state.startDate = startDate;
+      render(<PromotionPanel state={afterEvaluation} totalPoints={20} />);
+
+      expect(screen.getByTestId('points-total')).toBeInTheDocument();
+      expect(screen.queryByTestId('points-since')).not.toBeInTheDocument();
+    },
+  );
+
+  // Ruling 17: the standing's figure (`my_role_evaluation_standing`) is not
+  // floored in PR 2, so with a date set it is never taken for the total.
+  const barBeforeAnyEvaluation = {
+    kind: 'view',
+    view: { kind: 'bar', points: 12, threshold: 30, since: null },
+  } as const;
+  const referenceBeforeAnyEvaluation = {
+    kind: 'view',
+    view: {
+      kind: 'reference',
+      points: 12,
+      threshold: 30,
+      since: null,
+      startsLater: false,
+    },
+  } as const;
+
+  it('with a date, the floored total leads with its din line and the bar keeps its own figure unlabelled', () => {
+    state.startDate = '2026-09-01';
+    render(<PromotionPanel state={barBeforeAnyEvaluation} totalPoints={20} />);
+
+    expect(screen.getByTestId('points-total')).toHaveTextContent('20de puncte');
+    expect(screen.getByTestId('points-since').textContent).toBe(
+      'din 01.09.2026',
+    );
+    // The all-time figure, with no period beside it: the one `din` is the
+    // total's.
+    const figure = screen.getByText('12 / 30 de puncte');
+    expect(figure.parentElement).not.toHaveTextContent('din');
+    expect(screen.getByTestId('promotion-progress').textContent).toMatch(
+      /^20de puncte/,
+    );
+    expect(
+      screen.getByTestId('promotion-progress').textContent?.split('din'),
+    ).toHaveLength(2);
+  });
+
+  it('with a date, the floored total leads and the reference keeps its own figure unlabelled', () => {
+    state.startDate = '2026-09-01';
+    render(
+      <PromotionPanel state={referenceBeforeAnyEvaluation} totalPoints={20} />,
+    );
+
+    expect(screen.getByTestId('points-total')).toHaveTextContent('20de puncte');
+    expect(screen.getByTestId('points-since').textContent).toBe(
+      'din 01.09.2026',
+    );
+    // The reference's own figure and word, with no period beside them.
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.getByText('puncte')).toBeInTheDocument();
+    expect(
+      screen.getByTestId('promotion-progress').textContent?.split('din'),
+    ).toHaveLength(2);
+  });
+
+  it('with no date set, the bar figure is still the total and prints no period', () => {
+    state.startDate = null;
+    render(<PromotionPanel state={barBeforeAnyEvaluation} totalPoints={12} />);
+
+    expect(screen.queryByTestId('points-total')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('points-since')).not.toBeInTheDocument();
+    expect(screen.getByText('12 / 30 de puncte')).toBeInTheDocument();
+  });
+
+  it('with no date set, the reference figure is still the total', () => {
+    state.startDate = null;
+    render(
+      <PromotionPanel state={referenceBeforeAnyEvaluation} totalPoints={12} />,
+    );
+
+    expect(screen.queryByTestId('points-total')).not.toBeInTheDocument();
+    expect(screen.getByText('puncte')).toBeInTheDocument();
+  });
+
+  // Unknown is not "none": while the settings load (or failed to read) the
+  // floored total is shown, without a din line, rather than the unfloored
+  // standing as if it were the total, and nothing jumps when the date arrives.
+  it('while the date is unknown, the floored total leads on the bar view without a period', () => {
+    state.startDate = undefined;
+    render(<PromotionPanel state={barBeforeAnyEvaluation} totalPoints={20} />);
+
+    expect(screen.getByTestId('points-total')).toHaveTextContent('20de puncte');
+    expect(screen.queryByTestId('points-since')).not.toBeInTheDocument();
+    expect(screen.getByText('12 / 30 de puncte')).toBeInTheDocument();
+    expect(screen.getByTestId('promotion-progress').textContent).not.toContain(
+      'din',
+    );
+  });
+
+  it('while the date is unknown, the floored total leads on the reference view without a period', () => {
+    state.startDate = undefined;
+    render(
+      <PromotionPanel state={referenceBeforeAnyEvaluation} totalPoints={20} />,
+    );
+
+    expect(screen.getByTestId('points-total')).toHaveTextContent('20de puncte');
+    expect(screen.queryByTestId('points-since')).not.toBeInTheDocument();
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.getByTestId('promotion-progress').textContent).not.toContain(
+      'din',
+    );
   });
 });

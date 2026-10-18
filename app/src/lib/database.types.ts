@@ -464,6 +464,58 @@ export type Database = {
           },
         ]
       }
+      evaluation_settings: {
+        Row: {
+          created_at: string
+          eligibility_floor: number | null
+          id: number
+          membership_cutoff: string | null
+          points_start_date: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          eligibility_floor?: number | null
+          id: number
+          membership_cutoff?: string | null
+          points_start_date?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          eligibility_floor?: number | null
+          id?: number
+          membership_cutoff?: string | null
+          points_start_date?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evaluation_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "evaluation_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evaluation_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_attendance: {
         Row: {
           checked_in: boolean | null
@@ -1659,37 +1711,43 @@ export type Database = {
           changed_at: string
           changed_by: string | null
           field: string
+          from_date: string | null
           from_value: number | null
           id: number
           kind: string | null
           promotion_rule_id: number | null
           role_evaluation_id: number | null
           source: string
-          to_value: number
+          to_date: string | null
+          to_value: number | null
         }
         Insert: {
           changed_at?: string
           changed_by?: string | null
           field?: string
+          from_date?: string | null
           from_value?: number | null
           id?: never
           kind?: string | null
           promotion_rule_id?: number | null
           role_evaluation_id?: number | null
           source: string
-          to_value: number
+          to_date?: string | null
+          to_value?: number | null
         }
         Update: {
           changed_at?: string
           changed_by?: string | null
           field?: string
+          from_date?: string | null
           from_value?: number | null
           id?: never
           kind?: string | null
           promotion_rule_id?: number | null
           role_evaluation_id?: number | null
           source?: string
-          to_value?: number
+          to_date?: string | null
+          to_value?: number | null
         }
         Relationships: [
           {
@@ -4421,19 +4479,39 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      set_eligibility_floor: {
+        Args: { p_points: number }
+        Returns: {
+          created_at: string
+          eligibility_floor: number | null
+          id: number
+          membership_cutoff: string | null
+          points_start_date: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "evaluation_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_evaluation_percent: {
         Args: { p_kind: string; p_percent: number }
         Returns: {
           changed_at: string
           changed_by: string | null
           field: string
+          from_date: string | null
           from_value: number | null
           id: number
           kind: string | null
           promotion_rule_id: number | null
           role_evaluation_id: number | null
           source: string
-          to_value: number
+          to_date: string | null
+          to_value: number | null
         }
         SetofOptions: {
           from: "*"
@@ -4534,6 +4612,24 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      set_membership_cutoff: {
+        Args: { p_date: string }
+        Returns: {
+          created_at: string
+          eligibility_floor: number | null
+          id: number
+          membership_cutoff: string | null
+          points_start_date: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "evaluation_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_org_setting: {
         Args: { p_key: string; p_value: string }
         Returns: {
@@ -4546,6 +4642,24 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "org_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_points_start_date: {
+        Args: { p_date: string }
+        Returns: {
+          created_at: string
+          eligibility_floor: number | null
+          id: number
+          membership_cutoff: string | null
+          points_start_date: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "evaluation_settings"
           isOneToOne: true
           isSetofReturn: false
         }

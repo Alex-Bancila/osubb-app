@@ -46,6 +46,15 @@ drop trigger task_evaluations_reject_legacy_source on public.task_evaluations;
 -- which the pre-#317 shape below does not have yet; the transaction never
 -- commits, so dropping the trigger here is local.
 drop trigger points_ledger_refresh_promotion_candidates on public.points_ledger;
+-- R58 ruling 18: the award-instant guard reads NEW.evaluation_id, which the
+-- pre-#317 shape does not have either; dropped here for the same reason.
+drop trigger points_ledger_guard_award_instant on public.points_ledger;
+-- R58: my_points reads points_ledger.evaluation_id (the award instant of a
+-- task row, the Points Start Date window), so the column cannot be dropped
+-- while the view stands. The migration replayed below never touches the view
+-- and nothing here reads it; the transaction never commits, so dropping it
+-- is local.
+drop view public.my_points;
 drop function private.reject_legacy_evaluation_source();
 
 drop index public.points_ledger_evaluation_reason_uidx;

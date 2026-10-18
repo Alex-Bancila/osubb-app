@@ -214,10 +214,22 @@ function answering(data: unknown[]) {
     return chain;
   };
   chain.overrideTypes = () => Promise.resolve({ data, error: null });
+  // evaluation_settings' one row (R58).
+  chain.single = () => Promise.resolve({ data: data[0] ?? null, error: null });
   chain.then = (resolve: (value: unknown) => unknown) =>
     resolve({ data, error: null });
   return { chain, calls };
 }
+/** Each table answers with its own builder; an unlisted table is a failure. */
+function fromTables(byTable: Record<string, unknown>) {
+  api.from.mockImplementation((table: string) => {
+    const chain = byTable[table];
+    if (!chain) throw new Error(`unexpected read of ${table}`);
+    return chain;
+  });
+}
+/** The settings row with no Points Start Date, the day-one state (R58). */
+const noStart = () => answering([{ points_start_date: null }]).chain;
 it("reads a Member's total from Clasament's own row under the same filter (#906)", async () => {
   const board = answering([{ member_id: 'm', points: 32 }]);
   api.rpc.mockReturnValue(board.chain);
@@ -234,7 +246,7 @@ it("reads a Member's total from Clasament's own row under the same filter (#906)
 it('sums the ledger, reversal included, for a Member Clasament does not list (#906)', async () => {
   api.rpc.mockReturnValue(answering([]).chain);
   const ledger = answering([{ delta: 18 }, { delta: 12 }, { delta: -12 }]);
-  api.from.mockReturnValue(ledger.chain);
+  fromTables({ points_ledger: ledger.chain, evaluation_settings: noStart() });
   await expect(fetchLeadershipMemberTotal('m', {})).resolves.toBe(18);
   expect(api.from).toHaveBeenCalledWith('points_ledger');
   // No filter, no join: every Task row of the Member counts.
@@ -249,7 +261,7 @@ it('sums the ledger, reversal included, for a Member Clasament does not list (#9
 it('narrows the ledger sum exactly as the board does: Evaluation instant, Campaign, Group subtree (#906)', async () => {
   api.rpc.mockReturnValue(answering([]).chain);
   const ledger = answering([{ delta: 5 }]);
-  api.from.mockReturnValue(ledger.chain);
+  fromTables({ points_ledger: ledger.chain });
   await fetchLeadershipMemberTotal('m', {
     p_group_id: 7,
     p_campaign_id: 3,
@@ -280,4 +292,69 @@ it('fails the total when the board fails, rather than reading 0 (#906)', async (
   api.rpc.mockReturnValue(failed.chain);
   await expect(fetchLeadershipMemberTotal('m', {})).rejects.toThrow('offline');
   expect(api.from).not.toHaveBeenCalled();
+});
+// R58: the server floors every total at the Points Start Date; the browser
+// sum for a Member the board does not list does the same, unless the caller
+// chose a start of their own (Clasament's lookback).
+it('floors the ledger sum at the Points Start Date when no p_from is given (R58)', async () => {
+  api.rpc.mockReturnValue(answering([]).chain);
+  const settings = answering([{ points_start_date: '2026-09-01' }]);
+  const ledger = answering([{ delta: 5 }, { delta: 7 }]);
+  fromTables({
+    points_ledger: ledger.chain,
+    evaluation_settings: settings.chain,
+  });
+  await expect(fetchLeadershipMemberTotal('m', {})).resolves.toBe(12);
+  expect(api.from).toHaveBeenCalledWith('evaluation_settings');
+  expect(settings.calls).toContainEqual(['eq', ['id', 1]]);
+  expect(ledger.calls).toEqual([
+    ['select', ['delta,task_evaluations!inner(evaluated_at)']],
+    ['eq', ['member_id', 'm']],
+    ['in', ['reason', ['task', 'task_reversal']]],
+    // Bucharest midnight of 1 September: 21:00 UTC the evening before.
+    ['gte', ['task_evaluations.evaluated_at', '2026-08-31T21:00:00.000Z']],
+    ['order', ['id']],
+    ['range', [0, 499]],
+  ]);
+});
+it('keeps the To bound beside the floor, as the board does (R58)', async () => {
+  api.rpc.mockReturnValue(answering([]).chain);
+  const ledger = answering([{ delta: 5 }]);
+  fromTables({
+    points_ledger: ledger.chain,
+    evaluation_settings: answering([{ points_start_date: '2026-09-01' }]).chain,
+  });
+  await fetchLeadershipMemberTotal('m', { p_to: '2026-09-30T21:00:00.000Z' });
+  expect(ledger.calls).toContainEqual([
+    'gte',
+    ['task_evaluations.evaluated_at', '2026-08-31T21:00:00.000Z'],
+  ]);
+  expect(ledger.calls).toContainEqual([
+    'lt',
+    ['task_evaluations.evaluated_at', '2026-09-30T21:00:00.000Z'],
+  ]);
+});
+it('honours an explicit p_from earlier than the start, the lookback, and never reads the settings (R58)', async () => {
+  api.rpc.mockReturnValue(answering([]).chain);
+  const ledger = answering([{ delta: 9 }]);
+  fromTables({ points_ledger: ledger.chain });
+  await expect(
+    fetchLeadershipMemberTotal('m', { p_from: '2026-07-31T21:00:00.000Z' }),
+  ).resolves.toBe(9);
+  expect(api.from).not.toHaveBeenCalledWith('evaluation_settings');
+  expect(ledger.calls).toContainEqual([
+    'gte',
+    ['task_evaluations.evaluated_at', '2026-07-31T21:00:00.000Z'],
+  ]);
+});
+it('fails the total when the settings cannot be read, rather than summing everything (R58)', async () => {
+  api.rpc.mockReturnValue(answering([]).chain);
+  const settings = answering([]);
+  settings.chain.single = () =>
+    Promise.resolve({ data: null, error: new Error('offline') });
+  fromTables({
+    points_ledger: answering([]).chain,
+    evaluation_settings: settings.chain,
+  });
+  await expect(fetchLeadershipMemberTotal('m', {})).rejects.toThrow('offline');
 });

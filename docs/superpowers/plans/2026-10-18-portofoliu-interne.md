@@ -33,7 +33,7 @@
   - `invalid_points_start_date` → `Data de început a punctajului este o zi de cel târziu azi.`
   - `evaluation_settings_manage_forbidden` → `Doar BC și Moderatorul pot schimba setările evaluărilor.`
   - `role_evaluation_not_found` → `Evaluarea nu mai există. Reîncarcă pagina.`
-  - `org_setting_not_settable` keeps its key; its copy becomes `Setarea se schimbă din Portofoliu Interne.`
+  - `org_setting_not_settable` keeps its key; its copy becomes `Setarea se schimbă din Portofoliu Interne.` — in PR 3 (Task 12, with the rename); PR 2 keeps `din Evaluări de rol` (CodeRabbit on #1078).
 - **Shipping.** One branch and one PR per part; the body carries the spec link and `🤖 Generated with [Claude Code](https://claude.com/claude-code)`. A review (`@coderabbitai review`; when its quota means a long wait, a fresh-context reviewer instead, with the notes posted on the PR), then merge on green CI with `gh pr merge --merge --delete-branch`, then check the staging push with `gh run list --commit <merge sha>`. Commits end with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. Nothing is pushed or merged without Alex's go-ahead on the PR.
 
 ## Review Focus
@@ -304,7 +304,7 @@ create table public.evaluation_settings (
 
 - Modify: the migration (section 3)
 - Create: `supabase/tests/evaluation_settings_commands.test.sql`
-- Modify: `supabase/tests/tracker_grants.test.sql` (public rows for the three commands; private rows for the three `_impl`s and `points_floor`; count `258`)
+- Modify: `supabase/tests/tracker_grants.test.sql` (public rows for the three commands; private rows for the three `_impl`s and `points_floor`; count `258`), `scripts/check-seed-rerunnable.sh:334-338,361-362` (Step 4b)
 
 **Interfaces:**
 
@@ -329,6 +329,8 @@ Order inside each `_impl`: 1. `PT400 invalid_eligibility_floor` (null or < 1) / 
 - [ ] **Step 3: Migration section 3**, the six functions and `points_floor`, with comments and grants. Model the gate on `private.set_promotion_threshold_impl` (main: `20260927220000_role_evaluations.sql:895-951`).
 
 - [ ] **Step 4: Rosters.** `tracker_grants.test.sql`: public rows `('set_eligibility_floor', 'p_points integer', false, true, false, false)`, `('set_membership_cutoff', 'p_date date', …)`, `('set_points_start_date', 'p_date date', …)`; private rows for the three `_impl`s (`impl`) and `('points_floor', '', 'none')`; count `258`.
+
+- [ ] **Step 4b: Seed protection** (review of Task 4, minor 7). In `scripts/check-seed-rerunnable.sh`, beside the demo calls at :334-338 add `select public.set_eligibility_floor(1);` as the demo BC persona (so `evaluation_settings.updated_by` names a demo Member before the seed re-runs), and beside the two counters at :361-362 add a third that counts `evaluation_settings` rows whose `updated_by` is a demo Member after the re-run (expected 0). Removing `seed.sql`'s `evaluation_settings` update must then fail the script.
 
 - [ ] **Step 5: Run green** on the suite and `tracker_grants.test.sql`.
 
@@ -553,7 +555,7 @@ create trigger profiles_refresh_university_signals after update of university, s
 -- create trigger evaluation_settings_refresh_promotion_candidates after update on public.evaluation_settings for each statement execute function private.refresh_promotion_candidates_on_write();
 
 -- Section 9: the drops and the day-one data.
--- insert into retention_signals the Signals of the latest run of each kind, from the OLD core (still present until this section): kind, member_id, role, 'below_line', task_points, run.threshold_used, run.id, created_at = run.run_at.
+-- insert into retention_signals the Signals of the latest run of each kind (ledger Ruling 14: the old core is already gone by this section): one row per distinct member named by a notifications row whose dedupe_key matches '^retention_signal:' || run.id || ':' -- kind, member_id, the Member's current role as role_at_listing, reason 'below_line', task_points from private.task_points_in_range over the run's period, run.threshold_used, run.id, created_at = run.run_at.
 -- select cron.unschedule('osubb-apply-promotions');
 -- drop function private.apply_promotions(); drop function private.apply_promotion(uuid, member_role, member_role, text); drop function private.detect_promotions();
 -- drop function public.update_promotion_rule(bigint, integer, boolean); drop function private.update_promotion_rule_impl(bigint, integer, boolean);
@@ -565,7 +567,7 @@ create trigger profiles_refresh_university_signals after update of university, s
 
 - [ ] **Step 2: Watch it fail.**
 
-- [ ] **Step 3: Sections 6–9** as in Interfaces. Section 9's data move runs before the drops, in one `do $$ … $$` block that calls the old four-argument core per latest run.
+- [ ] **Step 3: Sections 6–9** as in Interfaces. Section 9's data move runs before the drops, in one `do $$ … $$` block that reads the latest run per kind, its retention_signal notifications and `private.task_points_in_range` (Ruling 14).
 
 - [ ] **Step 4: Fixed references.** `promotion_candidates_live.test.sql`: the `promotion_rules` writes become `set_membership_cutoff` / `evaluation_settings` updates; the `has_trigger` on `promotion_rules` becomes the `evaluation_settings` one; the body text pin. `provision_joined_at.test.sql`: remove the `apply_promotions` calls and their assertions (plan down). `legacy_task_import.test.sql:129`: the `promotion_rules` update becomes an `evaluation_settings` update (or goes if #1074 removed the suite first). `retired_surface.test.sql`: `hasnt_` pins for `promotion_rules`, `update_promotion_rule`, `apply_promotions`, `apply_promotion`, `detect_promotions`, `role_evaluation_ranking(text,date,date)`, `run_role_evaluation(text,date,date,text)`. `notification_read_rules.test.sql`: a `live` retention case. `live_changes.test.sql`: nothing to exclude; `rls_deny_by_default.test.sql`: a `retention_signals` fixture row. `seed.sql:137-155`: the regex already allows `live`; add a `delete from retention_signals` by demo member before the `role_evaluations` delete. `check-seed-rerunnable.sh:369-370`: the orphan count accepts a `live` second segment for `retention_signal` too. `tracker_grants.test.sql`: drop the public row of `update_promotion_rule` and the private rows of `apply_promotions`, `apply_promotion`, `detect_promotions`, `update_promotion_rule_impl`; add `refresh_university_signals` (`none`), `refresh_university_signals_on_write` (`trigger`); count `257`. Delete `apply_promotions.test.sql`, `detect_promotions.test.sql`, `promotion_rule_command.test.sql`; split `promotion_rules.test.sql`.
 
@@ -652,6 +654,8 @@ export function signalReasonText(
 export function promoteHref(candidate: PromotionCandidate): string; // reason text names the run or the listing day, as before
 export const SIMULATION_NOTE = "Simulare, nimic nu a fost salvat.";
 ```
+
+Captions (ruling 19, from the PR 2 reviews): every total that drops older points says so with the same `pointsSinceText` line — the Clasament members board (beside its member count), Voluntari's Puncte column (a caption under the header), Campanii's panel (its own `din {date}` beside the Campaign scope, and an empty state that reads `Niciun punct acordat de la {date} în această campanie.` when older points exist); `PromotionPanel` may label the standing figure again now that Ruling 17 floors it (Task 11); the Praguri log's author cell reads `migrare` for a `migration` row, `evaluarea „…”` for a run and the Member for a manual change.
 
 Layout: `ReceiptTurnScope` → `SegmentedRadio` **Tip** with two options (Vechime is gone) → `PageGrid columns={2} alignHeaders` with `RunPanel` and `SettingsPanel` → `PageGrid columns={1}` with `CandidatesPanel`, `SignalsPanel`, `HistoryPanel`, `ChangeLogPanel`. `RunPanel` state machine: `form` → (Simulează, pending) → `result` (shows `SimulationResult` with `SIMULATION_NOTE`, **Finalizează** opening the confirmation `Dialog` with `finalizeConsequences`, **Modifică valorile** back to `form` keeping the values); after a finalised run, the receipt `runResultText` and the form resets as today (`defaultRangeStart`). The form is prefilled from `useEvaluationSettings` and `useEvaluationPercents` on first render and after every finalised run; **Simulează** is disabled while `eligibilityFloor` is null with the hint `eligibility_floor_not_set` copy, and for `voluntar_activ` while `membershipCutoff` is null. `HistoryPanel` columns: name, kind, range, Prag minim, Procent, Data limită, run by, run at, line in force before, line computed, ranked / evaluated; a row opens `RankingSheet` for that run (empty state for a pre-R58 run: `Clasamentul evaluărilor de dinainte de Portofoliu Interne nu mai este disponibil.`). `ChangeLogPanel` words per field: `prag`, `procent`, `prag minim`, `data limită de intrare`, `data de început a punctajului`, and the historical `vechime` / `regulă pornită`.
 

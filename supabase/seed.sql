@@ -121,14 +121,15 @@ $$;
 -- #901: Role Evaluations and Role history before the demo profiles. None of
 -- `role_evaluations.run_by`, `promotion_candidates.member_id`/`decided_by`,
 -- `promotion_threshold_changes.changed_by`, `promotion_thresholds.updated_by`,
--- `org_settings.updated_by` or `role_history.member_id`/`changed_by` has an
+-- `org_settings.updated_by`, `evaluation_settings.updated_by` (R58) or
+-- `role_history.member_id`/`changed_by` has an
 -- `on delete` clause, so a demo persona who ran an Evaluation, edited a
 -- threshold or a share, or was promoted (by BC, or by the daily
 -- osubb-apply-promotions time rule) pins the demo cohort. Demo-owned here
 -- means: a run a demo account ran, with its Candidates, threshold hand-overs
 -- and Notifications; a Candidate or Role change of a demo Member or decided by
 -- one (the ledger's `awarded_by` rule); a threshold or share change a demo
--- account made. The two settings tables are reference data: their rows keep
+-- account made. The three settings tables are reference data: their rows keep
 -- their values and only forget the demo author.
 --
 -- The Candidate and Retention Signal Notifications carry no foreign key:
@@ -183,6 +184,11 @@ update promotion_thresholds threshold
  where p.id = threshold.updated_by and p.email like '%@demo.osubb';
 
 update org_settings setting
+   set updated_by = null
+  from profiles p
+ where p.id = setting.updated_by and p.email like '%@demo.osubb';
+
+update evaluation_settings setting
    set updated_by = null
   from profiles p
  where p.id = setting.updated_by and p.email like '%@demo.osubb';

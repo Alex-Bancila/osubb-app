@@ -93,6 +93,25 @@ describe('live change signals (#961)', () => {
     });
   });
 
+  // R58: a new Points Start Date changes every total a page shows.
+  it('a change of the evaluation settings refreshes the evaluation, points and campaign families', async () => {
+    const { invalidate } = setup();
+    const { onChange } = await joined();
+
+    act(() =>
+      onChange({ payload: { table: 'evaluation_settings', op: 'UPDATE' } }),
+    );
+
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: keys.evaluation.all,
+      }),
+    );
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.points.all });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.campaigns.all });
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: keys.tasks.all });
+  });
+
   it('ignores a table it does not know and a message without one', async () => {
     const { invalidate } = setup();
     const { onChange } = await joined();

@@ -1,12 +1,15 @@
 import { Panel } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { formatPoints } from '../../lib/format';
+import { pointsSinceText } from '../../lib/points-period';
+import { usePointsStartDate } from '../../queries/evaluation-settings';
 import { useMyRoleLabel } from '../../queries/my-role-label';
 import { useMyPoints } from '../../queries/points';
 
 /**
  * The Member's Personal Score (CONTEXT.md) above Taskurile mele, ruling R10:
- * the `my_points` total and the Role label, as Acasă shows them. No rank —
+ * the `my_points` total and the Role label, as Acasă shows them, and from
+ * when it counts once BC has set a Points Start Date (R58). No rank —
  * ranking is a leadership view (ADR-0007), so nothing here asks for one.
  *
  * A `Panel` stat (layout T6): the kit's 19 px title above one box, the total
@@ -18,6 +21,7 @@ export function PersonalScoreHeader() {
      value as the fallback while it loads — never a blank chip (#963: the
      Board Title for a member who holds one). */
   const roleLabel = useMyRoleLabel();
+  const since = pointsSinceText(usePointsStartDate());
 
   return (
     <Panel title="Punctajul meu" className="h-auto">
@@ -48,6 +52,14 @@ export function PersonalScoreHeader() {
             <span className="text-[length:var(--fs-md)] font-semibold text-muted-foreground">
               puncte
             </span>
+            {since && (
+              <span
+                data-slot="points-since"
+                className="text-sm font-medium text-muted-foreground"
+              >
+                {since}
+              </span>
+            )}
           </p>
         )}
         {roleLabel && (

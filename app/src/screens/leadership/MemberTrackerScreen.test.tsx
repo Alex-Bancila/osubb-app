@@ -15,6 +15,8 @@ const state = vi.hoisted(() => ({
   history: vi.fn(),
   options: vi.fn(),
   total: vi.fn(),
+  // R58: the Points Start Date, null until BC sets one.
+  pointsStart: null as string | null | undefined,
 }));
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../../queries/leadership', () => ({
@@ -24,6 +26,9 @@ vi.mock('../../queries/leadership', () => ({
 }));
 vi.mock('../../queries/task-tabs', () => ({
   useTaskLeadership: () => ({ data: true }),
+}));
+vi.mock('../../queries/evaluation-settings', () => ({
+  usePointsStartDate: () => state.pointsStart,
 }));
 import MemberTrackerScreen from './MemberTrackerScreen';
 import { memberTaskPresentation } from './member-history';
@@ -158,6 +163,7 @@ const budget = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  state.pointsStart = null;
   completed.groups.mockReturnValue({
     data: { groups: [], groupNames: new Map(), campaigns: [] },
     isPending: false,
@@ -601,6 +607,45 @@ it('says the range alone when only a period is chosen, and a negative total keep
   expect(total()).toHaveTextContent('−2 pctpuncte');
   expect(total()).toHaveTextContent('acordate din 1 septembrie 2026');
   expect(total()).not.toHaveTextContent('filtrele alese');
+});
+it('says the total counts from the Points Start Date when nothing narrows it (R58)', () => {
+  state.pointsStart = '2026-09-01';
+  view();
+  // The filter is not prefilled: the server floors, the caption says so.
+  expect(state.total).toHaveBeenLastCalledWith(uid, {});
+  expect(total()).toHaveTextContent(/^12 pctpuncte acordate din 01\.09\.2026$/);
+  // A real sentence now, not the redundant "everything".
+  expect(scope()).not.toHaveClass('sr-only');
+  expect(total()).not.toHaveTextContent('din toate taskurile');
+});
+it('keeps the whole-record sentence while no Points Start Date is set (R58)', () => {
+  view();
+  expect(total()).toHaveTextContent('din toate taskurile');
+  expect(scope()).toHaveClass('sr-only');
+});
+it('claims nothing about the period while the Points Start Date is not known yet (R58)', () => {
+  state.pointsStart = undefined;
+  const first = view();
+  // Not "din toate taskurile" either: the date may floor the total.
+  expect(total()).toHaveTextContent(/^12 pctpuncte$/);
+  expect(scope().textContent).toBe('');
+  first.unmount();
+  view(uid, '?grup=7');
+  expect(total()).toHaveTextContent(/^12 pctpuncte din filtrele alese$/);
+  expect(total()).not.toHaveTextContent('acordate');
+});
+it('joins the start to the filters chosen, and to a range that has only an end (R58)', () => {
+  state.pointsStart = '2026-09-01';
+  view(uid, '?grup=7&pana_la=2026-09-30');
+  expect(total()).toHaveTextContent(
+    'din filtrele alese · acordate din 01.09.2026 până la 30 septembrie 2026',
+  );
+});
+it('reads an explicit De la earlier than the start as the range it is, the lookback (R58)', () => {
+  state.pointsStart = '2026-09-01';
+  view(uid, '?de_la=2026-08-01');
+  expect(total()).toHaveTextContent('acordate din 1 august 2026');
+  expect(total()).not.toHaveTextContent('01.09.2026');
 });
 it('shows 0 points as a figure, a loading line, and a retriable error for the total (#906)', async () => {
   state.total.mockReturnValue({ data: 0, isPending: false, isError: false });

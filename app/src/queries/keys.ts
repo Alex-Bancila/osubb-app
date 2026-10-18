@@ -378,6 +378,10 @@ export const keys = {
     /* The two Promotion Rules: tenure and on/off (#935). */
     rules: (memberId: string | undefined) =>
       ['evaluation', 'rules', { memberId }] as const,
+    /* The evaluation settings (R58): the Eligibility Floor, the Membership
+       Cutoff and the Points Start Date. One row, read by every Member. */
+    settings: (memberId: string | undefined) =>
+      ['evaluation', 'settings', { memberId }] as const,
   },
   /* The organization settings (#681): every row, read by every Member. */
   orgSettings: {
