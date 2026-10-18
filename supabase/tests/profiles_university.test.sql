@@ -11,7 +11,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(36);
+select plan(41);
 
 -- ==================== 1. The column and its constraint ====================
 
@@ -39,6 +39,9 @@ create function pg_temp.u58(n integer) returns uuid language sql immutable as $$
 create function pg_temp.univ58(n integer) returns text
 language sql stable security definer set search_path = '' as $$
   select university from public.profiles where id = pg_temp.u58(n) $$;
+create function pg_temp.email58(n integer) returns text
+language sql stable security definer set search_path = '' as $$
+  select email from public.profiles where id = pg_temp.u58(n) $$;
 create function pg_temp.role58(n integer) returns text
 language sql stable security definer set search_path = '' as $$
   select role::text from public.profiles where id = pg_temp.u58(n) $$;
@@ -173,6 +176,29 @@ select lives_ok(
 select lives_ok(
   $$ update public.profiles set role = 'activ' where id = pg_temp.u58(5) $$,
   'and that voter can be moved to another Role without a university');
+
+-- ==================== 7. service_role ====================
+-- The privileged guard lets every role that is not a client role through
+-- before it asks private.caller_level(), a schema service_role has no usage
+-- on. The Edge Functions (reinvite-member, the import) write guarded columns
+-- as service_role.
+
+set local role service_role;
+
+select lives_ok(
+  $$ update public.profiles set university = 'Universitatea Tehnică din Cluj-Napoca' where id = pg_temp.u58(4) $$,
+  'service_role writes a Member''s university: the guard exits before it asks for a level');
+select is(pg_temp.univ58(4), 'Universitatea Tehnică din Cluj-Napoca', 'and it lands');
+select lives_ok(
+  $$ update public.profiles set email = 'renamed.58@test.local' where id = pg_temp.u58(2) $$,
+  'service_role writes a Member''s email through the same branch (reinvite-member)');
+select is(pg_temp.email58(2), 'renamed.58@test.local', 'and it lands too');
+select throws_ok(
+  $$ update public.profiles set role = 'vot' where id = pg_temp.u58(4) $$,
+  'PT409', 'vote_requires_ubb_student',
+  'service_role cannot grant Drept de Vot to a non-UBB Member either');
+
+reset role;
 
 select * from finish();
 rollback;

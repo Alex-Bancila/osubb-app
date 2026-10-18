@@ -25,7 +25,12 @@ comment on function private.ubb_university() is 'R58: the canonical name of Univ
 -- ==================== 2 · the privileged guard ====================
 -- Rebuilt from 20260929234000_retire_dead_surface.sql (the latest
 -- definition); `university` joins the columns only BC may change. Its grants
--- and comment are carried over by `create or replace`.
+-- and comment are carried over by `create or replace`. The two exits are
+-- separate statements, not one `or` expression: planning the expression
+-- resolves private.caller_level() for the current user, and service_role has
+-- no usage on `private`, so a service_role write of a guarded column (a
+-- university, an email) would fail with "permission denied for schema private"
+-- instead of passing.
 create or replace function public.guard_profile_privileged_columns() returns trigger
  language plpgsql
  set search_path to ''
@@ -39,8 +44,10 @@ begin
      and new.university  is not distinct from old.university then
     return new;
   end if;
-  if current_user not in ('authenticated', 'anon')
-     or (select private.caller_level()) >= 6 then
+  if current_user not in ('authenticated', 'anon') then
+    return new;
+  end if;
+  if (select private.caller_level()) >= 6 then
     return new;
   end if;
   raise exception
@@ -58,7 +65,7 @@ begin
   return new;
 end $$;
 revoke execute on function private.guard_vote_university() from public, anon, authenticated, service_role;
-comment on function private.guard_vote_university() is 'R58 (ADR-0004, amended 2026-10-18): the rule of the organization -- a Role change into vot is refused with PT409 vote_requires_ubb_student unless profiles.university is the canonical Universitatea Babeș-Bolyai (private.ubb_university); null never counts. It binds every writer of profiles.role, so set_member_role and the apply paths answer it alike. It fires on the change of Role only: a voter whose university changes later is not unseated, and a provisioning insert of a voter is outside it until the import carries the university. Security definer because no client role may execute private.ubb_university().';
+comment on function private.guard_vote_university() is 'R58 (ADR-0004, amended 2026-10-18): the rule of the organization -- a Role change into vot is refused with PT409 vote_requires_ubb_student unless profiles.university is the canonical Universitatea Babeș-Bolyai (private.ubb_university); null never counts. Every writer of a Role change into Drept de Vot meets it, set_member_role included. It fires on the change of Role only: a voter whose university changes later is not unseated, and a provisioning insert of a voter is outside it until the import carries the university. Security definer because no client role may execute private.ubb_university().';
 create trigger profiles_guard_vote_university before update of role on public.profiles
   for each row when (new.role = 'vot' and old.role is distinct from 'vot')
   execute function private.guard_vote_university();
