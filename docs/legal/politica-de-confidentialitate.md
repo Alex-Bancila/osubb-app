@@ -13,7 +13,7 @@
 
 # Politica de confidențialitate a aplicației OSUBB
 
-**Versiunea 1.3 · în vigoare de la 19.10.2026**
+**Versiunea 1.3 · în vigoare de la 20.10.2026**
 
 Aplicația OSUBB („app.osubb.ro”) este aplicația internă a Organizației Studenților din Universitatea Babeș-Bolyai (OSUBB). Este folosită doar de membrii organizației, pe bază de invitație, pentru a organiza activitatea de voluntariat: taskuri și puncte, calendarul evenimentelor, anunțuri și notificări.
 
@@ -107,7 +107,7 @@ Când schimbăm această politică, publicăm noua versiune în aplicație, cu n
 
 ---
 
-_Versiunea 1.3 — 19.10.2026. Secțiunea „Decizii automate” nu mai descrie o regulă automată de promovare: nimic nu schimbă automat rolul nimănui, iar evaluările de rol sunt liste pentru BC._
+_Versiunea 1.3 — 20.10.2026. Secțiunea „Decizii automate” nu mai descrie o regulă automată de promovare: nimic nu schimbă automat rolul nimănui, iar evaluările de rol sunt liste pentru BC._
 
 _Versiunea 1.2 — 18.10.2026. Adaugă universitatea la care studiezi, vizibilă oricărui membru._
 
