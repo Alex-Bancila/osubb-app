@@ -36,6 +36,7 @@ import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { InfoHint } from '../../components/ui/info-hint';
 import { useAuth } from '../../lib/auth';
+import { useCapability } from '../../lib/capabilities';
 import { safeHexColor } from '../../lib/color';
 import { formatDayMonthYear, initials } from '../../lib/format';
 import { useTheme } from '../../lib/theme';
@@ -139,6 +140,9 @@ export default function ProfileScreen() {
   const myRoleLabel = useMyRoleLabel();
   const promotion = usePromotionProgressState();
   const timelineShown = useRoleTimelineShown(profileQuery.data);
+  // R58: BC and the Moderator record the Universitate, their own from the
+  // pencil's sheet; for them the row needs no "whom to ask" hint.
+  const canEditUniversity = useCapability('manageRoles').data === true;
 
   const { theme, toggleTheme } = useTheme();
   const [editOpen, setEditOpen] = useState(false);
@@ -405,13 +409,17 @@ export default function ProfileScreen() {
                         </span>
                       )}
                     </SettingRow>
-                    {/* R58: BC sets it on the Member's page; here it is read-only. */}
+                    {/* R58: BC and the Moderator edit it from the pencil's
+                        sheet; every other Member reads it here, with the "i"
+                        that says whom to ask. */}
                     <SettingRow
                       label="Universitate"
                       hint={
-                        <InfoHint label="Despre universitate">
-                          {UNIVERSITY_HINT}
-                        </InfoHint>
+                        canEditUniversity ? undefined : (
+                          <InfoHint label="Despre universitate">
+                            {UNIVERSITY_HINT}
+                          </InfoHint>
+                        )
                       }
                     >
                       {profile.university ? (
@@ -519,6 +527,7 @@ export default function ProfileScreen() {
         onClose={() => setEditOpen(false)}
         onSaved={() => setSaved(true)}
         profile={profile}
+        canEditUniversity={canEditUniversity}
       />
     </Page>
   );

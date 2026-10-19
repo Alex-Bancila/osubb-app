@@ -1,10 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { UNIVERSITIES } from '../../lib/universities';
 import type { MyProfile } from '../../queries/profile';
+import { chooseOption, optionNames } from '../../test/select';
 import EditProfileSheet from './EditProfileSheet';
 
 const updateUser = vi.hoisted(() => vi.fn());
@@ -23,10 +25,24 @@ vi.mock('../../lib/auth', () => ({
 }));
 
 const updateProfileMock = vi.fn();
+// Set by a test that renders the sheet while the profile save is out.
+let profilePending = false;
 
 vi.mock('../../queries/profile', () => ({
   useUpdateMyProfile: () => ({
     mutateAsync: updateProfileMock,
+    isPending: profilePending,
+    error: null,
+  }),
+}));
+
+// R58: BC and the Moderator write their own Universitate through the same
+// command Administrare uses for any Member.
+const updateUniversityMock = vi.fn();
+
+vi.mock('../../queries/admin-member', () => ({
+  useUpdateMemberUniversity: () => ({
+    mutateAsync: updateUniversityMock,
     isPending: false,
     error: null,
   }),
@@ -59,9 +75,15 @@ function wrapper(queryClient = new QueryClient()) {
 function renderSheet(
   profile: MyProfile = sampleProfile,
   onClose: () => void = vi.fn(),
+  canEditUniversity = false,
 ) {
   return render(
-    <EditProfileSheet open={true} onClose={onClose} profile={profile} />,
+    <EditProfileSheet
+      open={true}
+      onClose={onClose}
+      profile={profile}
+      canEditUniversity={canEditUniversity}
+    />,
     { wrapper: wrapper() },
   );
 }
@@ -77,6 +99,7 @@ describe('EditProfileSheet', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     updateProfileMock.mockResolvedValue(undefined);
+    updateUniversityMock.mockResolvedValue(undefined);
     updateUser.mockResolvedValue({ data: {}, error: null });
   });
 
@@ -373,6 +396,290 @@ describe('EditProfileSheet', () => {
         /Scrie un număr de telefon valid/,
       );
       expect(phoneInput()).toHaveFocus();
+    });
+  });
+
+  describe('Universitate (R58)', () => {
+    const university = () =>
+      screen.getByRole('combobox', { name: 'Universitate' });
+    const universityName = () => screen.getByLabelText('Numele universității');
+
+    it('offers Universitate to a BC member and saves it with the profile', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      renderSheet(sampleProfile, onClose, true);
+
+      expect(university()).toHaveAttribute('data-slot', 'select');
+      expect(await optionNames(user, university())).toEqual([
+        ...UNIVERSITIES,
+        'Altă universitate',
+      ]);
+      // Nothing recorded yet: nothing chosen, and no free text.
+      expect(university()).toHaveTextContent('Alege universitatea');
+      expect(screen.queryByLabelText('Numele universității')).toBeNull();
+
+      await chooseOption(user, university(), 'Altă universitate');
+      await user.type(universityName(), '  Universitatea din București ');
+      await save();
+
+      // The same command Administrare uses, with the viewer's own id.
+      expect(updateUniversityMock).toHaveBeenCalledTimes(1);
+      expect(updateUniversityMock).toHaveBeenCalledWith({
+        memberId: 'p1',
+        university: 'Universitatea din București',
+      });
+      // The profile is saved as before, beside it.
+      expect(updateProfileMock).toHaveBeenCalledTimes(1);
+      expect(updateProfileMock).toHaveBeenCalledWith({
+        nickname: 'Ani',
+        phone: '+40711223344',
+        avatarColor: '#284C93',
+      });
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('saves a university chosen from the list as the list names it', async () => {
+      const user = userEvent.setup();
+      renderSheet(sampleProfile, vi.fn(), true);
+
+      await chooseOption(user, university(), 'Universitatea Babeș-Bolyai');
+      // A list entry needs no typed name.
+      expect(screen.queryByLabelText('Numele universității')).toBeNull();
+      await save();
+
+      expect(updateUniversityMock).toHaveBeenCalledWith({
+        memberId: 'p1',
+        university: 'Universitatea Babeș-Bolyai',
+      });
+    });
+
+    it('opens a stored Universitate on its list entry, or on Altă universitate with the name typed', () => {
+      const { unmount } = renderSheet(
+        { ...sampleProfile, university: 'Universitatea Sapientia' },
+        vi.fn(),
+        true,
+      );
+      expect(university()).toHaveTextContent('Universitatea Sapientia');
+      expect(screen.queryByLabelText('Numele universității')).toBeNull();
+      unmount();
+
+      renderSheet(
+        { ...sampleProfile, university: 'Universitatea din București' },
+        vi.fn(),
+        true,
+      );
+      expect(university()).toHaveTextContent('Altă universitate');
+      expect(universityName()).toHaveValue('Universitatea din București');
+    });
+
+    it('does not write an unchanged Universitate, recorded or not', async () => {
+      const user = userEvent.setup();
+      const { unmount } = renderSheet(
+        { ...sampleProfile, university: 'Universitatea din București' },
+        vi.fn(),
+        true,
+      );
+      await save();
+      expect(updateProfileMock).toHaveBeenCalledTimes(1);
+      expect(updateUniversityMock).not.toHaveBeenCalled();
+      unmount();
+
+      // Never recorded and left alone: the blank never blocks the profile.
+      renderSheet(sampleProfile, vi.fn(), true);
+      await user.clear(nicknameInput());
+      await user.type(nicknameInput(), 'Anișoara');
+      await save();
+      expect(updateProfileMock).toHaveBeenCalledTimes(2);
+      expect(updateUniversityMock).not.toHaveBeenCalled();
+    });
+
+    it('hides Universitate below BC', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      renderSheet(sampleProfile, onClose);
+
+      expect(
+        screen.queryByRole('combobox', { name: 'Universitate' }),
+      ).toBeNull();
+      expect(screen.queryByText('Universitate')).toBeNull();
+      expect(screen.queryByLabelText('Numele universității')).toBeNull();
+
+      await user.type(nicknameInput(), 'x');
+      await save();
+      expect(updateUniversityMock).not.toHaveBeenCalled();
+      // The payload is the three columns a Member writes, as ever.
+      const payload = updateProfileMock.mock.calls[0]?.[0] as object;
+      expect(Object.keys(payload).sort()).toEqual([
+        'avatarColor',
+        'nickname',
+        'phone',
+      ]);
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it('refuses a typed university under 2 characters under its field, and writes nothing', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      renderSheet(sampleProfile, onClose, true);
+
+      await chooseOption(user, university(), 'Altă universitate');
+      await user.type(universityName(), 'A');
+      await save();
+
+      expect(universityName()).toHaveAttribute('aria-invalid', 'true');
+      expect(universityName()).toHaveAccessibleDescription(
+        'Universitatea are între 2 și 120 de caractere.',
+      );
+      expect(universityName()).toHaveFocus();
+      expect(updateUniversityMock).not.toHaveBeenCalled();
+      expect(updateProfileMock).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+
+      // Typing a valid name hides the refusal about the old one.
+      await user.type(universityName(), 'bc');
+      expect(universityName()).not.toHaveAttribute('aria-invalid');
+      await save();
+      expect(updateUniversityMock).toHaveBeenCalledWith({
+        memberId: 'p1',
+        university: 'Abc',
+      });
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('asks for the name when Altă universitate is chosen and left empty', async () => {
+      const user = userEvent.setup();
+      renderSheet(sampleProfile, vi.fn(), true);
+
+      await chooseOption(user, university(), 'Altă universitate');
+      await save();
+
+      expect(universityName()).toHaveAccessibleDescription(
+        'Universitatea are între 2 și 120 de caractere.',
+      );
+      expect(updateProfileMock).not.toHaveBeenCalled();
+    });
+
+    it('puts a server refusal of the Universitate under its field and keeps the sheet open', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      updateUniversityMock.mockRejectedValueOnce({
+        code: '23514',
+        message: 'invalid_university',
+      });
+      renderSheet(sampleProfile, onClose, true);
+
+      await chooseOption(user, university(), 'Altă universitate');
+      await user.type(universityName(), 'Universitatea din București');
+      await save();
+
+      expect(universityName()).toHaveAccessibleDescription(
+        'Universitatea are între 2 și 120 de caractere.',
+      );
+      expect(universityName()).toHaveFocus();
+      expect(screen.queryByText(/invalid_university/)).not.toBeInTheDocument();
+      // Both must succeed before the sheet closes.
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('says so, beside the field, when the Universitate cannot be saved', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      updateUniversityMock.mockRejectedValueOnce(
+        new Error('permission denied'),
+      );
+      renderSheet(sampleProfile, onClose, true);
+
+      await chooseOption(user, university(), 'Universitatea Sapientia');
+      await save();
+
+      expect(
+        screen.getByText(
+          'Nu am putut salva universitatea. Verifică permisiunile și reîncearcă.',
+        ),
+      ).toBeVisible();
+      expect(onClose).not.toHaveBeenCalled();
+      // Choosing again hides the refusal about the old choice.
+      await chooseOption(
+        user,
+        university(),
+        'Universitatea Tehnică din Cluj-Napoca',
+      );
+      expect(screen.queryByText(/nu am putut salva universitatea/i)).toBeNull();
+    });
+
+    it('keeps the sheet open when the profile is refused, shows its reason where it lands today, and never writes the Universitate', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      updateProfileMock.mockRejectedValueOnce({
+        code: '23514',
+        message: 'nickname_taken',
+      });
+      renderSheet(sampleProfile, onClose, true);
+
+      await chooseOption(user, university(), 'Universitatea Sapientia');
+      await user.clear(nicknameInput());
+      await user.type(nicknameInput(), 'Ionuț');
+      await save();
+
+      expect(nicknameInput()).toHaveAccessibleDescription(
+        /Porecla este deja folosită de alt membru\. Alege alta\./,
+      );
+      expect(onClose).not.toHaveBeenCalled();
+      // The profile is saved first: its refusal leaves the Universitate alone.
+      expect(updateProfileMock).toHaveBeenCalledTimes(1);
+      expect(updateUniversityMock).not.toHaveBeenCalled();
+    });
+
+    it('writes the Universitate only after the profile is saved', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      let saveProfile: () => void = () => {};
+      updateProfileMock.mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          saveProfile = resolve;
+        }),
+      );
+      renderSheet(sampleProfile, onClose, true);
+
+      await chooseOption(user, university(), 'Universitatea Sapientia');
+      await save();
+
+      // The profile write is still out: nothing else is written beside it.
+      expect(updateProfileMock).toHaveBeenCalledTimes(1);
+      expect(updateUniversityMock).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+
+      saveProfile();
+      await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+      expect(updateUniversityMock).toHaveBeenCalledWith({
+        memberId: 'p1',
+        university: 'Universitatea Sapientia',
+      });
+    });
+
+    it('holds the Universitate controls while the profile save is pending', () => {
+      // The profile is written first; a choice made while it is out would
+      // otherwise outrun the value already on its way.
+      profilePending = true;
+      try {
+        renderSheet(sampleProfile, vi.fn(), true);
+
+        expect(university()).toHaveAttribute('data-disabled');
+        expect(
+          screen.getByRole('button', { name: 'Se salvează…' }),
+        ).toBeDisabled();
+      } finally {
+        profilePending = false;
+      }
+    });
+
+    it('is a field of the sheet with a visible label, and passes the accessibility check', async () => {
+      renderSheet(sampleProfile, vi.fn(), true);
+
+      expect(university()).toHaveAccessibleName('Universitate');
+      expect((await axe.run(screen.getByRole('dialog'))).violations).toEqual(
+        [],
+      );
     });
   });
 
