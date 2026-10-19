@@ -108,7 +108,7 @@ select throws_ok(
 -- (evaluation_rankings_read.test.sql owns its rules). #48 seeded a third,
 -- vote_retention_percent, which R58 deleted (y is evaluation_settings.vot_percent,
 -- role_evaluation_simulation.test.sql). #771 seeds privacy_notice_version, at 1.0,
--- #860 moves it to 1.1 and R58 to 1.2 (privacy_notice_acknowledgements.test.sql
+-- #860 moves it to 1.1 and R58 to 1.2 and 1.3 (privacy_notice_acknowledgements.test.sql
 -- owns its rules). #775 seeds email_daily_quota, at 90 (email_digest.test.sql owns
 -- its rules). #824 seeds board_group_id, whose value is whatever the demo seed
 -- pointed it at (board_group_setting.test.sql owns its rules).
@@ -116,7 +116,7 @@ select results_eq(
   $$ select key,
             case key when 'adunarea_generala_group_id' then true
                      when 'board_group_id' then true
-                     when 'privacy_notice_version' then value = '1.2'
+                     when 'privacy_notice_version' then value = '1.3'
                      when 'email_daily_quota' then value = '90'
                      else value is null end,
             updated_by
@@ -126,7 +126,7 @@ select results_eq(
             ('board_group_id'::text, true, null::uuid),
             ('email_daily_quota'::text, true, null::uuid),
             ('privacy_notice_version'::text, true, null::uuid) $$,
-  'the seed rows: adherence_form_url, empty, #512''s adunarea_generala_group_id, #771''s privacy_notice_version at 1.2 (R58), #775''s email_daily_quota at 90 and #824''s board_group_id, none set through the command -- and no other key (R58 deleted #48''s vote_retention_percent)');
+  'the seed rows: adherence_form_url, empty, #512''s adunarea_generala_group_id, #771''s privacy_notice_version at 1.3 (R58), #775''s email_daily_quota at 90 and #824''s board_group_id, none set through the command -- and no other key (R58 deleted #48''s vote_retention_percent)');
 
 -- ==================== 3. Grants ====================
 
@@ -181,7 +181,7 @@ select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000004');
 select results_eq(
   $$ select key, case key when 'adunarea_generala_group_id' then true
                           when 'board_group_id' then true
-                          when 'privacy_notice_version' then value = '1.2'
+                          when 'privacy_notice_version' then value = '1.3'
                           when 'email_daily_quota' then value = '90'
                           else value is null end
        from public.org_settings order by key $$,

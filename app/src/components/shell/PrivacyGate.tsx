@@ -129,7 +129,7 @@ export function PrivacyGate({ children }: { children: ReactElement }) {
           // newer than the server's version (the text shipped before its
           // migration ran) is answered stale instead of recording what the
           // server does not yet ask for. When the server writes the same
-          // number differently (1.2.0 for this 1.2), its exact string is what
+          // number differently (1.3.0 for this 1.3), its exact string is what
           // acknowledge_privacy_notice compares, so that is what is sent.
           onClick={() =>
             acknowledge.mutate(
