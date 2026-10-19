@@ -331,7 +331,10 @@ describe('CampaignsPanel', () => {
 
       // One that starts before it, or has no start, is cut at the date.
       for (const range of [
-        { p_from: '2026-08-31T21:00:00.000Z', p_to: '2026-10-31T22:00:00.000Z' },
+        {
+          p_from: '2026-08-31T21:00:00.000Z',
+          p_to: '2026-10-31T22:00:00.000Z',
+        },
         { p_to: '2026-10-31T22:00:00.000Z' },
       ]) {
         const view = show('', range);

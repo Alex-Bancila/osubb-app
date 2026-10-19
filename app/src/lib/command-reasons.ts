@@ -600,10 +600,6 @@ const REASON_COPY = new Map<string, string>([
   // The browser's own: a date input left empty.
   ['date_required', 'Alege data.'],
   [
-    'promotion_threshold_not_set',
-    'Setează întâi pragul pentru acest tip de evaluare.',
-  ],
-  [
     'promotion_threshold_manage_forbidden',
     'Doar BC și Moderatorul pot schimba pragurile.',
   ],
@@ -617,8 +613,6 @@ const REASON_COPY = new Map<string, string>([
     'evaluation_percent_manage_forbidden',
     'Doar BC și Moderatorul pot schimba procentele.',
   ],
-  // set_org_setting refuses y: only set_evaluation_percent writes it.
-  ['org_setting_not_settable', 'Setarea se schimbă din Evaluări de rol.'],
   /* The evaluation settings (R58): the Eligibility Floor, the Membership
      Cutoff and the Points Start Date, and the runs that need the first two. */
   [

@@ -629,9 +629,7 @@ it('claims nothing about the period while the Points Start Date is not known yet
   // Not "din toate taskurile" either: the date may floor the total.
   expect(total()).toHaveTextContent(/^12 pctpuncte$/);
   // No empty paragraph is left behind for a screen reader to stop on.
-  expect(
-    total().querySelector('[data-slot="member-total-scope"]'),
-  ).toBeNull();
+  expect(total().querySelector('[data-slot="member-total-scope"]')).toBeNull();
   first.unmount();
   view(uid, '?grup=7');
   expect(total()).toHaveTextContent(/^12 pctpuncte din filtrele alese$/);

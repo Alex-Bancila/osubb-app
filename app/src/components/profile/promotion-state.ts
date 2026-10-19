@@ -61,10 +61,13 @@ const LADDER_ROLES = new Set(['recrut', 'voluntar', 'activ', 'vot']);
 
 /**
  * `since` is the first day the points count from, formatted ('1 iulie
- * 2026'): the day AFTER the last Role Evaluation's range, never the
- * evaluation's own date (F-6, #893). Null before any Role Evaluation: then
- * `points` is the Member's total, and the panel says it once rather than as
- * a second 'total' (#859 B38).
+ * 2026'), and `sinceIso` the same day as the server gave it: the later of
+ * the day AFTER the last Role Evaluation's range, never the evaluation's own
+ * date (F-6, #893), and the Points Start Date (ruling 17, R58). Which of the
+ * two opened the window decides what the panel may say it is "after", so the
+ * panel compares `sinceIso` with the Points Start Date. Null before any Role
+ * Evaluation and any start date: then `points` is the Member's total, and the
+ * panel says it once rather than as a second 'total' (#859 B38).
  *
  * `startsLater`: `since` is still ahead (a Role Evaluation whose range ended
  * today), so nothing counts yet; the panel says when the count starts
@@ -82,6 +85,7 @@ export type View =
       points: number;
       threshold: number;
       since: string | null;
+      sinceIso: string | null;
       startsLater?: boolean;
     }
   | {
@@ -89,6 +93,7 @@ export type View =
       points: number;
       threshold: number;
       since: string | null;
+      sinceIso: string | null;
       startsLater?: boolean;
     }
   | null;
@@ -127,7 +132,14 @@ function viewFor(
     if (progress.membershipCutoff === null) return null;
     const tenure = tenureState(joinedAt, progress.membershipCutoff);
     if (tenure.met && measurable) {
-      return { kind: 'bar', points, threshold, since: sinceDate, startsLater };
+      return {
+        kind: 'bar',
+        points,
+        threshold,
+        since: sinceDate,
+        sinceIso: since,
+        startsLater,
+      };
     }
     return { kind: 'tenure', text: tenureText(tenure), tenure };
   }
@@ -139,6 +151,7 @@ function viewFor(
         points,
         threshold,
         since: sinceDate,
+        sinceIso: since,
         startsLater,
       }
     : null;
