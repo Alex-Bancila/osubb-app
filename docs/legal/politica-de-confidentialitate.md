@@ -3,7 +3,7 @@
   și pentru pasul de confirmare de după conectare (#771, ruling L16). Textul versiunii 1.0 a fost
   aprobat de Alex pe 2026-09-27; corecturile versiunii 1.1 (#860), pe 2026-09-29; versiunea 1.2
   (universitatea, ruling R58), aprobată de Alex pe 2026-10-18; versiunea 1.3 (deciziile automate,
-  ruling R58, partea a treia), redactată pe 2026-10-19, așteaptă aprobarea lui Alex.
+  ruling R58, partea a treia), aprobată de Alex pe 2026-10-20.
   Regula versiunilor: orice schimbare de conținut incrementează „Versiunea” și data, în acest fișier și
   în app/src/screens/privacy/PrivacyNoticeContent.tsx, iar în același pull request o migrație ridică
   în org_settings `privacy_notice_version` la același număr; aplicația cere apoi fiecărui Membru o
