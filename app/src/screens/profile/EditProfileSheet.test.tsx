@@ -25,11 +25,13 @@ vi.mock('../../lib/auth', () => ({
 }));
 
 const updateProfileMock = vi.fn();
+// Set by a test that renders the sheet while the profile save is out.
+let profilePending = false;
 
 vi.mock('../../queries/profile', () => ({
   useUpdateMyProfile: () => ({
     mutateAsync: updateProfileMock,
-    isPending: false,
+    isPending: profilePending,
     error: null,
   }),
 }));
@@ -653,6 +655,22 @@ describe('EditProfileSheet', () => {
         memberId: 'p1',
         university: 'Universitatea Sapientia',
       });
+    });
+
+    it('holds the Universitate controls while the profile save is pending', () => {
+      // The profile is written first; a choice made while it is out would
+      // otherwise outrun the value already on its way.
+      profilePending = true;
+      try {
+        renderSheet(sampleProfile, vi.fn(), true);
+
+        expect(university()).toHaveAttribute('data-disabled');
+        expect(
+          screen.getByRole('button', { name: 'Se salvează…' }),
+        ).toBeDisabled();
+      } finally {
+        profilePending = false;
+      }
     });
 
     it('is a field of the sheet with a visible label, and passes the accessibility check', async () => {

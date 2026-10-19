@@ -235,7 +235,7 @@ function EditProfileForm({
                 value={university.option}
                 placeholder="Alege universitatea"
                 options={UNIVERSITY_CHOICES}
-                disabled={universityMutation.isPending}
+                disabled={pending}
                 onValueChange={(option) => {
                   setUniversity({ ...university, option });
                   // A refusal was about the old choice.
@@ -253,7 +253,7 @@ function EditProfileForm({
                   id={universityNameId}
                   type="text"
                   value={university.other}
-                  disabled={universityMutation.isPending}
+                  disabled={pending}
                   onChange={(e) =>
                     setUniversity({ ...university, other: e.target.value })
                   }
