@@ -1,3 +1,5 @@
+-- #1081: Portofoliu Interne replaces Evaluări de rol -- one ranking, stored Retention Signals, the shares at home (R58, part 3).
+--
 -- R58 (Alex, 2026-10-18; spec docs/superpowers/specs/2026-10-18-portofoliu-interne-design.md,
 -- section C): Portofoliu Interne replaces Evaluări de rol. A Role Evaluation
 -- ranks every eligible Member of its kind in one ranking, a Simulation shows
@@ -107,7 +109,7 @@ comment on column public.retention_signals.reason is
 comment on column public.retention_signals.task_points is
   'R58: the holder''s Task Points in the run''s Evaluation Period; null exactly for not_ubb_student.';
 comment on column public.retention_signals.threshold_used is
-  'R58: the line the run computed and measured against (the Promotion Threshold it handed over); null for not_ubb_student and for a run that ranked nobody, which has no line.';
+  'R58: the line the holder was measured against -- since R58 the line the run computed and handed over as the Promotion Threshold; for a row stored on day one from a pre-R58 run, that run''s threshold in force (role_evaluations.threshold_used). A below_floor row fell under the run''s Eligibility Floor (role_evaluations.eligibility_floor), not under this number: the column still names the line. Null for not_ubb_student and for a run that ranked nobody, which has no line.';
 comment on column public.retention_signals.role_evaluation_id is
   'R58: the finalised run that raised the Signal; null for the live not_ubb_student Signal (retention_signals_live_reason_ck).';
 comment on column public.retention_signals.created_at is
@@ -1222,11 +1224,6 @@ create trigger profiles_refresh_university_signals
 after update of university, status on public.profiles
 for each statement execute function private.refresh_university_signals_on_write();
 
--- The rule applies to the state it finds: a voter BC already moved to another
--- university between the Universitate column and this migration is
--- signalled now, not at the next write.
-select private.refresh_university_signals();
-
 -- A Role change closes the Member's open Retention Signals. Restated from
 -- main's body (20260927220000_role_evaluations.sql, section 16) with the
 -- Signal close added after the Candidate close.
@@ -1313,6 +1310,14 @@ $function$;
 
 comment on function private.notification_subject(bigint, text, text) is
   '#1012 (R37), extended by R53 and R58: the subject a Notification row is about, from its task_id (task:<id>), else its dedupe key (task:/event:<id>:<field>, announcement:<id> and its Termen reminders announcement:<id>:termen:<date>, request:<id> -> completed_work_request:<id>, application:<id> -> group_application:<id>, promotion_candidate:<run|live>:<member> -> promotion_candidate:<member>, retention_signal:<run|live>:<member> -> retention_signal:<member>), else its link (/tracker?task=, /tracker/<id>, /calendar?event=, /anunturi?anunt=), else null. Pure; used by the insert trigger and the backfill. Executable by no client role.';
+
+-- The rule applies to the state it finds: a voter BC already moved to another
+-- university between the Universitate column and this migration is
+-- signalled now, not at the next write. This call must follow the
+-- notification_subject restate just above: the Notification it sends is about
+-- retention_signal:<member> only under the widened rule, and a stored subject
+-- of null would leave it unread when BC opens the Member's tracker page.
+select private.refresh_university_signals();
 
 -- ---------------------------------------------------------------------------
 -- 8. The live Promotion Candidates read the Membership Cutoff Date.

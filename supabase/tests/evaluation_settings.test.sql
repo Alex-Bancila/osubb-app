@@ -15,7 +15,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(56);
+select plan(58);
 
 -- ==================== Fixtures — prefix 58582000-… ====================
 -- 1 bc; 2 voluntar; 3 deactivated voluntar holding a still-valid token.
@@ -103,6 +103,14 @@ select throws_ok(
   $$ update public.evaluation_settings set eligibility_floor = -3 $$,
   '23514', 'new row for relation "evaluation_settings" violates check constraint "evaluation_settings_floor_ck"',
   'evaluation_settings_floor_ck: and never negative');
+select throws_ok(
+  $$ update public.evaluation_settings set activ_percent = 0 $$,
+  '23514', 'new row for relation "evaluation_settings" violates check constraint "evaluation_settings_activ_percent_ck"',
+  'evaluation_settings_activ_percent_ck: x, the Voluntar Activ share, is at least 1 %');
+select throws_ok(
+  $$ update public.evaluation_settings set vot_percent = 101 $$,
+  '23514', 'new row for relation "evaluation_settings" violates check constraint "evaluation_settings_vot_percent_ck"',
+  'evaluation_settings_vot_percent_ck: y, the Adunarea Generală share, is at most 100 %');
 select lives_ok(
   $$ update public.evaluation_settings
         set eligibility_floor = 1, membership_cutoff = '2026-09-01', points_start_date = '2026-10-01' $$,

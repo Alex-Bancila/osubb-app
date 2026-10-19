@@ -17,7 +17,8 @@
 -- Ruling 17, count from no earlier than the Points Start Date. The Promotion
 -- Rules, their command and the daily job are gone.
 --
--- In order: 0. day one stored nothing on an empty database; 1. shape; 2. a
+-- In order: 0. day one stored nothing on an empty database; 1. shape, with every
+-- CHECK constraint and the open-row index pinned by name; 2. a
 -- Voluntar Activ run's Signals and who reads them; 3. an Adunarea Generală run
 -- leaves the other kind's Signals open; 4. the live Universitate Signal
 -- (Review Focus 1), and both kinds' runs leave it open; 5. a Role change
@@ -54,7 +55,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(55);
+select plan(64);
 
 -- ==================== 0. Day one ====================
 -- The migration stored the Retention Signals of the latest run of each kind;
@@ -148,6 +149,67 @@ select is(
 select is(
   (select prosecdef from pg_proc where oid = 'private.refresh_university_signals()'::regprocedure),
   true, 'the refresh is security definer: it writes Signals and Notifications no caller may write');
+
+-- Every CHECK constraint is asserted by name (conventions section 8, Ruling
+-- 23). Postgres evaluates CHECKs in name order -- closed_as, closed_shape,
+-- kind, live_reason, points_shape, reason -- and each probe row below passes
+-- every constraint that sorts before the one it names. Run id 1 is a stand-in:
+-- a CHECK refuses the row before its foreign keys are looked at, and a dropped
+-- CHECK would let the row reach the foreign key instead, so the assertion
+-- fails either way.
+select throws_ok(
+  $$ insert into public.retention_signals
+       (kind, member_id, role_at_listing, reason, task_points, threshold_used, role_evaluation_id)
+     values ('other', pg_temp.r58('G'), 'activ', 'below_line', 20, 40, 1) $$,
+  '23514', 'new row for relation "retention_signals" violates check constraint "retention_signals_kind_ck"',
+  'retention_signals_kind_ck: a Signal belongs to voluntar_activ or adunarea_generala, no other kind');
+select throws_ok(
+  $$ insert into public.retention_signals
+       (kind, member_id, role_at_listing, reason, task_points, threshold_used, role_evaluation_id)
+     values ('voluntar_activ', pg_temp.r58('G'), 'activ', 'below_target', 20, 40, 1) $$,
+  '23514', 'new row for relation "retention_signals" violates check constraint "retention_signals_reason_ck"',
+  'retention_signals_reason_ck: the reason is below_line, below_floor or not_ubb_student');
+select throws_ok(
+  $$ insert into public.retention_signals
+       (kind, member_id, role_at_listing, reason, task_points, threshold_used, role_evaluation_id,
+        closed_at, closed_as)
+     values ('voluntar_activ', pg_temp.r58('G'), 'activ', 'below_line', 20, 40, 1, now(), 'deleted') $$,
+  '23514', 'new row for relation "retention_signals" violates check constraint "retention_signals_closed_as_ck"',
+  'retention_signals_closed_as_ck: a Signal closes as role_changed, superseded or resolved, nothing else');
+select throws_ok(
+  $$ insert into public.retention_signals
+       (kind, member_id, role_at_listing, reason, task_points, threshold_used, role_evaluation_id, closed_at)
+     values ('voluntar_activ', pg_temp.r58('G'), 'activ', 'below_line', 20, 40, 1, now()) $$,
+  '23514', 'new row for relation "retention_signals" violates check constraint "retention_signals_closed_shape_ck"',
+  'retention_signals_closed_shape_ck: closed_at and closed_as are set together -- a close time without a how is refused');
+select throws_ok(
+  $$ insert into public.retention_signals
+       (kind, member_id, role_at_listing, reason, task_points, threshold_used, role_evaluation_id)
+     values ('voluntar_activ', pg_temp.r58('G'), 'activ', 'below_line', 20, 40, null) $$,
+  '23514', 'new row for relation "retention_signals" violates check constraint "retention_signals_live_reason_ck"',
+  'retention_signals_live_reason_ck: only the Universitate Signal is live -- a points-based Signal without its run is refused');
+select throws_ok(
+  $$ insert into public.retention_signals
+       (kind, member_id, role_at_listing, reason, task_points, threshold_used, role_evaluation_id)
+     values ('adunarea_generala', pg_temp.r58('J'), 'vot', 'not_ubb_student', 5, null, null) $$,
+  '23514', 'new row for relation "retention_signals" violates check constraint "retention_signals_points_shape_ck"',
+  'retention_signals_points_shape_ck: the Universitate Signal carries no Task Points');
+
+-- One open Signal per (kind, Member, reason): the second of a pair is refused
+-- by the unique index, and the first is removed again so no later section
+-- meets it.
+select lives_ok(
+  $$ insert into public.retention_signals (kind, member_id, role_at_listing, reason)
+     values ('adunarea_generala', pg_temp.r58('A'), 'vot', 'not_ubb_student') $$,
+  'one open live Signal is stored for a Member');
+select throws_ok(
+  $$ insert into public.retention_signals (kind, member_id, role_at_listing, reason)
+     values ('adunarea_generala', pg_temp.r58('A'), 'vot', 'not_ubb_student') $$,
+  '23505', 'duplicate key value violates unique constraint "retention_signals_open_uidx"',
+  'retention_signals_open_uidx: a second open Signal for the same (kind, Member, reason) is refused');
+delete from public.retention_signals where member_id = pg_temp.r58('A');
+select is((select count(*) from public.retention_signals), 0::bigint,
+  'the probe rows are gone: no later section meets a Signal it did not write');
 
 -- ==================== 2. A Voluntar Activ run's Signals, and who reads them ====================
 

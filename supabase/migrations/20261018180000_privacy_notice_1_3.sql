@@ -1,4 +1,4 @@
--- Ruling R58, part 3: the Privacy Notice moves to version 1.3.
+-- #1081: the Privacy Notice moves to version 1.3 (R58, part 3).
 --
 -- docs/legal/politica-de-confidentialitate.md and its app copy
 -- (app/src/screens/privacy/PrivacyNoticeContent.tsx) now read "Versiunea 1.3"

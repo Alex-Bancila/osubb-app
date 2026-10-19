@@ -6,10 +6,29 @@
 # changed after the run -- first on a database with no run (nothing is
 # stored), then over pre-R58 runs of both kinds with Role history around
 # them, inside one rollback transaction. The block is the migration's
-# only DO block; the seeded demo Members stand in for the holders.
+# only DO block; the seeded demo Members stand in for the holders. It also
+# reads the migration for the order of its own Universitate refresh (below).
 set -euo pipefail
 migration=$(printf '%s\n' supabase/migrations/*_portofoliu_interne.sql)
 db_container="${SUPABASE_DB_CONTAINER:-supabase_db_osubb-app}"
+
+# The migration's own Universitate refresh can send a Notification, and that
+# Notification is stored with a subject (retention_signal:<member>, the one
+# that opening the Member's tracker page marks read) only under the widened
+# private.notification_subject rule. A suite runs after the whole migration,
+# when the rule is already widened, so it cannot see the order; the harness
+# reads the file instead: the refresh call must come after the restate.
+refresh_follows_subject_restate() {  # <migration file>; 0 when the order is right
+  local refresh subject
+  refresh=$(grep -n '^select private\.refresh_university_signals();$' "$1" | cut -d: -f1)
+  subject=$(grep -n '^create or replace function private\.notification_subject(' "$1" | cut -d: -f1)
+  [[ "$refresh" =~ ^[0-9]+$ && "$subject" =~ ^[0-9]+$ ]] || return 2
+  [ "$refresh" -gt "$subject" ]
+}
+if ! refresh_follows_subject_restate "$migration"; then
+  echo 'The migration refreshes the Universitate Signals before it widens notification_subject' >&2
+  exit 1
+fi
 day_one() { sed -n '/^do \$\$$/,/^end \$\$;$/p' "$migration"; }
 if [ -z "$(day_one)" ]; then
   echo 'The day-one block was not found in the migration' >&2; exit 1

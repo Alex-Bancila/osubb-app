@@ -29,6 +29,16 @@
 -- 58589000-, R58). A Task Point total is base_points(difficulty) x
 -- rating_mult(rating) summed: 60 = 20x3, 50 = 20x2 + 5x2, 40 = 20x2,
 -- 30 = 15x2, 25 = 20x1 + 5x1, 20 = 20x1, 15 = 5x3, 10 = 5x2, 5 = 5x1.
+--
+-- The evaluation settings row is put back to day one first -- the Prag minim,
+-- the Data limită de intrare and the Data de început a punctajului unset, x 35
+-- and y 25 -- so the suites never depend on what a stack's earlier suites or
+-- its own users left in it.
+
+update public.evaluation_settings
+   set eligibility_floor = null, membership_cutoff = null, points_start_date = null,
+       activ_percent = 35, vot_percent = 25, updated_by = null
+ where id = 1;
 
 create function pg_temp.r58(p_key text) returns uuid language sql immutable as $$
   select ('58589000-0000-0000-0000-0000000000'
