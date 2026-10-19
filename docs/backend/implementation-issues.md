@@ -26,7 +26,7 @@ Legend: ✅ delivered · 🧍 needs a human (browser/account/BC) · everything e
 - ✅ 1.6a notifications (#45, PR #116) · 1.6b suppression bc+bce + push_tokens (#46, PR #117)
 - **#47 1.7a** ag_eligibility view · **#48 1.7b** ag_quorum_top25 view
 - **#6 1.8** P1 deltas: `profiles.joined_at` + `points_ledger.note`
-- _(Phase 2)_ **#49 1.9a** promotion_rules · **#50 1.9b** role_history · **#51 1.9c** detect_promotions() · **#52 1.9d** promotion job + notification (ADR-0004)
+- _(Phase 2)_ **#49 1.9a** promotion_rules · **#50 1.9b** role_history · **#51 1.9c** detect_promotions() · **#52 1.9d** promotion job + notification (ADR-0004). Historical: #49, #51 and #52 retired by R58 (2026-10-18): Promotion Rules, `detect_promotions` and the daily job are gone; see `docs/superpowers/specs/2026-10-18-portofoliu-interne-design.md`
 
 ## Epic 2 — Auth & login
 

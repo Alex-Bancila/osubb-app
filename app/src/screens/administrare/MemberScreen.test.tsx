@@ -839,7 +839,7 @@ it('lets BC set a join date that was never recorded (#932)', async () => {
   // What an unset date costs stays on the page.
   expect(
     within(fact('Data intrării')).getByText(
-      'Fără ea, membrul nu acumulează vechime pentru promovări.',
+      'Fără ea, membrul nu poate deveni candidat la promovare.',
     ),
   ).toBeVisible();
   // One pencil, not a text button.

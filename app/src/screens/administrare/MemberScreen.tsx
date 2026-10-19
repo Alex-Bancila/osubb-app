@@ -301,8 +301,8 @@ function RowEditorButtons({
 }
 
 /**
- * "Data intrării" for BC and the Moderator (#932): the date tenure counts
- * from, as a row whose pencil opens a date (the app's `DatePicker`) with
+ * "Data intrării" for BC and the Moderator (#932): the date the Membership
+ * Cutoff Date is measured against, as a row whose pencil opens a date (the app's `DatePicker`) with
  * Salvează / Renunță in place. The picker has no upper bound, so a day in the
  * future can be chosen: the schema refuses it under the field before anything
  * is sent. The write is
@@ -415,10 +415,10 @@ function JoinDateRow({ member }: { member: AdminMember }) {
           </Button>
         </span>
       )}
-      {/* Unset, the promotion job counts no tenure (#51). */}
+      {/* Unset, the Membership Cutoff Date cannot list the Voluntar (R58). */}
       {!editing && !joined && (
         <p className="m-0 basis-full text-sm text-muted-foreground">
-          Fără ea, membrul nu acumulează vechime pentru promovări.
+          Fără ea, membrul nu poate deveni candidat la promovare.
         </p>
       )}
       {message && !editing && turn.current && (
@@ -627,7 +627,8 @@ function AccountPanel({
             <Unset>Necompletată</Unset>
           )}
         </FactRow>
-        {/* BC and the Moderator set the date tenure counts from (#932); for
+        {/* BC and the Moderator set the date the Membership Cutoff Date
+            is measured against (#932); for
             anyone else it is the header's "Membru din", when there is one. */}
         {canEdit && <JoinDateRow member={member} />}
         {/* R58: BC and the Moderator set the university; Profil and the
