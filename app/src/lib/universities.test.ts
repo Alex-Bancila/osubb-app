@@ -4,6 +4,8 @@ import {
   OTHER_UNIVERSITY,
   UBB,
   UNIVERSITIES,
+  UNIVERSITY_CHOICES,
+  universityDraft,
   universityOption,
 } from './universities';
 
@@ -37,4 +39,22 @@ it('counts only Universitatea Babeș-Bolyai as a UBB student', () => {
   expect(isUbbStudent('Universitatea din București')).toBe(false);
   expect(isUbbStudent(null)).toBe(false);
   expect(isUbbStudent(undefined)).toBe(false);
+});
+
+it('offers the list as the select entries, then Altă universitate', () => {
+  expect(UNIVERSITY_CHOICES.map((choice) => choice.label)).toEqual([
+    ...UNIVERSITIES,
+    'Altă universitate',
+  ]);
+  expect(UNIVERSITY_CHOICES.at(-1)?.value).toBe(OTHER_UNIVERSITY);
+});
+
+it('drafts a stored value as its list entry, or as Altă universitate with the name typed', () => {
+  expect(universityDraft(UBB)).toEqual({ option: UBB, other: '' });
+  expect(universityDraft('Universitatea din București')).toEqual({
+    option: OTHER_UNIVERSITY,
+    other: 'Universitatea din București',
+  });
+  // Nothing stored: nothing chosen yet.
+  expect(universityDraft(null)).toEqual({ option: '', other: '' });
 });

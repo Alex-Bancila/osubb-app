@@ -51,8 +51,9 @@ import { formatDayMonthYear, formatPoints, initials } from '../../lib/format';
 import { isUuid } from '../../lib/ids';
 import {
   OTHER_UNIVERSITY,
-  UNIVERSITIES,
-  universityOption,
+  UNIVERSITY_CHOICES,
+  UNIVERSITY_SAVE_FAILED,
+  universityDraft,
 } from '../../lib/universities';
 import { bucharestDayKey } from '../../lib/calendar-time';
 import {
@@ -89,8 +90,6 @@ const SAVE_FAILED =
   'Nu am putut salva numele. Verifică permisiunile și reîncearcă.';
 const JOINED_SAVE_FAILED =
   'Nu am putut salva data intrării. Verifică permisiunile și reîncearcă.';
-const UNIVERSITY_SAVE_FAILED =
-  'Nu am putut salva universitatea. Verifică permisiunile și reîncearcă.';
 const IDENTITY_FORM_ID = 'member-identity-form';
 
 /** The page's tabs, by their `?tab=` value — as Profil's. */
@@ -430,24 +429,6 @@ function JoinDateRow({ member }: { member: AdminMember }) {
     </li>
   );
 }
-
-/**
- * The select's draft for a stored Universitate: its list entry, or "Altă
- * universitate" with the stored name as the free text.
- */
-function universityDraft(university: string | null) {
-  const option = universityOption(university) ?? '';
-  return {
-    option,
-    other: option === OTHER_UNIVERSITY ? (university ?? '') : '',
-  };
-}
-
-/** The Universitate select's entries: the list, then the free-text one. */
-const UNIVERSITY_CHOICES = [
-  ...UNIVERSITIES.map((name) => ({ value: name, label: name })),
-  { value: OTHER_UNIVERSITY, label: 'Altă universitate' },
-];
 
 /**
  * "Universitate" for BC and the Moderator (R58), beside the join date: a row
