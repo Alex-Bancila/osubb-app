@@ -37,14 +37,12 @@ vi.mock('../lib/supabase', () => ({
 
 import { runSchema } from '../lib/schemas/role-evaluation';
 import {
-  fetchEvaluationPercents,
   fetchPromotionCandidates,
   fetchRetentionSignals,
   fetchRoleEvaluationRanking,
   fetchRoleEvaluations,
   fetchThresholdChanges,
   latestRun,
-  percentText,
   runRoleEvaluationCommand,
   simulateRoleEvaluation,
   simulationOutcome,
@@ -258,45 +256,6 @@ describe('the Role Evaluation reads (#827 over #826)', () => {
     expect(await fetchRoleEvaluationRanking(12)).toEqual([
       { ...PAGE_ROW, ranked: false, rank: null, line: null },
     ]);
-  });
-
-  it('reads x and y, and who changed each last, from evaluation_percents (#866)', async () => {
-    db.results.set('evaluation_percents', {
-      data: [
-        {
-          kind: 'voluntar_activ',
-          percent: 35,
-          changed_at: '2026-09-28T09:00:00Z',
-          changed_by: 'bc',
-        },
-        {
-          kind: 'adunarea_generala',
-          percent: 25,
-          changed_at: null,
-          changed_by: null,
-        },
-      ],
-      error: null,
-    });
-    const percents = await fetchEvaluationPercents();
-    expect(percents).toEqual([
-      {
-        kind: 'voluntar_activ',
-        percent: 35,
-        changedAt: '2026-09-28T09:00:00Z',
-        changedBy: 'bc',
-      },
-      {
-        kind: 'adunarea_generala',
-        percent: 25,
-        changedAt: null,
-        changedBy: null,
-      },
-    ]);
-    expect(db.calls).toContainEqual(['rpc', 'evaluation_percents', undefined]);
-    expect(percentText(percents, 'voluntar_activ')).toBe('35');
-    expect(percentText(percents, 'adunarea_generala')).toBe('25');
-    expect(percentText(undefined, 'voluntar_activ')).toBe('—');
   });
 
   it('throws a read error rather than showing an empty list', async () => {

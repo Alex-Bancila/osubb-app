@@ -442,49 +442,6 @@ export function simulationOutcome(
   };
 }
 
-/**
- * A kind's top share in force (#866, ruling R30): x for Voluntar Activ, y for
- * the Adunarea Generală — both held in `evaluation_settings` since R58 — with
- * who changed it last and when: null before any change, and for anyone below
- * BC.
- */
-export type EvaluationPercent = {
-  kind: string;
-  percent: number | null;
-  changedAt: string | null;
-  changedBy: string | null;
-};
-
-/** Both shares, from `evaluation_percents()`: Voluntar Activ first. */
-export async function fetchEvaluationPercents(): Promise<EvaluationPercent[]> {
-  const { data, error } = await supabase.rpc('evaluation_percents');
-  if (error) throw error;
-  return (data ?? []).map((row) => ({
-    kind: row.kind,
-    // Null for a session that reads neither share nor log (RLS).
-    percent: row.percent as number | null,
-    changedAt: row.changed_at as string | null,
-    changedBy: row.changed_by as string | null,
-  }));
-}
-
-export function useEvaluationPercents() {
-  const memberId = useAuth().session?.user.id;
-  return useQuery({
-    queryKey: keys.evaluation.percents(memberId),
-    queryFn: memberId ? fetchEvaluationPercents : skipToken,
-  });
-}
-
-/** One kind's share as the run confirmation writes it, `—` while unknown. */
-export function percentText(
-  percents: readonly EvaluationPercent[] | undefined,
-  kind: RoleEvaluationKind,
-): string {
-  const percent = percents?.find((row) => row.kind === kind)?.percent;
-  return percent === null || percent === undefined ? '—' : String(percent);
-}
-
 /** What the tab asks the server to do. */
 export type RoleEvaluationCommand =
   | { kind: 'run'; values: RunValues }

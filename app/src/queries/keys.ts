@@ -377,8 +377,6 @@ export const keys = {
     /* The open stored Retention Signals (R58). */
     signals: (memberId: string | undefined) =>
       ['evaluation', 'signals', { memberId }] as const,
-    percents: (memberId: string | undefined) =>
-      ['evaluation', 'percents', { memberId }] as const,
     /* The evaluation settings (R58): the Eligibility Floor, the Membership
        Cutoff and the Points Start Date. One row, read by every Member. */
     settings: (memberId: string | undefined) =>
