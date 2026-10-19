@@ -23,6 +23,7 @@ import { Button } from '../../components/ui/button';
 import { WorkFilter } from '../../components/work-filter/WorkFilter';
 import { useAuth } from '../../lib/auth';
 import { formatPoints } from '../../lib/format';
+import { pointsPeriodText } from '../../lib/points-period';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import {
   WORK_FILTER_KEYS,
@@ -30,10 +31,7 @@ import {
   type WorkFilterLevels,
   type WorkFilterValue,
 } from '../../lib/work-filter';
-import {
-  pointsPeriodText,
-  usePointsStartDate,
-} from '../../queries/evaluation-settings';
+import { usePointsStartDate } from '../../queries/evaluation-settings';
 import {
   useLeaderboardIdentities,
   useLeadershipLeaderboard,

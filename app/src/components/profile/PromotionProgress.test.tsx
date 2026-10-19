@@ -46,8 +46,7 @@ vi.mock('../../queries/reference', () => ({
 }));
 
 // R58: the Points Start Date is a settings read; the test hands it over.
-vi.mock('../../queries/evaluation-settings', async (importActual) => ({
-  ...(await importActual<typeof import('../../queries/evaluation-settings')>()),
+vi.mock('../../queries/evaluation-settings', () => ({
   usePointsStartDate: () => state.startDate,
 }));
 
@@ -615,34 +614,51 @@ describe('the Points Start Date beside the total', () => {
     ).toHaveLength(2);
   });
 
-  it.each([null, undefined])(
-    'while the date is %s, the bar figure is still the total and prints no period',
-    (startDate) => {
-      state.startDate = startDate;
-      render(
-        <PromotionPanel state={barBeforeAnyEvaluation} totalPoints={12} />,
-      );
+  it('with no date set, the bar figure is still the total and prints no period', () => {
+    state.startDate = null;
+    render(<PromotionPanel state={barBeforeAnyEvaluation} totalPoints={12} />);
 
-      expect(screen.queryByTestId('points-total')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('points-since')).not.toBeInTheDocument();
-      expect(screen.getByText('12 / 30 de puncte')).toBeInTheDocument();
-      expect(screen.queryByText(/din 01/)).not.toBeInTheDocument();
-    },
-  );
+    expect(screen.queryByTestId('points-total')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('points-since')).not.toBeInTheDocument();
+    expect(screen.getByText('12 / 30 de puncte')).toBeInTheDocument();
+  });
 
-  it.each([null, undefined])(
-    'while the date is %s, the reference figure is still the total',
-    (startDate) => {
-      state.startDate = startDate;
-      render(
-        <PromotionPanel
-          state={referenceBeforeAnyEvaluation}
-          totalPoints={12}
-        />,
-      );
+  it('with no date set, the reference figure is still the total', () => {
+    state.startDate = null;
+    render(
+      <PromotionPanel state={referenceBeforeAnyEvaluation} totalPoints={12} />,
+    );
 
-      expect(screen.queryByTestId('points-total')).not.toBeInTheDocument();
-      expect(screen.getByText('puncte')).toBeInTheDocument();
-    },
-  );
+    expect(screen.queryByTestId('points-total')).not.toBeInTheDocument();
+    expect(screen.getByText('puncte')).toBeInTheDocument();
+  });
+
+  // Unknown is not "none": while the settings load (or failed to read) the
+  // floored total is shown, without a din line, rather than the unfloored
+  // standing as if it were the total, and nothing jumps when the date arrives.
+  it('while the date is unknown, the floored total leads on the bar view without a period', () => {
+    state.startDate = undefined;
+    render(<PromotionPanel state={barBeforeAnyEvaluation} totalPoints={20} />);
+
+    expect(screen.getByTestId('points-total')).toHaveTextContent('20de puncte');
+    expect(screen.queryByTestId('points-since')).not.toBeInTheDocument();
+    expect(screen.getByText('12 / 30 de puncte')).toBeInTheDocument();
+    expect(screen.getByTestId('promotion-progress').textContent).not.toContain(
+      'din',
+    );
+  });
+
+  it('while the date is unknown, the floored total leads on the reference view without a period', () => {
+    state.startDate = undefined;
+    render(
+      <PromotionPanel state={referenceBeforeAnyEvaluation} totalPoints={20} />,
+    );
+
+    expect(screen.getByTestId('points-total')).toHaveTextContent('20de puncte');
+    expect(screen.queryByTestId('points-since')).not.toBeInTheDocument();
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.getByTestId('promotion-progress').textContent).not.toContain(
+      'din',
+    );
+  });
 });

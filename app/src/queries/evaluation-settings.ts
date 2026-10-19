@@ -7,9 +7,7 @@ import {
 } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
 import { CommandError } from '../lib/command-reasons';
-import { formatDayMonthYear, formatDayOrNull } from '../lib/format';
 import { supabase } from '../lib/supabase';
-import type { WorkFilterValue } from '../lib/work-filter';
 import { keys } from './keys';
 
 /**
@@ -82,40 +80,12 @@ export function usePointsStartDate(): string | null | undefined {
   }).data;
 }
 
-/** What a total says about where it begins: `din 01.09.2026`, or nothing. */
-export function pointsSinceText(
-  date: string | null | undefined,
-): string | null {
-  const day = formatDayOrNull(date);
-  return day ? `din ${day}` : null;
-}
-
-/**
- * The period a total counts over, in the words both captions share (the
- * Cup's `puncte acordate …` and Tracker membru's `acordate …`), for the Work
- * Filter's range and the Points Start Date (R58):
- *
- * - an explicit **De la** — even one before the start date, the lookback — is
- *   the range it is: `între 1 august 2026 și 30 septembrie 2026`,
- *   `din 1 august 2026`;
- * - without one the server counts from the start date, so the text begins
- *   there: `din 01.09.2026`, `din 01.09.2026 până la 30 septembrie 2026`;
- * - `null` when nothing narrows the period (the whole record), and
- *   `undefined` while the start date is not known (loading, or a failed
- *   read): a caption must then say nothing about the period rather than
- *   claim the whole record.
+/*
+ * The words a total uses for its period are pure and live in
+ * `lib/points-period` (no Supabase client), so a screen and its test can use
+ * them without loading this module; they are re-exported for its readers.
  */
-export function pointsPeriodText(
-  range: Pick<WorkFilterValue, 'from' | 'to'>,
-  pointsStartDate: string | null | undefined,
-): string | null | undefined {
-  const from = range.from && formatDayMonthYear(range.from);
-  const to = range.to && formatDayMonthYear(range.to);
-  if (from && to) return `între ${from} și ${to}`;
-  if (!from && pointsStartDate === undefined) return undefined;
-  const begin = from ? `din ${from}` : pointsSinceText(pointsStartDate);
-  return [begin, to && `până la ${to}`].filter(Boolean).join(' ') || null;
-}
+export { pointsPeriodText, pointsSinceText } from '../lib/points-period';
 
 /** What the Setări panel asks the server to do. */
 export type EvaluationSettingCommand =

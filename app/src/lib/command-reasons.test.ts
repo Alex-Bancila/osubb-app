@@ -275,7 +275,7 @@ it.each([
     'evaluation_percent_manage_forbidden',
     'Doar BC și Moderatorul pot schimba procentele.',
   ],
-  ['org_setting_not_settable', 'Setarea se schimbă din Portofoliu Interne.'],
+  ['org_setting_not_settable', 'Setarea se schimbă din Evaluări de rol.'],
   // The evaluation settings (R58): the Eligibility Floor, the Membership
   // Cutoff and the Points Start Date.
   [
