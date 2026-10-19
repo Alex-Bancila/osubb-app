@@ -166,8 +166,8 @@ export function useUpdateMemberJoinedAt() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: updateMemberJoinedAt,
-    // Tenure counts from the date: the Member Card, Profil and the promotion
-    // progress bars all read it.
+    // The Membership Cutoff Date is measured against the date: the Member
+    // Card, Profil and the promotion progress bars all read it.
     onSuccess: async () => {
       await Promise.all(
         [keys.members.all, keys.profile.all, keys.points.all].map((queryKey) =>

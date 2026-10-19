@@ -64,10 +64,11 @@ export const ADMINISTRARE_TABS = [
     capabilities: ['managesAnyGroup'],
   },
   {
-    // Ruling R28: the Perioade tab is Evaluări de rol (#826, #827 rebuild it).
-    path: '/administrare/evaluari',
+    // Ruling R58: Evaluări de rol (R28, before it Perioade) became Portofoliu
+    // Interne; both old paths redirect here.
+    path: '/administrare/portofoliu-interne',
     icon: ClipboardCheck,
-    label: 'Evaluări de rol',
+    label: 'Portofoliu Interne',
     capabilities: ['manageRoles'],
   },
   {

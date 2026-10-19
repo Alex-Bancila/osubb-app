@@ -1,9 +1,15 @@
-import { formatDayMonthYear, parseLocalDate } from '../../lib/format';
+import {
+  formatDay,
+  formatDayMonthYear,
+  parseLocalDate,
+} from '../../lib/format';
 import { useAuth } from '../../lib/auth';
 import { useMyProfile } from '../../queries/profile';
 import {
+  tenureState,
   usePromotionProgress,
   type PromotionProgress as Progress,
+  type Tenure,
 } from '../../queries/promotion-progress';
 import { useRoles } from '../../queries/reference';
 
@@ -55,22 +61,31 @@ const LADDER_ROLES = new Set(['recrut', 'voluntar', 'activ', 'vot']);
 
 /**
  * `since` is the first day the points count from, formatted ('1 iulie
- * 2026'): the day AFTER the last Role Evaluation's range, never the
- * evaluation's own date (F-6, #893). Null before any Role Evaluation: then
- * `points` is the Member's total, and the panel says it once rather than as
- * a second 'total' (#859 B38).
+ * 2026'), and `sinceIso` the same day as the server gave it: the later of
+ * the day AFTER the last Role Evaluation's range, never the evaluation's own
+ * date (F-6, #893), and the Points Start Date (ruling 17, R58). Which of the
+ * two opened the window decides what the panel may say it is "after", so the
+ * panel compares `sinceIso` with the Points Start Date. Null before any Role
+ * Evaluation and any start date: then `points` is the Member's total, and the
+ * panel says it once rather than as a second 'total' (#859 B38).
  *
  * `startsLater`: `since` is still ahead (a Role Evaluation whose range ended
  * today), so nothing counts yet; the panel says when the count starts
  * rather than showing 0 as a result.
+ *
+ * `tenure` (R58): the one line a Voluntar reads in place of the bar, about the
+ * Membership Cutoff Date. `text` says it; `tenure` is the state it was made
+ * from (the cutoff, the Member's join date, whether they joined by it), so the
+ * panel can word it differently without asking again.
  */
 export type View =
-  | { kind: 'tenure'; text: string }
+  | { kind: 'tenure'; text: string; tenure: Tenure }
   | {
       kind: 'bar';
       points: number;
       threshold: number;
       since: string | null;
+      sinceIso: string | null;
       startsLater?: boolean;
     }
   | {
@@ -78,13 +93,22 @@ export type View =
       points: number;
       threshold: number;
       since: string | null;
+      sinceIso: string | null;
       startsLater?: boolean;
     }
   | null;
 
-/** The line a Recrut reads once the tenure date has passed (#859 B43). */
-export const TENURE_MET_TEXT =
-  'Îndeplinești vechimea; promovarea se aplică la următoarea rulare.';
+/**
+ * What a Voluntar reads about the Membership Cutoff Date (R58): that they
+ * joined by it, or the day they must have joined by to be listed. The days are
+ * written dd.mm.yyyy, as the settings are everywhere else.
+ */
+function tenureText({ cutoff, met }: Tenure): string {
+  const day = formatDay(cutoff);
+  return met
+    ? `Ai intrat în OSUBB până la ${day}: poți deveni candidat la Voluntar Activ.`
+    : `Pentru a deveni candidat la Voluntar Activ trebuie să fi intrat în OSUBB până la ${day}.`;
+}
 
 function viewFor(
   role: string,
@@ -98,26 +122,26 @@ function viewFor(
   const sinceDay = parseLocalDate(since);
   const startsLater = sinceDay !== null && sinceDay > startOfToday();
 
-  if (role === 'recrut') {
-    const date = tenureDate(joinedAt, progress.voluntarTenureMonths);
-    if (!date) return null;
-    // The tenure job promotes on its next run, so a date already reached is
-    // never promised in the future tense (Audit D D-7).
-    return startOfToday() >= date
-      ? { kind: 'tenure', text: TENURE_MET_TEXT }
-      : { kind: 'tenure', text: `Devii Voluntar din ${formatTenure(date)}` };
-  }
+  // R58: nothing promotes a Recrut by the calendar; BC does it by hand in
+  // Roluri, so there is no date to show and nothing to promise.
+  if (role === 'recrut') return null;
 
   if (role === 'voluntar') {
-    const date = tenureDate(joinedAt, progress.activTenureMonths);
-    if (!date) return null;
-    if (measurable && startOfToday() >= date) {
-      return { kind: 'bar', points, threshold, since: sinceDate, startsLater };
+    // Without a Membership Cutoff Date nobody is listed, and the panel makes
+    // no promise either (as it made none for a disabled rule).
+    if (progress.membershipCutoff === null) return null;
+    const tenure = tenureState(joinedAt, progress.membershipCutoff);
+    if (tenure.met && measurable) {
+      return {
+        kind: 'bar',
+        points,
+        threshold,
+        since: sinceDate,
+        sinceIso: since,
+        startsLater,
+      };
     }
-    return {
-      kind: 'tenure',
-      text: `Poți deveni Voluntar Activ din ${formatTenure(date)}`,
-    };
+    return { kind: 'tenure', text: tenureText(tenure), tenure };
   }
 
   // Voluntar Activ and Voluntar cu Drept de Vot: no tenure line to fall back on.
@@ -127,35 +151,13 @@ function viewFor(
         points,
         threshold,
         since: sinceDate,
+        sinceIso: since,
         startsLater,
       }
     : null;
 }
 
-/**
- * `joined_at` + the rule's months, as a local calendar date. A day the target
- * month lacks clamps to its last day (31 August + 6 months is 28/29 February),
- * the way PostgreSQL's `date + interval 'n months'` does.
- */
-function tenureDate(joinedAt: string | null, months: number | null) {
-  const joined = parseLocalDate(joinedAt);
-  if (!joined || months === null) return null;
-  const year = joined.getFullYear();
-  const month = joined.getMonth() + months;
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  return new Date(year, month, Math.min(joined.getDate(), lastDay));
-}
-
 function startOfToday() {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-}
-
-function formatTenure(date: Date): string {
-  const iso = [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('-');
-  return formatDayMonthYear(iso) ?? iso;
 }

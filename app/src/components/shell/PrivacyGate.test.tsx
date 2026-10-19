@@ -10,7 +10,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 /* A two-table stand-in: the current version in org_settings and the
    Member's own acknowledgement rows, answered by `maybeSingle()`. */
 const db = vi.hoisted(() => ({
-  version: '1.2' as string | null,
+  version: '1.3' as string | null,
   acknowledged: [] as string[],
   settingsError: null as Error | null,
   settingsReads: 0,
@@ -76,7 +76,7 @@ const NEW_VERSION = {
 } as const;
 
 beforeEach(() => {
-  db.version = '1.2';
+  db.version = '1.3';
   db.acknowledged = [];
   db.settingsError = null;
   db.settingsReads = 0;
@@ -84,8 +84,8 @@ beforeEach(() => {
   reloadToLatestVersion.mockClear();
 });
 
-it('bundles the 1.2 notice (R58), the version the migration sets', () => {
-  expect(PRIVACY_NOTICE_VERSION).toBe('1.2');
+it('bundles the 1.3 notice (R58), the version the migration sets', () => {
+  expect(PRIVACY_NOTICE_VERSION).toBe('1.3');
 });
 
 it('shows the notice and nothing of the app to a Member who never acknowledged it', async () => {
@@ -106,18 +106,18 @@ it('shows the notice and nothing of the app to a Member who never acknowledged i
 });
 
 it('asks again when the Member acknowledged only an older version', async () => {
-  db.version = '1.2';
-  db.acknowledged = ['1.1'];
+  db.version = '1.3';
+  db.acknowledged = ['1.2'];
   show();
   expect(await screen.findByRole('button', BUTTON)).toBeVisible();
   expect(screen.queryByRole('heading', { name: 'Acasă' })).toBeNull();
   expect(
-    screen.getByText('Versiunea 1.2 · în vigoare de la', { exact: false }),
+    screen.getByText('Versiunea 1.3 · în vigoare de la', { exact: false }),
   ).toBeVisible();
 });
 
 it('opens the app for a Member who acknowledged the current version', async () => {
-  db.acknowledged = ['1.2'];
+  db.acknowledged = ['1.3'];
   show();
   expect(await screen.findByRole('heading', { name: 'Acasă' })).toBeVisible();
   expect(screen.queryByRole('button', BUTTON)).toBeNull();
@@ -132,13 +132,13 @@ it('opens the app when no version is configured at all', async () => {
 it('records the current version on the tap, then opens the app', async () => {
   const user = userEvent.setup();
   db.rpc.mockImplementation(async () => {
-    db.acknowledged = ['1.2'];
+    db.acknowledged = ['1.3'];
     return { data: {}, error: null };
   });
   show();
   await user.click(await screen.findByRole('button', BUTTON));
   expect(db.rpc).toHaveBeenCalledWith('acknowledge_privacy_notice', {
-    p_version: '1.2',
+    p_version: '1.3',
   });
   expect(await screen.findByRole('heading', { name: 'Acasă' })).toBeVisible();
 });
@@ -146,7 +146,7 @@ it('records the current version on the tap, then opens the app', async () => {
 it('treats an acknowledgement made in another tab as done', async () => {
   const user = userEvent.setup();
   db.rpc.mockImplementation(async () => {
-    db.acknowledged = ['1.2'];
+    db.acknowledged = ['1.3'];
     return {
       data: null,
       error: { code: 'PT409', message: 'privacy_notice_already_acknowledged' },
@@ -160,8 +160,8 @@ it('treats an acknowledgement made in another tab as done', async () => {
 
 it('records the version on screen, never the older one the server still asks for', async () => {
   const user = userEvent.setup();
-  // This build carries the 1.2 text before the server's migration has run.
-  db.version = '1.1';
+  // This build carries the 1.3 text before the server's migration has run.
+  db.version = '1.2';
   db.rpc.mockImplementation(async () => ({
     data: null,
     error: { code: 'PT409', message: 'privacy_notice_version_stale' },
@@ -169,10 +169,10 @@ it('records the version on screen, never the older one the server still asks for
   show();
   await user.click(await screen.findByRole('button', BUTTON));
   expect(db.rpc).toHaveBeenCalledWith('acknowledge_privacy_notice', {
-    p_version: '1.2',
+    p_version: '1.3',
   });
   expect(db.rpc).not.toHaveBeenCalledWith('acknowledge_privacy_notice', {
-    p_version: '1.1',
+    p_version: '1.2',
   });
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Politica de confidențialitate tocmai s-a actualizat.',
@@ -190,18 +190,18 @@ it('does not let the Member past when the check cannot be read', async () => {
   expect(screen.queryByRole('heading', { name: 'Acasă' })).toBeNull();
 
   db.settingsError = null;
-  db.acknowledged = ['1.2'];
+  db.acknowledged = ['1.3'];
   await user.click(screen.getByRole('button', { name: 'Încearcă din nou' }));
   expect(await screen.findByRole('heading', { name: 'Acasă' })).toBeVisible();
 });
 
 it('asks again, without a new sign-in, when the version moves while the app is open', async () => {
-  db.version = '1.1';
-  db.acknowledged = ['1.1'];
+  db.version = '1.2';
+  db.acknowledged = ['1.2'];
   show();
   expect(await screen.findByRole('heading', { name: 'Acasă' })).toBeVisible();
 
-  db.version = '1.2';
+  db.version = '1.3';
   act(() => {
     focusManager.setFocused(false);
     focusManager.setFocused(true);
@@ -212,7 +212,7 @@ it('asks again, without a new sign-in, when the version moves while the app is o
 });
 
 it('keeps the app open when a background re-read fails', async () => {
-  db.acknowledged = ['1.2'];
+  db.acknowledged = ['1.3'];
   show();
   expect(await screen.findByRole('heading', { name: 'Acasă' })).toBeVisible();
 
@@ -232,11 +232,11 @@ it('keeps the app open when a background re-read fails', async () => {
 
 it('offers a reload, not a notice it cannot show, when the server is ahead of the bundle', async () => {
   const user = userEvent.setup();
-  db.version = '1.3';
-  db.acknowledged = ['1.2'];
+  db.version = '1.4';
+  db.acknowledged = ['1.3'];
   show();
   expect(await screen.findByRole('heading', NEW_VERSION)).toBeVisible();
-  expect(screen.getByText(/versiunea 1\.3/)).toBeVisible();
+  expect(screen.getByText(/versiunea 1\.4/)).toBeVisible();
   // Neither the older text nor its button: tapping it could only be stale.
   expect(screen.queryByRole('button', BUTTON)).toBeNull();
   expect(
@@ -256,43 +256,43 @@ it('offers a reload, not a notice it cannot show, when the server is ahead of th
 
 it('never locks the Member out when the server is ahead: "Mai târziu" opens the app', async () => {
   const user = userEvent.setup();
-  db.version = '1.3';
+  db.version = '1.4';
   show();
   await user.click(await screen.findByRole('button', { name: 'Mai târziu' }));
   expect(await screen.findByRole('heading', { name: 'Acasă' })).toBeVisible();
   expect(db.rpc).not.toHaveBeenCalled();
 });
 
-it('compares versions as numbers: 1.10 is ahead of the 1.2 bundle, 1.2.0 is not and is acknowledged as the server wrote it', async () => {
+it('compares versions as numbers: 1.10 is ahead of the 1.3 bundle, 1.3.0 is not and is acknowledged as the server wrote it', async () => {
   const user = userEvent.setup();
   db.version = '1.10';
   const first = show();
   expect(await screen.findByRole('heading', NEW_VERSION)).toBeVisible();
   first.unmount();
 
-  db.version = '1.2.0';
+  db.version = '1.3.0';
   show();
   // Equal to the bundle: the notice itself.
   expect(await screen.findByRole('button', BUTTON)).toBeVisible();
   expect(screen.queryByRole('heading', NEW_VERSION)).toBeNull();
-  // The server compares the exact string, so 1.2.0 is what gets recorded.
+  // The server compares the exact string, so 1.3.0 is what gets recorded.
   db.rpc.mockImplementation(async () => {
-    db.acknowledged = ['1.2.0'];
+    db.acknowledged = ['1.3.0'];
     return { data: {}, error: null };
   });
   await user.click(screen.getByRole('button', BUTTON));
   expect(db.rpc).toHaveBeenCalledWith('acknowledge_privacy_notice', {
-    p_version: '1.2.0',
+    p_version: '1.3.0',
   });
   expect(await screen.findByRole('heading', { name: 'Acasă' })).toBeVisible();
 });
 
 it('shows the reload step when the server moves ahead while the app is open', async () => {
-  db.acknowledged = ['1.2'];
+  db.acknowledged = ['1.3'];
   show();
   expect(await screen.findByRole('heading', { name: 'Acasă' })).toBeVisible();
 
-  db.version = '1.3';
+  db.version = '1.4';
   act(() => {
     focusManager.setFocused(false);
     focusManager.setFocused(true);

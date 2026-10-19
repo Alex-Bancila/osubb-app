@@ -9,6 +9,11 @@ const api = vi.hoisted(() => ({
   mutate: vi.fn(),
   report: vi.fn(),
   remove: vi.fn(),
+  // R58: the Points Start Date, null until BC sets one.
+  pointsStart: null as string | null | undefined,
+}));
+vi.mock('../../queries/evaluation-settings', () => ({
+  usePointsStartDate: () => api.pointsStart,
 }));
 vi.mock('../../queries/delete-for-good', () => ({
   useDeleteCampaign: () => ({ mutateAsync: api.remove, isPending: false }),
@@ -110,6 +115,7 @@ const noViolations = async (element: Element) =>
   ).toEqual([]);
 
 beforeEach(() => {
+  api.pointsStart = null;
   api.campaigns.mockReset().mockReturnValue({ data: rows });
   api.mutate.mockReset().mockResolvedValue(rows[0]);
   api.report.mockReset().mockReturnValue({ isPending: true });
@@ -271,6 +277,92 @@ describe('CampaignsPanel', () => {
       within(list).getByRole('button', { name: 'Profilul membrului Ani' }),
     );
     expect(await screen.findByRole('dialog', { name: 'Ani' })).toBeVisible();
+  });
+
+  // Ruling 19 (R58): a Campaign's totals drop the points before the Points
+  // Start Date (the server floors the range), so the report says from when.
+  describe('the Points Start Date in the report', () => {
+    const report = (members: unknown[]) =>
+      api.report.mockReturnValue({
+        isPending: false,
+        isError: false,
+        data: {
+          totals: { points: 0, tasksCompleted: 0, tasksTotal: 3 },
+          members,
+        },
+      });
+
+    it('says the report counts from the date when no range is chosen, and what an empty one means', async () => {
+      api.pointsStart = '2026-10-01';
+      report([]);
+      const user = userEvent.setup();
+      show();
+      await user.click(reportButton('Toamnă'));
+      expect(
+        screen.getByText('Doar punctele acordate din 01.10.2026.'),
+      ).toBeVisible();
+      expect(
+        screen.getByText(
+          'Niciun punct acordat de la 01.10.2026 în această campanie.',
+        ),
+      ).toBeVisible();
+      expect(screen.queryByText(/Nimeni nu a primit/)).toBeNull();
+    });
+
+    it('keeps the chosen period, and says when the date cuts it', async () => {
+      api.pointsStart = '2026-10-01';
+      report([]);
+      const user = userEvent.setup();
+      // A period that starts after the date is the period it is.
+      const { unmount } = show('', {
+        p_from: '2026-10-04T21:00:00.000Z',
+        p_to: '2026-10-31T22:00:00.000Z',
+      });
+      await user.click(reportButton('Toamnă'));
+      expect(
+        screen.getByText('Doar punctele acordate în perioada aleasă.'),
+      ).toBeVisible();
+      expect(
+        screen.getByText(
+          'Nimeni nu a primit puncte în această campanie în perioada aleasă.',
+        ),
+      ).toBeVisible();
+      unmount();
+
+      // One that starts before it, or has no start, is cut at the date.
+      for (const range of [
+        {
+          p_from: '2026-08-31T21:00:00.000Z',
+          p_to: '2026-10-31T22:00:00.000Z',
+        },
+        { p_to: '2026-10-31T22:00:00.000Z' },
+      ]) {
+        const view = show('', range);
+        await user.click(reportButton('Toamnă'));
+        expect(
+          screen.getByText(
+            'Doar punctele acordate în perioada aleasă, dar nu înainte de 01.10.2026.',
+          ),
+        ).toBeVisible();
+        view.unmount();
+      }
+    });
+
+    it.each([
+      ['no date is set', null],
+      ['the date is not known yet', undefined],
+    ])('says nothing about a start while %s', async (_case, value) => {
+      api.pointsStart = value;
+      report([]);
+      const user = userEvent.setup();
+      show();
+      await user.click(reportButton('Toamnă'));
+      expect(
+        screen.getByText('Nimeni nu a primit încă puncte în această campanie.'),
+      ).toBeVisible();
+      expect(screen.queryByText(/Doar punctele acordate/)).toBeNull();
+      expect(screen.queryByText(/de la 01/)).toBeNull();
+    });
   });
 
   it('reads the report undated by default and not at all while the range is inverted', async () => {

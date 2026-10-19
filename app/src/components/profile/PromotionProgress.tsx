@@ -14,25 +14,26 @@ import {
  * #634, #828 — where a Member stands before the next Role Evaluation
  * (ADR-0004 amended 2026-09-21; rulings R9, R13, R18, R28).
  *
- * Only the Recrut → Voluntar step is a date the tenure job keeps. Every other
- * step is BC's decision: reaching the Promotion Threshold makes a tenured
- * Voluntar a Promotion Candidate at once (#983) and at every Voluntar Activ
- * Role Evaluation, and nothing here promises a Role.
+ * Every step is BC's decision (R58 dropped the promotion by the calendar):
+ * reaching the Promotion Threshold makes a Voluntar who joined by the
+ * Membership Cutoff Date a Promotion Candidate at once (#983) and at every
+ * Voluntar Activ Role Evaluation, and nothing here promises a Role.
  *
- * Six states, one per rung:
- * - Recrut: the date the `time` rule makes them Voluntar; once that date has
- *   passed, that the next run applies it (#859 B43). No bar.
- * - Voluntar before the tenure date: the date they can become Voluntar Activ.
- *   Nothing about the threshold (R18).
- * - Voluntar with tenure: a bar from 0 to the Voluntar Activ Promotion
- *   Threshold in force, points counted since the last Voluntar Activ Role
- *   Evaluation (the total before any); past it, they are a candidate and BC
- *   has been told (#983).
+ * States, one per rung:
+ * - Recrut: nothing; BC promotes by hand in Roluri, so there is no date to
+ *   show.
+ * - Voluntar who joined after the Membership Cutoff Date: the day they must
+ *   have joined by. Nothing about the threshold (R18). With no cutoff set,
+ *   nothing at all.
+ * - Voluntar who joined by the cutoff: a bar from 0 to the Voluntar Activ
+ *   Promotion Threshold in force, points counted since the last Voluntar
+ *   Activ Role Evaluation (the total before any); past it, they are a
+ *   candidate and BC has been told (#983).
  * - Voluntar Activ: their points beside the Voluntar Activ threshold; a
  *   Voluntar cu Drept de Vot: beside the Adunarea Generală threshold — the
  *   reference the Retention Signal uses. No bar.
  * - Level ≥ 5: nothing at all (R13).
- * - No threshold in force for the kind: the tenure lines only; the bar and
+ * - No threshold in force for the kind: the cutoff line only; the bar and
  *   the reference are hidden, never faked.
  *
  * #859 (B38): Profil's one points panel. Given the Member's total, the panel
@@ -49,11 +50,13 @@ import {
  *
  * R58: once BC has set a Points Start Date, the total says from when it counts
  * (`din 01.09.2026`) under the number. The figure below is the Member's
- * standing (`my_role_evaluation_standing`), which the date does not floor
- * (ruling 17: PR 3 floors it with the live-candidate window), so with a date
+ * standing (`my_role_evaluation_standing`), which starts at the later of the
+ * day after the last Role Evaluation and that date (ruling 17), so with a date
  * set — or not yet known — it is never taken for the total: the panel leads
- * with the floored total and the bar or the reference keeps its own figure,
- * unlabelled.
+ * with the floored total and the bar or the reference keeps a figure of its
+ * own, with the day it counts from. That day is "(după ultima evaluare)" only
+ * when a run opened the window: when the start date did, or while it is not
+ * known which, the day stands alone.
  *
  * Read-only and never a leaderboard: no rank, no other Member's points (R6).
  */
@@ -87,7 +90,7 @@ export function PromotionPanel({
     <Panel title={title}>
       <div data-testid="promotion-progress" className="flex flex-col gap-3">
         {showTotal && <PointsTotal points={totalPoints} />}
-        <PromotionBody state={state} />
+        <PromotionBody state={state} startDate={startDate} leads={!showTotal} />
       </div>
     </Panel>
   );
@@ -132,8 +135,14 @@ export function PointsTotal({ points }: { points: number }) {
 
 function PromotionBody({
   state,
+  startDate,
+  leads,
 }: {
   state: Exclude<PromotionState, { kind: 'hidden' }>;
+  /** The Points Start Date: `undefined` while it is not known. */
+  startDate: string | null | undefined;
+  /** No total leads the panel, so the Member's figure may. */
+  leads: boolean;
 }): ReactNode {
   if (state.kind === 'loading') {
     return <Loading label="Se încarcă progresul…" />;
@@ -162,20 +171,46 @@ function PromotionBody({
           points={view.points}
           threshold={view.threshold}
           since={view.since}
+          afterRun={openedByRun(view.sinceIso, startDate)}
         />
       );
     case 'reference':
-      return <Reference view={view} />;
+      return (
+        <Reference
+          view={view}
+          afterRun={openedByRun(view.sinceIso, startDate)}
+          leads={leads && !view.since}
+        />
+      );
   }
+}
+
+/**
+ * Whether a Role Evaluation opened the window the figure counts over (ruling
+ * 17): `since` is the later of the day after the last run and the Points
+ * Start Date, so it is the run's only when it is after the start date. It is
+ * the start date's when the two coincide, and nothing is claimed while the
+ * date is not known (`undefined`).
+ */
+function openedByRun(
+  sinceIso: string | null,
+  startDate: string | null | undefined,
+): boolean {
+  return (
+    sinceIso !== null &&
+    startDate !== undefined &&
+    (startDate === null || sinceIso > startDate)
+  );
 }
 
 /**
  * "din 1 iulie 2026 (după ultima evaluare)" — the figure's period. `since` is
  * the day after the last range, so it is named as the day the count starts,
- * never as the evaluation's date (F-6, #893).
+ * never as the evaluation's date (F-6, #893). When the Points Start Date
+ * opened the window instead, the day stands alone: "din 1 octombrie 2026".
  */
-function sinceText(since: string): string {
-  return `din ${since} (după ultima evaluare)`;
+function sinceText(since: string, afterRun: boolean): string {
+  return afterRun ? `din ${since} (după ultima evaluare)` : `din ${since}`;
 }
 
 /**
@@ -207,24 +242,29 @@ function CountStartsLater({
 
 function Reference({
   view,
+  afterRun,
+  leads,
 }: {
   view: Extract<NonNullable<View>, { kind: 'reference' }>;
+  afterRun: boolean;
+  /** The figure is the panel's one big number: no total above it. */
+  leads: boolean;
 }) {
   return (
     <div className="flex flex-col gap-2">
       <p className="m-0 flex flex-wrap items-baseline gap-2">
         <span
           className={
-            view.since
-              ? 'text-lg font-bold text-foreground tabular-nums'
-              : 'text-[length:var(--fs-2xl)] leading-none font-extrabold tracking-[-0.02em] text-foreground tabular-nums'
+            leads
+              ? 'text-[length:var(--fs-2xl)] leading-none font-extrabold tracking-[-0.02em] text-foreground tabular-nums'
+              : 'text-lg font-bold text-foreground tabular-nums'
           }
         >
           {formatPoints(view.points)}
         </span>
         <span className="text-sm font-semibold text-muted-foreground">
           {pointWord(view.points)}
-          {view.since && ` ${sinceText(view.since)}`}
+          {view.since && ` ${sinceText(view.since, afterRun)}`}
         </span>
       </p>
       <p className="m-0 text-sm text-muted-foreground">
@@ -238,10 +278,12 @@ function ThresholdBar({
   points,
   threshold,
   since,
+  afterRun,
 }: {
   points: number;
   threshold: number;
   since: string | null;
+  afterRun: boolean;
 }) {
   // Reaching the threshold makes a Promotion Candidate at once (#983); BC
   // decides. "At" counts as past it.
@@ -262,7 +304,9 @@ function ThresholdBar({
           {formatPoints(points)} / {formatPointCount(threshold)}
         </span>
         {since && (
-          <span className="text-muted-foreground">{sinceText(since)}</span>
+          <span className="text-muted-foreground">
+            {sinceText(since, afterRun)}
+          </span>
         )}
       </div>
       <div

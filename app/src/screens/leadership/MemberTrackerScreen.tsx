@@ -256,12 +256,16 @@ function MemberTotal({
           <span className="sr-only">{pointWord(total.data)}</span>
         </p>
       )}{' '}
-      <p
-        data-slot="member-total-scope"
-        className={cn('m-0 text-xs', scope === WHOLE_RECORD && 'sr-only')}
-      >
-        {scope}
-      </p>
+      {/* Nothing to say while the Points Start Date is unknown: no empty
+          paragraph for a screen reader to stop on. */}
+      {scope && (
+        <p
+          data-slot="member-total-scope"
+          className={cn('m-0 text-xs', scope === WHOLE_RECORD && 'sr-only')}
+        >
+          {scope}
+        </p>
+      )}
     </section>
   );
 }

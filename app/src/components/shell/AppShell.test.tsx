@@ -477,7 +477,10 @@ describe('AppShell', () => {
     ],
     ['/administrare/grupuri', 'Administrare'],
     ['/administrare/grupuri/2', 'Administrare'],
+    ['/administrare/portofoliu-interne', 'Administrare'],
+    // The old paths only redirect, but a Notification may still open one.
     ['/administrare/evaluari', 'Administrare'],
+    ['/administrare/perioade', 'Administrare'],
     ['/administrare/setari', 'Administrare'],
     ['/administrare/campanii', 'Campanii'],
     ['/administrare/grupuri/2/campanii', 'Campanii'],

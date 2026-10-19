@@ -26,8 +26,10 @@ import { fetchUnreadNotificationSubjects } from './notifications';
 import { fetchGroups } from './reference';
 import {
   fetchPromotionCandidates,
+  fetchRetentionSignals,
   fetchRoleEvaluationRanking,
   fetchThresholdChanges,
+  simulateRoleEvaluation,
 } from './role-evaluations';
 import { fetchTaskOpportunities } from './task-opportunities';
 import {
@@ -70,33 +72,70 @@ const ranked = (index: number) => ({
   member_id: `member-${index}`,
   role: 'activ',
   task_points: ROWS - index,
+  ranked: true,
   rank: index + 1,
-  cohort_size: ROWS,
+  evaluated_count: ROWS,
+  ranked_count: ROWS,
   share_size: 50,
+  line: ROWS - 49,
   inside: index < 50,
-  tenure_since: null,
+  listable: false,
 });
-const run = {
-  kind: 'voluntar_activ',
-  period_from: '2026-02-01',
-  period_to: '2026-07-31',
-};
 
 beforeEach(() => postgrest.reset());
 
 describe('Administrare', () => {
   it('ranks a Role Evaluation cohort past 500 Members', async () => {
     postgrest.serve('role_evaluation_ranking', many(ranked));
-    const ranking = await fetchRoleEvaluationRanking(run);
+    const ranking = await fetchRoleEvaluationRanking(12);
     expect(ranking).toHaveLength(ROWS);
     expect(ranking.at(-1)).toMatchObject({
       memberId: 'member-500',
       rank: 501,
     });
     expect(orders(postgrest.requestsTo('role_evaluation_ranking')[0])).toEqual([
-      ['role'],
-      ['rank'],
+      ['task_points', { ascending: false }],
       ['member_id'],
+    ]);
+  });
+
+  it('simulates a Role Evaluation over a population past 500 Members', async () => {
+    postgrest.serve('simulate_role_evaluation', many(ranked));
+    const rows = await simulateRoleEvaluation({
+      kind: 'voluntar_activ',
+      from: '2026-02-01',
+      to: '2026-07-31',
+      floor: 10,
+      percent: 35,
+      cutoff: '2026-03-01',
+    });
+    expect(rows).toHaveLength(ROWS);
+    expect(rows.at(-1)).toMatchObject({ memberId: 'member-500', rank: 501 });
+    expect(orders(postgrest.requestsTo('simulate_role_evaluation')[0])).toEqual(
+      [['task_points', { ascending: false }], ['member_id']],
+    );
+  });
+
+  it('lists every open Retention Signal', async () => {
+    postgrest.serve(
+      'retention_signals',
+      many((index) => ({
+        id: index,
+        kind: 'voluntar_activ',
+        member_id: `member-${index}`,
+        role_at_listing: 'activ',
+        reason: 'below_line',
+        task_points: index,
+        threshold_used: 600,
+        role_evaluation_id: 1,
+        created_at: '2026-10-01T10:00:00Z',
+      })),
+    );
+    await expect(fetchRetentionSignals()).resolves.toHaveLength(ROWS);
+    expect(orders(postgrest.requestsTo('retention_signals')[0])).toEqual([
+      ['kind', { ascending: true }],
+      ['task_points', { ascending: true }],
+      ['id', { ascending: true }],
     ]);
   });
 
@@ -108,7 +147,7 @@ describe('Administrare', () => {
         ? many(ranked)
         : failure,
     );
-    await expect(fetchRoleEvaluationRanking(run)).rejects.toBe(failure);
+    await expect(fetchRoleEvaluationRanking(12)).rejects.toBe(failure);
   });
 
   it('lists every open Promotion Candidate', async () => {

@@ -50,7 +50,9 @@ vi.mock('../../queries/evaluation-settings', () => ({
   usePointsStartDate: () => state.startDate,
 }));
 
-vi.mock('../../queries/promotion-progress', () => ({
+// The read is the hook's to fake; `tenureState` is the real rule (R58).
+vi.mock('../../queries/promotion-progress', async (importActual) => ({
+  ...(await importActual<typeof import('../../queries/promotion-progress')>()),
   usePromotionProgress: ({
     enabled,
     role,
@@ -73,12 +75,14 @@ const LEVELS: Record<string, number> = {
   bc: 6,
 };
 
-/** Joined 25 March 2026; both rules demand 6 months, so tenure is 25 September 2026. */
+/**
+ * Joined 25 March 2026; the Membership Cutoff Date (R58) is 31 March 2026, so a
+ * Voluntar joined by it is open to Voluntar Activ.
+ */
 function progress(overrides: Partial<Progress> = {}): Progress {
   return {
     since: '2026-07-01',
-    voluntarTenureMonths: 6,
-    activTenureMonths: 6,
+    membershipCutoff: '2026-03-31',
     threshold: 30,
     points: 12,
     ...overrides,
@@ -101,9 +105,6 @@ function setup(
   return render(<PromotionProgress />);
 }
 
-const DAY_BEFORE_TENURE = new Date(2026, 8, 24, 23, 59);
-const DAY_OF_TENURE = new Date(2026, 8, 25, 0, 1);
-
 describe('PromotionProgress (#634)', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -120,72 +121,86 @@ describe('PromotionProgress (#634)', () => {
     vi.useRealTimers();
   });
 
+  // R58: nothing promotes a Recrut by the calendar any more; BC does it by
+  // hand in Roluri, so Profil promises no date and no line.
   describe('Recrut', () => {
-    it('shows the date the tenure rule makes them Voluntar, and no bar', () => {
-      setup('recrut', progress(), { today: DAY_BEFORE_TENURE });
+    it('promises nothing: no tenure line, no date, no bar', () => {
+      const { container } = setup('recrut');
 
-      expect(
-        screen.getByText('Devii Voluntar din 25 septembrie 2026'),
-      ).toBeInTheDocument();
-      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-      expect(screen.queryByText(/pragul/i)).not.toBeInTheDocument();
+      expect(container).toBeEmptyDOMElement();
+      expect(document.body.textContent).not.toMatch(/devii voluntar/i);
     });
 
-    it('clamps a join on the 31st to the last day of the target month', () => {
-      state.joinedAt = '2026-08-31';
-      setup('recrut');
+    it('promises nothing either way a threshold stands', () => {
+      const { container } = setup('recrut', progress({ threshold: null }));
 
-      expect(
-        screen.getByText('Devii Voluntar din 28 februarie 2027'),
-      ).toBeInTheDocument();
-    });
-
-    it('keeps the tenure line when no threshold is in force', () => {
-      setup('recrut', progress({ threshold: null }), {
-        today: DAY_BEFORE_TENURE,
-      });
-
-      expect(
-        screen.getByText('Devii Voluntar din 25 septembrie 2026'),
-      ).toBeInTheDocument();
+      expect(container).toBeEmptyDOMElement();
     });
   });
 
-  describe('Recrut past the tenure date (#859 B43, Audit D D-7)', () => {
-    it('says the tenure is met and the next run applies it — no date in the past', () => {
-      // Joined 1 January 2026, six months: tenure 1 July 2026; today is 28 September.
-      state.joinedAt = '2026-01-01';
-      setup('recrut', progress(), { today: new Date(2026, 8, 28, 10, 0) });
+  describe('Voluntar and the Membership Cutoff Date (R58)', () => {
+    it('joined after the cutoff: the day they must have joined by, nothing about points', () => {
+      state.joinedAt = '2026-04-02';
+      setup('voluntar');
 
       expect(
         screen.getByText(
-          'Îndeplinești vechimea; promovarea se aplică la următoarea rulare.',
+          'Pentru a deveni candidat la Voluntar Activ trebuie să fi intrat în OSUBB până la 31.03.2026.',
         ),
       ).toBeInTheDocument();
-      expect(screen.queryByText(/devii voluntar/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      expect(screen.getByTestId('promotion-progress')).not.toHaveTextContent(
+        /punct|12/i,
+      );
     });
 
-    it('the tenure day itself already counts as met', () => {
-      setup('recrut', progress(), { today: DAY_OF_TENURE });
+    it('joined on the cutoff day itself: the bar is open', () => {
+      state.joinedAt = '2026-03-31';
+      setup('voluntar');
 
-      expect(screen.getByText(/îndeplinești vechimea/i)).toBeInTheDocument();
+      expect(screen.getByRole('progressbar')).toBeInTheDocument();
+    });
+
+    it('the day after the cutoff is already too late', () => {
+      state.joinedAt = '2026-04-01';
+      setup('voluntar');
+
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      expect(
+        screen.getByText(/trebuie să fi intrat în OSUBB/),
+      ).toBeInTheDocument();
+    });
+
+    it('no cutoff set yet: nobody is listed, so nothing is promised', () => {
+      const { container } = setup(
+        'voluntar',
+        progress({ membershipCutoff: null }),
+      );
+
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it('a Voluntar with no join date cannot be listed either', () => {
+      state.joinedAt = null;
+      setup('voluntar');
+
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      expect(
+        screen.getByText(/trebuie să fi intrat în OSUBB/),
+      ).toBeInTheDocument();
+    });
+
+    it('never speaks of months of vechime', () => {
+      state.joinedAt = '2026-04-02';
+      setup('voluntar');
+
+      expect(document.body.textContent).not.toMatch(/vechime|luni/i);
     });
   });
 
   describe('Voluntar', () => {
-    it('the day before the tenure date: the eligibility date and nothing about points', () => {
-      setup('voluntar', progress(), { today: DAY_BEFORE_TENURE });
-
-      expect(
-        screen.getByText('Poți deveni Voluntar Activ din 25 septembrie 2026'),
-      ).toBeInTheDocument();
-      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-      expect(screen.queryByText(/puncte?/i)).not.toBeInTheDocument();
-      expect(screen.queryByText('12')).not.toBeInTheDocument();
-    });
-
-    it('the day of the tenure date: a bar from 0 to the stored threshold', () => {
-      setup('voluntar', progress(), { today: DAY_OF_TENURE });
+    it('joined by the cutoff: a bar from 0 to the stored threshold', () => {
+      setup('voluntar');
 
       const bar = screen.getByRole('progressbar', {
         name: 'Progres spre pragul Voluntar Activ',
@@ -201,7 +216,7 @@ describe('PromotionProgress (#634)', () => {
         screen.getByText('Mai ai 18 puncte până la pragul Voluntar Activ'),
       ).toBeInTheDocument();
       expect(
-        screen.queryByText(/poți deveni voluntar activ/i),
+        screen.queryByText(/trebuie să fi intrat în OSUBB/),
       ).not.toBeInTheDocument();
     });
 
@@ -310,7 +325,9 @@ describe('PromotionProgress (#634)', () => {
       setup('voluntar', progress({ threshold: null }));
 
       expect(
-        screen.getByText('Poți deveni Voluntar Activ din 25 septembrie 2026'),
+        screen.getByText(
+          'Ai intrat în OSUBB până la 31.03.2026: poți deveni candidat la Voluntar Activ.',
+        ),
       ).toBeInTheDocument();
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       expect(screen.queryByText(/mai ai|pragul/i)).not.toBeInTheDocument();
@@ -321,7 +338,9 @@ describe('PromotionProgress (#634)', () => {
 
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       expect(
-        screen.getByText('Poți deveni Voluntar Activ din 25 septembrie 2026'),
+        screen.getByText(
+          'Ai intrat în OSUBB până la 31.03.2026: poți deveni candidat la Voluntar Activ.',
+        ),
       ).toBeInTheDocument();
     });
   });
@@ -444,6 +463,7 @@ describe('PromotionPanel with the total', () => {
             points: 5,
             threshold: 30,
             since: '1 iulie 2026',
+            sinceIso: '2026-07-01',
           },
         }}
         totalPoints={20}
@@ -462,7 +482,13 @@ describe('PromotionPanel with the total', () => {
       <PromotionPanel
         state={{
           kind: 'view',
-          view: { kind: 'bar', points: 12, threshold: 30, since: null },
+          view: {
+            kind: 'bar',
+            points: 12,
+            threshold: 30,
+            since: null,
+            sinceIso: null,
+          },
         }}
         totalPoints={12}
       />,
@@ -478,7 +504,15 @@ describe('PromotionPanel with the total', () => {
       <PromotionPanel
         state={{
           kind: 'view',
-          view: { kind: 'tenure', text: 'Devii Voluntar din 1 iulie 2027' },
+          view: {
+            kind: 'tenure',
+            text: 'Pentru a deveni candidat la Voluntar Activ trebuie să fi intrat în OSUBB până la 31.03.2026.',
+            tenure: {
+              cutoff: '2026-03-31',
+              joinedAt: '2026-04-02',
+              met: false,
+            },
+          },
         }}
         totalPoints={1}
       />,
@@ -500,7 +534,13 @@ describe('the Points Start Date beside the total', () => {
 
   const afterEvaluation = {
     kind: 'view',
-    view: { kind: 'bar', points: 5, threshold: 30, since: '1 iulie 2026' },
+    view: {
+      kind: 'bar',
+      points: 5,
+      threshold: 30,
+      since: '1 iulie 2026',
+      sinceIso: '2026-07-01',
+    },
   } as const;
 
   it('PointsTotal says from when under the number', () => {
@@ -536,7 +576,13 @@ describe('the Points Start Date beside the total', () => {
   // floored in PR 2, so with a date set it is never taken for the total.
   const barBeforeAnyEvaluation = {
     kind: 'view',
-    view: { kind: 'bar', points: 12, threshold: 30, since: null },
+    view: {
+      kind: 'bar',
+      points: 12,
+      threshold: 30,
+      since: null,
+      sinceIso: null,
+    },
   } as const;
   const referenceBeforeAnyEvaluation = {
     kind: 'view',
@@ -545,6 +591,7 @@ describe('the Points Start Date beside the total', () => {
       points: 12,
       threshold: 30,
       since: null,
+      sinceIso: null,
       startsLater: false,
     },
   } as const;
@@ -634,4 +681,118 @@ describe('the Points Start Date beside the total', () => {
       'din',
     );
   });
+});
+
+// Ruling 17 (R58): the standing's window opens on the later of the day after
+// the last run and the Points Start Date. "după ultima evaluare" says the run
+// opened it; when the start date did, the day stands alone, and while the
+// date is unknown nothing is claimed about which one it was.
+describe('the label of the figure’s window (ruling 17)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    state.progress.isError = false;
+    state.progress.error = null;
+    state.joinedAt = '2026-03-25';
+    state.startDate = null;
+  });
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+  const today = { today: new Date(2026, 9, 20, 9, 0) };
+
+  it('a Voluntar whose window the start date opened reads the day alone', () => {
+    state.startDate = '2026-10-01';
+    setup('voluntar', progress({ since: '2026-10-01', points: 5 }), today);
+
+    expect(screen.getByText('din 1 octombrie 2026')).toBeInTheDocument();
+    expect(screen.queryByText(/după ultima evaluare/)).not.toBeInTheDocument();
+  });
+
+  it('a Voluntar whose window a run opened keeps "după ultima evaluare"', () => {
+    state.startDate = '2026-10-01';
+    setup('voluntar', progress({ since: '2026-10-05', points: 5 }), today);
+
+    expect(
+      screen.getByText('din 5 octombrie 2026 (după ultima evaluare)'),
+    ).toBeInTheDocument();
+  });
+
+  it('with no start date set, the run opened it', () => {
+    state.startDate = null;
+    setup('voluntar', progress({ since: '2026-07-01' }), today);
+
+    expect(
+      screen.getByText('din 1 iulie 2026 (după ultima evaluare)'),
+    ).toBeInTheDocument();
+  });
+
+  it('claims no event while the start date is unknown', () => {
+    state.startDate = undefined;
+    setup('voluntar', progress({ since: '2026-07-01' }), today);
+
+    expect(screen.getByText('din 1 iulie 2026')).toBeInTheDocument();
+    expect(screen.queryByText(/după ultima evaluare/)).not.toBeInTheDocument();
+  });
+
+  it.each(['activ', 'vot'])(
+    'the reference of a %s reads the same way',
+    (role) => {
+      state.startDate = '2026-10-01';
+      setup(role, progress({ since: '2026-10-01', points: 5 }), today);
+      expect(
+        screen.getByText('puncte din 1 octombrie 2026'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText(/după ultima evaluare/),
+      ).not.toBeInTheDocument();
+      cleanup();
+
+      setup(role, progress({ since: '2026-10-05', points: 5 }), today);
+      expect(
+        screen.getByText('puncte din 5 octombrie 2026 (după ultima evaluare)'),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it('a start date set on the day of the run’s end names the start date', () => {
+    // Both opened the window on the same day: the start date is what the
+    // figure is judged by, and the day stands alone.
+    state.startDate = '2026-10-01';
+    setup('activ', progress({ since: '2026-10-01' }), today);
+
+    expect(screen.queryByText(/după ultima evaluare/)).not.toBeInTheDocument();
+  });
+
+  // The hero figure is single: the total leads once the settings say there is
+  // a start date, or while they are unknown; otherwise the standing's own
+  // figure is the total and leads itself.
+  it.each([
+    ['no start date set', null, null],
+    ['the start date unknown', undefined, null],
+    ['a start date set', '2026-10-01', '2026-10-01'],
+  ])(
+    'prints one big figure on the reference view with %s',
+    (_case, startDate, sinceIso) => {
+      state.startDate = startDate;
+      const { container } = render(
+        <PromotionPanel
+          state={{
+            kind: 'view',
+            view: {
+              kind: 'reference',
+              points: 12,
+              threshold: 30,
+              since: sinceIso ? '1 octombrie 2026' : null,
+              sinceIso,
+              startsLater: false,
+            },
+          }}
+          totalPoints={20}
+        />,
+      );
+
+      expect(container.querySelectorAll('[class*="fs-2xl"]')).toHaveLength(1);
+    },
+  );
 });

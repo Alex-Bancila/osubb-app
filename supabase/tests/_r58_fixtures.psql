@@ -1,0 +1,109 @@
+-- _r58_fixtures.psql -- R58 (Alex, 2026-10-18; spec
+-- docs/superpowers/specs/2026-10-18-portofoliu-interne-design.md, section C):
+-- the shared Portofoliu Interne fixture, included with `\ir` after
+-- _helpers.sql by role_evaluation_simulation.test.sql and
+-- retention_signals.test.sql. Written as the owner inside the including
+-- suite's rolled-back transaction.
+--
+-- Every live active ladder holder the demo seed brings (recrut, voluntar,
+-- activ, vot) is deactivated first, so a Role Evaluation meets exactly these
+-- ten Members. One BC member evaluates their work. Each Member's Task Points
+-- come from real Tasks, Assignments and `command` Evaluations
+-- (pg_temp.test_credit_task), every one dated 2026-06-15, inside the
+-- Evaluation Period [2026-03-01, 2026-09-30] the suites rank; B earns nothing.
+--
+--   key  role      joined_at    Task Points  university
+--   A    recrut    2026-01-05   60           -
+--   B    recrut    2026-01-05    0           -
+--   C    voluntar  2026-01-10   50           -
+--   D    voluntar  2026-02-20   40           -
+--   E    voluntar  2026-04-01   30           -
+--   F    voluntar  2026-05-01   25           -
+--   G    activ     2025-01-01   20           -
+--   H    activ     2025-01-01   15           -
+--   I    vot       2024-01-01   10           private.ubb_university()
+--   J    vot       2024-01-01    5           Universitatea Tehnică din Cluj-Napoca
+--   BC   bc        2020-01-01    -           -
+--
+-- Ids: pg_temp.r58('A') ... pg_temp.r58('J'), pg_temp.r58('BC') (prefix
+-- 58589000-, R58). A Task Point total is base_points(difficulty) x
+-- rating_mult(rating) summed: 60 = 20x3, 50 = 20x2 + 5x2, 40 = 20x2,
+-- 30 = 15x2, 25 = 20x1 + 5x1, 20 = 20x1, 15 = 5x3, 10 = 5x2, 5 = 5x1.
+--
+-- The evaluation settings row is put back to day one first -- the Prag minim,
+-- the Data limită de intrare and the Data de început a punctajului unset, x 35
+-- and y 25 -- so the suites never depend on what a stack's earlier suites or
+-- its own users left in it.
+
+update public.evaluation_settings
+   set eligibility_floor = null, membership_cutoff = null, points_start_date = null,
+       activ_percent = 35, vot_percent = 25, updated_by = null
+ where id = 1;
+
+create function pg_temp.r58(p_key text) returns uuid language sql immutable as $$
+  select ('58589000-0000-0000-0000-0000000000'
+          || case p_key
+               when 'BC' then '01'
+               when 'A' then '11' when 'B' then '12' when 'C' then '13' when 'D' then '14'
+               when 'E' then '15' when 'F' then '16' when 'G' then '17' when 'H' then '18'
+               when 'I' then '19' when 'J' then '1a'
+             end)::uuid
+$$;
+grant execute on function pg_temp.r58(text) to authenticated;
+
+update public.profiles set status = 'inactiv'
+ where status = 'activ'
+   and role in ('recrut', 'voluntar', 'activ', 'vot')
+   and id::text not like '58589000-%';
+
+insert into auth.users (id, email)
+select pg_temp.r58(member.key), lower(member.key) || '-r58@test.local'
+  from unnest(array['BC', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']) as member (key);
+
+insert into public.profiles (id, full_name, email, role, status, joined_at, university) values
+  (pg_temp.r58('BC'), 'BC R58',         'bc-r58@test.local', 'bc',       'activ', '2020-01-01', null),
+  (pg_temp.r58('A'),  'Recrut A R58',   'a-r58@test.local',  'recrut',   'activ', '2026-01-05', null),
+  (pg_temp.r58('B'),  'Recrut B R58',   'b-r58@test.local',  'recrut',   'activ', '2026-01-05', null),
+  (pg_temp.r58('C'),  'Voluntar C R58', 'c-r58@test.local',  'voluntar', 'activ', '2026-01-10', null),
+  (pg_temp.r58('D'),  'Voluntar D R58', 'd-r58@test.local',  'voluntar', 'activ', '2026-02-20', null),
+  (pg_temp.r58('E'),  'Voluntar E R58', 'e-r58@test.local',  'voluntar', 'activ', '2026-04-01', null),
+  (pg_temp.r58('F'),  'Voluntar F R58', 'f-r58@test.local',  'voluntar', 'activ', '2026-05-01', null),
+  (pg_temp.r58('G'),  'Activ G R58',    'g-r58@test.local',  'activ',    'activ', '2025-01-01', null),
+  (pg_temp.r58('H'),  'Activ H R58',    'h-r58@test.local',  'activ',    'activ', '2025-01-01', null),
+  (pg_temp.r58('I'),  'Vot I R58',      'i-r58@test.local',  'vot',      'activ', '2024-01-01', private.ubb_university()),
+  (pg_temp.r58('J'),  'Vot J R58',      'j-r58@test.local',  'vot',      'activ', '2024-01-01',
+   'Universitatea Tehnică din Cluj-Napoca');
+
+insert into public.groups (name, category, min_level) values ('Grup Portofoliu R58', 'department', 0);
+
+-- One completed Task, its ended Assignment and one `command` Evaluation at
+-- p_at for p_member, at the given Difficulty and Rating.
+create function pg_temp.r58_credit(p_member uuid, p_difficulty int, p_rating int,
+                                   p_at timestamptz default '2026-06-15 10:00:00+00')
+returns void language plpgsql as $$
+declare
+  v_task bigint;
+begin
+  insert into public.tasks
+    (title, description, deadline, group_id, status, difficulty, rating,
+     created_by, created_at, completed_at)
+  values ('Credit R58 ' || gen_random_uuid(), 'Fixture', p_at,
+          (select id from public.groups where name = 'Grup Portofoliu R58'),
+          'completed', p_difficulty, p_rating, pg_temp.r58('BC'),
+          p_at - interval '1 day', p_at)
+  returning id into v_task;
+  insert into public.task_assignments (task_id, member_id, assigned_at, ended_at, end_reason)
+  values (v_task, p_member, p_at - interval '1 day', p_at, 'completed');
+  perform pg_temp.test_credit_task(v_task, p_member, pg_temp.r58('BC'), p_awarded_at => p_at);
+end $$;
+
+select pg_temp.r58_credit(pg_temp.r58(credit.key), credit.difficulty, credit.rating)
+  from (values ('A', 10, 5),
+               ('C', 10, 4), ('C', 5, 4),
+               ('D', 10, 4),
+               ('E',  9, 4),
+               ('F', 10, 3), ('F', 5, 3),
+               ('G', 10, 3),
+               ('H',  5, 5),
+               ('I',  5, 4),
+               ('J',  5, 3)) as credit (key, difficulty, rating);

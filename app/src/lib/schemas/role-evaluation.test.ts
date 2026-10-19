@@ -3,6 +3,7 @@ import {
   percentSchema,
   rejectionSchema,
   runSchema,
+  simulationSchema,
   thresholdSchema,
 } from './role-evaluation';
 
@@ -22,10 +23,21 @@ const valid = {
   from: '2026-02-01',
   to: '2026-06-30',
   name: '  Semestrul II  ',
+  floor: ' 10 ',
+  percent: '35',
+  cutoff: '2026-03-01',
 };
 
-it('takes a Role Evaluation as run_role_evaluation checks it (#826)', () => {
-  expect(run.parse(valid)).toEqual({ ...valid, name: 'Semestrul II' });
+it('takes a Role Evaluation as run_role_evaluation checks it (#826, R58)', () => {
+  expect(run.parse(valid)).toEqual({
+    kind: 'voluntar_activ',
+    from: '2026-02-01',
+    to: '2026-06-30',
+    name: 'Semestrul II',
+    floor: 10,
+    percent: 35,
+    cutoff: '2026-03-01',
+  });
   expect(issues(run.safeParse({ ...valid, kind: 'altceva' }))).toEqual([
     'kind:invalid_role_evaluation_kind',
   ]);
@@ -37,6 +49,51 @@ it('takes a Role Evaluation as run_role_evaluation checks it (#826)', () => {
   ]);
   expect(issues(run.safeParse({ ...valid, name: 'n'.repeat(121) }))).toEqual([
     'name:name_too_long',
+  ]);
+});
+
+// The Simulation writes nothing and records no run, so it has no name: the form
+// keeps Nume, Simulează checks every other field, Finalizează the name too.
+it('takes a Simulation as simulate_role_evaluation checks it: the run without its name', () => {
+  const simulation = simulationSchema('2026-09-28');
+  const { name: _name, ...values } = valid;
+  expect(simulation.parse(values)).toEqual({
+    kind: 'voluntar_activ',
+    from: '2026-02-01',
+    to: '2026-06-30',
+    floor: 10,
+    percent: 35,
+    cutoff: '2026-03-01',
+  });
+  // A name, typed or not, is neither required nor checked, nor carried.
+  expect(simulation.parse({ ...values, name: '' })).not.toHaveProperty('name');
+  expect(simulation.safeParse({ ...values, name: 'ab' }).success).toBe(true);
+  expect(
+    simulation.parse({ ...values, name: 'Semestrul II' }),
+  ).not.toHaveProperty('name');
+  // Every other rule of the run holds.
+  expect(issues(simulation.safeParse({ ...values, from: '' }))).toEqual([
+    'from:date_required',
+  ]);
+  expect(issues(simulation.safeParse({ ...values, to: '2026-09-29' }))).toEqual(
+    ['to:date_range_in_future'],
+  );
+  expect(issues(simulation.safeParse({ ...values, floor: '0' }))).toEqual([
+    'floor:invalid_eligibility_floor',
+  ]);
+  expect(issues(simulation.safeParse({ ...values, percent: '101' }))).toEqual([
+    'percent:invalid_percent',
+  ]);
+  expect(issues(simulation.safeParse({ ...values, cutoff: '' }))).toEqual([
+    'cutoff:membership_cutoff_not_set',
+  ]);
+  expect(
+    simulation.parse({ ...values, kind: 'adunarea_generala', cutoff: '' })
+      .cutoff,
+  ).toBeNull();
+  // And the run still asks for the name.
+  expect(issues(run.safeParse({ ...values, name: '' }))).toEqual([
+    'name:invalid_role_evaluation_name',
   ]);
 });
 
@@ -57,6 +114,41 @@ it('needs both days, Până la not before De la and not after today', () => {
   expect(
     run.safeParse({ ...valid, from: '2026-09-28', to: '2026-09-28' }).success,
   ).toBe(true);
+});
+
+it('takes a Prag minim of a whole number, at least 1 (R58)', () => {
+  for (const floor of ['', '0', '-3', '2.5', 'abc', '2147483648'])
+    expect(issues(run.safeParse({ ...valid, floor })), floor).toEqual([
+      'floor:invalid_eligibility_floor',
+    ]);
+  expect(run.parse({ ...valid, floor: '1' }).floor).toBe(1);
+});
+
+it('takes a Procent from 1 to 100 (R58)', () => {
+  for (const percent of ['', '0', '-3', '2.5', 'abc', '101', '0100'])
+    expect(issues(run.safeParse({ ...valid, percent })), percent).toEqual([
+      'percent:invalid_percent',
+    ]);
+  expect(run.parse({ ...valid, percent: '1' }).percent).toBe(1);
+  expect(run.parse({ ...valid, percent: '100' }).percent).toBe(100);
+});
+
+it('needs a Data limită de intrare, not after today, for Voluntar Activ only (R58)', () => {
+  expect(issues(run.safeParse({ ...valid, cutoff: '' }))).toEqual([
+    'cutoff:membership_cutoff_not_set',
+  ]);
+  expect(issues(run.safeParse({ ...valid, cutoff: '2026-09-29' }))).toEqual([
+    'cutoff:invalid_membership_cutoff',
+  ]);
+  expect(run.parse({ ...valid, cutoff: '2026-09-28' }).cutoff).toBe(
+    '2026-09-28',
+  );
+  // The Adunarea Generală has no cutoff: whatever the field holds, the run
+  // carries none.
+  for (const cutoff of ['', '2026-03-01', '2027-01-01'])
+    expect(
+      run.parse({ ...valid, kind: 'adunarea_generala', cutoff }).cutoff,
+    ).toBeNull();
 });
 
 it('takes a whole threshold of at least 1', () => {

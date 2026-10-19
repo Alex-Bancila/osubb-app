@@ -466,6 +466,7 @@ export type Database = {
       }
       evaluation_settings: {
         Row: {
+          activ_percent: number
           created_at: string
           eligibility_floor: number | null
           id: number
@@ -473,8 +474,10 @@ export type Database = {
           points_start_date: string | null
           updated_at: string
           updated_by: string | null
+          vot_percent: number
         }
         Insert: {
+          activ_percent?: number
           created_at?: string
           eligibility_floor?: number | null
           id: number
@@ -482,8 +485,10 @@ export type Database = {
           points_start_date?: string | null
           updated_at?: string
           updated_by?: string | null
+          vot_percent?: number
         }
         Update: {
+          activ_percent?: number
           created_at?: string
           eligibility_floor?: number | null
           id?: number
@@ -491,6 +496,7 @@ export type Database = {
           points_start_date?: string | null
           updated_at?: string
           updated_by?: string | null
+          vot_percent?: number
         }
         Relationships: [
           {
@@ -1655,57 +1661,6 @@ export type Database = {
           },
         ]
       }
-      promotion_rules: {
-        Row: {
-          created_at: string
-          enabled: boolean
-          from_role: Database["public"]["Enums"]["member_role"]
-          id: number
-          kind: string
-          min_tenure_months: number
-          percent: number | null
-          to_role: Database["public"]["Enums"]["member_role"]
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          enabled?: boolean
-          from_role: Database["public"]["Enums"]["member_role"]
-          id?: never
-          kind: string
-          min_tenure_months: number
-          percent?: number | null
-          to_role: Database["public"]["Enums"]["member_role"]
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          enabled?: boolean
-          from_role?: Database["public"]["Enums"]["member_role"]
-          id?: never
-          kind?: string
-          min_tenure_months?: number
-          percent?: number | null
-          to_role?: Database["public"]["Enums"]["member_role"]
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "promotion_rules_from_role_fkey"
-            columns: ["from_role"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "promotion_rules_to_role_fkey"
-            columns: ["to_role"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       promotion_threshold_changes: {
         Row: {
           changed_at: string
@@ -1777,13 +1732,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "promotion_thresholds"
             referencedColumns: ["kind"]
-          },
-          {
-            foreignKeyName: "promotion_threshold_changes_promotion_rule_id_fkey"
-            columns: ["promotion_rule_id"]
-            isOneToOne: false
-            referencedRelation: "promotion_rules"
-            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "promotion_threshold_changes_role_evaluation_id_fkey"
@@ -1958,42 +1906,125 @@ export type Database = {
         }
         Relationships: []
       }
-      role_evaluations: {
+      retention_signals: {
         Row: {
+          closed_as: string | null
+          closed_at: string | null
+          created_at: string
           id: number
           kind: string
+          member_id: string
+          reason: string
+          role_at_listing: Database["public"]["Enums"]["member_role"]
+          role_evaluation_id: number | null
+          task_points: number | null
+          threshold_used: number | null
+        }
+        Insert: {
+          closed_as?: string | null
+          closed_at?: string | null
+          created_at?: string
+          id?: never
+          kind: string
+          member_id: string
+          reason: string
+          role_at_listing: Database["public"]["Enums"]["member_role"]
+          role_evaluation_id?: number | null
+          task_points?: number | null
+          threshold_used?: number | null
+        }
+        Update: {
+          closed_as?: string | null
+          closed_at?: string | null
+          created_at?: string
+          id?: never
+          kind?: string
+          member_id?: string
+          reason?: string
+          role_at_listing?: Database["public"]["Enums"]["member_role"]
+          role_evaluation_id?: number | null
+          task_points?: number | null
+          threshold_used?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "retention_signals_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "retention_signals_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retention_signals_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retention_signals_role_evaluation_id_fkey"
+            columns: ["role_evaluation_id"]
+            isOneToOne: false
+            referencedRelation: "role_evaluations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      role_evaluations: {
+        Row: {
+          eligibility_floor: number | null
+          evaluated_count: number | null
+          id: number
+          kind: string
+          membership_cutoff: string | null
           name: string
+          percent_used: number | null
           period_from: string
           period_to: string
           ranked_count: number
           run_at: string
           run_by: string
           threshold_computed: number | null
-          threshold_used: number
+          threshold_used: number | null
         }
         Insert: {
+          eligibility_floor?: number | null
+          evaluated_count?: number | null
           id?: never
           kind: string
+          membership_cutoff?: string | null
           name: string
+          percent_used?: number | null
           period_from: string
           period_to: string
           ranked_count: number
           run_at?: string
           run_by: string
           threshold_computed?: number | null
-          threshold_used: number
+          threshold_used?: number | null
         }
         Update: {
+          eligibility_floor?: number | null
+          evaluated_count?: number | null
           id?: never
           kind?: string
+          membership_cutoff?: string | null
           name?: string
+          percent_used?: number | null
           period_from?: string
           period_to?: string
           ranked_count?: number
           run_at?: string
           run_by?: string
           threshold_computed?: number | null
-          threshold_used?: number
+          threshold_used?: number | null
         }
         Relationships: [
           {
@@ -4379,20 +4410,31 @@ export type Database = {
       }
       reveal_deal_code: { Args: { p_announcement_id: number }; Returns: string }
       role_evaluation_ranking: {
-        Args: { p_from: string; p_kind: string; p_to: string }
+        Args: { p_role_evaluation_id: number }
         Returns: {
-          cohort_size: number
+          evaluated_count: number
           inside: boolean
+          line: number
+          listable: boolean
           member_id: string
           rank: number
+          ranked: boolean
+          ranked_count: number
           role: Database["public"]["Enums"]["member_role"]
           share_size: number
           task_points: number
-          tenure_since: string
         }[]
       }
       run_role_evaluation: {
-        Args: { p_from: string; p_kind: string; p_name: string; p_to: string }
+        Args: {
+          p_cutoff?: string
+          p_floor: number
+          p_from: string
+          p_kind: string
+          p_name: string
+          p_percent: number
+          p_to: string
+        }
         Returns: {
           candidates: number
           retention_signals: number
@@ -4482,6 +4524,7 @@ export type Database = {
       set_eligibility_floor: {
         Args: { p_points: number }
         Returns: {
+          activ_percent: number
           created_at: string
           eligibility_floor: number | null
           id: number
@@ -4489,6 +4532,7 @@ export type Database = {
           points_start_date: string | null
           updated_at: string
           updated_by: string | null
+          vot_percent: number
         }
         SetofOptions: {
           from: "*"
@@ -4615,6 +4659,7 @@ export type Database = {
       set_membership_cutoff: {
         Args: { p_date: string }
         Returns: {
+          activ_percent: number
           created_at: string
           eligibility_floor: number | null
           id: number
@@ -4622,6 +4667,7 @@ export type Database = {
           points_start_date: string | null
           updated_at: string
           updated_by: string | null
+          vot_percent: number
         }
         SetofOptions: {
           from: "*"
@@ -4649,6 +4695,7 @@ export type Database = {
       set_points_start_date: {
         Args: { p_date: string }
         Returns: {
+          activ_percent: number
           created_at: string
           eligibility_floor: number | null
           id: number
@@ -4656,6 +4703,7 @@ export type Database = {
           points_start_date: string | null
           updated_at: string
           updated_by: string | null
+          vot_percent: number
         }
         SetofOptions: {
           from: "*"
@@ -4744,6 +4792,29 @@ export type Database = {
           p_outcome: string
         }
         Returns: string
+      }
+      simulate_role_evaluation: {
+        Args: {
+          p_cutoff?: string
+          p_floor: number
+          p_from: string
+          p_kind: string
+          p_percent: number
+          p_to: string
+        }
+        Returns: {
+          evaluated_count: number
+          inside: boolean
+          line: number
+          listable: boolean
+          member_id: string
+          rank: number
+          ranked: boolean
+          ranked_count: number
+          role: Database["public"]["Enums"]["member_role"]
+          share_size: number
+          task_points: number
+        }[]
       }
       start_task: {
         Args: { p_task_id: number }
@@ -5058,30 +5129,6 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "groups"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      update_promotion_rule: {
-        Args: {
-          p_enabled: boolean
-          p_min_tenure_months: number
-          p_rule_id: number
-        }
-        Returns: {
-          created_at: string
-          enabled: boolean
-          from_role: Database["public"]["Enums"]["member_role"]
-          id: number
-          kind: string
-          min_tenure_months: number
-          percent: number | null
-          to_role: Database["public"]["Enums"]["member_role"]
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "promotion_rules"
           isOneToOne: true
           isSetofReturn: false
         }

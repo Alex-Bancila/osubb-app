@@ -12,6 +12,10 @@ const api = vi.hoisted(() => ({
   mutate: vi.fn(),
   report: vi.fn(),
 }));
+// R58: the Points Start Date is a settings read; none is set here.
+vi.mock('../../queries/evaluation-settings', () => ({
+  usePointsStartDate: () => null,
+}));
 vi.mock('../../queries/task-form-options', () => ({
   useTaskFormOptions: api.options,
 }));

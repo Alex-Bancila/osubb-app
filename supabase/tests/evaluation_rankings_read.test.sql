@@ -8,11 +8,13 @@
 -- any ancestor of it, read from groups.path. Every other live active Member
 -- reads their own row. The Adunarea Generală is the Group
 -- org_settings.adunarea_generala_group_id names -- by row, never by name.
--- The predicate itself is unchanged by R28; only what it gates moved from a
--- Period id to a (kind, from, to) date range.
+-- The predicate itself is unchanged by R28 and R58; what it gates moved from
+-- a Period id to a (kind, from, to) date range (R28) and back to the id of a
+-- recorded Role Evaluation (R58), whose ranking is recomputed from its own
+-- values.
 --
 -- In order: the predicate's shape and grants, the persona matrix over one
--- fixed date range of kind adunarea_generala, the predicate called directly
+-- recorded adunarea_generala run (Eligibility Floor 1, 25 %), the predicate called directly
 -- (the shape #826's own ranking suite reuses), and the setting -- its table
 -- CHECK, set_org_setting's rules for the new key, and re-pointing / clearing
 -- it moving the full read with it.
@@ -101,8 +103,8 @@ insert into public.profiles (id, full_name, email, role, status) values
   ('51200000-0000-0000-0000-000000000007', 'Manager Diverse 512',     'ancestor512@test.local',  'voluntar',  'activ'),
   ('51200000-0000-0000-0000-000000000008', 'Ana AG 512',              'ana512@test.local',       'vot',       'activ'),
   ('51200000-0000-0000-0000-000000000009', 'Bianca AG 512',           'bianca512@test.local',    'vot',       'activ'),
-  -- R28 (#826): a Voluntar cu Drept de Vot -- the population for a
-  -- role_evaluation_ranking('adunarea_generala', ...) call, so he has an own
+  -- R28 (#826): a Voluntar cu Drept de Vot -- in an Adunarea Generală run's
+  -- population (R58: its ranking is read by run id), so he has an own
   -- row to read; his Group Role is still absent from the AG itself.
   ('51200000-0000-0000-0000-000000000010', 'Victor 512',              'victor512@test.local',    'vot',       'activ'),
   ('51200000-0000-0000-0000-000000000011', 'Responsabil Comisia 512', 'comisia512@test.local',   'vot',       'activ'),
@@ -151,12 +153,20 @@ select fixture.group_id, fixture.member_id::uuid, fixture.group_role
 update public.org_settings set value = (select ag from fx512)::text
  where key = 'adunarea_generala_group_id';
 
--- R28 (#826) dropped Evaluation Periods: role_evaluation_ranking takes a
--- date range directly. [today, today] in Bucharest days brackets every
--- award below, all dated now().
-alter table fx512 add column period_from date, add column period_to date;
+-- R28 (#826) dropped Evaluation Periods; R58 reads the ranking of a recorded
+-- run by its id. [today, today] in Bucharest days brackets every award below,
+-- all dated now(). The run is written as the owner, with the Eligibility
+-- Floor 1 and 25 % (run_role_evaluation's own suites exercise the command).
+alter table fx512 add column period_from date, add column period_to date, add column run_id bigint;
 update fx512 set period_from = (now() at time zone 'Europe/Bucharest')::date,
                  period_to   = (now() at time zone 'Europe/Bucharest')::date;
+insert into public.role_evaluations
+  (kind, name, period_from, period_to, run_by, threshold_used, threshold_computed, ranked_count,
+   eligibility_floor, percent_used, membership_cutoff, evaluated_count)
+select 'adunarea_generala', 'Evaluare AG 512', period_from, period_to,
+       '51200000-0000-0000-0000-000000000001', null, 12, 4, 1, 25, null, 7
+  from fx512;
+update fx512 set run_id = (select id from public.role_evaluations where name = 'Evaluare AG 512');
 
 -- In-range Task Points (difficulty x rating_mult(rating)):
 -- Ana 4 x 3 = 12, Victor 3 x 3 = 9, Bianca 2 x 3 = 6, the AG Responsible 1 x 2 = 2.
@@ -187,22 +197,23 @@ $$;
 
 -- The full ranking, for the full-read assertions. The AG's own Manager, and
 -- Comisia's and the decoy's Responsibles, are live Voluntar cu Drept de Vot
--- holders too (none of them credited), so R28's population includes all
--- three at 0 points, tied for last.
+-- holders too (none of them credited), so the population includes all three
+-- at 0 points -- below the Eligibility Floor 1, so evaluated but not ranked
+-- (no rank, R58).
 create temp table full512 (member_id uuid, task_points integer, rank integer);
 insert into full512 values
   ('51200000-0000-0000-0000-000000000008', 12, 1),
   ('51200000-0000-0000-0000-000000000010',  9, 2),
   ('51200000-0000-0000-0000-000000000009',  6, 3),
   ('51200000-0000-0000-0000-000000000006',  2, 4),
-  ('51200000-0000-0000-0000-000000000005',  0, 5),
-  ('51200000-0000-0000-0000-000000000011',  0, 5),
-  ('51200000-0000-0000-0000-000000000012',  0, 5);
+  ('51200000-0000-0000-0000-000000000005',  0, null),
+  ('51200000-0000-0000-0000-000000000011',  0, null),
+  ('51200000-0000-0000-0000-000000000012',  0, null);
 grant select on full512 to authenticated;
 
 create function pg_temp.ranking() returns text language sql as $$
-  select format('select member_id, task_points, rank from public.role_evaluation_ranking(''adunarea_generala'', %L, %L)',
-                (select period_from from fx512), (select period_to from fx512));
+  select format('select member_id, task_points, rank from public.role_evaluation_ranking(%s)',
+                (select run_id from fx512));
 $$;
 grant execute on function pg_temp.ranking() to authenticated;
 
@@ -229,7 +240,7 @@ select ok(
   'the predicate reads groups.path and the setting, and names no Group');
 select ok(
   pg_get_functiondef('private.can_read_evaluation_rankings()'::regprocedure) !~* 'is_interne|responsabil|>= *4'
-  and pg_get_functiondef('private.role_evaluation_ranking_impl(text, date, date)'::regprocedure) !~* 'is_interne|responsabil|>= *4|>= *5',
+  and pg_get_functiondef('private.role_evaluation_ranking_impl(bigint)'::regprocedure) !~* 'is_interne|responsabil|>= *4|>= *5',
   'neither the predicate nor the ranking body reads is_interne, the retired rank or level 4 or 5');
 
 -- ==================== 2. Full read ====================
@@ -280,49 +291,49 @@ select results_eq(pg_temp.ranking(),
 reset role;
 
 select pg_temp.test_login_leadership('51200000-0000-0000-0000-000000000004');
-select is((select count(*) from public.role_evaluation_ranking('adunarea_generala', (select period_from from fx512), (select period_to from fx512))), 0::bigint,
+select is((select count(*) from public.role_evaluation_ranking((select run_id from fx512))), 0::bigint,
   'a BCE with no Group Role reads only their own row -- none here (a BCE is never a Drept de Vot holder): level 5 is not the full read');
 reset role;
 
 select pg_temp.test_login_leadership('51200000-0000-0000-0000-000000000011');
 select results_eq(pg_temp.ranking(),
-  $$ values ('51200000-0000-0000-0000-000000000011'::uuid, 0, 5) $$,
-  'a Group Responsible of a Child Group of the AG reads exactly her own row, at 0 -- authority does not flow up');
+  $$ values ('51200000-0000-0000-0000-000000000011'::uuid, 0, null::int) $$,
+  'a Group Responsible of a Child Group of the AG reads exactly her own row, at 0 and unranked -- authority does not flow up');
 reset role;
 
 select pg_temp.test_login_leadership('51200000-0000-0000-0000-000000000012');
 select results_eq(pg_temp.ranking(),
-  $$ values ('51200000-0000-0000-0000-000000000012'::uuid, 0, 5) $$,
+  $$ values ('51200000-0000-0000-0000-000000000012'::uuid, 0, null::int) $$,
   'the decoy Group named Adunarea Generală confers no extra read beyond its Responsible''s own row -- the AG is identified by row, not by name');
 reset role;
 
 -- ==================== 4. Nothing ====================
 
 select pg_temp.test_login('51200000-0000-0000-0000-000000000006', '{}'::jsonb);
-select is((select count(*) from public.role_evaluation_ranking('adunarea_generala', (select period_from from fx512), (select period_to from fx512))), 0::bigint,
+select is((select count(*) from public.role_evaluation_ranking((select run_id from fx512))), 0::bigint,
   'a claimless session -- the AG Responsible''s own uid -- reads nothing (house rule 12)');
 reset role;
 
 select pg_temp.test_clear_jwt();
 set local role authenticated;
-select is((select count(*) from public.role_evaluation_ranking('adunarea_generala', (select period_from from fx512), (select period_to from fx512))), 0::bigint,
+select is((select count(*) from public.role_evaluation_ranking((select run_id from fx512))), 0::bigint,
   'a session with no JWT at all reads nothing');
 reset role;
 
 select pg_temp.login_stale('51200000-0000-0000-0000-000000000003', 'bc', 6);
-select is((select count(*) from public.role_evaluation_ranking('adunarea_generala', (select period_from from fx512), (select period_to from fx512))), 0::bigint,
+select is((select count(*) from public.role_evaluation_ranking((select run_id from fx512))), 0::bigint,
   'an inactive Member holding stale BC claims reads nothing');
 reset role;
 
 select pg_temp.login_stale('51200000-0000-0000-0000-000000000013', 'vot', 3);
-select is((select count(*) from public.role_evaluation_ranking('adunarea_generala', (select period_from from fx512), (select period_to from fx512))), 0::bigint,
+select is((select count(*) from public.role_evaluation_ranking((select run_id from fx512))), 0::bigint,
   'a deactivated AG Responsible''s still-valid token reads nothing');
 reset role;
 
 select pg_temp.test_clear_jwt();
 set local role anon;
 select throws_ok(
-  $$ select * from public.role_evaluation_ranking('adunarea_generala', (select period_from from fx512), (select period_to from fx512)) $$,
+  $$ select * from public.role_evaluation_ranking((select run_id from fx512)) $$,
   '42501', null,
   'anon cannot execute the ranking');
 reset role;
@@ -411,7 +422,7 @@ select results_eq(pg_temp.ranking(), $$ select * from full512 order by task_poin
   're-pointing the setting moves the full read: the newly named Group''s Responsible reads every row');
 reset role;
 select pg_temp.test_login_leadership('51200000-0000-0000-0000-000000000006');
-select is((select count(*) from public.role_evaluation_ranking('adunarea_generala', (select period_from from fx512), (select period_to from fx512))), 1::bigint,
+select is((select count(*) from public.role_evaluation_ranking((select run_id from fx512))), 1::bigint,
   'and the previous AG''s Responsible is back to their own row');
 reset role;
 select pg_temp.test_login_leadership('51200000-0000-0000-0000-000000000007');
@@ -429,7 +440,7 @@ select results_eq(pg_temp.ranking(), $$ select * from full512 order by task_poin
   'with no Adunarea Generală named, BC still reads every row');
 reset role;
 select pg_temp.test_login_leadership('51200000-0000-0000-0000-000000000007');
-select is((select count(*) from public.role_evaluation_ranking('adunarea_generala', (select period_from from fx512), (select period_to from fx512))), 0::bigint,
+select is((select count(*) from public.role_evaluation_ranking((select run_id from fx512))), 0::bigint,
   'with no Adunarea Generală named, no Group Role reads the full ranking -- the ancestor Manager holds no Drept de Vot Role, so he has no own row either');
 reset role;
 

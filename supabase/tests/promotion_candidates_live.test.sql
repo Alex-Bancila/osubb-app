@@ -1,30 +1,35 @@
--- promotion_candidates_live.test.sql -- #983 (ruling R35): the Promotion
--- Candidate list between Role Evaluations.
+-- promotion_candidates_live.test.sql -- #983 (ruling R35), rebuilt by R58:
+-- the Promotion Candidate list between Role Evaluations.
 --
--- A tenured Voluntar whose net Task Points since the latest Voluntar Activ
--- run's window opened (all time before any run) reach the threshold in force
--- is listed the moment they qualify -- a promotion_candidates row with
--- role_evaluation_id null and one Notification per live BC/Moderator -- by
+-- A Voluntar who joined on or before the Membership Cutoff Date (R58: no
+-- tenure rule) and whose net Task Points since the latest Voluntar Activ
+-- run's window opened (all time before any run; never before the Points
+-- Start Date, Ruling 17 -- retention_signals.test.sql pins that) reach the
+-- threshold in force is listed the moment they qualify -- a
+-- promotion_candidates row with role_evaluation_id null, tenure_since the
+-- join date, and one Notification per live BC/Moderator -- by
 -- private.refresh_promotion_candidates(), which the statement triggers on
--- points_ledger, promotion_thresholds, promotion_rules and profiles call,
--- run_role_evaluation calls last, and the daily tenure job calls. A live row
--- of a Voluntar who no longer qualifies is superseded by nobody; a Member who
--- leaves Voluntar stays the role_history trigger's (promoted / superseded by
--- the actor). A live rejection holds until the next Voluntar Activ run; a run
--- row's rejection holds for its run only. Nothing is promoted.
+-- points_ledger, promotion_thresholds, evaluation_settings and profiles call
+-- and run_role_evaluation calls last. Nobody is listed while the cutoff is
+-- unset, and no daily job exists. A live row of a Voluntar who no longer
+-- qualifies is superseded by nobody; a Member who leaves Voluntar stays the
+-- role_history trigger's (promoted / superseded by the actor). A live
+-- rejection holds until the next Voluntar Activ run; a run row's rejection
+-- holds for its run only. Nothing is promoted.
 --
 -- In order: the held-lock probe (first: the refresh's try-lock, once it
 -- succeeds, holds (47, 1) for the rest of this one transaction, so a remote
 -- holder can only be set up before any refresh ran here); shape and grants;
 -- the crossing and who is never listed; the line moving (threshold, a
--- reversal, the rule's switch); a live rejection; a run; the daily job;
--- status and tenure; a promotion.
+-- reversal, the cutoff moved and cleared); a live rejection; a run; no daily
+-- job; status and the join date; a promotion.
 --
 -- Fixtures (prefix 98300000-), written as the owner in this rolled-back
 -- transaction. Every other live ladder holder is deactivated so the eligible
 -- set is this suite's; the leaders set is read from the database (the demo
--- seed's BC and Moderator are live too). Awards are dated now() unless a run
--- must range over them.
+-- seed's BC and Moderator are live too). The Membership Cutoff Date is
+-- yesterday (Bucharest), so a Voluntar who joined today is not listable.
+-- Awards are dated now() unless a run must range over them.
 --
 -- Mutation guards, run 2026-10-02 as in-transaction redefinitions of
 -- private.refresh_promotion_candidates, each turning the named assertion red:
@@ -44,9 +49,13 @@
 --     targets is pinned by promotion_candidates.test.sql;
 --   * the run's trailing refresh removed (run_role_evaluation_impl) -> "after
 --     the run, a Voluntar already at the threshold in the new window is
---     listed at once";
---   * the daily job's refresh removed (apply_promotions) -> "the daily job
---     lists a Voluntar the triggers missed".
+--     listed at once" (not re-run under R58: this suite's run writes its
+--     Floor through to evaluation_settings, whose trigger refreshes the list
+--     too, so the guard now holds only for a run whose values equal the
+--     settings in force).
+-- R58's own guards (run 2026-10-18 as scratch copies of this file, as above):
+--   * trigger evaluation_settings_refresh_promotion_candidates dropped ->
+--     "a cutoff moved before the Voluntar joined unlists them at once".
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
@@ -54,7 +63,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(52);
+select plan(54);
 
 -- ==================== Fixtures ====================
 
@@ -137,7 +146,12 @@ update public.profiles set status = 'inactiv'
  where status = 'activ'
    and role in ('recrut', 'voluntar', 'activ', 'vot')
    and id::text not like '98300000-%';
-update public.promotion_rules set min_tenure_months = 6, enabled = true;
+-- R58: the Membership Cutoff Date replaces the tenure rule: yesterday, so
+-- the Voluntar who joined today is not listable. A direct write, as the
+-- remote session holds the lock set_membership_cutoff would wait for.
+update public.evaluation_settings
+   set membership_cutoff = (now() at time zone 'Europe/Bucharest')::date - 1
+ where id = 1;
 update public.promotion_thresholds set threshold = 15 where kind = 'voluntar_activ';
 
 -- Pinned so a refresh that waits fails here instead of hanging the suite.
@@ -162,7 +176,7 @@ select pg_temp.credit983('98300000-0000-0000-0000-000000000018', 1);
 reset lock_timeout;
 select results_eq(
   $$ select * from pg_temp.open983('98300000-0000-0000-0000-000000000018') $$,
-  $$ values (null::bigint, 16, '2000-07-01'::date, 15) $$,
+  $$ values (null::bigint, 16, '2000-01-01'::date, 15) $$,
   'an award while another writer''s refresh holds (47, 1) shared is listed at once: the list catches up by itself');
 select extensions.dblink_exec('lock983', 'rollback;');
 select extensions.dblink_disconnect('lock983');
@@ -172,8 +186,7 @@ create temp table fx983 as
          (select array_agg(profile.id order by profile.id)
             from public.profiles as profile
             join public.roles as role on role.id = profile.role
-           where profile.status = 'activ' and role.level >= 6) as leaders,
-         (select id from public.promotion_rules where kind = 'top_percent') as rule_id;
+           where profile.status = 'activ' and role.level >= 6) as leaders;
 grant select on fx983 to authenticated;
 select is(
   (select count(*) from public.role_evaluations
@@ -203,8 +216,8 @@ select has_trigger('public', 'points_ledger', 'points_ledger_refresh_promotion_c
   'an award or a reversal refreshes the list');
 select has_trigger('public', 'promotion_thresholds', 'promotion_thresholds_refresh_promotion_candidates',
   'a threshold change refreshes the list');
-select has_trigger('public', 'promotion_rules', 'promotion_rules_refresh_promotion_candidates',
-  'a rule change refreshes the list');
+select has_trigger('public', 'evaluation_settings', 'evaluation_settings_refresh_promotion_candidates',
+  'a change of the evaluation settings (the cutoff, the Points Start Date) refreshes the list');
 select has_trigger('public', 'profiles', 'profiles_refresh_promotion_candidates',
   'a Profile change (role, status, join date) refreshes the list');
 
@@ -219,8 +232,8 @@ select is(
 insert into tasks983 select 'v1_five', pg_temp.credit983('98300000-0000-0000-0000-000000000011', 5);
 select results_eq(
   $$ select * from pg_temp.open983('98300000-0000-0000-0000-000000000011') $$,
-  $$ values (null::bigint, 15, '2000-07-01'::date, 15) $$,
-  'reaching the threshold lists the Voluntar at once: a live row (no run) with their points, their tenure date and the line in force');
+  $$ values (null::bigint, 15, '2000-01-01'::date, 15) $$,
+  'reaching the threshold lists the Voluntar at once: a live row (no run) with their points, their join date and the line in force');
 select results_eq(
   $$ select array_agg(member_id order by member_id) from public.notifications
       where dedupe_key = 'promotion_candidate:live:98300000-0000-0000-0000-000000000011' $$,
@@ -228,13 +241,15 @@ select results_eq(
   'one Notification to every live BC and Moderator -- not BCE, not the deactivated BC');
 select results_eq(
   $$ select kind::text, title, link,
-            body like '%Vali 983 are 15 puncte de task în total, cel puțin pragul în vigoare de 15 puncte, și vechimea cerută.%',
-            body like '%Nu este promovat automat: îl poți promova în Voluntar Activ din panoul de roluri sau respinge din Evaluări de rol.%'
+            body = 'Vali 983 are 15 puncte de task în total, cel puțin pragul de promovare de 15 puncte, '
+                   || 'intrat în OSUBB până la ' || to_char((select today from fx983) - 1, 'DD.MM.YYYY') || '. '
+                   || 'Nu este promovat automat: îl poți promova în Voluntar Activ din panoul de roluri '
+                   || 'sau respinge din Portofoliu Interne.'
        from public.notifications
       where dedupe_key = 'promotion_candidate:live:98300000-0000-0000-0000-000000000011'
         and member_id = '98300000-0000-0000-0000-000000000001' $$,
-  $$ values ('system', 'Candidat la promovare: Vali 983', '/administrare/evaluari', true, true) $$,
-  'the Notification: the Nickname, the points as a total (no run yet), the line in force, no automatic promotion, the Evaluări de rol link');
+  $$ values ('system', 'Candidat la promovare: Vali 983', '/administrare/portofoliu-interne', true) $$,
+  'the Notification: the Nickname, the points as a total (no run yet), the Promotion Threshold named in full, the cutoff -- never a tenure -- no automatic promotion, the Portofoliu Interne link');
 
 select pg_temp.credit983('98300000-0000-0000-0000-000000000015', 20);
 select pg_temp.credit983('98300000-0000-0000-0000-000000000016', 20);
@@ -245,7 +260,7 @@ select is(
                         '98300000-0000-0000-0000-000000000016',
                         '98300000-0000-0000-0000-000000000017')),
   0::bigint,
-  'never listed, whatever the points: an untenured Voluntar, a Voluntar Activ holder, a deactivated Voluntar');
+  'never listed, whatever the points: a Voluntar who joined after the cutoff, a Voluntar Activ holder, a deactivated Voluntar');
 
 -- ==================== 4. The line moves ====================
 
@@ -265,7 +280,7 @@ select lives_ok($$ select public.set_promotion_threshold('voluntar_activ', 15) $
 reset role;
 select results_eq(
   $$ select * from pg_temp.open983('98300000-0000-0000-0000-000000000011') $$,
-  $$ values (null::bigint, 15, '2000-07-01'::date, 15) $$,
+  $$ values (null::bigint, 15, '2000-01-01'::date, 15) $$,
   'lowering it back lists them again, in a new row');
 select is(
   (select count(*) from public.promotion_candidates where member_id = '98300000-0000-0000-0000-000000000011'),
@@ -291,24 +306,36 @@ select is(
   15,
   'earning the points back lists them again');
 
+-- R58: the cutoff replaces the rule's switch (Review Focus 4).
 select pg_temp.test_login_leadership('98300000-0000-0000-0000-000000000001');
 select lives_ok(
-  $$ select public.update_promotion_rule((select rule_id from fx983), 6, false) $$,
-  'BC turns the Voluntar -> Voluntar Activ rule off');
+  $$ select public.set_membership_cutoff('1999-12-31') $$,
+  'BC moves the Membership Cutoff Date before the Voluntar joined');
 reset role;
 select is(
   (select count(*) from pg_temp.open983('98300000-0000-0000-0000-000000000011')),
   0::bigint,
-  'a rule turned off lists no Promotion Candidate: the live row is superseded');
+  'a cutoff moved before the Voluntar joined unlists them at once: the live row is superseded');
 select pg_temp.test_login_leadership('98300000-0000-0000-0000-000000000001');
 select lives_ok(
-  $$ select public.update_promotion_rule((select rule_id from fx983), 6, true) $$,
-  'BC turns it on again');
+  $$ select public.set_membership_cutoff((select today from fx983) - 1) $$,
+  'BC moves it back to yesterday');
 reset role;
 select is(
   (select task_points from pg_temp.open983('98300000-0000-0000-0000-000000000011')),
   15,
-  'the rule turned on lists them again');
+  'the cutoff moved back lists them again');
+-- No command clears the cutoff: do it as the owner.
+update public.evaluation_settings set membership_cutoff = null where id = 1;
+select is(
+  (select count(*) from public.promotion_candidates where role_evaluation_id is null and decision is null),
+  0::bigint,
+  'with no cutoff set, nobody is listed live');
+update public.evaluation_settings set membership_cutoff = (select today from fx983) - 1 where id = 1;
+select is(
+  (select task_points from pg_temp.open983('98300000-0000-0000-0000-000000000011')),
+  15,
+  'setting it again lists them again');
 
 -- ==================== 5. A live rejection holds while the window lasts ====================
 
@@ -352,7 +379,8 @@ select pg_temp.test_login_leadership('98300000-0000-0000-0000-000000000001');
 select lives_ok(
   $$ insert into run983
      select * from public.run_role_evaluation('voluntar_activ',
-       (select today from fx983) - 30, (select today from fx983) - 1, 'Evaluare #983') $$,
+       (select today from fx983) - 30, (select today from fx983) - 1, 'Evaluare #983',
+       1, 35, (select today from fx983) - 1) $$,
   'BC runs a Voluntar Activ Role Evaluation over the thirty days up to yesterday');
 reset role;
 
@@ -363,14 +391,14 @@ select results_eq(
       order by candidate.id $$,
   $$ values (true, 'superseded', '98300000-0000-0000-0000-000000000001'::uuid, 15),
             (false, null::text, null::uuid, 15) $$,
-  'the run supersedes the live row (by BC, as any open row) and lists the Voluntar from its range: a run row carrying the threshold used');
+  'the run supersedes the live row (by BC, as any open row) and lists the Voluntar from its range: a run row carrying the line it computed (R58: 15, the only ranked Member''s Task Points)');
 select is(
   (select role_evaluation_id from pg_temp.open983('98300000-0000-0000-0000-000000000013')),
   (select role_evaluation_id from run983),
   'the open row is the run''s');
 select results_eq(
   $$ select * from pg_temp.open983('98300000-0000-0000-0000-000000000011') $$,
-  $$ values (null::bigint, 15, '2000-07-01'::date, 15) $$,
+  $$ values (null::bigint, 15, '2000-01-01'::date, 15) $$,
   'after the run, a Voluntar already at the threshold in the new window (points dated today, after the range) is listed at once');
 select results_eq(
   $$ select body like ('%de la ultima evaluare Voluntar Activ (din ' || to_char((select today from fx983), 'DD.MM.YYYY') || ')%')
@@ -401,20 +429,22 @@ reset role;
 select pg_temp.credit983('98300000-0000-0000-0000-000000000013', 5);
 select results_eq(
   $$ select * from pg_temp.open983('98300000-0000-0000-0000-000000000013') $$,
-  $$ values (null::bigint, 20, '2000-07-01'::date, 15) $$,
+  $$ values (null::bigint, 20, '2000-01-01'::date, 15) $$,
   'a run row''s rejection holds for its run only: the Member is listed live from the new window');
 
--- ==================== 7. The daily job ====================
+-- ==================== 7. No daily job ====================
+-- R58: with the tenure gone, nothing qualifies a Voluntar by the calendar
+-- alone -- who qualifies moves only with a write the triggers see.
 
+select is((select count(*) from cron.job where jobname = 'osubb-apply-promotions'), 0::bigint,
+  'no daily job lists or promotes anyone');
 select pg_temp.credit983('98300000-0000-0000-0000-000000000019', 15);
-delete from public.promotion_candidates where member_id = '98300000-0000-0000-0000-000000000019';
-select lives_ok($$ select private.apply_promotions() $$, 'the daily job runs');
 select results_eq(
   $$ select * from pg_temp.open983('98300000-0000-0000-0000-000000000019') $$,
-  $$ values (null::bigint, 15, '2000-07-01'::date, 15) $$,
-  'the daily job lists a Voluntar the triggers missed (a tenure reached by the calendar alone)');
+  $$ values (null::bigint, 15, '2000-01-01'::date, 15) $$,
+  'the award that reaches the line lists the Voluntar itself');
 
--- ==================== 8. Status and tenure ====================
+-- ==================== 8. Status and the join date ====================
 
 select pg_temp.credit983('98300000-0000-0000-0000-000000000014', 15);
 select is(
@@ -436,8 +466,8 @@ select is(
 update public.profiles set joined_at = '2000-01-01' where id = '98300000-0000-0000-0000-000000000015';
 select results_eq(
   $$ select * from pg_temp.open983('98300000-0000-0000-0000-000000000015') $$,
-  $$ values (null::bigint, 20, '2000-07-01'::date, 15) $$,
-  'the join date moved back lists the once-untenured Voluntar, with the tenure date it implies');
+  $$ values (null::bigint, 20, '2000-01-01'::date, 15) $$,
+  'the join date moved back to before the cutoff lists the Voluntar who had joined today, with that join date');
 
 -- ==================== 9. A promotion ====================
 

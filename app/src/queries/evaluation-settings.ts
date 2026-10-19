@@ -22,11 +22,17 @@ import { keys } from './keys';
  * - `pointsStartDate` (Data de început a punctajului): the first Bucharest
  *   day whose Task Points count in any total. The SQL readers apply it; the
  *   app only says it, beside the totals it changes.
+ * - `activPercent` and `votPercent` (Procent): the top share each Role
+ *   Evaluation kind takes of the eligible Members, x for Voluntar Activ and y
+ *   for the Adunarea Generală, 1–100. They live in this row since R58 and are
+ *   never null; `set_evaluation_percent` still writes them.
  */
 export type EvaluationSettings = {
   eligibilityFloor: number | null;
   membershipCutoff: string | null;
   pointsStartDate: string | null;
+  activPercent: number;
+  votPercent: number;
   updatedAt: string;
   updatedBy: string | null;
 };
@@ -35,7 +41,7 @@ export async function fetchEvaluationSettings(): Promise<EvaluationSettings> {
   const { data, error } = await supabase
     .from('evaluation_settings')
     .select(
-      'eligibility_floor, membership_cutoff, points_start_date, updated_at, updated_by',
+      'eligibility_floor, membership_cutoff, points_start_date, activ_percent, vot_percent, updated_at, updated_by',
     )
     .eq('id', 1)
     .single();
@@ -44,6 +50,8 @@ export async function fetchEvaluationSettings(): Promise<EvaluationSettings> {
     eligibilityFloor: data.eligibility_floor,
     membershipCutoff: data.membership_cutoff,
     pointsStartDate: data.points_start_date,
+    activPercent: data.activ_percent,
+    votPercent: data.vot_percent,
     updatedAt: data.updated_at,
     updatedBy: data.updated_by,
   };

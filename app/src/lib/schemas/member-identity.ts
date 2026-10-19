@@ -74,8 +74,8 @@ export const inviteFieldForReason: Readonly<Record<string, string>> = {
 
 /**
  * A Member's join date (#932): a real calendar day (`YYYY-MM-DD`, as the
- * date input sends it), never after today in Bucharest — tenure for the
- * promotion rules counts from it. `today` is injectable for tests.
+ * date input sends it), never after today in Bucharest — the Membership
+ * Cutoff Date is measured against it. `today` is injectable for tests.
  */
 export function memberJoinedAtSchema(
   today: string = bucharestDayKey(new Date()) ?? '',

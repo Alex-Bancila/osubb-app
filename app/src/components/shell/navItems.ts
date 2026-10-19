@@ -123,6 +123,8 @@ export const NAV_ITEMS: NavItem[] = [
       '/administrare/grupuri/:groupId',
       '/administrare/roluri',
       '/administrare/cereri',
+      '/administrare/portofoliu-interne',
+      // Old links only redirect, but a Notification may still open them.
       '/administrare/evaluari',
       '/administrare/perioade',
       '/administrare/confidentialitate',

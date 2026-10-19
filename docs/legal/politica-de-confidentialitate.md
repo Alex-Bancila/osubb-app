@@ -2,7 +2,8 @@
   Politica de confidențialitate a aplicației OSUBB: sursa de adevăr pentru pagina /confidentialitate
   și pentru pasul de confirmare de după conectare (#771, ruling L16). Textul versiunii 1.0 a fost
   aprobat de Alex pe 2026-09-27; corecturile versiunii 1.1 (#860), pe 2026-09-29; versiunea 1.2
-  (universitatea, ruling R58), aprobată de Alex pe 2026-10-18.
+  (universitatea, ruling R58), aprobată de Alex pe 2026-10-18; versiunea 1.3 (deciziile automate,
+  ruling R58, partea a treia), aprobată de Alex pe 2026-10-20.
   Regula versiunilor: orice schimbare de conținut incrementează „Versiunea” și data, în acest fișier și
   în app/src/screens/privacy/PrivacyNoticeContent.tsx, iar în același pull request o migrație ridică
   în org_settings `privacy_notice_version` la același număr; aplicația cere apoi fiecărui Membru o
@@ -12,7 +13,7 @@
 
 # Politica de confidențialitate a aplicației OSUBB
 
-**Versiunea 1.2 · în vigoare de la 18.10.2026**
+**Versiunea 1.3 · în vigoare de la 20.10.2026**
 
 Aplicația OSUBB („app.osubb.ro”) este aplicația internă a Organizației Studenților din Universitatea Babeș-Bolyai (OSUBB). Este folosită doar de membrii organizației, pe bază de invitație, pentru a organiza activitatea de voluntariat: taskuri și puncte, calendarul evenimentelor, anunțuri și notificări.
 
@@ -44,7 +45,11 @@ Operatorul datelor este organizația Studenților din Universitatea Babeș-Bolya
 
 ## 3. Decizii automate
 
-Aplicația aplică automat o singură regulă de promovare stabilită de BC: trecerea de la Recrut la Voluntar după vechimea cerută. Efectul este schimbarea rolului tău în organizație și o notificare. Trecerea de la Voluntar la Voluntar Activ nu este automată: o evaluare de rol te poate arăta drept candidat la promovare, după vechime și pragul de puncte, iar BC decide promovarea. Nicio decizie automată nu retrogradează pe nimeni. Poți cere oricând ca o promovare (sau lipsa ei) să fie verificată de o persoană, scriind BC-ului sau la [it@osubb.ro](mailto:it@osubb.ro).
+Aplicația nu schimbă automat rolul nimănui. Nicio regulă nu te promovează și nu te retrogradează singură, nici după trecerea timpului, nici după puncte: orice promovare sau retragere de rol este decizia BC, luată manual.
+
+BC rulează evaluări de rol. O evaluare ia punctele de task primite de membri într-o perioadă aleasă de BC, ține cont doar de membrii care au cel puțin punctajul minim stabilit de BC și calculează din ele un prag de promovare. Pe această bază întocmește două liste pentru BC și Moderator: candidații la promovare (Voluntari intrați în organizație până la o dată limită stabilită de BC, care ating pragul) și semnalele de retenție (Voluntari Activi și Voluntari cu Drept de Vot care rămân sub prag sau sub punctajul minim). Un Voluntar poate apărea drept candidat la promovare și între evaluări, în clipa în care punctele lui ating pragul în vigoare. Dacă universitatea înregistrată pentru un Voluntar cu Drept de Vot se schimbă într-una care nu este Universitatea Babeș-Bolyai, un semnal de retenție apare imediat, pentru că Dreptul de Vot îl pot avea doar studenții UBB.
+
+Aceste liste sunt doar informații pentru BC, care decide singur ce face cu ele. Despre ele tu nu primești nicio notificare: notificările merg doar la conducerea organizației. Dacă BC îți schimbă rolul, primești o notificare despre noul rol. Poți cere oricând ca o promovare (sau lipsa ei) să fie verificată de o persoană, scriind BC-ului sau la [it@osubb.ro](mailto:it@osubb.ro).
 
 ## 4. Cine vede datele tale în organizație
 
@@ -101,6 +106,8 @@ Aplicația păstrează în memoria browserului tău sesiunea de conectare, adres
 Când schimbăm această politică, publicăm noua versiune în aplicație, cu numărul și data ei, și îți cerem să confirmi că ai citit-o la următoarea conectare. Confirmarea ta (versiunea și momentul) este păstrată și vizibilă pentru BC și Moderator, ca dovadă că ai fost informat; ea nu este un consimțământ și nu schimbă nimic din datele tale.
 
 ---
+
+_Versiunea 1.3 — 20.10.2026. Secțiunea „Decizii automate” nu mai descrie o regulă automată de promovare: nimic nu schimbă automat rolul nimănui, iar evaluările de rol sunt liste pentru BC._
 
 _Versiunea 1.2 — 18.10.2026. Adaugă universitatea la care studiezi, vizibilă oricărui membru._
 

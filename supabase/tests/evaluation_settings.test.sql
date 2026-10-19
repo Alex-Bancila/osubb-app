@@ -15,7 +15,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(56);
+select plan(58);
 
 -- ==================== Fixtures — prefix 58582000-… ====================
 -- 1 bc; 2 voluntar; 3 deactivated voluntar holding a still-valid token.
@@ -49,8 +49,8 @@ select is((select relrowsecurity from pg_class where oid = 'public.evaluation_se
   'evaluation_settings has RLS enabled in the migration that creates it (house rule 2)');
 select columns_are('public', 'evaluation_settings',
   array['id', 'eligibility_floor', 'membership_cutoff', 'points_start_date',
-        'created_at', 'updated_at', 'updated_by'],
-  'the row holds the three settings, its timestamps and who last changed it');
+        'created_at', 'updated_at', 'updated_by', 'activ_percent', 'vot_percent'],
+  'the row holds the three settings, its timestamps, who last changed it and, since Portofoliu Interne (R58 section C), the two shares x and y');
 select is(
   (select count(*) from pg_attribute as attribute
      where attribute.attrelid = 'public.evaluation_settings'::regclass
@@ -103,6 +103,14 @@ select throws_ok(
   $$ update public.evaluation_settings set eligibility_floor = -3 $$,
   '23514', 'new row for relation "evaluation_settings" violates check constraint "evaluation_settings_floor_ck"',
   'evaluation_settings_floor_ck: and never negative');
+select throws_ok(
+  $$ update public.evaluation_settings set activ_percent = 0 $$,
+  '23514', 'new row for relation "evaluation_settings" violates check constraint "evaluation_settings_activ_percent_ck"',
+  'evaluation_settings_activ_percent_ck: x, the Voluntar Activ share, is at least 1 %');
+select throws_ok(
+  $$ update public.evaluation_settings set vot_percent = 101 $$,
+  '23514', 'new row for relation "evaluation_settings" violates check constraint "evaluation_settings_vot_percent_ck"',
+  'evaluation_settings_vot_percent_ck: y, the Adunarea Generală share, is at most 100 %');
 select lives_ok(
   $$ update public.evaluation_settings
         set eligibility_floor = 1, membership_cutoff = '2026-09-01', points_start_date = '2026-10-01' $$,
@@ -276,7 +284,7 @@ select throws_ok(
   'promotion_threshold_changes_subject_ck: nor does a date change');
 select throws_ok(
   format($$ insert into public.promotion_threshold_changes (field, to_value, source, changed_by, promotion_rule_id)
-            values ('floor', 5, 'manual', %L, (select min(id) from public.promotion_rules)) $$, pg_temp.u582(1)),
+            values ('floor', 5, 'manual', %L, 1) $$, pg_temp.u582(1)),
   '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_subject_ck"',
   'promotion_threshold_changes_subject_ck: nor does it name a Promotion Rule');
 select throws_ok(

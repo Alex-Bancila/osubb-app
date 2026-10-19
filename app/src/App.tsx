@@ -66,8 +66,8 @@ const AdminRolesTab = lazy(() =>
 const AdminApplicationsTab = lazy(
   () => import('./screens/administrare/AdminApplicationsTab'),
 );
-const RoleEvaluationsScreen = lazy(
-  () => import('./screens/administrare/RoleEvaluationsScreen'),
+const PortofoliuInterneScreen = lazy(
+  () => import('./screens/administrare/portofoliu/PortofoliuInterneScreen'),
 );
 const AdminPrivacyTab = lazy(() =>
   import('./screens/administrare/PrivacyPanel').then((module) => ({
@@ -447,17 +447,27 @@ export default function App() {
               }
             />
             <Route
-              path="evaluari"
+              path="portofoliu-interne"
               element={
-                <AdministrareTabRoute path="/administrare/evaluari">
-                  <RoleEvaluationsScreen />
+                <AdministrareTabRoute path="/administrare/portofoliu-interne">
+                  <PortofoliuInterneScreen />
                 </AdministrareTabRoute>
               }
             />
-            {/* Ruling R28 renamed the tab; old links still arrive. */}
+            {/* Rulings R28 and R58 renamed the tab twice; old links — and the
+                Notifications stored before R58, which link /evaluari — still
+                arrive. */}
+            <Route
+              path="evaluari"
+              element={
+                <Navigate to="/administrare/portofoliu-interne" replace />
+              }
+            />
             <Route
               path="perioade"
-              element={<Navigate to="/administrare/evaluari" replace />}
+              element={
+                <Navigate to="/administrare/portofoliu-interne" replace />
+              }
             />
             <Route
               path="confidentialitate"

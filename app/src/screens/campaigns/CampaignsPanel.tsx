@@ -32,10 +32,13 @@ import {
 import { InfoHint } from '../../components/ui/info-hint';
 import { Input } from '../../components/ui/input';
 import { ActionMenu } from '../../components/ui/menu';
+import { bucharestDayKey } from '../../lib/calendar-time';
 import { describeFailure } from '../../lib/command-reasons';
-import { formatPoints } from '../../lib/format';
+import { formatDay, formatPoints } from '../../lib/format';
+import { pointsSinceText } from '../../lib/points-period';
 import { campaignSchema, fieldForReason } from '../../lib/schemas/campaign';
 import { useFormValidation } from '../../lib/use-form-validation';
+import { usePointsStartDate } from '../../queries/evaluation-settings';
 import {
   useCampaignChange,
   useCampaignReport,
@@ -185,6 +188,7 @@ function CampaignReportView({
   range: CampaignReportRange | null;
 }) {
   const report = useCampaignReport(campaignId, range);
+  const pointsStartDate = usePointsStartDate();
   if (range === null)
     return (
       <p className="text-sm text-muted-foreground">
@@ -203,11 +207,20 @@ function CampaignReportView({
     );
   const { totals, members } = report.data;
   const dated = range.p_from !== undefined || range.p_to !== undefined;
+  // Ruling 19 (R58): the server floors a report at the Points Start Date, so
+  // the report says from when it counts — once the date is known to exist and
+  // the chosen period does not already begin after it.
+  const startDay = typeof pointsStartDate === 'string' ? pointsStartDate : null;
+  const fromDay = range.p_from ? bucharestDayKey(range.p_from) : null;
+  const floored = startDay !== null && (fromDay === null || fromDay < startDay);
+  const since = floored ? pointsSinceText(startDay) : null;
   return (
     <div className="space-y-2">
-      {dated && (
+      {(dated || since) && (
         <p className="text-sm text-muted-foreground">
-          Doar punctele acordate în perioada aleasă.
+          {dated
+            ? `Doar punctele acordate în perioada aleasă${since ? `, dar nu înainte de ${formatDay(startDay)}` : ''}.`
+            : `Doar punctele acordate ${since}.`}
         </p>
       )}
       <p className="text-sm">
@@ -219,7 +232,9 @@ function CampaignReportView({
         <p className="text-sm text-muted-foreground">
           {dated
             ? 'Nimeni nu a primit puncte în această campanie în perioada aleasă.'
-            : 'Nimeni nu a primit încă puncte în această campanie.'}
+            : startDay
+              ? `Niciun punct acordat de la ${formatDay(startDay)} în această campanie.`
+              : 'Nimeni nu a primit încă puncte în această campanie.'}
         </p>
       ) : (
         <ul className="space-y-1 text-sm" aria-label="Voluntari cu puncte">

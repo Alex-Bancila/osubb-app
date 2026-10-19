@@ -17,6 +17,8 @@ import {
 } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
 import { formatPoints, pointWord } from '../../lib/format';
+import { pointsSinceText } from '../../lib/points-period';
+import { usePointsStartDate } from '../../queries/evaluation-settings';
 import {
   useMemberDirectory,
   type DirectoryMember,
@@ -262,6 +264,9 @@ function DirectoryRows({
 
 export default function VolunteersScreen() {
   const query = useMemberDirectory();
+  // Ruling 19 (R58): the Puncte column counts from the Points Start Date, so
+  // the page says so — and nothing while the date is not set or not known.
+  const pointsSince = pointsSinceText(usePointsStartDate());
   const [filters, setFilters] = useState<DirectoryFilters>(emptyFilters);
   const [view, setView] = useState<View>('list');
   const [selected, setSelected] = useState<DirectoryMember | null>(null);
@@ -313,6 +318,14 @@ export default function VolunteersScreen() {
         />
       ) : (
         <>
+          {pointsSince && (
+            <p
+              data-slot="points-since"
+              className="m-0 text-sm text-muted-foreground"
+            >
+              Punctele se numără {pointsSince}.
+            </p>
+          )}
           <DirectoryFilterBar
             members={members}
             filters={filters}

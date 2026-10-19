@@ -600,10 +600,6 @@ const REASON_COPY = new Map<string, string>([
   // The browser's own: a date input left empty.
   ['date_required', 'Alege data.'],
   [
-    'promotion_threshold_not_set',
-    'Setează întâi pragul pentru acest tip de evaluare.',
-  ],
-  [
     'promotion_threshold_manage_forbidden',
     'Doar BC și Moderatorul pot schimba pragurile.',
   ],
@@ -617,18 +613,6 @@ const REASON_COPY = new Map<string, string>([
     'evaluation_percent_manage_forbidden',
     'Doar BC și Moderatorul pot schimba procentele.',
   ],
-  /* The Promotion Rules' tenure and on/off (#935). */
-  [
-    'invalid_tenure_months',
-    'Vechimea este un număr întreg de luni, de la 0 la 120.',
-  ],
-  ['invalid_promotion_rule_enabled', 'Alege dacă regula este pornită.'],
-  [
-    'promotion_rule_manage_forbidden',
-    'Doar BC și Moderatorul pot schimba regulile de promovare.',
-  ],
-  // set_org_setting refuses y: only set_evaluation_percent writes it.
-  ['org_setting_not_settable', 'Setarea se schimbă din Evaluări de rol.'],
   /* The evaluation settings (R58): the Eligibility Floor, the Membership
      Cutoff and the Points Start Date, and the runs that need the first two. */
   [
@@ -647,6 +631,12 @@ const REASON_COPY = new Map<string, string>([
     'evaluation_settings_manage_forbidden',
     'Doar BC și Moderatorul pot schimba setările evaluărilor.',
   ],
+  // eligibility_floor_not_set is the page's own gate, not a reason a function
+  // raises: simulate_ and run_role_evaluation take p_floor as an argument, so
+  // the Portofoliu Interne page refuses to start without a Prag minim and shows
+  // this copy itself. membership_cutoff_not_set is both: the page's gate, and
+  // the PT400 the server raises for a Voluntar Activ run without a cutoff.
+  // Ruling 21 removed only the reasons nothing raises or shows; keep these two.
   [
     'eligibility_floor_not_set',
     'Setează pragul minim înainte de a rula o evaluare.',
@@ -674,11 +664,8 @@ const REASON_COPY = new Map<string, string>([
     'candidate_rejection_reason_too_long',
     'Motivul are cel mult 500 de caractere.',
   ],
-  // Still raised by the ranking a run reads (`private.role_evaluation_rows`).
-  [
-    'promotion_rule_not_found',
-    'Regula de promovare nu mai este disponibilă. Reîncarcă pagina.',
-  ],
+  // The ranking of a recorded run (R58): the run was never there, or is gone.
+  ['role_evaluation_not_found', 'Evaluarea nu mai există. Reîncarcă pagina.'],
 
   /* ---- Organization settings (#681, #512) ---- */
   [

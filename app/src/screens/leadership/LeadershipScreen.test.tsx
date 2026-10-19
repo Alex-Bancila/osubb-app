@@ -395,6 +395,61 @@ it('names the start as the beginning of a range that has only an end', () => {
   ).toBeInTheDocument();
 });
 
+// Ruling 19 (R58): the members' board drops the points before the Points
+// Start Date, so it says from when it counts, beside its member count.
+describe('the members’ board says from when its points count', () => {
+  const twoMembers = {
+    data: [
+      { member_id: uid, full_name: 'Ioana Popescu', points: 12, rank: 1 },
+      { member_id: 'andrei', full_name: 'Andrei Pop', points: 3, rank: 2 },
+    ],
+  };
+  beforeEach(() => {
+    state.board.mockReturnValue(twoMembers);
+  });
+
+  it('names the Points Start Date beside the count', () => {
+    pointsStart.value = '2026-09-01';
+    renderPage();
+    const board = membersPanel() as HTMLElement;
+    expect(within(board).getByText('2 membri')).toBeInTheDocument();
+    expect(
+      within(board).getByText('puncte acordate din 01.09.2026'),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    ['no date is set', null],
+    ['the date is not known yet', undefined],
+  ])('says nothing about a start while %s', (_case, value) => {
+    pointsStart.value = value;
+    renderPage();
+    const board = membersPanel() as HTMLElement;
+    expect(within(board).getByText('2 membri')).toBeInTheDocument();
+    expect(board).not.toHaveTextContent(/acordate|din 0|din 1/);
+  });
+
+  it('reads an explicit De la earlier than the start as the range it is, the lookback', () => {
+    pointsStart.value = '2026-09-01';
+    renderPage('?de_la=2026-08-01');
+    const board = membersPanel() as HTMLElement;
+    expect(
+      within(board).getByText('puncte acordate din 1 august 2026'),
+    ).toBeInTheDocument();
+    expect(board).not.toHaveTextContent('01.09.2026');
+  });
+
+  it('keeps a chosen Până la with the start', () => {
+    pointsStart.value = '2026-09-01';
+    renderPage('?pana_la=2026-09-30');
+    expect(
+      within(membersPanel() as HTMLElement).getByText(
+        'puncte acordate din 01.09.2026 până la 30 septembrie 2026',
+      ),
+    ).toBeInTheDocument();
+  });
+});
+
 it('sends nothing while Până la is before De la, on either board', async () => {
   const user = userEvent.setup();
   const { unmount } = renderPage('?de_la=2026-09-30&pana_la=2026-09-01');

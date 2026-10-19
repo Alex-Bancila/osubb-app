@@ -29,7 +29,8 @@ export function pointsSinceText(
  * - `null` when nothing narrows the period (the whole record), and
  *   `undefined` while the start date is not known (loading, or a failed
  *   read): a caption must then say nothing about the period rather than
- *   claim the whole record.
+ *   claim the whole record. A day the member chose stays in the words even
+ *   then: `până la 30 septembrie 2026`.
  */
 export function pointsPeriodText(
   range: Pick<WorkFilterValue, 'from' | 'to'>,
@@ -38,7 +39,8 @@ export function pointsPeriodText(
   const from = range.from && formatDayMonthYear(range.from);
   const to = range.to && formatDayMonthYear(range.to);
   if (from && to) return `între ${from} și ${to}`;
-  if (!from && pointsStartDate === undefined) return undefined;
+  if (!from && pointsStartDate === undefined)
+    return to ? `până la ${to}` : undefined;
   const begin = from ? `din ${from}` : pointsSinceText(pointsStartDate);
   return [begin, to && `până la ${to}`].filter(Boolean).join(' ') || null;
 }

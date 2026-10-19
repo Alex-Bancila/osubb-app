@@ -133,7 +133,8 @@ const FAMILIES_BY_TABLE: ReadonlyMap<string, readonly Prefix[]> = new Map<
   ['role_history', [keys.profile.all, keys.members.all]],
   ['role_evaluations', [keys.evaluation.all, keys.points.all]],
   ['promotion_candidates', [keys.evaluation.all, keys.points.all]],
-  ['promotion_rules', [keys.evaluation.all, keys.points.all]],
+  /* R58: the stored Retention Signals the page reads. */
+  ['retention_signals', [keys.evaluation.all]],
   ['promotion_thresholds', [keys.evaluation.all]],
   ['promotion_threshold_changes', [keys.evaluation.all]],
   /* R58: the Points Start Date moves every total on the page. */

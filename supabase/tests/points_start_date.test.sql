@@ -15,7 +15,8 @@
 --   4. Campaign totals and reports follow it with no lookback, tasks_completed
 --      included; a completed Umbrella (no Evaluation) counts by its completion
 --      against the date, and an explicit range still leaves it out.
---   5. A Role Evaluation's standing ignores it.
+--   5. A Member's standing counts from the later of the kind's last run and
+--      the date (Ruling 17); a Role Evaluation's ranking ignores it.
 --   6. Review Focus 2: a Task deleted for good after the date was set leaves
 --      the Personal Score unchanged (its orphaned award and reversal never
 --      count) and nets to zero in the whole ledger.
@@ -30,7 +31,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(35);
+select plan(38);
 
 -- The row as the migration seeded it, whatever an earlier suite or the database
 -- left in it: this suite sets and clears the date itself.
@@ -335,12 +336,45 @@ select results_eq(
   $$ values (4, 1, 7) $$,
   'campaign_totals under an explicit "De la" leaves both Umbrellas out, as #677 documents; only the evaluated Subtask counts');
 
--- ==================== 5 · A Role Evaluation ignores it ====================
+-- ==================== 5 · The standing counts from the later of the last run and the date ====================
+-- Ruling 17 (R58): a Member's standing toward a kind's threshold -- and the
+-- live Promotion Candidates, retention_signals.test.sql -- counts from the
+-- later of the day after the kind's last run and the Points Start Date. A
+-- Role Evaluation's own Evaluation Period still ignores the date.
 
 select pg_temp.as_member(2);
-select is((select task_points from public.my_role_evaluation_standing('voluntar_activ')), 15,
-  'my_role_evaluation_standing counts every award since the last run, whatever the Points Start Date');
+select results_eq(
+  $$ select 'voluntar_activ'::text, since, task_points from public.my_role_evaluation_standing('voluntar_activ')
+     union all
+     select 'adunarea_generala', since, task_points from public.my_role_evaluation_standing('adunarea_generala') $$,
+  $$ values ('voluntar_activ'::text, '2026-09-01'::date, 12), ('adunarea_generala', '2026-09-01'::date, 12) $$,
+  'with no run before it, the standing of either kind counts from the Points Start Date: the award at its midnight and October''s, not March''s');
 reset role;
+-- Two Voluntar Activ runs, written as the owner: one whose window opened
+-- before the date, then one whose window opens after it.
+insert into public.role_evaluations (kind, name, period_from, period_to, run_by, threshold_used, ranked_count, run_at)
+values ('voluntar_activ', 'Evaluare iunie R58T6', '2026-01-01', '2026-06-30', pg_temp.u(1), 30, 0, now() - interval '2 hours');
+select pg_temp.as_member(2);
+select results_eq(
+  $$ select since, task_points from public.my_role_evaluation_standing('voluntar_activ') $$,
+  $$ values ('2026-09-01'::date, 12) $$,
+  'after a run that ended before the date, the standing still counts from the Points Start Date, the later of the two');
+reset role;
+insert into public.role_evaluations (kind, name, period_from, period_to, run_by, threshold_used, ranked_count, run_at)
+values ('voluntar_activ', 'Evaluare septembrie R58T6', '2026-07-01', '2026-09-30', pg_temp.u(1), 30, 0, now() - interval '1 hour');
+select pg_temp.as_member(2);
+select results_eq(
+  $$ select since, task_points from public.my_role_evaluation_standing('voluntar_activ') $$,
+  $$ values ('2026-10-01'::date, 7) $$,
+  'after a run that ended after the date, the standing counts from the day after that run: only October''s award');
+reset role;
+delete from public.role_evaluations where name in ('Evaluare iunie R58T6', 'Evaluare septembrie R58T6');
+select is(
+  (select ranked.task_points
+     from private.role_evaluation_rows('voluntar_activ', '2026-01-01', '2026-10-31', 1, 100, '2026-01-01') as ranked
+    where ranked.member_id = pg_temp.u(2)),
+  15,
+  'a Role Evaluation ranks its own Evaluation Period whatever the Points Start Date: 3 + 5 + 7, the reopened pair netting to zero');
 
 -- ==================== 6 · Review Focus 2: a Task deleted for good ====================
 

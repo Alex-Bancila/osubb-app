@@ -31,10 +31,10 @@
 --     raw 23514 or a stored value.
 -- The claimless sweep over this table lives in rls_deny_by_default.test.sql.
 --
--- #860 moved the current version from 1.0 to 1.1 and the 1.2 notice (R58)
--- moved it again, so every version in this suite reads two steps higher than
--- #771 wrote it (1.2 current, 1.3 the bump, 0.9 still the stale one); the
--- assertions are otherwise unchanged.
+-- #860 moved the current version from 1.0 to 1.1 and the 1.2 and 1.3 notices
+-- (R58) moved it twice more, so every version in this suite reads three steps
+-- higher than #771 wrote it (1.3 current, 1.4 the bump, 0.9 still the stale
+-- one); the assertions are otherwise unchanged.
 --
 -- No pg_temp.test_race: the org_settings row is held `for share` against
 -- set_org_setting's `for update`, the same one-row lock org_settings.test.sql
@@ -81,10 +81,10 @@ create function pg_temp.login(p_n integer) returns void language sql as $$
   select pg_temp.test_login_leadership(('77100000-0000-0000-0000-' || lpad(p_n::text, 12, '0'))::uuid);
 $$;
 
--- The deactivated BC acknowledged 1.2 while still active; the row stays, and
+-- The deactivated BC acknowledged 1.3 while still active; the row stays, and
 -- the status read must still leave them out (only activ Members are listed).
 insert into privacy_notice_acknowledgements (member_id, notice_version)
-  values ('77100000-0000-0000-0000-000000000007', '1.2');
+  values ('77100000-0000-0000-0000-000000000007', '1.3');
 
 -- ==================== 1. Schema and the seeded version ====================
 
@@ -111,14 +111,14 @@ select throws_ok(
 
 select results_eq(
   $$ select value, updated_by from org_settings where key = 'privacy_notice_version' $$,
-  $$ values ('1.2'::text, null::uuid) $$,
-  'the Privacy Notice version is 1.2, the document''s "Versiunea 1.2" (#771 seeded 1.0; #860''s and R58''s migrations moved it), set by no one');
+  $$ values ('1.3'::text, null::uuid) $$,
+  'the Privacy Notice version is 1.3, the document''s "Versiunea 1.3" (#771 seeded 1.0; #860''s and R58''s migrations moved it), set by no one');
 select throws_ok(
   $$ update org_settings set value = null where key = 'privacy_notice_version' $$,
   '23514', 'new row for relation "org_settings" violates check constraint "org_settings_privacy_notice_version_ck"',
   'org_settings_privacy_notice_version_ck: the version is never null, even on a direct write');
 select throws_ok(
-  $$ update org_settings set value = '1.2-draft' where key = 'privacy_notice_version' $$,
+  $$ update org_settings set value = '1.3-draft' where key = 'privacy_notice_version' $$,
   '23514', 'new row for relation "org_settings" violates check constraint "org_settings_privacy_notice_version_ck"',
   'org_settings_privacy_notice_version_ck: the version is dotted numbers, even on a direct write');
 
@@ -190,17 +190,17 @@ select throws_ok($$ select public.acknowledge_privacy_notice('') $$,
   'a claimless caller sending a blank version is answered at step 1, before the gate');
 
 -- The gate.
-select throws_ok($$ select public.acknowledge_privacy_notice('1.2') $$,
+select throws_ok($$ select public.acknowledge_privacy_notice('1.3') $$,
   '42501', 'privacy_acknowledgement_forbidden', 'a claimless session acknowledges nothing');
 reset role;
 select pg_temp.login_stale_bc();
-select throws_ok($$ select public.acknowledge_privacy_notice('1.2') $$,
+select throws_ok($$ select public.acknowledge_privacy_notice('1.3') $$,
   '42501', 'privacy_acknowledgement_forbidden',
   'a deactivated Member holding a still-valid token acknowledges nothing');
 reset role;
 select pg_temp.test_clear_jwt();
 set local role anon;
-select throws_ok($$ select public.acknowledge_privacy_notice('1.2') $$,
+select throws_ok($$ select public.acknowledge_privacy_notice('1.3') $$,
   '42501', null, 'anon cannot even execute the command');
 reset role;
 
@@ -221,26 +221,26 @@ select is(
 
 -- Success.
 select pg_temp.login(4);
-create temp table ack_a as select * from public.acknowledge_privacy_notice(' 1.2 ');
+create temp table ack_a as select * from public.acknowledge_privacy_notice(' 1.3 ');
 select results_eq(
   $$ select member_id, notice_version from ack_a $$,
-  $$ values ('77100000-0000-0000-0000-000000000004'::uuid, '1.2'::text) $$,
-  'Voluntar A acknowledges 1.2 (sent padded, stored trimmed) -- the row names the caller, never a parameter');
+  $$ values ('77100000-0000-0000-0000-000000000004'::uuid, '1.3'::text) $$,
+  'Voluntar A acknowledges 1.3 (sent padded, stored trimmed) -- the row names the caller, never a parameter');
 select ok((select acknowledged_at is not null and acknowledged_at <= now() from ack_a),
   'the returned row carries the database''s acknowledgement time');
-select throws_ok($$ select public.acknowledge_privacy_notice('1.2') $$,
+select throws_ok($$ select public.acknowledge_privacy_notice('1.3') $$,
   'PT409', 'privacy_notice_already_acknowledged',
   'acknowledging the same version again is privacy_notice_already_acknowledged');
 reset role;
 
 select pg_temp.login(5);
-select is((select notice_version from public.acknowledge_privacy_notice('1.2')), '1.2',
-  'Voluntar B acknowledges 1.2');
+select is((select notice_version from public.acknowledge_privacy_notice('1.3')), '1.3',
+  'Voluntar B acknowledges 1.3');
 reset role;
 select pg_temp.login(2);
-select is((select member_id from public.acknowledge_privacy_notice('1.2')),
+select is((select member_id from public.acknowledge_privacy_notice('1.3')),
   '77100000-0000-0000-0000-000000000002'::uuid,
-  'BC acknowledges 1.2 like every Member');
+  'BC acknowledges 1.3 like every Member');
 reset role;
 
 select results_eq(
@@ -254,7 +254,7 @@ select results_eq(
 select pg_temp.login(4);
 select results_eq(
   $$ select member_id, notice_version from privacy_notice_acknowledgements $$,
-  $$ values ('77100000-0000-0000-0000-000000000004'::uuid, '1.2'::text) $$,
+  $$ values ('77100000-0000-0000-0000-000000000004'::uuid, '1.3'::text) $$,
   'an ordinary Member reads their own acknowledgement and nobody else''s');
 reset role;
 select pg_temp.login(6);
@@ -296,11 +296,11 @@ reset role;
 select pg_temp.login(6);
 select lives_ok(
   $$ insert into privacy_notice_acknowledgements (member_id, notice_version)
-     values ('77100000-0000-0000-0000-000000000006', '1.2') $$,
+     values ('77100000-0000-0000-0000-000000000006', '1.3') $$,
   'a Member inserts their own acknowledgement of the current version directly (the own-insert policy)');
 select throws_ok(
   $$ insert into privacy_notice_acknowledgements (member_id, notice_version)
-     values ('77100000-0000-0000-0000-000000000003', '1.2') $$,
+     values ('77100000-0000-0000-0000-000000000003', '1.3') $$,
   '42501', 'new row violates row-level security policy for table "privacy_notice_acknowledgements"',
   'a Member cannot insert an acknowledgement for someone else');
 reset role;
@@ -312,7 +312,7 @@ select throws_ok(
   'a direct insert of a stale version is refused by the policy');
 select throws_ok(
   $$ insert into privacy_notice_acknowledgements (member_id, notice_version, acknowledged_at)
-     values ('77100000-0000-0000-0000-000000000003', '1.2', '2020-01-01') $$,
+     values ('77100000-0000-0000-0000-000000000003', '1.3', '2020-01-01') $$,
   '42501', 'permission denied for table privacy_notice_acknowledgements',
   'a direct insert cannot choose its acknowledgement time');
 reset role;
@@ -328,7 +328,7 @@ select throws_ok(
 reset role;
 select pg_temp.login(2);
 select throws_ok(
-  $$ update privacy_notice_acknowledgements set notice_version = '1.3' $$,
+  $$ update privacy_notice_acknowledgements set notice_version = '1.4' $$,
   '42501', 'permission denied for table privacy_notice_acknowledgements',
   'not even BC edits an acknowledgement');
 select throws_ok(
@@ -345,14 +345,14 @@ reset role;
 select pg_temp.login_claimless();
 select throws_ok(
   $$ insert into privacy_notice_acknowledgements (member_id, notice_version)
-     values ('77100000-0000-0000-0000-000000000008', '1.2') $$,
+     values ('77100000-0000-0000-0000-000000000008', '1.3') $$,
   '42501', 'new row violates row-level security policy for table "privacy_notice_acknowledgements"',
   'a claimless session cannot insert even its own acknowledgement');
 reset role;
 select pg_temp.login_stale_bc();
 select throws_ok(
   $$ insert into privacy_notice_acknowledgements (member_id, notice_version)
-     values ('77100000-0000-0000-0000-000000000007', '1.3') $$,
+     values ('77100000-0000-0000-0000-000000000007', '1.4') $$,
   '42501', 'new row violates row-level security policy for table "privacy_notice_acknowledgements"',
   'a deactivated Member''s still-valid token cannot insert directly either');
 reset role;
@@ -360,32 +360,32 @@ select pg_temp.test_clear_jwt();
 set local role anon;
 select throws_ok(
   $$ insert into privacy_notice_acknowledgements (member_id, notice_version)
-     values ('77100000-0000-0000-0000-000000000004', '1.2') $$,
+     values ('77100000-0000-0000-0000-000000000004', '1.3') $$,
   '42501', null, 'anon cannot insert');
 reset role;
 
 select results_eq(
   $$ select member_id, notice_version from privacy_notice_acknowledgements
       where member_id::text like '77100000-%' order by member_id, notice_version $$,
-  $$ values ('77100000-0000-0000-0000-000000000002'::uuid, '1.2'::text),
-            ('77100000-0000-0000-0000-000000000004'::uuid, '1.2'::text),
-            ('77100000-0000-0000-0000-000000000005'::uuid, '1.2'::text),
-            ('77100000-0000-0000-0000-000000000006'::uuid, '1.2'::text),
-            ('77100000-0000-0000-0000-000000000007'::uuid, '1.2'::text) $$,
+  $$ values ('77100000-0000-0000-0000-000000000002'::uuid, '1.3'::text),
+            ('77100000-0000-0000-0000-000000000004'::uuid, '1.3'::text),
+            ('77100000-0000-0000-0000-000000000005'::uuid, '1.3'::text),
+            ('77100000-0000-0000-0000-000000000006'::uuid, '1.3'::text),
+            ('77100000-0000-0000-0000-000000000007'::uuid, '1.3'::text) $$,
   'after the direct-write matrix: the three the command wrote, the deactivated Member''s older row and the one direct insert -- nothing else');
 
 -- ==================== 6. A new version re-asks everyone ====================
 
 -- set_org_setting's step 1 for the new key, answered to every caller.
 select pg_temp.login(4);
-select throws_ok($$ select public.set_org_setting('privacy_notice_version', '1.3-rc') $$,
+select throws_ok($$ select public.set_org_setting('privacy_notice_version', '1.4-rc') $$,
   'PT400', 'invalid_org_setting_value',
   'an ordinary Member sending a malformed version is answered invalid_org_setting_value before the gate');
-select throws_ok($$ select public.set_org_setting('privacy_notice_version', '1.3') $$,
+select throws_ok($$ select public.set_org_setting('privacy_notice_version', '1.4') $$,
   '42501', 'org_settings_manage_forbidden', 'an ordinary Member cannot bump the version');
 reset role;
 select pg_temp.login(3);
-select throws_ok($$ select public.set_org_setting('privacy_notice_version', '1.3') $$,
+select throws_ok($$ select public.set_org_setting('privacy_notice_version', '1.4') $$,
   '42501', 'org_settings_manage_forbidden', 'a BCE cannot bump the version');
 reset role;
 select pg_temp.login(2);
@@ -405,39 +405,40 @@ select throws_ok($$ select public.set_org_setting('adunarea_generala_group_id', 
   'PT400', 'invalid_org_setting_value',
   'BC: after #771''s rebuild, adunarea_generala_group_id must still name an active Group (#512)');
 -- #866 (ruling R30): y no longer changes here at all -- set_evaluation_percent
--- is its one write path -- so both of #48's refusals are now the key refusal.
+-- is its one write path. Since R58 y lives in evaluation_settings.vot_percent
+-- and the key is gone, so both of #48's refusals are now the unknown key's.
 select throws_ok($$ select public.set_org_setting('vote_retention_percent', '0') $$,
-  'PT400', 'org_setting_not_settable',
-  'BC: vote_retention_percent is still refused a 0 -- since #866 every value is refused (org_setting_not_settable)');
+  'PT404', 'org_setting_not_found',
+  'BC: vote_retention_percent is still refused a 0 -- since R58 the key no longer exists (org_setting_not_found)');
 select throws_ok($$ select public.set_org_setting('vote_retention_percent', '') $$,
-  'PT400', 'org_setting_not_settable',
-  'BC: vote_retention_percent still cannot be cleared -- since #866 every value is refused (org_setting_not_settable)');
-select throws_ok($$ select public.set_org_setting('privacy_notice_version', '1.2') $$,
+  'PT404', 'org_setting_not_found',
+  'BC: vote_retention_percent still cannot be cleared -- since R58 the key no longer exists (org_setting_not_found)');
+select throws_ok($$ select public.set_org_setting('privacy_notice_version', '1.3') $$,
   'PT409', 'nothing_to_update', 'BC: re-sending the current version is nothing_to_update');
 select results_eq(
-  $$ select value, updated_by from public.set_org_setting('privacy_notice_version', ' 1.3 ') $$,
-  $$ values ('1.3'::text, '77100000-0000-0000-0000-000000000002'::uuid) $$,
-  'BC bumps the Privacy Notice version to 1.3 through set_org_setting, trimmed and audited');
+  $$ select value, updated_by from public.set_org_setting('privacy_notice_version', ' 1.4 ') $$,
+  $$ values ('1.4'::text, '77100000-0000-0000-0000-000000000002'::uuid) $$,
+  'BC bumps the Privacy Notice version to 1.4 through set_org_setting, trimmed and audited');
 reset role;
 select pg_temp.login(4);
-select is((select value from org_settings where key = 'privacy_notice_version'), '1.3',
+select is((select value from org_settings where key = 'privacy_notice_version'), '1.4',
   'every Member reads the new current version');
-select throws_ok($$ select public.acknowledge_privacy_notice('1.2') $$,
+select throws_ok($$ select public.acknowledge_privacy_notice('1.3') $$,
   'PT409', 'privacy_notice_version_stale',
-  'after the bump, acknowledging 1.2 is stale');
-select is((select notice_version from public.acknowledge_privacy_notice('1.3')), '1.3',
-  'Voluntar A is asked again and acknowledges 1.3');
+  'after the bump, acknowledging 1.3 is stale');
+select is((select notice_version from public.acknowledge_privacy_notice('1.4')), '1.4',
+  'Voluntar A is asked again and acknowledges 1.4');
 select results_eq(
   $$ select notice_version from privacy_notice_acknowledgements order by notice_version $$,
-  $$ values ('1.2'::text), ('1.3'::text) $$,
-  'the 1.2 acknowledgement stays beside the 1.3 one');
+  $$ values ('1.3'::text), ('1.4'::text) $$,
+  'the 1.3 acknowledgement stays beside the 1.4 one');
 reset role;
 select pg_temp.login(6);
 select throws_ok(
   $$ insert into privacy_notice_acknowledgements (member_id, notice_version)
-     values ('77100000-0000-0000-0000-000000000006', '1.2') $$,
+     values ('77100000-0000-0000-0000-000000000006', '1.3') $$,
   '42501', 'new row violates row-level security policy for table "privacy_notice_acknowledgements"',
-  'after the bump, the policy refuses a direct insert of 1.2 as well');
+  'after the bump, the policy refuses a direct insert of 1.3 as well');
 reset role;
 
 -- ==================== 7. The status read ====================
@@ -454,11 +455,11 @@ select results_eq(
   $$ select member_id, notice_version from status_bc
       where member_id::text like '77100000-%' order by member_id $$,
   $$ values ('77100000-0000-0000-0000-000000000001'::uuid, null::text),
-            ('77100000-0000-0000-0000-000000000002'::uuid, '1.2'::text),
+            ('77100000-0000-0000-0000-000000000002'::uuid, '1.3'::text),
             ('77100000-0000-0000-0000-000000000003'::uuid, null::text),
-            ('77100000-0000-0000-0000-000000000004'::uuid, '1.3'::text),
-            ('77100000-0000-0000-0000-000000000005'::uuid, '1.2'::text),
-            ('77100000-0000-0000-0000-000000000006'::uuid, '1.2'::text),
+            ('77100000-0000-0000-0000-000000000004'::uuid, '1.4'::text),
+            ('77100000-0000-0000-0000-000000000005'::uuid, '1.3'::text),
+            ('77100000-0000-0000-0000-000000000006'::uuid, '1.3'::text),
             ('77100000-0000-0000-0000-000000000008'::uuid, null::text) $$,
   'BC reads every active Member with their latest acknowledged version -- null when none, and the deactivated Member left out');
 select is(

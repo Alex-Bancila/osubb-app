@@ -237,7 +237,7 @@ const REASON_MAX = 1000;
 
 /**
  * The Role and Status management surface; the server capability gates mount.
- * `?membru=<id>` pre-selects a Member — the Evaluări de rol tab's
+ * `?membru=<id>` pre-selects a Member — the Portofoliu Interne tab's
  * **Editează rolul** links here from a Retention Signal — and scrolls the
  * panel into view. Beside it, `rol` preselects the new Role and `motiv`
  * prefills the reason: a Promotion Candidate's **Promovează** (#827) arrives

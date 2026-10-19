@@ -35,19 +35,20 @@ vi.mock('../lib/supabase', () => ({
   },
 }));
 
+import { runSchema } from '../lib/schemas/role-evaluation';
 import {
   fetchPromotionCandidates,
+  fetchRetentionSignals,
   fetchRoleEvaluationRanking,
   fetchRoleEvaluations,
   fetchThresholdChanges,
-  fetchEvaluationPercents,
-  fetchPromotionRules,
   latestRun,
-  percentText,
-  retentionSignals,
   runRoleEvaluationCommand,
+  simulateRoleEvaluation,
+  simulationOutcome,
   type RankingRow,
   type RoleEvaluation,
+  type RunValues,
 } from './role-evaluations';
 
 const run = (extra: Partial<RoleEvaluation>): RoleEvaluation => ({
@@ -61,8 +62,53 @@ const run = (extra: Partial<RoleEvaluation>): RoleEvaluation => ({
   threshold_used: 30,
   threshold_computed: 42,
   ranked_count: 3,
+  eligibility_floor: 10,
+  percent_used: 35,
+  membership_cutoff: '2026-03-01',
+  evaluated_count: 8,
   ...extra,
 });
+
+/** What the form hands the Simulation and the run (R58). */
+const VALUES: RunValues = {
+  kind: 'voluntar_activ',
+  from: '2026-03-01',
+  to: '2026-09-30',
+  name: 'Evaluare S1',
+  floor: 10,
+  percent: 35,
+  cutoff: '2026-03-01',
+};
+
+/** One row of `role_evaluation_ranking` / `simulate_role_evaluation`. */
+const SERVER_ROW = {
+  member_id: 'ana',
+  role: 'voluntar',
+  task_points: 50,
+  ranked: true,
+  rank: 2,
+  evaluated_count: 10,
+  ranked_count: 8,
+  share_size: 3,
+  line: 40,
+  inside: true,
+  listable: true,
+};
+
+/** The same row as the page reads it. */
+const PAGE_ROW: RankingRow = {
+  memberId: 'ana',
+  role: 'voluntar',
+  taskPoints: 50,
+  ranked: true,
+  rank: 2,
+  evaluatedCount: 10,
+  rankedCount: 8,
+  shareSize: 3,
+  line: 40,
+  inside: true,
+  listable: true,
+};
 
 beforeEach(() => {
   db.results = new Map();
@@ -70,7 +116,7 @@ beforeEach(() => {
 });
 
 describe('the Role Evaluation reads (#827 over #826)', () => {
-  it('reads the runs newest first', async () => {
+  it('reads the runs newest first, with the values each run used (R58)', async () => {
     db.results.set('role_evaluations', { data: [run({})], error: null });
     expect(await fetchRoleEvaluations()).toEqual([run({})]);
     expect(db.calls).toContainEqual([
@@ -79,6 +125,23 @@ describe('the Role Evaluation reads (#827 over #826)', () => {
       'run_at',
       { ascending: false },
     ]);
+    expect(db.calls).toContainEqual([
+      'role_evaluations',
+      'select',
+      'id, kind, name, period_from, period_to, run_by, run_at, threshold_used, threshold_computed, ranked_count, eligibility_floor, percent_used, membership_cutoff, evaluated_count',
+    ]);
+  });
+
+  it('a run recorded before R58 keeps its new values null, and may have no line before it', async () => {
+    const old = run({
+      threshold_used: null,
+      eligibility_floor: null,
+      percent_used: null,
+      membership_cutoff: null,
+      evaluated_count: null,
+    });
+    db.results.set('role_evaluations', { data: [old], error: null });
+    expect(await fetchRoleEvaluations()).toEqual([old]);
   });
 
   it('reads the threshold log newest first, with which value changed', async () => {
@@ -94,53 +157,6 @@ describe('the Role Evaluation reads (#827 over #826)', () => {
       'order',
       'changed_at',
       { ascending: false },
-    ]);
-  });
-
-  it('reads both Promotion Rules, the ladder in order (#935)', async () => {
-    db.results.set('promotion_rules', {
-      data: [
-        {
-          id: 5,
-          kind: 'top_percent',
-          from_role: 'voluntar',
-          to_role: 'activ',
-          min_tenure_months: 12,
-          enabled: false,
-        },
-        {
-          id: 9,
-          kind: 'time',
-          from_role: 'recrut',
-          to_role: 'voluntar',
-          min_tenure_months: 6,
-          enabled: true,
-        },
-      ],
-      error: null,
-    });
-    expect(await fetchPromotionRules()).toEqual([
-      {
-        id: 9,
-        kind: 'time',
-        fromRole: 'recrut',
-        toRole: 'voluntar',
-        tenureMonths: 6,
-        enabled: true,
-      },
-      {
-        id: 5,
-        kind: 'top_percent',
-        fromRole: 'voluntar',
-        toRole: 'activ',
-        tenureMonths: 12,
-        enabled: false,
-      },
-    ]);
-    expect(db.calls).toContainEqual([
-      'promotion_rules',
-      'select',
-      'id, kind, from_role, to_role, min_tenure_months, enabled',
     ]);
   });
 
@@ -207,77 +223,39 @@ describe('the Role Evaluation reads (#827 over #826)', () => {
     );
   });
 
-  it('ranks a run over its own kind and range', async () => {
+  it('ranks a recorded run by its id alone, with the values the run recorded (R58)', async () => {
     db.results.set('role_evaluation_ranking', {
-      data: [
-        {
-          member_id: 'ana',
-          role: 'activ',
-          task_points: 12,
-          rank: 2,
-          cohort_size: 2,
-          share_size: 1,
-          inside: false,
-          tenure_since: null,
-        },
-      ],
+      data: [SERVER_ROW],
       error: null,
     });
-    expect(await fetchRoleEvaluationRanking(run({}))).toEqual([
-      {
-        memberId: 'ana',
-        role: 'activ',
-        taskPoints: 12,
-        rank: 2,
-        cohortSize: 2,
-        shareSize: 1,
-        inside: false,
-      },
-    ]);
+    expect(await fetchRoleEvaluationRanking(12)).toEqual([PAGE_ROW]);
     expect(db.calls).toContainEqual([
       'rpc',
       'role_evaluation_ranking',
-      { p_kind: 'voluntar_activ', p_from: '2026-02-01', p_to: '2026-06-30' },
+      { p_role_evaluation_id: 12 },
+    ]);
+    // Highest points first, the Member last so a page boundary is stable.
+    expect(db.calls).toContainEqual([
+      'role_evaluation_ranking',
+      'order',
+      'task_points',
+      { ascending: false },
+    ]);
+    expect(db.calls).toContainEqual([
+      'role_evaluation_ranking',
+      'order',
+      'member_id',
     ]);
   });
 
-  it('reads x and y, and who changed each last, from evaluation_percents (#866)', async () => {
-    db.results.set('evaluation_percents', {
-      data: [
-        {
-          kind: 'voluntar_activ',
-          percent: 35,
-          changed_at: '2026-09-28T09:00:00Z',
-          changed_by: 'bc',
-        },
-        {
-          kind: 'adunarea_generala',
-          percent: 25,
-          changed_at: null,
-          changed_by: null,
-        },
-      ],
+  it('an unranked Member has no rank, and a run that ranked nobody has no line', async () => {
+    db.results.set('role_evaluation_ranking', {
+      data: [{ ...SERVER_ROW, ranked: false, rank: null, line: null }],
       error: null,
     });
-    const percents = await fetchEvaluationPercents();
-    expect(percents).toEqual([
-      {
-        kind: 'voluntar_activ',
-        percent: 35,
-        changedAt: '2026-09-28T09:00:00Z',
-        changedBy: 'bc',
-      },
-      {
-        kind: 'adunarea_generala',
-        percent: 25,
-        changedAt: null,
-        changedBy: null,
-      },
+    expect(await fetchRoleEvaluationRanking(12)).toEqual([
+      { ...PAGE_ROW, ranked: false, rank: null, line: null },
     ]);
-    expect(db.calls).toContainEqual(['rpc', 'evaluation_percents', undefined]);
-    expect(percentText(percents, 'voluntar_activ')).toBe('35');
-    expect(percentText(percents, 'adunarea_generala')).toBe('25');
-    expect(percentText(undefined, 'voluntar_activ')).toBe('—');
   });
 
   it('throws a read error rather than showing an empty list', async () => {
@@ -286,6 +264,301 @@ describe('the Role Evaluation reads (#827 over #826)', () => {
       error: new Error('boom'),
     });
     await expect(fetchRoleEvaluations()).rejects.toThrow('boom');
+  });
+});
+
+describe('the Simulation (R58)', () => {
+  it('sends the six arguments of simulate_role_evaluation, and nothing else', async () => {
+    db.results.set('simulate_role_evaluation', {
+      data: [SERVER_ROW],
+      error: null,
+    });
+    const { name: _name, ...simulated } = VALUES;
+    expect(await simulateRoleEvaluation(simulated)).toEqual([PAGE_ROW]);
+    expect(db.calls).toContainEqual([
+      'rpc',
+      'simulate_role_evaluation',
+      {
+        p_kind: 'voluntar_activ',
+        p_from: '2026-03-01',
+        p_to: '2026-09-30',
+        p_floor: 10,
+        p_percent: 35,
+        p_cutoff: '2026-03-01',
+      },
+    ]);
+    expect(db.calls).not.toContainEqual(
+      expect.arrayContaining(['run_role_evaluation']),
+    );
+  });
+
+  it('the Adunarea Generală kind has no cutoff to send', async () => {
+    await simulateRoleEvaluation({
+      kind: 'adunarea_generala',
+      from: '2026-03-01',
+      to: '2026-09-30',
+      floor: 10,
+      percent: 25,
+      cutoff: null,
+    });
+    const call = db.calls.find((c) => c[1] === 'simulate_role_evaluation');
+    expect(call?.[2]).toEqual({
+      p_kind: 'adunarea_generala',
+      p_from: '2026-03-01',
+      p_to: '2026-09-30',
+      p_floor: 10,
+      p_percent: 25,
+    });
+    // PostgREST reads a missing argument as the function's null default.
+    expect(call?.[2]).not.toHaveProperty('p_cutoff', expect.any(String));
+  });
+
+  it('throws what the server refused, and rows are read in stable pages', async () => {
+    const error = { code: 'PT400', message: 'invalid_eligibility_floor' };
+    db.results.set('simulate_role_evaluation', { data: null, error });
+    await expect(
+      simulateRoleEvaluation({
+        kind: 'voluntar_activ',
+        from: '2026-03-01',
+        to: '2026-09-30',
+        floor: 0,
+        percent: 35,
+        cutoff: '2026-03-01',
+      }),
+    ).rejects.toBe(error);
+    expect(db.calls).toContainEqual([
+      'simulate_role_evaluation',
+      'order',
+      'task_points',
+      { ascending: false },
+    ]);
+    expect(db.calls).toContainEqual([
+      'simulate_role_evaluation',
+      'order',
+      'member_id',
+    ]);
+  });
+});
+
+/**
+ * Six Members evaluated over one period: a Floor of 10, 35 %, four ranked,
+ * share size 2, the line 40 (the 2nd ranked Member's points).
+ */
+function row(extra: Partial<RankingRow> & { memberId: string }): RankingRow {
+  return {
+    role: 'voluntar',
+    taskPoints: 0,
+    ranked: true,
+    rank: 1,
+    evaluatedCount: 6,
+    rankedCount: 4,
+    shareSize: 2,
+    line: 40,
+    inside: false,
+    listable: false,
+    ...extra,
+  };
+}
+
+const SIX_ROWS: RankingRow[] = [
+  // A Recrut shapes the percentile but cannot be listed.
+  row({ memberId: 'recrut', role: 'recrut', taskPoints: 60, inside: true }),
+  // Two Voluntars who joined by the cutoff and are inside: the Candidates.
+  row({
+    memberId: 'ana',
+    taskPoints: 50,
+    rank: 2,
+    inside: true,
+    listable: true,
+  }),
+  row({
+    memberId: 'dan',
+    taskPoints: 40,
+    rank: 3,
+    inside: true,
+    listable: true,
+  }),
+  // A Voluntar Activ ranked below the line: below_line.
+  row({ memberId: 'activ', role: 'activ', taskPoints: 20, rank: 4 }),
+  // A voter under the Floor: unranked, below_floor.
+  row({
+    memberId: 'vot',
+    role: 'vot',
+    taskPoints: 3,
+    ranked: false,
+    rank: null,
+  }),
+  // A Voluntar under the Floor: no holder, no Signal.
+  row({
+    memberId: 'voluntar',
+    taskPoints: 2,
+    ranked: false,
+    rank: null,
+    listable: true,
+  }),
+];
+
+describe('simulationOutcome (R58)', () => {
+  it('Voluntar Activ: the line, the counts, the listable Voluntars inside, and the holders not inside', () => {
+    const outcome = simulationOutcome(SIX_ROWS, 'voluntar_activ');
+    expect(outcome.line).toBe(40);
+    expect(outcome.rankedCount).toBe(4);
+    expect(outcome.evaluatedCount).toBe(6);
+    expect(outcome.candidates.map((candidate) => candidate.memberId)).toEqual([
+      'ana',
+      'dan',
+    ]);
+    // Lowest points first: the Signals BC reads the way the stored ones are.
+    expect(
+      outcome.signals.map((signal) => [signal.row.memberId, signal.reason]),
+    ).toEqual([
+      ['vot', 'below_floor'],
+      ['activ', 'below_line'],
+    ]);
+  });
+
+  it('Adunarea Generală: no Candidates, and only voters raise Signals', () => {
+    const outcome = simulationOutcome(
+      [
+        row({ memberId: 'a', role: 'vot', taskPoints: 30, inside: true }),
+        row({ memberId: 'b', role: 'vot', taskPoints: 12, rank: 2 }),
+        row({
+          memberId: 'c',
+          role: 'vot',
+          taskPoints: 1,
+          ranked: false,
+          rank: null,
+        }),
+        // A Voluntar Activ is outside this kind's population in practice; a
+        // row that says otherwise is not a voter and raises nothing.
+        row({ memberId: 'd', role: 'activ', taskPoints: 2 }),
+        row({ memberId: 'e', role: 'voluntar', listable: true, inside: true }),
+      ],
+      'adunarea_generala',
+    );
+    expect(outcome.candidates).toEqual([]);
+    expect(
+      outcome.signals.map((signal) => [signal.row.memberId, signal.reason]),
+    ).toEqual([
+      ['c', 'below_floor'],
+      ['b', 'below_line'],
+    ]);
+  });
+
+  it('nobody ranked: no line, and every holder is below the Floor', () => {
+    const outcome = simulationOutcome(
+      [
+        row({
+          memberId: 'x',
+          role: 'activ',
+          ranked: false,
+          rank: null,
+          line: null,
+          rankedCount: 0,
+          evaluatedCount: 1,
+        }),
+      ],
+      'voluntar_activ',
+    );
+    expect(outcome).toMatchObject({
+      line: null,
+      rankedCount: 0,
+      evaluatedCount: 1,
+      candidates: [],
+    });
+    expect(outcome.signals.map((signal) => signal.reason)).toEqual([
+      'below_floor',
+    ]);
+  });
+
+  it('an empty population is an empty outcome', () => {
+    expect(simulationOutcome([], 'voluntar_activ')).toEqual({
+      line: null,
+      rankedCount: 0,
+      evaluatedCount: 0,
+      candidates: [],
+      signals: [],
+    });
+  });
+});
+
+describe('the stored Retention Signals (R58)', () => {
+  it('reads the open rows, the kind then the lowest points first', async () => {
+    db.results.set('retention_signals', {
+      data: [
+        {
+          id: 4,
+          kind: 'adunarea_generala',
+          member_id: 'ion',
+          role_at_listing: 'vot',
+          reason: 'not_ubb_student',
+          task_points: null,
+          threshold_used: null,
+          role_evaluation_id: null,
+          created_at: '2026-10-18T09:00:00Z',
+        },
+        {
+          id: 3,
+          kind: 'voluntar_activ',
+          member_id: 'ana',
+          role_at_listing: 'activ',
+          reason: 'below_line',
+          task_points: 12,
+          threshold_used: 40,
+          role_evaluation_id: 9,
+          created_at: '2026-10-17T09:00:00Z',
+        },
+      ],
+      error: null,
+    });
+    expect(await fetchRetentionSignals()).toEqual([
+      {
+        id: 4,
+        kind: 'adunarea_generala',
+        memberId: 'ion',
+        roleAtListing: 'vot',
+        reason: 'not_ubb_student',
+        taskPoints: null,
+        thresholdUsed: null,
+        roleEvaluationId: null,
+        listedAt: '2026-10-18T09:00:00Z',
+      },
+      {
+        id: 3,
+        kind: 'voluntar_activ',
+        memberId: 'ana',
+        roleAtListing: 'activ',
+        reason: 'below_line',
+        taskPoints: 12,
+        thresholdUsed: 40,
+        roleEvaluationId: 9,
+        listedAt: '2026-10-17T09:00:00Z',
+      },
+    ]);
+    const calls = db.calls.filter((call) => call[0] === 'retention_signals');
+    expect(calls).toContainEqual([
+      'retention_signals',
+      'is',
+      'closed_at',
+      null,
+    ]);
+    // The order is the server's: kind, then points ascending, then the row.
+    const orders = calls
+      .filter((call) => call[1] === 'order')
+      .map((call) => call.slice(2));
+    expect(orders).toEqual([
+      ['kind', { ascending: true }],
+      ['task_points', { ascending: true }],
+      ['id', { ascending: true }],
+    ]);
+    expect(String(calls.find((call) => call[1] === 'select')?.[2])).toBe(
+      'id, kind, member_id, role_at_listing, reason, task_points, threshold_used, role_evaluation_id, created_at',
+    );
+  });
+
+  it('throws a failed read', async () => {
+    db.results.set('retention_signals', { data: null, error: new Error('x') });
+    await expect(fetchRetentionSignals()).rejects.toThrow('x');
   });
 });
 
@@ -300,61 +573,69 @@ describe('what the tab derives', () => {
     expect(latestRun(runs, 'adunarea_generala')?.id).toBe(3);
     expect(latestRun([], 'voluntar_activ')).toBeUndefined();
   });
-
-  it('signals every holder of the kind’s Role below the threshold used', () => {
-    const row = (extra: Partial<RankingRow>): RankingRow => ({
-      memberId: 'x',
-      role: 'activ',
-      taskPoints: 0,
-      rank: 1,
-      cohortSize: 3,
-      shareSize: 1,
-      inside: false,
-      ...extra,
-    });
-    const ranking = [
-      row({ memberId: 'at-line', taskPoints: 30 }),
-      row({ memberId: 'below', taskPoints: 12, rank: 2 }),
-      row({ memberId: 'lowest', taskPoints: 3, rank: 3 }),
-      row({ memberId: 'voluntar', role: 'voluntar', taskPoints: 1 }),
-    ];
-    expect(
-      retentionSignals(run({}), ranking).map((signal) => signal.memberId),
-    ).toEqual(['lowest', 'below']);
-    expect(
-      retentionSignals(run({ kind: 'adunarea_generala' }), [
-        row({ memberId: 'vot', role: 'vot', taskPoints: 5 }),
-        row({ memberId: 'activ', taskPoints: 5 }),
-      ]).map((signal) => signal.memberId),
-    ).toEqual(['vot']);
-  });
 });
 
 describe('the commands', () => {
-  it('runs a Role Evaluation and reports its counts', async () => {
+  it('the run form parses into the values a run takes', () => {
+    const values: RunValues = runSchema('2026-09-30').parse({
+      kind: 'voluntar_activ',
+      from: '2026-03-01',
+      to: '2026-09-30',
+      name: ' Evaluare S1 ',
+      floor: '10',
+      percent: '35',
+      cutoff: '2026-03-01',
+    });
+    expect(values).toEqual(VALUES);
+  });
+
+  it('runs a Role Evaluation with its seven arguments and reports its counts', async () => {
     db.results.set('run_role_evaluation', {
       data: [{ role_evaluation_id: 9, candidates: 2, retention_signals: 1 }],
       error: null,
     });
     expect(
-      await runRoleEvaluationCommand({
-        kind: 'run',
-        evaluationKind: 'voluntar_activ',
-        from: '2026-07-01',
-        to: '2026-09-28',
-        name: 'Semestrul II',
-      }),
+      await runRoleEvaluationCommand({ kind: 'run', values: VALUES }),
     ).toEqual({ roleEvaluationId: 9, candidates: 2, retentionSignals: 1 });
     expect(db.calls).toContainEqual([
       'rpc',
       'run_role_evaluation',
       {
         p_kind: 'voluntar_activ',
-        p_from: '2026-07-01',
-        p_to: '2026-09-28',
-        p_name: 'Semestrul II',
+        p_from: '2026-03-01',
+        p_to: '2026-09-30',
+        p_name: 'Evaluare S1',
+        p_floor: 10,
+        p_percent: 35,
+        p_cutoff: '2026-03-01',
       },
     ]);
+  });
+
+  it('an Adunarea Generală run sends no cutoff', async () => {
+    db.results.set('run_role_evaluation', {
+      data: [{ role_evaluation_id: 10, candidates: 0, retention_signals: 3 }],
+      error: null,
+    });
+    await runRoleEvaluationCommand({
+      kind: 'run',
+      values: {
+        ...VALUES,
+        kind: 'adunarea_generala',
+        percent: 25,
+        cutoff: null,
+      },
+    });
+    const call = db.calls.find((c) => c[1] === 'run_role_evaluation');
+    expect(call?.[2]).toEqual({
+      p_kind: 'adunarea_generala',
+      p_from: '2026-03-01',
+      p_to: '2026-09-30',
+      p_name: 'Evaluare S1',
+      p_floor: 10,
+      p_percent: 25,
+    });
+    expect(call?.[2]).not.toHaveProperty('p_cutoff', expect.any(String));
   });
 
   it('sets a threshold, a share and rejects a candidate through their commands', async () => {
@@ -390,18 +671,15 @@ describe('the commands', () => {
     ]);
   });
 
-  it('edits a Promotion Rule through update_promotion_rule (#935)', async () => {
+  it('has no command left for a Promotion Rule (R58)', async () => {
     await runRoleEvaluationCommand({
-      kind: 'rule',
-      ruleId: 3,
-      tenureMonths: 0,
-      enabled: false,
+      kind: 'threshold',
+      evaluationKind: 'voluntar_activ',
+      threshold: 5,
     });
-    expect(db.calls).toContainEqual([
-      'rpc',
-      'update_promotion_rule',
-      { p_rule_id: 3, p_min_tenure_months: 0, p_enabled: false },
-    ]);
+    expect(db.calls).not.toContainEqual(
+      expect.arrayContaining(['update_promotion_rule']),
+    );
   });
 
   it('carries the server reason of a refusal', async () => {
@@ -412,5 +690,18 @@ describe('the commands', () => {
     await expect(
       runRoleEvaluationCommand({ kind: 'reject', candidateId: 7, reason: 'x' }),
     ).rejects.toMatchObject({ reason: 'promotion_candidate_decided' });
+  });
+
+  it('a refused run carries its reason too', async () => {
+    db.results.set('run_role_evaluation', {
+      data: null,
+      error: { code: 'PT400', message: 'membership_cutoff_not_set' },
+    });
+    await expect(
+      runRoleEvaluationCommand({
+        kind: 'run',
+        values: { ...VALUES, cutoff: null },
+      }),
+    ).rejects.toMatchObject({ reason: 'membership_cutoff_not_set' });
   });
 });

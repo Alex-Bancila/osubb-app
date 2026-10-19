@@ -23,7 +23,8 @@
 -- private.task_points_in_range's raw timestamptz bounds; 5.
 -- private.role_evaluation_rows' inclusive-Bucharest-day range; 6.
 -- promotion_threshold_changes schema, its source-shape check, and its
--- level->=6 read gate.
+-- level->=6 read gate; 7. the log's shape rules for its tenure and on/off
+-- history rows (moved from promotion_rule_command.test.sql, R58).
 --
 -- Mutation guards, each named against the assertion that turns red (run as
 -- scratch copies of this file on 2026-09-27; see the report for exact runs):
@@ -33,8 +34,8 @@
 --     red (the reversal falls outside a created_at filter, so the award
 --     leaks through uncancelled);
 --   * private.role_evaluation_rows' upper bound changed from
---     `(p_period_to + 1)::timestamp at time zone 'Europe/Bucharest'` to
---     `p_period_to::timestamp at time zone 'Europe/Bucharest'` (or `<` to
+--     `(p_to + 1)::timestamp at time zone 'Europe/Bucharest'` to
+--     `p_to::timestamp at time zone 'Europe/Bucharest'` (or `<` to
 --     `<=`) -> "EdgeNext 826, credited at 00:00 Bucharest the day after
 --     period_to, is excluded" goes red.
 begin;
@@ -43,7 +44,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(46);
+select plan(58);
 
 -- ==================== Fixtures ====================
 
@@ -110,8 +111,9 @@ select is(
   'the only policy is role_evaluations_read, for select -- no client write policy exists');
 select columns_are('public', 'role_evaluations',
   array['id', 'kind', 'name', 'period_from', 'period_to', 'run_by', 'run_at',
-        'threshold_used', 'threshold_computed', 'ranked_count'],
-  'role_evaluations carries kind, name, the Period bounds, who ran it and when, the threshold used and computed, and ranked_count');
+        'threshold_used', 'threshold_computed', 'ranked_count',
+        'eligibility_floor', 'percent_used', 'membership_cutoff', 'evaluated_count'],
+  'role_evaluations carries kind, name, the Period bounds, who ran it and when, the threshold used and computed, ranked_count and, since R58, the Eligibility Floor, share and Membership Cutoff Date it ranked with and evaluated_count');
 
 select throws_ok(
   $$ insert into public.role_evaluations
@@ -148,6 +150,30 @@ select throws_ok(
              '82600000-0000-0000-0000-000000000001', 30, -1) $$,
   '23514', 'new row for relation "role_evaluations" violates check constraint "role_evaluations_ranked_count_ck"',
   'role_evaluations_ranked_count_ck: a negative ranked_count is rejected');
+-- R58: the values a run ranked with, and how many it evaluated.
+select throws_ok(
+  $$ insert into public.role_evaluations
+       (kind, name, period_from, period_to, run_by, threshold_used, ranked_count, eligibility_floor)
+     values ('voluntar_activ', 'Prag zero 826', '2028-02-01', '2028-02-28',
+             '82600000-0000-0000-0000-000000000001', 30, 5, 0) $$,
+  '23514', 'new row for relation "role_evaluations" violates check constraint "role_evaluations_floor_ck"',
+  'role_evaluations_floor_ck: an Eligibility Floor below 1 is rejected');
+select throws_ok(
+  $$ insert into public.role_evaluations
+       (kind, name, period_from, period_to, run_by, threshold_used, ranked_count, percent_used)
+     values ('voluntar_activ', 'Procent 101 826', '2028-02-01', '2028-02-28',
+             '82600000-0000-0000-0000-000000000001', 30, 5, 101) $$,
+  '23514', 'new row for relation "role_evaluations" violates check constraint "role_evaluations_percent_used_ck"',
+  'role_evaluations_percent_used_ck: a share above 100 is rejected');
+select throws_ok(
+  $$ insert into public.role_evaluations
+       (kind, name, period_from, period_to, run_by, threshold_used, ranked_count, evaluated_count)
+     values ('voluntar_activ', 'Evaluati putini 826', '2028-02-01', '2028-02-28',
+             '82600000-0000-0000-0000-000000000001', 30, 5, 4) $$,
+  '23514', 'new row for relation "role_evaluations" violates check constraint "role_evaluations_evaluated_count_ck"',
+  'role_evaluations_evaluated_count_ck: a run never ranks more Members than it evaluated');
+select col_is_null('public', 'role_evaluations', 'threshold_used',
+  'threshold_used is nullable since R58: a kind''s first run needs no Promotion Threshold in force');
 
 -- No overlap or uniqueness rule (R28): a correction run over the same, or an
 -- overlapping, span is legitimate -- the threshold chain follows run_at, not
@@ -175,10 +201,10 @@ select is(
   array[true, false, false, false],
   'authenticated may select role_evaluations and nothing else -- run_role_evaluation is the only write path');
 -- The table's revoke only names public/anon/authenticated (the idiom every
--- promotion_rules-family table in this migration and #49's promotion_rules
--- share -- conventions section 4's older two/three-role form); service_role
--- keeps Supabase's default table privileges, so only its read is asserted
--- here, matching promotion_rules.test.sql's own scope.
+-- table of this family in #826's migration shares, as #49's promotion_rules
+-- did until R58 dropped it -- conventions section 4's older two/three-role
+-- form); service_role keeps Supabase's default table privileges, so only its
+-- read is asserted here, as promotion_thresholds.test.sql scopes its own.
 select is(has_table_privilege('service_role', 'public.role_evaluations', 'select'), true,
   'service_role may select role_evaluations');
 select is(
@@ -320,7 +346,8 @@ select is(
 -- [period_from, period_to] converts to the half-open Bucharest instants
 -- [period_from at 00:00, (period_to + 1) at 00:00) -- an award at 23:59
 -- Bucharest on period_to is inside; one at 00:00 Bucharest the next day is
--- not.
+-- not. R58: the core takes the run's Floor, share and cutoff too -- Floor 1,
+-- 35 % and a cutoff on period_to here; the range rule does not depend on them.
 
 insert into public.tasks
   (title, description, deadline, group_id, status, difficulty, rating,
@@ -342,12 +369,12 @@ select pg_temp.test_credit_task(task.id, '82600000-0000-0000-0000-000000000015',
   from public.tasks as task where task.title = 'EdgeNext 826';
 
 select is(
-  (select task_points from private.role_evaluation_rows('voluntar_activ', '2028-05-01', '2028-05-10', '2028-05-10')
+  (select task_points from private.role_evaluation_rows('voluntar_activ', '2028-05-01', '2028-05-10', 1, 35, '2028-05-10')
     where member_id = '82600000-0000-0000-0000-000000000014'),
   6,
   'Edge 826, credited at 23:59 Bucharest on period_to, is inside the range');
 select is(
-  (select task_points from private.role_evaluation_rows('voluntar_activ', '2028-05-01', '2028-05-10', '2028-05-10')
+  (select task_points from private.role_evaluation_rows('voluntar_activ', '2028-05-01', '2028-05-10', 1, 35, '2028-05-10')
     where member_id = '82600000-0000-0000-0000-000000000015'),
   0,
   'EdgeNext 826, credited at 00:00 Bucharest the day after period_to, is excluded');
@@ -402,8 +429,8 @@ select is(has_sequence_privilege('authenticated', 'public.promotion_threshold_ch
   'authenticated cannot allocate a promotion_threshold_changes id');
 
 select pg_temp.test_login_leadership('82600000-0000-0000-0000-000000000001');
-select is((select count(*) from public.promotion_threshold_changes), 2::bigint,
-  'BC (live level >= 6) reads both threshold changes');
+select is((select count(*) from public.promotion_threshold_changes), 3::bigint,
+  'BC (live level >= 6) reads every change: both threshold changes and R58''s day-one change of x (source migration; y, already 25, is not logged -- Ruling 16)');
 reset role;
 
 select pg_temp.test_login_leadership('82600000-0000-0000-0000-000000000005');
@@ -426,6 +453,53 @@ set local role anon;
 select throws_ok($$ select count(*) from public.promotion_threshold_changes $$, '42501', null,
   'anon cannot read promotion_threshold_changes at all');
 reset role;
+
+-- ==================== 7. The log's history rows (tenure, enabled) ====================
+-- Moved here from promotion_rule_command.test.sql §8 (#935) when R58 dropped
+-- the Promotion Rules, their command and that suite: the log keeps its
+-- tenure and on/off rows as history, so its shape rules for them still hold.
+-- promotion_rule_id is a plain number since R58 (no foreign key), so a
+-- literal id stands for the dropped rule.
+
+select throws_ok(
+  $$ insert into public.promotion_threshold_changes (kind, field, promotion_rule_id, from_value, to_value, source, changed_by)
+     values ('voluntar_activ', 'tenure', 2, 6, 4, 'manual', '82600000-0000-0000-0000-000000000001') $$,
+  '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_subject_ck"',
+  'promotion_threshold_changes_subject_ck: a rule change names its rule, never a kind');
+select throws_ok(
+  $$ insert into public.promotion_threshold_changes (kind, field, from_value, to_value, source, changed_by)
+     values (null, 'threshold', 15, 20, 'manual', '82600000-0000-0000-0000-000000000001') $$,
+  '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_subject_ck"',
+  'promotion_threshold_changes_subject_ck: a threshold change still names its kind');
+select throws_ok(
+  $$ insert into public.promotion_threshold_changes (field, promotion_rule_id, from_value, to_value, source, changed_by)
+     values ('tenure', 2, 6, 121, 'manual', '82600000-0000-0000-0000-000000000001') $$,
+  '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_tenure_shape_ck"',
+  'promotion_threshold_changes_tenure_shape_ck: a tenure above 120 months cannot be logged');
+select throws_ok(
+  format($$ insert into public.promotion_threshold_changes (field, promotion_rule_id, from_value, to_value, source, role_evaluation_id)
+            values ('tenure', 2, 6, 4, 'role_evaluation', %s) $$, (select re1 from fx826)),
+  '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_tenure_shape_ck"',
+  'promotion_threshold_changes_tenure_shape_ck: a Role Evaluation never changes a tenure');
+select throws_ok(
+  $$ insert into public.promotion_threshold_changes (field, promotion_rule_id, from_value, to_value, source, changed_by)
+     values ('enabled', 2, 1, 1, 'manual', '82600000-0000-0000-0000-000000000001') $$,
+  '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_enabled_shape_ck"',
+  'promotion_threshold_changes_enabled_shape_ck: an on/off row is always a flip');
+select throws_ok(
+  $$ insert into public.promotion_threshold_changes (field, promotion_rule_id, from_value, to_value, source, changed_by)
+     values ('enabled', 2, 0, 2, 'manual', '82600000-0000-0000-0000-000000000001') $$,
+  '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_enabled_shape_ck"',
+  'promotion_threshold_changes_enabled_shape_ck: on/off is 0 or 1');
+select throws_ok(
+  $$ insert into public.promotion_threshold_changes (kind, from_value, to_value, source, changed_by)
+     values ('voluntar_activ', 15, 0, 'manual', '82600000-0000-0000-0000-000000000001') $$,
+  '23514', 'new row for relation "promotion_threshold_changes" violates check constraint "promotion_threshold_changes_to_value_range_ck"',
+  'promotion_threshold_changes_to_value_range_ck: a threshold is still at least 1 Task Point');
+select lives_ok(
+  $$ insert into public.promotion_threshold_changes (field, promotion_rule_id, from_value, to_value, source, changed_by)
+     values ('tenure', 1, 2, 0, 'manual', '82600000-0000-0000-0000-000000000001') $$,
+  'a tenure of 0 months can be logged -- the table allows it, and since R58 the rule it names need not exist');
 
 select * from finish();
 rollback;

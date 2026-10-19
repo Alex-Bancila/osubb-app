@@ -391,6 +391,13 @@ function LeadershipContent() {
   const { value, params } = useWorkFilter(levels);
   const options = useLeadershipFilters();
   const pointsStartDate = usePointsStartDate();
+  // Ruling 19 (R58): the board drops the points before the Points Start Date,
+  // so it says from when it counts — once the date is known to exist. An
+  // explicit De la is the lookback and the range it is.
+  const boardSince =
+    typeof pointsStartDate === 'string'
+      ? `puncte acordate ${pointsPeriodText(value, pointsStartDate)}`
+      : null;
   // R43: the members' board opens on the preferred Groups' points (the Cup
   // ranks Groups, so it is never narrowed by them).
   const preferred = usePreferredGroups();
@@ -442,7 +449,17 @@ function LeadershipContent() {
         <Panel
           aria-label="Clasamentul membrilor"
           description={
-            params && board.data ? memberCount(board.data.length) : null
+            params && board.data ? (
+              <>
+                {memberCount(board.data.length)}
+                {boardSince && (
+                  <>
+                    <span aria-hidden="true"> · </span>
+                    <span data-slot="points-since">{boardSince}</span>
+                  </>
+                )}
+              </>
+            ) : null
           }
           // The ranking reaches the frame (layout L1); a state keeps its padding.
           flush={Boolean(params && board.data?.length)}
