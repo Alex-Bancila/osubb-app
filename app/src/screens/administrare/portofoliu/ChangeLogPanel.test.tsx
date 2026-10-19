@@ -91,6 +91,32 @@ it('lists every change of a threshold with its author or run, the word of its fi
 it('lists the three evaluation settings in their own words', async () => {
   db.runs = [RUN_VA];
   db.changes = [
+    // No command clears a setting, but the log reads either side as a
+    // missing value all the same.
+    {
+      id: 5,
+      kind: null,
+      field: 'floor',
+      from_value: 12,
+      to_value: null,
+      source: 'manual',
+      changed_by: 'dan',
+      role_evaluation_id: null,
+      changed_at: '2026-10-20T08:00:00Z',
+    },
+    {
+      id: 4,
+      kind: null,
+      field: 'cutoff',
+      from_value: null,
+      to_value: null,
+      from_date: '2026-03-01',
+      to_date: null,
+      source: 'manual',
+      changed_by: 'dan',
+      role_evaluation_id: null,
+      changed_at: '2026-10-19T08:00:00Z',
+    },
     {
       id: 3,
       kind: null,
@@ -131,9 +157,11 @@ it('lists the three evaluation settings in their own words', async () => {
   ];
   show(<Host />);
 
-  // A date change reads as the days, a missing value as a dash, and a
-  // setting names itself instead of a kind.
+  // A date change reads as the days, a missing value on either side as
+  // `nesetat`, and a setting names itself instead of a kind.
   expect(await rowsOf()).toEqual([
+    '20.10.2026 · Prag minim12 → nesetat·DIDănuț',
+    '19.10.2026 · Data limită de intrare01.03.2026 → nesetat·DIDănuț',
     '18.10.2026 · Data de început a punctajului01.09.2026 → 01.10.2026·DIDănuț',
     '17.10.2026 · Data limită de intrarenesetat → 01.03.2026·DIDănuț',
     '16.10.2026 · Prag minimnesetat → 12·DIDănuț',

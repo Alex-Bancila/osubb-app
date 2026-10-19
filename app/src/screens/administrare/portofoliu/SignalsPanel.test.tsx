@@ -158,6 +158,24 @@ it('names the Adunarea Generală line for a voter below it, not the promotion on
   ).toHaveTextContent('sub pragul de promovare (12 din 40 de puncte)');
 });
 
+// The hint names both lines a holder can fall under, never a bare "prag".
+it('says in its hint that a holder falls under the line of their own evaluation or the Floor', async () => {
+  db.runs = [RUN_VA];
+  db.signals = [signal({ id: 1 })];
+  const user = userEvent.setup();
+  show(<Host />);
+  const signals = await panel();
+  await user.click(
+    within(signals).getByRole('button', {
+      name: 'Despre semnalele de retenție',
+    }),
+  );
+  const hint = await screen.findByText(/Deținători ai rolului găsiți/);
+  expect(hint).toHaveTextContent(
+    'Deținători ai rolului găsiți de o evaluare sub linia evaluării sale (pragul de promovare sau pragul Adunării Generale) sau sub pragul minim, și votanți care nu mai sunt studenți UBB. Retragerea unui rol este decizia BC, din panoul de roluri.',
+  );
+});
+
 it('says so when none is open', async () => {
   db.runs = [RUN_VA];
   db.signals = [signal({ id: 1, closed_at: '2026-07-02T09:00:00Z' })];

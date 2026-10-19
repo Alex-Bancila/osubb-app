@@ -70,9 +70,10 @@ export function SignalsPanel({
       title="Semnale de retenție"
       control={
         <InfoHint label="Despre semnalele de retenție">
-          Deținători ai rolului găsiți de o evaluare sub pragul de promovare sau
-          sub pragul minim, și votanți care nu mai sunt studenți UBB. Retragerea
-          unui rol este decizia BC, din panoul de roluri.
+          Deținători ai rolului găsiți de o evaluare sub linia evaluării sale
+          (pragul de promovare sau pragul Adunării Generale) sau sub pragul
+          minim, și votanți care nu mai sunt studenți UBB. Retragerea unui rol
+          este decizia BC, din panoul de roluri.
         </InfoHint>
       }
       stack={4}
