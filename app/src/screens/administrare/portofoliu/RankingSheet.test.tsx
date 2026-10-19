@@ -86,15 +86,16 @@ it('lists every evaluated Member in the order given, with the rank or "sub prag 
     expect.stringContaining('Mia Toma'),
     expect.stringContaining('Radu Cozma'),
   ]);
-  expect(body.map((cells) => cells.slice(1).map((cell) => cell.textContent)))
-    .toEqual([
-      ['Voluntar', '55', '1', 'Da'],
-      ['Voluntar', '40', '2', 'Da'],
-      ['Voluntar Activ', '12', '3', 'Nu'],
-      ['Voluntar cu Drept de Vot', '11', '4', 'Nu'],
-      ['Voluntar Activ', '3', 'sub prag minim', 'Nu'],
-      ['Recrut', '0', 'sub prag minim', 'Nu'],
-    ]);
+  expect(
+    body.map((cells) => cells.slice(1).map((cell) => cell.textContent)),
+  ).toEqual([
+    ['Voluntar', '55', '1', 'Da'],
+    ['Voluntar', '40', '2', 'Da'],
+    ['Voluntar Activ', '12', '3', 'Nu'],
+    ['Voluntar cu Drept de Vot', '11', '4', 'Nu'],
+    ['Voluntar Activ', '3', 'sub prag minim', 'Nu'],
+    ['Recrut', '0', 'sub prag minim', 'Nu'],
+  ]);
 });
 
 it('says how many Members it holds when there are none', () => {
@@ -123,7 +124,8 @@ it('closes from the X', async () => {
     />,
   );
   await user.click(screen.getByRole('button', { name: 'Închide' }));
-  expect(close).toHaveBeenCalledWith(false);
+  // The sheet asks to close; the second argument is its event.
+  expect(close.mock.calls[0]?.[0]).toBe(false);
 });
 
 it('reads the ranking of a finished run from the server and titles it with the run', async () => {

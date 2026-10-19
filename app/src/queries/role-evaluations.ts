@@ -295,8 +295,9 @@ export async function simulateRoleEvaluation(
 /**
  * The ranking of one recorded run, recomputed by the server from the values
  * the run recorded (so the rows its Simulation showed, while the ledger is
- * unchanged). Empty for a run recorded before R58 and for a session that may
- * read only its own row. `PT404 role_evaluation_not_found` for an unknown run.
+ * unchanged). Empty for a run recorded before R58; only the caller's own row
+ * for a session without #512's read. `PT404 role_evaluation_not_found` for an
+ * unknown run.
  */
 export async function fetchRoleEvaluationRanking(
   runId: number,

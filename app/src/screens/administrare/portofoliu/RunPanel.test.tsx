@@ -149,7 +149,9 @@ it('simulates, shows the line and the lists, and finalises only after a confirma
     expect.stringContaining('Dănuț'),
   ]);
   expect(run).toHaveTextContent('sub pragul minim (3 din 10 puncte)');
-  expect(run).toHaveTextContent('sub pragul de promovare (12 din 40 de puncte)');
+  expect(run).toHaveTextContent(
+    'sub pragul de promovare (12 din 40 de puncte)',
+  );
   // The form is gone while the result is up.
   expect(within(run).queryByRole('button', { name: 'Simulează' })).toBeNull();
   expect(
@@ -174,9 +176,7 @@ it('simulates, shows the line and the lists, and finalises only after a confirma
   );
   expect(runCall()).toBeUndefined();
 
-  await user.click(
-    within(dialog).getByRole('button', { name: 'Finalizează' }),
-  );
+  await user.click(within(dialog).getByRole('button', { name: 'Finalizează' }));
   await waitFor(() => expect(runCall()).toBeDefined());
   expect(
     await within(run).findByText(
@@ -264,14 +264,16 @@ it('keeps the typed values on Modifică valorile', async () => {
   expect(within(run).getByLabelText('Nume')).toHaveValue('Semestrul II');
   expect(within(run).getByLabelText('Prag minim')).toHaveValue('12');
   expect(within(run).getByLabelText('Procent')).toHaveValue(40);
-  expect(
-    within(run).getByLabelText('Data limită de intrare'),
-  ).toHaveAttribute('data-value', '2026-03-31');
+  expect(within(run).getByLabelText('Data limită de intrare')).toHaveAttribute(
+    'data-value',
+    '2026-03-31',
+  );
   // Nothing was written by simulating.
   expect(runCall()).toBeUndefined();
 });
 
 it('simulates without a name, but Finalizează asks for it before the confirmation opens', async () => {
+  db.runs = [RUN_VA];
   db.simulation = rankedRows();
   const user = userEvent.setup();
   show(<Host />);
@@ -280,7 +282,9 @@ it('simulates without a name, but Finalizează asks for it before the confirmati
   await user.click(within(run).getByRole('button', { name: 'Simulează' }));
   expect(simulatedCall()).toBeDefined();
 
-  await user.click(await within(run).findByRole('button', { name: 'Finalizează' }));
+  await user.click(
+    await within(run).findByRole('button', { name: 'Finalizează' }),
+  );
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(within(run).getByLabelText('Nume')).toHaveAccessibleDescription(
     'Scrie numele evaluării.',
@@ -377,8 +381,9 @@ it('sends no cutoff for the Adunarea Generală, and lists no candidates', async 
     p_percent: 25,
   });
   expect(run).toHaveTextContent('Prag Adunarea Generală: 40 de puncte');
-  expect(within(run).queryByRole('list', { name: 'Candidați la promovare' }))
-    .toBeNull();
+  expect(
+    within(run).queryByRole('list', { name: 'Candidați la promovare' }),
+  ).toBeNull();
   expect(run).toHaveTextContent(
     'Adunarea Generală nu are candidați la promovare.',
   );
@@ -396,14 +401,14 @@ it('places a server refusal under its field', async () => {
 
   await user.click(within(run).getByRole('button', { name: 'Simulează' }));
   await waitFor(() =>
-    expect(within(run).getByLabelText('Prag minim')).toHaveAccessibleDescription(
+    expect(
+      within(run).getByLabelText('Prag minim'),
+    ).toHaveAccessibleDescription(
       'Pragul minim este un număr întreg de cel puțin 1.',
     ),
   );
   // Still the form: nothing to finalise.
-  expect(
-    within(run).queryByRole('button', { name: 'Finalizează' }),
-  ).toBeNull();
+  expect(within(run).queryByRole('button', { name: 'Finalizează' })).toBeNull();
 });
 
 it('places the refusal of a finalised run under the name', async () => {
@@ -417,10 +422,7 @@ it('places the refusal of a finalised run under the name', async () => {
   const run = await ready();
   await pickDate(user, within(run).getByLabelText('De la'), '2026-09-01');
   await user.click(within(run).getByRole('button', { name: 'Simulează' }));
-  await user.type(
-    await within(run).findByLabelText('Nume'),
-    'Semestrul II',
-  );
+  await user.type(await within(run).findByLabelText('Nume'), 'Semestrul II');
   await user.click(within(run).getByRole('button', { name: 'Finalizează' }));
   await user.click(
     within(await screen.findByRole('dialog')).getByRole('button', {

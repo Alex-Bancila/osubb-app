@@ -535,6 +535,7 @@ export function identitiesMock() {
   };
 }
 
+// oxlint-disable-next-line react/only-export-components
 function Where() {
   const { pathname, search } = useLocation();
   return <div data-testid="where">{pathname + search}</div>;

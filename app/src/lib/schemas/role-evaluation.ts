@@ -12,31 +12,123 @@ export type RoleEvaluationKind = (typeof ROLE_EVALUATION_KINDS)[number];
 /** Postgres `integer`'s ceiling: `set_promotion_threshold` takes one. */
 const INT_MAX = 2_147_483_647;
 
+/** The fields a run and its Simulation share, as the form holds them. */
+const rankingFields = {
+  kind: z
+    .string()
+    .refine(
+      (kind) => (ROLE_EVALUATION_KINDS as readonly string[]).includes(kind),
+      { message: 'invalid_role_evaluation_kind' },
+    )
+    .transform((kind) => kind as RoleEvaluationKind),
+  from: z.string(),
+  to: z.string(),
+  floor: z
+    .string()
+    .trim()
+    .superRefine((value, ctx) => {
+      if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > INT_MAX)
+        ctx.addIssue({
+          code: 'custom',
+          message: 'invalid_eligibility_floor',
+        });
+    })
+    .transform(Number),
+  percent: z
+    .string()
+    .trim()
+    .superRefine((value, ctx) => {
+      if (!/^\d{1,3}$/.test(value) || Number(value) < 1 || Number(value) > 100)
+        ctx.addIssue({ code: 'custom', message: 'invalid_percent' });
+    })
+    .transform(Number),
+  cutoff: z.string(),
+};
+
 /**
- * The **Rulează o evaluare** form, as `simulate_role_evaluation` and
- * `run_role_evaluation` (#826, R58) check it before their gate: a kind, both
- * days of the Evaluation Period with **Până la** not before **De la** and not
- * after `today` (a Bucharest day, given by the caller), a name trimmed to
- * 3–120 characters, the **Prag minim** (a whole number of points, at least 1),
- * the **Procent** (a whole number from 1 to 100) and — for the Voluntar Activ
- * kind only — the **Data limită de intrare**, a day not after `today`. The
- * Adunarea Generală has no cutoff: whatever its field holds, the output is
- * `null`. The numbers are text in the form (digits are checked before the
- * number is) and numbers in the output. Two ISO days compare correctly as
- * strings.
+ * The rules that read several fields at once: both days of the Evaluation
+ * Period, with **Până la** not before **De la** and not after `today`, and —
+ * for the Voluntar Activ kind only — the **Data limită de intrare**, a day not
+ * after `today`.
+ */
+function checkRanking(
+  values: {
+    kind: RoleEvaluationKind;
+    from: string;
+    to: string;
+    cutoff: string;
+  },
+  ctx: z.RefinementCtx,
+  today: string,
+) {
+  // An empty date input reports '': the day is missing, not misordered.
+  if (!ISO_DAY.test(values.from))
+    ctx.addIssue({
+      code: 'custom',
+      path: ['from'],
+      message: 'date_required',
+    });
+  if (!ISO_DAY.test(values.to))
+    ctx.addIssue({
+      code: 'custom',
+      path: ['to'],
+      message: 'date_required',
+    });
+  else if (ISO_DAY.test(values.from) && values.to < values.from)
+    ctx.addIssue({
+      code: 'custom',
+      path: ['to'],
+      message: 'invalid_date_range',
+    });
+  else if (values.to > today)
+    ctx.addIssue({
+      code: 'custom',
+      path: ['to'],
+      message: 'date_range_in_future',
+    });
+  // Only the Voluntar Activ kind lists Candidates by the cutoff.
+  if (values.kind === 'voluntar_activ') {
+    if (!ISO_DAY.test(values.cutoff))
+      ctx.addIssue({
+        code: 'custom',
+        path: ['cutoff'],
+        message: 'membership_cutoff_not_set',
+      });
+    else if (values.cutoff > today)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['cutoff'],
+        message: 'invalid_membership_cutoff',
+      });
+  }
+}
+
+/** The Adunarea Generală has no cutoff: whatever its field holds, it is null. */
+function withoutAgCutoff<
+  T extends { kind: RoleEvaluationKind; cutoff: string },
+>(values: T) {
+  return {
+    ...values,
+    cutoff: values.kind === 'voluntar_activ' ? values.cutoff : null,
+  };
+}
+
+/**
+ * The **Rulează o evaluare** form, as `run_role_evaluation` (#826, R58) checks
+ * it before its gate: a kind, both days of the Evaluation Period with **Până
+ * la** not before **De la** and not after `today` (a Bucharest day, given by
+ * the caller), a name trimmed to 3–120 characters, the **Prag minim** (a whole
+ * number of points, at least 1), the **Procent** (a whole number from 1 to
+ * 100) and — for the Voluntar Activ kind only — the **Data limită de
+ * intrare**, a day not after `today`. The Adunarea Generală has no cutoff:
+ * whatever its field holds, the output is `null`. The numbers are text in the
+ * form (digits are checked before the number is) and numbers in the output.
+ * Two ISO days compare correctly as strings.
  */
 export function runSchema(today: string) {
   return z
     .object({
-      kind: z
-        .string()
-        .refine(
-          (kind) => (ROLE_EVALUATION_KINDS as readonly string[]).includes(kind),
-          { message: 'invalid_role_evaluation_kind' },
-        )
-        .transform((kind) => kind as RoleEvaluationKind),
-      from: z.string(),
-      to: z.string(),
+      ...rankingFields,
       name: requiredText({
         required: 'invalid_role_evaluation_name',
         min: 3,
@@ -44,81 +136,23 @@ export function runSchema(today: string) {
         max: 120,
         tooLong: 'name_too_long',
       }),
-      floor: z
-        .string()
-        .trim()
-        .superRefine((value, ctx) => {
-          if (
-            !/^\d+$/.test(value) ||
-            Number(value) < 1 ||
-            Number(value) > INT_MAX
-          )
-            ctx.addIssue({
-              code: 'custom',
-              message: 'invalid_eligibility_floor',
-            });
-        })
-        .transform(Number),
-      percent: z
-        .string()
-        .trim()
-        .superRefine((value, ctx) => {
-          if (
-            !/^\d{1,3}$/.test(value) ||
-            Number(value) < 1 ||
-            Number(value) > 100
-          )
-            ctx.addIssue({ code: 'custom', message: 'invalid_percent' });
-        })
-        .transform(Number),
-      cutoff: z.string(),
     })
-    .superRefine((values, ctx) => {
-      // An empty date input reports '': the day is missing, not misordered.
-      if (!ISO_DAY.test(values.from))
-        ctx.addIssue({
-          code: 'custom',
-          path: ['from'],
-          message: 'date_required',
-        });
-      if (!ISO_DAY.test(values.to))
-        ctx.addIssue({
-          code: 'custom',
-          path: ['to'],
-          message: 'date_required',
-        });
-      else if (ISO_DAY.test(values.from) && values.to < values.from)
-        ctx.addIssue({
-          code: 'custom',
-          path: ['to'],
-          message: 'invalid_date_range',
-        });
-      else if (values.to > today)
-        ctx.addIssue({
-          code: 'custom',
-          path: ['to'],
-          message: 'date_range_in_future',
-        });
-      // Only the Voluntar Activ kind lists Candidates by the cutoff.
-      if (values.kind === 'voluntar_activ') {
-        if (!ISO_DAY.test(values.cutoff))
-          ctx.addIssue({
-            code: 'custom',
-            path: ['cutoff'],
-            message: 'membership_cutoff_not_set',
-          });
-        else if (values.cutoff > today)
-          ctx.addIssue({
-            code: 'custom',
-            path: ['cutoff'],
-            message: 'invalid_membership_cutoff',
-          });
-      }
-    })
-    .transform((values) => ({
-      ...values,
-      cutoff: values.kind === 'voluntar_activ' ? values.cutoff : null,
-    }));
+    .superRefine((values, ctx) => checkRanking(values, ctx, today))
+    .transform(withoutAgCutoff);
+}
+
+/**
+ * The same form as **Simulează** checks it: every field of the run but its
+ * name. A Simulation writes nothing and records no run, so `simulate_role_
+ * evaluation` takes no name; the form still holds **Nume**, which only
+ * **Finalizează** needs. Whatever the name field holds is neither checked nor
+ * carried.
+ */
+export function simulationSchema(today: string) {
+  return z
+    .object(rankingFields)
+    .superRefine((values, ctx) => checkRanking(values, ctx, today))
+    .transform(withoutAgCutoff);
 }
 
 /** Where each reason the run form (or its Simulation) raises is shown. */

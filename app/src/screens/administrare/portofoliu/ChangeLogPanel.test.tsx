@@ -1,11 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
-import {
-  db,
-  resetDb,
-  RUN_VA,
-  show,
-} from '../../../test/portofoliu-fake';
+import { db, resetDb, RUN_VA, show } from '../../../test/portofoliu-fake';
 import { useRoleEvaluations } from '../../../queries/role-evaluations';
 
 vi.mock('../../../lib/supabase', async () =>

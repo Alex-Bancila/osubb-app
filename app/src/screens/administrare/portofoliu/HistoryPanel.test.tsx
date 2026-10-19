@@ -81,9 +81,7 @@ it('lists runs newest first with their values, and opens the ranking of a run', 
     'Semestrul I',
   ]);
   expect(
-    body.map((cells) =>
-      cells.slice(1, 6).map((cell) => cell.textContent),
-    ),
+    body.map((cells) => cells.slice(1, 6).map((cell) => cell.textContent)),
   ).toEqual([
     ['Adunarea Generală', '01.07.2026–20.09.2026', '10', '25 %', '—'],
     ['Voluntar Activ', '01.02.2026–30.06.2026', '10', '35 %', '31.03.2026'],
@@ -192,7 +190,9 @@ it('lists the runs as rows under the width the table’s columns fit, so nothing
     ).getAllByRole('listitem');
     expect(rows).toHaveLength(2);
     expect(rows[0]).toHaveTextContent('AG toamnă');
-    expect(rows[0]).toHaveTextContent('Adunarea Generală · 01.07.2026–20.09.2026');
+    expect(rows[0]).toHaveTextContent(
+      'Adunarea Generală · 01.07.2026–20.09.2026',
+    );
     expect(rows[0]).toHaveTextContent('Prag minim 10');
     expect(rows[0]).toHaveTextContent('Procent 25 %');
     expect(rows[1]).toHaveTextContent('Semestrul I');

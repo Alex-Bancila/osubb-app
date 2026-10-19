@@ -94,7 +94,9 @@ it('lists the five settings and, under Praguri în vigoare, the two thresholds',
 
   const labels = within(panel)
     .getAllByRole('listitem')
-    .map((item) => item.querySelector('[data-slot="sub-heading"]')?.textContent);
+    .map(
+      (item) => item.querySelector('[data-slot="sub-heading"]')?.textContent,
+    );
   expect(labels).toEqual([
     'Prag minim',
     'Data limită de intrare',
@@ -155,7 +157,9 @@ it('edits each setting on Salvează and logs it', async () => {
   expect(db.rpc).toHaveBeenCalledWith('set_eligibility_floor', {
     p_points: 12,
   });
-  expect(await within(panel).findByText('Prag minim a fost salvat.')).toBeVisible();
+  expect(
+    await within(panel).findByText('Prag minim a fost salvat.'),
+  ).toBeVisible();
   await waitFor(() =>
     expect(row(panel, 'Prag minim')).toHaveTextContent('12 puncte'),
   );
@@ -314,7 +318,7 @@ it('names where each last change came from: a Member, a run, a migration', async
   const panel = await settings();
 
   await waitFor(() =>
-    expect(row(panel, 'Prag minim')).toHaveTextContent('schimbat de Dănuț'),
+    expect(row(panel, 'Prag minim')).toHaveTextContent(/schimbat de.*Dănuț/),
   );
   expect(row(panel, 'Data limită de intrare')).toHaveTextContent(
     'schimbat de evaluarea „Semestrul I”',
@@ -428,7 +432,9 @@ it('still edits the two Promotion Thresholds by hand', async () => {
       changed_at: '2026-07-01T09:00:00Z',
     },
   ];
-  db.thresholds[0]!.threshold = 42;
+  db.thresholds = db.thresholds.map((current) =>
+    current.kind === 'voluntar_activ' ? { ...current, threshold: 42 } : current,
+  );
   const user = userEvent.setup();
   show(<Host />);
   const panel = await settings();

@@ -352,7 +352,11 @@ describe('route guards', () => {
     ['/administrare/grupuri', 'Grupuri tab', []],
     ['/administrare/roluri', 'Roluri tab', ['manageRoles']],
     ['/administrare/cereri', 'Cereri de aderare tab', []],
-    ['/administrare/portofoliu-interne', 'Portofoliu Interne tab', ['manageRoles']],
+    [
+      '/administrare/portofoliu-interne',
+      'Portofoliu Interne tab',
+      ['manageRoles'],
+    ],
     [
       '/administrare/confidentialitate',
       'Confidențialitate tab',

@@ -46,9 +46,7 @@ function rows(raw: Ranked[] = rankedRows()) {
 }
 
 it('shows the line, the counts, the Candidates and the Signals of a Voluntar Activ Simulation', async () => {
-  show(
-    <SimulationResult kind="voluntar_activ" floor={10} rows={rows()} />,
-  );
+  show(<SimulationResult kind="voluntar_activ" floor={10} rows={rows()} />);
 
   expect(screen.getByText('Prag de promovare: 40 de puncte')).toBeVisible();
   expect(screen.getByText('4 clasați din 6 evaluați')).toBeVisible();
@@ -95,7 +93,9 @@ it('says nobody reaches the Prag minim when nobody was ranked', () => {
   const nobody = rankedRows()
     .slice(4)
     .map((row) => ({ ...row, ranked_count: 0, line: null }));
-  show(<SimulationResult kind="voluntar_activ" floor={10} rows={rows(nobody)} />);
+  show(
+    <SimulationResult kind="voluntar_activ" floor={10} rows={rows(nobody)} />,
+  );
 
   expect(screen.getByText('Nimeni nu atinge pragul minim.')).toBeVisible();
   expect(screen.getByText('0 clasați din 6 evaluați')).toBeVisible();
@@ -128,7 +128,9 @@ it('says so when the Simulation finds no Signal, and counts one as one', () => {
   show(<SimulationResult kind="voluntar_activ" floor={10} rows={rows(one)} />);
 
   expect(screen.getByText('1 clasat din 1 evaluat')).toBeVisible();
-  expect(screen.getByText('Niciun semnal de retenție în simulare.')).toBeVisible();
+  expect(
+    screen.getByText('Niciun semnal de retenție în simulare.'),
+  ).toBeVisible();
 });
 
 it('lists no Candidates for the Adunarea Generală, and the open Universitate Signals with its Signals', async () => {
@@ -171,11 +173,11 @@ it('lists no Candidates for the Adunarea Generală, and the open Universitate Si
       closed_at: '2026-10-03T08:00:00Z',
     },
   ];
-  show(
-    <SimulationResult kind="adunarea_generala" floor={10} rows={rows()} />,
-  );
+  show(<SimulationResult kind="adunarea_generala" floor={10} rows={rows()} />);
 
-  expect(screen.getByText('Prag Adunarea Generală: 40 de puncte')).toBeVisible();
+  expect(
+    screen.getByText('Prag Adunarea Generală: 40 de puncte'),
+  ).toBeVisible();
   expect(
     screen.queryByRole('list', { name: 'Candidați la promovare' }),
   ).toBeNull();
@@ -197,9 +199,7 @@ it('lists no Candidates for the Adunarea Generală, and the open Universitate Si
 
 it('opens the whole ranking in a sheet from Vezi clasamentul', async () => {
   const user = userEvent.setup();
-  show(
-    <SimulationResult kind="voluntar_activ" floor={10} rows={rows()} />,
-  );
+  show(<SimulationResult kind="voluntar_activ" floor={10} rows={rows()} />);
 
   await user.click(screen.getByRole('button', { name: 'Vezi clasamentul' }));
   const sheet = await screen.findByRole('dialog');

@@ -72,7 +72,12 @@ it('lists the open Promotion Candidates: Promovează opens Roluri preset, Respin
   db.runs = [RUN_VA];
   db.candidates = [
     candidate({ id: 7 }),
-    candidate({ id: 8, member_id: 'dan', task_points: 31, tenure_since: '2026-01-10' }),
+    candidate({
+      id: 8,
+      member_id: 'dan',
+      task_points: 31,
+      tenure_since: '2026-01-10',
+    }),
   ];
   const user = userEvent.setup();
   show(<Host />);

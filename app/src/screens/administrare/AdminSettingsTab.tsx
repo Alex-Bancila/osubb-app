@@ -516,8 +516,9 @@ function GroupSettingRow({
  * force ("Nesetat" and what that means when empty); "Editează" opens the same
  * inline editor everywhere — Salvează, enabled once the value changed, and
  * Renunță. Mounted behind `manageRoles`; `set_org_setting` decides again on
- * the server (level 6). The Role Evaluation thresholds and shares are edited
- * in Evaluări de rol (R28, R30), which the first panel links to.
+ * the server (level 6). The Role Evaluation settings, thresholds and shares
+ * are edited in Portofoliu Interne (R28, R30, R58), which the first panel
+ * links to.
  */
 export default function AdminSettingsTab() {
   const settings = useOrgSettings();
@@ -540,7 +541,10 @@ export default function AdminSettingsTab() {
     <PageGrid columns={1}>
       <Panel
         title="Promovări și evaluări"
-        action={{ label: 'Praguri și procente', to: '/administrare/evaluari' }}
+        action={{
+          label: 'Setările evaluărilor',
+          to: '/administrare/portofoliu-interne',
+        }}
         flush
       >
         <ul className={rowListClass}>

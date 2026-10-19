@@ -73,9 +73,10 @@ it('shows Run and Setări before the first run, and the lists once something exi
     expect(shownPanels()).toEqual(['Rulează o evaluare', 'Setări']),
   );
   // The two boxes of the first row start on one line (X9).
-  expect(
-    document.querySelector('[data-slot="page-grid"]'),
-  ).toHaveAttribute('data-align-headers', 'true');
+  expect(document.querySelector('[data-slot="page-grid"]')).toHaveAttribute(
+    'data-align-headers',
+    'true',
+  );
   expect(
     (
       await axe.run(first.container, {
@@ -207,10 +208,7 @@ it('runs a whole evaluation through the commands of R58 and calls none of the re
   ).closest('section') as HTMLElement;
 
   await user.click(within(run).getByRole('button', { name: 'Simulează' }));
-  await user.type(
-    await within(run).findByLabelText('Nume'),
-    'Semestrul II',
-  );
+  await user.type(await within(run).findByLabelText('Nume'), 'Semestrul II');
   await user.click(within(run).getByRole('button', { name: 'Finalizează' }));
   await user.click(
     within(await screen.findByRole('dialog')).getByRole('button', {
@@ -246,8 +244,8 @@ it('runs a whole evaluation through the commands of R58 and calls none of the re
     'p_to',
   ]);
   // A ranking is asked for by the run's id, never by (kind, from, to).
-  for (const [name, args] of calls.filter(
-    ([name]) => name === 'role_evaluation_ranking',
+  for (const [, args] of calls.filter(
+    ([asked]) => asked === 'role_evaluation_ranking',
   ))
-    expect(args, name).toEqual({ p_role_evaluation_id: expect.any(Number) });
+    expect(args).toEqual({ p_role_evaluation_id: expect.any(Number) });
 });
