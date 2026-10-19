@@ -494,7 +494,7 @@ it('records no line when the Simulation ranked nobody, and the confirmation says
   await user.click(within(run).getByRole('button', { name: 'Finalizează' }));
   const dialog = await screen.findByRole('dialog');
   expect(dialog).toHaveTextContent(
-    'Nimeni nu atinge pragul minim: evaluarea se înregistrează fără prag nou, iar toți deținătorii devin semnale de retenție.',
+    'Nimeni nu atinge pragul minim: evaluarea se înregistrează fără un nou Prag de promovare, iar toți deținătorii devin semnale de retenție.',
   );
   expect(dialog).not.toHaveTextContent('devine punctele ultimului membru');
   expect(runCall()).toBeUndefined();

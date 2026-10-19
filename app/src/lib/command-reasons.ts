@@ -631,6 +631,11 @@ const REASON_COPY = new Map<string, string>([
     'evaluation_settings_manage_forbidden',
     'Doar BC și Moderatorul pot schimba setările evaluărilor.',
   ],
+  // The next two are the page's own gate, not reasons a function raises:
+  // simulate_ and run_role_evaluation take p_floor / p_cutoff as arguments, so
+  // the Portofoliu Interne page refuses to start without the settings and
+  // shows this copy itself. Ruling 21 removed the reasons the server stopped
+  // raising; these stay, and nobody should delete them under it.
   [
     'eligibility_floor_not_set',
     'Setează pragul minim înainte de a rula o evaluare.',

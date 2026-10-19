@@ -207,6 +207,13 @@ it('runs a whole evaluation through the commands of R58 and calls none of the re
     await screen.findByRole('heading', { name: 'Rulează o evaluare' })
   ).closest('section') as HTMLElement;
 
+  // A Prag minim and a Procent of its own, so the run changes settings too.
+  const floor = within(run).getByLabelText('Prag minim');
+  await user.clear(floor);
+  await user.type(floor, '12');
+  const percent = within(run).getByLabelText('Procent');
+  await user.clear(percent);
+  await user.type(percent, '40');
   await user.click(within(run).getByRole('button', { name: 'Simulează' }));
   await user.type(await within(run).findByLabelText('Nume'), 'Toamna 2026');
   await user.click(within(run).getByRole('button', { name: 'Finalizează' }));
@@ -217,6 +224,40 @@ it('runs a whole evaluation through the commands of R58 and calls none of the re
   );
   await within(run).findByText(
     'Evaluarea „Toamna 2026” a rulat: 2 candidați la promovare, 1 semnal de retenție.',
+  );
+
+  // What the run wrote reaches the lists beside the form: the line it
+  // computed is now the Prag de promovare in force, naming the run, and the
+  // log holds the threshold and each setting it changed -- newest first.
+  const settings = screen
+    .getByRole('heading', { name: 'Setări', level: 2 })
+    .closest('section') as HTMLElement;
+  const thresholdRow = within(settings)
+    .getAllByRole('listitem')
+    .find(
+      (item) =>
+        item.querySelector('[data-slot="sub-heading"]')?.textContent ===
+        'Prag de promovare',
+    ) as HTMLElement;
+  await waitFor(() =>
+    expect(thresholdRow).toHaveTextContent(
+      'calculat de evaluarea „Toamna 2026”',
+    ),
+  );
+  expect(thresholdRow).toHaveTextContent('25 de puncte');
+  const log = await screen.findByRole('list', {
+    name: 'Istoricul modificărilor',
+  });
+  await waitFor(() =>
+    expect(
+      within(log)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual([
+      '28.09.2026 · Procent Voluntar Activ35 % → 40 %·evaluarea „Toamna 2026”',
+      '28.09.2026 · Prag minim10 → 12·evaluarea „Toamna 2026”',
+      '28.09.2026 · Prag de promovare30 → 25·evaluarea „Toamna 2026”',
+    ]),
   );
 
   const calls = db.rpc.mock.calls;

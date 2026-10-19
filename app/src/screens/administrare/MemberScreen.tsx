@@ -302,13 +302,13 @@ function RowEditorButtons({
 
 /**
  * "Data intrării" for BC and the Moderator (#932): the date the Membership
- * Cutoff Date is measured against, as a row whose pencil opens a date (the app's `DatePicker`) with
- * Salvează / Renunță in place. The picker has no upper bound, so a day in the
- * future can be chosen: the schema refuses it under the field before anything
- * is sent. The write is
- * `profiles_update_self` plus the #160 column grant; the privileged-column
- * guard refuses anyone below level 6 whatever the browser sends. Mounted
- * behind `memberEditRights(...).profile`, so a BC gets it on a BC's or the
+ * Cutoff Date is measured against, as a row whose pencil opens a date (the
+ * app's `DatePicker`) with Salvează / Renunță in place. The picker has no
+ * upper bound, so a day in the future can be chosen: the schema refuses it
+ * under the field before anything is sent. The write is `profiles_update_self`
+ * plus the #160 column grant; the privileged-column guard refuses anyone below
+ * level 6 whatever the browser sends. Mounted behind
+ * `memberEditRights(...).profile`, so a BC gets it on a BC's or the
  * Moderator's page too (#944).
  */
 function JoinDateRow({ member }: { member: AdminMember }) {
@@ -379,7 +379,8 @@ function JoinDateRow({ member }: { member: AdminMember }) {
               {...joinedField}
             />
             <InfoHint label="Despre data intrării" id={hintId}>
-              Vechimea pentru promovări se numără de la această dată.
+              Un Voluntar intrat după data limită de intrare nu poate fi
+              candidat la promovare.
             </InfoHint>
           </div>
           <FieldError {...form.errorProps('joinedAt')} />
@@ -627,9 +628,9 @@ function AccountPanel({
             <Unset>Necompletată</Unset>
           )}
         </FactRow>
-        {/* BC and the Moderator set the date the Membership Cutoff Date
-            is measured against (#932); for
-            anyone else it is the header's "Membru din", when there is one. */}
+        {/* BC and the Moderator set the date the Membership Cutoff Date is
+            measured against (#932); for anyone else it is the header's
+            "Membru din", when there is one. */}
         {canEdit && <JoinDateRow member={member} />}
         {/* R58: BC and the Moderator set the university; Profil and the
             Member Card show it to everyone else. */}

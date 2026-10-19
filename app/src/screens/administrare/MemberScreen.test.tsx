@@ -853,8 +853,11 @@ it('lets BC set a join date that was never recorded (#932)', async () => {
   expect(input).toHaveAttribute('data-slot', 'date-picker');
   expect(document.querySelector('input[type="date"]')).toBeNull();
   expect(input).toHaveAccessibleDescription(
-    'Vechimea pentru promovări se numără de la această dată.',
+    'Un Voluntar intrat după data limită de intrare nu poate fi candidat la promovare.',
   );
+  // R58: nothing counts tenure any more, so no sentence of the open editor
+  // (hint included) promises it.
+  expect(document.body.textContent).not.toMatch(/vechime/i);
   expect(
     screen.getByRole('button', { name: 'Despre data intrării' }),
   ).toBeVisible();

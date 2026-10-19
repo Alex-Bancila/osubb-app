@@ -534,7 +534,7 @@ it('says what the Data de început a punctajului changes, and what still reads o
   );
   const hint = await screen.findByText(/nu se mai numără în totaluri/);
   expect(hint).toHaveTextContent(
-    'nu se mai numără în totaluri (punctajul personal, campaniile, Cupa departamentelor); Clasamentul le arată doar cu un „De la” mai vechi.',
+    'nu se mai numără în totaluri (punctajul personal, campaniile, Cupa departamentelor); Clasamentul și Tracker membru le arată doar cu un „De la” mai vechi.',
   );
   expect(hint).not.toHaveTextContent('niciun total');
 });

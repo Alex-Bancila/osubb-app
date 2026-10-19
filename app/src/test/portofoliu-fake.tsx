@@ -337,6 +337,8 @@ const answer = async (name: string, args: Record<string, unknown>) => {
       };
     case 'run_role_evaluation': {
       const id = db.runs.length + 10;
+      const kind = String(args.p_kind);
+      const ranAt = '2026-09-28T10:00:00Z';
       db.runs.push({
         id,
         kind: String(args.p_kind),
@@ -344,7 +346,7 @@ const answer = async (name: string, args: Record<string, unknown>) => {
         period_from: String(args.p_from),
         period_to: String(args.p_to),
         run_by: 'bc',
-        run_at: '2026-09-28T10:00:00Z',
+        run_at: ranAt,
         threshold_used: 30,
         threshold_computed: 25,
         ranked_count: 4,
@@ -353,12 +355,62 @@ const answer = async (name: string, args: Record<string, unknown>) => {
         membership_cutoff: (args.p_cutoff as string | undefined) ?? null,
         evaluated_count: 6,
       });
-      // The values used become the settings in force (write-through).
-      db.settings.eligibility_floor = Number(args.p_floor);
-      if (args.p_kind === 'voluntar_activ') {
-        db.settings.activ_percent = Number(args.p_percent);
-        db.settings.membership_cutoff = (args.p_cutoff as string) ?? null;
-      } else db.settings.vot_percent = Number(args.p_percent);
+      // A finalised run hands the line it computed to its kind's Promotion
+      // Threshold and writes the values it used through to the settings in
+      // force, each changed value logged once naming the run (source
+      // role_evaluation, no author) -- as run_role_evaluation does.
+      const logRun = (
+        change: Pick<Change, 'from_value' | 'to_value'> & Partial<Change>,
+      ) =>
+        logChange({
+          kind: null,
+          source: 'role_evaluation',
+          changed_by: null,
+          role_evaluation_id: id,
+          changed_at: ranAt,
+          ...change,
+        });
+      const threshold = db.thresholds.find((row) => row.kind === kind);
+      const line = 25;
+      if (threshold && threshold.threshold !== line) {
+        logRun({ kind, from_value: threshold.threshold, to_value: line });
+        threshold.threshold = line;
+        threshold.updated_by = null;
+      }
+      const floor = Number(args.p_floor);
+      if (db.settings.eligibility_floor !== floor)
+        logRun({
+          field: 'floor',
+          from_value: db.settings.eligibility_floor,
+          to_value: floor,
+        });
+      db.settings.eligibility_floor = floor;
+      const percent = Number(args.p_percent);
+      const percentWas =
+        kind === 'voluntar_activ'
+          ? db.settings.activ_percent
+          : db.settings.vot_percent;
+      if (percentWas !== percent)
+        logRun({
+          kind,
+          field: 'percent',
+          from_value: percentWas,
+          to_value: percent,
+        });
+      if (kind === 'voluntar_activ') {
+        db.settings.activ_percent = percent;
+        const cutoff = (args.p_cutoff as string | undefined) ?? null;
+        if (db.settings.membership_cutoff !== cutoff)
+          logRun({
+            field: 'cutoff',
+            from_value: null,
+            to_value: null,
+            from_date: db.settings.membership_cutoff,
+            to_date: cutoff,
+          });
+        db.settings.membership_cutoff = cutoff;
+      } else db.settings.vot_percent = percent;
+      db.settings.updated_by = null;
       return {
         data: [
           {

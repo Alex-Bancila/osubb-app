@@ -62,9 +62,15 @@ describe('the confirmation of Finalizează (R58, spec F)', () => {
         percent: 35,
         line: null,
       });
+      // The kind's own line, never a bare "prag".
+      const line =
+        kind === 'voluntar_activ'
+          ? 'Prag de promovare'
+          : 'Prag Adunarea Generală';
       expect(text).toBe(
-        'Nimeni nu atinge pragul minim: evaluarea se înregistrează fără prag nou, iar toți deținătorii devin semnale de retenție.',
+        `Nimeni nu atinge pragul minim: evaluarea se înregistrează fără un nou ${line}, iar toți deținătorii devin semnale de retenție.`,
       );
+      expect(text).not.toMatch(/fără prag/i);
     },
   );
 

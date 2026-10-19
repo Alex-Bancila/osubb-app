@@ -326,7 +326,7 @@ export function SettingsPanel({
             <ValueRow
               editor={{
                 label: 'Data de început a punctajului',
-                hint: 'Punctele de task primite înainte de această zi nu se mai numără în totaluri (punctajul personal, campaniile, Cupa departamentelor); Clasamentul le arată doar cu un „De la” mai vechi. Evaluările rulate o ignoră, perioada lor fiind aleasă la rulare.',
+                hint: 'Punctele de task primite înainte de această zi nu se mai numără în totaluri (punctajul personal, campaniile, Cupa departamentelor); Clasamentul și Tracker membru le arată doar cu un „De la” mai vechi. Evaluările rulate o ignoră, perioada lor fiind aleasă la rulare.',
                 editorHint:
                   'O zi, cel târziu azi. Taskurile mai vechi își păstrează punctele și rămân în Taskuri încheiate.',
                 schema: pointsStart,
