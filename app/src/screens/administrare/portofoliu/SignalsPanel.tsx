@@ -22,9 +22,10 @@ import {
   formatInstantDay,
   KIND_LABEL,
   roleLabel,
+  shownName,
   signalReasonText,
 } from './portofoliu-text';
-import { Name, shownName } from './shared';
+import { Name } from './shared';
 
 /** The open Signals of each kind, kinds in the order the read gives them. */
 function byKind(signals: readonly RetentionSignal[]) {
@@ -55,6 +56,7 @@ export function SignalsPanel({
   // line the Signal stores.
   const reason = (signal: RetentionSignal) =>
     signalReasonText({
+      kind: signal.kind,
       reason: signal.reason,
       taskPoints: signal.taskPoints,
       thresholdUsed:

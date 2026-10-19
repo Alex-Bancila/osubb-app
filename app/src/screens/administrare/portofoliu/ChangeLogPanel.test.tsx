@@ -49,7 +49,7 @@ it('lists every change of a threshold with its author or run, the word of its fi
   db.changes = [
     {
       id: 1,
-      kind: 'voluntar_activ',
+      kind: 'adunarea_generala',
       from_value: null,
       to_value: 30,
       source: 'manual',
@@ -82,9 +82,9 @@ it('lists every change of a threshold with its author or run, the word of its fi
   show(<Host />);
 
   expect(await rowsOf()).toEqual([
-    '28.09.2026 · Adunarea Generală · procent20 % → 35 %·BCBianca Coman',
-    '01.07.2026 · Voluntar Activ · prag30 → 42·evaluarea „Semestrul I”',
-    '01.06.2026 · Voluntar Activ · pragnesetat → 30·DIDănuț',
+    '28.09.2026 · Procent Adunarea Generală20 % → 35 %·BCBianca Coman',
+    '01.07.2026 · Prag de promovare30 → 42·evaluarea „Semestrul I”',
+    '01.06.2026 · Prag Adunarea Generalănesetat → 30·DIDănuț',
   ]);
 });
 
@@ -135,7 +135,7 @@ it('lists the three evaluation settings in their own words', async () => {
   // setting names itself instead of a kind.
   expect(await rowsOf()).toEqual([
     '18.10.2026 · Data de început a punctajului01.09.2026 → 01.10.2026·DIDănuț',
-    '17.10.2026 · Data limită de intrare— → 01.03.2026·DIDănuț',
+    '17.10.2026 · Data limită de intrarenesetat → 01.03.2026·DIDănuț',
     '16.10.2026 · Prag minimnesetat → 12·DIDănuț',
   ]);
 });
@@ -169,7 +169,7 @@ it('says "migrare" for what a migration changed and names the run for what a run
   show(<Host />);
 
   expect(await rowsOf()).toEqual([
-    '18.10.2026 · Voluntar Activ · procent20 % → 35 %·migrare',
+    '18.10.2026 · Procent Voluntar Activ20 % → 35 %·migrare',
     '01.07.2026 · Prag minim10 → 12·evaluarea „Semestrul I”',
   ]);
 });

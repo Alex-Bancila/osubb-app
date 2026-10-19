@@ -19,8 +19,8 @@ import {
   useReadNotificationsAbout,
 } from '../../../queries/notifications';
 import { usePromotionCandidates } from '../../../queries/role-evaluations';
-import { formatInstantDay, promoteHref } from './portofoliu-text';
-import { Name, RejectDialog, shownName, type RunCommand } from './shared';
+import { formatInstantDay, promoteHref, shownName } from './portofoliu-text';
+import { Name, RejectDialog, type RunCommand } from './shared';
 
 /**
  * Candidați la promovare: the Voluntari who joined by the Data limită de

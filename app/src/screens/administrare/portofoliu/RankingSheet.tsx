@@ -70,7 +70,7 @@ function columns(identities: Identities): DataTableColumn<RankingRow>[] {
     {
       id: 'inside',
       accessorFn: (row) => row.inside,
-      header: 'În interior',
+      header: 'Atinge linia',
       enableSorting: false,
       cell: ({ row }) =>
         row.original.inside ? (
@@ -112,6 +112,7 @@ export function RankingSheet({
   onOpenChange,
   title,
   kind,
+  line,
   rows,
   children,
 }: {
@@ -120,6 +121,12 @@ export function RankingSheet({
   title: string;
   /** Names the line in the summary; the rows alone do not say which kind. */
   kind?: RoleEvaluationKind;
+  /**
+   * The line the summary states, when it is not the rows': a finished run
+   * states the one it recorded, while its rows are recomputed from today's
+   * ledger (spec C) and a later reversal may have moved theirs.
+   */
+  line?: number | null;
   rows?: readonly RankingRow[];
   children?: ReactNode;
 }) {
@@ -133,7 +140,7 @@ export function RankingSheet({
             <SheetTitle>{title}</SheetTitle>
             {first && kind ? (
               <SheetDescription className="tabular-nums">
-                {lineText(kind, first.line)} ·{' '}
+                {lineText(kind, line === undefined ? first.line : line)} ·{' '}
                 {countsText(first.rankedCount, first.evaluatedCount)}
               </SheetDescription>
             ) : (
@@ -177,6 +184,7 @@ export function RunRankingSheet({
       }}
       title={shown ? `Clasamentul evaluării „${shown.name}”` : 'Clasament'}
       kind={kind}
+      line={readable ? shown.threshold_computed : undefined}
       rows={readable ? ranking.data : undefined}
     >
       {!shown ? null : !readable ? (

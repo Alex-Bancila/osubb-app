@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode, type Ref } from 'react';
 import { ListChecks } from 'lucide-react';
 import { SubHeading, rowListClass } from '../../../components/layout';
 import { Button } from '../../../components/ui/button';
@@ -44,11 +44,14 @@ export function SimulationResult({
   kind,
   floor,
   rows,
+  lineRef,
 }: {
   kind: RoleEvaluationKind;
   /** The Prag minim the Simulation used: what a Member under it is judged by. */
   floor: number;
   rows: readonly RankingRow[];
+  /** Where focus goes when the result replaces the form that asked for it. */
+  lineRef?: Ref<HTMLParagraphElement>;
 }) {
   const [ranking, setRanking] = useState(false);
   const outcome = useMemo(() => simulationOutcome(rows, kind), [rows, kind]);
@@ -75,8 +78,10 @@ export function SimulationResult({
     <div data-slot="simulation-result" className="grid min-w-0 gap-4">
       <div className="grid gap-0.5">
         <p
+          ref={lineRef}
+          tabIndex={-1}
           data-slot="simulation-line"
-          className="m-0 text-base font-semibold tabular-nums"
+          className="m-0 text-base font-semibold tabular-nums outline-none"
         >
           {lineText(kind, outcome.line)}
         </p>
@@ -124,6 +129,7 @@ export function SimulationResult({
               <Entry
                 key={`${row.memberId}:${reason}`}
                 detail={`${roleLabel(row.role)} · ${signalReasonText({
+                  kind,
                   reason,
                   taskPoints: row.taskPoints,
                   thresholdUsed: reason === 'below_floor' ? floor : row.line,

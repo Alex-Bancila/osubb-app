@@ -70,7 +70,7 @@ it('lists every evaluated Member in the order given, with the rank or "sub prag 
     within(table)
       .getAllByRole('columnheader')
       .map((cell) => cell.textContent),
-  ).toEqual(['Membru', 'Rol', 'Puncte', 'Loc', 'În interior']);
+  ).toEqual(['Membru', 'Rol', 'Puncte', 'Loc', 'Atinge linia']);
   // Columns are not sortable: the order is the read's.
   expect(within(table).queryByRole('button', { name: /Sortează/ })).toBeNull();
   const body = within(table)
@@ -143,6 +143,10 @@ it('reads the ranking of a finished run from the server and titles it with the r
     p_role_evaluation_id: 1,
   });
   expect(sheet).toHaveTextContent('Ion Vlad');
+  // The summary states the line the run recorded (42), as its History row
+  // does; the rows below are recomputed from today's ledger (line 40).
+  expect(sheet).toHaveTextContent('Prag de promovare: 42 de puncte');
+  expect(sheet).not.toHaveTextContent('Prag de promovare: 40 de puncte');
 });
 
 it('says a run from before Portofoliu Interne has no ranking any more, and asks nothing', async () => {

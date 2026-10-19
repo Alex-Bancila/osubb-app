@@ -386,24 +386,6 @@ const answer = async (name: string, args: Record<string, unknown>) => {
       }
       return { data: row, error: null };
     }
-    case 'evaluation_percents':
-      return {
-        data: ['voluntar_activ', 'adunarea_generala'].map((kind) => {
-          const last = [...db.changes]
-            .filter((c) => c.kind === kind && c.field === 'percent')
-            .sort((a, b) => b.changed_at.localeCompare(a.changed_at))[0];
-          return {
-            kind,
-            percent:
-              kind === 'voluntar_activ'
-                ? db.settings.activ_percent
-                : db.settings.vot_percent,
-            changed_at: last?.changed_at ?? null,
-            changed_by: last?.changed_by ?? null,
-          };
-        }),
-        error: null,
-      };
     case 'set_evaluation_percent': {
       const kind = String(args.p_kind);
       logChange({
@@ -541,12 +523,15 @@ function Where() {
   return <div data-testid="where">{pathname + search}</div>;
 }
 
-/** Mount a panel (or the page) under a query client and a router. */
+/**
+ * Mount a panel (or the page) under a query client and a router. The client
+ * comes back with the render, to move the data under a page that is up.
+ */
 export function show(element: ReactElement) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={['/administrare/portofoliu-interne']}>
         <Routes>
@@ -556,4 +541,5 @@ export function show(element: ReactElement) {
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return { ...view, client };
 }

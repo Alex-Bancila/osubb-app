@@ -1,4 +1,11 @@
-import { useId, useMemo, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
 import { Panel } from '../../../components/layout';
 import { ErrorState, Loading } from '../../../components/states';
 import { Button } from '../../../components/ui/button';
@@ -37,11 +44,12 @@ import {
   defaultRangeStart,
   finalizeConsequences,
   KIND_LABEL,
+  rangeText,
   runResultText,
   SIMULATION_NOTE,
 } from './portofoliu-text';
 import { SimulationResult } from './SimulationResult';
-import { rangeText, type RunCommand } from './shared';
+import { type RunCommand } from './shared';
 
 /** What the member has typed over the values the settings prefill. */
 type Edits = Partial<{
@@ -117,6 +125,20 @@ export function RunPanel({
   const [message, setMessage] = useState<string | null>(null);
   // One receipt at a time across the page (F-11).
   const turn = useReceiptTurn();
+  // Where focus goes once the view that had it is gone: the result's line
+  // after Simulează, the first field after Modifică valorile, the receipt
+  // after a finished run.
+  const lineRef = useRef<HTMLParagraphElement>(null);
+  const receiptRef = useRef<HTMLParagraphElement>(null);
+  const focusNext = useRef<'line' | 'field' | 'receipt' | null>(null);
+  useEffect(() => {
+    const target = focusNext.current;
+    if (!target) return;
+    focusNext.current = null;
+    if (target === 'line') lineRef.current?.focus();
+    else if (target === 'field') document.getElementById(fromId)?.focus();
+    else receiptRef.current?.focus();
+  });
 
   // "De la" starts the day after the kind's last range, never after today;
   // "Până la" is today. The rest is what the settings hold, until typed over.
@@ -196,6 +218,7 @@ export function RunPanel({
       const rows = await simulateRoleEvaluation(values);
       form.reset();
       setSimulated({ values, input, rows });
+      focusNext.current = 'line';
     } catch (failure) {
       form.fail(failure, 'Nu am putut simula evaluarea. Reîncearcă.');
     } finally {
@@ -204,6 +227,7 @@ export function RunPanel({
   }
 
   function backToForm() {
+    focusNext.current = 'field';
     setSimulated(null);
     setConfirming(false);
     form.reset();
@@ -230,6 +254,7 @@ export function RunPanel({
         }),
       );
       turn.claim();
+      focusNext.current = 'receipt';
       // The next run starts from the settings this one just set.
       setSimulated(null);
       setEdits({});
@@ -252,6 +277,7 @@ export function RunPanel({
       </label>
       <Input
         id={nameId}
+        aria-label="Nume"
         value={live.name}
         required
         placeholder="Toamna 2026"
@@ -282,9 +308,7 @@ export function RunPanel({
         />
       ) : simulated ? (
         <div className="grid min-w-0 gap-4">
-          <p role="status" className="m-0 text-sm font-medium">
-            {SIMULATION_NOTE}
-          </p>
+          <p className="m-0 text-sm font-medium">{SIMULATION_NOTE}</p>
           <p className="m-0 text-sm text-muted-foreground tabular-nums">
             {KIND_LABEL[simulated.values.kind]} ·{' '}
             {rangeText({
@@ -300,6 +324,7 @@ export function RunPanel({
             kind={simulated.values.kind}
             floor={simulated.values.floor}
             rows={simulated.rows}
+            lineRef={lineRef}
           />
           {nameField}
           <FieldError>{form.formError}</FieldError>
@@ -430,13 +455,21 @@ export function RunPanel({
               </p>
             )}
           </div>
-          {message && turn.current && (
-            <p role="status" className="m-0 text-sm font-medium">
-              {message}
-            </p>
-          )}
         </form>
       )}
+      {/* One live region for the whole panel, mounted before anything is said
+          in it, so a screen reader announces the receipt when it arrives. */}
+      <div role="status">
+        {message && turn.current && (
+          <p
+            ref={receiptRef}
+            tabIndex={-1}
+            className="m-0 mt-4 text-sm font-medium outline-none"
+          >
+            {message}
+          </p>
+        )}
+      </div>
       <Dialog
         open={confirming}
         onOpenChange={(next) => !disabled && setConfirming(next)}

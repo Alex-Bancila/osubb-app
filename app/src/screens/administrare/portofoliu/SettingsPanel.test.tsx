@@ -138,7 +138,7 @@ it('edits each setting on Salvează and logs it', async () => {
   await user.click(
     within(panel).getByRole('button', { name: 'Editează Prag minim' }),
   );
-  const floor = within(panel).getByLabelText('Prag minim');
+  const floor = within(panel).getByLabelText('Valoare nouă pentru Prag minim');
   expect(floor).toHaveFocus();
   expect(floor).toHaveValue('10');
   await user.clear(floor);
@@ -178,7 +178,7 @@ it('edits each setting on Salvează and logs it', async () => {
   );
   await pickDate(
     user,
-    within(panel).getByLabelText('Data limită de intrare'),
+    within(panel).getByLabelText('Valoare nouă pentru Data limită de intrare'),
     '2026-03-15',
   );
   await save(user, row(panel, 'Data limită de intrare'));
@@ -199,7 +199,9 @@ it('edits each setting on Salvează and logs it', async () => {
   );
   await pickDate(
     user,
-    within(panel).getByLabelText('Data de început a punctajului'),
+    within(panel).getByLabelText(
+      'Valoare nouă pentru Data de început a punctajului',
+    ),
     '2026-09-01',
   );
   await save(user, row(panel, 'Data de început a punctajului'));
@@ -218,7 +220,9 @@ it('edits each setting on Salvează and logs it', async () => {
       name: 'Editează Procent Adunarea Generală',
     }),
   );
-  const share = within(panel).getByLabelText('Procent Adunarea Generală');
+  const share = within(panel).getByLabelText(
+    'Valoare nouă pentru Procent Adunarea Generală',
+  );
   expect(share).toHaveValue(25);
   await user.clear(share);
   await user.type(share, '101');
@@ -241,7 +245,9 @@ it('edits each setting on Salvează and logs it', async () => {
       name: 'Editează Procent Voluntar Activ',
     }),
   );
-  const activ = within(panel).getByLabelText('Procent Voluntar Activ');
+  const activ = within(panel).getByLabelText(
+    'Valoare nouă pentru Procent Voluntar Activ',
+  );
   await user.clear(activ);
   await user.type(activ, '40');
   await save(user, row(panel, 'Procent Voluntar Activ'));
@@ -345,7 +351,7 @@ it("shows a refusal under the row's field", async () => {
   await user.click(
     within(panel).getByRole('button', { name: 'Editează Prag minim' }),
   );
-  const floor = within(panel).getByLabelText('Prag minim');
+  const floor = within(panel).getByLabelText('Valoare nouă pentru Prag minim');
   await user.clear(floor);
   await user.type(floor, '12');
   await save(user, row(panel, 'Prag minim'));
@@ -366,7 +372,9 @@ it("shows a refusal under the row's field", async () => {
   );
   await pickDate(
     user,
-    within(panel).getByLabelText('Data de început a punctajului'),
+    within(panel).getByLabelText(
+      'Valoare nouă pentru Data de început a punctajului',
+    ),
     '2026-09-01',
   );
   await save(user, row(panel, 'Data de început a punctajului'));
@@ -387,7 +395,7 @@ it("shows a refusal under the row's field", async () => {
   );
   await pickDate(
     user,
-    within(panel).getByLabelText('Data limită de intrare'),
+    within(panel).getByLabelText('Valoare nouă pentru Data limită de intrare'),
     '2026-03-15',
   );
   await save(user, row(panel, 'Data limită de intrare'));
@@ -407,7 +415,9 @@ it("shows a refusal under the row's field", async () => {
       name: 'Editează Procent Adunarea Generală',
     }),
   );
-  const share = within(panel).getByLabelText('Procent Adunarea Generală');
+  const share = within(panel).getByLabelText(
+    'Valoare nouă pentru Procent Adunarea Generală',
+  );
   await user.clear(share);
   await user.type(share, '30');
   await save(user, row(panel, 'Procent Adunarea Generală'));
@@ -449,7 +459,9 @@ it('still edits the two Promotion Thresholds by hand', async () => {
   await user.click(
     within(panel).getByRole('button', { name: 'Editează Prag de promovare' }),
   );
-  const input = within(panel).getByLabelText('Prag de promovare');
+  const input = within(panel).getByLabelText(
+    'Valoare nouă pentru Prag de promovare',
+  );
   expect(input).toHaveValue(42);
   await user.clear(input);
   await user.type(input, '0');
@@ -475,10 +487,54 @@ it('still edits the two Promotion Thresholds by hand', async () => {
       name: 'Editează Prag Adunarea Generală',
     }),
   );
-  await user.type(within(panel).getByLabelText('Prag Adunarea Generală'), '12');
+  await user.type(
+    within(panel).getByLabelText('Valoare nouă pentru Prag Adunarea Generală'),
+    '12',
+  );
   await save(user, row(panel, 'Prag Adunarea Generală'));
   expect(db.rpc).toHaveBeenCalledWith('set_promotion_threshold', {
     p_kind: 'adunarea_generala',
     p_threshold: 12,
   });
+});
+
+it('names each editor’s field for the setting it changes', async () => {
+  const user = userEvent.setup();
+  show(<Host />);
+  const panel = await settings();
+
+  await user.click(
+    within(panel).getByRole('button', { name: 'Editează Prag minim' }),
+  );
+  expect(
+    within(panel).getByRole('textbox', {
+      name: 'Valoare nouă pentru Prag minim',
+    }),
+  ).toBeVisible();
+  await user.click(
+    within(panel).getByRole('button', {
+      name: 'Editează Data limită de intrare',
+    }),
+  );
+  expect(
+    within(panel).getByRole('button', {
+      name: /Valoare nouă pentru Data limită de intrare/,
+    }),
+  ).toBeVisible();
+});
+
+it('says what the Data de început a punctajului changes, and what still reads older points', async () => {
+  const user = userEvent.setup();
+  show(<Host />);
+  const panel = await settings();
+  await user.click(
+    within(panel).getByRole('button', {
+      name: 'Despre Data de început a punctajului',
+    }),
+  );
+  const hint = await screen.findByText(/nu se mai numără în totaluri/);
+  expect(hint).toHaveTextContent(
+    'nu se mai numără în totaluri (punctajul personal, campaniile, Cupa departamentelor); Clasamentul le arată doar cu un „De la” mai vechi.',
+  );
+  expect(hint).not.toHaveTextContent('niciun total');
 });

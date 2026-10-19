@@ -125,6 +125,39 @@ it('lists the open Retention Signals with their reason and a link to Roluri', as
   );
 });
 
+// The Adunarea Generală has no promotion: its line has its own name, the one
+// the Notification of the same Signal uses.
+it('names the Adunarea Generală line for a voter below it, not the promotion one', async () => {
+  db.runs = [RUN_VA];
+  db.signals = [
+    signal({
+      id: 1,
+      kind: 'adunarea_generala',
+      member_id: 'eva',
+      role_at_listing: 'vot',
+      reason: 'below_line',
+      task_points: 12,
+      threshold_used: 40,
+      role_evaluation_id: 2,
+    }),
+    signal({ id: 2, member_id: 'ana' }),
+  ];
+  show(<Host />);
+  const signals = await panel();
+  const ag = await within(signals).findByRole('list', {
+    name: 'Semnale de retenție: Adunarea Generală',
+  });
+  expect(ag).toHaveTextContent(
+    'sub pragul Adunării Generale (12 din 40 de puncte)',
+  );
+  expect(ag).not.toHaveTextContent('pragul de promovare');
+  expect(
+    within(signals).getByRole('list', {
+      name: 'Semnale de retenție: Voluntar Activ',
+    }),
+  ).toHaveTextContent('sub pragul de promovare (12 din 40 de puncte)');
+});
+
 it('says so when none is open', async () => {
   db.runs = [RUN_VA];
   db.signals = [signal({ id: 1, closed_at: '2026-07-02T09:00:00Z' })];

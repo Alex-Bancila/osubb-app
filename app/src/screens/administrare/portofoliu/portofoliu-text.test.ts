@@ -7,10 +7,16 @@ import {
   formatInstantDay,
   lineText,
   nextDay,
+  PERCENT_LABEL,
+  pointsOrDash,
   promoteHref,
+  rangeText,
   roleLabel,
+  runNameOf,
   runResultText,
+  shownName,
   signalReasonText,
+  THRESHOLD_LABEL,
   SIMULATION_NOTE,
   UNIVERSITY_SIGNALS_NOTE,
 } from './portofoliu-text';
@@ -28,7 +34,7 @@ describe('the confirmation of Finalizează (R58, spec F)', () => {
     expect(
       finalizeConsequences({ ...base, kind: 'voluntar_activ', percent: 35 }),
     ).toBe(
-      'Clasăm punctele de task primite între 01.07.2026 și 28.09.2026 de toți membrii sub BCE care au cel puțin 10 puncte. Pragul de promovare devine punctele ultimului membru din primii 35%: 40 de puncte. Voluntarii intrați până la 31.03.2026 care îl ating devin candidați la promovare; Voluntarii Activi și Voluntarii cu Drept de Vot sub el, sau sub pragul minim, devin semnale de retenție. Nimeni nu este promovat sau retrogradat automat.',
+      'Clasăm punctele de task primite între 01.07.2026 și 28.09.2026 de toți membrii sub BCE care au cel puțin 10 puncte. Pragul de promovare devine punctele ultimului membru din primii 35 %: 40 de puncte. Voluntarii intrați până la 31.03.2026 care îl ating devin candidați la promovare; Voluntarii Activi și Voluntarii cu Drept de Vot sub el, sau sub pragul minim, devin semnale de retenție. Nimeni nu este promovat sau retrogradat automat.',
     );
   });
 
@@ -43,7 +49,7 @@ describe('the confirmation of Finalizează (R58, spec F)', () => {
         floor: 1,
       }),
     ).toBe(
-      'Clasăm punctele de task primite între 01.07.2026 și 28.09.2026 de toți membrii Adunării Generale care au cel puțin 1 punct. Pragul Adunarea Generală devine punctele ultimului membru din primii 25%: 12 puncte. Voluntarii cu Drept de Vot sub el, sau sub pragul minim, devin semnale de retenție. Nimeni nu este promovat sau retrogradat automat.',
+      'Clasăm punctele de task primite între 01.07.2026 și 28.09.2026 de toți membrii Adunării Generale care au cel puțin 1 punct. Pragul Adunarea Generală devine punctele ultimului membru din primii 25 %: 12 puncte. Voluntarii cu Drept de Vot sub el, sau sub pragul minim, devin semnale de retenție. Nimeni nu este promovat sau retrogradat automat.',
     );
   });
 
@@ -74,6 +80,7 @@ describe('why a Retention Signal was raised', () => {
   it('compares a Member below the line with the Prag de promovare', () => {
     expect(
       signalReasonText({
+        kind: 'voluntar_activ',
         reason: 'below_line',
         taskPoints: 12,
         thresholdUsed: 40,
@@ -81,9 +88,32 @@ describe('why a Retention Signal was raised', () => {
     ).toBe('sub pragul de promovare (12 din 40 de puncte)');
   });
 
+  // The Adunarea Generală has no promotion: its line has its own name, the
+  // one the Notification uses.
+  it('names the Adunarea Generală line for a voter below it', () => {
+    expect(
+      signalReasonText({
+        kind: 'adunarea_generala',
+        reason: 'below_line',
+        taskPoints: 12,
+        thresholdUsed: 40,
+      }),
+    ).toBe('sub pragul Adunării Generale (12 din 40 de puncte)');
+  });
+
   it('compares a Member below the Floor with the Prag minim', () => {
     expect(
       signalReasonText({
+        kind: 'voluntar_activ',
+        reason: 'below_floor',
+        taskPoints: 3,
+        thresholdUsed: 10,
+      }),
+    ).toBe('sub pragul minim (3 din 10 puncte)');
+    // The same words for both kinds: the Floor is shared.
+    expect(
+      signalReasonText({
+        kind: 'adunarea_generala',
         reason: 'below_floor',
         taskPoints: 3,
         thresholdUsed: 10,
@@ -93,7 +123,12 @@ describe('why a Retention Signal was raised', () => {
 
   it('counts with the Romanian plural: 1 punct, de puncte from 20 on', () => {
     const text = (taskPoints: number, thresholdUsed: number) =>
-      signalReasonText({ reason: 'below_floor', taskPoints, thresholdUsed });
+      signalReasonText({
+        kind: 'voluntar_activ',
+        reason: 'below_floor',
+        taskPoints,
+        thresholdUsed,
+      });
     expect(text(0, 1)).toBe('sub pragul minim (0 din 1 punct)');
     expect(text(5, 19)).toBe('sub pragul minim (5 din 19 puncte)');
     expect(text(5, 20)).toBe('sub pragul minim (5 din 20 de puncte)');
@@ -104,6 +139,7 @@ describe('why a Retention Signal was raised', () => {
   it('says a voter left UBB without any figures', () => {
     expect(
       signalReasonText({
+        kind: 'adunarea_generala',
         reason: 'not_ubb_student',
         taskPoints: null,
         thresholdUsed: null,
@@ -114,6 +150,7 @@ describe('why a Retention Signal was raised', () => {
   it('keeps the reason alone when a figure is missing', () => {
     expect(
       signalReasonText({
+        kind: 'voluntar_activ',
         reason: 'below_floor',
         taskPoints: 3,
         thresholdUsed: null,
@@ -121,6 +158,7 @@ describe('why a Retention Signal was raised', () => {
     ).toBe('sub pragul minim');
     expect(
       signalReasonText({
+        kind: 'voluntar_activ',
         reason: 'below_line',
         taskPoints: null,
         thresholdUsed: 40,
@@ -160,6 +198,50 @@ describe('the line and the counts of a ranking', () => {
     expect(roleLabel('activ')).toBe('Voluntar Activ');
     expect(roleLabel('vot')).toBe('Voluntar cu Drept de Vot');
     expect(roleLabel('altceva')).toBe('altceva');
+  });
+});
+
+describe('the small words the rows share', () => {
+  it('names each kind’s line and share the way Setări does, never "prag" alone', () => {
+    expect(THRESHOLD_LABEL).toEqual({
+      voluntar_activ: 'Prag de promovare',
+      adunarea_generala: 'Prag Adunarea Generală',
+    });
+    expect(PERCENT_LABEL).toEqual({
+      voluntar_activ: 'Procent Voluntar Activ',
+      adunarea_generala: 'Procent Adunarea Generală',
+    });
+  });
+
+  it('writes a range and a figure, with a dash for none', () => {
+    expect(
+      rangeText({ period_from: '2026-02-01', period_to: '2026-06-30' }),
+    ).toBe('01.02.2026–30.06.2026');
+    expect(pointsOrDash(42)).toBe('42');
+    expect(pointsOrDash(null)).toBe('—');
+  });
+
+  it('finds a run’s name, or an ellipsis until the runs are read', () => {
+    const runs = [{ id: 1, name: 'Toamna 2026' }] as unknown as Parameters<
+      typeof runNameOf
+    >[0];
+    expect(runNameOf(runs, 1)).toBe('Toamna 2026');
+    expect(runNameOf(runs, 9)).toBe('…');
+    expect(runNameOf(runs, null)).toBe('…');
+  });
+
+  it('shows a Member by Nickname, else full name, else as unknown', () => {
+    const identities = new Map([
+      [
+        'dan',
+        { memberId: 'dan', nickname: ' Dănuț ', fullName: 'Dan Ionescu' },
+      ],
+      ['ana', { memberId: 'ana', nickname: null, fullName: 'Ana Pop' }],
+    ]) as Parameters<typeof shownName>[1];
+    expect(shownName('dan', identities)).toBe('Dănuț');
+    expect(shownName('ana', identities)).toBe('Ana Pop');
+    expect(shownName('x', identities)).toBe('Membru OSUBB');
+    expect(shownName('x', undefined)).toBe('Membru OSUBB');
   });
 });
 

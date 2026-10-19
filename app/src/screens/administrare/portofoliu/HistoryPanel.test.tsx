@@ -66,8 +66,8 @@ it('lists runs newest first with their values, and opens the ranking of a run', 
     'Data limită de intrare',
     'Rulată de',
     'Data',
-    'Prag de promovare înainte',
-    'Prag de promovare calculat',
+    'Linia înainte',
+    'Linia calculată',
     'Clasați / evaluați',
     'Clasament',
   ]);
@@ -197,7 +197,9 @@ it('lists the runs as rows under the width the table’s columns fit, so nothing
     expect(rows[0]).toHaveTextContent('Procent 25 %');
     expect(rows[1]).toHaveTextContent('Semestrul I');
     expect(rows[1]).toHaveTextContent('Data limită de intrare 31.03.2026');
-    expect(rows[1]).toHaveTextContent('înainte 30');
+    expect(rows[0]).toHaveTextContent('Prag Adunarea Generală înainte 10');
+    expect(rows[0]).toHaveTextContent('calculat —');
+    expect(rows[1]).toHaveTextContent('Prag de promovare înainte 30');
     expect(rows[1]).toHaveTextContent('calculat 42');
     expect(rows[1]).toHaveTextContent('8 / 12');
 

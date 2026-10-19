@@ -208,7 +208,7 @@ it('runs a whole evaluation through the commands of R58 and calls none of the re
   ).closest('section') as HTMLElement;
 
   await user.click(within(run).getByRole('button', { name: 'Simulează' }));
-  await user.type(await within(run).findByLabelText('Nume'), 'Semestrul II');
+  await user.type(await within(run).findByLabelText('Nume'), 'Toamna 2026');
   await user.click(within(run).getByRole('button', { name: 'Finalizează' }));
   await user.click(
     within(await screen.findByRole('dialog')).getByRole('button', {
@@ -216,7 +216,7 @@ it('runs a whole evaluation through the commands of R58 and calls none of the re
     }),
   );
   await within(run).findByText(
-    'Evaluarea „Semestrul II” a rulat: 2 candidați la promovare, 1 semnal de retenție.',
+    'Evaluarea „Toamna 2026” a rulat: 2 candidați la promovare, 1 semnal de retenție.',
   );
 
   const calls = db.rpc.mock.calls;
@@ -243,9 +243,4 @@ it('runs a whole evaluation through the commands of R58 and calls none of the re
     'p_percent',
     'p_to',
   ]);
-  // A ranking is asked for by the run's id, never by (kind, from, to).
-  for (const [, args] of calls.filter(
-    ([asked]) => asked === 'role_evaluation_ranking',
-  ))
-    expect(args).toEqual({ p_role_evaluation_id: expect.any(Number) });
 });

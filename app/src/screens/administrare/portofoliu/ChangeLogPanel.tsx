@@ -1,14 +1,24 @@
 import { cn } from 'cn';
 import { Panel, rowListClass } from '../../../components/layout';
 import { ErrorState, Loading } from '../../../components/states';
-import { formatDay, formatMonthCount, formatPoints } from '../../../lib/format';
+import {
+  formatDayOrNull,
+  formatMonthCount,
+  formatPoints,
+} from '../../../lib/format';
+import type { RoleEvaluationKind } from '../../../lib/schemas/role-evaluation';
 import {
   useThresholdChanges,
   type RoleEvaluation,
   type ThresholdChange,
 } from '../../../queries/role-evaluations';
-import { formatInstantDay, KIND_LABEL } from './portofoliu-text';
-import { Name, runNameOf, useChangeAuthors } from './shared';
+import {
+  formatInstantDay,
+  PERCENT_LABEL,
+  runNameOf,
+  THRESHOLD_LABEL,
+} from './portofoliu-text';
+import { Name, useChangeAuthors } from './shared';
 
 /** The log's subject for an evaluation setting (R58), which names no kind. */
 const SETTING_LABEL: Record<string, string> = {
@@ -18,10 +28,9 @@ const SETTING_LABEL: Record<string, string> = {
 };
 
 /**
- * The log's subject, with the word of the field changed: a kind and what of
- * it (`Voluntar Activ · prag`, `· procent`), a setting by its own name or —
- * history since R58 dropped the Promotion Rules — a rule's `vechime` or
- * `regulă pornită`.
+ * The log's subject, by the name Setări gives it: a kind's `Prag de promovare`
+ * or `Procent Voluntar Activ`, a setting by its own name or — history since
+ * R58 dropped the Promotion Rules — a rule's `vechime` or `regulă pornită`.
  */
 function changeSubject(change: ThresholdChange): string {
   const setting = SETTING_LABEL[change.field];
@@ -29,8 +38,9 @@ function changeSubject(change: ThresholdChange): string {
   if (change.promotion_rule_id !== null) {
     return `Regulă de promovare · ${change.field === 'enabled' ? 'regulă pornită' : 'vechime'}`;
   }
-  const kind = change.kind ?? '';
-  return `${KIND_LABEL[kind] ?? kind} · ${change.field === 'percent' ? 'procent' : 'prag'}`;
+  const kind = (change.kind ?? '') as RoleEvaluationKind;
+  const labels = change.field === 'percent' ? PERCENT_LABEL : THRESHOLD_LABEL;
+  return labels[kind] ?? kind;
 }
 
 /** The log's before → after, in each value's own unit. */
@@ -40,10 +50,11 @@ function changeValues(change: ThresholdChange): string {
       return `${change.from_value ?? '—'} % → ${change.to_value ?? '—'} %`;
     case 'tenure':
       return `${change.from_value === null ? '—' : formatMonthCount(change.from_value)} → ${change.to_value === null ? '—' : formatMonthCount(change.to_value)}`;
-    // The two dates carry no number: the day before and the day after, `—` for none.
+    // The two dates carry no number: the day before and the day after, and
+    // `nesetat` for none, as a first Prag minim reads.
     case 'cutoff':
     case 'points_start':
-      return `${formatDay(change.from_date)} → ${formatDay(change.to_date)}`;
+      return `${formatDayOrNull(change.from_date) ?? 'nesetat'} → ${formatDayOrNull(change.to_date) ?? 'nesetat'}`;
     case 'enabled': {
       const state = (value: number | null) =>
         value === 1 ? 'pornită' : 'oprită';
@@ -52,7 +63,7 @@ function changeValues(change: ThresholdChange): string {
     default:
       return `${
         change.from_value === null ? 'nesetat' : formatPoints(change.from_value)
-      } → ${change.to_value === null ? '—' : formatPoints(change.to_value)}`;
+      } → ${change.to_value === null ? 'nesetat' : formatPoints(change.to_value)}`;
   }
 }
 

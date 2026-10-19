@@ -9,9 +9,16 @@ import { formatDay } from '../../../lib/format';
 import { useMemberIdentities } from '../../../queries/member-identities';
 import type { RoleEvaluation } from '../../../queries/role-evaluations';
 import { useMinWidth } from '../../volunteers/use-min-width';
-import { formatInstantDay, KIND_LABEL } from './portofoliu-text';
+import type { RoleEvaluationKind } from '../../../lib/schemas/role-evaluation';
+import {
+  formatInstantDay,
+  KIND_LABEL,
+  pointsOrDash,
+  rangeText,
+  THRESHOLD_LABEL,
+} from './portofoliu-text';
 import { RunRankingSheet } from './RankingSheet';
-import { Name, pointsOrDash, rangeText, type Identities } from './shared';
+import { Name, type Identities } from './shared';
 
 /** A run's Procent, or `—` for a run recorded before Portofoliu Interne. */
 function percentOrDash(run: RoleEvaluation) {
@@ -90,10 +97,11 @@ function historyColumns(
       cell: ({ row }) => formatInstantDay(row.original.run_at),
     },
     {
-      // The line in force before the run: a first run had none.
+      // The line in force before the run: a first run had none. The Tip
+      // column says which kind's line it is.
       id: 'threshold_used',
       accessorFn: (row) => row.threshold_used,
-      header: 'Prag de promovare înainte',
+      header: 'Linia înainte',
       ...plain,
       cell: ({ row }) => pointsOrDash(row.original.threshold_used),
     },
@@ -101,7 +109,7 @@ function historyColumns(
       // The line the run computed: none when nobody reached the Prag minim.
       id: 'threshold_computed',
       accessorFn: (row) => row.threshold_computed,
-      header: 'Prag de promovare calculat',
+      header: 'Linia calculată',
       ...plain,
       cell: ({ row }) => pointsOrDash(row.original.threshold_computed),
     },
@@ -196,9 +204,9 @@ export function HistoryPanel({
                 </span>
               </span>
               <span className="text-muted-foreground tabular-nums">
-                Prag de promovare înainte {pointsOrDash(run.threshold_used)} ·
-                calculat {pointsOrDash(run.threshold_computed)} ·{' '}
-                {countsOrDash(run)}
+                {THRESHOLD_LABEL[run.kind as RoleEvaluationKind] ?? 'Linia'}{' '}
+                înainte {pointsOrDash(run.threshold_used)} · calculat{' '}
+                {pointsOrDash(run.threshold_computed)} · {countsOrDash(run)}
               </span>
               <Button
                 type="button"

@@ -1,9 +1,11 @@
 import { bucharestDayKey } from '../../../lib/calendar-time';
 import { formatDay, formatPointCount, formatPoints } from '../../../lib/format';
+import type { MemberIdentity } from '../../../components/member/member-identity';
 import type { RoleEvaluationKind } from '../../../lib/schemas/role-evaluation';
 import type {
   PromotionCandidate,
   RetentionSignal,
+  RoleEvaluation,
 } from '../../../queries/role-evaluations';
 import {
   ROLE_PANEL_MEMBER_PARAM,
@@ -30,6 +32,53 @@ const ROLE_LABEL: Record<string, string> = {
   activ: 'Voluntar Activ',
   vot: 'Voluntar cu Drept de Vot',
 };
+
+/** The name a Promotion Threshold goes by, one per kind (the copy never says "prag" alone). */
+export const THRESHOLD_LABEL: Record<RoleEvaluationKind, string> = {
+  voluntar_activ: 'Prag de promovare',
+  adunarea_generala: 'Prag Adunarea Generală',
+};
+
+/** The name of each kind's Procent. */
+export const PERCENT_LABEL: Record<RoleEvaluationKind, string> = {
+  voluntar_activ: 'Procent Voluntar Activ',
+  adunarea_generala: 'Procent Adunarea Generală',
+};
+
+/** The range of a run, as `01.02.2026–30.06.2026`. */
+export function rangeText(
+  run: Pick<RoleEvaluation, 'period_from' | 'period_to'>,
+) {
+  return `${formatDay(run.period_from)}–${formatDay(run.period_to)}`;
+}
+
+/** A points figure, or `—` for a line a run had none to show (R58). */
+export function pointsOrDash(points: number | null): string {
+  return points === null ? '—' : formatPoints(points);
+}
+
+/** The name an action's accessible label repeats. */
+export function shownName(
+  memberId: string,
+  identities: Map<string, MemberIdentity> | undefined,
+) {
+  const identity = identities?.get(memberId);
+  return identity?.nickname?.trim() || identity?.fullName || 'Membru OSUBB';
+}
+
+/** The name of a run for a log row or a note, `…` until the runs are read. */
+export function runNameOf(
+  evaluations: readonly RoleEvaluation[],
+  id: number | null,
+) {
+  return evaluations.find((run) => run.id === id)?.name ?? '…';
+}
+
+/** Refusals after which a Candidate's row is gone: the panel reports them. */
+export const STALE_CANDIDATE = new Set([
+  'promotion_candidate_not_found',
+  'promotion_candidate_decided',
+]);
 
 /** A Role as the app names it; an unknown id stands for itself. */
 export function roleLabel(role: string): string {
@@ -100,7 +149,7 @@ export function finalizeConsequences({
   if (line === null)
     return 'Nimeni nu atinge pragul minim: evaluarea se înregistrează fără prag nou, iar toți deținătorii devin semnale de retenție.';
   const ranked = `Clasăm punctele de task primite între ${formatDay(from)} și ${formatDay(to)} de toți membrii ${kind === 'voluntar_activ' ? 'sub BCE' : 'Adunării Generale'} care au cel puțin ${formatPointCount(floor)}.`;
-  const handed = `${kind === 'voluntar_activ' ? 'Pragul de promovare' : 'Pragul Adunarea Generală'} devine punctele ultimului membru din primii ${percent}%: ${formatPointCount(line)}.`;
+  const handed = `${kind === 'voluntar_activ' ? 'Pragul de promovare' : 'Pragul Adunarea Generală'} devine punctele ultimului membru din primii ${percent} %: ${formatPointCount(line)}.`;
   const outcome =
     kind === 'voluntar_activ'
       ? `Voluntarii intrați până la ${formatDay(cutoff)} care îl ating devin candidați la promovare; Voluntarii Activi și Voluntarii cu Drept de Vot sub el, sau sub pragul minim, devin semnale de retenție.`
@@ -147,21 +196,29 @@ export function runResultText({
 /**
  * Why a Retention Signal was raised, in the words of its figures:
  * `sub pragul de promovare (12 din 40 de puncte)` for a Member ranked below the
- * line, `sub pragul minim (3 din 10 puncte)` for one under the Prag minim, and
- * `nu mai este student UBB` for a voter whose Universitate is not UBB.
+ * Voluntar Activ line, `sub pragul Adunării Generale (12 din 40 de puncte)` for
+ * a voter below the Adunarea Generală's (it has no promotion, and the
+ * Notification words it so), `sub pragul minim (3 din 10 puncte)` for one
+ * under the Prag minim, and `nu mai este student UBB` for a voter whose
+ * Universitate is not UBB.
  * `thresholdUsed` is the figure the points are compared with: the line for the
  * first, the Prag minim for the second (a stored Signal of a Member under the
  * Floor carries the run's line, so the caller hands over the run's Floor). The
  * reason stands alone when a figure is missing.
  */
 export function signalReasonText(
-  signal: Pick<RetentionSignal, 'reason' | 'taskPoints' | 'thresholdUsed'>,
+  signal: Pick<
+    RetentionSignal,
+    'kind' | 'reason' | 'taskPoints' | 'thresholdUsed'
+  >,
 ): string {
   if (signal.reason === 'not_ubb_student') return 'nu mai este student UBB';
   const reason =
     signal.reason === 'below_floor'
       ? 'sub pragul minim'
-      : 'sub pragul de promovare';
+      : signal.kind === 'adunarea_generala'
+        ? 'sub pragul Adunării Generale'
+        : 'sub pragul de promovare';
   if (signal.taskPoints === null || signal.thresholdUsed === null)
     return reason;
   return `${reason} (${formatPoints(signal.taskPoints)} din ${formatPointCount(signal.thresholdUsed)})`;
@@ -176,7 +233,7 @@ export function lineText(
   line: number | null,
 ): string {
   if (line === null) return 'Nimeni nu atinge pragul minim.';
-  return `${kind === 'voluntar_activ' ? 'Prag de promovare' : 'Prag Adunarea Generală'}: ${formatPointCount(line)}`;
+  return `${THRESHOLD_LABEL[kind]}: ${formatPointCount(line)}`;
 }
 
 /** How many Members were ranked among those evaluated (one as one). */

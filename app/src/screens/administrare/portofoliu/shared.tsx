@@ -1,6 +1,3 @@
-/* Pure helpers and hooks sit beside the rows that use them, as this page's
-   one shared module; a Fast Refresh reload of it reloads the page. */
-/* oxlint-disable react/only-export-components */
 import {
   useEffect,
   useId,
@@ -29,7 +26,7 @@ import { FieldError } from '../../../components/ui/field';
 import { InfoHint } from '../../../components/ui/info-hint';
 import { Input, Textarea } from '../../../components/ui/input';
 import { describeFailure } from '../../../lib/command-reasons';
-import { formatDay, formatPointCount, formatPoints } from '../../../lib/format';
+import { formatPointCount, formatPoints } from '../../../lib/format';
 import {
   percentFieldForReason,
   percentSchema,
@@ -50,6 +47,12 @@ import type {
   ThresholdChange,
 } from '../../../queries/role-evaluations';
 import { useReceiptTurn } from '../../tracker/receipt-turn';
+import {
+  PERCENT_LABEL,
+  runNameOf,
+  STALE_CANDIDATE,
+  THRESHOLD_LABEL,
+} from './portofoliu-text';
 
 /** What the page asks of the Role Evaluation commands (run, threshold, share, reject). */
 export type RunCommand = (
@@ -57,30 +60,6 @@ export type RunCommand = (
 ) => Promise<RunResult | null>;
 
 export type Identities = Map<string, MemberIdentity> | undefined;
-
-/** The name a Promotion Threshold goes by, one per kind (the copy never says "prag" alone). */
-export const THRESHOLD_LABEL: Record<RoleEvaluationKind, string> = {
-  voluntar_activ: 'Prag de promovare',
-  adunarea_generala: 'Prag Adunarea Generală',
-};
-
-/** The name of each kind's Procent. */
-export const PERCENT_LABEL: Record<RoleEvaluationKind, string> = {
-  voluntar_activ: 'Procent Voluntar Activ',
-  adunarea_generala: 'Procent Adunarea Generală',
-};
-
-/** The range of a run, as `01.02.2026–30.06.2026`. */
-export function rangeText(
-  run: Pick<RoleEvaluation, 'period_from' | 'period_to'>,
-) {
-  return `${formatDay(run.period_from)}–${formatDay(run.period_to)}`;
-}
-
-/** A points figure, or `—` for a line a run had none to show (R58). */
-export function pointsOrDash(points: number | null): string {
-  return points === null ? '—' : formatPoints(points);
-}
 
 /** A name button for a Member the identities read may not have answered yet. */
 export function Name({
@@ -102,13 +81,8 @@ export function Name({
   );
 }
 
-/** The name an action's accessible label repeats. */
-export function shownName(memberId: string, identities: Identities) {
-  const identity = identities?.get(memberId);
-  return identity?.nickname?.trim() || identity?.fullName || 'Membru OSUBB';
-}
-
 /** Whoever changed a threshold, a share or a setting, for the names beside them. */
+// oxlint-disable-next-line react/only-export-components
 export function useChangeAuthors(
   changes: readonly ThresholdChange[] | undefined,
 ) {
@@ -120,14 +94,6 @@ export function useChangeAuthors(
     [changes],
   );
   return useMemberIdentities(memberIds).data;
-}
-
-/** The name of a run for a log row or a note, `…` until the runs are read. */
-export function runNameOf(
-  evaluations: readonly RoleEvaluation[],
-  id: number | null,
-) {
-  return evaluations.find((run) => run.id === id)?.name ?? '…';
 }
 
 /**
@@ -166,6 +132,7 @@ export function ChangeNote({
  * Where focus goes around an in-place editor: to its field when it opens,
  * back to the pencil that opened it when it closes (#923).
  */
+// oxlint-disable-next-line react/only-export-components
 export function useEditorFocus(editing: boolean, fieldId: string) {
   const editButton = useRef<HTMLButtonElement>(null);
   const wasEditing = useRef(false);
@@ -411,7 +378,7 @@ export function PercentRow({
             <div className="relative w-28 flex-none">
               <Input
                 id={inputId}
-                aria-labelledby={labelId}
+                aria-label={`Valoare nouă pentru ${label}`}
                 type="number"
                 inputMode="numeric"
                 min={1}
@@ -563,7 +530,7 @@ export function ThresholdRow({
           <div className="flex min-w-0 flex-wrap gap-2">
             <Input
               id={inputId}
-              aria-labelledby={labelId}
+              aria-label={`Valoare nouă pentru ${label}`}
               type="number"
               inputMode="numeric"
               min={1}
@@ -590,12 +557,6 @@ export function ThresholdRow({
     </SettingRow>
   );
 }
-
-/** Refusals after which the row itself is gone: the panel reports them. */
-export const STALE_CANDIDATE = new Set([
-  'promotion_candidate_not_found',
-  'promotion_candidate_decided',
-]);
 
 /** "Respinge", with the reason BC gives (at most 500 characters). */
 export function RejectDialog({

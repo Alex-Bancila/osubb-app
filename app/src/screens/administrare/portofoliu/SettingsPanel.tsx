@@ -168,7 +168,7 @@ function ValueRow<S extends z.ZodType>({
               <div className="w-56 max-w-full flex-none">
                 <DatePicker
                   id={inputId}
-                  aria-labelledby={labelId}
+                  aria-label={`Valoare nouă pentru ${editor.label}`}
                   value={draft}
                   required
                   max={today}
@@ -180,7 +180,7 @@ function ValueRow<S extends z.ZodType>({
             ) : (
               <Input
                 id={inputId}
-                aria-labelledby={labelId}
+                aria-label={`Valoare nouă pentru ${editor.label}`}
                 inputMode="numeric"
                 className="w-32 flex-none"
                 value={draft}
@@ -326,7 +326,7 @@ export function SettingsPanel({
             <ValueRow
               editor={{
                 label: 'Data de început a punctajului',
-                hint: 'Punctele de task primite înainte de această zi nu se mai numără în niciun total: punctajul personal, clasamentul, campaniile. Evaluările rulate o ignoră, perioada lor fiind aleasă la rulare.',
+                hint: 'Punctele de task primite înainte de această zi nu se mai numără în totaluri (punctajul personal, campaniile, Cupa departamentelor); Clasamentul le arată doar cu un „De la” mai vechi. Evaluările rulate o ignoră, perioada lor fiind aleasă la rulare.',
                 editorHint:
                   'O zi, cel târziu azi. Taskurile mai vechi își păstrează punctele și rămân în Taskuri încheiate.',
                 schema: pointsStart,

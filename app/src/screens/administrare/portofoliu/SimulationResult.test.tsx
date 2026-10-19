@@ -193,6 +193,11 @@ it('lists no Candidates for the Adunarea Generală, and the open Universitate Si
   // The voter below the line is there too; the other kind's and the closed
   // Signal are not.
   expect(signals).toHaveTextContent('Eva Rus');
+  // Below the Adunarea Generală's line, which is not a promotion line.
+  expect(signals).toHaveTextContent(
+    'sub pragul Adunării Generale (11 din 40 de puncte)',
+  );
+  expect(signals).not.toHaveTextContent('pragul de promovare');
   expect(signals).not.toHaveTextContent('Ion Vlad');
   expect(signals).not.toHaveTextContent('Mia Toma');
 });
