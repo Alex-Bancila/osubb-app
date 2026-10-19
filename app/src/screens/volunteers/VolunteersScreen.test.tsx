@@ -12,6 +12,11 @@ const mock = vi.hoisted(() => ({
   useMemberDirectory: vi.fn(),
   useGroups: vi.fn(),
   useMemberCard: vi.fn(),
+  // R58: the Points Start Date, null until BC sets one.
+  pointsStart: null as string | null | undefined,
+}));
+vi.mock('../../queries/evaluation-settings', () => ({
+  usePointsStartDate: () => mock.pointsStart,
 }));
 // The Member Card reads the viewer's Group Roles for "Pagina membrului" (#841).
 vi.mock('@/queries/my-groups', () => ({
@@ -130,6 +135,7 @@ function names() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mock.pointsStart = null;
   mock.useMemberDirectory.mockReturnValue(result());
   mock.useGroups.mockReturnValue({ data: byId, isError: false });
   mock.useMemberCard.mockImplementation((id: string) => ({
@@ -688,5 +694,35 @@ describe('Member directory', () => {
     dialog = await screen.findByRole('dialog');
     expect(within(dialog).queryByRole('group', { name: 'Statut' })).toBeNull();
     expect(within(dialog).getByRole('group', { name: 'Rol' })).toBeVisible();
+  });
+  // Ruling 19 (R58): the Puncte column drops the points before the Points
+  // Start Date, so the page says from when they count.
+  it('says from when the points count, once a Points Start Date is set', async () => {
+    mock.pointsStart = '2026-10-01';
+    const user = userEvent.setup();
+    render(<VolunteersScreen />);
+    const caption = screen.getByText('Punctele se numără din 01.10.2026.');
+    expect(caption).toBeVisible();
+    // Under the title, before the filters and the points they sit above.
+    expect(
+      screen
+        .getByRole('heading', { level: 1, name: 'Voluntari' })
+        .compareDocumentPosition(caption) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // The cards show the same points under the same sentence.
+    await user.click(screen.getByRole('button', { name: 'Carduri' }));
+    expect(
+      screen.getByText('Punctele se numără din 01.10.2026.'),
+    ).toBeVisible();
+  });
+
+  it.each([
+    ['no date is set', null],
+    ['the date is not known yet', undefined],
+  ])('says nothing about a start while %s', (_case, value) => {
+    mock.pointsStart = value;
+    render(<VolunteersScreen />);
+    expect(screen.getByText('−2')).toBeVisible();
+    expect(screen.queryByText(/Punctele se numără/)).toBeNull();
   });
 });

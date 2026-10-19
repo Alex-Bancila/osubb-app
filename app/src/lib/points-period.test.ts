@@ -41,11 +41,21 @@ describe('pointsPeriodText', () => {
     );
   });
 
-  it('is undefined while the date is unknown, unless a De la is chosen', () => {
+  it('is undefined while the date is unknown, unless a De la or a Până la is chosen', () => {
     expect(pointsPeriodText({}, undefined)).toBeUndefined();
-    expect(pointsPeriodText({ to: '2026-09-30' }, undefined)).toBeUndefined();
     expect(pointsPeriodText({ from: '2026-08-01' }, undefined)).toBe(
       'din 1 august 2026',
     );
+  });
+
+  // A day the member chose is theirs whatever the settings are doing: it
+  // stays in the caption while the Points Start Date loads (R58, Task 7).
+  it('keeps a chosen Până la while the date is unknown', () => {
+    expect(pointsPeriodText({ to: '2026-09-30' }, undefined)).toBe(
+      'până la 30 septembrie 2026',
+    );
+    expect(
+      pointsPeriodText({ from: '2026-08-01', to: '2026-09-30' }, undefined),
+    ).toBe('între 1 august 2026 și 30 septembrie 2026');
   });
 });

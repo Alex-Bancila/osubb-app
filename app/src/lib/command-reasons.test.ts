@@ -4,6 +4,7 @@ import {
   commandErrorMessage,
   commandReason,
   describeFailure,
+  knownReasons,
   reasonCopy,
 } from './command-reasons';
 
@@ -245,10 +246,9 @@ it('describes a failure for a form: the reason and the copy', () => {
 });
 
 /*
- * Every reason the Evaluări de rol tab (#827) can meet: #826's
+ * Every reason Portofoliu Interne (#827, R58) can meet: #826's
  * run_role_evaluation, set_promotion_threshold and reject_promotion_candidate,
- * the rule lookup the run's ranking passes through, and set_org_setting
- * (#681, #512) in the Setări tab.
+ * the Simulation, the three evaluation settings and the ranking of a run.
  */
 it.each([
   [
@@ -258,10 +258,6 @@ it.each([
   ['invalid_role_evaluation_kind', 'Alege tipul evaluării.'],
   ['invalid_role_evaluation_name', 'Scrie numele evaluării.'],
   ['date_range_in_future', 'Intervalul se poate termina cel târziu azi.'],
-  [
-    'promotion_threshold_not_set',
-    'Setează întâi pragul pentru acest tip de evaluare.',
-  ],
   [
     'promotion_threshold_manage_forbidden',
     'Doar BC și Moderatorul pot schimba pragurile.',
@@ -275,7 +271,6 @@ it.each([
     'evaluation_percent_manage_forbidden',
     'Doar BC și Moderatorul pot schimba procentele.',
   ],
-  ['org_setting_not_settable', 'Setarea se schimbă din Evaluări de rol.'],
   // The evaluation settings (R58): the Eligibility Floor, the Membership
   // Cutoff and the Points Start Date.
   [
@@ -323,10 +318,21 @@ it.each([
   ],
   ['date_required', 'Alege data.'],
 ])(
-  "has the issue's Romanian copy for the Evaluări de rol reason %s",
+  "has the issue's Romanian copy for the Portofoliu Interne reason %s",
   (reason, copy) => {
     expect(reasonCopy(reason)).toBe(copy);
     expect(commandReason({ code: 'PT409', message: reason })).toBe(reason);
+  },
+);
+
+// Ruling 21 (R58): no function raises them since the Promotion Rules and the
+// run's PT409 went, so the page can meet neither; the copy went with them.
+it.each(['org_setting_not_settable', 'promotion_threshold_not_set'])(
+  'has no copy for %s, which no function raises any more',
+  (reason) => {
+    expect(reasonCopy(reason)).toBeUndefined();
+    expect(knownReasons().has(reason)).toBe(false);
+    expect(commandReason({ code: 'PT409', message: reason })).toBeUndefined();
   },
 );
 

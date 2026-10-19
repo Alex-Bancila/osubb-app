@@ -117,8 +117,8 @@ vi.mock('./screens/administrare/GroupScreen', async () => {
     },
   };
 });
-vi.mock('./screens/administrare/RoleEvaluationsScreen', () => ({
-  default: () => <h2>Evaluări de rol tab</h2>,
+vi.mock('./screens/administrare/portofoliu/PortofoliuInterneScreen', () => ({
+  default: () => <h2>Portofoliu Interne tab</h2>,
 }));
 vi.mock('./screens/dashboard/DashboardScreen', () => ({
   default: () => <h1>Dashboard</h1>,
@@ -320,25 +320,30 @@ describe('route guards', () => {
     expect(screen.queryByRole('heading', { name: 'Grup screen' })).toBeNull();
   });
 
-  it('opens Evaluări de rol only for BC and the Moderator (manageRoles, #702), and /administrare/perioade still arrives there (R28)', async () => {
+  it('opens Portofoliu Interne only for BC and the Moderator (manageRoles, #702), and the old /administrare/evaluari and /administrare/perioade both arrive there (R58, Review Focus 5)', async () => {
     // A BCE administers a Group but does not manage Roles: sent home.
     auth.useAuth.mockReturnValue(member);
     grant('administer', 'managesAnyGroup', 'seeDirectory', 'seeLeadership');
-    window.history.pushState({}, '', '/administrare/evaluari');
+    window.history.pushState({}, '', '/administrare/portofoliu-interne');
     const denied = render(<App />);
     await waitFor(() => expect(window.location.pathname).toBe('/'));
     expect(
-      screen.queryByRole('heading', { name: 'Evaluări de rol tab' }),
+      screen.queryByRole('heading', { name: 'Portofoliu Interne tab' }),
     ).toBeNull();
     denied.unmount();
 
+    // An old Notification link (stored before R58) or bookmark carries a BC
+    // member to the new page; the redirect is the same for both old paths.
     grant('administer', 'managesAnyGroup', 'manageRoles');
-    window.history.pushState({}, '', '/administrare/perioade');
-    render(<App />);
-    expect(
-      await screen.findByRole('heading', { name: 'Evaluări de rol tab' }),
-    ).toBeVisible();
-    expect(window.location.pathname).toBe('/administrare/evaluari');
+    for (const old of ['/administrare/evaluari', '/administrare/perioade']) {
+      window.history.pushState({}, '', old);
+      const view = render(<App />);
+      expect(
+        await screen.findByRole('heading', { name: 'Portofoliu Interne tab' }),
+      ).toBeVisible();
+      expect(window.location.pathname).toBe('/administrare/portofoliu-interne');
+      view.unmount();
+    }
   });
 
   it.each([
@@ -347,7 +352,7 @@ describe('route guards', () => {
     ['/administrare/grupuri', 'Grupuri tab', []],
     ['/administrare/roluri', 'Roluri tab', ['manageRoles']],
     ['/administrare/cereri', 'Cereri de aderare tab', []],
-    ['/administrare/evaluari', 'Evaluări de rol tab', ['manageRoles']],
+    ['/administrare/portofoliu-interne', 'Portofoliu Interne tab', ['manageRoles']],
     [
       '/administrare/confidentialitate',
       'Confidențialitate tab',
@@ -619,7 +624,7 @@ describe('route guards', () => {
     ['/grupuri/1', 'Member Group screen'],
     ['/clasament?vedere=cupa', 'Clasament screen'],
     ['/administrare/grupuri/3', 'Grup screen'],
-    ['/administrare/evaluari', 'Evaluări de rol tab'],
+    ['/administrare/portofoliu-interne', 'Portofoliu Interne tab'],
     [
       '/tracker/membru/35400000-0000-0000-0000-000000000001',
       'Member history screen',

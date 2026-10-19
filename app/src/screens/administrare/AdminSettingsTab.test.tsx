@@ -157,10 +157,10 @@ it('groups the settings by purpose, each with its effect, value and one Editeaz�
   expect(
     container.querySelector('[data-setting="email_daily_quota"]'),
   ).toBeNull();
-  // The thresholds and shares live in Evaluări de rol (R28, R30).
+  // The settings, thresholds and shares live in Portofoliu Interne (R58).
   expect(
-    within(promotions).getByRole('link', { name: /Praguri și procente/ }),
-  ).toHaveAttribute('href', '/administrare/evaluari');
+    within(promotions).getByRole('link', { name: /Setările evaluărilor/ }),
+  ).toHaveAttribute('href', '/administrare/portofoliu-interne');
 
   // Every setting: one sentence of effect, "Nesetat" with its consequence,
   // and the same Editează button; no editor open, no permanent hint.

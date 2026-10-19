@@ -628,11 +628,22 @@ it('claims nothing about the period while the Points Start Date is not known yet
   const first = view();
   // Not "din toate taskurile" either: the date may floor the total.
   expect(total()).toHaveTextContent(/^12 pctpuncte$/);
-  expect(scope().textContent).toBe('');
+  // No empty paragraph is left behind for a screen reader to stop on.
+  expect(
+    total().querySelector('[data-slot="member-total-scope"]'),
+  ).toBeNull();
   first.unmount();
   view(uid, '?grup=7');
   expect(total()).toHaveTextContent(/^12 pctpuncte din filtrele alese$/);
   expect(total()).not.toHaveTextContent('acordate');
+});
+it('keeps a chosen Până la in the caption while the Points Start Date loads (R58)', () => {
+  state.pointsStart = undefined;
+  view(uid, '?pana_la=2026-09-30');
+  expect(total()).toHaveTextContent(
+    /^12 pctpuncte acordate până la 30 septembrie 2026$/,
+  );
+  expect(scope()).not.toHaveClass('sr-only');
 });
 it('joins the start to the filters chosen, and to a range that has only an end (R58)', () => {
   state.pointsStart = '2026-09-01';

@@ -463,6 +463,7 @@ describe('PromotionPanel with the total', () => {
             points: 5,
             threshold: 30,
             since: '1 iulie 2026',
+            sinceIso: '2026-07-01',
           },
         }}
         totalPoints={20}
@@ -481,7 +482,13 @@ describe('PromotionPanel with the total', () => {
       <PromotionPanel
         state={{
           kind: 'view',
-          view: { kind: 'bar', points: 12, threshold: 30, since: null },
+          view: {
+            kind: 'bar',
+            points: 12,
+            threshold: 30,
+            since: null,
+            sinceIso: null,
+          },
         }}
         totalPoints={12}
       />,
@@ -527,7 +534,13 @@ describe('the Points Start Date beside the total', () => {
 
   const afterEvaluation = {
     kind: 'view',
-    view: { kind: 'bar', points: 5, threshold: 30, since: '1 iulie 2026' },
+    view: {
+      kind: 'bar',
+      points: 5,
+      threshold: 30,
+      since: '1 iulie 2026',
+      sinceIso: '2026-07-01',
+    },
   } as const;
 
   it('PointsTotal says from when under the number', () => {
@@ -563,7 +576,13 @@ describe('the Points Start Date beside the total', () => {
   // floored in PR 2, so with a date set it is never taken for the total.
   const barBeforeAnyEvaluation = {
     kind: 'view',
-    view: { kind: 'bar', points: 12, threshold: 30, since: null },
+    view: {
+      kind: 'bar',
+      points: 12,
+      threshold: 30,
+      since: null,
+      sinceIso: null,
+    },
   } as const;
   const referenceBeforeAnyEvaluation = {
     kind: 'view',
@@ -572,6 +591,7 @@ describe('the Points Start Date beside the total', () => {
       points: 12,
       threshold: 30,
       since: null,
+      sinceIso: null,
       startsLater: false,
     },
   } as const;
@@ -661,4 +681,118 @@ describe('the Points Start Date beside the total', () => {
       'din',
     );
   });
+});
+
+// Ruling 17 (R58): the standing's window opens on the later of the day after
+// the last run and the Points Start Date. "după ultima evaluare" says the run
+// opened it; when the start date did, the day stands alone, and while the
+// date is unknown nothing is claimed about which one it was.
+describe('the label of the figure’s window (ruling 17)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    state.progress.isError = false;
+    state.progress.error = null;
+    state.joinedAt = '2026-03-25';
+    state.startDate = null;
+  });
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+  const today = { today: new Date(2026, 9, 20, 9, 0) };
+
+  it('a Voluntar whose window the start date opened reads the day alone', () => {
+    state.startDate = '2026-10-01';
+    setup('voluntar', progress({ since: '2026-10-01', points: 5 }), today);
+
+    expect(screen.getByText('din 1 octombrie 2026')).toBeInTheDocument();
+    expect(screen.queryByText(/după ultima evaluare/)).not.toBeInTheDocument();
+  });
+
+  it('a Voluntar whose window a run opened keeps "după ultima evaluare"', () => {
+    state.startDate = '2026-10-01';
+    setup('voluntar', progress({ since: '2026-10-05', points: 5 }), today);
+
+    expect(
+      screen.getByText('din 5 octombrie 2026 (după ultima evaluare)'),
+    ).toBeInTheDocument();
+  });
+
+  it('with no start date set, the run opened it', () => {
+    state.startDate = null;
+    setup('voluntar', progress({ since: '2026-07-01' }), today);
+
+    expect(
+      screen.getByText('din 1 iulie 2026 (după ultima evaluare)'),
+    ).toBeInTheDocument();
+  });
+
+  it('claims no event while the start date is unknown', () => {
+    state.startDate = undefined;
+    setup('voluntar', progress({ since: '2026-07-01' }), today);
+
+    expect(screen.getByText('din 1 iulie 2026')).toBeInTheDocument();
+    expect(screen.queryByText(/după ultima evaluare/)).not.toBeInTheDocument();
+  });
+
+  it.each(['activ', 'vot'])(
+    'the reference of a %s reads the same way',
+    (role) => {
+      state.startDate = '2026-10-01';
+      setup(role, progress({ since: '2026-10-01', points: 5 }), today);
+      expect(
+        screen.getByText('puncte din 1 octombrie 2026'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText(/după ultima evaluare/),
+      ).not.toBeInTheDocument();
+      cleanup();
+
+      setup(role, progress({ since: '2026-10-05', points: 5 }), today);
+      expect(
+        screen.getByText('puncte din 5 octombrie 2026 (după ultima evaluare)'),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it('a start date set on the day of the run’s end names the start date', () => {
+    // Both opened the window on the same day: the start date is what the
+    // figure is judged by, and the day stands alone.
+    state.startDate = '2026-10-01';
+    setup('activ', progress({ since: '2026-10-01' }), today);
+
+    expect(screen.queryByText(/după ultima evaluare/)).not.toBeInTheDocument();
+  });
+
+  // The hero figure is single: the total leads once the settings say there is
+  // a start date, or while they are unknown; otherwise the standing's own
+  // figure is the total and leads itself.
+  it.each([
+    ['no start date set', null, null],
+    ['the start date unknown', undefined, null],
+    ['a start date set', '2026-10-01', '2026-10-01'],
+  ])(
+    'prints one big figure on the reference view with %s',
+    (_case, startDate, sinceIso) => {
+      state.startDate = startDate;
+      const { container } = render(
+        <PromotionPanel
+          state={{
+            kind: 'view',
+            view: {
+              kind: 'reference',
+              points: 12,
+              threshold: 30,
+              since: sinceIso ? '1 octombrie 2026' : null,
+              sinceIso,
+              startsLater: false,
+            },
+          }}
+          totalPoints={20}
+        />,
+      );
+
+      expect(container.querySelectorAll('[class*="fs-2xl"]')).toHaveLength(1);
+    },
+  );
 });

@@ -85,7 +85,7 @@ function show(path: string, capabilities: Capabilities | undefined) {
             'grupuri',
             'roluri',
             'cereri',
-            'evaluari',
+            'portofoliu-interne',
             'confidentialitate',
             'setari',
             'deals',
@@ -122,7 +122,7 @@ it('shows BC the seven tabs in the order Alex listed, then OSUBB Deals (R44)', a
     'Grupuri',
     'Roluri',
     'Cereri de aderare',
-    'Evaluări de rol',
+    'Portofoliu Interne',
     'Confidențialitate',
     'Setări',
     'OSUBB Deals',
@@ -135,8 +135,8 @@ it('shows BC the seven tabs in the order Alex listed, then OSUBB Deals (R44)', a
   // The title says what the page is: no tagline under it.
   expect(document.querySelector('[data-slot="page-description"]')).toBeNull();
   expect(
-    within(tabBar()).getByRole('link', { name: 'Evaluări de rol' }),
-  ).toHaveAttribute('href', '/administrare/evaluari');
+    within(tabBar()).getByRole('link', { name: 'Portofoliu Interne' }),
+  ).toHaveAttribute('href', '/administrare/portofoliu-interne');
   expect((await axe.run(container)).violations).toEqual([]);
 });
 
@@ -272,7 +272,7 @@ describe('on a phone', () => {
       '/administrare/grupuri',
       '/administrare/roluri',
       '/administrare/cereri',
-      '/administrare/evaluari',
+      '/administrare/portofoliu-interne',
       '/administrare/confidentialitate',
       '/administrare/setari',
       '/administrare/deals',

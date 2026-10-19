@@ -57,6 +57,7 @@ describe('safe authentication destinations', () => {
     '/administrare/membri/35400000-0000-0000-0000-000000000001',
     '/administrare/grupuri/3',
     '/administrare/grupuri/3/campanii?grup=3#lista',
+    '/administrare/portofoliu-interne',
     '/administrare/evaluari',
     '/administrare/campanii',
   ])(
