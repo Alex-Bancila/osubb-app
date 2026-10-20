@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-20
 - **Decided by:** Alex Băncilă, in the grill session of 2026-10-20 (ruling R59)
-- **Status:** approved, not yet built.
+- **Status:** built (#1087).
 - **Amends:** nothing; adds the glossary term **Member Deletion** to `CONTEXT.md` §Access.
 
 ## The request
