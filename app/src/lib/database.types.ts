@@ -3704,6 +3704,7 @@ export type Database = {
         Args: { p_group_id: number; p_mode: string }
         Returns: Json
       }
+      delete_member: { Args: { p_member_id: string }; Returns: Json }
       delete_task: {
         Args: { p_task_id: number; p_with_points?: boolean }
         Returns: Json
@@ -4057,6 +4058,7 @@ export type Database = {
           phone: string
         }[]
       }
+      member_delete_preview: { Args: { p_member_id: string }; Returns: Json }
       member_level: { Args: { p_member: string }; Returns: number }
       my_capabilities: {
         Args: never

@@ -39,7 +39,9 @@ Each numbered point is one answer Alex gave, in the order asked; where he took t
 
 ### Database (one migration, dated after `20261018180000`)
 
-- **`private.member_deletion_holds(p_member_id uuid) returns jsonb`.** The one definition of "history": one key per kind in decision 2 with its count, only the non-zero ones. Fine-grained keys (`tasks_created`, `assignments`, `candidatures`, `task_activity`, `evaluations`, `points`, `completed_work_requests`, `events`, `rsvps`, `announcements`, `campaigns`, `group_applications`, `group_positions`, `deals_team`, `promotion_candidates`, `retention_signals`, `role_decisions`, `groups_created`, `imports`, `role_evaluations`, `settings_changes`). The page maps each key to Romanian copy. Not granted to anyone.
+- **`private.member_deletion_holds(p_member_id uuid) returns jsonb`.** The one definition of "history", **read from the catalog** rather than from a list: every foreign key into `profiles` or `auth.users` outside the `auth` schema holds the account, except the account's own columns (`private.member_deletion_goes`), an ordinary Group membership (`group_members` with `group_role = 'member'`) and the Role History about the Member (`role_history.member_id`, and `changed_by` on those same rows). One key per referencing column (`tasks.created_by`, `points_ledger.member_id`…) with its count, only the non-zero ones. A table added later therefore holds accounts until someone adds its column to the account's own list, which is the safe default; the suite proves it with a table created inside the test. The page maps each table to Romanian copy. Not granted to anyone.
+- **`private.member_deletion_goes(p_member_id uuid) returns jsonb`.** The account's own rows, counted by table, for the preview's list of what goes.
+- **`private.member_last_holder(p_member_id uuid) returns text`.** `'bc'` or `'moderator'` when the Member is the last active holder, else null.
 - **`private.can_delete_member(p_actor uuid, p_member uuid) returns boolean`.** Live `activ` actor at level ≥ 6 and `p_actor <> p_member`. The only authority rule; `private.require_member_deleter(p_member_id) returns uuid` raises `42501 member_manage_forbidden` when it is false (claimless and inactive callers included, through `private.require_active_member()`).
 - **`public.member_delete_preview(p_member_id uuid) returns jsonb`** (invoker wrapper + definer `_impl`): `{ holds: {…}, goes: { group_memberships, notifications, devices, … }, last_holder: 'bc' | 'moderator' | null }`. Same gate and same `PT404` as the command. It locks nothing.
 - **`public.delete_member(p_member_id uuid) returns jsonb`** (invoker wrapper + definer `_impl`), in the house steps:
@@ -51,7 +53,7 @@ Each numbered point is one answer Alex gave, in the order asked; where he took t
   6. Deletes the other Members' Notifications naming the account, the account's `role_history` rows (the guard admits a DELETE only for the `member_id` named in the transaction-local setting `osubb.deleting_member_id`, never for a client role), its `auth.flow_state` rows, then `delete from auth.users where id = p_member_id`.
   7. Returns `{ "member_id": … }`.
 - `private.guard_role_history` is re-issued from `main`'s latest body with the one DELETE exception. Its `vot` rule stays as it is.
-- Grants: the four-role revoke on every function; `authenticated` gets the two wrappers and their `_impl`s; no grant on `require_member_deleter`, `can_delete_member` or `member_deletion_holds`.
+- Grants: the four-role revoke on every function; `authenticated` gets the two wrappers and their `_impl`s; no grant on `require_member_deleter`, `can_delete_member`, `member_deletion_holds`, `member_deletion_goes` or `member_last_holder`.
 
 ### Tests (`supabase/tests/member_deletion.test.sql`, same PR)
 
@@ -59,7 +61,7 @@ Each numbered point is one answer Alex gave, in the order asked; where he took t
 - A fresh invited Member (Profile, an Appointment, a Notification, a push device, a Privacy Acknowledgement, an import record, a deactivation in Role History) is deleted. Afterwards no row anywhere names the id, the BC's re-invite Notification about it is gone, and `auth.users` and `auth.identities` are empty for it.
 - One fixture per holding kind refuses with `PT409 member_has_history` and a DETAIL naming that kind, and writes nothing.
 - The last active BC member and the last active Moderator refuse; a second active holder lets the delete through.
-- **A foreign-key tripwire:** every foreign key into `profiles` or `auth.users` read from `pg_constraint` must be listed as "goes with the account" or "holds it". A new table that names Members fails CI until someone decides which it is (the `live_changes.test.sql` idea).
+- **A table added later holds the account:** the suite creates a table with a cascading foreign key into `profiles`, and the deletion refuses naming it. After a deletion, a catalog sweep counts every row in every table whose foreign key names the id, and finds none.
 - A race through `pg_temp.test_race`: session A holds an uncommitted Candidature for the Member, session B's `delete_member` waits, then refuses with `member_has_history`.
 - `tracker_grants.test.sql`'s roster and count pin grow by the new functions; `role_history`'s guard still refuses a client DELETE.
 
