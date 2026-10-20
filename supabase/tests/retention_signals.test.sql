@@ -227,8 +227,8 @@ select results_eq(
   $$ values (pg_temp.r58('G'), 'voluntar_activ'::text, 'activ'::public.member_role, 'below_line'::text, 20, 40, null::timestamptz),
             (pg_temp.r58('H'), 'voluntar_activ', 'activ', 'below_line', 15, 40, null),
             (pg_temp.r58('I'), 'voluntar_activ', 'vot', 'below_line', 10, 40, null),
-            (pg_temp.r58('J'), 'voluntar_activ', 'vot', 'below_floor', 5, 40, null) $$,
-  'the run stores one open Signal per holder not inside the line, with its reason, the holder''s Task Points and the line');
+            (pg_temp.r58('J'), 'voluntar_activ', 'vot', 'below_floor', 5, 10, null) $$,
+  'the run stores one open Signal per holder not inside the line, with its reason, the holder''s Task Points and the figure they fell under: the line (40), or the Floor (10)');
 
 select pg_temp.test_login_leadership(pg_temp.r58('BC'));
 select is((select count(*) from public.retention_signals), 4::bigint, 'BC reads every Retention Signal');
