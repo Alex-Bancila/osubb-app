@@ -425,3 +425,103 @@ case "$out" in
   *) echo "::error::Re-seeding after a Role Evaluation left the wrong rows (expected evaluation-after:8:0:0:0:1:1:2:1:1:0:1:1): $(printf '%s' "$out" | grep -m1 'evaluation-after' || printf '%s' "$out" | tail -3)" >&2; exit 1 ;;
 esac
 echo "seed.sql re-runs after the demo Moderator ran a Role Evaluation of each kind."
+
+# ============ Re-seed while a demo Voluntar is a live Promotion Candidate ============
+# Between Role Evaluations a Voluntar is listed as a Promotion Candidate the
+# moment their Task Points reach the Voluntar Activ line (#983, R35), and on
+# staging that is live as soon as the Data limită de intrare is set (R58).
+# private.refresh_promotion_candidates runs from statement triggers on
+# points_ledger, promotion_thresholds, evaluation_settings and profiles -- so
+# the seed's own writes fire it, in its cleanup as well as in its inserts, and
+# a refresh that listed a demo Member again after the cleanup removed the
+# Candidates left a row pinning the demo profile. Each case is one transaction,
+# rolled back: the non-demo sentinel becomes a BC (a real leader the refresh
+# notifies), the demo Moderator sets the Prag minim and the Data limită de
+# intrare, then lists the demo Voluntar -- (a) by evaluating their Task in
+# review high enough to cross the line, as a tester would; (b) by lowering the
+# line to the points the seed itself gives them, so the seed's own ledger
+# inserts list them again mid-seed. The seed must re-run both times. Then (a)
+# leaves no demo Candidate and no Notification naming one on the real leader,
+# and (b) leaves exactly the one live Candidate and one Notification its
+# inserts made.
+live_setup=$(cat <<'SQL'
+update profiles set role = 'bc' where id = 'e2750000-0000-0000-0000-000000000001';
+select set_config('request.jwt.claims', jsonb_build_object(
+         'sub', p.id, 'role', 'authenticated',
+         'app_metadata', jsonb_build_object('member_role', p.role, 'member_level', r.level,
+           'group_ids', coalesce((select jsonb_agg(gm.group_id order by gm.group_id)
+                                    from group_members gm where gm.member_id = p.id), '[]'::jsonb)))::text,
+       true) is not null
+  from profiles p join roles r on r.id = p.role
+ where p.email = 'moderator@demo.osubb';
+select set_config('seed_check.voluntar_points', (
+  select earned.task_points::text from private.task_points_in_range('-infinity', 'infinity') earned
+   where earned.member_id = 'd0000000-0000-0000-0000-000000000002'), true) is not null;
+set local role authenticated;
+select 1 from public.set_eligibility_floor(
+  coalesce((select eligibility_floor from evaluation_settings where id = 1), 0) + 1);
+select 1 from public.set_membership_cutoff(current_date);
+SQL
+)
+live_by_evaluation=$(cat <<'SQL'
+select 1 from public.complete_task_review(
+  (select t.id from tasks t
+     join task_assignments a on a.task_id = t.id and a.ended_at is null
+    where t.status = 'in_review' and a.member_id = 'd0000000-0000-0000-0000-000000000002'
+    order by t.id limit 1),
+  10, 5, 'Probă candidat live');
+SQL
+)
+live_by_seeded_points=$(cat <<'SQL'
+select 1 from public.set_promotion_threshold('voluntar_activ',
+  current_setting('seed_check.voluntar_points')::integer);
+SQL
+)
+live_finish=$(cat <<'SQL'
+reset role;
+select set_config('request.jwt.claims', '', true) is not null;
+select 'live-before:' || format('%s:%s',
+  (select count(*) from promotion_candidates where member_id = 'd0000000-0000-0000-0000-000000000002'
+                                               and role_evaluation_id is null and decision is null),
+  (select count(*) from notifications where member_id = 'e2750000-0000-0000-0000-000000000001'
+                                        and dedupe_key = 'promotion_candidate:live:d0000000-0000-0000-0000-000000000002'));
+SQL
+)
+live_check=$(cat <<'SQL'
+select 'live-after:' || format('%s:%s:%s:%s:%s',
+  (select count(*) from profiles where email like '%@demo.osubb'),
+  (select count(*) from promotion_candidates where member_id = 'd0000000-0000-0000-0000-000000000002'
+                                               and role_evaluation_id is null and decision is null),
+  (select count(*) from promotion_candidates c join profiles p on p.id = c.member_id where p.email like '%@demo.osubb'),
+  (select count(*) from notifications where member_id = 'e2750000-0000-0000-0000-000000000001'
+                                        and dedupe_key like 'promotion_candidate:live:%'),
+  (select count(*) from evaluation_settings where membership_cutoff is not null and updated_by is null));
+SQL
+)
+live_candidate_case() { # $1 = case name, $2 = SQL that lists the demo Voluntar, $3 = expected live-after
+  local out
+  out=$({
+    echo "begin;"
+    printf '%s\n' "$live_setup" "$2" "$live_finish"
+    cat supabase/seed.sql
+    printf '%s\n' "$live_check"
+    echo "rollback;"
+  } | run_sql 2>&1) || {
+    echo "::error::seed.sql failed to re-run while the demo Voluntar was a live Promotion Candidate ($1): $(printf '%s' "$out" | grep -m1 -i 'error' || printf '%s' "$out" | tail -3)" >&2
+    exit 1
+  }
+  case "$out" in
+    *live-before:1:1*) ;;
+    *) echo "::error::The live Candidate fixture ($1) did not list the demo Voluntar and notify the real leader (expected live-before:1:1): $(printf '%s' "$out" | grep -m1 'live-before' || printf '%s' "$out" | tail -3)" >&2; exit 1 ;;
+  esac
+  case "$out" in
+    *"live-after:$3"*) ;;
+    *) echo "::error::Re-seeding while the demo Voluntar was a live Promotion Candidate ($1) left the wrong rows (expected live-after:$3): $(printf '%s' "$out" | grep -m1 'live-after' || printf '%s' "$out" | tail -3)" >&2; exit 1 ;;
+  esac
+}
+# 8 demo Members back; the demo Voluntar's open live Candidates; every
+# Candidate row of a demo Member; the real leader's live Candidate
+# Notifications; the Data limită de intrare kept with no demo author.
+live_candidate_case "listed by a Task evaluation" "$live_by_evaluation" "8:0:0:0:1"
+live_candidate_case "listed on the seed's own points" "$live_by_seeded_points" "8:1:1:1:1"
+echo "seed.sql re-runs while a demo Voluntar is a live Promotion Candidate."
