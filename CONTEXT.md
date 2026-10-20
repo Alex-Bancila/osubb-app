@@ -365,7 +365,7 @@ The Task Points a Member must have earned in the Evaluation Period to be ranked 
 _Avoid_: Prag alone, minimum threshold when the Promotion Threshold is meant, participation threshold
 
 **Membership Cutoff Date** (Data limită de intrare):
-The calendar day by which a Voluntar must have joined OSUBB to become a Promotion Candidate, at a Voluntar Activ Role Evaluation or between runs. BC sets it in Setări on Portofoliu Interne at any time, so the door is open before the first run, not in the run's form; each Voluntar Activ Simulation and run uses the date in force, and each run records the date it used. Until it is set nobody is listed between runs and a Voluntar Activ run or Simulation cannot start. A Member who joined after it is still ranked; they only cannot be listed. The Adunarea Generală kind has no cutoff.
+The calendar day by which a Voluntar must have joined OSUBB to become a Promotion Candidate, at a Voluntar Activ Role Evaluation or between runs. BC sets it in Setări on Portofoliu Interne, not in the run's form, at any time, so the door is open before the first run; each Voluntar Activ Simulation and run uses the date in force, and each run records the date it used. Until it is set nobody is listed between runs and a Voluntar Activ run or Simulation cannot start. A Member who joined after it is still ranked; they only cannot be listed. The Adunarea Generală kind has no cutoff.
 _Avoid_: Tenure, vechime, required months, seniority
 
 **Promotion Candidate**:

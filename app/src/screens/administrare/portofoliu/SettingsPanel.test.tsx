@@ -550,7 +550,7 @@ it('says in its hint that a run uses the Prag minim and the Data limită de intr
   );
   const hint = await screen.findByText(/Valorile după care citește/);
   expect(hint).toHaveTextContent(
-    'Valorile după care citește o evaluare: Prag minim, Data limită de intrare, Procent, și data de la care se numără punctele în orice total. Pragul minim și data limită de intrare se schimbă doar aici, iar o evaluare le folosește pe cele în vigoare; procentul din formular îl pune în vigoare odată finalizată.',
+    'Valorile după care citește o evaluare: Prag minim, Data limită de intrare, Procent, și data de la care se numără punctele în orice total. Pragul minim și data limită de intrare se schimbă doar aici, iar o evaluare le folosește pe cele în vigoare. Procentul ales în formular intră în vigoare când evaluarea e finalizată.',
   );
   expect(hint).not.toHaveTextContent('din formular și');
 });

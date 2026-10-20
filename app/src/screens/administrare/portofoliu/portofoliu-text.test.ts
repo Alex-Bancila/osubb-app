@@ -19,6 +19,7 @@ import {
   THRESHOLD_LABEL,
   SIMULATION_NOTE,
   SIMULATION_STALE,
+  SIMULATION_STALE_FLOOR,
   UNIVERSITY_SIGNALS_NOTE,
 } from './portofoliu-text';
 
@@ -257,6 +258,10 @@ describe('the notes of the Simulation card', () => {
     expect(SIMULATION_NOTE).toBe('Simulare, nimic nu a fost salvat.');
     expect(SIMULATION_STALE).toBe(
       'Pragul minim sau data limită de intrare s-au schimbat după simulare. Simulează din nou.',
+    );
+    // The Adunarea Generală has no cutoff: its note names the Floor alone.
+    expect(SIMULATION_STALE_FLOOR).toBe(
+      'Pragul minim s-a schimbat după simulare. Simulează din nou.',
     );
     expect(UNIVERSITY_SIGNALS_NOTE).toBe(
       'Semnalele „nu mai este student UBB” se ridică automat la schimbarea universității și apar în Semnale de retenție.',

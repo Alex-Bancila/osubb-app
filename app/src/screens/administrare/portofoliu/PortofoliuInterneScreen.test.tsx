@@ -12,7 +12,9 @@ import {
   show,
   type Signal,
 } from '../../../test/portofoliu-fake';
+import { pickDate } from '../../../test/date-picker';
 import { Where } from '../../../test/where';
+import { keys } from '../../../queries/keys';
 
 vi.mock('../../../lib/supabase', async () =>
   (await import('../../../test/portofoliu-fake')).supabaseMock(),
@@ -422,7 +424,40 @@ it('lists a kind’s panels once that kind has a row, not when only the other ha
   await waitFor(() => expect(shownPanels()).toEqual(['Rulează o evaluare']));
 });
 
-it('keeps the name and the end of the period when the kind changes, and nothing else', async () => {
+it('lists Candidați on Voluntar Activ once a Voluntar Activ run or a Candidate exists, never after an Adunarea Generală run alone', async () => {
+  // The Adunarea Generală makes no Candidates: its run is no reason for an
+  // empty box on the other kind's view.
+  db.runs = [RUN_AG];
+  const first = page();
+  await settledRun();
+  await waitFor(() => expect(shownPanels()).toEqual(['Rulează o evaluare']));
+  first.unmount();
+
+  // A Candidate listed between runs is something, with no run of its own.
+  db.candidates = [
+    {
+      id: 7,
+      member_id: 'ana',
+      task_points: 48,
+      tenure_since: '2026-03-15',
+      role_evaluation_id: null,
+      threshold_used: 30,
+      created_at: '2026-10-02T08:30:00Z',
+      decision: null,
+    },
+  ];
+  page();
+  await screen.findByRole('heading', {
+    name: 'Candidați la promovare',
+    level: 2,
+  });
+  expect(shownPanels()).toEqual([
+    'Rulează o evaluare',
+    'Candidați la promovare',
+  ]);
+});
+
+it('keeps each kind’s draft of the run form, apart from the other’s', async () => {
   const user = userEvent.setup();
   page();
   await settledRun();
@@ -431,10 +466,126 @@ it('keeps the name and the end of the period when the kind changes, and nothing 
   await user.clear(percent);
   await user.type(percent, '40');
 
+  // The Adunarea Generală has a draft of its own: its share, no name yet.
   await user.click(section('Adunarea Generală'));
-  expect(screen.getByLabelText('Nume')).toHaveValue('Toamna 2026');
+  expect(screen.getByLabelText('Nume')).toHaveValue('');
   expect(screen.getByLabelText('Procent')).toHaveValue(25);
   expect(screen.queryByLabelText('Data limită de intrare')).toBeNull();
+  await user.type(screen.getByLabelText('Nume'), 'AG 2026');
+
+  await user.click(section('Voluntar Activ'));
+  expect(screen.getByLabelText('Nume')).toHaveValue('Toamna 2026');
+  expect(screen.getByLabelText('Procent')).toHaveValue(40);
+  await user.click(section('Adunarea Generală'));
+  expect(screen.getByLabelText('Nume')).toHaveValue('AG 2026');
+});
+
+it('keeps the typed run form across a visit to Setări', async () => {
+  db.runs = [RUN_VA];
+  const user = userEvent.setup();
+  page();
+  await settledRun();
+  await pickDate(user, screen.getByLabelText('De la'), '2026-07-15');
+  await pickDate(user, screen.getByLabelText('Până la'), '2026-09-20');
+  const percent = screen.getByLabelText('Procent');
+  await user.clear(percent);
+  await user.type(percent, '40');
+  await user.type(screen.getByLabelText('Nume'), 'Toamna 2026');
+
+  await user.click(section('Setări'));
+  await settledSettings();
+  expect(screen.queryByLabelText('Nume')).toBeNull();
+  await user.click(section('Voluntar Activ'));
+  await settledRun();
+
+  expect(screen.getByLabelText('De la')).toHaveAttribute(
+    'data-value',
+    '2026-07-15',
+  );
+  expect(screen.getByLabelText('Până la')).toHaveAttribute(
+    'data-value',
+    '2026-09-20',
+  );
+  expect(screen.getByLabelText('Procent')).toHaveValue(40);
+  expect(screen.getByLabelText('Nume')).toHaveValue('Toamna 2026');
+});
+
+it('keeps the typed run form when the gate’s link leads to Setări and back', async () => {
+  db.settings.eligibility_floor = null;
+  const user = userEvent.setup();
+  const view = page();
+  await settledRun();
+  await user.type(screen.getByLabelText('Nume'), 'Toamna 2026');
+
+  await user.click(screen.getByRole('link', { name: 'Deschide Setări' }));
+  await settledSettings();
+  // BC sets the Prag minim there, and goes back.
+  db.settings.eligibility_floor = 10;
+  await act(async () => {
+    await view.client.invalidateQueries({ queryKey: keys.evaluation.all });
+  });
+  await user.click(section('Voluntar Activ'));
+  await settledRun();
+
+  expect(screen.getByLabelText('Nume')).toHaveValue('Toamna 2026');
+  expect(screen.getByRole('button', { name: 'Simulează' })).toBeEnabled();
+});
+
+it('keeps a shown Simulation across a visit to Setări, and stops it if the Prag minim changed there', async () => {
+  db.runs = [RUN_VA];
+  db.simulation = rankedRows();
+  const user = userEvent.setup();
+  const view = page();
+  await settledRun();
+  await user.click(screen.getByRole('button', { name: 'Simulează' }));
+  await user.type(await screen.findByLabelText('Nume'), 'Toamna 2026');
+  expect(
+    await screen.findByText('Simulare, nimic nu a fost salvat.'),
+  ).toBeVisible();
+
+  // Nothing changed meanwhile: the Simulation is there as it was left.
+  await user.click(section('Setări'));
+  await settledSettings();
+  await user.click(section('Voluntar Activ'));
+  expect(
+    await screen.findByText('Simulare, nimic nu a fost salvat.'),
+  ).toBeVisible();
+  expect(screen.getByLabelText('Nume')).toHaveValue('Toamna 2026');
+  const finalize = screen.getByRole('button', { name: 'Finalizează' });
+  expect(finalize).toBeEnabled();
+  expect(
+    db.rpc.mock.calls.filter(([name]) => name === 'simulate_role_evaluation'),
+  ).toHaveLength(1);
+
+  // The Prag minim changes in Setări: back on the card, the guard says so.
+  await user.click(section('Setări'));
+  await settledSettings();
+  db.settings.eligibility_floor = 15;
+  await act(async () => {
+    await view.client.invalidateQueries({ queryKey: keys.evaluation.all });
+  });
+  await user.click(section('Voluntar Activ'));
+  expect(
+    await screen.findByText(
+      'Pragul minim sau data limită de intrare s-au schimbat după simulare. Simulează din nou.',
+    ),
+  ).toBeVisible();
+  const stale = screen.getByRole('button', { name: 'Finalizează' });
+  expect(stale).toBeDisabled();
+  // The card still reads what was simulated.
+  expect(screen.getByText(/Prag minim 10 puncte/)).toBeVisible();
+
+  // Modifică valorile brings back what was typed, and simulates again.
+  await user.click(screen.getByRole('button', { name: 'Modifică valorile' }));
+  expect(screen.getByLabelText('Nume')).toHaveValue('Toamna 2026');
+  await user.click(screen.getByRole('button', { name: 'Simulează' }));
+  await screen.findByRole('button', { name: 'Finalizează' });
+  expect(screen.getByRole('button', { name: 'Finalizează' })).toBeEnabled();
+  expect(
+    db.rpc.mock.calls
+      .filter(([name]) => name === 'simulate_role_evaluation')
+      .at(-1)?.[1],
+  ).toMatchObject({ p_floor: 15 });
 });
 
 it('disables the switch while a command is pending', async () => {

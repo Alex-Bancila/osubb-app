@@ -109,6 +109,8 @@ function withSettings<T extends { kind: RoleEvaluationKind }>(
 ) {
   return {
     ...values,
+    // The refinement refused an unset Floor, and Zod skips the transform once
+    // a refinement has added an issue: here it is a number.
     floor: inForce.floor as number,
     cutoff: values.kind === 'voluntar_activ' ? inForce.cutoff : null,
   };

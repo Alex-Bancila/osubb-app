@@ -141,21 +141,37 @@ it('lists the runs of the Adunarea Generală and none of Voluntar Activ', async 
   show(<Host kind="adunarea_generala" />);
   const history = await panel();
 
-  const body = within(within(history).getByRole('table'))
+  const table = within(history).getByRole('table');
+  // The Adunarea Generală has no Data limită de intrare: no column of dashes.
+  expect(
+    within(table)
+      .getAllByRole('columnheader')
+      .map((cell) => cell.textContent),
+  ).toEqual([
+    'Nume',
+    'Interval',
+    'Prag minim',
+    'Procent',
+    'Rulată de',
+    'Data',
+    'Linia înainte',
+    'Linia calculată',
+    'Clasați / evaluați',
+    'Clasament',
+  ]);
+  const body = within(table)
     .getAllByRole('row')
     .slice(1)
     .map((row) => within(row).getAllByRole('cell'));
   expect(body.map((cells) => cells[0]?.textContent)).toEqual(['AG toamnă']);
-  expect(body[0]?.slice(1, 5).map((cell) => cell.textContent)).toEqual([
+  expect(body[0]?.slice(1, 4).map((cell) => cell.textContent)).toEqual([
     '01.07.2026–20.09.2026',
     '10',
     '25 %',
-    // No Data limită de intrare: the Adunarea Generală has none.
-    '—',
   ]);
-  expect(body[0]?.[5]).toHaveTextContent('Dănuț');
+  expect(body[0]?.[4]).toHaveTextContent('Dănuț');
   // A run that ranked nobody has no line of its own.
-  expect(body[0]?.slice(6, 10).map((cell) => cell.textContent)).toEqual([
+  expect(body[0]?.slice(5, 9).map((cell) => cell.textContent)).toEqual([
     '21.09.2026',
     '10',
     '—',
@@ -268,6 +284,8 @@ it('lists the runs as rows under the width the table’s columns fit, so nothing
     expect(rows[0]).toHaveTextContent('Procent 25 %');
     expect(rows[0]).toHaveTextContent('Prag Adunarea Generală înainte 10');
     expect(rows[0]).toHaveTextContent('calculat —');
+    // No cutoff to name: the Adunarea Generală has none.
+    expect(rows[0]).not.toHaveTextContent('Data limită de intrare');
     expect(history).not.toHaveTextContent('Semestrul I');
 
     db.rankings.set(RUN_AG.id, rankedRows());

@@ -258,8 +258,8 @@ export function SettingsPanel({
           Valorile după care citește o evaluare: Prag minim, Data limită de
           intrare, Procent, și data de la care se numără punctele în orice
           total. Pragul minim și data limită de intrare se schimbă doar aici,
-          iar o evaluare le folosește pe cele în vigoare; procentul din formular
-          îl pune în vigoare odată finalizată.
+          iar o evaluare le folosește pe cele în vigoare. Procentul ales în
+          formular intră în vigoare când evaluarea e finalizată.
         </InfoHint>
       }
     >

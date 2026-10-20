@@ -37,9 +37,7 @@ import {
   latestRun,
   simulateRoleEvaluation,
   simulationOutcome,
-  type RankingRow,
   type RoleEvaluation,
-  type RunValues,
 } from '../../../queries/role-evaluations';
 import { useReceiptTurn } from '../../tracker/receipt-turn';
 import {
@@ -50,38 +48,18 @@ import {
   runResultText,
   SIMULATION_NOTE,
   SIMULATION_STALE,
+  SIMULATION_STALE_FLOOR,
 } from './portofoliu-text';
 import { SETARI_HREF } from './portofoliu-view';
+import {
+  type DraftUpdate,
+  type Edits,
+  type FormValues,
+  type RunDraft,
+  type Simulated,
+} from './run-draft';
 import { SimulationResult } from './SimulationResult';
 import { type RunCommand } from './shared';
-
-/** What the member has typed over the values the settings prefill. */
-type Edits = Partial<{
-  from: string;
-  to: string;
-  name: string;
-  percent: string;
-}>;
-
-/**
- * The form as the fields hold it: text, until a schema reads it. The Prag
- * minim and the Data limită de intrare are not fields: they are settings,
- * edited only in Setări.
- */
-type FormValues = {
-  kind: RoleEvaluationKind;
-  from: string;
-  to: string;
-  name: string;
-  percent: string;
-};
-
-/** A Simulation shown: the values it used, the form they came from, its rows. */
-type Simulated = {
-  values: Omit<RunValues, 'name'>;
-  input: FormValues;
-  rows: RankingRow[];
-};
 
 /**
  * The refusals that are about a setting, not a field of the form: the way to
@@ -129,12 +107,20 @@ function SettingsLink() {
  */
 export function RunPanel({
   kind,
+  draft,
+  onDraft,
   evaluations,
   disabled,
   onRun,
 }: {
   /** The page's section: the kind this run is of. */
   kind: RoleEvaluationKind;
+  /**
+   * What was typed and the Simulation shown, kept by the page for this kind:
+   * leaving for Setări and coming back finds the form as it was left.
+   */
+  draft: RunDraft;
+  onDraft: (update: DraftUpdate) => void;
   evaluations: readonly RoleEvaluation[];
   disabled: boolean;
   onRun: RunCommand;
@@ -148,8 +134,11 @@ export function RunPanel({
   const today = bucharestDayKey(new Date()) ?? '';
   const settings = useEvaluationSettings();
   const data = settings.data;
-  const [edits, setEdits] = useState<Edits>({});
-  const [simulated, setSimulated] = useState<Simulated | null>(null);
+  const { edits, simulated } = draft;
+  const setEdits = (update: (previous: Edits) => Edits) =>
+    onDraft((previous) => ({ ...previous, edits: update(previous.edits) }));
+  const setSimulated = (next: Simulated | null) =>
+    onDraft((previous) => ({ ...previous, simulated: next }));
   const [simulating, setSimulating] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -219,13 +208,11 @@ export function RunPanel({
   const fromField = form.field('from');
   const toField = form.field('to');
 
-  // Another kind on the page's switch: its own "De la" and share, and nothing
-  // said about the kind before it. The name and "Până la" stay as typed.
+  // Another kind on the page's switch: its own draft comes in with the props,
+  // and nothing is said about the kind before it.
   const [shownKind, setShownKind] = useState(kind);
   if (shownKind !== kind) {
     setShownKind(kind);
-    setEdits((previous) => ({ to: previous.to, name: previous.name }));
-    setSimulated(null);
     setConfirming(false);
     setMessage(null);
     setSettingRefused(false);
@@ -315,7 +302,7 @@ export function RunPanel({
       focusNext.current = 'receipt';
       // The next run starts from the settings this one just set.
       setSimulated(null);
-      setEdits({});
+      setEdits(() => ({}));
       form.reset();
     } catch (failure) {
       setConfirming(false);
@@ -395,7 +382,11 @@ export function RunPanel({
           <div className="max-w-md">{nameField}</div>
           {formError}
           <FieldError id={staleId}>
-            {stale ? SIMULATION_STALE : null}
+            {stale
+              ? simulated?.values.kind === 'voluntar_activ'
+                ? SIMULATION_STALE
+                : SIMULATION_STALE_FLOOR
+              : null}
           </FieldError>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -418,9 +409,9 @@ export function RunPanel({
         </div>
       ) : (
         <form onSubmit={simulate} noValidate className="grid gap-4">
-          {/* The period, the kind's share and the name: four fields in a row from
-              1 280 px, two by two from 640 px, one under it. */}
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {/* Two rows from 640 px, De la · Până la and Procent · Nume; one column
+              under it. */}
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid min-w-0 content-start gap-1.5">
               <label htmlFor={fromId} className="text-sm font-medium">
                 De la

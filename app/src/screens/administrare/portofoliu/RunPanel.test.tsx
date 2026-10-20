@@ -33,12 +33,15 @@ vi.mock(
   () => import('../../../test/member-card-mock'),
 );
 import { RunPanel } from './RunPanel';
+import { useRunDrafts } from './run-draft';
 
 vi.setConfig({ testTimeout: 20_000 });
 
 /** The panel as the page mounts it: runs and the command from the queries. */
 function Host() {
   const [kind, setKind] = useState<RoleEvaluationKind>('voluntar_activ');
+  // The page keeps each kind's draft, so the panel can be left and come back.
+  const draftOf = useRunDrafts();
   const evaluations = useRoleEvaluations();
   const command = useRoleEvaluationCommand();
   if (!evaluations.data) return null;
@@ -49,6 +52,7 @@ function Host() {
       </button>
       <RunPanel
         kind={kind}
+        {...draftOf(kind)}
         evaluations={evaluations.data}
         disabled={command.isPending}
         onRun={(next) => command.mutateAsync(next)}
@@ -94,6 +98,9 @@ const runCall = () =>
 const SETTINGS_LINK = '/administrare/portofoliu-interne?vedere=setari';
 const CHANGED_AFTER_SIMULATION =
   'Pragul minim sau data limită de intrare s-au schimbat după simulare. Simulează din nou.';
+// The Adunarea Generală has no cutoff: only the Floor can stale its Simulation.
+const FLOOR_CHANGED_AFTER_SIMULATION =
+  'Pragul minim s-a schimbat după simulare. Simulează din nou.';
 
 /** Another BC member changes a setting while the page is up. */
 async function settingsChanged(view: ReturnType<typeof show>) {
@@ -727,10 +734,13 @@ it('stales an Adunarea Generală Simulation by the Prag minim only, never by the
     within(run).getByRole('button', { name: 'Finalizează' }),
   ).toBeEnabled();
 
-  // The Prag minim is shared.
+  // The Prag minim is shared, and the message names it alone.
   db.settings.eligibility_floor = 15;
   await settingsChanged(view);
-  expect(await within(run).findByText(CHANGED_AFTER_SIMULATION)).toBeVisible();
+  expect(
+    await within(run).findByText(FLOOR_CHANGED_AFTER_SIMULATION),
+  ).toBeVisible();
+  expect(run).not.toHaveTextContent('data limită de intrare s-au schimbat');
   expect(
     within(run).getByRole('button', { name: 'Finalizează' }),
   ).toBeDisabled();

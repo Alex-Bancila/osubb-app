@@ -97,6 +97,10 @@ export const SIMULATION_NOTE = 'Simulare, nimic nu a fost salvat.';
 export const SIMULATION_STALE =
   'Pragul minim sau data limită de intrare s-au schimbat după simulare. Simulează din nou.';
 
+/** The same for the Adunarea Generală, which has no cutoff: the Floor alone. */
+export const SIMULATION_STALE_FLOOR =
+  'Pragul minim s-a schimbat după simulare. Simulează din nou.';
+
 /**
  * Under the Signals of a Simulation: the ones about Universitate are not a
  * result of any run, so the rows cannot show them.

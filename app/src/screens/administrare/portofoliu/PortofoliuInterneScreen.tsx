@@ -25,6 +25,7 @@ import { HistoryPanel } from './HistoryPanel';
 import { KIND_LABEL } from './portofoliu-text';
 import { usePortofoliuView, type PortofoliuView } from './portofoliu-view';
 import { RunPanel } from './RunPanel';
+import { useRunDrafts } from './run-draft';
 import { SettingsPanel } from './SettingsPanel';
 import { SignalsPanel } from './SignalsPanel';
 
@@ -63,6 +64,9 @@ export default function PortofoliuInterneScreen() {
   const command = useRoleEvaluationCommand();
   const setting = useEvaluationSettingCommand();
   const [view, chooseView] = usePortofoliuView();
+  // Each kind's run form is kept here, so a visit to Setări (the gate's link
+  // included) finds it as it was left, a shown Simulation too.
+  const draftOf = useRunDrafts();
 
   if (evaluations.isPending || thresholds.isPending)
     return <Loading label="Se încarcă Portofoliu Interne…" />;
@@ -89,9 +93,9 @@ export default function PortofoliuInterneScreen() {
     hasRun(kind) ||
     signals.isError ||
     (signals.data ?? []).some((signal) => signal.kind === kind);
-  // Only Voluntar Activ has Candidates.
+  // Only Voluntar Activ has Candidates: a run of the other kind lists none.
   const hasCandidates =
-    evaluations.data.length > 0 ||
+    hasRun('voluntar_activ') ||
     candidates.isError ||
     (candidates.data?.length ?? 0) > 0;
   const hasLog = changes.isError || (changes.data?.length ?? 0) > 0;
@@ -124,6 +128,7 @@ export default function PortofoliuInterneScreen() {
         <PageGrid columns={1}>
           <RunPanel
             kind={view}
+            {...draftOf(view)}
             evaluations={evaluations.data}
             disabled={busy}
             onRun={onRun}

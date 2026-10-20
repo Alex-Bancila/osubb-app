@@ -32,11 +32,12 @@ function countsOrDash(run: RoleEvaluation) {
 }
 
 function historyColumns(
+  kind: RoleEvaluationKind,
   identities: Identities,
   open: (run: RoleEvaluation) => void,
 ): DataTableColumn<RoleEvaluation>[] {
   const plain = { enableSorting: false } as const;
-  return [
+  const columns: DataTableColumn<RoleEvaluation>[] = [
     {
       id: 'name',
       accessorFn: (row) => row.name,
@@ -131,6 +132,10 @@ function historyColumns(
       ),
     },
   ];
+  // The Adunarea Generală has no cutoff: a column of dashes says nothing.
+  return kind === 'voluntar_activ'
+    ? columns
+    : columns.filter((column) => column.id !== 'cutoff');
 }
 
 /**
@@ -162,8 +167,8 @@ export function HistoryPanel({
   const identities = useMemberIdentities(rows.map((run) => run.run_by));
   const [opened, setOpened] = useState<RoleEvaluation | null>(null);
   const columns = useMemo(
-    () => historyColumns(identities.data, setOpened),
-    [identities.data],
+    () => historyColumns(kind, identities.data, setOpened),
+    [kind, identities.data],
   );
   const table = useMinWidth(HISTORY_TABLE_FROM);
   return (
