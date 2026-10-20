@@ -1,9 +1,10 @@
 import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { vi } from 'vitest';
 import { answered } from './postgrest-fake';
+import { Where } from './where';
 
 /*
  * A small fake of the database behind Portofoliu Interne (R58): the tables
@@ -109,6 +110,8 @@ export const db = {
   /** What a finalised run reports back. */
   runResult: { candidates: 2, retention_signals: 1 },
   refuse: new Map<string, { code: string; message: string }>(),
+  /** A command that waits for its promise before it answers. */
+  hold: new Map<string, Promise<void>>(),
   rpc: vi.fn(),
 };
 
@@ -145,6 +148,7 @@ export function resetDb() {
   db.rankings = new Map();
   db.runResult = { candidates: 2, retention_signals: 1 };
   db.refuse = new Map();
+  db.hold = new Map();
   db.rpc.mockReset();
 }
 resetDb();
@@ -325,6 +329,7 @@ function logChange(
 
 const answer = async (name: string, args: Record<string, unknown>) => {
   db.rpc(name, args);
+  await db.hold.get(name);
   const refusal = db.refuse.get(name);
   if (refusal) return { data: null, error: refusal };
   switch (name) {
@@ -356,9 +361,11 @@ const answer = async (name: string, args: Record<string, unknown>) => {
         evaluated_count: 6,
       });
       // A finalised run hands the line it computed to its kind's Promotion
-      // Threshold and writes the values it used through to the settings in
-      // force, each changed value logged once naming the run (source
-      // role_evaluation, no author) -- as run_role_evaluation does.
+      // Threshold and writes only the share it used through to the settings
+      // in force, each changed value logged once naming the run (source
+      // role_evaluation, no author) -- as run_role_evaluation does. The Prag
+      // minim and the Data limită de intrare it used stay on its own row:
+      // they are Setări's alone, so a run never writes either back.
       const logRun = (
         change: Pick<Change, 'from_value' | 'to_value'> & Partial<Change>,
       ) =>
@@ -377,40 +384,22 @@ const answer = async (name: string, args: Record<string, unknown>) => {
         threshold.threshold = line;
         threshold.updated_by = null;
       }
-      const floor = Number(args.p_floor);
-      if (db.settings.eligibility_floor !== floor)
-        logRun({
-          field: 'floor',
-          from_value: db.settings.eligibility_floor,
-          to_value: floor,
-        });
-      db.settings.eligibility_floor = floor;
       const percent = Number(args.p_percent);
       const percentWas =
         kind === 'voluntar_activ'
           ? db.settings.activ_percent
           : db.settings.vot_percent;
-      if (percentWas !== percent)
+      if (percentWas !== percent) {
         logRun({
           kind,
           field: 'percent',
           from_value: percentWas,
           to_value: percent,
         });
-      if (kind === 'voluntar_activ') {
-        db.settings.activ_percent = percent;
-        const cutoff = (args.p_cutoff as string | undefined) ?? null;
-        if (db.settings.membership_cutoff !== cutoff)
-          logRun({
-            field: 'cutoff',
-            from_value: null,
-            to_value: null,
-            from_date: db.settings.membership_cutoff,
-            to_date: cutoff,
-          });
-        db.settings.membership_cutoff = cutoff;
-      } else db.settings.vot_percent = percent;
-      db.settings.updated_by = null;
+        if (kind === 'voluntar_activ') db.settings.activ_percent = percent;
+        else db.settings.vot_percent = percent;
+        db.settings.updated_by = null;
+      }
       return {
         data: [
           {
@@ -569,23 +558,21 @@ export function identitiesMock() {
   };
 }
 
-// oxlint-disable-next-line react/only-export-components
-function Where() {
-  const { pathname, search } = useLocation();
-  return <div data-testid="where">{pathname + search}</div>;
-}
-
 /**
- * Mount a panel (or the page) under a query client and a router. The client
+ * Mount a panel (or the page) under a query client and a router, at the
+ * page's address unless `at` gives another (a query included). The client
  * comes back with the render, to move the data under a page that is up.
  */
-export function show(element: ReactElement) {
+export function show(
+  element: ReactElement,
+  at = '/administrare/portofoliu-interne',
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   const view = render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={['/administrare/portofoliu-interne']}>
+      <MemoryRouter initialEntries={[at]}>
         <Routes>
           <Route path="/administrare/portofoliu-interne" element={element} />
           <Route path="/administrare/roluri" element={<Where />} />

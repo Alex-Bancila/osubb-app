@@ -34,6 +34,7 @@ import {
   useOrgSettings,
   type OrgSettingChange,
 } from '../../queries/org-settings';
+import { SETARI_HREF } from './portofoliu/portofoliu-view';
 
 type Save = (change: OrgSettingChange) => Promise<void>;
 type SettingKey = OrgSettingChange['key'];
@@ -543,7 +544,7 @@ export default function AdminSettingsTab() {
         title="Promovări și evaluări"
         action={{
           label: 'Setările evaluărilor',
-          to: '/administrare/portofoliu-interne',
+          to: SETARI_HREF,
         }}
         flush
       >

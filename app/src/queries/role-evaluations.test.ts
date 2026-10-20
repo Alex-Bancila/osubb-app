@@ -577,14 +577,17 @@ describe('what the tab derives', () => {
 
 describe('the commands', () => {
   it('the run form parses into the values a run takes', () => {
-    const values: RunValues = runSchema('2026-09-30').parse({
+    // The form's own fields; the Prag minim and the Data limită de intrare
+    // are the settings in force.
+    const values: RunValues = runSchema('2026-09-30', {
+      floor: 10,
+      cutoff: '2026-03-01',
+    }).parse({
       kind: 'voluntar_activ',
       from: '2026-03-01',
       to: '2026-09-30',
       name: ' Evaluare S1 ',
-      floor: '10',
       percent: '35',
-      cutoff: '2026-03-01',
     });
     expect(values).toEqual(VALUES);
   });

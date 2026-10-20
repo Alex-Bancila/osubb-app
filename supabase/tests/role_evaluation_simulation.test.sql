@@ -14,9 +14,10 @@
 -- public.simulate_role_evaluation returns those rows and writes nothing;
 -- public.run_role_evaluation records them, lists Candidates (listable and
 -- inside), raises Signals (a holder not inside: below_line when ranked,
--- below_floor when not), hands the line over and writes the Floor, the share
--- and the cutoff it used through to evaluation_settings; public.
--- role_evaluation_ranking(id) recomputes a recorded run from its own values.
+-- below_floor when not), hands the line over and writes the share it used
+-- through to evaluation_settings -- never the Floor or the cutoff, which are
+-- Setări's alone (Alex, 2026-10-20); public.role_evaluation_ranking(id)
+-- recomputes a recorded run from its own values.
 --
 -- In order: 0. public.retention_signals' shape; 1. the shares at home
 -- (evaluation_settings, migration log rows, org_settings without y); 2. the
@@ -47,7 +48,12 @@
 --     holder not inside" and "every holder raises a below_floor Signal,
 --     measured against the Floor";
 --   * the Simulation's cutoff check judging every kind again -> "a cutoff
---     tomorrow is not judged for the Adunarea Generală kind".
+--     tomorrow is not judged for the Adunarea Generală kind";
+--   * (2026-10-20, a run writes back only the share) section 9 writing the
+--     Floor back again -> "the run logs exactly the hand-over (45 -> 40)
+--     naming itself...", "Setări keeps the Prag minim and the Data limită de
+--     intrare unset..." and "the Floor the second run used (100) is not
+--     written back..."; writing the cutoff back again -> the first two.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
@@ -306,15 +312,13 @@ select results_eq(
        from public.promotion_threshold_changes
       where role_evaluation_id = (select role_evaluation_id from runs58 where label = 's1')
       order by field $$,
-  $$ values ('cutoff'::text, null::text, null::int, null::int, null::date, '2026-03-01'::date, 'role_evaluation'::text, null::uuid),
-            ('floor', null, null, 10, null, null, 'role_evaluation', null),
-            ('threshold', 'voluntar_activ', 45, 40, null, null, 'role_evaluation', null) $$,
-  'the run logs exactly the hand-over (45 -> 40), the Floor it used (unset -> 10) and the cutoff it used (unset -> 2026-03-01), each naming the run; the share it used was already 35');
+  $$ values ('threshold'::text, 'voluntar_activ'::text, 45, 40, null::date, null::date, 'role_evaluation'::text, null::uuid) $$,
+  'the run logs exactly the hand-over (45 -> 40) naming itself: the Floor (10) and the cutoff (2026-03-01) it used are not written back, so no floor or cutoff row; the share it used was already 35');
 select results_eq(
   $$ select eligibility_floor, activ_percent, vot_percent, membership_cutoff, updated_by
        from public.evaluation_settings where id = 1 $$,
-  $$ values (10, 35, 25, '2026-03-01'::date, null::uuid) $$,
-  'the values the run used are the settings in force: Floor 10, x 35, cutoff 2026-03-01');
+  $$ values (null::int, 35, 25, null::date, null::uuid) $$,
+  'Setări keeps the Prag minim and the Data limită de intrare unset: a run records the Floor 10 and the cutoff 2026-03-01 it used on its own row and never writes them back');
 select results_eq(
   $$ select member_id, task_points, tenure_since, threshold_used, decision
        from public.promotion_candidates
@@ -464,8 +468,8 @@ select results_eq(
   $$ values ('Activ G R58 (Voluntar Activ) are 20 puncte de task în evaluarea „Evaluare S1 prag 100” (01.03.2026–30.09.2026), '
              || 'sub pragul minim de 100 puncte. Rolul nu se retrage automat: decizia îi aparține BC.') $$,
   'the unranked holder''s Notification names the Floor of that run');
-select is((select eligibility_floor from public.evaluation_settings where id = 1), 100,
-  'the Floor the second run used is the setting in force');
+select is((select eligibility_floor from public.evaluation_settings where id = 1), null::int,
+  'the Floor the second run used (100) is not written back: the Prag minim is still unset in Setări');
 
 -- ==================== 9. The ranking of a recorded run ====================
 

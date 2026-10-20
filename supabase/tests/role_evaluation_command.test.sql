@@ -9,12 +9,13 @@
 -- session; the function and its privileges; step 1 (malformed for everyone,
 -- before the gate); the gate; a kind's first run with no threshold in force;
 -- a Voluntar Activ run (candidates without promotion, the line both ways, one
--- ranking, the hand-over, the values written through, the Notifications once
--- per recipient); a rejection and a hand edit, then a run over overlapping
--- days where the rejected Voluntar reappears and the previous undecided
--- candidate is superseded; a run under a hand-set threshold that measures
--- against its own line; no Promotion Rule gates a run; the Adunarea Generală
--- kind; a run that ranks nobody hands nothing over; the transactional proof.
+-- ranking, the hand-over, the share written through and the Floor and cutoff
+-- not, the Notifications once per recipient); a rejection and a hand edit,
+-- then a run over overlapping days where the rejected Voluntar reappears and
+-- the previous undecided candidate is superseded; a run under a hand-set
+-- threshold that measures against its own line; no Promotion Rule gates a
+-- run; the Adunarea Generală kind; a run that ranks nobody hands nothing over;
+-- the transactional proof.
 --
 -- Fixtures (fixture prefix 82600000-), written as the owner inside this
 -- rolled-back transaction. Every live active ladder holder the demo seed
@@ -23,7 +24,9 @@
 -- award is dated two days ago, inside it. The Voluntar Activ runs use the
 -- Eligibility Floor 5, the share 50 % and the cutoff today - 1; the
 -- Adunarea Generală runs 25 % and the Floor 5, except the one in section 10
--- (Floor 1).
+-- (Floor 1, share 40 %). Setări holds the Floor 7 and the cutoff 1999-12-31
+-- (before every join date, so no live Candidate is listed) throughout: a run
+-- never writes either back (Alex, 2026-10-20).
 --   R1 recrut 100, V3 voluntar joined today 50, A1 activ 25, V1 voluntar 20,
 --   V4 voluntar 15, A2 activ 15, G1 vot 12, V2 voluntar 10, A3 activ 5,
 --   G2 vot 3 (below the Floor).
@@ -55,6 +58,16 @@
 --     again (`p_cutoff > v_today` without `p_kind = 'voluntar_activ'`) ->
 --     "an Adunarea Generală run with a cutoff after today passes step 1" and
 --     "BC runs an Adunarea Generală Role Evaluation, handing it a cutoff";
+--   * (2026-10-20, a run writes back only the share) section 9 writing the
+--     Floor back again (an update and a 'floor' change row) -> "Setări after
+--     the run: the share is the run's 50...", "the Adunarea Generală run
+--     writes through and logs only its share...", "and, like every run before
+--     it, it left the Prag minim...", "no run of this suite logged a floor or
+--     cutoff change"; the cutoff written back again -> the same, and "only
+--     the share the run used (35 -> 50) is written through..."; the Floor
+--     written without its log row -> the two Setări assertions alone; the
+--     share no longer written -> "only the share the run used..." and "the
+--     Adunarea Generală run writes through and logs only its share...";
 --   (The held-lock probe runs in a remote session, which sees only committed
 --   code, so it was not run as a mutation: without the (47, 1) call the
 --   remote run meets no held lock and completes, so the probe discriminates.)
@@ -65,7 +78,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(71);
+select plan(75);
 
 -- ==================== 1. The lock ====================
 -- A held-lock probe, as #52's suite probes (52, 1): a run must wait on
@@ -177,6 +190,13 @@ update public.profiles set status = 'inactiv'
 update public.org_settings set value = null where key = 'adherence_form_url';
 update public.promotion_thresholds set threshold = 20 where kind = 'voluntar_activ';
 update public.promotion_thresholds set threshold = null where kind = 'adunarea_generala';
+-- Setări's Prag minim and Data limită de intrare, both different from every
+-- value a run below is given (and the cutoff before every join date, so the
+-- write refreshes no live Candidate): a run must leave them as they are.
+update public.evaluation_settings
+   set eligibility_floor = 7, membership_cutoff = date '1999-12-31',
+       activ_percent = 35, vot_percent = 25, updated_by = null
+ where id = 1;
 
 insert into auth.users (id, email)
 select ('82600000-0000-0000-0000-0000000000' || suffix)::uuid, 'm' || suffix || '-826@test.local'
@@ -410,9 +430,13 @@ select results_eq(
       where role_evaluation_id = (select role_evaluation_id from runs826 where label = 'va1')
         and field <> 'threshold'
       order by field $$,
-  $$ values ('cutoff'::text, null::int, null::int, null::date, true),
-            ('percent', 35, 50, null, null) $$,
-  'the share (35 -> 50) and the cutoff (unset -> yesterday) the run used are written through, each logged naming the run; the Floor 5 was already in force');
+  $$ values ('percent'::text, 35, 50, null::date, null::boolean) $$,
+  'only the share the run used (35 -> 50) is written through and logged naming the run: no floor row (5 against Setări''s 7) and no cutoff row (yesterday against 1999-12-31)');
+select results_eq(
+  $$ select eligibility_floor, activ_percent, vot_percent, membership_cutoff, updated_by
+       from public.evaluation_settings where id = 1 $$,
+  $$ values (7, 50, 25, date '1999-12-31', null::uuid) $$,
+  'Setări after the run: the share is the run''s 50, written with no author; the Prag minim (7) and the Data limită de intrare (1999-12-31) are as BC left them, not the 5 and yesterday the run used');
 
 -- The Notifications.
 select is(
@@ -565,14 +589,11 @@ select results_eq(
 -- ==================== 10. The Adunarea Generală kind ====================
 
 reset role;
--- The cutoff in force before the run: the Voluntar Activ runs' own.
-create temp table cutoff826 as
-  select membership_cutoff from public.evaluation_settings where id = 1;
 select pg_temp.test_login_leadership('82600000-0000-0000-0000-000000000001');
 select lives_ok($$ select public.set_promotion_threshold('adunarea_generala', 10) $$,
   'BC edits the Adunarea Generală threshold by hand');
 select lives_ok(
-  format($$ insert into runs826 select 'ag1', * from public.run_role_evaluation('adunarea_generala', %L, %L, 'AG #826', 1, 25, current_date + 2) $$,
+  format($$ insert into runs826 select 'ag1', * from public.run_role_evaluation('adunarea_generala', %L, %L, 'AG #826', 1, 40, current_date + 2) $$,
          (select d_from from fx826), (select d_to from fx826)),
   'BC runs an Adunarea Generală Role Evaluation, handing it a cutoff after today that the kind ignores');
 reset role;
@@ -582,14 +603,19 @@ select results_eq(
        from runs826 as r join public.role_evaluations as run on run.id = r.role_evaluation_id
       where r.label = 'ag1' $$,
   $$ values (0, 1, 2, 2, 10, 12, null::date) $$,
-  'the Adunarea Generală kind (Floor 1) ranks only the two Voluntar cu Drept de Vot holders, lists no candidate, signals the one below the line and computes 12 (top 25 % of two); it records no cutoff');
+  'the Adunarea Generală kind (Floor 1) ranks only the two Voluntar cu Drept de Vot holders, lists no candidate, signals the one below the line and computes 12 (top 40 % of two, one Member); it records no cutoff');
 select results_eq(
-  $$ select (select membership_cutoff from public.evaluation_settings where id = 1),
-            (select count(*) from public.promotion_threshold_changes
-              where field = 'cutoff'
-                and role_evaluation_id = (select role_evaluation_id from runs826 where label = 'ag1')) $$,
-  $$ select membership_cutoff, 0::bigint from cutoff826 $$,
-  'nor does it write the cutoff it was handed through: the setting keeps the Voluntar Activ runs'' day, and no cutoff change names the run');
+  $$ select kind, field, from_value, to_value, source, changed_by
+       from public.promotion_threshold_changes
+      where role_evaluation_id = (select role_evaluation_id from runs826 where label = 'ag1')
+        and field <> 'threshold' $$,
+  $$ values ('adunarea_generala'::text, 'percent'::text, 25, 40, 'role_evaluation'::text, null::uuid) $$,
+  'the Adunarea Generală run writes through and logs only its share (y 25 -> 40): no floor row (1 against Setări''s 7) and no cutoff row for the cutoff it was handed');
+select results_eq(
+  $$ select eligibility_floor, activ_percent, vot_percent, membership_cutoff
+       from public.evaluation_settings where id = 1 $$,
+  $$ values (7, 50, 40, date '1999-12-31') $$,
+  'Setări keeps the Prag minim (7) and the Data limită de intrare (1999-12-31); x is the Voluntar Activ runs'' 50 and y this run''s 40');
 select is(
   (select count(*) from public.promotion_candidates
     where role_evaluation_id = (select role_evaluation_id from runs826 where label = 'ag1')),
@@ -633,6 +659,15 @@ select results_eq(
       where run.id = (select role_evaluation_id from runs826 where label = 'ag0') $$,
   $$ values (null::int, 0, 12, 0::bigint) $$,
   'a run that ranks nobody records no line and hands nothing over: 12 stays in force, no threshold change row');
+select results_eq(
+  $$ select eligibility_floor, membership_cutoff from public.evaluation_settings where id = 1 $$,
+  $$ values (7, date '1999-12-31') $$,
+  'and, like every run before it, it left the Prag minim and the Data limită de intrare as BC had them');
+select is(
+  (select count(*) from public.promotion_threshold_changes
+    where source = 'role_evaluation' and field in ('floor', 'cutoff')),
+  0::bigint,
+  'no run of this suite logged a floor or cutoff change: a run never writes either back');
 
 -- ==================== 12. The transactional proof ====================
 -- The owner makes every Notification fail; the run must roll back whole.

@@ -1,7 +1,9 @@
-import { useState } from 'react';
 import { PageGrid } from '../../../components/layout';
 import { ErrorState, Loading } from '../../../components/states';
-import { SegmentedRadio } from '../../../components/ui/segmented-radio';
+import {
+  SegmentedRadio,
+  type SegmentedRadioOption,
+} from '../../../components/ui/segmented-radio';
 import type { RoleEvaluationKind } from '../../../lib/schemas/role-evaluation';
 import {
   useEvaluationSettingCommand,
@@ -21,13 +23,16 @@ import { CandidatesPanel } from './CandidatesPanel';
 import { ChangeLogPanel } from './ChangeLogPanel';
 import { HistoryPanel } from './HistoryPanel';
 import { KIND_LABEL } from './portofoliu-text';
+import { usePortofoliuView, type PortofoliuView } from './portofoliu-view';
 import { RunPanel } from './RunPanel';
+import { useRunDrafts } from './run-draft';
 import { SettingsPanel } from './SettingsPanel';
 import { SignalsPanel } from './SignalsPanel';
 
-const KINDS: readonly RoleEvaluationKind[] = [
-  'voluntar_activ',
-  'adunarea_generala',
+const VIEWS: readonly SegmentedRadioOption<PortofoliuView>[] = [
+  { value: 'voluntar_activ', label: KIND_LABEL['voluntar_activ'] },
+  { value: 'adunarea_generala', label: KIND_LABEL['adunarea_generala'] },
+  { value: 'setari', label: 'Setări' },
 ];
 
 /**
@@ -39,12 +44,15 @@ const KINDS: readonly RoleEvaluationKind[] = [
  * stays in the Role panel), reads the Retention Signals, and the history of
  * runs and of changes.
  *
- * One **Tip** switch at the top chooses the kind the run form is of. The
- * settings, the lists and the histories show both kinds, whichever is
- * chosen. Until something exists only the run form and the settings are on
- * the page: each list appears with its first row, the log with its first
- * change (B58). Mounted behind `manageRoles`; every command decides again on
- * the server (level 6).
+ * One **Secțiune** switch at the top chooses among three views, kept in the
+ * URL (`?vedere=`, Alex 2026-10-20): **Voluntar Activ** and **Adunarea
+ * Generală**, each with the run form of its kind and its own Candidates,
+ * Signals and runs, and **Setări**, with every setting and the log of their
+ * changes. The Prag minim and the Data limită de intrare are edited only
+ * there; a run uses the ones in force. Until something exists a kind's view is
+ * only its run form: each list appears with its first row of that kind, the
+ * log with its first change (B58). Mounted behind `manageRoles`; every command
+ * decides again on the server (level 6).
  */
 export default function PortofoliuInterneScreen() {
   const evaluations = useRoleEvaluations();
@@ -55,7 +63,10 @@ export default function PortofoliuInterneScreen() {
   const signals = useRetentionSignals();
   const command = useRoleEvaluationCommand();
   const setting = useEvaluationSettingCommand();
-  const [kind, setKind] = useState<RoleEvaluationKind>('voluntar_activ');
+  const [view, chooseView] = usePortofoliuView();
+  // Each kind's run form is kept here, so a visit to Setări (the gate's link
+  // included) finds it as it was left, a shown Simulation too.
+  const { draftOf, simulating } = useRunDrafts();
 
   if (evaluations.isPending || thresholds.isPending)
     return <Loading label="Se încarcă Portofoliu Interne…" />;
@@ -69,51 +80,68 @@ export default function PortofoliuInterneScreen() {
         }}
       />
     );
-  const busy = command.isPending || setting.isPending;
+  const busy = command.isPending || setting.isPending || simulating;
   const onRun = (next: RoleEvaluationCommand) => command.mutateAsync(next);
   const onSetting = (next: EvaluationSettingCommand) =>
     setting.mutateAsync(next);
-  const hasRun = evaluations.data.length > 0;
-  // A Candidate or a Signal can exist before any run: between runs they are
-  // listed live. A list that failed to load still shows its retry.
+  // What exists decides which lists appear (B58). A Candidate or a Signal can
+  // exist before any run: between runs they are listed live. A list that
+  // failed to load still shows its retry.
+  const hasRun = (kind: RoleEvaluationKind) =>
+    evaluations.data.some((run) => run.kind === kind);
+  const hasSignals = (kind: RoleEvaluationKind) =>
+    hasRun(kind) ||
+    signals.isError ||
+    (signals.data ?? []).some((signal) => signal.kind === kind);
+  // Only Voluntar Activ has Candidates: a run of the other kind lists none.
   const hasCandidates =
-    hasRun || candidates.isError || (candidates.data?.length ?? 0) > 0;
-  const hasSignals =
-    hasRun || signals.isError || (signals.data?.length ?? 0) > 0;
+    hasRun('voluntar_activ') ||
+    candidates.isError ||
+    (candidates.data?.length ?? 0) > 0;
   const hasLog = changes.isError || (changes.data?.length ?? 0) > 0;
   return (
     <ReceiptTurnScope>
-      {/* A choice of two, drawn as segments; a long label wraps inside its
+      {/* A choice of three, drawn as segments; a long label wraps inside its
           segment, never past it (F-22). */}
-      <SegmentedRadio<RoleEvaluationKind>
-        aria-label="Tip"
-        className="sm:max-w-xl"
-        options={KINDS.map((value) => ({ value, label: KIND_LABEL[value] }))}
-        value={kind}
-        onValueChange={setKind}
+      <SegmentedRadio<PortofoliuView>
+        aria-label="Secțiune"
+        className="sm:max-w-2xl"
+        options={VIEWS}
+        value={view}
+        onValueChange={chooseView}
         disabled={busy}
       />
-      <PageGrid columns={2} alignHeaders>
-        <RunPanel
-          kind={kind}
-          evaluations={evaluations.data}
-          disabled={busy}
-          onRun={onRun}
-        />
-        <SettingsPanel
-          thresholds={thresholds.data}
-          evaluations={evaluations.data}
-          disabled={busy}
-          onRun={onRun}
-          onSetting={onSetting}
-        />
-      </PageGrid>
-      <PageGrid columns={1}>
-        {hasCandidates && <CandidatesPanel disabled={busy} onRun={onRun} />}
-        {hasSignals && <SignalsPanel />}
-        {hasRun && <HistoryPanel evaluations={evaluations.data} />}
-        {hasLog && <ChangeLogPanel evaluations={evaluations.data} />}
-      </PageGrid>
+      {view === 'setari' ? (
+        // The settings, and the log of their changes beside them once it has
+        // a row.
+        <PageGrid columns={hasLog ? 2 : 1} alignHeaders={hasLog}>
+          <SettingsPanel
+            thresholds={thresholds.data}
+            evaluations={evaluations.data}
+            disabled={busy}
+            onRun={onRun}
+            onSetting={onSetting}
+          />
+          {hasLog && <ChangeLogPanel evaluations={evaluations.data} />}
+        </PageGrid>
+      ) : (
+        <PageGrid columns={1}>
+          <RunPanel
+            kind={view}
+            {...draftOf(view)}
+            evaluations={evaluations.data}
+            disabled={busy}
+            onRun={onRun}
+          />
+          {view === 'voluntar_activ' && hasCandidates && (
+            <CandidatesPanel disabled={busy} onRun={onRun} />
+          )}
+          {hasSignals(view) && <SignalsPanel kind={view} />}
+          {hasRun(view) && (
+            <HistoryPanel kind={view} evaluations={evaluations.data} />
+          )}
+        </PageGrid>
+      )}
     </ReceiptTurnScope>
   );
 }
