@@ -89,6 +89,19 @@ describe('taskDraftSchema', () => {
     ]);
   });
 
+  // R60: Formatted Text, at most 2000 visible and 4000 stored characters.
+  it('measures the description as Formatted Text (R60)', () => {
+    // 3600 stored (3599 trimmed), 1199 visible.
+    expect(check({ description: '**a** '.repeat(600) })).toEqual([]);
+    expect(
+      schema.parse({ ...draft, description: '**a** '.repeat(600) }).description,
+    ).toBe('**a** '.repeat(600).trim());
+    // 4005 stored, only 801 visible.
+    expect(check({ description: '**a**'.repeat(801) })).toEqual([
+      'description: description_too_long',
+    ]);
+  });
+
   it('refuses a deadline in the past on creation, and one that does not exist', () => {
     expect(check({ deadline: '2026-09-24T09:59:00Z' })).toEqual([
       'deadline: deadline_in_past',
@@ -275,6 +288,8 @@ describe('taskUpdateSchema', () => {
     expect(checkEdit({ description: 'd'.repeat(2001) })).toEqual([
       'description: description_too_long',
     ]);
+    // R60: 3600 stored, 1199 visible is a Formatted Text within both limits.
+    expect(checkEdit({ description: '**a** '.repeat(600) })).toEqual([]);
   });
 
   it('allows only the offered Campaigns and keeps an Umbrella without one', () => {

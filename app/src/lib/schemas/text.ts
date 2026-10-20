@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { visibleLength } from '../formatted-text/plain';
 import { charLength, emptyToNull, trimText } from '../normalize';
 
 /**
@@ -50,6 +51,47 @@ export function optionalText(rule: Omit<TextRule, 'required'> = {}) {
     .transform((value) => emptyToNull(trimText(value)))
     .superRefine((value, ctx) => {
       if (value !== null) measure(value, rule, ctx);
+    });
+}
+
+/**
+ * Formatted Text (ruling R60) is at most 2000 characters as the reader sees
+ * them (`visibleLength`) and at most 4000 as stored, the rule of
+ * `private.require_formatted_text_length`. The stored cap is judged first, so
+ * the stripper never runs on an unbounded value.
+ */
+function measureFormatted(
+  value: string,
+  tooLong: string,
+  ctx: z.RefinementCtx,
+) {
+  if (charLength(value) > 4000 || visibleLength(value) > 2000)
+    ctx.addIssue({ code: 'custom', message: tooLong });
+}
+
+/** A Formatted Text the command needs: trimmed, never blank, within R60's limits. */
+export function requiredFormattedText(rule: {
+  required: string;
+  tooLong: string;
+}) {
+  return z
+    .string()
+    .trim()
+    .superRefine((value, ctx) => {
+      if (value === '')
+        ctx.addIssue({ code: 'custom', message: rule.required });
+      else measureFormatted(value, rule.tooLong, ctx);
+    });
+}
+
+/** A Formatted Text the member may leave empty: trimmed, and blank becomes `null`. */
+export function optionalFormattedText(rule: { tooLong: string }) {
+  return z
+    .string()
+    .nullish()
+    .transform((value) => emptyToNull(trimText(value)))
+    .superRefine((value, ctx) => {
+      if (value !== null) measureFormatted(value, rule.tooLong, ctx);
     });
 }
 

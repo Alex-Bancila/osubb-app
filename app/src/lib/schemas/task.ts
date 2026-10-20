@@ -5,14 +5,15 @@ import type {
   TaskFormOptions,
 } from '../../screens/tracker/task-form-model';
 import { attachedLinksSchema, linksFieldForReason } from './attached-link';
-import { isId, optionalText, requiredText } from './text';
+import { isId, optionalFormattedText, requiredText } from './text';
 
 /** How many identical copies one create may ask for (spec 2026-10-11). */
 export const MAX_TASK_COPIES = 100;
 
 /**
  * A Task, as `create_task` / `update_task` accept it (#673, ruling R8): title
- * 3–120 characters, description at most 2000, a deadline not in the past on
+ * 3–120 characters, a Formatted Text description of at most 2000 visible and
+ * 4000 stored characters (ruling R60), a deadline not in the past on
  * creation, and the audience / assignment / Executor / Campaign combination
  * ADR-0007 allows. The command stays authoritative; this only means a draft
  * the server would refuse never leaves the browser.
@@ -24,8 +25,7 @@ export const taskTitle = requiredText({
   max: 120,
   tooLong: 'title_too_long',
 });
-export const taskDescription = optionalText({
-  max: 2000,
+export const taskDescription = optionalFormattedText({
   tooLong: 'description_too_long',
 });
 
