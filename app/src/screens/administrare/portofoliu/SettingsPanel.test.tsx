@@ -538,3 +538,19 @@ it('says what the Data de început a punctajului changes, and what still reads o
   );
   expect(hint).not.toHaveTextContent('niciun total');
 });
+
+// The run's form no longer carries the Prag minim or the Data limită de
+// intrare: this panel is where they are set, and a run uses the ones in force.
+it('says in its hint that a run uses the Prag minim and the Data limită de intrare set here', async () => {
+  const user = userEvent.setup();
+  show(<Host />);
+  const panel = await settings();
+  await user.click(
+    within(panel).getByRole('button', { name: 'Despre setări' }),
+  );
+  const hint = await screen.findByText(/Valorile după care citește/);
+  expect(hint).toHaveTextContent(
+    'Valorile după care citește o evaluare: Prag minim, Data limită de intrare, Procent, și data de la care se numără punctele în orice total. Pragul minim și data limită de intrare se schimbă doar aici, iar o evaluare le folosește pe cele în vigoare. Procentul ales în formular intră în vigoare când evaluarea e finalizată.',
+  );
+  expect(hint).not.toHaveTextContent('din formular și');
+});
