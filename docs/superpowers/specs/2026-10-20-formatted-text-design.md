@@ -152,7 +152,7 @@ Styles live in our stylesheet, never inline. Headings and quotes use the app's t
   - A second check per column, `char_length(private.formatted_text_plain(x)) <= 2000`, enforces the visible limit. The commands and `guard_announcement_text` raise the same reason codes as today before the constraint would fire.
   - Per the conventions, this is one check per rule, with one mutation test each.
 - **Notifications.** `private.notify_announcement` passes `private.formatted_text_plain(new.body)` as the Notification body. Notificări, push and the Email Digest then receive plain words and need no change.
-- **The Event to Announcement copy.** `private.event_announcement_body` keeps the description as Markdown after its date line. It clips at the last whole block (paragraph or list item) that keeps the visible text within 2000 characters, then appends "…" as its own paragraph, so a cut never lands inside a marker.
+- **The Event to Announcement copy.** `private.event_announcement_body` keeps the description as Markdown after its date line. It drops whole lines from the end until the visible text is within 2000 characters (and the stored text within 4000), then appends "…" on its own line, so a cut never lands inside a marker. The date line is never dropped.
 - **Reasons and notes.** They stay plain columns, so the notification bodies built from them (cancel, reopen, return, give up, rejections, applications) and the `left()` cuts of a Cerere's description are untouched.
 
 ### E. Copy (Romanian) and DESIGN.md
@@ -188,15 +188,17 @@ The patterns that stay literal under decision 16 are excluded. Odd hits get fixe
   - The stripper on the same fixture list.
   - Per column: visible 2000 passes with stored 3000; visible 2001 is refused; stored 4001 is refused, each with its reason code.
   - `notify_announcement` writes plain words.
-  - The Event copy clips on a block boundary.
+  - The Event copy clips on a line boundary.
 - **Acceptance by mutation:** reverting each rule makes its named assertion fail.
 
 ## PR split
 
-1. **The scan** (§F). It must run on staging and production before PR 2 ships.
-2. **The reader** (§B) and every read site, with no editor yet. Existing rows start rendering as Formatted Text.
-3. **The server** (§D): the stripper, the limits, the plain Notification body, the Event copy clip. It is independent of PR 2.
-4. **The editor** (§C) at the six sites, the PWA `globIgnores` entry and the DESIGN.md rows. It follows PRs 2 and 3.
+This is the order of the implementation plan, `docs/superpowers/plans/2026-10-20-formatted-text.md`:
+
+1. **The server** (§D): the stripper with its TypeScript twin, the limits on both sides, the plain Notification body and the Event copy clip.
+2. **The scan** (§F). It uses PR 1's stripper and runs on staging and production before PR 2 ships.
+3. **The reader** (§B) and every read site, with no editor yet. Existing rows start rendering as Formatted Text.
+4. **The editor** (§C) at the six sites, the PWA `globIgnores` entry and the DESIGN.md rows. It follows PRs 1 and 2.
 
 ## Measurements behind the choices (2026-10-20)
 
@@ -222,7 +224,7 @@ All sizes are minified and gzipped, with React excluded:
 - The link editor is a `Dialog`, on both phones and laptops.
 - Links to the app open inside the app.
 - In plain words, a Text Link shows its words and not its address.
-- The Event copy clips at a whole block.
+- The Event copy clips at a whole line.
 - Highlight uses the warning tint.
 - The scan lists at most 50 rows per pattern.
 
