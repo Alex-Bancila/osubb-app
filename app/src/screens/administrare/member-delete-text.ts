@@ -123,7 +123,14 @@ export function memberGoesItems(
   return items;
 }
 
-/** The Membri tab's receipt: the name as typed, no gendered article. */
+/**
+ * The Membri tab's receipt: the name as typed, no gendered article.
+ *
+ * A deliberate exception to "a Member's name renders through MemberName"
+ * (R59): the account no longer exists, so there is no Member Card to open
+ * and nothing MemberName could resolve; the full name BC just typed is the
+ * only name left to show, once, and it is not kept anywhere.
+ */
 export function memberDeletedReceipt(fullName: string): string {
   return `Contul „${fullName}” a fost șters definitiv.`;
 }

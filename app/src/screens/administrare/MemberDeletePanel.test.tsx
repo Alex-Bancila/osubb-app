@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
@@ -11,12 +11,39 @@ const state = vi.hoisted(() => ({
   deleteAsync: vi.fn(),
   refetch: vi.fn(),
 }));
+// The preview as React Query serves it: one cache entry, and every component
+// reading it renders again when it changes (the panel and its pop-up both
+// read it), which a plain mockReturnValue would not do.
+const store = vi.hoisted(() => {
+  let value: unknown;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => value,
+    set(next: unknown) {
+      value = next;
+      listeners.forEach((listener) => listener());
+    },
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
+    },
+  };
+});
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
-vi.mock('../../queries/member-deletion', async (original) => ({
-  ...(await original<object>()),
-  useMemberDeletePreview: state.preview,
-  useDeleteMember: () => ({ mutateAsync: state.deleteAsync, isPending: false }),
-}));
+vi.mock('../../queries/member-deletion', async (original) => {
+  const { useSyncExternalStore } = await import('react');
+  return {
+    ...(await original<object>()),
+    useMemberDeletePreview: (memberId: string) => {
+      state.preview(memberId);
+      return useSyncExternalStore(store.subscribe, store.get);
+    },
+    useDeleteMember: () => ({
+      mutateAsync: state.deleteAsync,
+      isPending: false,
+    }),
+  };
+});
 import { MemberDeletePanel } from './MemberDeletePanel';
 
 const MEMBER = '7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d';
@@ -27,7 +54,7 @@ const FREE: MemberDeletePreview = {
 };
 
 function preview(data: MemberDeletePreview | undefined, patch: object = {}) {
-  state.preview.mockReturnValue({
+  store.set({
     isPending: data === undefined,
     isError: false,
     data,
@@ -63,6 +90,7 @@ function show() {
 const panel = () => screen.getByRole('region', { name: 'Ștergere' });
 
 beforeEach(() => {
+  state.preview.mockReset();
   state.deleteAsync.mockReset().mockResolvedValue(undefined);
   state.refetch.mockReset();
   preview(FREE);
@@ -180,6 +208,71 @@ it('says why the server refused, and reads the preview again', async () => {
     'Contul are istoric și nu poate fi șters definitiv. Îl poți dezactiva din Roluri.',
   );
   expect(state.refetch).toHaveBeenCalled();
+});
+
+it('keeps the pop-up open when a refusal turns the account held, says why there, then focuses the way out', async () => {
+  const user = userEvent.setup();
+  state.deleteAsync.mockRejectedValue(
+    new CommandError(
+      { code: 'PT409', message: 'member_has_history' },
+      'Nu am putut șterge contul.',
+    ),
+  );
+  // The fresh read after the refusal: something now holds the account.
+  state.refetch.mockImplementation(() => {
+    preview({ ...FREE, holds: { 'tasks.created_by': 1 } });
+    return Promise.resolve();
+  });
+  show();
+  await user.click(screen.getByRole('button', { name: 'Șterge definitiv' }));
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Ștergi definitiv acest cont?',
+  });
+  await user.type(
+    within(dialog).getByLabelText(
+      'Scrie numele complet „Ana Pop” ca să confirmi',
+    ),
+    'Ana Pop',
+  );
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Șterge contul' }),
+  );
+
+  expect(screen.getByRole('dialog')).toBe(dialog);
+  expect(
+    await within(dialog).findByText(/^Contul are istoric în taskuri\./),
+  ).toBeVisible();
+  await user.click(within(dialog).getByRole('button', { name: 'Păstrează' }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(panel()).toHaveTextContent(
+    'Contul are istoric în taskuri. Nu poate fi șters definitiv;',
+  );
+  // The trigger is gone: focus lands in the reason that replaced it, on its
+  // way out (deactivation), never on the page.
+  expect(document.activeElement).toBe(
+    within(panel()).getByRole('link', { name: 'dezactivează-l din Roluri' }),
+  );
+});
+
+it('keeps the pop-up open when a background read of the preview fails', async () => {
+  const user = userEvent.setup();
+  show();
+  await user.click(screen.getByRole('button', { name: 'Șterge definitiv' }));
+  const dialog = await screen.findByRole('dialog');
+  act(() =>
+    preview(undefined, {
+      isPending: false,
+      isError: true,
+      error: new CommandError(
+        { code: '42501', message: 'member_manage_forbidden' },
+        'Nu am putut verifica acest cont.',
+      ),
+    }),
+  );
+  expect(screen.getByRole('dialog')).toBe(dialog);
+  expect(within(dialog).getByRole('alert')).toHaveTextContent(
+    'Nu mai ai permisiunea de a modifica acest membru. Reîncarcă pagina.',
+  );
 });
 
 it('offers to check again when the preview could not be read', async () => {

@@ -1,4 +1,5 @@
-import { useId, useState, type FormEvent } from 'react';
+import { Trash2 } from 'lucide-react';
+import { useId, useRef, useState, type FormEvent, type Ref } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import {
   Consequences,
@@ -33,17 +34,26 @@ const DELETE_FAILED = 'Nu am putut șterge contul. Încearcă din nou.';
  * Why there is no delete: the last active holder of a rank, or the history
  * the server named, with the way to deactivate instead (Roluri, a tab of the
  * same page — the back link's origin is kept, as a tab change keeps it).
+ * When a refusal takes the delete away while the pop-up is open, focus comes
+ * back here rather than to the page: to the link to Roluri when there is
+ * one, else to the paragraph itself (focusable from code only).
  */
-function Blocked({ preview }: { preview: MemberDeletePreview }) {
+function Blocked({
+  preview,
+  ref,
+}: {
+  preview: MemberDeletePreview;
+  ref?: Ref<HTMLParagraphElement>;
+}) {
   const location = useLocation();
   if (preview.lastHolder)
     return (
-      <p className="m-0 text-sm">
+      <p ref={ref} tabIndex={-1} className="m-0 text-sm outline-none">
         {reasonCopy(`member_is_last_${preview.lastHolder}`)}
       </p>
     );
   return (
-    <p className="m-0 text-sm">
+    <p ref={ref} tabIndex={-1} className="m-0 text-sm outline-none">
       {memberHeldSentence(preview.holds)} Nu poate fi șters definitiv;{' '}
       <Link
         to={{ search: '?tab=roluri' }}
@@ -151,6 +161,9 @@ function MemberDeleteBody({
         Nu rămâne nicio urmă, nici a ștergerii. {NO_UNDO}
       </p>
       <div className="grid gap-1.5">
+        {/* The full name as plain text, on purpose (R59): it is what must be
+            typed, character for character, so it is shown as stored rather
+            than as MemberName's Nickname-first button. */}
         <label htmlFor={inputId} className="text-sm font-medium">
           Scrie numele complet „{fullName}” ca să confirmi
         </label>
@@ -197,6 +210,12 @@ export function MemberDeletePanel({
   fullName: string;
 }) {
   const preview = useMemberDeletePreview(memberId);
+  // The pop-up is the panel's, not the deletable branch's: the preview it and
+  // the panel share may turn held or fail while it is open (a refusal reads it
+  // again), and it must stay open to say so rather than vanish.
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const reason = useRef<HTMLParagraphElement>(null);
   return (
     <Panel title="Ștergere">
       {preview.isPending ? (
@@ -223,19 +242,36 @@ export function MemberDeletePanel({
             Contul dispare cu tot ce ține de el și nu rămâne nicio urmă, nici a
             ștergerii.
           </p>
-          <DeleteForGoodDialog title="Ștergi definitiv acest cont?">
-            {(controls) => (
-              <MemberDeleteBody
-                memberId={memberId}
-                fullName={fullName}
-                controls={controls}
-              />
-            )}
-          </DeleteForGoodDialog>
+          {/* DeleteForGoodDialog's own trigger, drawn here so the pop-up can
+              outlive it. */}
+          <Button
+            ref={trigger}
+            type="button"
+            variant="destructive"
+            className="gap-2"
+            onClick={() => setOpen(true)}
+          >
+            <Trash2 className="size-4" aria-hidden="true" />
+            Șterge definitiv
+          </Button>
         </div>
       ) : (
-        <Blocked preview={preview.data} />
+        <Blocked ref={reason} preview={preview.data} />
       )}
+      <DeleteForGoodDialog
+        title="Ștergi definitiv acest cont?"
+        open={open}
+        onOpenChange={setOpen}
+        returnFocus={() => trigger.current ?? reason.current}
+      >
+        {(controls) => (
+          <MemberDeleteBody
+            memberId={memberId}
+            fullName={fullName}
+            controls={controls}
+          />
+        )}
+      </DeleteForGoodDialog>
     </Panel>
   );
 }

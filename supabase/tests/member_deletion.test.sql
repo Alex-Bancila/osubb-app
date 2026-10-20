@@ -2,8 +2,10 @@
 -- public.member_delete_preview.
 --
 -- What this suite pins, in the order each command answers:
---   1. the race, on COMMITTED fixtures, first: a Group Responsible appointed
---      while the deletion waits is seen and refuses it, never cascaded away;
+--   1. three races, on COMMITTED fixtures, first: a Group Responsible
+--      appointed or a row naming the login written while the deletion waits
+--      is seen and refuses it, never cascaded away; a deleter deactivated
+--      meanwhile is refused;
 --   2. the gate: claimless, anon, an inactive BC, a BCE, a Group Manager
 --      below level 6 and oneself are refused; a null and an unknown id;
 --   3. the preview of a freshly invited Member: nothing holds it, and it
@@ -17,7 +19,8 @@
 --   7. role_history stays immutable outside the command.
 --
 -- Fixture prefix 10870000-0000-0000-0000-0000000000NN; the committed race
--- fixtures use ...00000000009N and the Group '#1087 race'.
+-- fixtures use ...00000000009N, the Group '#1087 race' and the table
+-- public.test_1087_login_refs, all removed again by pg_temp.race_cleanup().
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
@@ -25,43 +28,66 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(43);
+select plan(50);
 
 create function pg_temp.u(n integer) returns uuid language sql immutable as $$
   select ('10870000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
 $$;
 
--- ==================== 1. The race ====================
--- Query A appoints the target Group Responsible of a committed Group and holds
--- its transaction; query B is the deletion. B must wait on A's row locks on
--- the target's Profile, then see the position and refuse. Without B's
--- `for update` on the Profile it would only wait at the cascade, delete the
--- account and take A's new roster row with it.
+-- ==================== 1. The races ====================
+-- Each query A holds a transaction that would give the target history (or
+-- take the deleter's standing away); query B is the deletion. B must wait on
+-- A, then see what A committed. Without the lock B waits on, B would only
+-- wait at the cascade, delete the account and take A's new row with it.
+--   race 1: a Group Responsible appointed (a key share on the Profile);
+--   race 2: a row naming the login itself, in a table outside auth that
+--           references auth.users (a key share on auth.users, not on the
+--           Profile) -- no such table exists yet, so the race commits one;
+--   race 3: the deleting BC deactivated while the deletion waits: the
+--           re-check under the lock refuses.
+-- 90 is the BC of races 1-2, 92 the BC of race 3; 91, 94, 95 the targets.
+
+create function pg_temp.race_cleanup() returns text language sql immutable as $c$
+  select $q$
+    drop function if exists public.test_1087_try_delete(uuid);
+    drop function if exists public.test_1087_name_login(uuid);
+    drop function if exists public.test_1087_deactivate(uuid);
+    drop table if exists public.test_1087_login_refs;
+    delete from public.notifications
+     where member_id = any ('{10870000-0000-0000-0000-000000000090,10870000-0000-0000-0000-000000000091,10870000-0000-0000-0000-000000000092,10870000-0000-0000-0000-000000000094,10870000-0000-0000-0000-000000000095}'::uuid[]);
+    delete from public.group_members where group_id in (select id from public.groups where name = '#1087 race');
+    delete from public.groups where name = '#1087 race';
+    delete from public.profiles
+     where id = any ('{10870000-0000-0000-0000-000000000090,10870000-0000-0000-0000-000000000091,10870000-0000-0000-0000-000000000092,10870000-0000-0000-0000-000000000094,10870000-0000-0000-0000-000000000095}'::uuid[]);
+    delete from auth.users
+     where id = any ('{10870000-0000-0000-0000-000000000090,10870000-0000-0000-0000-000000000091,10870000-0000-0000-0000-000000000092,10870000-0000-0000-0000-000000000094,10870000-0000-0000-0000-000000000095}'::uuid[]);
+  $q$
+$c$;
 
 select extensions.dblink_connect('md_setup', format(
   'host=db.supabase.internal port=5432 dbname=%L user=postgres password=postgres',
   current_database()));
 select extensions.dblink_exec('md_setup', 'set lock_timeout = ''2s''');
 -- #621: committed fixtures from an interrupted run must not hang cleanup.
+select extensions.dblink_exec('md_setup', pg_temp.race_cleanup());
 select extensions.dblink_exec('md_setup', $$
-  drop function if exists public.test_1087_try_delete(uuid);
-  delete from public.notifications
-   where member_id in ('10870000-0000-0000-0000-000000000090', '10870000-0000-0000-0000-000000000091');
-  delete from public.group_members where group_id in (select id from public.groups where name = '#1087 race');
-  delete from public.groups where name = '#1087 race';
-  delete from public.profiles
-   where id in ('10870000-0000-0000-0000-000000000090', '10870000-0000-0000-0000-000000000091');
-  delete from auth.users
-   where id in ('10870000-0000-0000-0000-000000000090', '10870000-0000-0000-0000-000000000091');
   insert into auth.users (id, email) values
     ('10870000-0000-0000-0000-000000000090', 'race.bc.1087@test.local'),
-    ('10870000-0000-0000-0000-000000000091', 'race.target.1087@test.local');
+    ('10870000-0000-0000-0000-000000000091', 'race.target.1087@test.local'),
+    ('10870000-0000-0000-0000-000000000092', 'race.bc2.1087@test.local'),
+    ('10870000-0000-0000-0000-000000000094', 'race.target2.1087@test.local'),
+    ('10870000-0000-0000-0000-000000000095', 'race.target3.1087@test.local');
   insert into public.profiles (id, full_name, email, role, status) values
     ('10870000-0000-0000-0000-000000000090', 'Race BC 1087', 'race.bc.1087@test.local', 'bc', 'activ'),
-    ('10870000-0000-0000-0000-000000000091', 'Race target 1087', 'race.target.1087@test.local', 'voluntar', 'activ');
+    ('10870000-0000-0000-0000-000000000091', 'Race target 1087', 'race.target.1087@test.local', 'voluntar', 'activ'),
+    ('10870000-0000-0000-0000-000000000092', 'Race BC2 1087', 'race.bc2.1087@test.local', 'bc', 'activ'),
+    ('10870000-0000-0000-0000-000000000094', 'Race target2 1087', 'race.target2.1087@test.local', 'voluntar', 'activ'),
+    ('10870000-0000-0000-0000-000000000095', 'Race target3 1087', 'race.target3.1087@test.local', 'voluntar', 'activ');
   insert into public.groups (name, category, min_level) values ('#1087 race', 'department', 0);
-  -- Test-only bridge: test_race aborts on an error from B, so B reports the
-  -- refusal as text instead.
+  create table public.test_1087_login_refs (
+    user_id uuid not null references auth.users (id) on delete cascade);
+  -- Test-only bridges: test_race aborts on an error from B, so B reports the
+  -- refusal as text; A writes through the owner what no client may write.
   create function public.test_1087_try_delete(p_member_id uuid) returns text
   language plpgsql set search_path = '' as $fn$
   begin
@@ -71,8 +97,22 @@ select extensions.dblink_exec('md_setup', $$
     return sqlstate || ' ' || sqlerrm;
   end;
   $fn$;
+  create function public.test_1087_name_login(p_user_id uuid) returns text
+  language sql security definer set search_path = '' as $fn$
+    insert into public.test_1087_login_refs (user_id) values (p_user_id);
+    select 'named';
+  $fn$;
+  create function public.test_1087_deactivate(p_member_id uuid) returns text
+  language sql security definer set search_path = '' as $fn$
+    update public.profiles set status = 'inactiv' where id = p_member_id;
+    select 'deactivated';
+  $fn$;
   revoke execute on function public.test_1087_try_delete(uuid) from public, anon, authenticated, service_role;
+  revoke execute on function public.test_1087_name_login(uuid) from public, anon, authenticated, service_role;
+  revoke execute on function public.test_1087_deactivate(uuid) from public, anon, authenticated, service_role;
   grant execute on function public.test_1087_try_delete(uuid) to authenticated;
+  grant execute on function public.test_1087_name_login(uuid) to authenticated;
+  grant execute on function public.test_1087_deactivate(uuid) to authenticated;
 $$);
 
 select pg_temp.test_login_leadership('10870000-0000-0000-0000-000000000090');
@@ -87,17 +127,25 @@ select is((select result_b from race1087), 'PT409 member_has_history',
 select ok((select b_waited from race1087),
   'delete_member waits on the target Profile a concurrent Appointment holds');
 
-select extensions.dblink_exec('md_setup', $$
-  drop function public.test_1087_try_delete(uuid);
-  delete from public.notifications
-   where member_id in ('10870000-0000-0000-0000-000000000090', '10870000-0000-0000-0000-000000000091');
-  delete from public.group_members where group_id in (select id from public.groups where name = '#1087 race');
-  delete from public.groups where name = '#1087 race';
-  delete from public.profiles
-   where id in ('10870000-0000-0000-0000-000000000090', '10870000-0000-0000-0000-000000000091');
-  delete from auth.users
-   where id in ('10870000-0000-0000-0000-000000000090', '10870000-0000-0000-0000-000000000091');
-$$);
+create temp table race2_1087 as select * from pg_temp.test_race(
+  $$select public.test_1087_name_login('10870000-0000-0000-0000-000000000094')$$,
+  $$select public.test_1087_try_delete('10870000-0000-0000-0000-000000000094')$$);
+select is((select result_b from race2_1087), 'PT409 member_has_history',
+  'a row naming the login, written while the deletion waits, holds the account: the deletion locks auth.users too');
+select ok((select b_waited from race2_1087),
+  'delete_member waits on a concurrent key share on the target''s login');
+
+select pg_temp.test_login_leadership('10870000-0000-0000-0000-000000000092');
+reset role;
+create temp table race3_1087 as select * from pg_temp.test_race(
+  $$select public.test_1087_deactivate('10870000-0000-0000-0000-000000000092')$$,
+  $$select public.test_1087_try_delete('10870000-0000-0000-0000-000000000095')$$);
+select is((select result_b from race3_1087), '42501 member_manage_forbidden',
+  'a BC deactivated while the deletion waits is refused by the re-check under the lock');
+select ok((select b_waited from race3_1087),
+  'delete_member waits on the deleting BC''s own Profile');
+
+select extensions.dblink_exec('md_setup', pg_temp.race_cleanup());
 select extensions.dblink_disconnect('md_setup');
 select pg_temp.test_clear_jwt();
 
@@ -157,6 +205,10 @@ insert into public.notifications (member_id, kind, title, body, link) values
    'Invitația pentru Member #1087 10 a fost retrimisă la member.10.1087@test.local.',
    '/administrare/membri/' || pg_temp.u(10)),
   (pg_temp.u(1), 'system', 'Altceva #1087', null, '/administrare/membri/' || pg_temp.u(4));
+-- And one about the account through its subject, with no link (a Promotion
+-- Candidate notice: the subject trigger derives it from the dedupe key).
+insert into public.notifications (member_id, kind, title, dedupe_key) values
+  (pg_temp.u(1), 'system', 'Candidat #1087', 'promotion_candidate:live:' || pg_temp.u(10));
 
 -- One holding kind per Member.
 insert into public.tasks (title, group_id, audience, assignment_mode, status, deadline, created_by) values
@@ -198,6 +250,11 @@ values (pg_temp.u(4), 'member.4.1087@test.local', 3, pg_temp.u(32));
 -- nobody has decided it goes with an account, so it holds one.
 create table public.test_1087_future (member_id uuid not null references public.profiles (id) on delete cascade);
 insert into public.test_1087_future (member_id) values (pg_temp.u(33));
+-- A column of profiles itself naming a Member (none exists yet): naming
+-- someone else holds them; naming the Member themselves goes with them.
+alter table public.profiles add column test_1087_mentor uuid references public.profiles (id) on delete set null;
+update public.profiles set test_1087_mentor = pg_temp.u(34) where id = pg_temp.u(4);
+update public.profiles set test_1087_mentor = pg_temp.u(35) where id = pg_temp.u(35);
 
 create function pg_temp.as_bc() returns void language sql as $$
   select pg_temp.test_login(pg_temp.u(1), '{"member_role":"bc","member_level":6}'::jsonb) $$;
@@ -321,6 +378,9 @@ select is(pg_temp.rows_naming(pg_temp.u(10)), 0::bigint,
   'no row in any table names the deleted Member: Profile, sign-in, identities, flow state, own rows');
 select is((select count(*) from public.notifications where link = '/administrare/membri/' || pg_temp.u(10)), 0::bigint,
   'another Member''s Notification naming the deleted account is gone');
+select is((select count(*) from public.notifications
+            where title = 'Candidat #1087' or subject = 'promotion_candidate:' || pg_temp.u(10)), 0::bigint,
+  'another Member''s Notification about the account through its subject is gone too');
 select is((select count(*) from public.notifications where link = '/administrare/membri/' || pg_temp.u(4)),
           (select other_notice from before1087),
   'a Notification about anyone else stays');
@@ -381,6 +441,12 @@ select is(pg_temp.held(pg_temp.u(32), 'member_imports.imported_by'), pg_temp.exp
   'an import the Member ran holds the account');
 select is(pg_temp.held(pg_temp.u(33), 'test_1087_future.member_id'), pg_temp.expect_held(),
   'a table added later holds the account until someone decides its rows go with it');
+select is(pg_temp.held(pg_temp.u(34), 'profiles.test_1087_mentor'), pg_temp.expect_held(),
+  'a column of profiles naming the Member holds the account: only the login key on profiles is the account itself');
+select pg_temp.as_bc();
+select is(public.member_delete_preview(pg_temp.u(35))->'holds', '{}'::jsonb,
+  'a column of profiles naming the Member themselves goes with them');
+reset role;
 select pg_temp.as_bc();
 select is(pg_temp.refusal(format('select public.delete_member(%L)', pg_temp.u(20)))->>'detail',
   'tasks.created_by=1',
@@ -389,7 +455,7 @@ reset role;
 select is((select count(*) from public.profiles where id = any (array[
             pg_temp.u(20), pg_temp.u(21), pg_temp.u(22), pg_temp.u(23), pg_temp.u(24), pg_temp.u(25),
             pg_temp.u(26), pg_temp.u(28), pg_temp.u(29), pg_temp.u(30), pg_temp.u(31), pg_temp.u(32),
-            pg_temp.u(33)])), 13::bigint,
+            pg_temp.u(33), pg_temp.u(34)])), 14::bigint,
   'every refused Member is still there');
 
 -- ==================== 6. The last active BC member and Moderator ====================

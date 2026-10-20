@@ -71,9 +71,11 @@ begin
         on attribute.attrelid = fk.conrelid and attribute.attnum = fk.conkey[1]
      where fk.contype = 'f'
        and fk.confrelid in ('public.profiles'::regclass, 'auth.users'::regclass)
-       -- Auth's own tables, and profiles.id itself, are the account.
+       -- Auth's own tables, and the key profiles.id -> auth.users itself, are
+       -- the account. Any other column of profiles naming a Member counts.
        and namespace.nspname <> 'auth'
-       and fk.conrelid <> 'public.profiles'::regclass
+       and not (fk.conrelid = 'public.profiles'::regclass
+                and fk.confrelid = 'auth.users'::regclass)
        and (namespace.nspname, relation.relname, attribute.attname) not in (
          ('public',  'announcement_reads',              'member_id'),
          ('public',  'deal_code_reveals',               'member_id'),
@@ -94,6 +96,13 @@ begin
       select count(*) into v_n
         from public.group_members
        where member_id = p_member_id and group_role <> 'member';
+    elsif (v_fk.schema_name, v_fk.table_name) = ('public', 'profiles') then
+      -- A column of profiles naming the Member on their own row goes with
+      -- that row; naming them on someone else's holds the account.
+      execute format('select count(*) from public.profiles where %I = $1 and id <> $1',
+                     v_fk.column_name)
+         into v_n
+        using p_member_id;
     elsif (v_fk.schema_name, v_fk.table_name, v_fk.column_name) = ('public', 'role_history', 'changed_by') then
       -- A Role change the Member decided for someone else; a row about the
       -- Member themselves goes with them.
@@ -118,7 +127,7 @@ end;
 $$;
 
 comment on function private.member_deletion_holds(uuid) is
-  'R59 (#1087): what holds an account, one key per referencing column ("tasks.created_by") with its count, only the non-zero ones. Read from the catalog: every foreign key into profiles or auth.users outside the auth schema counts, a SET NULL actor column included, except the account''s own columns (private.member_deletion_goes), an ordinary Group membership and the Role History about the Member.';
+  'R59 (#1087): what holds an account, one key per referencing column ("tasks.created_by") with its count, only the non-zero ones. Read from the catalog: every foreign key into profiles or auth.users outside the auth schema counts, a SET NULL actor column and any other column of profiles included, except the login key profiles.id itself, the account''s own columns (private.member_deletion_goes), an ordinary Group membership, the Role History about the Member and a profiles column naming the Member on their own row.';
 
 -- ==================== The last active holder ====================
 
@@ -256,6 +265,10 @@ begin
        or (profile.role in ('bc', 'moderator') and profile.status = 'activ')
     order by profile.id
       for update;
+  --    Then the login, for the same reason: a table outside auth may name
+  --    auth.users directly, and its insert takes FOR KEY SHARE there, not on
+  --    the Profile. Always after the Profiles, so the order is one.
+  perform 1 from auth.users where id = p_member_id for update;
 
   -- 4. The target, and the actor re-read under the lock: a demotion or
   --    deactivation that committed after the gate is seen here.

@@ -94,7 +94,8 @@ export function useDeleteMember() {
   return useMutation({
     mutationFn: deleteMember,
     // The account leaves every list that named it: Membri, the rosters and
-    // the pickers (Group families), and the Notifications that named it.
+    // the pickers (Group families), the Notifications that named it, and the
+    // Privacy Acknowledgement list BC reads.
     // Nothing is awaited and the Member's own queries are only marked stale,
     // so the page being left never re-reads an account that is gone.
     onSuccess: () => {
@@ -104,6 +105,7 @@ export function useDeleteMember() {
       });
       void client.invalidateQueries({ queryKey: keys.groups.all });
       void client.invalidateQueries({ queryKey: keys.notifications.all });
+      void client.invalidateQueries({ queryKey: keys.privacy.all });
     },
   });
 }

@@ -246,6 +246,8 @@ function MembersPanel({ provision }: { provision: boolean }) {
           ]}
         />
       )}
+      {/* Plain text on purpose (R59): the account is gone, so its name has
+          no Member Card for MemberName to open. */}
       {deleted && (
         <p role="status" className="text-sm">
           {deleted}

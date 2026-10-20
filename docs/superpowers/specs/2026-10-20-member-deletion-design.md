@@ -47,7 +47,7 @@ Each numbered point is one answer Alex gave, in the order asked; where he took t
 - **`public.delete_member(p_member_id uuid) returns jsonb`** (invoker wrapper + definer `_impl`), in the house steps:
   1. `PT400 invalid_member` for a null id.
   2. `private.require_member_deleter`.
-  3. One id-ordered statement locks the target, the actor and every live `activ` holder of `bc` and `moderator` **`for update`**. `for update`, not `for no key update`: the key itself is deleted, and only `for update` conflicts with the `for key share` lock every foreign-key insert takes on the Profile. So a concurrent write that would name the Member (an Assignment, a Candidature, an RSVP…) either commits first and is seen by step 5, or waits and then fails on the missing key. No row is ever cascaded away unseen.
+  3. One id-ordered statement locks the target, the actor and every live `activ` holder of `bc` and `moderator` **`for update`**, then the target's `auth.users` row the same way (a table outside `auth` may name the login directly; its insert takes `for key share` there, not on the Profile). `for update`, not `for no key update`: the key itself is deleted, and only `for update` conflicts with the `for key share` lock every foreign-key insert takes on the Profile. So a concurrent write that would name the Member (an Assignment, a Candidature, an RSVP…) either commits first and is seen by step 5, or waits and then fails on the missing key. No row is ever cascaded away unseen.
   4. `PT404 member_not_found`; the actor re-read under the lock (`42501 member_manage_forbidden` after a concurrent demotion).
   5. `PT409 member_is_last_bc` / `member_is_last_moderator`, then `PT409 member_has_history`, its DETAIL listing the non-zero keys with their counts.
   6. Deletes the other Members' Notifications naming the account, the account's `role_history` rows (the guard admits a DELETE only for the `member_id` named in the transaction-local setting `osubb.deleting_member_id`, never for a client role), its `auth.flow_state` rows, then `delete from auth.users where id = p_member_id`.
@@ -80,6 +80,7 @@ Each numbered point is one answer Alex gave, in the order asked; where he took t
 
 - A Member created by the volunteer import loses their `member_imports` row with them. Running the import again on an unchanged sheet creates them again, so the sheet row is fixed first.
 - Deleting a Member never changes a total, since a Member with Task Points cannot be deleted.
+- **Two names render as plain text, on purpose.** The confirmation shows the full name exactly as it must be typed, and the Membri receipt names an account that no longer exists, so there is no Member Card for `MemberName` to open. Both are exceptions to "a Member's name renders through MemberName", recorded in the code beside them.
 
 ## Later
 
