@@ -468,6 +468,20 @@ const REASON_COPY = new Map<string, string>([
     'last_bc_needs_replacement',
     'Este ultimul membru BC. Alege cine preia rolul de BC.',
   ],
+  // #1087 (ruling R59): Member Deletion takes only an account with no history.
+  ['invalid_member', 'Membrul nu mai este disponibil. Reîncarcă pagina.'],
+  [
+    'member_has_history',
+    'Contul are istoric și nu poate fi șters definitiv. Îl poți dezactiva din Roluri.',
+  ],
+  [
+    'member_is_last_bc',
+    'Este ultimul membru BC activ, așa că nu poate fi șters. Numește întâi alt membru BC.',
+  ],
+  [
+    'member_is_last_moderator',
+    'Este ultimul Moderator activ, așa că nu poate fi șters. Numește întâi alt Moderator.',
+  ],
   [
     'replacement_not_needed',
     'Rolul are încă un alt deținător activ, deci nu trebuie ales un înlocuitor. Reîncarcă pagina.',

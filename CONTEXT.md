@@ -413,6 +413,10 @@ _Avoid_: OTP in user-facing copy; password
 The account BC creates for a Member by email, before their first sign-in; its email carries a Magic Link and a Sign-in Code. Until it is first used, its email can be re-sent — by BC from Administrare, or by the Member from the login page.
 _Avoid_: sign-up, registration
 
+**Member Deletion** (Ștergere definitivă):
+BC or the Moderator removing a Member with no history from the application for good, sign-in included, so that nothing about them survives, not even a record that they were deleted (ruling R59, 2026-10-20). A Member has history once their name stands on anything beyond their own account: a Task, an Assignment, a Candidature, Task Points, an Evaluation, a Completed-work Request, an Event or an RSVP, an Announcement, a Campaign, an Application, a Group Manager or Group Responsible position, the OSUBB Deals team, a Promotion Candidate or Retention Signal, or any decision they made. Such a Member is deactivated instead. Their ordinary Group memberships, Notifications, devices, preferences and Role history go with them. Nobody deletes themselves, the last active BC member or the last active Moderator.
+_Avoid_: Removing (from a Group), deactivation, erasure (deleting a Member with history, a later design)
+
 **Provisioning**:
 Creating the organization membership information associated with an invited person, including their initial Department by Appointment.
 

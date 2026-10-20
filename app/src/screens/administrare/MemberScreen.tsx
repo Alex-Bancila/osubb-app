@@ -81,6 +81,7 @@ import {
 import { statusLabel } from '../volunteers/directory-filters';
 import { useReceiptTurn } from '../tracker/receipt-turn';
 import { ReceiptTurnScope } from '../tracker/ReceiptTurnScope';
+import { MemberDeletePanel } from './MemberDeletePanel';
 import { ReinvitePanel } from './ReinvitePanel';
 import { MemberRoleTimeline } from '../profile/RoleTimeline';
 import { RolePanel } from './RolePanel';
@@ -817,7 +818,8 @@ function GroupsPanel({
  * same tabs, their choice in the URL (`?tab=`):
  *
  * - **Cont**: the names, the join date, contact details and the Privacy
- *   Acknowledgement, with the invitation to resend while it is pending.
+ *   Acknowledgement, with the invitation to resend while it is pending and,
+ *   for BC and the Moderator on anyone else's page, **Ștergere** (R59).
  * - **Grupuri**: the Member's Groups in the viewer's area.
  * - **Roluri**: the Role and status editor and Istoric roluri — a tab only
  *   for whoever may see one of them.
@@ -1013,6 +1015,13 @@ export default function MemberScreen() {
                   leads={leads}
                 />
                 {rights.profile && <ReinvitePanel memberId={data.memberId} />}
+                {/* R59 (#1087): last, set apart from the edits above it. */}
+                {rights.deleteAccount && (
+                  <MemberDeletePanel
+                    memberId={data.memberId}
+                    fullName={data.fullName}
+                  />
+                )}
               </div>
             </Tabs.Panel>
 

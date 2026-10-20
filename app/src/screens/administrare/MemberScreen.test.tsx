@@ -90,6 +90,19 @@ vi.mock('./ReinvitePanel', () => ({
     <p>Retrimitere {memberId}</p>
   ),
 }));
+vi.mock('./MemberDeletePanel', () => ({
+  MemberDeletePanel: ({
+    memberId,
+    fullName,
+  }: {
+    memberId: string;
+    fullName: string;
+  }) => (
+    <p>
+      Ștergere {memberId} {fullName}
+    </p>
+  ),
+}));
 import MemberScreen from './MemberScreen';
 
 const ready = { isPending: false, isError: false };
@@ -1107,6 +1120,19 @@ it("offers BC every edit on the Moderator's page, as on anyone's (#944, R31)", (
   expect(
     screen.getByText('Editor rol 7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d'),
   ).toBeInTheDocument();
+  // R59: deleting a Moderator with no history is BC's too, as in set_member_status.
+  expect(
+    screen.getByText('Ștergere 7a3c1e2b-4d5f-4a6b-8c9d-0e1f2a3b4c5d Ana Pop'),
+  ).toBeVisible();
+});
+
+it('offers BC the Ștergere panel on Cont, after the account and invitation (R59)', () => {
+  show();
+  const cont = screen.getByRole('tabpanel', { name: 'Cont' });
+  const texts = within(cont)
+    .getAllByText(/^(Retrimitere|Ștergere) /)
+    .map((node) => node.textContent?.split(' ')[0]);
+  expect(texts).toEqual(['Retrimitere', 'Ștergere']);
 });
 
 it('offers BC their own names and join date but no Role panel (#944)', () => {
@@ -1126,6 +1152,8 @@ it('offers BC their own names and join date but no Role panel (#944)', () => {
     screen.getByRole('button', { name: 'Editează numele și porecla' }),
   ).toBeVisible();
   expect(screen.queryByText(/^Editor rol /)).toBeNull();
+  // Nobody deletes their own account (R59).
+  expect(screen.queryByText(/^Ștergere /)).toBeNull();
   // Istoric roluri is still theirs to read.
   expect(screen.getByRole('tab', { name: 'Roluri' })).toBeVisible();
 });
@@ -1144,6 +1172,7 @@ it('offers a viewer below BC no edit at all (#944)', () => {
   ).toBeNull();
   expect(screen.queryByText(/^Retrimitere /)).toBeNull();
   expect(screen.queryByText(/^Editor rol /)).toBeNull();
+  expect(screen.queryByText(/^Ștergere /)).toBeNull();
 });
 
 it('moves between tabs with a finger swipe over the panel (2026-10-11)', async () => {
