@@ -11,7 +11,9 @@ import { charLength } from '../normalize';
  * Where Postgres and JavaScript read a pattern differently, this one spells
  * out what Postgres does:
  *
- *   - `[[:space:]]` is `[ \t\n\r\f\v]`, not `\s` (no Unicode spaces);
+ *   - a space is `[ \t\n\r\f\v]` here and in the database, not `\s` (which
+ *     counts Unicode spaces) and not `[[:space:]]` (which does under some
+ *     locales, U+2003 among them);
  *   - a word character is `0-9A-Za-z` and U+00C0-U+024F, every Romanian
  *     letter, not `\p{L}`;
  *   - the `n` flag, where `^` means "start of a line" and a negated class

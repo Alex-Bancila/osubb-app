@@ -6,14 +6,15 @@
 -- (toPlainText): app/src/lib/formatted-text/plain.test.ts parses this file and
 -- runs every fixture through the twin, so each one is exactly one line of the
 -- shape that test reads and no other line in this file takes that shape. A `\n`
--- or `\r` is written as an escape inside E'' and a literal backslash as `\\`.
+-- or `\r` is written as an escape inside E'', a literal backslash as `\\` and an
+-- invisible character such as the em space U+2003 as the character itself.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(24);
+select plan(26);
 
 -- ==================== fixtures ====================
 
@@ -38,6 +39,8 @@ select is(private.formatted_text_plain(E'câș_b_'), E'câș_b_', 'diacritic bef
 select is(private.formatted_text_plain(E'\\_nu\\_'), E'_nu_', 'escaped underscore');
 select is(private.formatted_text_plain(E'\\~nu\\~'), E'~nu~', 'escaped tilde');
 select is(private.formatted_text_plain(E'abc\n'), E'abc\n', 'trailing newline kept');
+select is(private.formatted_text_plain(E'*a *'), E'a ', 'em space is not a space in a marker');
+select is(private.formatted_text_plain(E'[x](https://a.ro/b c)'), E'x', 'em space is not a space in a link address');
 
 -- ==================== contract ====================
 

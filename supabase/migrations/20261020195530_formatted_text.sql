@@ -17,10 +17,13 @@
 -- never crosses one. The single-character markers (`*`, `_`, `~`) only pair at
 -- a word boundary, so `5*3*2`, `nume_prenume` and `ăla*b*` stay as typed; a
 -- word character is spelled out as 0-9, A-Z, a-z and U+00C0-U+024F (every
--- Romanian letter) rather than [[:alnum:]], so the result never depends on the
--- database locale and the TypeScript twin spells the same class. The
--- TypeScript twin (toPlainText) runs the same chain, and both are tested
--- against the fixture lines of supabase/tests/formatted_text_plain.test.sql.
+-- Romanian letter) rather than [[:alnum:]], and a space is spelled out as
+-- space, tab, newline, carriage return, form feed and vertical tab rather than
+-- [[:space:]] (which counts U+2003 and U+2028 under some locales), so the
+-- result never depends on the database locale and the TypeScript twin spells
+-- the same two classes. The TypeScript twin (toPlainText) runs the same chain,
+-- and both are tested against the fixture lines of
+-- supabase/tests/formatted_text_plain.test.sql.
 create function private.formatted_text_plain(p_text text)
 returns text
 language plpgsql
@@ -43,15 +46,15 @@ begin
   v := regexp_replace(v, '^([ \t]*)[-*+][ \t]+', '\1• ', 'gn');
   -- A Text Link shows its words; only http(s) is a link, so [x](javascript:..)
   -- stays text.
-  v := regexp_replace(v, '\[([^]\n]*)\]\((https?://[^)[:space:]]+)\)', '\1', 'g');
+  v := regexp_replace(v, '\[([^]\n]*)\]\((https?://[^) \t\n\r\f\v]+)\)', '\1', 'g');
   -- Paired markers. The doubled ones pair anywhere on a line; the single
   -- ones only at a word boundary.
   v := regexp_replace(v, '\*\*([^*\n]+)\*\*', '\1', 'g');
   v := regexp_replace(v, '~~([^~\n]+)~~', '\1', 'g');
   v := regexp_replace(v, '==([^=\n]+)==', '\1', 'g');
-  v := regexp_replace(v, '(^|[^0-9A-Za-zÀ-ɏ*\\])\*([^*[:space:]]([^*\n]*[^*[:space:]])?)\*(?![0-9A-Za-zÀ-ɏ*])', '\1\2', 'gn');
-  v := regexp_replace(v, '(^|[^0-9A-Za-zÀ-ɏ_\\])_([^_[:space:]]([^_\n]*[^_[:space:]])?)_(?![0-9A-Za-zÀ-ɏ_])', '\1\2', 'gn');
-  v := regexp_replace(v, '(^|[^0-9A-Za-zÀ-ɏ~\\])~([^~[:space:]]([^~\n]*[^~[:space:]])?)~(?![0-9A-Za-zÀ-ɏ~])', '\1\2', 'gn');
+  v := regexp_replace(v, '(^|[^0-9A-Za-zÀ-ɏ*\\])\*([^* \t\n\r\f\v]([^*\n]*[^* \t\n\r\f\v])?)\*(?![0-9A-Za-zÀ-ɏ*])', '\1\2', 'gn');
+  v := regexp_replace(v, '(^|[^0-9A-Za-zÀ-ɏ_\\])_([^_ \t\n\r\f\v]([^_\n]*[^_ \t\n\r\f\v])?)_(?![0-9A-Za-zÀ-ɏ_])', '\1\2', 'gn');
+  v := regexp_replace(v, '(^|[^0-9A-Za-zÀ-ɏ~\\])~([^~ \t\n\r\f\v]([^~\n]*[^~ \t\n\r\f\v])?)~(?![0-9A-Za-zÀ-ɏ~])', '\1\2', 'gn');
   -- A backslash escape shows the escaped character.
   v := regexp_replace(v, '\\([\\`*_{}\[\]()#+.!~=>|-])', '\1', 'g');
 
