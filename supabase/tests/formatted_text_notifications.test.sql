@@ -10,7 +10,8 @@
 -- until the visible text is within 2000 characters and the stored text within
 -- 4000, the closing ellipsis included, on a line of its own; the date line stays.
 -- A description that is one long paragraph is never dropped whole: its plain
--- words are kept, cut at the last space inside the limit (ruling 10).
+-- words are kept, cut at the last space inside the limit (ruling 10). With no
+-- description at all the copy is the date line, never clipped.
 --
 -- Personas (prefix 1090): 1 vot, Manager of Dept R60N   2 voluntar, its member
 begin;
@@ -18,7 +19,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(16);
 
 create function pg_temp.u60(n integer) returns uuid language sql immutable as $$
   select ('10900000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -161,6 +162,20 @@ select ok(
 select is(pg_temp.evcopy(E'Aduceți **laptopul**.\n- una'),
   pg_temp.date_line() || E'\n\n' || E'Aduceți **laptopul**.\n- una',
   'a description within the limits is copied unchanged after the date line, markers included');
+
+-- ==================== 5. no description, no clip ====================
+-- private.notify_event asks for the date line alone (a null description). The
+-- clip runs only on a description: with none it has no lines to count down
+-- and would never end. A date line over the limit cannot be stored
+-- (events_location_length_ck), so the copy is called directly with one, and
+-- the statement timeout turns a loop into a failure.
+select is(pg_temp.evcopy(null), 'Miercuri, 25 septembrie 2030, 18:40',
+  'with no description the copy is the date line alone');
+set local statement_timeout = '10s';
+select is(private.event_announcement_body('2030-09-25 15:40+00', null, repeat('x', 2100), null),
+  'Miercuri, 25 septembrie 2030, 18:40 · ' || repeat('x', 2100),
+  'a null description is never clipped, even under a date line over the limit');
+set local statement_timeout to default;
 
 select * from finish();
 rollback;

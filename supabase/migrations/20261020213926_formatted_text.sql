@@ -1437,8 +1437,11 @@ begin
   -- pairs within its line), and the blank lines it leaves behind go with them.
   -- The date line stays, and the "…" closes the copy on a line of its own,
   -- counted with the candidate it closes, so it never pushes the copy back
-  -- over the limit. Each pass drops at least one line, so the loop ends.
-  if char_length(private.formatted_text_plain(v_body)) > 2000 or char_length(v_body) > 4000 then
+  -- over the limit. Each pass drops at least one line, so the loop ends; it
+  -- runs only on a description, since with none (notify_event's call) there
+  -- are no lines to count down and the date line is the whole body.
+  if v_text is not null
+     and (char_length(private.formatted_text_plain(v_body)) > 2000 or char_length(v_body) > 4000) then
     v_lines := string_to_array(v_text, E'\n');
     v_n := cardinality(v_lines);
     loop
