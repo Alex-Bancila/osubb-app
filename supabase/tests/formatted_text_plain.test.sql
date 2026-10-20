@@ -13,7 +13,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(18);
+select plan(24);
 
 -- ==================== fixtures ====================
 
@@ -32,6 +32,12 @@ select is(private.formatted_text_plain(E'\\*nu\\* \\# titlu'), E'*nu* # titlu', 
 select is(private.formatted_text_plain(E'rând\r\n- punct'), E'rând\n• punct', 'crlf');
 select is(private.formatted_text_plain(E'  - spațiu în față'), E'• spațiu în față', 'leading spaces');
 select is(private.formatted_text_plain(E'<b>html</b>'), E'<b>html</b>', 'html stays text');
+select is(private.formatted_text_plain(E'*a*b'), E'*a*b', 'closer before letter');
+select is(private.formatted_text_plain(E'_a_b'), E'_a_b', 'underscore closer before letter');
+select is(private.formatted_text_plain(E'câș_b_'), E'câș_b_', 'diacritic before underscore');
+select is(private.formatted_text_plain(E'\\_nu\\_'), E'_nu_', 'escaped underscore');
+select is(private.formatted_text_plain(E'\\~nu\\~'), E'~nu~', 'escaped tilde');
+select is(private.formatted_text_plain(E'abc\n'), E'abc\n', 'trailing newline kept');
 
 -- ==================== contract ====================
 
@@ -42,7 +48,7 @@ select is(
      join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'private' and p.proname = 'formatted_text_plain'),
   'i',
-  'the stripper is immutable, so a CHECK constraint may call it');
+  'the stripper is immutable');
 select ok(not has_function_privilege('authenticated', 'private.formatted_text_plain(text)', 'execute'),
   'authenticated cannot execute the stripper directly');
 
