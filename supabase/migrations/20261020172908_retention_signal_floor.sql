@@ -1,6 +1,6 @@
--- R58 follow-ups (PR #1082, "Not in this PR"): a Retention Signal stores the
--- figure its holder fell under, and the Adunarea Generală kind no longer
--- refuses a Membership Cutoff Date it ignores.
+-- #1085: a Retention Signal stores the figure its holder fell under; the Adunarea Generală kind no longer refuses a cutoff it ignores.
+--
+-- The R58 follow-ups PR #1082 left under "Not in this PR".
 --
 -- 1. retention_signals.threshold_used. A finalised run stored the line it
 --    computed on every Signal, so a below_floor row named a figure its holder
