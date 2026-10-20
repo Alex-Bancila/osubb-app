@@ -233,8 +233,16 @@ The optional note an Executor attaches when submitting a Task for review, with a
 _Avoid_: Feedback (the reviewer's note), completion description, comment
 
 **Attached Link**:
-A labelled external address shown as a button under its label and, in a details view, as "Deschide: <etichetă>". An Announcement or a Task carries up to five Attached Links; a Submission Note or a Group's application form carries one (ruling R46, 2026-10-07). Text fields stay plain text and never carry links themselves.
-_Avoid_: Form link, URL field, inline link
+A labelled external address shown as a button under its label and, in a details view, as "Deschide: <etichetă>". An Announcement or a Task carries up to five Attached Links; a Submission Note or a Group's application form carries one (ruling R46, 2026-10-07). It stays the place for an item's materials even where the text can carry a Text Link.
+_Avoid_: Form link, URL field
+
+**Formatted Text**:
+The body of an Announcement or Deal, the description of a Task and the description of an Event, which their author may style with Titlu, Subtitlu, Citat, bold, italic, strikethrough, highlight, bulleted and numbered lists and Text Links. Every other text field (notes, reasons, the Submission Note, a Cerere's description) stays plain text. Wherever a Notification, a push, an email or a short preview carries Formatted Text, it carries its words without the styling.
+_Avoid_: Rich text, Markdown (the storage, not the concept)
+
+**Text Link**:
+An http(s) address inside Formatted Text: either the address as pasted or typed, or words the author turned into a link. It opens in a new tab, or inside the app when it points to the app. Unlike an Attached Link it has no button of its own.
+_Avoid_: Inline link, hyperlink
 
 **Task Activity**:
 The immutable chronological history of Task lifecycle, assignment, queue, evaluation, and cancellation events.
