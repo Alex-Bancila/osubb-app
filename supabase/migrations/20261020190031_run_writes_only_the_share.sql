@@ -1,4 +1,4 @@
--- #<ISSUE>: a run writes back only the share it used; Prag minim and Data limită de intrare stay Setări's (R58)
+-- #1089: a run writes back only the share it used; Prag minim and Data limită de intrare stay Setări's (R58)
 --
 -- Why (Alex, 2026-10-20). Prag minim and Data limită de intrare are now set
 -- only in Setări: the run form no longer carries them and sends the values in
@@ -72,8 +72,8 @@ begin
     raise sqlstate 'PT400' using message = 'membership_cutoff_not_set';
   end if;
   -- A cutoff is a day that has begun, as set_membership_cutoff demands of
-  -- the value this run writes through. The Adunarea Generală kind writes no
-  -- cutoff through, so it is not judged for it.
+  -- the value in Setări the page sends. The Adunarea Generală kind has no
+  -- cutoff, so it is not judged for one.
   if p_kind = 'voluntar_activ' and p_cutoff > v_today then
     raise sqlstate 'PT400' using message = 'invalid_membership_cutoff';
   end if;
@@ -92,7 +92,7 @@ begin
   end if;
 
   -- 3. Runs, threshold, share and settings edits serialise here, then the
-  --    kind's threshold row, then the settings row the run writes through.
+  --    kind's threshold row, then the settings row (the share it may write).
   --    R58: no line in force is needed -- the run measures against the line
   --    it computes, so a kind's first run needs none.
   perform pg_catalog.pg_advisory_xact_lock(47, 1);
