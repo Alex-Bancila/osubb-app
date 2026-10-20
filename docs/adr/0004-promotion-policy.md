@@ -9,6 +9,7 @@
 - **Amended:** 2026-09-29 — ruling R31: every BC member, not only the Moderator, grants and removes the BC and Moderator Roles; whoever removes the last active Moderator or BC member names the replacement in the same change; extended the same day (#917) to the Status of a BC member or Moderator and to provisioning or re-inviting at either rank
 - **Amended:** 2026-10-02 — ruling R35 (#983): a Voluntar who holds the required tenure and reaches the Promotion Threshold in force between Role Evaluations becomes a Promotion Candidate at once, not only at the next run; BC still promotes by hand
 - **Amended:** 2026-10-18 — ruling R58 (Portofoliu Interne): nothing promotes by the calendar any more, Recrut → Voluntar included; a Membership Cutoff Date replaces tenure; an Eligibility Floor gates who is ranked and the percentile is taken over the eligible alone, in one ranking of every Member below BCE for the Voluntar Activ kind; a run measures its Candidates and Signals against the line it computes; only a UBB student may hold Drept de Vot; a Simulation precedes every finalised run
+- **Amended:** 2026-10-20 — R58 amendment (#1089): Portofoliu Interne gets a Setări view, the only place the Eligibility Floor (Prag minim) and the Membership Cutoff Date (Data limită de intrare) are set; a finalised run uses the values in force, records them on its own row and writes back only the share it used, never the Floor or the cutoff
 - **Deciders:** Alex Băncilă (IT Coordinator)
 - **Supersedes:** —
 - **Superseded by:** —
