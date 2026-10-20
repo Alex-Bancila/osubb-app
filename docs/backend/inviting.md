@@ -344,6 +344,15 @@ Omit `email` to re-send to the profile address — when BC corrected it in the "
 
 **Why the address changes in two places, in this order.** The sign-in address lives in `auth.users.email`, the one the app shows in `profiles.email`, and no transaction spans Auth and Postgres. The function moves Auth first, then the profile, and moves Auth back if the profile refuses — so each side ends where it started or both hold the new address, and the invitation only ever goes to an address both hold. If the rollback itself fails, the function answers `500 email_out_of_sync` and its log says `ROLLBACK FAILED: auth.users.email and profiles.email differ` with both addresses; put the Auth address back in the dashboard (Authentication → Users → the user → email) to the one in `profiles.email`.
 
+## An account created by mistake (#1087, ruling R59)
+
+When an invitation went to a person who does not exist, or one person ended up with two accounts, BC or the Moderator deletes the account for good from the app: Administrare → **Membri** → the Member → **Cont** → **Ștergere** → **Șterge definitiv**, then type the Member's full name and press **Șterge contul**.
+
+- **What goes:** the profile and the sign-in, the Member's ordinary Group memberships, Notifications, devices, notification preferences, Privacy Acknowledgements, their row in the volunteer import and their Role History, an earlier deactivation included. No application row survives, not even a record of the deletion; other Members' Notifications that named the account (the re-invite notice) go too. The hosting providers' own logs (Auth sign-ins, the email provider's send log, access logs) keep their own retention, as the Privacy Notice's _Date tehnice_ paragraph says.
+- **What refuses it:** anything beyond the account's own rows, such as a Task, an Assignment, a Candidature, Task Points, an RSVP, an Announcement, a Group position, the Deals team, a Promotion Candidate or Retention Signal, or any decision the Member made. The panel names what holds the account; deactivate that Member under **Roluri** instead. Nobody deletes their own account, the last active BC member or the last active Moderator.
+- **Never use the Supabase dashboard's "Delete user" for this.** The login cascades into the profile, and the profile into the Points Ledger and the Assignment History: a dashboard delete of a Member credited directly or by the Legacy Import erases their Task Points without a word. `public.delete_member` checks first, under a lock.
+- **An account from the volunteer import:** its import record goes with it, so running the import again on an unchanged sheet creates the account again. Fix or remove the sheet row first.
+
 ## The setting that silently breaks everything
 
 In `supabase/config.toml`, two keys look similar and do very different things:

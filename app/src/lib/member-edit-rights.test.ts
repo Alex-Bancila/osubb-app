@@ -11,13 +11,15 @@ describe('memberEditRights (#944, ruling R31)', () => {
     expect(memberEditRights({ id: viewer, leads: true }, other)).toEqual({
       profile: true,
       rankAndStatus: true,
+      deleteAccount: true,
     });
   });
 
-  it('lets them edit their own Profile but never their own rank or Status', () => {
+  it('lets them edit their own Profile but never their own rank or Status, nor delete their own account', () => {
     expect(memberEditRights({ id: viewer, leads: true }, viewer)).toEqual({
       profile: true,
       rankAndStatus: false,
+      deleteAccount: false,
     });
   });
 

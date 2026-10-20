@@ -33,12 +33,15 @@ vi.mock(
   () => import('../../../test/member-card-mock'),
 );
 import { RunPanel } from './RunPanel';
+import { useRunDrafts } from './run-draft';
 
 vi.setConfig({ testTimeout: 20_000 });
 
 /** The panel as the page mounts it: runs and the command from the queries. */
 function Host() {
   const [kind, setKind] = useState<RoleEvaluationKind>('voluntar_activ');
+  // The page keeps each kind's draft, so the panel can be left and come back.
+  const { draftOf } = useRunDrafts();
   const evaluations = useRoleEvaluations();
   const command = useRoleEvaluationCommand();
   if (!evaluations.data) return null;
@@ -49,6 +52,7 @@ function Host() {
       </button>
       <RunPanel
         kind={kind}
+        {...draftOf(kind)}
         evaluations={evaluations.data}
         disabled={command.isPending}
         onRun={(next) => command.mutateAsync(next)}
@@ -77,15 +81,33 @@ const panel = async () =>
 async function ready() {
   const run = await panel();
   await waitFor(() =>
-    expect(within(run).getByLabelText('Prag minim')).not.toHaveValue(''),
+    expect(within(run).getByLabelText('Procent')).not.toHaveValue(null),
   );
   return run;
 }
 
 const simulatedCall = () =>
   db.rpc.mock.calls.find(([name]) => name === 'simulate_role_evaluation');
+const lastSimulatedCall = () =>
+  db.rpc.mock.calls
+    .filter(([name]) => name === 'simulate_role_evaluation')
+    .at(-1);
 const runCall = () =>
   db.rpc.mock.calls.find(([name]) => name === 'run_role_evaluation');
+
+const SETTINGS_LINK = '/administrare/portofoliu-interne?vedere=setari';
+const CHANGED_AFTER_SIMULATION =
+  'Setările s-au schimbat după simulare (pragul minim, data limită de intrare sau procentul). Simulează din nou.';
+// The Adunarea Generală has no cutoff: its note does not name one.
+const AG_CHANGED_AFTER_SIMULATION =
+  'Setările s-au schimbat după simulare (pragul minim sau procentul). Simulează din nou.';
+
+/** Another BC member changes a setting while the page is up. */
+async function settingsChanged(view: ReturnType<typeof show>) {
+  await act(async () => {
+    await view.client.invalidateQueries({ queryKey: keys.evaluation.all });
+  });
+}
 
 it('simulates, shows the line and the lists, and finalises only after a confirmation that names the consequences', async () => {
   db.runs = [RUN_VA];
@@ -94,8 +116,8 @@ it('simulates, shows the line and the lists, and finalises only after a confirma
   const { container } = show(<Host />);
   const run = await ready();
 
-  // The form, prefilled from the settings in force; De la is the day after
-  // the kind's last range, Până la is today. The app's picker, no browser field.
+  // The form: De la is the day after the kind's last range, Până la is today,
+  // Procent is the kind's share in force. The app's picker, no browser field.
   const from = within(run).getByLabelText('De la');
   expect(from).toHaveAttribute('data-slot', 'date-picker');
   expect(from).toHaveAttribute('data-value', '2026-07-01');
@@ -104,12 +126,10 @@ it('simulates, shows the line and the lists, and finalises only after a confirma
     '2026-09-28',
   );
   expect(run.querySelector('input[type="date"]')).toBeNull();
-  expect(within(run).getByLabelText('Prag minim')).toHaveValue('10');
   expect(within(run).getByLabelText('Procent')).toHaveValue(35);
-  expect(within(run).getByLabelText('Data limită de intrare')).toHaveAttribute(
-    'data-value',
-    '2026-03-31',
-  );
+  // The Prag minim and the Data limită de intrare are set in Setări only.
+  expect(within(run).queryByLabelText('Prag minim')).toBeNull();
+  expect(within(run).queryByLabelText('Data limită de intrare')).toBeNull();
   // Nothing is saved by looking.
   expect(runCall()).toBeUndefined();
 
@@ -118,6 +138,7 @@ it('simulates, shows the line and the lists, and finalises only after a confirma
   expect(
     await within(run).findByText('Simulare, nimic nu a fost salvat.'),
   ).toBeVisible();
+  // The Floor and the cutoff are the settings in force.
   expect(simulatedCall()?.[1]).toEqual({
     p_kind: 'voluntar_activ',
     p_from: '2026-07-01',
@@ -126,6 +147,10 @@ it('simulates, shows the line and the lists, and finalises only after a confirma
     p_percent: 35,
     p_cutoff: '2026-03-31',
   });
+  // The card still names, read-only, what the Simulation used.
+  expect(run).toHaveTextContent(
+    'Voluntar Activ · 01.07.2026–28.09.2026 · Prag minim 10 puncte · Procent 35 % · Data limită de intrare 31.03.2026',
+  );
   // The result: the line, the counts, the lists.
   expect(run).toHaveTextContent('Prag de promovare: 40 de puncte');
   expect(run).toHaveTextContent('4 clasați din 6 evaluați');
@@ -153,8 +178,9 @@ it('simulates, shows the line and the lists, and finalises only after a confirma
   expect(run).toHaveTextContent(
     'sub pragul de promovare (12 din 40 de puncte)',
   );
-  // The form is gone while the result is up.
+  // The form is gone while the result is up, and nothing says it is stale.
   expect(within(run).queryByRole('button', { name: 'Simulează' })).toBeNull();
+  expect(run).not.toHaveTextContent(CHANGED_AFTER_SIMULATION);
   expect(
     (
       await axe.run(container, {
@@ -190,6 +216,43 @@ it('simulates, shows the line and the lists, and finalises only after a confirma
   expect(within(run).getByLabelText('Nume')).toHaveValue('');
 });
 
+it('simulates and runs with the Prag minim and the Data limită de intrare in force, and writes neither back', async () => {
+  db.runs = [RUN_VA];
+  db.simulation = rankedRows();
+  db.settings.eligibility_floor = 12;
+  db.settings.membership_cutoff = '2026-05-01';
+  const user = userEvent.setup();
+  show(<Host />);
+  const run = await ready();
+
+  await user.click(within(run).getByRole('button', { name: 'Simulează' }));
+  await user.type(await within(run).findByLabelText('Nume'), 'Toamna 2026');
+  await user.click(within(run).getByRole('button', { name: 'Finalizează' }));
+  await user.click(
+    within(await screen.findByRole('dialog')).getByRole('button', {
+      name: 'Finalizează',
+    }),
+  );
+  await waitFor(() => expect(runCall()).toBeDefined());
+
+  expect(simulatedCall()?.[1]).toMatchObject({
+    p_floor: 12,
+    p_cutoff: '2026-05-01',
+  });
+  expect(runCall()?.[1]).toEqual({
+    ...(simulatedCall()?.[1] as object),
+    p_name: 'Toamna 2026',
+  });
+  // A run never writes the two back (the fake mirrors run_role_evaluation,
+  // which writes only the share): they stay as Setări has them.
+  await within(run).findByText(/a rulat/);
+  expect(db.settings.eligibility_floor).toBe(12);
+  expect(db.settings.membership_cutoff).toBe('2026-05-01');
+  expect(
+    db.changes.filter((change) => change.field && change.field !== 'threshold'),
+  ).toEqual([]);
+});
+
 it('finalises with the values the Simulation used', async () => {
   db.runs = [RUN_VA];
   db.simulation = rankedRows();
@@ -197,9 +260,6 @@ it('finalises with the values the Simulation used', async () => {
   show(<Host />);
   const run = await ready();
 
-  const floor = within(run).getByLabelText('Prag minim');
-  await user.clear(floor);
-  await user.type(floor, '12');
   const percent = within(run).getByLabelText('Procent');
   await user.clear(percent);
   await user.type(percent, '40');
@@ -219,7 +279,7 @@ it('finalises with the values the Simulation used', async () => {
     p_kind: 'voluntar_activ',
     p_from: '2026-07-01',
     p_to: '2026-09-28',
-    p_floor: 12,
+    p_floor: 10,
     p_percent: 40,
     p_cutoff: '2026-03-31',
   });
@@ -227,12 +287,11 @@ it('finalises with the values the Simulation used', async () => {
     ...(simulatedCall()?.[1] as object),
     p_name: 'Toamna 2026',
   });
-  // The values the run used are now the settings in force: the form
-  // starts the next one from them.
+  // The share the run used is now the one in force: the form starts the next
+  // run from it.
   await waitFor(() =>
-    expect(within(run).getByLabelText('Prag minim')).toHaveValue('12'),
+    expect(within(run).getByLabelText('Procent')).toHaveValue(40),
   );
-  expect(within(run).getByLabelText('Procent')).toHaveValue(40);
 });
 
 it('keeps the typed values on Modifică valorile', async () => {
@@ -243,9 +302,6 @@ it('keeps the typed values on Modifică valorile', async () => {
 
   await pickDate(user, within(run).getByLabelText('De la'), '2026-07-15');
   await user.type(within(run).getByLabelText('Nume'), 'Toamna 2026');
-  const floor = within(run).getByLabelText('Prag minim');
-  await user.clear(floor);
-  await user.type(floor, '12');
   const percent = within(run).getByLabelText('Procent');
   await user.clear(percent);
   await user.type(percent, '40');
@@ -263,12 +319,7 @@ it('keeps the typed values on Modifică valorile', async () => {
     '2026-09-28',
   );
   expect(within(run).getByLabelText('Nume')).toHaveValue('Toamna 2026');
-  expect(within(run).getByLabelText('Prag minim')).toHaveValue('12');
   expect(within(run).getByLabelText('Procent')).toHaveValue(40);
-  expect(within(run).getByLabelText('Data limită de intrare')).toHaveAttribute(
-    'data-value',
-    '2026-03-31',
-  );
   // Nothing was written by simulating.
   expect(runCall()).toBeUndefined();
 });
@@ -303,22 +354,16 @@ it('simulates without a name, but Finalizează asks for it before the confirmati
   expect(await screen.findByRole('dialog')).toBeVisible();
 });
 
-it('validates the other fields before simulating, nothing is sent', async () => {
+it('validates its own fields before simulating, nothing is sent', async () => {
   const user = userEvent.setup();
   show(<Host />);
   const run = await ready();
 
-  const floor = within(run).getByLabelText('Prag minim');
-  await user.clear(floor);
-  await user.type(floor, '0');
   const percent = within(run).getByLabelText('Procent');
   await user.clear(percent);
   await user.type(percent, '101');
   await user.click(within(run).getByRole('button', { name: 'Simulează' }));
 
-  expect(floor).toHaveAccessibleDescription(
-    'Pragul minim este un număr întreg de cel puțin 1.',
-  );
   expect(percent).toHaveAccessibleDescription(
     'Procentul trebuie să fie între 1 și 100.',
   );
@@ -329,37 +374,72 @@ it('validates the other fields before simulating, nothing is sent', async () => 
   );
 });
 
-it('is disabled until Prag minim is set, and for Voluntar Activ until Data limită de intrare is set', async () => {
-  // Nothing is set yet: the Floor is the first thing missing.
-  db.settings.eligibility_floor = null;
+it.each([
+  [
+    'voluntar_activ',
+    { floor: null, cutoff: null },
+    'Setează pragul minim înainte de a rula o evaluare.',
+  ],
+  [
+    'voluntar_activ',
+    { floor: 10, cutoff: null },
+    'Setează data limită de intrare înainte de a rula evaluarea Voluntar Activ.',
+  ],
+  [
+    'adunarea_generala',
+    { floor: null, cutoff: '2026-03-31' },
+    'Setează pragul minim înainte de a rula o evaluare.',
+  ],
+  [
+    // The Adunarea Generală has no cutoff: it asks for the Floor alone.
+    'adunarea_generala',
+    { floor: null, cutoff: null },
+    'Setează pragul minim înainte de a rula o evaluare.',
+  ],
+] as const)(
+  'is disabled for %s while a setting it needs is unset: %j, and leads to Setări',
+  async (kind, unset, copy) => {
+    db.settings.eligibility_floor = unset.floor;
+    db.settings.membership_cutoff = unset.cutoff;
+    const user = userEvent.setup();
+    show(<Host />);
+    const run = await panel();
+    if (kind === 'adunarea_generala')
+      await user.click(
+        await screen.findByRole('button', { name: 'Alege Adunarea Generală' }),
+      );
+    const button = await within(run).findByRole('button', {
+      name: 'Simulează',
+    });
+    expect(button).toBeDisabled();
+    // The reason, as the button's description, and a way to the setting.
+    expect(button).toHaveAccessibleDescription(copy);
+    expect(within(run).getByText(copy)).toBeVisible();
+    const link = within(run).getByRole('link', { name: 'Deschide Setări' });
+    expect(link).toHaveAttribute('href', SETTINGS_LINK);
+    expect(simulatedCall()).toBeUndefined();
+  },
+);
+
+it('is enabled, with no way to Setări, once what its kind needs is set', async () => {
+  // Voluntar Activ needs both; the Adunarea Generală only the Floor.
   db.settings.membership_cutoff = null;
   const user = userEvent.setup();
-  const first = show(<Host />);
-  let run = await panel();
-  let button = await within(run).findByRole('button', { name: 'Simulează' });
-  expect(button).toBeDisabled();
-  expect(button).toHaveAccessibleDescription(
-    'Setează pragul minim înainte de a rula o evaluare.',
-  );
-  first.unmount();
-
-  // The Floor set: Voluntar Activ still needs its Data limită de intrare.
-  db.settings.eligibility_floor = 10;
   show(<Host />);
-  run = await ready();
-  button = within(run).getByRole('button', { name: 'Simulează' });
-  expect(button).toBeDisabled();
-  expect(button).toHaveAccessibleDescription(
-    'Setează data limită de intrare înainte de a rula evaluarea Voluntar Activ.',
-  );
+  const run = await ready();
+  expect(within(run).getByRole('button', { name: 'Simulează' })).toBeDisabled();
+  expect(
+    within(run).getByRole('link', { name: 'Deschide Setări' }),
+  ).toBeVisible();
 
-  // The Adunarea Generală has no cutoff: only the Floor was needed.
   await user.click(
     screen.getByRole('button', { name: 'Alege Adunarea Generală' }),
   );
-  expect(within(run).queryByLabelText('Data limită de intrare')).toBeNull();
   expect(within(run).getByRole('button', { name: 'Simulează' })).toBeEnabled();
   expect(within(run).getByLabelText('Procent')).toHaveValue(25);
+  expect(
+    within(run).queryByRole('link', { name: 'Deschide Setări' }),
+  ).toBeNull();
   expect(simulatedCall()).toBeUndefined();
 });
 
@@ -374,6 +454,7 @@ it('sends no cutoff for the Adunarea Generală, and lists no candidates', async 
   await pickDate(user, within(run).getByLabelText('De la'), '2026-07-01');
   await user.click(within(run).getByRole('button', { name: 'Simulează' }));
   await within(run).findByRole('button', { name: 'Finalizează' });
+  // The Floor is the setting in force; the cutoff, though set, is not sent.
   expect(simulatedCall()?.[1]).toEqual({
     p_kind: 'adunarea_generala',
     p_from: '2026-07-01',
@@ -382,6 +463,7 @@ it('sends no cutoff for the Adunarea Generală, and lists no candidates', async 
     p_percent: 25,
   });
   expect(run).toHaveTextContent('Prag Adunarea Generală: 40 de puncte');
+  expect(run).not.toHaveTextContent('Data limită de intrare');
   expect(
     within(run).queryByRole('list', { name: 'Candidați la promovare' }),
   ).toBeNull();
@@ -390,10 +472,10 @@ it('sends no cutoff for the Adunarea Generală, and lists no candidates', async 
   );
 });
 
-it('places a server refusal under its field', async () => {
+it('places a server refusal about a field under that field', async () => {
   db.refuse.set('simulate_role_evaluation', {
     code: 'PT400',
-    message: 'invalid_eligibility_floor',
+    message: 'invalid_percent',
   });
   const user = userEvent.setup();
   show(<Host />);
@@ -402,14 +484,95 @@ it('places a server refusal under its field', async () => {
 
   await user.click(within(run).getByRole('button', { name: 'Simulează' }));
   await waitFor(() =>
-    expect(
-      within(run).getByLabelText('Prag minim'),
-    ).toHaveAccessibleDescription(
-      'Pragul minim este un număr întreg de cel puțin 1.',
+    expect(within(run).getByLabelText('Procent')).toHaveAccessibleDescription(
+      'Procentul trebuie să fie între 1 și 100.',
     ),
   );
-  // Still the form: nothing to finalise.
+  // Still the form: nothing to finalise, and nothing to fix in Setări.
   expect(within(run).queryByRole('button', { name: 'Finalizează' })).toBeNull();
+  expect(
+    within(run).queryByRole('link', { name: 'Deschide Setări' }),
+  ).toBeNull();
+});
+
+it.each([
+  [
+    'invalid_eligibility_floor',
+    'Pragul minim este un număr întreg de cel puțin 1.',
+  ],
+  [
+    'invalid_membership_cutoff',
+    'Data limită de intrare este o zi de cel târziu azi.',
+  ],
+  [
+    'membership_cutoff_not_set',
+    'Setează data limită de intrare înainte de a rula evaluarea Voluntar Activ.',
+  ],
+])(
+  'shows a server refusal on a setting (%s) as the form’s error, with the way to Setări',
+  async (reason, message) => {
+    db.refuse.set('simulate_role_evaluation', {
+      code: 'PT400',
+      message: reason,
+    });
+    const user = userEvent.setup();
+    show(<Host />);
+    const run = await ready();
+    await pickDate(user, within(run).getByLabelText('De la'), '2026-09-01');
+
+    await user.click(within(run).getByRole('button', { name: 'Simulează' }));
+    const error = await within(run).findByText(message);
+    expect(error.closest('[role="alert"]')).not.toBeNull();
+    expect(
+      within(run).getByRole('link', { name: 'Deschide Setări' }),
+    ).toHaveAttribute('href', SETTINGS_LINK);
+    // No field carries it: there is none for a setting here.
+    expect(
+      within(run).getByLabelText('Procent'),
+    ).not.toHaveAccessibleDescription(/./);
+    expect(
+      within(run).queryByRole('button', { name: 'Finalizează' }),
+    ).toBeNull();
+
+    // The next Simulation starts clean.
+    db.refuse.clear();
+    db.simulation = rankedRows();
+    await user.click(within(run).getByRole('button', { name: 'Simulează' }));
+    await within(run).findByRole('button', { name: 'Finalizează' });
+    expect(within(run).queryByText(message)).toBeNull();
+    expect(
+      within(run).queryByRole('link', { name: 'Deschide Setări' }),
+    ).toBeNull();
+  },
+);
+
+it('shows the refusal of a finalised run on a setting beside the result, with the way to Setări', async () => {
+  db.runs = [RUN_VA];
+  db.simulation = rankedRows();
+  db.refuse.set('run_role_evaluation', {
+    code: 'PT400',
+    message: 'invalid_eligibility_floor',
+  });
+  const user = userEvent.setup();
+  show(<Host />);
+  const run = await ready();
+  await user.click(within(run).getByRole('button', { name: 'Simulează' }));
+  await user.type(await within(run).findByLabelText('Nume'), 'Toamna 2026');
+  await user.click(within(run).getByRole('button', { name: 'Finalizează' }));
+  await user.click(
+    within(await screen.findByRole('dialog')).getByRole('button', {
+      name: 'Finalizează',
+    }),
+  );
+  expect(
+    await within(run).findByText(
+      'Pragul minim este un număr întreg de cel puțin 1.',
+    ),
+  ).toBeVisible();
+  expect(
+    within(run).getByRole('link', { name: 'Deschide Setări' }),
+  ).toHaveAttribute('href', SETTINGS_LINK);
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 });
 
 it('places the refusal of a finalised run under the name', async () => {
@@ -436,45 +599,168 @@ it('places the refusal of a finalised run under the name', async () => {
     ),
   );
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(
+    within(run).queryByRole('link', { name: 'Deschide Setări' }),
+  ).toBeNull();
 });
 
-it('finalises the simulated values even if the settings change meanwhile', async () => {
+it('finalises a Procent typed in the form that differs from Setări: only a change in Setări since the Simulation stales it', async () => {
+  db.runs = [RUN_VA];
+  db.simulation = rankedRows();
+  const user = userEvent.setup();
+  show(<Host />);
+  const run = await ready();
+  const percent = within(run).getByLabelText('Procent');
+  expect(percent).toHaveValue(35);
+  await user.clear(percent);
+  await user.type(percent, '40');
+  await user.click(within(run).getByRole('button', { name: 'Simulează' }));
+  await within(run).findByRole('button', { name: 'Finalizează' });
+
+  // The form's 40 is the member's choice, not a change of Setări (35).
+  expect(run).toHaveTextContent('Procent 40 %');
+  expect(run).not.toHaveTextContent(CHANGED_AFTER_SIMULATION);
+  expect(
+    within(run).getByRole('button', { name: 'Finalizează' }),
+  ).toBeEnabled();
+  await user.type(within(run).getByLabelText('Nume'), 'Toamna 2026');
+  await user.click(within(run).getByRole('button', { name: 'Finalizează' }));
+  await user.click(
+    within(await screen.findByRole('dialog')).getByRole('button', {
+      name: 'Finalizează',
+    }),
+  );
+  await waitFor(() => expect(runCall()).toBeDefined());
+  expect(runCall()?.[1]).toMatchObject({
+    p_percent: 40,
+    p_name: 'Toamna 2026',
+  });
+});
+
+it.each([
+  ['the Prag minim', () => (db.settings.eligibility_floor = 15)],
+  [
+    'the Data limită de intrare',
+    () => (db.settings.membership_cutoff = '2026-05-01'),
+  ],
+  ['the Procent in Setări', () => (db.settings.activ_percent = 40)],
+])(
+  'will not finalise a Simulation once %s in force has changed, and says so',
+  async (_name, change) => {
+    db.runs = [RUN_VA];
+    db.simulation = rankedRows();
+    const user = userEvent.setup();
+    const view = show(<Host />);
+    const run = await ready();
+    await user.click(within(run).getByRole('button', { name: 'Simulează' }));
+    const finalize = await within(run).findByRole('button', {
+      name: 'Finalizează',
+    });
+    expect(finalize).toBeEnabled();
+
+    // A live update, or another BC member.
+    change();
+    await settingsChanged(view);
+    expect(
+      await within(run).findByText(CHANGED_AFTER_SIMULATION),
+    ).toBeVisible();
+    expect(finalize).toBeDisabled();
+    // The card still reads what was simulated.
+    expect(run).toHaveTextContent('Prag minim 10 puncte');
+    expect(run).toHaveTextContent('Data limită de intrare 31.03.2026');
+    // Nothing finalises behind the disabled button.
+    await user.type(within(run).getByLabelText('Nume'), 'Toamna 2026');
+    await user.click(finalize);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(runCall()).toBeUndefined();
+
+    // Modifică valorile still works, and the next Simulation reads the values
+    // now in force.
+    await user.click(
+      within(run).getByRole('button', { name: 'Modifică valorile' }),
+    );
+    expect(within(run).queryByText(CHANGED_AFTER_SIMULATION)).toBeNull();
+    await user.click(within(run).getByRole('button', { name: 'Simulează' }));
+    await within(run).findByRole('button', { name: 'Finalizează' });
+    expect(lastSimulatedCall()?.[1]).toMatchObject({
+      p_floor: db.settings.eligibility_floor,
+      p_cutoff: db.settings.membership_cutoff,
+      p_percent: db.settings.activ_percent,
+    });
+    expect(lastSimulatedCall()?.[1]).not.toEqual(simulatedCall()?.[1]);
+    expect(within(run).queryByText(CHANGED_AFTER_SIMULATION)).toBeNull();
+    expect(
+      within(run).getByRole('button', { name: 'Finalizează' }),
+    ).toBeEnabled();
+  },
+);
+
+it('closes an open confirmation when the Prag minim changes under it, and writes nothing', async () => {
   db.runs = [RUN_VA];
   db.simulation = rankedRows();
   const user = userEvent.setup();
   const view = show(<Host />);
   const run = await ready();
   await user.click(within(run).getByRole('button', { name: 'Simulează' }));
-  await within(run).findByRole('button', { name: 'Finalizează' });
-  const simulatedWith = simulatedCall()?.[1] as object;
-  expect(simulatedWith).toMatchObject({
-    p_floor: 10,
-    p_percent: 35,
-    p_cutoff: '2026-03-31',
-  });
-
-  // Another BC member changes every setting while the result is up.
-  db.settings.eligibility_floor = 15;
-  db.settings.activ_percent = 40;
-  db.settings.membership_cutoff = '2026-05-01';
-  await act(async () => {
-    await view.client.invalidateQueries({ queryKey: keys.evaluation.all });
-  });
-
-  // The card still reads what was simulated, and so does the confirmation.
-  expect(run).toHaveTextContent('Prag minim 10 puncte · Procent 35 %');
-  expect(run).toHaveTextContent('Data limită de intrare 31.03.2026');
-  await user.type(within(run).getByLabelText('Nume'), 'Toamna 2026');
+  await user.type(await within(run).findByLabelText('Nume'), 'Toamna 2026');
   await user.click(within(run).getByRole('button', { name: 'Finalizează' }));
-  const dialog = await screen.findByRole('dialog');
-  expect(dialog).toHaveTextContent('care au cel puțin 10 puncte');
-  expect(dialog).toHaveTextContent('primii 35 %');
-  expect(dialog).toHaveTextContent('Voluntarii intrați până la 31.03.2026');
-  await user.click(within(dialog).getByRole('button', { name: 'Finalizează' }));
-  await waitFor(() => expect(runCall()).toBeDefined());
+  await screen.findByRole('dialog');
 
-  // The Simulation's six arguments and the name; none of the new settings.
-  expect(runCall()?.[1]).toEqual({ ...simulatedWith, p_name: 'Toamna 2026' });
+  db.settings.eligibility_floor = 15;
+  await settingsChanged(view);
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(await within(run).findByText(CHANGED_AFTER_SIMULATION)).toBeVisible();
+  expect(runCall()).toBeUndefined();
+});
+
+/** An Adunarea Generală Simulation shown, over the page's form. */
+async function simulateAdunareaGenerala(
+  user: ReturnType<typeof userEvent.setup>,
+) {
+  db.simulation = rankedRows();
+  const view = show(<Host />);
+  const run = await ready();
+  await user.click(
+    screen.getByRole('button', { name: 'Alege Adunarea Generală' }),
+  );
+  await pickDate(user, within(run).getByLabelText('De la'), '2026-07-01');
+  await user.click(within(run).getByRole('button', { name: 'Simulează' }));
+  await within(run).findByRole('button', { name: 'Finalizează' });
+  return { view, run };
+}
+
+it.each([
+  ['the Prag minim', () => (db.settings.eligibility_floor = 15)],
+  ['its own Procent in Setări', () => (db.settings.vot_percent = 30)],
+])(
+  'stales an Adunarea Generală Simulation by %s, and the note does not name a cutoff',
+  async (_name, change) => {
+    const user = userEvent.setup();
+    const { view, run } = await simulateAdunareaGenerala(user);
+
+    change();
+    await settingsChanged(view);
+    expect(
+      await within(run).findByText(AG_CHANGED_AFTER_SIMULATION),
+    ).toBeVisible();
+    expect(run).not.toHaveTextContent('data limită de intrare s-au');
+    expect(
+      within(run).getByRole('button', { name: 'Finalizează' }),
+    ).toBeDisabled();
+  },
+);
+
+it('does not stale an Adunarea Generală Simulation by what that kind does not use: the cutoff, Voluntar Activ’s Procent', async () => {
+  const user = userEvent.setup();
+  const { view, run } = await simulateAdunareaGenerala(user);
+
+  db.settings.membership_cutoff = '2026-05-01';
+  db.settings.activ_percent = 40;
+  await settingsChanged(view);
+  expect(run).not.toHaveTextContent('Setările s-au schimbat');
+  expect(
+    within(run).getByRole('button', { name: 'Finalizează' }),
+  ).toBeEnabled();
 });
 
 it('records no line when the Simulation ranked nobody, and the confirmation says so', async () => {

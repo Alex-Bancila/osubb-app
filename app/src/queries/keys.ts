@@ -99,6 +99,9 @@ export const keys = {
     /** Members the import created and nobody invited yet (#992). */
     uninvited: (viewerId: string | undefined) =>
       ['members', 'uninvited', { viewerId }] as const,
+    /** What a Member Deletion would meet (#1087, ruling R59). */
+    deletePreview: (memberId: string, viewerId: string | undefined) =>
+      ['members', 'deletePreview', { memberId, viewerId }] as const,
   },
   /* Reference data — roles, Groups, the scoring guides. Same family for all of
      it: one `['reference']` invalidation after a deploy, or after Administrare

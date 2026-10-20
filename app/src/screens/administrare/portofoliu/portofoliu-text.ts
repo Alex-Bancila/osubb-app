@@ -89,6 +89,19 @@ export function roleLabel(role: string): string {
 export const SIMULATION_NOTE = 'Simulare, nimic nu a fost salvat.';
 
 /**
+ * Under the result of a Simulation when Setări has changed since it ran: the
+ * Prag minim, for Voluntar Activ the Data limită de intrare, or the kind's
+ * Procent. Finalizează records the values the Simulation used, so the run
+ * would disagree with Setări; the page asks to simulate again.
+ */
+export const SIMULATION_STALE =
+  'Setările s-au schimbat după simulare (pragul minim, data limită de intrare sau procentul). Simulează din nou.';
+
+/** The same for the Adunarea Generală, which has no cutoff. */
+export const SIMULATION_STALE_AG =
+  'Setările s-au schimbat după simulare (pragul minim sau procentul). Simulează din nou.';
+
+/**
  * Under the Signals of a Simulation: the ones about Universitate are not a
  * result of any run, so the rows cannot show them.
  */
