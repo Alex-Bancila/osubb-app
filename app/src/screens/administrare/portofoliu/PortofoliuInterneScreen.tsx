@@ -136,9 +136,7 @@ export default function PortofoliuInterneScreen() {
           {view === 'voluntar_activ' && hasCandidates && (
             <CandidatesPanel disabled={busy} onRun={onRun} />
           )}
-          {hasSignals(view) && (
-            <SignalsPanel kind={view} evaluations={evaluations.data} />
-          )}
+          {hasSignals(view) && <SignalsPanel kind={view} />}
           {hasRun(view) && (
             <HistoryPanel kind={view} evaluations={evaluations.data} />
           )}

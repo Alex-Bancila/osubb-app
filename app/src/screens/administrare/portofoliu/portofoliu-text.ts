@@ -215,8 +215,7 @@ export function runResultText({
  * under the Prag minim, and `nu mai este student UBB` for a voter whose
  * Universitate is not UBB.
  * `thresholdUsed` is the figure the points are compared with: the line for the
- * first, the Prag minim for the second (a stored Signal of a Member under the
- * Floor carries the run's line, so the caller hands over the run's Floor). The
+ * first two, the Prag minim for the third, as a stored Signal holds them. The
  * reason stands alone when a figure is missing.
  */
 export function signalReasonText(

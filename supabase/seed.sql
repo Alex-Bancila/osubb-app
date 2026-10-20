@@ -94,11 +94,12 @@ do $$ begin perform pg_temp.seed_password(); end $$;
 -- request whose approval created a demo Task pins that Task; the requests go
 -- BEFORE the Tasks. `campaigns` go after them for the mirror-image reason —
 -- `tasks_campaign_id_fkey` pins a Campaign while any Task still carries it.
--- Final order (#901 put the Role Evaluation graph first): Candidate/Retention
--- Notifications → Promotion Candidates → threshold changes → Role Evaluations
--- → settings authors → role_history → ledger → evaluations → activity →
--- candidates → assignments → requests → tasks → campaigns → events →
--- announcements → projects → teams → auth.users.
+-- Final order (#901 put the Role Evaluation graph first; the live Promotion
+-- Candidate put the demo Task Points before it): ledger → Candidate/Retention
+-- Notifications → Promotion Candidates → Retention Signals → threshold changes
+-- → Role Evaluations → settings authors → role_history → evaluations →
+-- activity → candidates → assignments → requests → tasks → campaigns → events
+-- → announcements → projects → teams → auth.users.
 
 -- Do not silently remove demo-held positions in a real Member's Group.
 do $$
@@ -117,6 +118,33 @@ begin
   end if;
 end;
 $$;
+
+-- The demo cohort's Task Points go first, before the Candidates they list.
+-- Between Role Evaluations private.refresh_promotion_candidates lists every
+-- Voluntar whose Task Points reach the Voluntar Activ line once the Data
+-- limită de intrare is set (#983, R35; R58), and statement triggers on
+-- points_ledger, promotion_thresholds, evaluation_settings and profiles run
+-- it -- on this cleanup's own writes too: the `updated_by` updates below fire
+-- it even when they change no row. While a demo Voluntar still held their
+-- Task Points, such a refresh listed them again after their Candidate and its
+-- Notifications had gone, and the new row (no `on delete`) pinned the demo
+-- profile. With the ledger gone a demo Member has no Task Points, so every
+-- later refresh in this cleanup can only supersede them, never list them. The
+-- live Universitate Signal needs no such step: only an update of
+-- `profiles.university` or `profiles.status` opens one, and nothing here
+-- updates a profile. No table references points_ledger.
+--
+-- The ledger has to go before the Tasks and their Evaluations anyway: neither
+-- `task_id` nor `evaluation_id` cascades. Delete only history for demo-owned
+-- Tasks, leaving independent tester-owned history for non-demo Members
+-- untouched.
+delete from points_ledger l
+ where exists (select 1 from profiles p
+                where p.email like '%@demo.osubb'
+                  and p.id in (l.member_id, l.awarded_by))
+    or exists (select 1 from tasks t
+                 join profiles p on p.id = t.created_by
+                where t.id = l.task_id and p.email like '%@demo.osubb');
 
 -- #901: Role Evaluations and Role history before the demo profiles. None of
 -- `role_evaluations.run_by`, `promotion_candidates.member_id`/`decided_by`,
@@ -217,17 +245,6 @@ delete from role_history history
                   and p.id in (history.member_id, history.changed_by));
 
 alter table role_history enable trigger role_history_guard;
-
--- Ledger and Assignment history before Tasks: neither Task reference
--- cascades. Delete only history for demo-owned Tasks, leaving independent
--- tester-owned history for non-demo Members untouched.
-delete from points_ledger l
- where exists (select 1 from profiles p
-                where p.email like '%@demo.osubb'
-                  and p.id in (l.member_id, l.awarded_by))
-    or exists (select 1 from tasks t
-                 join profiles p on p.id = t.created_by
-                where t.id = l.task_id and p.email like '%@demo.osubb');
 
 -- #317/#292: `task_evaluations` and `task_activity` are append-only by
 -- trigger, not merely by grants — `private.guard_task_evaluation_change()`

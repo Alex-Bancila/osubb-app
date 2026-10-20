@@ -41,14 +41,20 @@
 --     -> "ranked_count is 8: B and J are below the Floor, I's 10 is at it";
 --   * the run's Candidate loop measuring `task_points >= threshold_used` (the
 --     line in force before) instead of `inside` -> "the run lists C and D as
---     Promotion Candidates".
+--     Promotion Candidates";
+--   * (2026-10-20, #1082's follow-ups) the run's Signal storing `v_line` for
+--     every reason again -> "the run raises a Retention Signal for every
+--     holder not inside" and "every holder raises a below_floor Signal,
+--     measured against the Floor";
+--   * the Simulation's cutoff check judging every kind again -> "a cutoff
+--     tomorrow is not judged for the Adunarea Generală kind".
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(67);
+select plan(68);
 
 \ir _r58_fixtures.psql
 
@@ -265,6 +271,10 @@ select results_eq(
   $$ values (pg_temp.r58('I'), true,  1,          2, 1, 1, 10, true,  false),
             (pg_temp.r58('J'), false, null::int,  2, 1, 1, 10, false, false) $$,
   'the Adunarea Generală kind ranks the two voters alone, needs no cutoff: 2 evaluated, 1 ranked (J below the Floor), line 10');
+select lives_ok(
+  format($$ select * from public.simulate_role_evaluation('adunarea_generala', '2026-03-01', '2026-09-30', 10, 25, %L) $$,
+         (now() at time zone 'Europe/Bucharest')::date + 1),
+  'a cutoff tomorrow is not judged for the Adunarea Generală kind, which ignores it');
 reset role;
 
 -- ==================== 7. A finalised Voluntar Activ run ====================
@@ -325,8 +335,8 @@ select results_eq(
   $$ values (pg_temp.r58('G'), 'activ'::public.member_role, 'below_line'::text, 20, 40, null::timestamptz),
             (pg_temp.r58('H'), 'activ', 'below_line', 15, 40, null),
             (pg_temp.r58('I'), 'vot', 'below_line', 10, 40, null),
-            (pg_temp.r58('J'), 'vot', 'below_floor', 5, 40, null) $$,
-  'the run raises a Retention Signal for every holder not inside: G, H and I below the line, J below the Floor');
+            (pg_temp.r58('J'), 'vot', 'below_floor', 5, 10, null) $$,
+  'the run raises a Retention Signal for every holder not inside: G, H and I below the line (40), J below the Floor (10), each storing the figure it fell under');
 select is(
   (select count(*) from public.retention_signals
     where role_evaluation_id = (select role_evaluation_id from runs58 where label = 's1')
@@ -435,11 +445,11 @@ select results_eq(
        from public.retention_signals
       where role_evaluation_id = (select role_evaluation_id from runs58 where label = 's2')
       order by member_id $$,
-  $$ values (pg_temp.r58('G'), 'below_floor'::text, 20, null::int),
-            (pg_temp.r58('H'), 'below_floor', 15, null),
-            (pg_temp.r58('I'), 'below_floor', 10, null),
-            (pg_temp.r58('J'), 'below_floor', 5, null) $$,
-  'every holder raises a below_floor Signal, with no line to measure against');
+  $$ values (pg_temp.r58('G'), 'below_floor'::text, 20, 100),
+            (pg_temp.r58('H'), 'below_floor', 15, 100),
+            (pg_temp.r58('I'), 'below_floor', 10, 100),
+            (pg_temp.r58('J'), 'below_floor', 5, 100) $$,
+  'every holder raises a below_floor Signal, measured against the Floor (100): there is no line');
 select results_eq(
   $$ select count(*), count(*) filter (where closed_as = 'superseded' and closed_at is not null)
        from public.retention_signals

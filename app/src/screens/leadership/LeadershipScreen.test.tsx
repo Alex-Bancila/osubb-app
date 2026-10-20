@@ -335,7 +335,7 @@ it('sends the Cup its Campaign and range from the URL, never the Group', () => {
   });
   expect(
     screen.getByText(
-      'Campania Bun venit · puncte acordate între 1 septembrie 2026 și 30 septembrie 2026',
+      'Campania Bun venit · puncte acordate între 01.09.2026 și 30.09.2026',
     ),
   ).toBeInTheDocument();
 });
@@ -369,7 +369,7 @@ it('names only the Campaign while the Points Start Date is not known yet', () =>
   cleanup();
   renderPage('?vedere=cupa&de_la=2026-08-01');
   expect(
-    screen.getByText('Toate campaniile · puncte acordate din 1 august 2026'),
+    screen.getByText('Toate campaniile · puncte acordate din 01.08.2026'),
   ).toBeInTheDocument();
 });
 
@@ -380,7 +380,7 @@ it('reads an explicit De la earlier than the start as the range it is, the lookb
     p_from: '2026-07-31T21:00:00.000Z',
   });
   expect(
-    screen.getByText('Toate campaniile · puncte acordate din 1 august 2026'),
+    screen.getByText('Toate campaniile · puncte acordate din 01.08.2026'),
   ).toBeInTheDocument();
   expect(screen.queryByText(/01\.09\.2026/)).not.toBeInTheDocument();
 });
@@ -390,7 +390,7 @@ it('names the start as the beginning of a range that has only an end', () => {
   renderPage('?vedere=cupa&pana_la=2026-09-30');
   expect(
     screen.getByText(
-      'Toate campaniile · puncte acordate din 01.09.2026 până la 30 septembrie 2026',
+      'Toate campaniile · puncte acordate din 01.09.2026 până la 30.09.2026',
     ),
   ).toBeInTheDocument();
 });
@@ -434,7 +434,7 @@ describe('the members’ board says from when its points count', () => {
     renderPage('?de_la=2026-08-01');
     const board = membersPanel() as HTMLElement;
     expect(
-      within(board).getByText('puncte acordate din 1 august 2026'),
+      within(board).getByText('puncte acordate din 01.08.2026'),
     ).toBeInTheDocument();
     expect(board).not.toHaveTextContent('01.09.2026');
   });
@@ -444,7 +444,7 @@ describe('the members’ board says from when its points count', () => {
     renderPage('?pana_la=2026-09-30');
     expect(
       within(membersPanel() as HTMLElement).getByText(
-        'puncte acordate din 01.09.2026 până la 30 septembrie 2026',
+        'puncte acordate din 01.09.2026 până la 30.09.2026',
       ),
     ).toBeInTheDocument();
   });

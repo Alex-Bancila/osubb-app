@@ -1,15 +1,8 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
-import {
-  db,
-  resetDb,
-  RUN_VA,
-  show,
-  type Signal,
-} from '../../../test/portofoliu-fake';
+import { db, resetDb, show, type Signal } from '../../../test/portofoliu-fake';
 import type { RoleEvaluationKind } from '../../../lib/schemas/role-evaluation';
-import { useRoleEvaluations } from '../../../queries/role-evaluations';
 
 vi.mock('../../../lib/supabase', async () =>
   (await import('../../../test/portofoliu-fake')).supabaseMock(),
@@ -29,9 +22,7 @@ import { SignalsPanel } from './SignalsPanel';
 vi.setConfig({ testTimeout: 20_000 });
 
 function Host({ kind = 'voluntar_activ' }: { kind?: RoleEvaluationKind }) {
-  const evaluations = useRoleEvaluations();
-  if (!evaluations.data) return null;
-  return <SignalsPanel kind={kind} evaluations={evaluations.data} />;
+  return <SignalsPanel kind={kind} />;
 }
 
 beforeEach(resetDb);
@@ -58,7 +49,6 @@ const signal = (extra: Partial<Signal> & { id: number }): Signal => ({
 });
 
 it('lists the open Signals of its kind with their reason and a link to Roluri, and no sub-heading', async () => {
-  db.runs = [RUN_VA];
   db.signals = [
     signal({
       id: 3,
@@ -72,15 +62,15 @@ it('lists the open Signals of its kind with their reason and a link to Roluri, a
       created_at: '2026-10-02T08:30:00Z',
     }),
     signal({ id: 1 }),
-    // A Member below the Floor: the Signal's threshold is the run's line,
-    // the figure it is judged by is the run's Prag minim.
+    // A Member below the Floor: the Signal stores the run's Prag minim, the
+    // figure it was judged by, so no run needs reading for it.
     signal({
       id: 2,
       member_id: 'dan',
       role_at_listing: 'vot',
       reason: 'below_floor',
       task_points: 3,
-      threshold_used: 40,
+      threshold_used: 10,
     }),
     // Closed: no longer listed.
     signal({ id: 4, member_id: 'mia', closed_at: '2026-07-02T09:00:00Z' }),
@@ -156,7 +146,6 @@ it('lists the voters of the Adunarea Generală, and none of Voluntar Activ', asy
 // The Adunarea Generală has no promotion: its line has its own name, the one
 // the Notification of the same Signal uses.
 it('names the Adunarea Generală line for a voter below it, not the promotion one', async () => {
-  db.runs = [RUN_VA];
   db.signals = [
     signal({
       id: 1,
@@ -191,7 +180,6 @@ it('names the Adunarea Generală line for a voter below it, not the promotion on
 
 // The hint names both lines a holder can fall under, never a bare "prag".
 it('says in its hint that a holder falls under the line of their own evaluation or the Floor', async () => {
-  db.runs = [RUN_VA];
   db.signals = [signal({ id: 1 })];
   const user = userEvent.setup();
   show(<Host />);
@@ -208,7 +196,6 @@ it('says in its hint that a holder falls under the line of their own evaluation 
 });
 
 it('says so when none is open', async () => {
-  db.runs = [RUN_VA];
   db.signals = [signal({ id: 1, closed_at: '2026-07-02T09:00:00Z' })];
   show(<Host />);
   const signals = await panel();
@@ -220,7 +207,6 @@ it('says so when none is open', async () => {
 });
 
 it('says so for a kind that has none open, whatever the other kind has', async () => {
-  db.runs = [RUN_VA];
   db.signals = [signal({ id: 1 })];
   show(<Host kind="adunarea_generala" />);
   const signals = await panel();

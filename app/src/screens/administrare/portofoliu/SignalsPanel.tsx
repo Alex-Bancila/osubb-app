@@ -12,11 +12,7 @@ import { buttonVariants } from '../../../components/ui/button';
 import { InfoHint } from '../../../components/ui/info-hint';
 import type { RoleEvaluationKind } from '../../../lib/schemas/role-evaluation';
 import { useMemberIdentities } from '../../../queries/member-identities';
-import {
-  useRetentionSignals,
-  type RetentionSignal,
-  type RoleEvaluation,
-} from '../../../queries/role-evaluations';
+import { useRetentionSignals } from '../../../queries/role-evaluations';
 import { ROLE_PANEL_MEMBER_PARAM } from '../RolePanel';
 import {
   formatInstantDay,
@@ -35,32 +31,13 @@ import { Name } from './shared';
  * itself when the Role changes, the fact reverses or the kind's next run
  * replaces it. The other kind's Signals are in the other kind's view.
  */
-export function SignalsPanel({
-  kind,
-  evaluations,
-}: {
-  kind: RoleEvaluationKind;
-  evaluations: readonly RoleEvaluation[];
-}) {
+export function SignalsPanel({ kind }: { kind: RoleEvaluationKind }) {
   const signals = useRetentionSignals();
   const rows = useMemo(
     () => (signals.data ?? []).filter((signal) => signal.kind === kind),
     [signals.data, kind],
   );
   const identities = useMemberIdentities(rows.map((signal) => signal.memberId));
-  // A Member under the Floor is judged by it: the run's Prag minim, not the
-  // line the Signal stores.
-  const reason = (signal: RetentionSignal) =>
-    signalReasonText({
-      kind: signal.kind,
-      reason: signal.reason,
-      taskPoints: signal.taskPoints,
-      thresholdUsed:
-        signal.reason === 'below_floor'
-          ? (evaluations.find((run) => run.id === signal.roleEvaluationId)
-              ?.eligibility_floor ?? null)
-          : signal.thresholdUsed,
-    });
   return (
     <Panel
       title="Semnale de retenție"
@@ -105,8 +82,8 @@ export function SignalsPanel({
               >
                 <Name memberId={signal.memberId} identities={identities.data} />
                 <p className="m-0 text-sm text-muted-foreground tabular-nums">
-                  {roleLabel(signal.roleAtListing)} · {reason(signal)} ·{' '}
-                  {formatInstantDay(signal.listedAt)}
+                  {roleLabel(signal.roleAtListing)} · {signalReasonText(signal)}{' '}
+                  · {formatInstantDay(signal.listedAt)}
                 </p>
               </ListRow>
             );

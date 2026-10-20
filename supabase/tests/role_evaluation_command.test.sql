@@ -51,6 +51,10 @@
 --   * the supersede update removed -> "the next run supersedes the undecided
 --     candidate" (the new candidate then trips the one-open index and the
 --     run fails);
+--   * (2026-10-20, #1082's follow-ups) the cutoff check judging every kind
+--     again (`p_cutoff > v_today` without `p_kind = 'voluntar_activ'`) ->
+--     "an Adunarea Generală run with a cutoff after today passes step 1" and
+--     "BC runs an Adunarea Generală Role Evaluation, handing it a cutoff";
 --   (The held-lock probe runs in a remote session, which sees only committed
 --   code, so it was not run as a mutation: without the (47, 1) call the
 --   remote run meets no held lock and completes, so the probe discriminates.)
@@ -61,7 +65,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(69);
+select plan(71);
 
 -- ==================== 1. The lock ====================
 -- A held-lock probe, as #52's suite probes (52, 1): a run must wait on
@@ -301,6 +305,9 @@ select throws_ok($$ select * from public.run_role_evaluation('voluntar_activ', c
 select throws_ok($$ select * from public.run_role_evaluation('voluntar_activ', current_date - 2, current_date - 1, 'Evaluare', 5, 50, current_date + 2) $$,
   'PT400', 'invalid_membership_cutoff',
   'a cutoff after today is invalid_membership_cutoff, before the gate -- a run never writes through a date set_membership_cutoff would refuse');
+select throws_ok($$ select * from public.run_role_evaluation('adunarea_generala', current_date - 2, current_date - 1, 'Evaluare', 5, 25, current_date + 2) $$,
+  '42501', 'role_evaluation_manage_forbidden',
+  'an Adunarea Generală run with a cutoff after today passes step 1 and meets the gate: the kind ignores the cutoff, so it is not judged');
 
 -- ==================== 4. The gate ====================
 
@@ -558,13 +565,16 @@ select results_eq(
 -- ==================== 10. The Adunarea Generală kind ====================
 
 reset role;
+-- The cutoff in force before the run: the Voluntar Activ runs' own.
+create temp table cutoff826 as
+  select membership_cutoff from public.evaluation_settings where id = 1;
 select pg_temp.test_login_leadership('82600000-0000-0000-0000-000000000001');
 select lives_ok($$ select public.set_promotion_threshold('adunarea_generala', 10) $$,
   'BC edits the Adunarea Generală threshold by hand');
 select lives_ok(
-  format($$ insert into runs826 select 'ag1', * from public.run_role_evaluation('adunarea_generala', %L, %L, 'AG #826', 1, 25) $$,
+  format($$ insert into runs826 select 'ag1', * from public.run_role_evaluation('adunarea_generala', %L, %L, 'AG #826', 1, 25, current_date + 2) $$,
          (select d_from from fx826), (select d_to from fx826)),
-  'BC runs an Adunarea Generală Role Evaluation');
+  'BC runs an Adunarea Generală Role Evaluation, handing it a cutoff after today that the kind ignores');
 reset role;
 select results_eq(
   $$ select r.candidates, r.retention_signals, run.ranked_count, run.evaluated_count, run.threshold_used,
@@ -572,7 +582,14 @@ select results_eq(
        from runs826 as r join public.role_evaluations as run on run.id = r.role_evaluation_id
       where r.label = 'ag1' $$,
   $$ values (0, 1, 2, 2, 10, 12, null::date) $$,
-  'the Adunarea Generală kind (Floor 1) ranks only the two Voluntar cu Drept de Vot holders, lists no candidate, signals the one below the line and computes 12 (top 25 % of two); it has no cutoff');
+  'the Adunarea Generală kind (Floor 1) ranks only the two Voluntar cu Drept de Vot holders, lists no candidate, signals the one below the line and computes 12 (top 25 % of two); it records no cutoff');
+select results_eq(
+  $$ select (select membership_cutoff from public.evaluation_settings where id = 1),
+            (select count(*) from public.promotion_threshold_changes
+              where field = 'cutoff'
+                and role_evaluation_id = (select role_evaluation_id from runs826 where label = 'ag1')) $$,
+  $$ select membership_cutoff, 0::bigint from cutoff826 $$,
+  'nor does it write the cutoff it was handed through: the setting keeps the Voluntar Activ runs'' day, and no cutoff change names the run');
 select is(
   (select count(*) from public.promotion_candidates
     where role_evaluation_id = (select role_evaluation_id from runs826 where label = 'ag1')),
