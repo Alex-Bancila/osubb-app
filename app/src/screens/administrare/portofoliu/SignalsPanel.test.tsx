@@ -8,6 +8,7 @@ import {
   show,
   type Signal,
 } from '../../../test/portofoliu-fake';
+import type { RoleEvaluationKind } from '../../../lib/schemas/role-evaluation';
 import { useRoleEvaluations } from '../../../queries/role-evaluations';
 
 vi.mock('../../../lib/supabase', async () =>
@@ -27,10 +28,10 @@ import { SignalsPanel } from './SignalsPanel';
 
 vi.setConfig({ testTimeout: 20_000 });
 
-function Host() {
+function Host({ kind = 'voluntar_activ' }: { kind?: RoleEvaluationKind }) {
   const evaluations = useRoleEvaluations();
   if (!evaluations.data) return null;
-  return <SignalsPanel evaluations={evaluations.data} />;
+  return <SignalsPanel kind={kind} evaluations={evaluations.data} />;
 }
 
 beforeEach(resetDb);
@@ -56,10 +57,9 @@ const signal = (extra: Partial<Signal> & { id: number }): Signal => ({
   ...extra,
 });
 
-it('lists the open Retention Signals with their reason and a link to Roluri', async () => {
+it('lists the open Signals of its kind with their reason and a link to Roluri, and no sub-heading', async () => {
   db.runs = [RUN_VA];
   db.signals = [
-    // Newest kind first, as the read orders them.
     signal({
       id: 3,
       kind: 'adunarea_generala',
@@ -89,21 +89,17 @@ it('lists the open Retention Signals with their reason and a link to Roluri', as
   show(<Host />);
   const signals = await panel();
 
-  // One group per kind, in the order the read gives.
-  const groups = await within(signals).findAllByRole('list');
-  expect(groups.map((list) => list.getAttribute('aria-label'))).toEqual([
-    'Semnale de retenție: Adunarea Generală',
+  // Voluntar Activ alone: one list, named by its kind, and nothing for the
+  // Adunarea Generală's voter.
+  const lists = await within(signals).findAllByRole('list');
+  expect(lists.map((list) => list.getAttribute('aria-label'))).toEqual([
     'Semnale de retenție: Voluntar Activ',
   ]);
-  const [ag, va] = groups as [HTMLElement, HTMLElement];
+  expect(signals.querySelector('[data-slot="sub-heading"]')).toBeNull();
+  expect(signals).not.toHaveTextContent('Eva Rus');
+  expect(signals).not.toHaveTextContent('nu mai este student UBB');
 
-  const voter = within(ag).getAllByRole('listitem')[0] as HTMLElement;
-  expect(voter).toHaveTextContent('Eva Rus');
-  expect(voter).toHaveTextContent('Voluntar cu Drept de Vot');
-  expect(voter).toHaveTextContent('nu mai este student UBB');
-  expect(voter).toHaveTextContent('02.10.2026');
-
-  const rows = within(va).getAllByRole('listitem');
+  const rows = within(lists[0] as HTMLElement).getAllByRole('listitem');
   expect(rows).toHaveLength(2);
   expect(rows[0]).toHaveTextContent('Ana Pop');
   expect(rows[0]).toHaveTextContent('Voluntar Activ');
@@ -125,6 +121,38 @@ it('lists the open Retention Signals with their reason and a link to Roluri', as
   );
 });
 
+it('lists the voters of the Adunarea Generală, and none of Voluntar Activ', async () => {
+  db.signals = [
+    signal({
+      id: 3,
+      kind: 'adunarea_generala',
+      member_id: 'eva',
+      role_at_listing: 'vot',
+      reason: 'not_ubb_student',
+      task_points: null,
+      threshold_used: null,
+      role_evaluation_id: null,
+      created_at: '2026-10-02T08:30:00Z',
+    }),
+    signal({ id: 1 }),
+  ];
+  show(<Host kind="adunarea_generala" />);
+  const signals = await panel();
+
+  const list = await within(signals).findByRole('list');
+  expect(list).toHaveAttribute(
+    'aria-label',
+    'Semnale de retenție: Adunarea Generală',
+  );
+  const voter = within(list).getAllByRole('listitem');
+  expect(voter).toHaveLength(1);
+  expect(voter[0]).toHaveTextContent('Eva Rus');
+  expect(voter[0]).toHaveTextContent('Voluntar cu Drept de Vot');
+  expect(voter[0]).toHaveTextContent('nu mai este student UBB');
+  expect(voter[0]).toHaveTextContent('02.10.2026');
+  expect(signals).not.toHaveTextContent('Ana Pop');
+});
+
 // The Adunarea Generală has no promotion: its line has its own name, the one
 // the Notification of the same Signal uses.
 it('names the Adunarea Generală line for a voter below it, not the promotion one', async () => {
@@ -142,17 +170,20 @@ it('names the Adunarea Generală line for a voter below it, not the promotion on
     }),
     signal({ id: 2, member_id: 'ana' }),
   ];
-  show(<Host />);
+  const ag = show(<Host kind="adunarea_generala" />);
   const signals = await panel();
-  const ag = await within(signals).findByRole('list', {
+  const agList = await within(signals).findByRole('list', {
     name: 'Semnale de retenție: Adunarea Generală',
   });
-  expect(ag).toHaveTextContent(
+  expect(agList).toHaveTextContent(
     'sub pragul Adunării Generale (12 din 40 de puncte)',
   );
-  expect(ag).not.toHaveTextContent('pragul de promovare');
+  expect(agList).not.toHaveTextContent('pragul de promovare');
+  ag.unmount();
+
+  show(<Host kind="voluntar_activ" />);
   expect(
-    within(signals).getByRole('list', {
+    await within(await panel()).findByRole('list', {
       name: 'Semnale de retenție: Voluntar Activ',
     }),
   ).toHaveTextContent('sub pragul de promovare (12 din 40 de puncte)');
@@ -186,4 +217,17 @@ it('says so when none is open', async () => {
     await within(signals).findByText('Niciun semnal de retenție deschis.'),
   ).toBeVisible();
   expect(within(signals).queryByRole('list')).toBeNull();
+});
+
+it('says so for a kind that has none open, whatever the other kind has', async () => {
+  db.runs = [RUN_VA];
+  db.signals = [signal({ id: 1 })];
+  show(<Host kind="adunarea_generala" />);
+  const signals = await panel();
+
+  expect(
+    await within(signals).findByText('Niciun semnal de retenție deschis.'),
+  ).toBeVisible();
+  expect(within(signals).queryByRole('list')).toBeNull();
+  expect(signals).not.toHaveTextContent('Ana Pop');
 });

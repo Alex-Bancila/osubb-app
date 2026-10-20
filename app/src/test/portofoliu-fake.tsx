@@ -1,9 +1,10 @@
 import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { vi } from 'vitest';
 import { answered } from './postgrest-fake';
+import { Where } from './where';
 
 /*
  * A small fake of the database behind Portofoliu Interne (R58): the tables
@@ -109,6 +110,8 @@ export const db = {
   /** What a finalised run reports back. */
   runResult: { candidates: 2, retention_signals: 1 },
   refuse: new Map<string, { code: string; message: string }>(),
+  /** A command that waits for its promise before it answers. */
+  hold: new Map<string, Promise<void>>(),
   rpc: vi.fn(),
 };
 
@@ -145,6 +148,7 @@ export function resetDb() {
   db.rankings = new Map();
   db.runResult = { candidates: 2, retention_signals: 1 };
   db.refuse = new Map();
+  db.hold = new Map();
   db.rpc.mockReset();
 }
 resetDb();
@@ -325,6 +329,7 @@ function logChange(
 
 const answer = async (name: string, args: Record<string, unknown>) => {
   db.rpc(name, args);
+  await db.hold.get(name);
   const refusal = db.refuse.get(name);
   if (refusal) return { data: null, error: refusal };
   switch (name) {
@@ -569,23 +574,21 @@ export function identitiesMock() {
   };
 }
 
-// oxlint-disable-next-line react/only-export-components
-function Where() {
-  const { pathname, search } = useLocation();
-  return <div data-testid="where">{pathname + search}</div>;
-}
-
 /**
- * Mount a panel (or the page) under a query client and a router. The client
+ * Mount a panel (or the page) under a query client and a router, at the
+ * page's address unless `at` gives another (a query included). The client
  * comes back with the render, to move the data under a page that is up.
  */
-export function show(element: ReactElement) {
+export function show(
+  element: ReactElement,
+  at = '/administrare/portofoliu-interne',
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   const view = render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={['/administrare/portofoliu-interne']}>
+      <MemoryRouter initialEntries={[at]}>
         <Routes>
           <Route path="/administrare/portofoliu-interne" element={element} />
           <Route path="/administrare/roluri" element={<Where />} />

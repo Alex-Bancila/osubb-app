@@ -89,6 +89,15 @@ export function roleLabel(role: string): string {
 export const SIMULATION_NOTE = 'Simulare, nimic nu a fost salvat.';
 
 /**
+ * Under the result of a Simulation when the Prag minim, or for Voluntar Activ
+ * the Data limită de intrare, in force is no longer the one it used: the run
+ * would record values nobody has seen ranked, so Finalizează waits for a new
+ * Simulation.
+ */
+export const SIMULATION_STALE =
+  'Pragul minim sau data limită de intrare s-au schimbat după simulare. Simulează din nou.';
+
+/**
  * Under the Signals of a Simulation: the ones about Universitate are not a
  * result of any run, so the rows cannot show them.
  */

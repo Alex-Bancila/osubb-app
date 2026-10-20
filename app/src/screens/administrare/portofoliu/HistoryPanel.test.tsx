@@ -9,7 +9,9 @@ import {
   RUN_OLD,
   RUN_VA,
   show,
+  type Run,
 } from '../../../test/portofoliu-fake';
+import type { RoleEvaluationKind } from '../../../lib/schemas/role-evaluation';
 import { useRoleEvaluations } from '../../../queries/role-evaluations';
 
 vi.mock('../../../lib/supabase', async () =>
@@ -29,11 +31,25 @@ import { HistoryPanel } from './HistoryPanel';
 
 vi.setConfig({ testTimeout: 20_000 });
 
-function Host() {
+function Host({ kind = 'voluntar_activ' }: { kind?: RoleEvaluationKind }) {
   const evaluations = useRoleEvaluations();
   if (!evaluations.data) return null;
-  return <HistoryPanel evaluations={evaluations.data} />;
+  return <HistoryPanel kind={kind} evaluations={evaluations.data} />;
 }
+
+/** A later Voluntar Activ run, to see the order. */
+const RUN_VA_LATER: Run = {
+  ...RUN_VA,
+  id: 4,
+  name: 'Semestrul II',
+  period_from: '2026-07-01',
+  period_to: '2026-08-31',
+  run_at: '2026-09-01T09:00:00Z',
+  threshold_used: 42,
+  threshold_computed: 45,
+  ranked_count: 9,
+  evaluated_count: 14,
+};
 
 beforeEach(resetDb);
 
@@ -45,21 +61,21 @@ const panel = async () =>
     })
   ).closest('section') as HTMLElement;
 
-it('lists runs newest first with their values, and opens the ranking of a run', async () => {
-  db.runs = [RUN_VA, RUN_AG];
+it('lists the runs of its kind newest first with their values, and opens the ranking of a run', async () => {
+  db.runs = [RUN_VA, RUN_AG, RUN_VA_LATER];
   db.rankings.set(RUN_VA.id, rankedRows());
   const user = userEvent.setup();
   show(<Host />);
   const history = await panel();
 
   const table = within(history).getByRole('table');
+  // The kind is the page's section, not a column.
   expect(
     within(table)
       .getAllByRole('columnheader')
       .map((cell) => cell.textContent),
   ).toEqual([
     'Nume',
-    'Tip',
     'Interval',
     'Prag minim',
     'Procent',
@@ -75,24 +91,24 @@ it('lists runs newest first with their values, and opens the ranking of a run', 
     .getAllByRole('row')
     .slice(1)
     .map((row) => within(row).getAllByRole('cell'));
-  // Newest run first; the Member who ran it opens their card, the rest is text.
+  // Newest run first, and only Voluntar Activ's; the Member who ran it opens
+  // their card, the rest is text.
   expect(body.map((cells) => cells[0]?.textContent)).toEqual([
-    'AG toamnă',
+    'Semestrul II',
     'Semestrul I',
   ]);
+  expect(history).not.toHaveTextContent('AG toamnă');
   expect(
-    body.map((cells) => cells.slice(1, 6).map((cell) => cell.textContent)),
+    body.map((cells) => cells.slice(1, 5).map((cell) => cell.textContent)),
   ).toEqual([
-    ['Adunarea Generală', '01.07.2026–20.09.2026', '10', '25 %', '—'],
-    ['Voluntar Activ', '01.02.2026–30.06.2026', '10', '35 %', '31.03.2026'],
+    ['01.07.2026–31.08.2026', '10', '35 %', '31.03.2026'],
+    ['01.02.2026–30.06.2026', '10', '35 %', '31.03.2026'],
   ]);
-  expect(body[0]?.[6]).toHaveTextContent('Dănuț');
-  expect(body[1]?.[6]).toHaveTextContent('Bianca Coman');
+  expect(body[0]?.[5]).toHaveTextContent('Bianca Coman');
   expect(
-    body.map((cells) => cells.slice(7, 11).map((cell) => cell.textContent)),
+    body.map((cells) => cells.slice(6, 10).map((cell) => cell.textContent)),
   ).toEqual([
-    // A run that ranked nobody has no line of its own.
-    ['21.09.2026', '10', '—', '0 / 5'],
+    ['01.09.2026', '42', '45', '9 / 14'],
     ['01.07.2026', '30', '42', '8 / 12'],
   ]);
 
@@ -115,6 +131,37 @@ it('lists runs newest first with their values, and opens the ranking of a run', 
   expect(db.rpc).not.toHaveBeenCalledWith('role_evaluation_ranking', {
     p_role_evaluation_id: 2,
   });
+  expect(db.rpc).not.toHaveBeenCalledWith('role_evaluation_ranking', {
+    p_role_evaluation_id: 4,
+  });
+});
+
+it('lists the runs of the Adunarea Generală and none of Voluntar Activ', async () => {
+  db.runs = [RUN_VA, RUN_AG, RUN_VA_LATER];
+  show(<Host kind="adunarea_generala" />);
+  const history = await panel();
+
+  const body = within(within(history).getByRole('table'))
+    .getAllByRole('row')
+    .slice(1)
+    .map((row) => within(row).getAllByRole('cell'));
+  expect(body.map((cells) => cells[0]?.textContent)).toEqual(['AG toamnă']);
+  expect(body[0]?.slice(1, 5).map((cell) => cell.textContent)).toEqual([
+    '01.07.2026–20.09.2026',
+    '10',
+    '25 %',
+    // No Data limită de intrare: the Adunarea Generală has none.
+    '—',
+  ]);
+  expect(body[0]?.[5]).toHaveTextContent('Dănuț');
+  // A run that ranked nobody has no line of its own.
+  expect(body[0]?.slice(6, 10).map((cell) => cell.textContent)).toEqual([
+    '21.09.2026',
+    '10',
+    '—',
+    '0 / 5',
+  ]);
+  expect(history).not.toHaveTextContent('Semestrul');
 });
 
 it('shows a dash for a first run, which had no line in force before it', async () => {
@@ -124,8 +171,8 @@ it('shows a dash for a first run, which had no line in force before it', async (
   const cells = within(
     within(history).getAllByRole('row')[1] as HTMLElement,
   ).getAllByRole('cell');
-  expect(cells[8]?.textContent).toBe('—');
-  expect(cells[9]?.textContent).toBe('42');
+  expect(cells[7]?.textContent).toBe('—');
+  expect(cells[8]?.textContent).toBe('42');
 });
 
 it('explains a pre-R58 run has no ranking', async () => {
@@ -138,12 +185,12 @@ it('explains a pre-R58 run has no ranking', async () => {
   const cells = within(
     within(history).getAllByRole('row')[1] as HTMLElement,
   ).getAllByRole('cell');
-  expect(cells.slice(3, 6).map((cell) => cell.textContent)).toEqual([
+  expect(cells.slice(2, 5).map((cell) => cell.textContent)).toEqual([
     '—',
     '—',
     '—',
   ]);
-  expect(cells[10]?.textContent).toBe('—');
+  expect(cells[9]?.textContent).toBe('—');
 
   await user.click(
     within(history).getByRole('button', {
@@ -160,11 +207,18 @@ it('explains a pre-R58 run has no ranking', async () => {
   );
 });
 
-it('says no run has been finalised yet', async () => {
-  show(<Host />);
+it('says no run has been finalised yet, or none of its kind', async () => {
+  const first = show(<Host />);
   const history = await panel();
   expect(
     await within(history).findByText('Nicio evaluare încă.'),
+  ).toBeVisible();
+  first.unmount();
+
+  db.runs = [RUN_AG];
+  show(<Host />);
+  expect(
+    await within(await panel()).findByText('Nicio evaluare încă.'),
   ).toBeVisible();
 });
 
@@ -181,27 +235,40 @@ it('lists the runs as rows under the width the table’s columns fit, so nothing
   try {
     db.runs = [RUN_VA, RUN_AG];
     const user = userEvent.setup();
-    show(<Host />);
-    const history = await panel();
+    const va = show(<Host />);
+    let history = await panel();
     expect(window.matchMedia).toHaveBeenCalledWith('(min-width: 96rem)');
     expect(within(history).queryByRole('table')).toBeNull();
-    const rows = within(
+    let rows = within(
       within(history).getByRole('list', { name: 'Istoricul evaluărilor' }),
     ).getAllByRole('listitem');
-    expect(rows).toHaveLength(2);
+    // Only the kind's runs, and no kind to name: the section says it.
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent('Semestrul I');
+    expect(rows[0]).toHaveTextContent('01.02.2026–30.06.2026');
+    expect(rows[0]).not.toHaveTextContent('Voluntar Activ');
+    expect(rows[0]).toHaveTextContent('Prag minim 10');
+    expect(rows[0]).toHaveTextContent('Procent 35 %');
+    expect(rows[0]).toHaveTextContent('Data limită de intrare 31.03.2026');
+    expect(rows[0]).toHaveTextContent('Prag de promovare înainte 30');
+    expect(rows[0]).toHaveTextContent('calculat 42');
+    expect(rows[0]).toHaveTextContent('8 / 12');
+    expect(history).not.toHaveTextContent('AG toamnă');
+    va.unmount();
+
+    show(<Host kind="adunarea_generala" />);
+    history = await panel();
+    rows = within(
+      within(history).getByRole('list', { name: 'Istoricul evaluărilor' }),
+    ).getAllByRole('listitem');
+    expect(rows).toHaveLength(1);
     expect(rows[0]).toHaveTextContent('AG toamnă');
-    expect(rows[0]).toHaveTextContent(
-      'Adunarea Generală · 01.07.2026–20.09.2026',
-    );
+    expect(rows[0]).toHaveTextContent('01.07.2026–20.09.2026');
     expect(rows[0]).toHaveTextContent('Prag minim 10');
     expect(rows[0]).toHaveTextContent('Procent 25 %');
-    expect(rows[1]).toHaveTextContent('Semestrul I');
-    expect(rows[1]).toHaveTextContent('Data limită de intrare 31.03.2026');
     expect(rows[0]).toHaveTextContent('Prag Adunarea Generală înainte 10');
     expect(rows[0]).toHaveTextContent('calculat —');
-    expect(rows[1]).toHaveTextContent('Prag de promovare înainte 30');
-    expect(rows[1]).toHaveTextContent('calculat 42');
-    expect(rows[1]).toHaveTextContent('8 / 12');
+    expect(history).not.toHaveTextContent('Semestrul I');
 
     db.rankings.set(RUN_AG.id, rankedRows());
     await user.click(

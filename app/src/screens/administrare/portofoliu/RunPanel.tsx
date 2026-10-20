@@ -6,6 +6,7 @@ import {
   useState,
   type FormEvent,
 } from 'react';
+import { Link } from 'react-router';
 import { Panel } from '../../../components/layout';
 import { ErrorState, Loading } from '../../../components/states';
 import { Button } from '../../../components/ui/button';
@@ -22,7 +23,7 @@ import { FieldError } from '../../../components/ui/field';
 import { InfoHint } from '../../../components/ui/info-hint';
 import { Input } from '../../../components/ui/input';
 import { bucharestDayKey } from '../../../lib/calendar-time';
-import { reasonCopy } from '../../../lib/command-reasons';
+import { describeFailure, reasonCopy } from '../../../lib/command-reasons';
 import { formatDay, formatPointCount } from '../../../lib/format';
 import {
   runFieldForReason,
@@ -38,6 +39,7 @@ import {
   simulationOutcome,
   type RankingRow,
   type RoleEvaluation,
+  type RunValues,
 } from '../../../queries/role-evaluations';
 import { useReceiptTurn } from '../../tracker/receipt-turn';
 import {
@@ -47,7 +49,9 @@ import {
   rangeText,
   runResultText,
   SIMULATION_NOTE,
+  SIMULATION_STALE,
 } from './portofoliu-text';
+import { SETARI_HREF } from './portofoliu-view';
 import { SimulationResult } from './SimulationResult';
 import { type RunCommand } from './shared';
 
@@ -56,42 +60,69 @@ type Edits = Partial<{
   from: string;
   to: string;
   name: string;
-  floor: string;
   percent: string;
-  cutoff: string;
 }>;
 
-/** The form as the fields hold it: text, until a schema reads it. */
+/**
+ * The form as the fields hold it: text, until a schema reads it. The Prag
+ * minim and the Data limită de intrare are not fields: they are settings,
+ * edited only in Setări.
+ */
 type FormValues = {
   kind: RoleEvaluationKind;
   from: string;
   to: string;
   name: string;
-  floor: string;
   percent: string;
-  cutoff: string;
 };
 
 /** A Simulation shown: the values it used, the form they came from, its rows. */
 type Simulated = {
-  values: {
-    kind: RoleEvaluationKind;
-    from: string;
-    to: string;
-    floor: number;
-    percent: number;
-    cutoff: string | null;
-  };
+  values: Omit<RunValues, 'name'>;
   input: FormValues;
   rows: RankingRow[];
 };
 
 /**
- * Rulează o evaluare (R58): the form of a run, prefilled from the settings in
- * force, then **Simulează** — the ranking such a run would produce, written
- * nowhere — and only then **Finalizează**, which asks once more, naming the
- * consequences, and records the run with the very values the Simulation used.
+ * The refusals that are about a setting, not a field of the form: the way to
+ * Setări goes beside them.
+ */
+const SETTING_REFUSALS: ReadonlySet<string> = new Set([
+  'invalid_eligibility_floor',
+  'invalid_membership_cutoff',
+  'membership_cutoff_not_set',
+]);
+
+function isSettingRefusal(failure: unknown) {
+  const { reason } = describeFailure(failure, '');
+  return reason !== undefined && SETTING_REFUSALS.has(reason);
+}
+
+/** The way to the setting a run needs: Setări, the page's own view. */
+function SettingsLink() {
+  return (
+    <Link
+      to={SETARI_HREF}
+      className="inline-flex min-h-11 items-center rounded-sm text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring"
+    >
+      Deschide Setări
+    </Link>
+  );
+}
+
+/**
+ * Rulează o evaluare (R58): the form of a run — the period, the kind's
+ * **Procent** (prefilled from the settings in force) and the name — then
+ * **Simulează**, the ranking such a run would produce, written nowhere, and
+ * only then **Finalizează**, which asks once more, naming the consequences,
+ * and records the run with the very values the Simulation used.
  * **Modifică valorile** goes back to the form with everything as typed.
+ *
+ * The **Prag minim** and, for Voluntar Activ, the **Data limită de intrare**
+ * are not on the form: a Simulation and a run use the ones in force, which BC
+ * edits only in Setări. The result card still names them, read-only. If either
+ * changes while a Simulation is shown, the run would record values nobody has
+ * seen ranked, so Finalizează waits for a new Simulation.
  *
  * The name belongs to the run, not to the Simulation: **Simulează** checks
  * every field but **Nume**, **Finalizează** needs it.
@@ -102,7 +133,7 @@ export function RunPanel({
   disabled,
   onRun,
 }: {
-  /** The page's Tip: the kind this run is of. */
+  /** The page's section: the kind this run is of. */
   kind: RoleEvaluationKind;
   evaluations: readonly RoleEvaluation[];
   disabled: boolean;
@@ -111,10 +142,9 @@ export function RunPanel({
   const fromId = useId();
   const toId = useId();
   const nameId = useId();
-  const floorId = useId();
   const percentId = useId();
-  const cutoffId = useId();
   const blockedId = useId();
+  const staleId = useId();
   const today = bucharestDayKey(new Date()) ?? '';
   const settings = useEvaluationSettings();
   const data = settings.data;
@@ -123,6 +153,8 @@ export function RunPanel({
   const [simulating, setSimulating] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  // The last refusal was about a setting: Setări is where it is mended.
+  const [settingRefused, setSettingRefused] = useState(false);
   // One receipt at a time across the page (F-11).
   const turn = useReceiptTurn();
   // Where focus goes once the view that had it is gone: the result's line
@@ -141,7 +173,8 @@ export function RunPanel({
   });
 
   // "De la" starts the day after the kind's last range, never after today;
-  // "Până la" is today. The rest is what the settings hold, until typed over.
+  // "Până la" is today. The Procent is the kind's share in force, until typed
+  // over.
   const live: FormValues = {
     kind,
     from:
@@ -149,22 +182,35 @@ export function RunPanel({
       defaultRangeStart(latestRun(evaluations, kind)?.period_to, today),
     to: edits.to ?? today,
     name: edits.name ?? '',
-    floor: edits.floor ?? String(data?.eligibilityFloor ?? ''),
     percent:
       edits.percent ??
       String(
         (kind === 'voluntar_activ' ? data?.activPercent : data?.votPercent) ??
           '',
       ),
-    cutoff: edits.cutoff ?? data?.membershipCutoff ?? '',
   };
   // Once a Simulation is shown only the name can still change: the run is of
   // the values it used, whatever the settings do meanwhile.
   const input: FormValues = simulated
     ? { ...simulated.input, name: live.name }
     : live;
-  const simulation = useMemo(() => simulationSchema(today), [today]);
-  const run = useMemo(() => runSchema(today), [today]);
+  // The Prag minim and, for Voluntar Activ, the Data limită de intrare in
+  // force: what a Simulation uses. Once one is shown, the run is of the ones
+  // it used.
+  const floor = simulated
+    ? simulated.values.floor
+    : (data?.eligibilityFloor ?? null);
+  const cutoff = simulated
+    ? simulated.values.cutoff
+    : (data?.membershipCutoff ?? null);
+  const simulation = useMemo(
+    () => simulationSchema(today, { floor, cutoff }),
+    [today, floor, cutoff],
+  );
+  const run = useMemo(
+    () => runSchema(today, { floor, cutoff }),
+    [today, floor, cutoff],
+  );
   const form = useFormValidation(
     simulated ? run : simulation,
     input,
@@ -172,21 +218,17 @@ export function RunPanel({
   );
   const fromField = form.field('from');
   const toField = form.field('to');
-  const cutoffField = form.field('cutoff');
 
-  // Another kind on the page's switch: its own "De la", share and cutoff, and
-  // nothing said about the kind before it. The name, "Până la" and the Prag
-  // minim stay as typed.
+  // Another kind on the page's switch: its own "De la" and share, and nothing
+  // said about the kind before it. The name and "Până la" stay as typed.
   const [shownKind, setShownKind] = useState(kind);
   if (shownKind !== kind) {
     setShownKind(kind);
-    setEdits((previous) => ({
-      to: previous.to,
-      name: previous.name,
-      floor: previous.floor,
-    }));
+    setEdits((previous) => ({ to: previous.to, name: previous.name }));
     setSimulated(null);
+    setConfirming(false);
     setMessage(null);
+    setSettingRefused(false);
     form.reset();
   }
 
@@ -194,8 +236,8 @@ export function RunPanel({
     setEdits((previous) => ({ ...previous, [key]: value }));
 
   // A Simulation reads the Prag minim and, for Voluntar Activ, the cutoff in
-  // force; a run needs the same. Until BC has set them there is nothing to
-  // simulate.
+  // force; a run needs the same. Until BC has set them in Setări there is
+  // nothing to simulate.
   const floorUnset = data !== undefined && data.eligibilityFloor === null;
   const cutoffUnset =
     kind === 'voluntar_activ' &&
@@ -206,10 +248,22 @@ export function RunPanel({
     : cutoffUnset
       ? reasonCopy('membership_cutoff_not_set')
       : undefined;
+  // The Prag minim, or for Voluntar Activ the Data limită de intrare, is no
+  // longer the one the Simulation shown used (a live update, another BC
+  // member): the card keeps what it simulated, and Finalizează waits.
+  const stale =
+    simulated !== null &&
+    data !== undefined &&
+    (simulated.values.floor !== data.eligibilityFloor ||
+      (simulated.values.kind === 'voluntar_activ' &&
+        simulated.values.cutoff !== data.membershipCutoff));
+  // A confirmation of values that went stale is closed, never answered.
+  if (stale && confirming) setConfirming(false);
 
   async function simulate(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
+    setSettingRefused(false);
     if (!form.validate()) return;
     // The Simulation writes nothing and has no name.
     const values = simulation.parse(input);
@@ -221,6 +275,7 @@ export function RunPanel({
       focusNext.current = 'line';
     } catch (failure) {
       form.fail(failure, 'Nu am putut simula evaluarea. Reîncearcă.');
+      setSettingRefused(isSettingRefusal(failure));
     } finally {
       setSimulating(false);
     }
@@ -230,25 +285,28 @@ export function RunPanel({
     focusNext.current = 'field';
     setSimulated(null);
     setConfirming(false);
+    setSettingRefused(false);
     form.reset();
   }
 
   function review() {
+    if (stale) return;
     if (form.validate()) setConfirming(true);
   }
 
   async function confirm() {
-    if (!simulated) return;
+    if (!simulated || stale) return;
+    // The run schema holds the settings the Simulation used.
     const parsed = run.safeParse(input);
     if (!parsed.success) return;
-    const values = { ...simulated.values, name: parsed.data.name };
+    setSettingRefused(false);
     try {
-      const result = await onRun({ kind: 'run', values });
+      const result = await onRun({ kind: 'run', values: parsed.data });
       setConfirming(false);
       setMessage(
         runResultText({
-          kind: values.kind,
-          name: values.name,
+          kind: parsed.data.kind,
+          name: parsed.data.name,
           candidates: result?.candidates ?? 0,
           retentionSignals: result?.retentionSignals ?? 0,
         }),
@@ -262,8 +320,16 @@ export function RunPanel({
     } catch (failure) {
       setConfirming(false);
       form.fail(failure, 'Nu am putut rula evaluarea. Reîncearcă.');
+      setSettingRefused(isSettingRefusal(failure));
     }
   }
+
+  const formError = (
+    <>
+      <FieldError>{form.formError}</FieldError>
+      {settingRefused && form.formError && <SettingsLink />}
+    </>
+  );
 
   const named = run.safeParse(input);
   const line = simulated
@@ -271,7 +337,7 @@ export function RunPanel({
     : null;
 
   const nameField = (
-    <div className="grid gap-1.5">
+    <div className="grid min-w-0 content-start gap-1.5">
       <label htmlFor={nameId} className="text-sm font-medium">
         Nume
       </label>
@@ -326,10 +392,18 @@ export function RunPanel({
             rows={simulated.rows}
             lineRef={lineRef}
           />
-          {nameField}
-          <FieldError>{form.formError}</FieldError>
+          <div className="max-w-md">{nameField}</div>
+          {formError}
+          <FieldError id={staleId}>
+            {stale ? SIMULATION_STALE : null}
+          </FieldError>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" disabled={disabled} onClick={review}>
+            <Button
+              type="button"
+              disabled={disabled || stale}
+              aria-describedby={stale ? staleId : undefined}
+              onClick={review}
+            >
               Finalizează
             </Button>
             <Button
@@ -344,7 +418,9 @@ export function RunPanel({
         </div>
       ) : (
         <form onSubmit={simulate} noValidate className="grid gap-4">
-          <div className="grid gap-3 sm:grid-cols-2">
+          {/* The period, the kind's share and the name: four fields in a row from
+              1 280 px, two by two from 640 px, one under it. */}
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="grid min-w-0 content-start gap-1.5">
               <label htmlFor={fromId} className="text-sm font-medium">
                 De la
@@ -375,23 +451,6 @@ export function RunPanel({
               />
               <FieldError {...form.errorProps('to')} />
             </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="grid min-w-0 content-start gap-1.5">
-              <label htmlFor={floorId} className="text-sm font-medium">
-                Prag minim
-              </label>
-              <Input
-                id={floorId}
-                inputMode="numeric"
-                value={live.floor}
-                required
-                disabled={disabled}
-                onChange={(event) => edit('floor')(event.target.value)}
-                {...form.field('floor')}
-              />
-              <FieldError {...form.errorProps('floor')} />
-            </div>
             <div className="grid min-w-0 content-start gap-1.5">
               <label htmlFor={percentId} className="text-sm font-medium">
                 Procent
@@ -420,26 +479,9 @@ export function RunPanel({
               </div>
               <FieldError {...form.errorProps('percent')} />
             </div>
+            {nameField}
           </div>
-          {kind === 'voluntar_activ' && (
-            <div className="grid min-w-0 content-start gap-1.5">
-              <label htmlFor={cutoffId} className="text-sm font-medium">
-                Data limită de intrare
-              </label>
-              <DatePicker
-                id={cutoffId}
-                value={live.cutoff}
-                required
-                max={today}
-                disabled={disabled}
-                onChange={edit('cutoff')}
-                {...cutoffField}
-              />
-              <FieldError {...form.errorProps('cutoff')} />
-            </div>
-          )}
-          {nameField}
-          <FieldError>{form.formError}</FieldError>
+          {formError}
           <div className="grid gap-2">
             <Button
               type="submit"
@@ -450,8 +492,9 @@ export function RunPanel({
               {simulating ? 'Se simulează…' : 'Simulează'}
             </Button>
             {blocked !== undefined && (
-              <p id={blockedId} className="m-0 text-sm text-muted-foreground">
-                {blocked}
+              <p className="m-0 flex flex-wrap items-center gap-x-3 text-sm text-muted-foreground">
+                <span id={blockedId}>{blocked}</span>
+                <SettingsLink />
               </p>
             )}
           </div>
@@ -496,7 +539,7 @@ export function RunPanel({
             </Button>
             <Button
               type="button"
-              disabled={disabled}
+              disabled={disabled || stale}
               onClick={() => void confirm()}
             >
               Finalizează

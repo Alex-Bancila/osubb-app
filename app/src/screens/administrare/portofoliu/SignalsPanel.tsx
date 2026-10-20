@@ -6,11 +6,11 @@ import {
   ListRow,
   Panel,
   rowListClass,
-  SubHeading,
 } from '../../../components/layout';
 import { ErrorState, Loading } from '../../../components/states';
 import { buttonVariants } from '../../../components/ui/button';
 import { InfoHint } from '../../../components/ui/info-hint';
+import type { RoleEvaluationKind } from '../../../lib/schemas/role-evaluation';
 import { useMemberIdentities } from '../../../queries/member-identities';
 import {
   useRetentionSignals,
@@ -27,31 +27,27 @@ import {
 } from './portofoliu-text';
 import { Name } from './shared';
 
-/** The open Signals of each kind, kinds in the order the read gives them. */
-function byKind(signals: readonly RetentionSignal[]) {
-  const groups = new Map<string, RetentionSignal[]>();
-  for (const signal of signals)
-    groups.set(signal.kind, [...(groups.get(signal.kind) ?? []), signal]);
-  return [...groups];
-}
-
 /**
- * Semnale de retenție (R58): the stored, open Signals — a holder a finalised
- * run found below the line or the Prag minim, and a voter whose Universitate
- * is not UBB — each with its reason, the day it was raised and a way to
- * Roluri. Retiring a Role is BC's decision there; a Signal closes by itself
- * when the Role changes, the fact reverses or the kind's next run replaces it.
+ * Semnale de retenție (R58): the stored, open Signals of one kind — a holder
+ * a finalised run found below the line or the Prag minim, and a voter whose
+ * Universitate is not UBB — each with its reason, the day it was raised and a
+ * way to Roluri. Retiring a Role is BC's decision there; a Signal closes by
+ * itself when the Role changes, the fact reverses or the kind's next run
+ * replaces it. The other kind's Signals are in the other kind's view.
  */
 export function SignalsPanel({
+  kind,
   evaluations,
 }: {
+  kind: RoleEvaluationKind;
   evaluations: readonly RoleEvaluation[];
 }) {
   const signals = useRetentionSignals();
-  const groups = useMemo(() => byKind(signals.data ?? []), [signals.data]);
-  const identities = useMemberIdentities(
-    (signals.data ?? []).map((signal) => signal.memberId),
+  const rows = useMemo(
+    () => (signals.data ?? []).filter((signal) => signal.kind === kind),
+    [signals.data, kind],
   );
+  const identities = useMemberIdentities(rows.map((signal) => signal.memberId));
   // A Member under the Floor is judged by it: the run's Prag minim, not the
   // line the Signal stores.
   const reason = (signal: RetentionSignal) =>
@@ -76,7 +72,6 @@ export function SignalsPanel({
           este decizia BC, din panoul de roluri.
         </InfoHint>
       }
-      stack={4}
     >
       {signals.isPending ? (
         <Loading label="Se încarcă semnalele…" />
@@ -85,46 +80,38 @@ export function SignalsPanel({
           text="Nu am putut încărca semnalele de retenție."
           onRetry={() => void signals.refetch()}
         />
-      ) : groups.length === 0 ? (
+      ) : rows.length === 0 ? (
         <EmptyState>Niciun semnal de retenție deschis.</EmptyState>
       ) : (
-        groups.map(([kind, rows]) => (
-          <div key={kind} className="grid min-w-0 gap-1">
-            <SubHeading>{KIND_LABEL[kind] ?? kind}</SubHeading>
-            <ul
-              className={rowListClass}
-              aria-label={`Semnale de retenție: ${KIND_LABEL[kind] ?? kind}`}
-            >
-              {rows.map((signal) => {
-                const name = shownName(signal.memberId, identities.data);
-                return (
-                  <ListRow
-                    key={signal.id}
-                    stackAction
-                    action={
-                      <Link
-                        to={`/administrare/roluri?${ROLE_PANEL_MEMBER_PARAM}=${encodeURIComponent(signal.memberId)}`}
-                        aria-label={`Editează rolul: ${name}`}
-                        className={cn(buttonVariants({ variant: 'outline' }))}
-                      >
-                        Editează rolul
-                      </Link>
-                    }
+        <ul
+          className={rowListClass}
+          aria-label={`Semnale de retenție: ${KIND_LABEL[kind]}`}
+        >
+          {rows.map((signal) => {
+            const name = shownName(signal.memberId, identities.data);
+            return (
+              <ListRow
+                key={signal.id}
+                stackAction
+                action={
+                  <Link
+                    to={`/administrare/roluri?${ROLE_PANEL_MEMBER_PARAM}=${encodeURIComponent(signal.memberId)}`}
+                    aria-label={`Editează rolul: ${name}`}
+                    className={cn(buttonVariants({ variant: 'outline' }))}
                   >
-                    <Name
-                      memberId={signal.memberId}
-                      identities={identities.data}
-                    />
-                    <p className="m-0 text-sm text-muted-foreground tabular-nums">
-                      {roleLabel(signal.roleAtListing)} · {reason(signal)} ·{' '}
-                      {formatInstantDay(signal.listedAt)}
-                    </p>
-                  </ListRow>
-                );
-              })}
-            </ul>
-          </div>
-        ))
+                    Editează rolul
+                  </Link>
+                }
+              >
+                <Name memberId={signal.memberId} identities={identities.data} />
+                <p className="m-0 text-sm text-muted-foreground tabular-nums">
+                  {roleLabel(signal.roleAtListing)} · {reason(signal)} ·{' '}
+                  {formatInstantDay(signal.listedAt)}
+                </p>
+              </ListRow>
+            );
+          })}
+        </ul>
       )}
     </Panel>
   );

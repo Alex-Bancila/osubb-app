@@ -18,6 +18,7 @@ import {
   signalReasonText,
   THRESHOLD_LABEL,
   SIMULATION_NOTE,
+  SIMULATION_STALE,
   UNIVERSITY_SIGNALS_NOTE,
 } from './portofoliu-text';
 
@@ -252,8 +253,11 @@ describe('the small words the rows share', () => {
 });
 
 describe('the notes of the Simulation card', () => {
-  it('says nothing was saved, and that Universitate Signals rise on their own', () => {
+  it('says nothing was saved, that a setting changed after it, and that Universitate Signals rise on their own', () => {
     expect(SIMULATION_NOTE).toBe('Simulare, nimic nu a fost salvat.');
+    expect(SIMULATION_STALE).toBe(
+      'Pragul minim sau data limită de intrare s-au schimbat după simulare. Simulează din nou.',
+    );
     expect(UNIVERSITY_SIGNALS_NOTE).toBe(
       'Semnalele „nu mai este student UBB” se ridică automat la schimbarea universității și apar în Semnale de retenție.',
     );

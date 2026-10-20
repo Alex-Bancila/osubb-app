@@ -257,8 +257,9 @@ export function SettingsPanel({
         <InfoHint label="Despre setări">
           Valorile după care citește o evaluare: Prag minim, Data limită de
           intrare, Procent, și data de la care se numără punctele în orice
-          total. O evaluare rulată le propune pe cele din formular și, odată
-          finalizată, le pune în vigoare.
+          total. Pragul minim și data limită de intrare se schimbă doar aici,
+          iar o evaluare le folosește pe cele în vigoare; procentul din formular
+          îl pune în vigoare odată finalizată.
         </InfoHint>
       }
     >

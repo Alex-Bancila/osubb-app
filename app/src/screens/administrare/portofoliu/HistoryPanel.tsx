@@ -12,7 +12,6 @@ import { useMinWidth } from '../../volunteers/use-min-width';
 import type { RoleEvaluationKind } from '../../../lib/schemas/role-evaluation';
 import {
   formatInstantDay,
-  KIND_LABEL,
   pointsOrDash,
   rangeText,
   THRESHOLD_LABEL,
@@ -46,12 +45,6 @@ function historyColumns(
       cell: ({ row }) => (
         <span className="font-medium">{row.original.name}</span>
       ),
-    },
-    {
-      id: 'kind',
-      accessorFn: (row) => KIND_LABEL[row.kind] ?? row.kind,
-      header: 'Tip',
-      ...plain,
     },
     {
       id: 'range',
@@ -97,8 +90,8 @@ function historyColumns(
       cell: ({ row }) => formatInstantDay(row.original.run_at),
     },
     {
-      // The line in force before the run: a first run had none. The Tip
-      // column says which kind's line it is.
+      // The line in force before the run: a first run had none. It is the
+      // line of the kind the page shows.
       id: 'threshold_used',
       accessorFn: (row) => row.threshold_used,
       header: 'Linia înainte',
@@ -149,27 +142,33 @@ function historyColumns(
 const HISTORY_TABLE_FROM = '96rem';
 
 /**
- * Istoricul evaluărilor: every finalised run with the values it ranked by
- * (period, Prag minim, Procent, Data limită de intrare), the line in force
- * before it and the line it computed, and how many Members it ranked. A row
- * opens the ranking of that run.
+ * Istoricul evaluărilor: every finalised run of one kind with the values it
+ * ranked by (period, Prag minim, Procent, Data limită de intrare), the line in
+ * force before it and the line it computed, and how many Members it ranked. A
+ * row opens the ranking of that run. The other kind's runs are in the other
+ * kind's view.
  */
 export function HistoryPanel({
+  kind,
   evaluations,
 }: {
+  kind: RoleEvaluationKind;
   evaluations: readonly RoleEvaluation[];
 }) {
-  const identities = useMemberIdentities(evaluations.map((run) => run.run_by));
+  const rows = useMemo(
+    () => evaluations.filter((run) => run.kind === kind),
+    [evaluations, kind],
+  );
+  const identities = useMemberIdentities(rows.map((run) => run.run_by));
   const [opened, setOpened] = useState<RoleEvaluation | null>(null);
   const columns = useMemo(
     () => historyColumns(identities.data, setOpened),
     [identities.data],
   );
-  const rows = useMemo(() => [...evaluations], [evaluations]);
   const table = useMinWidth(HISTORY_TABLE_FROM);
   return (
     <Panel title="Istoricul evaluărilor">
-      {/* Mounted only once a run exists (B58). */}
+      {/* Mounted only once a run of the kind exists (B58). */}
       {table ? (
         <DataTable
           columns={columns}
@@ -187,7 +186,7 @@ export function HistoryPanel({
             >
               <span className="font-semibold wrap-anywhere">{run.name}</span>
               <span className="text-muted-foreground tabular-nums">
-                {KIND_LABEL[run.kind] ?? run.kind} · {rangeText(run)}
+                {rangeText(run)}
               </span>
               <span className="text-muted-foreground tabular-nums">
                 Prag minim {pointsOrDash(run.eligibility_floor)} · Procent{' '}
@@ -204,8 +203,8 @@ export function HistoryPanel({
                 </span>
               </span>
               <span className="text-muted-foreground tabular-nums">
-                {THRESHOLD_LABEL[run.kind as RoleEvaluationKind] ?? 'Linia'}{' '}
-                înainte {pointsOrDash(run.threshold_used)} · calculat{' '}
+                {THRESHOLD_LABEL[kind]} înainte{' '}
+                {pointsOrDash(run.threshold_used)} · calculat{' '}
                 {pointsOrDash(run.threshold_computed)} · {countsOrDash(run)}
               </span>
               <Button
