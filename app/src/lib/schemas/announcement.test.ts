@@ -44,6 +44,16 @@ it('trims every text, as announcements_guard_text does', () => {
   ).toBe('2099-10-02T20:59:00.000Z');
 });
 
+// R60: the body is Formatted Text, at most 2000 characters as the reader sees
+// them and 4000 as stored -- private.require_formatted_text_length's rule.
+it('measures the body as Formatted Text (R60)', () => {
+  // 3600 stored (3599 trimmed), 1199 visible.
+  expect(check({ body: '**a** '.repeat(600) })).toEqual([]);
+  expect(check({ body: 'a'.repeat(2001) })).toEqual(['body: body_too_long']);
+  // 4005 stored, only 801 visible.
+  expect(check({ body: '**a**'.repeat(801) })).toEqual(['body: body_too_long']);
+});
+
 it.each([
   [{ title: ' \t ' }, ['title: title_required']],
   [{ title: '  ab  ' }, ['title: title_too_short']],

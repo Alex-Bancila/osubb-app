@@ -122,6 +122,16 @@ describe('eventSchema', () => {
     ]);
   });
 
+  // R60: Formatted Text, at most 2000 visible and 4000 stored characters.
+  it('measures the description as Formatted Text (R60)', () => {
+    // 3600 stored (3599 trimmed), 1199 visible.
+    expect(check({ description: '**a** '.repeat(600) })).toEqual([]);
+    // 4005 stored, only 801 visible.
+    expect(check({ description: '**a**'.repeat(801) })).toEqual([
+      'description: description_too_long',
+    ]);
+  });
+
   it.each([
     ['0', ['capacity: invalid_event_capacity']],
     ['1', []],

@@ -10,7 +10,7 @@ import {
   type EventFormValues,
   type EventType,
 } from '../../screens/calendar/event-form-model';
-import { optionalText, requiredText } from './text';
+import { optionalFormattedText, optionalText, requiredText } from './text';
 
 const EVENT_TYPES: readonly string[] = EVENT_TYPE_CHOICES.map(
   (choice) => choice.value,
@@ -18,7 +18,8 @@ const EVENT_TYPES: readonly string[] = EVENT_TYPE_CHOICES.map(
 
 /**
  * An Event, as `create_event` / `update_event` accept it (#673, ruling R8):
- * title 3–120 characters, description at most 2000, a start not in the past
+ * title 3–120 characters, a Formatted Text description of at most 2000
+ * visible and 4000 stored characters (ruling R60), a start not in the past
  * on creation, an end after the start, capacity 1–1000, and a Minimum Level
  * between the Group's and the actor's own. Wall-clock times are read in
  * Romania, as the form shows them.
@@ -47,7 +48,7 @@ export function eventSchema(
       // Security pass 2026-09-27: events_location_length_ck (at most 200).
       location: optionalText({ max: 200, tooLong: 'location_too_long' }),
       capacity: z.string(),
-      description: optionalText({ max: 2000, tooLong: 'description_too_long' }),
+      description: optionalFormattedText({ tooLong: 'description_too_long' }),
       minLevel: z.number(),
       campaignId: z.number().nullable(),
       announce: z.boolean(),

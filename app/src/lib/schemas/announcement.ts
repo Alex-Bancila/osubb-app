@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import { attachedLinksSchema, linksFieldForReason } from './attached-link';
-import { isId, requiredText } from './text';
+import { isId, requiredFormattedText, requiredText } from './text';
 
 /**
  * An Announcement, as `announcements_guard_text` stores it (#673, ruling R8):
- * a title of 3–120 characters, a body of at most 2000, up to five Attached
+ * a title of 3–120 characters, a Formatted Text body of at most 2000 visible
+ * and 4000 stored characters (ruling R60), up to five Attached
  * Links (ruling R46), an Origin Group the author may publish from, and an
  * optional Termen that is not in the past (#909,
  * `announcements_guard_deadline`). `deadline` is an ISO instant, `null` for
@@ -18,9 +19,8 @@ export const announcementSchema = z.object({
     max: 120,
     tooLong: 'title_too_long',
   }),
-  body: requiredText({
+  body: requiredFormattedText({
     required: 'body_required',
-    max: 2000,
     tooLong: 'body_too_long',
   }),
   groupId: z.number().nullable().refine(isId, 'announcement_group_required'),

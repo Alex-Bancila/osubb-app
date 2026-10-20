@@ -182,7 +182,8 @@ Add the comment, the revoke, and the roster row `('formatted_text_plain', 'p_tex
 - Consumes: `private.formatted_text_plain`; `toPlainText` and `visibleLength`.
 - Produces:
   - `private.require_formatted_text_length(p_field text, p_value text) returns void`, `immutable`. Null or blank passes. `char_length(p_value) > 4000` or `char_length(private.formatted_text_plain(p_value)) > 2000` raises `PT400 <p_field>_too_long`.
-  - Constraints `announcements_body_length_ck`, `tasks_description_length_ck` and `events_description_length_ck` keep their names. Their expression becomes `<col> is null or (char_length(<col>) <= 4000 and char_length(private.formatted_text_plain(<col>)) <= 2000)`: drop, add `not valid`, then `validate constraint`.
+  - Constraints `announcements_body_length_ck`, `tasks_description_length_ck` and `events_description_length_ck` keep their names and hold only the stored cap. Their expression becomes `char_length(<col>) <= 4000` (`<col> is null or …` where the column is nullable): drop, add `not valid`, then `validate constraint`.
+  - The visible limit lives only in `private.require_formatted_text_length`, called from the `SECURITY DEFINER` row guard `private.guard_announcement_text` and the `SECURITY DEFINER` Task and Event commands. No constraint calls it: a `CHECK` runs as the writing role, and a client write cannot call a private function revoked from `authenticated`.
   - `requiredFormattedText(rule: { required: string; tooLong: string })` and `optionalFormattedText(rule: { tooLong: string })` in `lib/schemas/text.ts`. They trim like `requiredText` / `optionalText`, and the issue is `tooLong` when `visibleLength(v) > 2000` or `charLength(v) > 4000`.
 
 - [ ] **Step 1: Write the failing suite** `formatted_text_limits.test.sql`. For each column (an `announcements` insert, `create_task` signed in as a Group Manager, `create_event` signed in as one) assert:
@@ -200,7 +201,7 @@ Add the comment, the revoke, and the roster row `('formatted_text_plain', 'p_tex
 - [ ] **Step 3: Implement the server side.**
   - Add the helper, with its revoke and roster row (count goes to 260).
   - Swap the three constraints.
-  - In `private.guard_announcement_text` (latest: `20261007190000_attached_links_five.sql`), swap the line `elsif char_length(new.body) > 2000 then` for `elsif char_length(new.body) > 4000 or char_length(private.formatted_text_plain(new.body)) > 2000 then`.
+  - In `private.guard_announcement_text` (latest: `20261007190000_attached_links_five.sql`), swap the branch `elsif char_length(new.body) > 2000 then` for a call to `private.require_formatted_text_length('body', new.body)`, its `PT400` named `23514 body_too_long` as the guard names its other reasons.
   - Restate every function whose latest body calls `private.require_text_length('description', …, 2000)` on a Task or Event description, swapping that call for `private.require_formatted_text_length('description', …)` with the same value argument. List them on the reset stack with: `select p.oid::regprocedure from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'private' and prosrc like '%require_text_length(''description''%'`.
   - Leave out any function whose description is a Cerere's (`create_completed_work_request_impl`).
 

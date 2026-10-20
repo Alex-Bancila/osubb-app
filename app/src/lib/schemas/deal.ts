@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { attachedLinksSchema, linksFieldForReason } from './attached-link';
-import { optionalText, requiredText } from './text';
+import { optionalText, requiredFormattedText, requiredText } from './text';
 
 /** The Deal Code's limit, trimmed (`deal_code_too_long`). */
 export const DEAL_CODE_MAX = 80;
@@ -21,9 +21,9 @@ export const dealSchema = z.object({
     max: 120,
     tooLong: 'title_too_long',
   }),
-  body: requiredText({
+  // R60: Formatted Text, at most 2000 visible and 4000 stored characters.
+  body: requiredFormattedText({
     required: 'body_required',
-    max: 2000,
     tooLong: 'body_too_long',
   }),
   deadline: z
