@@ -55,7 +55,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(64);
+select plan(65);
 
 -- ==================== 0. Day one ====================
 -- The migration stored the Retention Signals of the latest run of each kind;
@@ -391,7 +391,8 @@ select is(
 
 -- ==================== 6. The live Promotion Candidates ====================
 -- The latest Voluntar Activ run (S2) ended 2026-09-30, so the window opens on
--- 2026-10-01; its cutoff, 2026-03-01, is the one in force.
+-- 2026-10-01. A run never writes the Data limită de intrare back (Alex,
+-- 2026-10-20), so BC sets it in Setări below: 2026-03-01.
 
 insert into auth.users (id, email) values
   (pg_temp.r58x('L'), 'l-r58x@test.local'), (pg_temp.r58x('M'), 'm-r58x@test.local');
@@ -402,6 +403,8 @@ insert into public.profiles (id, full_name, email, role, status, joined_at) valu
 select pg_temp.test_login_leadership(pg_temp.r58('BC'));
 select lives_ok($$ select public.set_promotion_threshold('voluntar_activ', 20) $$,
   'BC sets the Voluntar Activ Promotion Threshold to 20');
+select lives_ok($$ select public.set_membership_cutoff('2026-03-01') $$,
+  'and the Data limită de intrare to 2026-03-01, in Setări: the runs above used it but wrote nothing back');
 reset role;
 
 -- 5 first, then 20: each award refreshes the list, and only the second

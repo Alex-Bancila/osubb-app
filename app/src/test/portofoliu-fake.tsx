@@ -361,9 +361,11 @@ const answer = async (name: string, args: Record<string, unknown>) => {
         evaluated_count: 6,
       });
       // A finalised run hands the line it computed to its kind's Promotion
-      // Threshold and writes the values it used through to the settings in
-      // force, each changed value logged once naming the run (source
-      // role_evaluation, no author) -- as run_role_evaluation does.
+      // Threshold and writes only the share it used through to the settings
+      // in force, each changed value logged once naming the run (source
+      // role_evaluation, no author) -- as run_role_evaluation does. The Prag
+      // minim and the Data limită de intrare it used stay on its own row:
+      // they are Setări's alone, so a run never writes either back.
       const logRun = (
         change: Pick<Change, 'from_value' | 'to_value'> & Partial<Change>,
       ) =>
@@ -382,40 +384,22 @@ const answer = async (name: string, args: Record<string, unknown>) => {
         threshold.threshold = line;
         threshold.updated_by = null;
       }
-      const floor = Number(args.p_floor);
-      if (db.settings.eligibility_floor !== floor)
-        logRun({
-          field: 'floor',
-          from_value: db.settings.eligibility_floor,
-          to_value: floor,
-        });
-      db.settings.eligibility_floor = floor;
       const percent = Number(args.p_percent);
       const percentWas =
         kind === 'voluntar_activ'
           ? db.settings.activ_percent
           : db.settings.vot_percent;
-      if (percentWas !== percent)
+      if (percentWas !== percent) {
         logRun({
           kind,
           field: 'percent',
           from_value: percentWas,
           to_value: percent,
         });
-      if (kind === 'voluntar_activ') {
-        db.settings.activ_percent = percent;
-        const cutoff = (args.p_cutoff as string | undefined) ?? null;
-        if (db.settings.membership_cutoff !== cutoff)
-          logRun({
-            field: 'cutoff',
-            from_value: null,
-            to_value: null,
-            from_date: db.settings.membership_cutoff,
-            to_date: cutoff,
-          });
-        db.settings.membership_cutoff = cutoff;
-      } else db.settings.vot_percent = percent;
-      db.settings.updated_by = null;
+        if (kind === 'voluntar_activ') db.settings.activ_percent = percent;
+        else db.settings.vot_percent = percent;
+        db.settings.updated_by = null;
+      }
       return {
         data: [
           {

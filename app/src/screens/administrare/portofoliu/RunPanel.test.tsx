@@ -243,7 +243,8 @@ it('simulates and runs with the Prag minim and the Data limită de intrare in fo
     ...(simulatedCall()?.[1] as object),
     p_name: 'Toamna 2026',
   });
-  // The run's write-through of the two is a no-op: they were the ones in force.
+  // A run never writes the two back (the fake mirrors run_role_evaluation,
+  // which writes only the share): they stay as Setări has them.
   await within(run).findByText(/a rulat/);
   expect(db.settings.eligibility_floor).toBe(12);
   expect(db.settings.membership_cutoff).toBe('2026-05-01');
