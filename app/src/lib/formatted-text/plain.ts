@@ -44,6 +44,21 @@ function boundaryPair(marker: '*' | '_' | '~'): RegExp {
   );
 }
 
+/**
+ * `marker` doubled around words, anywhere on a line. The content starts and
+ * ends on a non-space, so `2 ** 3 ** 4` and `a == b == c` are text.
+ */
+function doubledPair(marker: '*' | '~' | '='): RegExp {
+  const escaped = marker === '*' ? '\\*\\*' : marker + marker;
+  return new RegExp(
+    `${escaped}([^${marker}${SPACE}]([^${marker}\\n]*[^${marker}${SPACE}])?)${escaped}`,
+    'gu',
+  );
+}
+
+const BOLD = doubledPair('*');
+const STRIKE_DOUBLED = doubledPair('~');
+const HIGHLIGHT = doubledPair('=');
 const ITALIC_STAR = boundaryPair('*');
 const ITALIC_UNDERSCORE = boundaryPair('_');
 const STRIKE_TILDE = boundaryPair('~');
@@ -58,25 +73,29 @@ function trimSpaces(value: string): string {
 }
 
 /**
- * The Formatted Text without its markers: heading and quote markers removed,
+ * The Formatted Text without its markers: quote and heading markers removed,
  * list items bulleted (a numbered item keeps its number), paired
  * bold/italic/strike/highlight markers and http(s) Text Link syntax removed,
  * backslash escapes unescaped, CRLF folded to LF, trimmed of spaces. The order
- * matters: the backslash escapes come last so an escaped marker survives every
- * pattern before it.
+ * is the database's: the quote before the heading, so `> # Titlu` loses both,
+ * and the backslash escapes last. A backslash therefore keeps a marker literal
+ * only where an earlier step refuses it (a line start, a single-marker opener,
+ * a pair of stars written `\*\*`); the Text Link and the closers do not look
+ * for one, so `\[x](https://a.b)` gives `\x` and `*a\*` gives `a\`.
  */
 export function toPlainText(markdown: string): string {
   let text = markdown.replace(/\r\n/g, '\n');
-  text = text.replace(/(^|\n)[ \t]*#{1,6}[ \t]+/gu, '$1');
   text = text.replace(/(^|\n)[ \t]*>[ \t]?/gu, '$1');
+  text = text.replace(/(^|\n)[ \t]*#{1,6}[ \t]+/gu, '$1');
   text = text.replace(/(^|\n)([ \t]*)[-*+][ \t]+/gu, '$1$2• ');
+  // The words hold no bracket: the innermost one wins, as in CommonMark.
   text = text.replace(
-    /\[([^\]\n]*)\]\((https?:\/\/[^) \t\n\r\f\v]+)\)/gu,
+    /\[([^[\]\n]*)\]\((https?:\/\/[^) \t\n\r\f\v]+)\)/gu,
     '$1',
   );
-  text = text.replace(/\*\*([^*\n]+)\*\*/gu, '$1');
-  text = text.replace(/~~([^~\n]+)~~/gu, '$1');
-  text = text.replace(/==([^=\n]+)==/gu, '$1');
+  text = text.replace(BOLD, '$1');
+  text = text.replace(STRIKE_DOUBLED, '$1');
+  text = text.replace(HIGHLIGHT, '$1');
   text = text.replace(ITALIC_STAR, '$1$2');
   text = text.replace(ITALIC_UNDERSCORE, '$1$2');
   text = text.replace(STRIKE_TILDE, '$1$2');

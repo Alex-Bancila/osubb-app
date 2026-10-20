@@ -1,9 +1,10 @@
 -- R60: Formatted Text, the server's half.
 --
--- Four fields carry a restricted Markdown (Announcement body, Task and Event
--- description, Group description). The database never renders it; it only
--- needs the words, so the visible-length limits count them and a Notification
--- carries them. The sections below build that in the order the later ones use:
+-- Three columns carry a restricted Markdown: announcements.body,
+-- tasks.description and events.description. The database never renders it; it
+-- only needs the words, so the visible-length limits count them and a
+-- Notification carries them. The sections below build that in the order the
+-- later ones use:
 --
 --   1. private.formatted_text_plain, the stripper.
 --   2. The visible-length limits: private.require_formatted_text_length, the
@@ -16,11 +17,17 @@
 -- ==================== 1. private.formatted_text_plain (R60) ====================
 
 -- Markdown in, plain words out. A regexp chain whose order matters: block
--- markers first (they are anchored at a line start), then links and the paired
--- inline markers, and the backslash escapes last so an escaped marker survives
--- every pattern before it. Each pattern that anchors on `^` runs newline-
--- sensitive ('n'), so `^` means the start of a line and a bracket expression
--- never crosses one. The single-character markers (`*`, `_`, `~`) only pair at
+-- markers first (they are anchored at a line start; the quote before the
+-- heading, so a quoted heading loses both), then links and the paired inline
+-- markers, and the backslash escapes last. A backslash therefore keeps a
+-- marker literal only where an earlier pattern refuses it: at a line start
+-- (`\#`, `\>`, `\-`), before a single-marker opener (`\*`, `\_`, `\~`) and
+-- between doubled stars (`\*\*`). The Text Link and the closers do not look
+-- for one, so `\[x](https://a.b)` gives `\x`, and `*a\*` and `**a\**` give
+-- `a\`. Each pattern that anchors on `^` runs newline-sensitive ('n'), so `^`
+-- means the start of a line and a bracket expression never crosses one. Every
+-- paired marker holds words that start and end on a non-space, and the
+-- single-character markers (`*`, `_`, `~`) only pair at
 -- a word boundary, so `5*3*2`, `nume_prenume` and `ăla*b*` stay as typed; a
 -- word character is spelled out as 0-9, A-Z, a-z and U+00C0-U+024F (every
 -- Romanian letter) rather than [[:alnum:]], and a space is spelled out as
@@ -45,19 +52,23 @@ begin
   end if;
 
   v := replace(p_text, E'\r\n', E'\n');
-  -- Headings and quotes lose their marker; list markers become a bullet
-  -- (a numbered item keeps its number).
-  v := regexp_replace(v, '^[ \t]*#{1,6}[ \t]+', '', 'gn');
+  -- Quotes and headings lose their marker, the quote first so `> # Titlu`
+  -- loses both; list markers become a bullet (a numbered item keeps its
+  -- number).
   v := regexp_replace(v, '^[ \t]*>[ \t]?', '', 'gn');
+  v := regexp_replace(v, '^[ \t]*#{1,6}[ \t]+', '', 'gn');
   v := regexp_replace(v, '^([ \t]*)[-*+][ \t]+', '\1• ', 'gn');
   -- A Text Link shows its words; only http(s) is a link, so [x](javascript:..)
-  -- stays text.
-  v := regexp_replace(v, '\[([^]\n]*)\]\((https?://[^) \t\n\r\f\v]+)\)', '\1', 'g');
-  -- Paired markers. The doubled ones pair anywhere on a line; the single
-  -- ones only at a word boundary.
-  v := regexp_replace(v, '\*\*([^*\n]+)\*\*', '\1', 'g');
-  v := regexp_replace(v, '~~([^~\n]+)~~', '\1', 'g');
-  v := regexp_replace(v, '==([^=\n]+)==', '\1', 'g');
+  -- stays text. Its words hold no bracket, so the innermost bracket wins
+  -- (`[a [b](https://x.ro)` gives `[a b`, as in CommonMark) and a run of `[`
+  -- is read once, not once per bracket.
+  v := regexp_replace(v, '\[([^][\n]*)\]\((https?://[^) \t\n\r\f\v]+)\)', '\1', 'g');
+  -- Paired markers, each around words that start and end on a non-space, so
+  -- `2 ** 3 ** 4` and `a == b == c` stay as typed. The doubled ones pair
+  -- anywhere on a line; the single ones only at a word boundary.
+  v := regexp_replace(v, '\*\*([^* \t\n\r\f\v]([^*\n]*[^* \t\n\r\f\v])?)\*\*', '\1', 'g');
+  v := regexp_replace(v, '~~([^~ \t\n\r\f\v]([^~\n]*[^~ \t\n\r\f\v])?)~~', '\1', 'g');
+  v := regexp_replace(v, '==([^= \t\n\r\f\v]([^=\n]*[^= \t\n\r\f\v])?)==', '\1', 'g');
   v := regexp_replace(v, '(^|[^0-9A-Za-zÀ-ɏ*\\])\*([^* \t\n\r\f\v]([^*\n]*[^* \t\n\r\f\v])?)\*(?![0-9A-Za-zÀ-ɏ*])', '\1\2', 'gn');
   v := regexp_replace(v, '(^|[^0-9A-Za-zÀ-ɏ_\\])_([^_ \t\n\r\f\v]([^_\n]*[^_ \t\n\r\f\v])?)_(?![0-9A-Za-zÀ-ɏ_])', '\1\2', 'gn');
   v := regexp_replace(v, '(^|[^0-9A-Za-zÀ-ɏ~\\])~([^~ \t\n\r\f\v]([^~\n]*[^~ \t\n\r\f\v])?)~(?![0-9A-Za-zÀ-ɏ~])', '\1\2', 'gn');
@@ -69,7 +80,7 @@ end;
 $$;
 
 comment on function private.formatted_text_plain(text) is
-  'R60 (Formatted Text): the words of a restricted-Markdown text -- heading, quote and list markers, paired bold/italic/strike/highlight markers and http(s) Text Link syntax removed, list items bulleted, backslash escapes unescaped, CRLF folded to LF, trimmed. Null in, null out. The visible-length limits count its result and a Notification body carries it; the TypeScript twin toPlainText gives the same words, both tested against supabase/tests/formatted_text_plain.test.sql.';
+  'R60 (Formatted Text): the words of a restricted-Markdown text -- heading, quote and list markers, paired bold/italic/strike/highlight markers and http(s) Text Link syntax removed, list items bulleted, backslash escapes unescaped last (so an escaped line-start marker, single-marker opener or pair of stars stays literal, while an escaped Text Link bracket or closing marker does not), CRLF folded to LF, trimmed. Null in, null out. The visible-length limits count its result and a Notification body carries it; the TypeScript twin toPlainText gives the same words, both tested against supabase/tests/formatted_text_plain.test.sql.';
 revoke execute on function private.formatted_text_plain(text)
   from public, anon, authenticated, service_role;
 

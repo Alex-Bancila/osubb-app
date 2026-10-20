@@ -14,7 +14,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(26);
+select plan(32);
 
 -- ==================== fixtures ====================
 
@@ -41,6 +41,12 @@ select is(private.formatted_text_plain(E'\\~nu\\~'), E'~nu~', 'escaped tilde');
 select is(private.formatted_text_plain(E'abc\n'), E'abc\n', 'trailing newline kept');
 select is(private.formatted_text_plain(E'*a *'), E'a ', 'em space is not a space in a marker');
 select is(private.formatted_text_plain(E'[x](https://a.ro/b c)'), E'x', 'em space is not a space in a link address');
+select is(private.formatted_text_plain(E'> # Titlu'), E'Titlu', 'quoted heading');
+select is(private.formatted_text_plain(E'# > x'), E'> x', 'heading holding a quote mark');
+select is(private.formatted_text_plain(E'2 ** 3 ** 4'), E'2 ** 3 ** 4', 'spaced stars stay');
+select is(private.formatted_text_plain(E'a == b == c'), E'a == b == c', 'spaced equals stay');
+select is(private.formatted_text_plain(E'**a **'), E'**a **', 'bold needs an edge');
+select is(private.formatted_text_plain(E'[a [b](https://x.ro)'), E'[a b', 'innermost link');
 
 -- ==================== contract ====================
 
