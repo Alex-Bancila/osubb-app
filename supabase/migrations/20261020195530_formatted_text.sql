@@ -9,6 +9,9 @@
 --   2. The visible-length limits: private.require_formatted_text_length, the
 --      three stored caps, the announcements row guard and the Task and Event
 --      commands.
+--   3. Plain Notifications and the Event copy: private.notify_announcement
+--      hands over the words of the body, and private.event_announcement_body
+--      cuts a long description at whole lines.
 
 -- ==================== 1. private.formatted_text_plain (R60) ====================
 
@@ -1322,3 +1325,123 @@ begin
   return v_updated;
 end;
 $function$;
+
+-- ==================== 3. Plain Notifications and the Event copy (R60) ====================
+
+-- A Notification is plain text wherever it is read (the bell, the push, the
+-- Email Digest), so an Announcement's Notification carries the words of its
+-- body, not its Markdown; and the copy of an Event's description into its
+-- Announcement is cut at whole lines, never inside a marker. Neither
+-- function changes its signature. private.notify already clips at 2000
+-- characters, which a plain body never passes now.
+
+-- Restated from 20261014153142_edit_notices.sql; only the two body arguments
+-- change (the first notice and the told-again one), plus the comment above them.
+create or replace function private.notify_announcement(p_row announcements, p_actor uuid, p_changed text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_recipients uuid[] := coalesce(private.announcement_recipients(p_row), '{}'::uuid[]);
+  v_key text := 'announcement:' || p_row.id::text;
+  v_told uuid[];
+  v_deal boolean := p_row.kind = 'deal';
+  v_link text := case when p_row.kind = 'deal' then '/anunturi/deals?deal=' else '/anunturi?anunt=' end
+                 || p_row.id::text;
+begin
+  -- Whoever holds a notice about it, or opened it, knows it.
+  v_told := private.told_of(v_recipients, v_key)
+            || array(select reading.member_id from public.announcement_reads as reading
+                      where reading.announcement_id = p_row.id and reading.member_id = any (v_recipients));
+  -- #635: a critical Announcement's Notification is critical, so it still
+  -- pushes to a Member who muted 'announce'. #861 (Audit D-20): keyed
+  -- announcement:<id>, so reading the Announcement finds and clears it -- and
+  -- an unread notice is refreshed in place rather than doubled. R45: a Deal
+  -- says so and opens on the OSUBB Deals tab. R60: the body is Formatted Text
+  -- and a Notification is plain, so it carries the words of the body, whether
+  -- the Member is told for the first time or told again.
+  perform private.notify(
+    array(select member from unnest(v_recipients) as member where member <> all (v_told)),
+    'announce', case when v_deal then 'Deal nou: ' else 'Anunț nou: ' end || p_row.title,
+    private.formatted_text_plain(p_row.body), null, v_key, p_actor, v_link, p_row.priority = 'critical');
+  perform private.notify(v_told, 'announce',
+    case when v_deal then 'Deal actualizat: ' else 'Anunț actualizat: ' end || p_row.title,
+    coalesce(p_changed, private.formatted_text_plain(p_row.body)), null, v_key, p_actor, v_link, p_row.priority = 'critical');
+end;
+$function$;
+
+comment on function private.notify_announcement(public.announcements, uuid, text) is
+  'R53: tells private.announcement_recipients of the Announcement, never p_actor -- "Anunț nou" ("Deal nou") with its text to whoever does not know it, "Anunț actualizat" ("Deal actualizat") to whoever does -- holds a notice about it (private.told_of) or opened it, with p_changed or, for an approval, its text. R60: its text is the words of the body (private.formatted_text_plain), never the Markdown. Keyed announcement:<id>. Granted to nobody.';
+
+-- Restated from 20260929170000_announcement_deadline.sql; only the clip changes.
+create or replace function private.event_announcement_body(p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_description text)
+ RETURNS text
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO ''
+AS $function$
+declare
+  v_days constant text[] := array['duminică','luni','marți','miercuri','joi','vineri','sâmbătă'];
+  v_months constant text[] := array['ianuarie','februarie','martie','aprilie','mai','iunie',
+    'iulie','august','septembrie','octombrie','noiembrie','decembrie'];
+  v_start timestamp := p_starts_at at time zone 'Europe/Bucharest';
+  v_end timestamp := p_ends_at at time zone 'Europe/Bucharest';
+  v_line text;
+  v_text text;
+  v_lines text[];
+  v_n integer;
+  v_body text;
+begin
+  -- "Miercuri, 30 septembrie 2026, 18:40–20:40 · Sala 305", always in Romania.
+  v_line := v_days[extract(dow from v_start)::int + 1] || ', '
+    || extract(day from v_start)::int || ' ' || v_months[extract(month from v_start)::int]
+    || ' ' || extract(year from v_start)::int || ', ' || to_char(v_start, 'HH24:MI');
+  v_line := upper(left(v_line, 1)) || substr(v_line, 2);
+  if v_end is not null then
+    if v_end::date = v_start::date then
+      v_line := v_line || '–' || to_char(v_end, 'HH24:MI');
+    else
+      v_line := v_line || ' – ' || v_days[extract(dow from v_end)::int + 1] || ', '
+        || extract(day from v_end)::int || ' ' || v_months[extract(month from v_end)::int]
+        || ' ' || extract(year from v_end)::int || ', ' || to_char(v_end, 'HH24:MI');
+    end if;
+  end if;
+  if nullif(btrim(p_location), '') is not null then
+    v_line := v_line || ' · ' || btrim(p_location);
+  end if;
+  v_text := nullif(btrim(p_description), '');
+  v_body := v_line;
+  if v_text is not null then
+    v_body := v_body || E'\n\n' || v_text;
+  end if;
+  -- R60: an Event description is Formatted Text and may use all the 2000
+  -- visible characters an Announcement body has; the date line on top must
+  -- not push the Announcement over its limit, visible (2000) or stored (4000).
+  -- Lines go from the end, so a cut never lands inside a marker (every marker
+  -- pairs within its line), and the blank lines it leaves behind go with them.
+  -- The date line stays, and the "…" closes the copy on a line of its own,
+  -- counted with the candidate it closes, so it never pushes the copy back
+  -- over the limit. Each pass drops at least one line, so the loop ends.
+  if char_length(private.formatted_text_plain(v_body)) > 2000 or char_length(v_body) > 4000 then
+    v_lines := string_to_array(v_text, E'\n');
+    v_n := cardinality(v_lines);
+    loop
+      v_n := v_n - 1;
+      while v_n > 0 and btrim(v_lines[v_n], E' \t\r') = '' loop
+        v_n := v_n - 1;
+      end loop;
+      v_body := v_line
+        || case when v_n > 0 then E'\n\n' || array_to_string(v_lines[1:v_n], E'\n') else '' end
+        || E'\n…';
+      exit when v_n = 0
+        or (char_length(private.formatted_text_plain(v_body)) <= 2000 and char_length(v_body) <= 4000);
+    end loop;
+  end if;
+  return v_body;
+end;
+$function$;
+
+comment on function private.event_announcement_body(timestamptz, timestamptz, text, text) is
+  '#909: the body of the Announcement create_event(p_announce) publishes -- "Miercuri, 30 septembrie 2026, 18:40–20:40 · Sala 305", a blank line and the description, in Romania''s time zone. R60: the description stays Formatted Text. When the body would pass the 2000 visible characters (private.formatted_text_plain) or the 4000 stored ones an Announcement body allows, lines go from the end of the description until it fits with "…" closing it on a line of its own, so a cut never lands inside a marker; the date line is never dropped.';

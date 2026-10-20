@@ -1,0 +1,140 @@
+-- formatted_text_notifications.test.sql -- R60 (Formatted Text): what leaves the
+-- Markdown as plain words.
+--
+-- An Announcement body may hold Markdown now, but a Notification is plain text
+-- everywhere it is read (the bell, the push, the Email Digest): private.
+-- notify_announcement hands private.notify the words of the body, whether the
+-- Member is told for the first time or already holds a notice about it. And an
+-- Event's description, copied into its Announcement by private.
+-- event_announcement_body, is cut at whole lines -- never inside a marker --
+-- until the visible text is within 2000 characters and the stored text within
+-- 4000, the closing ellipsis included, on a line of its own; the date line stays.
+--
+-- Personas (prefix 1090): 1 vot, Manager of Dept R60N   2 voluntar, its member
+begin;
+\set osubb_test_suite true
+\ir _helpers.sql
+set local search_path = public, extensions;
+create extension if not exists pgtap with schema extensions;
+select plan(11);
+
+create function pg_temp.u60(n integer) returns uuid language sql immutable as $$
+  select ('10900000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
+$$;
+insert into auth.users(id, email)
+select pg_temp.u60(n), 'notify.' || n || '.r60@test.local' from generate_series(1, 2) n;
+insert into public.profiles(id, full_name, email, role, status)
+select pg_temp.u60(n), 'Notificare R60 ' || n, 'notify.' || n || '.r60@test.local',
+       (case n when 1 then 'vot' else 'voluntar' end)::public.member_role, 'activ'
+  from generate_series(1, 2) n;
+insert into public.groups(name, category, min_level) values ('Dept R60N', 'department', 0);
+insert into public.group_members(group_id, member_id, group_role)
+select grp.id, pg_temp.u60(row_.n), row_.group_role
+  from (values (1, 'manager'), (2, 'member')) as row_(n, group_role)
+  cross join public.groups as grp where grp.name = 'Dept R60N';
+
+create function pg_temp.dept() returns bigint language sql stable security definer set search_path = '' as $$
+  select id from public.groups where name = 'Dept R60N'
+$$;
+create function pg_temp.ann(p_title text) returns public.announcements language sql stable security definer set search_path = '' as $$
+  select * from public.announcements where title = p_title
+$$;
+-- The Event copy under test, for a fixed start so its date line has a known
+-- length: "Miercuri, 25 septembrie 2030, 18:40".
+create function pg_temp.evcopy(p_description text) returns text language sql stable security definer set search_path = '' as $$
+  select private.event_announcement_body('2030-09-25 15:40+00', null, null, p_description)
+$$;
+create function pg_temp.date_line() returns text language sql stable security definer set search_path = '' as $$
+  select private.event_announcement_body('2030-09-25 15:40+00', null, null, null)
+$$;
+create function pg_temp.plain_len(p_text text) returns integer language sql stable security definer set search_path = '' as $$
+  select char_length(private.formatted_text_plain(p_text))
+$$;
+
+-- ==================== 1. the Notification carries the words ====================
+select pg_temp.test_login_leadership(pg_temp.u60(1));
+insert into public.announcements(title, body, group_id, audience)
+values ('Anunț cu format R60N', E'Ne vedem **joi**.\n- sala 2/I', pg_temp.dept(), 'local');
+reset role;
+select is((select body from public.notifications
+            where title = 'Anunț nou: Anunț cu format R60N' and member_id = pg_temp.u60(2)),
+  E'Ne vedem joi.\n• sala 2/I',
+  'the first Notification of an Announcement carries the words of its body, markers gone');
+
+-- A Member who already holds the notice is told again with the same words:
+-- the approval of an Announcement its audience knew sends no change list.
+do $$
+begin
+  perform private.notify_announcement(pg_temp.ann('Anunț cu format R60N'), null, null);
+end;
+$$;
+select is((select title || ' | ' || body from public.notifications
+            where dedupe_key = 'announcement:' || (pg_temp.ann('Anunț cu format R60N')).id::text
+              and member_id = pg_temp.u60(2)),
+  E'Anunț actualizat: Anunț cu format R60N | Ne vedem joi.\n• sala 2/I',
+  'a Member who already holds the notice is told again with the words, not the Markdown');
+
+-- ==================== 2. the Event copy is cut at whole lines ====================
+-- 30 lines of 70 visible characters (74 stored): with the date line and a
+-- blank line they are 2166 visible characters, so lines go from the end.
+-- kept = the lines between the blank line and the ellipsis; given = the
+-- description's own lines.
+create temp table copy30 as
+select body,
+       (string_to_array(body, E'\n'))[3 : cardinality(string_to_array(body, E'\n')) - 1] as kept,
+       string_to_array(description, E'\n') as given
+  from (select description, private.event_announcement_body(now() + interval '1 day', null, null, description) as body
+          from (select array_to_string(array_fill('**' || repeat('x', 70) || '**', array[30]), E'\n') as description) as d) as c;
+
+select ok(pg_temp.plain_len((select body from copy30)) <= 2000,
+  'an Event description over the limit is copied within 2000 visible characters');
+select ok((select body from copy30) like E'%\n…',
+  'a cut copy ends with an ellipsis on a line of its own');
+select ok(
+  (select kept = given[1 : cardinality(kept)]
+          and cardinality(kept) > 0
+          and (string_to_array(body, E'\n'))[cardinality(string_to_array(body, E'\n'))] = '…'
+          and (select bool_and(line ~ '^\*\*x{70}\*\*$') from unnest(kept) as line)
+     from copy30),
+  'every line before the ellipsis is an input line unchanged, in order, and none ends inside a marker');
+select ok(
+  (select pg_temp.plain_len(left(body, -2) || E'\n' || given[cardinality(kept) + 1] || E'\n…') > 2000
+     from copy30),
+  'the copy keeps as many lines as fit: one more line, ellipsis included, would pass the limit');
+
+-- ==================== 3. the boundary: the ellipsis is inside the limit ====================
+-- date_line + blank line + a line of L characters + "\n…" is exactly 2000
+-- visible characters when L = 1996 - length(date_line). The next line is
+-- dropped, the first one stays.
+select is(pg_temp.evcopy(repeat('a', 1996 - char_length(pg_temp.date_line())) || E'\nbbbb'),
+  pg_temp.date_line() || E'\n\n' || repeat('a', 1996 - char_length(pg_temp.date_line())) || E'\n…',
+  'a copy that fits the limit exactly, ellipsis included, keeps its last whole line');
+-- One character longer and the ellipsis would make 2001: that line goes too,
+-- though the copy without its ellipsis would have been within 2000.
+select is(pg_temp.evcopy(repeat('a', 1997 - char_length(pg_temp.date_line())) || E'\nbbbb'),
+  pg_temp.date_line() || E'\n…',
+  'a line the ellipsis would push over the limit is dropped as well');
+-- A description that is one over-long line has no whole line to keep.
+select is(pg_temp.evcopy(repeat('x', 2000)),
+  pg_temp.date_line() || E'\n…',
+  'a description of one over-long line leaves the date line and the ellipsis');
+
+-- Stored 4000 is a limit of its own: 7 lines of 189 visible characters
+-- (569 stored) are 1366 visible but 4026 stored with the date line.
+select ok(
+  (with cp as (
+     select pg_temp.evcopy(array_to_string(array_fill(repeat('**a** ', 94) || '**a**', array[7]), E'\n')) as body)
+   select char_length(body) <= 4000
+          and pg_temp.plain_len(body) <= 2000
+          and body like E'%\n…'
+          and cardinality(string_to_array(body, E'\n')) = 2 + 6 + 1
+     from cp),
+  'the stored 4000 cuts a copy at a line too: 6 of the 7 lines stay');
+
+-- ==================== 4. a short description is copied whole ====================
+select is(pg_temp.evcopy(E'Aduceți **laptopul**.\n- una'),
+  pg_temp.date_line() || E'\n\n' || E'Aduceți **laptopul**.\n- una',
+  'a description within the limits is copied unchanged after the date line, markers included');
+
+select * from finish();
+rollback;

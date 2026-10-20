@@ -89,10 +89,14 @@ select is(private.event_announcement_body('2030-12-01 10:00+00',null,null,null),
 select is(private.event_announcement_body('2030-09-25 15:40+00','2030-09-26 07:00+00','',''),
   'Miercuri, 25 septembrie 2030, 18:40 – joi, 26 septembrie 2030, 10:00',
   'an Event that ends on another day names the end day');
-select is(char_length(private.event_announcement_body('2030-09-25 15:40+00',null,null,repeat('x',2000))), 2000,
-  'a full-length description is clipped to the 2000 characters an Announcement body allows');
-select ok(private.event_announcement_body('2030-09-25 15:40+00',null,null,repeat('x',2000)) like '%…',
-  'a clipped body ends with an ellipsis');
+-- R60: a copy over the limit is cut at whole lines, never mid-line, and the
+-- ellipsis has a line of its own (suite formatted_text_notifications).
+select is(private.event_announcement_body('2030-09-25 15:40+00',null,null,repeat('x',2000)),
+  E'Miercuri, 25 septembrie 2030, 18:40\n…',
+  'a description that is one line filling the limit has no whole line to keep: the date line and an ellipsis remain');
+select ok(private.event_announcement_body('2030-09-25 15:40+00',null,null,
+    array_to_string(array_fill(repeat('x',49), array[40]), E'\n')) like E'%\n…',
+  'a multi-line description over the limit is cut at a line and ends with an ellipsis on its own line');
 
 -- ==================== 4. create_event without p_announce ====================
 select pg_temp.test_login_leadership(pg_temp.u909(1));
