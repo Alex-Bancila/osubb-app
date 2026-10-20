@@ -148,9 +148,10 @@ Styles live in our stylesheet, never inline. Headings and quotes use the app's t
 
 - **One stripper.** `private.formatted_text_plain(text) returns text`, `immutable`, `set search_path = ''`. It is a regexp chain that gives the same words as the TypeScript `plain` view, and both are tested against the same fixture list.
 - **Limits.**
-  - Each of the three `*_length_ck` constraints becomes `char_length(x) <= 4000`.
-  - A second check per column, `char_length(private.formatted_text_plain(x)) <= 2000`, enforces the visible limit. The commands and `guard_announcement_text` raise the same reason codes as today before the constraint would fire.
-  - Per the conventions, this is one check per rule, with one mutation test each.
+  - Each of the three `*_length_ck` constraints becomes `char_length(x) <= 4000`. It holds only this stored cap.
+  - The visible limit, `char_length(private.formatted_text_plain(x)) <= 2000`, lives in one helper, `private.require_formatted_text_length(field, value)`, which also judges the stored cap, first. The `SECURITY DEFINER` row guard `guard_announcement_text` calls it, and so do the `SECURITY DEFINER` Task and Event commands. They raise the same reason codes as today.
+  - The visible limit is not a constraint because a `CHECK` runs as the writing role, and `private.formatted_text_plain` is revoked from `authenticated`: a constraint that called it would refuse every client write.
+  - Per the conventions, each rule has one mutation test.
 - **Notifications.** `private.notify_announcement` passes `private.formatted_text_plain(new.body)` as the Notification body. Notificări, push and the Email Digest then receive plain words and need no change.
 - **The Event to Announcement copy.** `private.event_announcement_body` keeps the description as Markdown after its date line. It drops whole lines from the end until the visible text is within 2000 characters (and the stored text within 4000), then appends "…" on its own line, so a cut never lands inside a marker. The date line is never dropped.
 - **Reasons and notes.** They stay plain columns, so the notification bodies built from them (cancel, reopen, return, give up, rejections, applications) and the `left()` cuts of a Cerere's description are untouched.
