@@ -110,7 +110,7 @@ export default function PortofoliuInterneScreen() {
       </PageGrid>
       <PageGrid columns={1}>
         {hasCandidates && <CandidatesPanel disabled={busy} onRun={onRun} />}
-        {hasSignals && <SignalsPanel evaluations={evaluations.data} />}
+        {hasSignals && <SignalsPanel />}
         {hasRun && <HistoryPanel evaluations={evaluations.data} />}
         {hasLog && <ChangeLogPanel evaluations={evaluations.data} />}
       </PageGrid>

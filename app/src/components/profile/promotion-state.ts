@@ -1,15 +1,11 @@
-import {
-  formatDay,
-  formatDayMonthYear,
-  parseLocalDate,
-} from '../../lib/format';
+import { formatDay, formatDayOrNull, parseLocalDate } from '../../lib/format';
 import { useAuth } from '../../lib/auth';
 import { useMyProfile } from '../../queries/profile';
 import {
-  tenureState,
+  membershipCutoffState,
   usePromotionProgress,
+  type MembershipCutoffState,
   type PromotionProgress as Progress,
-  type Tenure,
 } from '../../queries/promotion-progress';
 import { useRoles } from '../../queries/reference';
 
@@ -60,8 +56,9 @@ export function usePromotionProgressState(): PromotionState {
 const LADDER_ROLES = new Set(['recrut', 'voluntar', 'activ', 'vot']);
 
 /**
- * `since` is the first day the points count from, formatted ('1 iulie
- * 2026'), and `sinceIso` the same day as the server gave it: the later of
+ * `since` is the first day the points count from, written dd.mm.yyyy as the
+ * settings are everywhere else ('01.07.2026'), and `sinceIso` the same day as
+ * the server gave it: the later of
  * the day AFTER the last Role Evaluation's range, never the evaluation's own
  * date (F-6, #893), and the Points Start Date (ruling 17, R58). Which of the
  * two opened the window decides what the panel may say it is "after", so the
@@ -73,13 +70,13 @@ const LADDER_ROLES = new Set(['recrut', 'voluntar', 'activ', 'vot']);
  * today), so nothing counts yet; the panel says when the count starts
  * rather than showing 0 as a result.
  *
- * `tenure` (R58): the one line a Voluntar reads in place of the bar, about the
- * Membership Cutoff Date. `text` says it; `tenure` is the state it was made
- * from (the cutoff, the Member's join date, whether they joined by it), so the
+ * `cutoff` (R58): the one line a Voluntar reads in place of the bar, about the
+ * Membership Cutoff Date. `text` says it; `state` is what it was made from
+ * (the cutoff, the Member's join date, whether they joined by it), so the
  * panel can word it differently without asking again.
  */
 export type View =
-  | { kind: 'tenure'; text: string; tenure: Tenure }
+  | { kind: 'cutoff'; text: string; state: MembershipCutoffState }
   | {
       kind: 'bar';
       points: number;
@@ -103,7 +100,7 @@ export type View =
  * joined by it, or the day they must have joined by to be listed. The days are
  * written dd.mm.yyyy, as the settings are everywhere else.
  */
-function tenureText({ cutoff, met }: Tenure): string {
+function cutoffText({ cutoff, met }: MembershipCutoffState): string {
   const day = formatDay(cutoff);
   return met
     ? `Ai intrat în OSUBB până la ${day}: poți deveni candidat la Voluntar Activ.`
@@ -118,7 +115,7 @@ function viewFor(
   const { threshold, points, since } = progress;
   // The bar needs a target; without one it is hidden, never faked.
   const measurable = threshold !== null;
-  const sinceDate = since ? (formatDayMonthYear(since) ?? since) : null;
+  const sinceDate = since ? (formatDayOrNull(since) ?? since) : null;
   const sinceDay = parseLocalDate(since);
   const startsLater = sinceDay !== null && sinceDay > startOfToday();
 
@@ -130,8 +127,8 @@ function viewFor(
     // Without a Membership Cutoff Date nobody is listed, and the panel makes
     // no promise either (as it made none for a disabled rule).
     if (progress.membershipCutoff === null) return null;
-    const tenure = tenureState(joinedAt, progress.membershipCutoff);
-    if (tenure.met && measurable) {
+    const state = membershipCutoffState(joinedAt, progress.membershipCutoff);
+    if (state.met && measurable) {
       return {
         kind: 'bar',
         points,
@@ -141,10 +138,10 @@ function viewFor(
         startsLater,
       };
     }
-    return { kind: 'tenure', text: tenureText(tenure), tenure };
+    return { kind: 'cutoff', text: cutoffText(state), state };
   }
 
-  // Voluntar Activ and Voluntar cu Drept de Vot: no tenure line to fall back on.
+  // Voluntar Activ and Voluntar cu Drept de Vot: no cutoff line to fall back on.
   return measurable
     ? {
         kind: 'reference',

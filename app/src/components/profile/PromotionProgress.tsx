@@ -82,7 +82,7 @@ export function PromotionPanel({
   // correct and the layout does not jump once the settings arrive.
   const figureIsTotal =
     view !== null &&
-    view.kind !== 'tenure' &&
+    view.kind !== 'cutoff' &&
     !view.since &&
     startDate === null;
   const showTotal = totalPoints !== undefined && !figureIsTotal;
@@ -157,11 +157,11 @@ function PromotionBody({
     );
   }
   const { view } = state;
-  if (view.kind !== 'tenure' && view.startsLater && view.since) {
+  if (view.kind !== 'cutoff' && view.startsLater && view.since) {
     return <CountStartsLater since={view.since} threshold={view.threshold} />;
   }
   switch (view.kind) {
-    case 'tenure':
+    case 'cutoff':
       return (
         <p className="m-0 text-sm font-medium text-foreground">{view.text}</p>
       );
@@ -204,10 +204,10 @@ function openedByRun(
 }
 
 /**
- * "din 1 iulie 2026 (după ultima evaluare)" — the figure's period. `since` is
+ * "din 01.07.2026 (după ultima evaluare)" — the figure's period. `since` is
  * the day after the last range, so it is named as the day the count starts,
  * never as the evaluation's date (F-6, #893). When the Points Start Date
- * opened the window instead, the day stands alone: "din 1 octombrie 2026".
+ * opened the window instead, the day stands alone: "din 01.10.2026".
  */
 function sinceText(since: string, afterRun: boolean): string {
   return afterRun ? `din ${since} (după ultima evaluare)` : `din ${since}`;
