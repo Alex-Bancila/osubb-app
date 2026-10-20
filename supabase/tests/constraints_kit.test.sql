@@ -205,12 +205,12 @@ select is(pg_temp.as_not_valid(k.tbl, k.conname), false, format('%s is back to N
 
 select throws_ok($$ update public.tasks set title = 'ab' where id = (select min(id) from public.tasks) $$,
   '23514', pg_temp.violation('tasks', 'tasks_title_length_ck'), 'NOT VALID tasks_title_length_ck refuses a two-character title');
-select throws_ok($$ update public.tasks set description = repeat('d', 2001) where id = (select min(id) from public.tasks) $$,
-  '23514', pg_temp.violation('tasks', 'tasks_description_length_ck'), 'NOT VALID tasks_description_length_ck refuses 2001 characters');
+select throws_ok($$ update public.tasks set description = repeat('d', 4001) where id = (select min(id) from public.tasks) $$,
+  '23514', pg_temp.violation('tasks', 'tasks_description_length_ck'), 'NOT VALID tasks_description_length_ck refuses 4001 stored characters (R60: the visible limit is the commands'' to judge)');
 select throws_ok($$ update public.events set title = 'ab' where id = (select min(id) from public.events) $$,
   '23514', pg_temp.violation('events', 'events_title_length_ck'), 'NOT VALID events_title_length_ck refuses a two-character title');
-select throws_ok($$ update public.events set description = repeat('d', 2001) where id = (select min(id) from public.events) $$,
-  '23514', pg_temp.violation('events', 'events_description_length_ck'), 'NOT VALID events_description_length_ck refuses 2001 characters');
+select throws_ok($$ update public.events set description = repeat('d', 4001) where id = (select min(id) from public.events) $$,
+  '23514', pg_temp.violation('events', 'events_description_length_ck'), 'NOT VALID events_description_length_ck refuses 4001 stored characters (R60: the visible limit is the commands'' to judge)');
 select throws_ok($$ update public.events set capacity = 1001 where id = (select min(id) from public.events) $$,
   '23514', pg_temp.violation('events', 'events_capacity_range_ck'), 'NOT VALID events_capacity_range_ck refuses a capacity of 1001');
 select throws_ok($$ update public.campaigns set name = 'ab' where id = (select min(id) from public.campaigns) $$,
@@ -219,8 +219,8 @@ select throws_ok($$ update public.groups set name = 'ab' where id = (select min(
   '23514', pg_temp.violation('groups', 'groups_name_length_ck'), 'NOT VALID groups_name_length_ck refuses a two-character name');
 select throws_ok($$ update public.announcements set title = 'ab' where id = (select min(id) from public.announcements) $$,
   '23514', pg_temp.violation('announcements', 'announcements_title_length_ck'), 'NOT VALID announcements_title_length_ck refuses a two-character title');
-select throws_ok($$ update public.announcements set body = repeat('b', 2001) where id = (select min(id) from public.announcements) $$,
-  '23514', pg_temp.violation('announcements', 'announcements_body_length_ck'), 'NOT VALID announcements_body_length_ck refuses 2001 characters');
+select throws_ok($$ update public.announcements set body = repeat('b', 4001) where id = (select min(id) from public.announcements) $$,
+  '23514', pg_temp.violation('announcements', 'announcements_body_length_ck'), 'NOT VALID announcements_body_length_ck refuses 4001 stored characters (R60: the visible limit is the row guard''s to judge)');
 select throws_ok($$ update public.announcements set form_label = 'Formular', form_url = 'ftp://osubb.ro'
                     where id = (select min(id) from public.announcements) $$,
   '23514', pg_temp.violation('announcements', 'announcements_form_link_ck'), 'NOT VALID announcements_form_link_ck refuses a non-http(s) address');
