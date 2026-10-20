@@ -21,30 +21,30 @@ describe('pointsPeriodText', () => {
   it('begins at the Points Start Date when the filter has no De la', () => {
     expect(pointsPeriodText({}, '2026-09-01')).toBe('din 01.09.2026');
     expect(pointsPeriodText({ to: '2026-09-30' }, '2026-09-01')).toBe(
-      'din 01.09.2026 până la 30 septembrie 2026',
+      'din 01.09.2026 până la 30.09.2026',
     );
   });
 
   it('reads an explicit De la as the range it is, before the start or not', () => {
     expect(pointsPeriodText({ from: '2026-08-01' }, '2026-09-01')).toBe(
-      'din 1 august 2026',
+      'din 01.08.2026',
     );
     expect(
       pointsPeriodText({ from: '2026-08-01', to: '2026-09-30' }, '2026-09-01'),
-    ).toBe('între 1 august 2026 și 30 septembrie 2026');
+    ).toBe('între 01.08.2026 și 30.09.2026');
   });
 
   it('is null for the whole record: no date set, nothing chosen', () => {
     expect(pointsPeriodText({}, null)).toBeNull();
     expect(pointsPeriodText({ to: '2026-09-30' }, null)).toBe(
-      'până la 30 septembrie 2026',
+      'până la 30.09.2026',
     );
   });
 
   it('is undefined while the date is unknown, unless a De la or a Până la is chosen', () => {
     expect(pointsPeriodText({}, undefined)).toBeUndefined();
     expect(pointsPeriodText({ from: '2026-08-01' }, undefined)).toBe(
-      'din 1 august 2026',
+      'din 01.08.2026',
     );
   });
 
@@ -52,10 +52,10 @@ describe('pointsPeriodText', () => {
   // stays in the caption while the Points Start Date loads (R58, Task 7).
   it('keeps a chosen Până la while the date is unknown', () => {
     expect(pointsPeriodText({ to: '2026-09-30' }, undefined)).toBe(
-      'până la 30 septembrie 2026',
+      'până la 30.09.2026',
     );
     expect(
       pointsPeriodText({ from: '2026-08-01', to: '2026-09-30' }, undefined),
-    ).toBe('între 1 august 2026 și 30 septembrie 2026');
+    ).toBe('între 01.08.2026 și 30.09.2026');
   });
 });

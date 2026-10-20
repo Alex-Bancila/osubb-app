@@ -46,7 +46,7 @@ vi.mock('../lib/auth', () => ({
 import {
   fetchPromotionProgress,
   roleEvaluationKindFor,
-  tenureState,
+  membershipCutoffState,
   usePromotionProgress,
 } from './promotion-progress';
 
@@ -72,19 +72,19 @@ describe('roleEvaluationKindFor (#828, R28)', () => {
   });
 });
 
-describe('tenureState (R58)', () => {
+describe('membershipCutoffState (R58)', () => {
   it('is met when the Member joined on or before the cutoff', () => {
-    expect(tenureState('2026-02-15', '2026-03-01')).toEqual({
+    expect(membershipCutoffState('2026-02-15', '2026-03-01')).toEqual({
       cutoff: '2026-03-01',
       joinedAt: '2026-02-15',
       met: true,
     });
     // The cutoff day itself counts, as the server's `joined_at <= cutoff`.
-    expect(tenureState('2026-03-01', '2026-03-01').met).toBe(true);
+    expect(membershipCutoffState('2026-03-01', '2026-03-01').met).toBe(true);
   });
 
   it('is unmet when the Member joined after the cutoff', () => {
-    expect(tenureState('2026-03-02', '2026-03-01')).toEqual({
+    expect(membershipCutoffState('2026-03-02', '2026-03-01')).toEqual({
       cutoff: '2026-03-01',
       joinedAt: '2026-03-02',
       met: false,
@@ -92,7 +92,7 @@ describe('tenureState (R58)', () => {
   });
 
   it('is unmet while no cutoff is set: nobody is listed meanwhile', () => {
-    expect(tenureState('2020-01-01', null)).toEqual({
+    expect(membershipCutoffState('2020-01-01', null)).toEqual({
       cutoff: null,
       joinedAt: '2020-01-01',
       met: false,
@@ -100,7 +100,7 @@ describe('tenureState (R58)', () => {
   });
 
   it('is unmet for a Member with no join date', () => {
-    expect(tenureState(null, '2026-03-01')).toEqual({
+    expect(membershipCutoffState(null, '2026-03-01')).toEqual({
       cutoff: '2026-03-01',
       joinedAt: null,
       met: false,

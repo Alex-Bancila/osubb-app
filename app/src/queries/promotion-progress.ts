@@ -10,7 +10,7 @@ import { keys } from './keys';
  *
  * Everything here is read, never computed: the Membership Cutoff Date a
  * Voluntar must have joined by to be listed (R58, in place of the months of
- * tenure the Promotion Rules demanded) and, from
+ * membership the Promotion Rules demanded) and, from
  * `my_role_evaluation_standing(kind)` (#826), the caller's own Task Points in
  * the current window and that kind's Promotion Threshold in force. There is no
  * open Evaluation Period any more (R28): a Role Evaluation is a run BC
@@ -55,16 +55,16 @@ export type PromotionProgress = {
  * no cutoff nobody is listed, and a Member without a join date cannot be
  * shown to have joined by any day. Two ISO days compare correctly as strings.
  */
-export type Tenure = {
+export type MembershipCutoffState = {
   cutoff: string | null;
   joinedAt: string | null;
   met: boolean;
 };
 
-export function tenureState(
+export function membershipCutoffState(
   joinedAt: string | null,
   cutoff: string | null,
-): Tenure {
+): MembershipCutoffState {
   return {
     cutoff,
     joinedAt,

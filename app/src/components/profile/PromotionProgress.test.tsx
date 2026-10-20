@@ -50,7 +50,7 @@ vi.mock('../../queries/evaluation-settings', () => ({
   usePointsStartDate: () => state.startDate,
 }));
 
-// The read is the hook's to fake; `tenureState` is the real rule (R58).
+// The read is the hook's to fake; `membershipCutoffState` is the real rule (R58).
 vi.mock('../../queries/promotion-progress', async (importActual) => ({
   ...(await importActual<typeof import('../../queries/promotion-progress')>()),
   usePromotionProgress: ({
@@ -124,7 +124,7 @@ describe('PromotionProgress (#634)', () => {
   // R58: nothing promotes a Recrut by the calendar any more; BC does it by
   // hand in Roluri, so Profil promises no date and no line.
   describe('Recrut', () => {
-    it('promises nothing: no tenure line, no date, no bar', () => {
+    it('promises nothing: no cutoff line, no date, no bar', () => {
       const { container } = setup('recrut');
 
       expect(container).toBeEmptyDOMElement();
@@ -210,7 +210,7 @@ describe('PromotionProgress (#634)', () => {
       expect(bar).toHaveAttribute('aria-valuenow', '12');
       expect(bar).toHaveAttribute('aria-valuetext', '12 din 30 de puncte');
       expect(
-        screen.getByText('din 1 iulie 2026 (după ultima evaluare)'),
+        screen.getByText('din 01.07.2026 (după ultima evaluare)'),
       ).toBeInTheDocument();
       expect(
         screen.getByText('Mai ai 18 puncte până la pragul Voluntar Activ'),
@@ -230,7 +230,7 @@ describe('PromotionProgress (#634)', () => {
       });
 
       expect(screen.getByTestId('count-starts')).toHaveTextContent(
-        'Punctele pentru următoarea evaluare se numără din 30 septembrie 2026.',
+        'Punctele pentru următoarea evaluare se numără din 30.09.2026.',
       );
       expect(
         screen.getByText('Pragul în vigoare: 30 de puncte'),
@@ -249,7 +249,7 @@ describe('PromotionProgress (#634)', () => {
 
       expect(screen.getByRole('progressbar')).toBeInTheDocument();
       expect(
-        screen.getByText('din 30 septembrie 2026 (după ultima evaluare)'),
+        screen.getByText('din 30.09.2026 (după ultima evaluare)'),
       ).toBeInTheDocument();
     });
 
@@ -321,7 +321,7 @@ describe('PromotionProgress (#634)', () => {
       ).toBeInTheDocument();
     });
 
-    it('no threshold in force: the tenure line only, nothing about the threshold', () => {
+    it('no threshold in force: the cutoff line only, nothing about the threshold', () => {
       setup('voluntar', progress({ threshold: null }));
 
       expect(
@@ -354,7 +354,7 @@ describe('PromotionProgress (#634)', () => {
 
       expect(screen.getByText('12')).toBeInTheDocument();
       expect(
-        screen.getByText('puncte din 1 iulie 2026 (după ultima evaluare)'),
+        screen.getByText('puncte din 01.07.2026 (după ultima evaluare)'),
       ).toBeInTheDocument();
       expect(
         screen.getByText('Pragul în vigoare: 30 de puncte'),
@@ -372,7 +372,7 @@ describe('PromotionProgress (#634)', () => {
       });
 
       expect(screen.getByTestId('count-starts')).toHaveTextContent(
-        'Punctele pentru următoarea evaluare se numără din 30 septembrie 2026.',
+        'Punctele pentru următoarea evaluare se numără din 30.09.2026.',
       );
       expect(
         screen.getByText('Pragul în vigoare: 30 de puncte'),
@@ -462,7 +462,7 @@ describe('PromotionPanel with the total', () => {
             kind: 'bar',
             points: 5,
             threshold: 30,
-            since: '1 iulie 2026',
+            since: '01.07.2026',
             sinceIso: '2026-07-01',
           },
         }}
@@ -472,7 +472,7 @@ describe('PromotionPanel with the total', () => {
 
     expect(screen.getByTestId('points-total')).toHaveTextContent('20de puncte');
     expect(
-      screen.getByText('din 1 iulie 2026 (după ultima evaluare)'),
+      screen.getByText('din 01.07.2026 (după ultima evaluare)'),
     ).toBeInTheDocument();
     expect(screen.queryByText(/în total/)).not.toBeInTheDocument();
   });
@@ -499,15 +499,15 @@ describe('PromotionPanel with the total', () => {
     expect(screen.queryByText(/în total/)).not.toBeInTheDocument();
   });
 
-  it('a tenure line still shows the total above it', () => {
+  it('a cutoff line still shows the total above it', () => {
     render(
       <PromotionPanel
         state={{
           kind: 'view',
           view: {
-            kind: 'tenure',
+            kind: 'cutoff',
             text: 'Pentru a deveni candidat la Voluntar Activ trebuie să fi intrat în OSUBB până la 31.03.2026.',
-            tenure: {
+            state: {
               cutoff: '2026-03-31',
               joinedAt: '2026-04-02',
               met: false,
@@ -538,7 +538,7 @@ describe('the Points Start Date beside the total', () => {
       kind: 'bar',
       points: 5,
       threshold: 30,
-      since: '1 iulie 2026',
+      since: '01.07.2026',
       sinceIso: '2026-07-01',
     },
   } as const;
@@ -705,7 +705,7 @@ describe('the label of the figure’s window (ruling 17)', () => {
     state.startDate = '2026-10-01';
     setup('voluntar', progress({ since: '2026-10-01', points: 5 }), today);
 
-    expect(screen.getByText('din 1 octombrie 2026')).toBeInTheDocument();
+    expect(screen.getByText('din 01.10.2026')).toBeInTheDocument();
     expect(screen.queryByText(/după ultima evaluare/)).not.toBeInTheDocument();
   });
 
@@ -714,7 +714,7 @@ describe('the label of the figure’s window (ruling 17)', () => {
     setup('voluntar', progress({ since: '2026-10-05', points: 5 }), today);
 
     expect(
-      screen.getByText('din 5 octombrie 2026 (după ultima evaluare)'),
+      screen.getByText('din 05.10.2026 (după ultima evaluare)'),
     ).toBeInTheDocument();
   });
 
@@ -723,7 +723,7 @@ describe('the label of the figure’s window (ruling 17)', () => {
     setup('voluntar', progress({ since: '2026-07-01' }), today);
 
     expect(
-      screen.getByText('din 1 iulie 2026 (după ultima evaluare)'),
+      screen.getByText('din 01.07.2026 (după ultima evaluare)'),
     ).toBeInTheDocument();
   });
 
@@ -731,7 +731,7 @@ describe('the label of the figure’s window (ruling 17)', () => {
     state.startDate = undefined;
     setup('voluntar', progress({ since: '2026-07-01' }), today);
 
-    expect(screen.getByText('din 1 iulie 2026')).toBeInTheDocument();
+    expect(screen.getByText('din 01.07.2026')).toBeInTheDocument();
     expect(screen.queryByText(/după ultima evaluare/)).not.toBeInTheDocument();
   });
 
@@ -740,9 +740,7 @@ describe('the label of the figure’s window (ruling 17)', () => {
     (role) => {
       state.startDate = '2026-10-01';
       setup(role, progress({ since: '2026-10-01', points: 5 }), today);
-      expect(
-        screen.getByText('puncte din 1 octombrie 2026'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('puncte din 01.10.2026')).toBeInTheDocument();
       expect(
         screen.queryByText(/după ultima evaluare/),
       ).not.toBeInTheDocument();
@@ -750,7 +748,7 @@ describe('the label of the figure’s window (ruling 17)', () => {
 
       setup(role, progress({ since: '2026-10-05', points: 5 }), today);
       expect(
-        screen.getByText('puncte din 5 octombrie 2026 (după ultima evaluare)'),
+        screen.getByText('puncte din 05.10.2026 (după ultima evaluare)'),
       ).toBeInTheDocument();
     },
   );
@@ -783,7 +781,7 @@ describe('the label of the figure’s window (ruling 17)', () => {
               kind: 'reference',
               points: 12,
               threshold: 30,
-              since: sinceIso ? '1 octombrie 2026' : null,
+              since: sinceIso ? '01.10.2026' : null,
               sinceIso,
               startsLater: false,
             },

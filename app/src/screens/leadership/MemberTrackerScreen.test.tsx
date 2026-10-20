@@ -591,7 +591,7 @@ it('re-reads the total with every Work Filter level, as Clasament does (#906)', 
     p_to: '2026-09-30T21:00:00.000Z',
   });
   expect(total()).toHaveTextContent(
-    'din filtrele alese · acordate între 1 septembrie 2026 și 30 septembrie 2026',
+    'din filtrele alese · acordate între 01.09.2026 și 30.09.2026',
   );
   // Narrowed: the sentence is on the page, for everyone.
   expect(scope()).not.toHaveClass('sr-only');
@@ -605,7 +605,7 @@ it('says the range alone when only a period is chosen, and a negative total keep
   state.total.mockReturnValue({ data: -2, isPending: false, isError: false });
   view(uid, '?de_la=2026-09-01');
   expect(total()).toHaveTextContent('−2 pctpuncte');
-  expect(total()).toHaveTextContent('acordate din 1 septembrie 2026');
+  expect(total()).toHaveTextContent('acordate din 01.09.2026');
   expect(total()).not.toHaveTextContent('filtrele alese');
 });
 it('says the total counts from the Points Start Date when nothing narrows it (R58)', () => {
@@ -639,7 +639,7 @@ it('keeps a chosen Până la in the caption while the Points Start Date loads (R
   state.pointsStart = undefined;
   view(uid, '?pana_la=2026-09-30');
   expect(total()).toHaveTextContent(
-    /^12 pctpuncte acordate până la 30 septembrie 2026$/,
+    /^12 pctpuncte acordate până la 30.09.2026$/,
   );
   expect(scope()).not.toHaveClass('sr-only');
 });
@@ -647,13 +647,13 @@ it('joins the start to the filters chosen, and to a range that has only an end (
   state.pointsStart = '2026-09-01';
   view(uid, '?grup=7&pana_la=2026-09-30');
   expect(total()).toHaveTextContent(
-    'din filtrele alese · acordate din 01.09.2026 până la 30 septembrie 2026',
+    'din filtrele alese · acordate din 01.09.2026 până la 30.09.2026',
   );
 });
 it('reads an explicit De la earlier than the start as the range it is, the lookback (R58)', () => {
   state.pointsStart = '2026-09-01';
   view(uid, '?de_la=2026-08-01');
-  expect(total()).toHaveTextContent('acordate din 1 august 2026');
+  expect(total()).toHaveTextContent('acordate din 01.08.2026');
   expect(total()).not.toHaveTextContent('01.09.2026');
 });
 it('shows 0 points as a figure, a loading line, and a retriable error for the total (#906)', async () => {
