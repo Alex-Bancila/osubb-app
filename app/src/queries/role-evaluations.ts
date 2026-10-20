@@ -333,7 +333,9 @@ export function useRoleEvaluationRanking(runId: number | null) {
  * (`below_floor`), or a voter whose Universitate is known and is not UBB
  * (`not_ubb_student`, live, with no run). `kind` is the Role Evaluation kind
  * it belongs to, `roleAtListing` the Role the Member held when it was raised.
- * The points and the line are null for a Universitate Signal.
+ * `thresholdUsed` is the figure the Member fell under: the line for
+ * `below_line`, the run's Eligibility Floor for `below_floor`. The points and
+ * the figure are null for a Universitate Signal.
  */
 export type RetentionSignal = {
   id: number;
