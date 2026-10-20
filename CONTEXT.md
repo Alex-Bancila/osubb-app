@@ -365,7 +365,7 @@ The date range, from one day to another, that BC chooses for one Role Evaluation
 _Avoid_: Season, scoring window, semester when the ranking window is meant, open Period
 
 **Simulation** (Simulare):
-A Role Evaluation computed with chosen values and shown on Portofoliu Interne without being recorded: no history row, no Promotion Candidate, no Retention Signal, no Notification, no change to any setting. BC may simulate as often as it likes before finalising; a Simulation uses the Eligibility Floor and, for the Voluntar Activ kind, the Membership Cutoff Date in force, and finalising records the run with exactly the values the Simulation showed. If the Floor, or that cutoff, changes after a Simulation, it can no longer be finalised: BC simulates again.
+A Role Evaluation computed with chosen values and shown on Portofoliu Interne without being recorded: no history row, no Promotion Candidate, no Retention Signal, no Notification, no change to any setting. BC may simulate as often as it likes before finalising; a Simulation uses the Eligibility Floor and, for the Voluntar Activ kind, the Membership Cutoff Date in force, and finalising records the run with exactly the values the Simulation showed. If Setări changes after a Simulation (the Floor, that cutoff, or the kind's share in force), the page no longer lets it be finalised and asks BC to simulate again; a share typed in the form that differs from Setări is BC's choice and does not count. The server records the values a run carries and writes back only the share.
 _Avoid_: Dry run, draft evaluation, preview run
 
 **Eligibility Floor** (Prag minim):

@@ -41,7 +41,7 @@ vi.setConfig({ testTimeout: 20_000 });
 function Host() {
   const [kind, setKind] = useState<RoleEvaluationKind>('voluntar_activ');
   // The page keeps each kind's draft, so the panel can be left and come back.
-  const draftOf = useRunDrafts();
+  const { draftOf } = useRunDrafts();
   const evaluations = useRoleEvaluations();
   const command = useRoleEvaluationCommand();
   if (!evaluations.data) return null;
@@ -97,10 +97,10 @@ const runCall = () =>
 
 const SETTINGS_LINK = '/administrare/portofoliu-interne?vedere=setari';
 const CHANGED_AFTER_SIMULATION =
-  'Pragul minim sau data limită de intrare s-au schimbat după simulare. Simulează din nou.';
-// The Adunarea Generală has no cutoff: only the Floor can stale its Simulation.
-const FLOOR_CHANGED_AFTER_SIMULATION =
-  'Pragul minim s-a schimbat după simulare. Simulează din nou.';
+  'Setările s-au schimbat după simulare (pragul minim, data limită de intrare sau procentul). Simulează din nou.';
+// The Adunarea Generală has no cutoff: its note does not name one.
+const AG_CHANGED_AFTER_SIMULATION =
+  'Setările s-au schimbat după simulare (pragul minim sau procentul). Simulează din nou.';
 
 /** Another BC member changes a setting while the page is up. */
 async function settingsChanged(view: ReturnType<typeof show>) {
@@ -604,41 +604,37 @@ it('places the refusal of a finalised run under the name', async () => {
   ).toBeNull();
 });
 
-it('finalises the simulated values even if a share changes meanwhile', async () => {
+it('finalises a Procent typed in the form that differs from Setări: only a change in Setări since the Simulation stales it', async () => {
   db.runs = [RUN_VA];
   db.simulation = rankedRows();
   const user = userEvent.setup();
-  const view = show(<Host />);
+  show(<Host />);
   const run = await ready();
+  const percent = within(run).getByLabelText('Procent');
+  expect(percent).toHaveValue(35);
+  await user.clear(percent);
+  await user.type(percent, '40');
   await user.click(within(run).getByRole('button', { name: 'Simulează' }));
   await within(run).findByRole('button', { name: 'Finalizează' });
-  const simulatedWith = simulatedCall()?.[1] as object;
-  expect(simulatedWith).toMatchObject({
-    p_floor: 10,
-    p_percent: 35,
-    p_cutoff: '2026-03-31',
-  });
 
-  // Another BC member changes the share while the result is up.
-  db.settings.activ_percent = 40;
-  await settingsChanged(view);
-
-  // The card still reads what was simulated, and so does the confirmation.
-  // Only the Prag minim and the Data limită de intrare make it stale.
-  expect(run).toHaveTextContent('Prag minim 10 puncte · Procent 35 %');
-  expect(run).toHaveTextContent('Data limită de intrare 31.03.2026');
+  // The form's 40 is the member's choice, not a change of Setări (35).
+  expect(run).toHaveTextContent('Procent 40 %');
   expect(run).not.toHaveTextContent(CHANGED_AFTER_SIMULATION);
+  expect(
+    within(run).getByRole('button', { name: 'Finalizează' }),
+  ).toBeEnabled();
   await user.type(within(run).getByLabelText('Nume'), 'Toamna 2026');
   await user.click(within(run).getByRole('button', { name: 'Finalizează' }));
-  const dialog = await screen.findByRole('dialog');
-  expect(dialog).toHaveTextContent('care au cel puțin 10 puncte');
-  expect(dialog).toHaveTextContent('primii 35 %');
-  expect(dialog).toHaveTextContent('Voluntarii intrați până la 31.03.2026');
-  await user.click(within(dialog).getByRole('button', { name: 'Finalizează' }));
+  await user.click(
+    within(await screen.findByRole('dialog')).getByRole('button', {
+      name: 'Finalizează',
+    }),
+  );
   await waitFor(() => expect(runCall()).toBeDefined());
-
-  // The Simulation's arguments and the name; none of the new share.
-  expect(runCall()?.[1]).toEqual({ ...simulatedWith, p_name: 'Toamna 2026' });
+  expect(runCall()?.[1]).toMatchObject({
+    p_percent: 40,
+    p_name: 'Toamna 2026',
+  });
 });
 
 it.each([
@@ -647,6 +643,7 @@ it.each([
     'the Data limită de intrare',
     () => (db.settings.membership_cutoff = '2026-05-01'),
   ],
+  ['the Procent in Setări', () => (db.settings.activ_percent = 40)],
 ])(
   'will not finalise a Simulation once %s in force has changed, and says so',
   async (_name, change) => {
@@ -688,6 +685,7 @@ it.each([
     expect(lastSimulatedCall()?.[1]).toMatchObject({
       p_floor: db.settings.eligibility_floor,
       p_cutoff: db.settings.membership_cutoff,
+      p_percent: db.settings.activ_percent,
     });
     expect(lastSimulatedCall()?.[1]).not.toEqual(simulatedCall()?.[1]);
     expect(within(run).queryByText(CHANGED_AFTER_SIMULATION)).toBeNull();
@@ -715,9 +713,11 @@ it('closes an open confirmation when the Prag minim changes under it, and writes
   expect(runCall()).toBeUndefined();
 });
 
-it('stales an Adunarea Generală Simulation by the Prag minim only, never by the cutoff it does not use', async () => {
+/** An Adunarea Generală Simulation shown, over the page's form. */
+async function simulateAdunareaGenerala(
+  user: ReturnType<typeof userEvent.setup>,
+) {
   db.simulation = rankedRows();
-  const user = userEvent.setup();
   const view = show(<Host />);
   const run = await ready();
   await user.click(
@@ -726,25 +726,41 @@ it('stales an Adunarea Generală Simulation by the Prag minim only, never by the
   await pickDate(user, within(run).getByLabelText('De la'), '2026-07-01');
   await user.click(within(run).getByRole('button', { name: 'Simulează' }));
   await within(run).findByRole('button', { name: 'Finalizează' });
+  return { view, run };
+}
 
-  // The cutoff is Voluntar Activ's: this kind does not care.
+it.each([
+  ['the Prag minim', () => (db.settings.eligibility_floor = 15)],
+  ['its own Procent in Setări', () => (db.settings.vot_percent = 30)],
+])(
+  'stales an Adunarea Generală Simulation by %s, and the note does not name a cutoff',
+  async (_name, change) => {
+    const user = userEvent.setup();
+    const { view, run } = await simulateAdunareaGenerala(user);
+
+    change();
+    await settingsChanged(view);
+    expect(
+      await within(run).findByText(AG_CHANGED_AFTER_SIMULATION),
+    ).toBeVisible();
+    expect(run).not.toHaveTextContent('data limită de intrare s-au');
+    expect(
+      within(run).getByRole('button', { name: 'Finalizează' }),
+    ).toBeDisabled();
+  },
+);
+
+it('does not stale an Adunarea Generală Simulation by what that kind does not use: the cutoff, Voluntar Activ’s Procent', async () => {
+  const user = userEvent.setup();
+  const { view, run } = await simulateAdunareaGenerala(user);
+
   db.settings.membership_cutoff = '2026-05-01';
+  db.settings.activ_percent = 40;
   await settingsChanged(view);
-  expect(run).not.toHaveTextContent(CHANGED_AFTER_SIMULATION);
+  expect(run).not.toHaveTextContent('Setările s-au schimbat');
   expect(
     within(run).getByRole('button', { name: 'Finalizează' }),
   ).toBeEnabled();
-
-  // The Prag minim is shared, and the message names it alone.
-  db.settings.eligibility_floor = 15;
-  await settingsChanged(view);
-  expect(
-    await within(run).findByText(FLOOR_CHANGED_AFTER_SIMULATION),
-  ).toBeVisible();
-  expect(run).not.toHaveTextContent('data limită de intrare s-au schimbat');
-  expect(
-    within(run).getByRole('button', { name: 'Finalizează' }),
-  ).toBeDisabled();
 });
 
 it('records no line when the Simulation ranked nobody, and the confirmation says so', async () => {

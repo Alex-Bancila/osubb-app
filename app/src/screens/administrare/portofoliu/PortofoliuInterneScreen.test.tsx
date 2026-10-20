@@ -567,7 +567,7 @@ it('keeps a shown Simulation across a visit to Setări, and stops it if the Prag
   await user.click(section('Voluntar Activ'));
   expect(
     await screen.findByText(
-      'Pragul minim sau data limită de intrare s-au schimbat după simulare. Simulează din nou.',
+      'Setările s-au schimbat după simulare (pragul minim, data limită de intrare sau procentul). Simulează din nou.',
     ),
   ).toBeVisible();
   const stale = screen.getByRole('button', { name: 'Finalizează' });
@@ -586,6 +586,53 @@ it('keeps a shown Simulation across a visit to Setări, and stops it if the Prag
       .filter(([name]) => name === 'simulate_role_evaluation')
       .at(-1)?.[1],
   ).toMatchObject({ p_floor: 15 });
+});
+
+it('keeps an Adunarea Generală Simulation across Setări, and stops it if that kind’s Procent changed there', async () => {
+  db.simulation = rankedRows();
+  const user = userEvent.setup();
+  const view = page('?vedere=adunarea-generala');
+  await settledRun();
+  await pickDate(user, screen.getByLabelText('De la'), '2026-07-01');
+  await user.click(screen.getByRole('button', { name: 'Simulează' }));
+  await screen.findByText('Simulare, nimic nu a fost salvat.');
+
+  await user.click(section('Setări'));
+  await settledSettings();
+  db.settings.vot_percent = 30;
+  await act(async () => {
+    await view.client.invalidateQueries({ queryKey: keys.evaluation.all });
+  });
+  await user.click(section('Adunarea Generală'));
+  expect(
+    await screen.findByText(
+      'Setările s-au schimbat după simulare (pragul minim sau procentul). Simulează din nou.',
+    ),
+  ).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Finalizează' })).toBeDisabled();
+});
+
+it('disables the switch while a Simulation is running', async () => {
+  db.runs = [RUN_VA];
+  db.simulation = rankedRows();
+  let release!: () => void;
+  db.hold.set(
+    'simulate_role_evaluation',
+    new Promise<void>((resolve) => {
+      release = resolve;
+    }),
+  );
+  const user = userEvent.setup();
+  page();
+  await settledRun();
+  await user.click(screen.getByRole('button', { name: 'Simulează' }));
+  await waitFor(() =>
+    expect(section('Setări')).toHaveAttribute('aria-disabled', 'true'),
+  );
+  expect(section('Adunarea Generală')).toHaveAttribute('aria-disabled', 'true');
+  await act(async () => release());
+  await screen.findByText('Simulare, nimic nu a fost salvat.');
+  expect(section('Setări')).not.toHaveAttribute('aria-disabled');
 });
 
 it('disables the switch while a command is pending', async () => {

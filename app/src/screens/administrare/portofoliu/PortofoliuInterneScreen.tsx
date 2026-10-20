@@ -66,7 +66,7 @@ export default function PortofoliuInterneScreen() {
   const [view, chooseView] = usePortofoliuView();
   // Each kind's run form is kept here, so a visit to Setări (the gate's link
   // included) finds it as it was left, a shown Simulation too.
-  const draftOf = useRunDrafts();
+  const { draftOf, simulating } = useRunDrafts();
 
   if (evaluations.isPending || thresholds.isPending)
     return <Loading label="Se încarcă Portofoliu Interne…" />;
@@ -80,7 +80,7 @@ export default function PortofoliuInterneScreen() {
         }}
       />
     );
-  const busy = command.isPending || setting.isPending;
+  const busy = command.isPending || setting.isPending || simulating;
   const onRun = (next: RoleEvaluationCommand) => command.mutateAsync(next);
   const onSetting = (next: EvaluationSettingCommand) =>
     setting.mutateAsync(next);

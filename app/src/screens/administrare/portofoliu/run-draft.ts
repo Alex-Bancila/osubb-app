@@ -23,11 +23,17 @@ export type FormValues = {
   percent: string;
 };
 
-/** A Simulation shown: the values it used, the form they came from, its rows. */
+/**
+ * A Simulation shown: the values it used, the form they came from, its rows,
+ * and the kind's share in force in Setări when it ran. `values.percent` is what
+ * the form said, which may differ from Setări; `shareInForce` is what Setări
+ * said, to notice when it changes afterwards.
+ */
 export type Simulated = {
   values: Omit<RunValues, 'name'>;
   input: FormValues;
   rows: RankingRow[];
+  shareInForce: number;
 };
 
 /**
@@ -46,16 +52,22 @@ export type DraftUpdate = (previous: RunDraft) => RunDraft;
 /**
  * One draft per kind, kept by the page that mounts the run form: Voluntar
  * Activ and Adunarea Generală are separate runs, each with its own name and
- * period. The page spreads `draftOf(kind)` into the panel.
+ * period. The page spreads `draftOf(kind)` into the panel. `simulating` is
+ * true while a Simulation is on its way, which the page treats as busy: the
+ * result lands in the form that asked for it.
  */
 export function useRunDrafts() {
   const [drafts, setDrafts] = useState<Record<RoleEvaluationKind, RunDraft>>({
     voluntar_activ: EMPTY_DRAFT,
     adunarea_generala: EMPTY_DRAFT,
   });
-  return (kind: RoleEvaluationKind) => ({
+  const [simulating, onSimulating] = useState(false);
+  const draftOf = (kind: RoleEvaluationKind) => ({
     draft: drafts[kind],
     onDraft: (update: DraftUpdate) =>
       setDrafts((all) => ({ ...all, [kind]: update(all[kind]) })),
+    simulating,
+    onSimulating,
   });
+  return { draftOf, simulating };
 }

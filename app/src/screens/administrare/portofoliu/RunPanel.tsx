@@ -32,7 +32,10 @@ import {
   type RoleEvaluationKind,
 } from '../../../lib/schemas/role-evaluation';
 import { useFormValidation } from '../../../lib/use-form-validation';
-import { useEvaluationSettings } from '../../../queries/evaluation-settings';
+import {
+  useEvaluationSettings,
+  type EvaluationSettings,
+} from '../../../queries/evaluation-settings';
 import {
   latestRun,
   simulateRoleEvaluation,
@@ -48,7 +51,7 @@ import {
   runResultText,
   SIMULATION_NOTE,
   SIMULATION_STALE,
-  SIMULATION_STALE_FLOOR,
+  SIMULATION_STALE_AG,
 } from './portofoliu-text';
 import { SETARI_HREF } from './portofoliu-view';
 import {
@@ -76,6 +79,13 @@ function isSettingRefusal(failure: unknown) {
   return reason !== undefined && SETTING_REFUSALS.has(reason);
 }
 
+/** The kind's Procent in force in Setări. */
+function shareInForce(settings: EvaluationSettings, kind: RoleEvaluationKind) {
+  return kind === 'voluntar_activ'
+    ? settings.activPercent
+    : settings.votPercent;
+}
+
 /** The way to the setting a run needs: Setări, the page's own view. */
 function SettingsLink() {
   return (
@@ -98,9 +108,12 @@ function SettingsLink() {
  *
  * The **Prag minim** and, for Voluntar Activ, the **Data limită de intrare**
  * are not on the form: a Simulation and a run use the ones in force, which BC
- * edits only in Setări. The result card still names them, read-only. If either
- * changes while a Simulation is shown, the run would record values nobody has
- * seen ranked, so Finalizează waits for a new Simulation.
+ * edits only in Setări. The result card still names them, read-only. Finalizează
+ * records the values the Simulation used, so if Setări changes after it (the
+ * Prag minim, the cutoff, or the kind's Procent in force) the run would
+ * disagree with Setări: the card says so and Finalizează waits for a new
+ * Simulation. A Procent typed in the form that differs from Setări is the
+ * member's choice, not a change.
  *
  * The name belongs to the run, not to the Simulation: **Simulează** checks
  * every field but **Nume**, **Finalizează** needs it.
@@ -109,6 +122,8 @@ export function RunPanel({
   kind,
   draft,
   onDraft,
+  simulating,
+  onSimulating,
   evaluations,
   disabled,
   onRun,
@@ -121,6 +136,9 @@ export function RunPanel({
    */
   draft: RunDraft;
   onDraft: (update: DraftUpdate) => void;
+  /** A Simulation is on its way; the page keeps its switch still meanwhile. */
+  simulating: boolean;
+  onSimulating: (simulating: boolean) => void;
   evaluations: readonly RoleEvaluation[];
   disabled: boolean;
   onRun: RunCommand;
@@ -139,7 +157,6 @@ export function RunPanel({
     onDraft((previous) => ({ ...previous, edits: update(previous.edits) }));
   const setSimulated = (next: Simulated | null) =>
     onDraft((previous) => ({ ...previous, simulated: next }));
-  const [simulating, setSimulating] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   // The last refusal was about a setting: Setări is where it is mended.
@@ -171,12 +188,7 @@ export function RunPanel({
       defaultRangeStart(latestRun(evaluations, kind)?.period_to, today),
     to: edits.to ?? today,
     name: edits.name ?? '',
-    percent:
-      edits.percent ??
-      String(
-        (kind === 'voluntar_activ' ? data?.activPercent : data?.votPercent) ??
-          '',
-      ),
+    percent: edits.percent ?? String(data ? shareInForce(data, kind) : ''),
   };
   // Once a Simulation is shown only the name can still change: the run is of
   // the values it used, whatever the settings do meanwhile.
@@ -235,15 +247,17 @@ export function RunPanel({
     : cutoffUnset
       ? reasonCopy('membership_cutoff_not_set')
       : undefined;
-  // The Prag minim, or for Voluntar Activ the Data limită de intrare, is no
-  // longer the one the Simulation shown used (a live update, another BC
-  // member): the card keeps what it simulated, and Finalizează waits.
+  // Setări has changed since the Simulation shown (a live update, another BC
+  // member, a visit to Setări): the Prag minim, for Voluntar Activ the Data
+  // limită de intrare, or the kind's Procent in force. The card keeps what it
+  // simulated, and Finalizează waits.
   const stale =
     simulated !== null &&
     data !== undefined &&
     (simulated.values.floor !== data.eligibilityFloor ||
       (simulated.values.kind === 'voluntar_activ' &&
-        simulated.values.cutoff !== data.membershipCutoff));
+        simulated.values.cutoff !== data.membershipCutoff) ||
+      simulated.shareInForce !== shareInForce(data, simulated.values.kind));
   // A confirmation of values that went stale is closed, never answered.
   if (stale && confirming) setConfirming(false);
 
@@ -251,20 +265,25 @@ export function RunPanel({
     event.preventDefault();
     setMessage(null);
     setSettingRefused(false);
-    if (!form.validate()) return;
+    if (!form.validate() || data === undefined) return;
     // The Simulation writes nothing and has no name.
     const values = simulation.parse(input);
-    setSimulating(true);
+    onSimulating(true);
     try {
       const rows = await simulateRoleEvaluation(values);
       form.reset();
-      setSimulated({ values, input, rows });
+      setSimulated({
+        values,
+        input,
+        rows,
+        shareInForce: shareInForce(data, values.kind),
+      });
       focusNext.current = 'line';
     } catch (failure) {
       form.fail(failure, 'Nu am putut simula evaluarea. Reîncearcă.');
       setSettingRefused(isSettingRefusal(failure));
     } finally {
-      setSimulating(false);
+      onSimulating(false);
     }
   }
 
@@ -385,7 +404,7 @@ export function RunPanel({
             {stale
               ? simulated?.values.kind === 'voluntar_activ'
                 ? SIMULATION_STALE
-                : SIMULATION_STALE_FLOOR
+                : SIMULATION_STALE_AG
               : null}
           </FieldError>
           <div className="flex flex-wrap gap-2">

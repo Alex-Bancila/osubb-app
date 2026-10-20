@@ -19,7 +19,7 @@ import {
   THRESHOLD_LABEL,
   SIMULATION_NOTE,
   SIMULATION_STALE,
-  SIMULATION_STALE_FLOOR,
+  SIMULATION_STALE_AG,
   UNIVERSITY_SIGNALS_NOTE,
 } from './portofoliu-text';
 
@@ -257,11 +257,11 @@ describe('the notes of the Simulation card', () => {
   it('says nothing was saved, that a setting changed after it, and that Universitate Signals rise on their own', () => {
     expect(SIMULATION_NOTE).toBe('Simulare, nimic nu a fost salvat.');
     expect(SIMULATION_STALE).toBe(
-      'Pragul minim sau data limită de intrare s-au schimbat după simulare. Simulează din nou.',
+      'Setările s-au schimbat după simulare (pragul minim, data limită de intrare sau procentul). Simulează din nou.',
     );
-    // The Adunarea Generală has no cutoff: its note names the Floor alone.
-    expect(SIMULATION_STALE_FLOOR).toBe(
-      'Pragul minim s-a schimbat după simulare. Simulează din nou.',
+    // The Adunarea Generală has no cutoff: its note does not name one.
+    expect(SIMULATION_STALE_AG).toBe(
+      'Setările s-au schimbat după simulare (pragul minim sau procentul). Simulează din nou.',
     );
     expect(UNIVERSITY_SIGNALS_NOTE).toBe(
       'Semnalele „nu mai este student UBB” se ridică automat la schimbarea universității și apar în Semnale de retenție.',
