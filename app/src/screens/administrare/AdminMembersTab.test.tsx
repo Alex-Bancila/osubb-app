@@ -83,7 +83,9 @@ function Search() {
   return <p data-testid="search">{search}</p>;
 }
 
-function show(entry = '/administrare/membri') {
+function show(
+  entry: string | { pathname: string; state: unknown } = '/administrare/membri',
+) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <MemoryRouter initialEntries={[entry]}>
@@ -121,6 +123,17 @@ beforeEach(() => {
       }),
     ],
   });
+});
+
+/* #1087 (ruling R59): a Member deleted for good on their page lands here. */
+it('confirms a deletion with the receipt the Member page sent, once', () => {
+  show({
+    pathname: '/administrare/membri',
+    state: { receipt: 'Contul „Ana Pop” a fost șters definitiv.' },
+  });
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Contul „Ana Pop” a fost șters definitiv.',
+  );
 });
 
 it('lists every Member with Rol and Status, the row opening their page', async () => {

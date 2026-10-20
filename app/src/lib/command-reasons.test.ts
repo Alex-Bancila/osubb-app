@@ -424,6 +424,24 @@ it('has Romanian copy for every delete-for-good refusal', () => {
     expect(reasonCopy(reason), reason).toBeDefined();
 });
 
+/* #1087 (ruling R59): every reason Member Deletion raises that has no copy yet. */
+it('says why a Member cannot be deleted for good, and what to do instead', () => {
+  const said = (message: string) =>
+    commandErrorMessage({ code: 'PT409', message }, 'fallback');
+  expect(said('member_has_history')).toBe(
+    'Contul are istoric și nu poate fi șters definitiv. Îl poți dezactiva din Roluri.',
+  );
+  expect(said('member_is_last_bc')).toBe(
+    'Este ultimul membru BC activ, așa că nu poate fi șters. Numește întâi alt membru BC.',
+  );
+  expect(said('member_is_last_moderator')).toBe(
+    'Este ultimul Moderator activ, așa că nu poate fi șters. Numește întâi alt Moderator.',
+  );
+  expect(
+    commandErrorMessage({ code: 'PT400', message: 'invalid_member' }, 'x'),
+  ).toBe('Membrul nu mai este disponibil. Reîncarcă pagina.');
+});
+
 it('says why a Group outside the Department label stays out of the Cup (ADR-0009, amended 2026-10-13)', () => {
   expect(
     commandErrorMessage(

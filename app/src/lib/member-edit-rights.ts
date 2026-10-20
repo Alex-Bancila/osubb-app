@@ -14,6 +14,10 @@
  * - `rankAndStatus` — `set_member_role` / `set_member_status`: the same viewer,
  *   never on themselves (R31's replacement is named inside another Member's
  *   save, never as the target).
+ * - `deleteAccount` — `delete_member` (#1087, ruling R59): the same viewer, never
+ *   on themselves (`private.can_delete_member`). Whether the account may go at
+ *   all (its history, the last holder of a rank) is the server's preview to
+ *   answer, not this predicate's.
  *
  * `leads` is the viewer's live leadership: `my_capabilities().manage_roles`
  * (live level >= 6 with an `activ` Profile) or, where the page has the roster
@@ -23,11 +27,13 @@
 export type MemberEditRights = {
   profile: boolean;
   rankAndStatus: boolean;
+  deleteAccount: boolean;
 };
 
 export const NO_MEMBER_EDITS: MemberEditRights = {
   profile: false,
   rankAndStatus: false,
+  deleteAccount: false,
 };
 
 export function memberEditRights(
@@ -35,5 +41,6 @@ export function memberEditRights(
   targetId: string | undefined,
 ): MemberEditRights {
   if (!viewer.leads || !viewer.id || !targetId) return NO_MEMBER_EDITS;
-  return { profile: true, rankAndStatus: viewer.id !== targetId };
+  const other = viewer.id !== targetId;
+  return { profile: true, rankAndStatus: other, deleteAccount: other };
 }

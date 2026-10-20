@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { cn } from 'cn';
 import {
   DataTable,
@@ -27,6 +27,7 @@ import { normalizeSearch, statusLabel } from '../volunteers/directory-filters';
 import { MemberCount } from '../volunteers/MemberCount';
 import { CsvImportDialog } from './CsvImportDialog';
 import { InviteMemberDialog, type InvitedMember } from './InviteMemberDialog';
+import type { MembersListState } from './member-delete-text';
 import { UninvitedGrid } from './UninvitedGrid';
 
 type MembersView = 'all' | 'uninvited';
@@ -170,6 +171,20 @@ function MembersPanel({ provision }: { provision: boolean }) {
   const uninvited = useUninvitedMembers(provision);
   const view: MembersView =
     provision && params.get(VIEW_PARAM) === UNINVITED ? 'uninvited' : 'all';
+  // A Member deleted for good on their page lands here with its receipt
+  // (#1087, ruling R59). Read once, then dropped from history so a reload
+  // does not repeat it.
+  const location = useLocation();
+  const [deleted] = useState(
+    () => (location.state as MembersListState | null)?.receipt ?? null,
+  );
+  useEffect(() => {
+    if ((location.state as MembersListState | null)?.receipt)
+      void navigate(
+        { pathname: location.pathname, search: location.search },
+        { replace: true, state: null },
+      );
+  }, [location, navigate]);
   const [visited, setVisited] = useState(false);
   const gridMounted = visited || view === 'uninvited';
   if (view === 'uninvited' && !visited) setVisited(true);
@@ -230,6 +245,11 @@ function MembersPanel({ provision }: { provision: boolean }) {
             },
           ]}
         />
+      )}
+      {deleted && (
+        <p role="status" className="text-sm">
+          {deleted}
+        </p>
       )}
       {latest && (
         <p role="status" className="text-sm">
