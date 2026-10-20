@@ -1392,6 +1392,9 @@ declare
   v_text text;
   v_lines text[];
   v_n integer;
+  v_words text;
+  v_cut text;
+  v_room integer;
   v_body text;
 begin
   -- "Miercuri, 30 septembrie 2026, 18:40–20:40 · Sala 305", always in Romania.
@@ -1438,10 +1441,38 @@ begin
       exit when v_n = 0
         or (char_length(private.formatted_text_plain(v_body)) <= 2000 and char_length(v_body) <= 4000);
     end loop;
+    -- Ruling 10: a description is never dropped whole. When no whole line
+    -- fits (one long paragraph, or a first line over the limit by itself) the
+    -- copy keeps the plain words of the first line with any, markers gone, so
+    -- no cut can land inside one: cut at the last space inside what the date
+    -- line, the blank line and the closing "…" leave of the 2000 characters
+    -- (at the budget when the line has no space), then "…" on a line of its
+    -- own as above. Plain words are as long stored as visible, so the 4000
+    -- stored limit holds with the 2000.
+    if v_n = 0 then
+      select piece.txt into v_words
+        from unnest(v_lines) with ordinality as piece (txt, ord)
+       where btrim(piece.txt, E' \t\r') <> ''
+       order by piece.ord
+       limit 1;
+      v_words := btrim(coalesce(private.formatted_text_plain(v_words), ''), E' \t\r');
+      v_room := 2000 - char_length(v_line) - 4;
+      if char_length(v_words) > v_room then
+        v_cut := left(v_words, v_room);
+        -- A cut that lands inside a word steps back to the space before it.
+        if substr(v_words, v_room + 1, 1) !~ '[ \t]' and v_cut ~ '[ \t]' then
+          v_cut := regexp_replace(v_cut, '[ \t]+[^ \t]*$', '');
+        end if;
+        v_words := btrim(v_cut, E' \t');
+      end if;
+      v_body := v_line
+        || case when v_words <> '' then E'\n\n' || v_words else '' end
+        || E'\n…';
+    end if;
   end if;
   return v_body;
 end;
 $function$;
 
 comment on function private.event_announcement_body(timestamptz, timestamptz, text, text) is
-  '#909: the body of the Announcement create_event(p_announce) publishes -- "Miercuri, 30 septembrie 2026, 18:40–20:40 · Sala 305", a blank line and the description, in Romania''s time zone. R60: the description stays Formatted Text. When the body would pass the 2000 visible characters (private.formatted_text_plain) or the 4000 stored ones an Announcement body allows, lines go from the end of the description until it fits with "…" closing it on a line of its own, so a cut never lands inside a marker; the date line is never dropped.';
+  '#909: the body of the Announcement create_event(p_announce) publishes -- "Miercuri, 30 septembrie 2026, 18:40–20:40 · Sala 305", a blank line and the description, in Romania''s time zone. R60: the description stays Formatted Text. When the body would pass the 2000 visible characters (private.formatted_text_plain) or the 4000 stored ones an Announcement body allows, lines go from the end of the description until it fits with "…" closing it on a line of its own, so a cut never lands inside a marker; the date line is never dropped. If not even the first line fits (one long paragraph) the copy keeps that line''s plain words -- markers gone -- cut at the last space inside the 2000 characters (at the limit when it has no space), then "…" on its own line: a description is never dropped whole.';

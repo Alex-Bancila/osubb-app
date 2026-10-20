@@ -9,6 +9,8 @@
 -- event_announcement_body, is cut at whole lines -- never inside a marker --
 -- until the visible text is within 2000 characters and the stored text within
 -- 4000, the closing ellipsis included, on a line of its own; the date line stays.
+-- A description that is one long paragraph is never dropped whole: its plain
+-- words are kept, cut at the last space inside the limit (ruling 10).
 --
 -- Personas (prefix 1090): 1 vot, Manager of Dept R60N   2 voluntar, its member
 begin;
@@ -16,7 +18,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(11);
+select plan(14);
 
 create function pg_temp.u60(n integer) returns uuid language sql immutable as $$
   select ('10900000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -109,15 +111,39 @@ select ok(
 select is(pg_temp.evcopy(repeat('a', 1996 - char_length(pg_temp.date_line())) || E'\nbbbb'),
   pg_temp.date_line() || E'\n\n' || repeat('a', 1996 - char_length(pg_temp.date_line())) || E'\n…',
   'a copy that fits the limit exactly, ellipsis included, keeps its last whole line');
--- One character longer and the ellipsis would make 2001: that line goes too,
--- though the copy without its ellipsis would have been within 2000.
-select is(pg_temp.evcopy(repeat('a', 1997 - char_length(pg_temp.date_line())) || E'\nbbbb'),
-  pg_temp.date_line() || E'\n…',
+-- One character longer and the ellipsis would make 2001: the second line goes
+-- too, though the copy without its ellipsis would have been within 2000. Three
+-- lines: aaa, a line of 1993 - length(date_line) characters, then cccc.
+select is(pg_temp.evcopy(E'aaa\n' || repeat('b', 1993 - char_length(pg_temp.date_line())) || E'\ncccc'),
+  pg_temp.date_line() || E'\n\naaa\n…',
   'a line the ellipsis would push over the limit is dropped as well');
--- A description that is one over-long line has no whole line to keep.
+
+-- ==================== 3b. one long paragraph is never dropped whole ====================
+-- A description that is one over-long line has no whole line to keep, so the
+-- copy keeps that line's plain words, cut at the last space inside the 2000
+-- characters (date line, blank line and closing ellipsis included). A single
+-- line of 1990 characters with a bold word: 1986 visible, 2027 with the date line.
+create temp table para as
+select pg_temp.evcopy(repeat('x', 1000) || ' **bold** ' || repeat('x', 980)) as body;
+select ok(
+  (select pg_temp.plain_len(body) <= 2000
+          and char_length(body) <= 4000
+          and body like pg_temp.date_line() || E'\n\n%'
+          and body not like '%**%'
+          and body like E'%\n…'
+     from para),
+  'one long paragraph is copied within the limits, date line first, markers gone, ending with an ellipsis');
+select is((select body from para),
+  pg_temp.date_line() || E'\n\n' || repeat('x', 1000) || ' bold' || E'\n…',
+  'its plain words are cut at the last space inside the limit, never inside a word it can step back from');
+-- No space to step back to: the cut is at the budget, which fills the limit exactly.
 select is(pg_temp.evcopy(repeat('x', 2000)),
-  pg_temp.date_line() || E'\n…',
-  'a description of one over-long line leaves the date line and the ellipsis');
+  pg_temp.date_line() || E'\n\n' || repeat('x', 2000 - char_length(pg_temp.date_line()) - 4) || E'\n…',
+  'a paragraph without a space is cut at the budget: exactly 2000 visible characters');
+-- Leading blank lines are not the description's first line.
+select is(pg_temp.evcopy(E'\n' || repeat('x', 2000)),
+  pg_temp.date_line() || E'\n\n' || repeat('x', 2000 - char_length(pg_temp.date_line()) - 4) || E'\n…',
+  'the plain words come from the first line that has any');
 
 -- Stored 4000 is a limit of its own: 7 lines of 189 visible characters
 -- (569 stored) are 1366 visible but 4026 stored with the date line.
