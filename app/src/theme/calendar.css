@@ -734,8 +734,12 @@
   outline-offset: -2px;
 }
 
+/* Whatever the Member can act on inside the card sits above the button's
+   card-wide hit area: the managers' strip, Cine participă, and a Text Link in
+   the description, which would otherwise open the review instead. */
 .event-card.is-reviewable .event-manage,
-.event-card.is-reviewable .event-attendance {
+.event-card.is-reviewable .event-attendance,
+.event-card.is-reviewable .event-description a {
   position: relative;
   z-index: 1;
 }
