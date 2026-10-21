@@ -18,12 +18,18 @@ import {
  *   - a single `*` or `~` between two letters or digits is text (`5*3*2`,
  *     `5~10 și 20~30`), escaped before lexing; `_` inside a word is already
  *     text in CommonMark (`nume_prenume`);
- *   - `**`, `~~` and `==` pair only around words (`2 ** 3 ** 4` is text);
+ *   - `**`, `~~` and `==` pair only around words (`2 ** 3 ** 4` is text),
+ *     and `==` only within one line with no `=` inside;
  *   - in `[a [b](https://x.ro)` the innermost brackets are the link.
  */
 
-/** `==x==`: the words start and end on a non-space, so `a == b == c` is text. */
-const HIGHLIGHT = /^==(?=\S)([\s\S]*?\S)==/;
+/**
+ * `==x==`, paired exactly as the stripper pairs it (`plain.ts`, ruling 15): on
+ * one line, no `=` inside, and a non-space just inside each marker, a space
+ * being ` \t\n\r\f\v` as in the database. `a == b == c`, `==a=b==` and a pair
+ * across a line break are text.
+ */
+const HIGHLIGHT = /^==([^= \t\n\r\f\v](?:[^=\n]*[^= \t\n\r\f\v])?)==/;
 
 const highlight: TokenizerExtension = {
   name: 'highlight',

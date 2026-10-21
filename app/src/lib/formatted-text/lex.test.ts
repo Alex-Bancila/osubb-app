@@ -1,6 +1,7 @@
 import type { Token, Tokens } from 'marked';
 import { describe, expect, it } from 'vitest';
 import { lexFormattedText } from './lex';
+import { toPlainText } from './plain';
 
 /** The tokens of `markdown`, read without narrowing them by type. */
 function lex(markdown: string): Tokens.Generic[] {
@@ -55,6 +56,22 @@ describe('lexFormattedText (ruling R60)', () => {
   it('pairs == only around words: a == b == c is text', () => {
     expect(types('a == b == c')).not.toContain('highlight');
     expect(types('2 ** 3 ** 4')).not.toContain('strong');
+  });
+
+  // Ruling 15: the reader pairs `==` exactly where the stripper removes the
+  // pair, so each case is checked against `toPlainText` as well.
+  it.each([
+    ['==nou==', true],
+    ['x==y==z', true],
+    ['== a==', true],
+    ['==a\nb==', false],
+    ['==a=b==', false],
+    ['==a ==', false],
+    ['==\ta==', false],
+    ['a == b == c', false],
+  ])('pairs %j as the stripper does: %j', (markdown, paired) => {
+    expect(toPlainText(markdown) !== markdown).toBe(paired);
+    expect(types(markdown).includes('highlight')).toBe(paired);
   });
 
   it('folds \\r\\n and reads a single line break as a hard break', () => {

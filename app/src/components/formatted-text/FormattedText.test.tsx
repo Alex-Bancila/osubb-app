@@ -140,6 +140,14 @@ describe('FormattedText, full (ruling R60)', () => {
     expect(container).toHaveTextContent('a == b == c');
   });
 
+  it('highlights only within one line and with no = inside, as the stripper pairs ==', () => {
+    expect(full('==a\nb==').querySelector('mark')).toBeNull();
+    const equals = full('==a=b==');
+    expect(equals.querySelector('mark')).toBeNull();
+    expect(equals).toHaveTextContent('==a=b==');
+    expect(full('==nou==').querySelector('mark')).toHaveTextContent(/^nou$/);
+  });
+
   it('takes the innermost link, as the stripper does', () => {
     const container = full('[a [b](https://x.ro)');
     const paragraph = container.querySelector('p');
