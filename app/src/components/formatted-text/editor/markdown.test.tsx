@@ -529,6 +529,62 @@ describe('a mark comes off the fewest characters (fix round 1)', () => {
     expect(toPlainText(markdown)).toBe('https://x.ro/a* [ș)');
   });
 
+  it.each([
+    ['italic', italic, '!', 'http://x.ro!'],
+    ['strike', strike, '*', 'http://b.ro*'],
+  ])(
+    'links an address once a dropped %s leaves its marks the same (fix round 2)',
+    (_, mark, after, words) => {
+      // Found by the task re-review: the address stopped where its marks
+      // changed, the writer then dropped the mark that changed, and the
+      // address was saved unlinked once and linked the next time.
+      const [scheme = '', host = ''] = words.slice(0, -1).split(/(?<=\/\/)/);
+      const markdown = stableWrite(
+        doc(paragraph(text(scheme, mark), text(host), text(after, bold))),
+      );
+      expect(markdown).not.toContain('\\:');
+      expect(toPlainText(markdown)).toBe(words);
+      const back = parseFormattedText(markdown).content?.[0]?.content ?? [];
+      expect(back[0]).toEqual(
+        text(words.slice(0, -1), link(words.slice(0, -1))),
+      );
+    },
+  );
+
+  it.each([
+    ['a <!-- b_c --> d', 'a \\<!-- b\\_c --> d'],
+    ['x <span class="a_b">y', 'x \\<span class="a\\_b">y'],
+    ['Q&A <b>x</b> 1 < 2', 'Q&A <b>x</b> 1 < 2'],
+  ])(
+    'escapes the < of raw HTML in %j only where a marker inside it would show (fix round 2)',
+    (words, markdown) => {
+      // The reader shows raw HTML as typed, escapes and all.
+      expect(stableWrite(doc(paragraph(text(words))))).toBe(markdown);
+      expect(reader(markdown)).toContain(
+        words
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;'),
+      );
+      // The stripper keeps the backslash before `<` (a database follow-up).
+      expect(toPlainText(markdown)).toBe(markdown.replace(/\\_/g, '_'));
+    },
+  );
+
+  it.each([
+    [
+      paragraph(text('vezi http://'), text('x.ro', bold)),
+      'vezi http://**x.ro**',
+    ],
+    [paragraph(text('http://'), text('1', strike)), 'http://~~1~~'],
+  ])(
+    'escapes no : where a marker already ends the address (fix round 2)',
+    (block, markdown) => {
+      expect(stableWrite(doc(block))).toBe(markdown);
+      expect(toPlainText(markdown)).not.toContain('\\');
+    },
+  );
+
   it('takes bold off the punctuation that ends it before a letter', () => {
     const markdown = stableWrite(doc(paragraph(text('x.', bold), text('a'))));
     expect(markdown).toBe('**x**.a');

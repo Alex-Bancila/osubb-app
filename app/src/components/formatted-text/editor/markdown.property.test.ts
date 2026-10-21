@@ -9,10 +9,11 @@ import {
 } from './markdown';
 
 /**
- * Random documents through the editor's writer (ruling 21, fix round 1). Each
- * must write a text that reads back as the document it was written from, less
- * only marks, and writes again byte for byte the same. Fixed seed, so a
- * failure is a regression to pin with its own test in `markdown.test.tsx`.
+ * Random documents through the editor's writer (ruling 21, fix rounds 1 and
+ * 2). Each must write a text that saves the same way the second time, reads
+ * back as the document it was written from with marks dropped and addresses
+ * linked only, and strips to the document's words. Fixed seeds, so a failure
+ * is a regression to pin with its own test in `markdown.test.tsx`.
  */
 
 /** mulberry32: a small seeded generator. */
@@ -26,36 +27,9 @@ function generator(seed: number) {
   };
 }
 
-/** Words, markers, addresses and HTML: what a reader and a stripper can trip on. */
-const PIECES = [
-  'a',
-  'b',
-  'ș',
-  ' ',
-  ' ',
-  '*',
-  '_',
-  '~',
-  '=',
-  '[',
-  ']',
-  '(',
-  ')',
-  '!',
-  '#',
-  '-',
-  '1',
-  '.',
-  '<',
-  '>',
-  '\\',
-  '`',
-  '|',
-  '&',
-  ':',
-  '+',
-  '"',
-  'x',
+/** Words, markers, whole addresses and HTML: what the readers can trip on. */
+const MIXED = [
+  ...'ab  ș*_~=[]()!#-1.<>\\`|&:+"x',
   'https://x.ro/a',
   'http://y.ro',
   'www.a.ro',
@@ -63,21 +37,56 @@ const PIECES = [
   '<!--',
   '0740123456.',
 ];
-const HREFS = ['https://x.ro/a', 'https://x.ro/b(c)', 'javascript:x'];
+
+/**
+ * Addresses in pieces, each piece with its own marks, among the punctuation
+ * an address ends on (fix round 2: an address split by marks).
+ */
+const ADDRESSES = [
+  'https://',
+  'http://',
+  'x.ro',
+  'b.ro',
+  'www.',
+  'amp;',
+  ...'/aș.:_*~=\\`|[]()&;?!,<>"\'#%-@ 1+',
+];
+
+type Pieces = { words: readonly string[]; hrefs: readonly string[] };
+
+const VARIANTS: [string, Pieces][] = [
+  [
+    'mixed',
+    {
+      words: MIXED,
+      hrefs: ['https://x.ro/a', 'https://x.ro/b(c)', 'javascript:x'],
+    },
+  ],
+  [
+    'address-heavy',
+    {
+      words: ADDRESSES,
+      hrefs: ['https://x.ro/a', 'https://x.ro', 'http://y.ro/(z)'],
+    },
+  ],
+];
+
 const MARKS = ['bold', 'italic', 'strike', 'highlight', 'link'];
 
-function documents(seed: number, count: number): JSONContent[] {
+function documents(seed: number, count: number, pieces: Pieces) {
   const random = generator(seed);
   const pick = <T>(items: readonly T[]): T =>
     items[Math.floor(random() * items.length)] as T;
   const inline = (): JSONContent[] =>
     Array.from({ length: 1 + Math.floor(random() * 5) }, (): JSONContent => {
-      if (random() < 0.12) return { type: 'hardBreak' };
-      const text = Array.from({ length: 1 + Math.floor(random() * 4) }, () =>
-        pick(PIECES),
+      if (random() < 0.1) return { type: 'hardBreak' };
+      const text = Array.from({ length: 1 + Math.floor(random() * 5) }, () =>
+        pick(pieces.words),
       ).join('');
-      const marks = MARKS.filter(() => random() < 0.18).map((type) =>
-        type === 'link' ? { type, attrs: { href: pick(HREFS) } } : { type },
+      const marks = MARKS.filter(() => random() < 0.17).map((type) =>
+        type === 'link'
+          ? { type, attrs: { href: pick(pieces.hrefs) } }
+          : { type },
       );
       return marks.length
         ? { type: 'text', text, marks }
@@ -117,7 +126,7 @@ function documents(seed: number, count: number): JSONContent[] {
         }
       : { type: 'bulletList', content: items };
   };
-  return Array.from({ length: count }, () => ({
+  return Array.from({ length: count }, (): JSONContent => ({
     type: 'doc',
     content: Array.from({ length: 1 + Math.floor(random() * 3) }, () =>
       block(0),
@@ -139,16 +148,22 @@ function bare(node: JSONContent): JSONContent {
   return { ...node, content };
 }
 
-/** Each character's marks, in document order. */
-function marksByCharacter(node: JSONContent): string[][] {
+type Character = { text: string; marks: string[]; href: string | null };
+
+/** Each character with its marks, in document order; a hard break as `\n`. */
+function characters(node: JSONContent): Character[] {
   if (node.type === 'text')
-    return [...(node.text ?? '')].map(() =>
-      (node.marks ?? []).map(
+    return [...(node.text ?? '')].map((text) => ({
+      text,
+      marks: (node.marks ?? []).map(
         (mark) => `${mark.type} ${mark.attrs?.href ?? ''}`,
       ),
-    );
-  if (node.type === 'hardBreak') return [[]];
-  return (node.content ?? []).flatMap(marksByCharacter);
+      href:
+        (node.marks ?? []).find((mark) => mark.type === 'link')?.attrs?.href ??
+        null,
+    }));
+  if (node.type === 'hardBreak') return [{ text: '\n', marks: [], href: null }];
+  return (node.content ?? []).flatMap(characters);
 }
 
 /** The words a document strips to: its texts, a bullet or a number per item. */
@@ -167,70 +182,110 @@ function words(node: JSONContent): string {
 }
 
 /**
- * The three shapes whose markers the stripper keeps (a database follow-up,
- * like `\<`): a quote inside a quote or a list item, and an item that opens
- * with no words of its own.
+ * The two shapes whose markers the stripper keeps (a database follow-up,
+ * like `\<`): a quote inside a quote, and a list item that opens with no
+ * words of its own.
  */
-function stripperKeepsMarkers(
-  node: JSONContent,
-  inQuote = false,
-  inItem = false,
-): boolean {
-  if (node.type === 'blockquote' && (inQuote || inItem)) return true;
+function stripperKeepsMarkers(node: JSONContent, inQuote = false): boolean {
+  if (node.type === 'blockquote' && inQuote) return true;
   if (node.type === 'listItem' && !node.content?.[0]?.content?.length)
     return true;
   return (node.content ?? []).some((child) =>
-    stripperKeepsMarkers(
-      child,
-      inQuote || node.type === 'blockquote',
-      inItem || node.type === 'listItem',
-    ),
+    stripperKeepsMarkers(child, inQuote || node.type === 'blockquote'),
   );
 }
 
-/** No spaces and no backslashes: `\<` and literal backslashes aside, the same words. */
-const squashed = (value: string) => value.replace(/[\s\\]/g, '');
+const unspaced = (value: string) => value.replace(/\s/g, '');
 
-describe('any document, written (ruling 21)', () => {
-  const cases = documents(20261021, 400);
-  // Written once, read by every check below.
-  let memo: { json: JSONContent; markdown: string; back: JSONContent }[] = [];
-  const written = () => {
-    if (!memo.length)
-      memo = cases.map((json) => {
-        const markdown = serializeFormattedText(json);
-        return { json, markdown, back: parseFormattedText(markdown) };
-      });
-    return memo;
-  };
+/**
+ * Whether `stripped` holds exactly `expected`'s words, spaces aside, with no
+ * backslash the document did not have but the ruled one before a `<` that
+ * opens a line (`plain.ts` does not unescape `<`, a database follow-up).
+ */
+function sameWords(stripped: string, expected: string): boolean {
+  const left = unspaced(stripped);
+  const right = unspaced(expected);
+  let at = 0;
+  let to = 0;
+  while (at < left.length && to < right.length) {
+    if (left[at] === right[to]) {
+      at += 1;
+      to += 1;
+    } else if (left[at] === '\\' && left[at + 1] === '<' && right[to] === '<')
+      at += 1;
+    else return false;
+  }
+  return at === left.length && to === right.length;
+}
 
-  it('writes text that writes again byte for byte the same', () => {
-    for (const { markdown, back } of written())
-      expect(serializeFormattedText(back)).toBe(markdown);
-  });
+/** A Text Link's address as the writer keeps it: parentheses encoded. */
+const encoded = (text: string) =>
+  text.replace(/\(/g, '%28').replace(/\)/g, '%29');
 
-  it('reads back as its normalised document, its words and blocks whole', () => {
-    for (const { json, back } of written())
-      expect(bare(back)).toEqual(bare(normalizeFormattedText(json)));
-  });
+describe.each(VARIANTS)(
+  'any document, %s, written (ruling 21)',
+  (_, pieces) => {
+    const cases = documents(20261021, 300, pieces);
+    // Written once and read back once, for every check below.
+    let memo: { json: JSONContent; markdown: string; back: JSONContent }[] = [];
+    const written = () => {
+      if (!memo.length)
+        memo = cases.map((json) => {
+          const markdown = serializeFormattedText(json);
+          return { json, markdown, back: parseFormattedText(markdown) };
+        });
+      return memo;
+    };
 
-  it('only ever drops a mark, and never adds one', () => {
-    for (const { json, back } of written()) {
-      const intended = marksByCharacter(normalizeFormattedText(json));
-      marksByCharacter(back).forEach((marks, index) => {
-        for (const mark of marks) expect(intended[index]).toContain(mark);
-      });
-    }
-  });
+    it('saves the same way the second time as the first', () => {
+      for (const { markdown, back } of written())
+        expect(serializeFormattedText(back)).toBe(markdown);
+    });
 
-  it('gives the stripper the document’s words', () => {
-    let checked = 0;
-    for (const { json, markdown } of written()) {
-      const normal = normalizeFormattedText(json);
-      if (stripperKeepsMarkers(normal)) continue;
-      checked += 1;
-      expect(squashed(toPlainText(markdown))).toBe(squashed(words(normal)));
-    }
-    expect(checked).toBeGreaterThan(200);
-  });
-});
+    it('reads back as its normalised document, its words and blocks whole', () => {
+      for (const { json, back } of written())
+        expect(bare(back)).toEqual(bare(normalizeFormattedText(json)));
+    });
+
+    it('only drops marks, and adds only a link from an address to itself', () => {
+      for (const { json, back } of written()) {
+        const intended = characters(normalizeFormattedText(json));
+        const read = characters(back);
+        read.forEach((character, index) => {
+          const before = intended[index];
+          for (const mark of character.marks) {
+            if (before?.marks.includes(mark)) continue;
+            // A link added where there was none: to the address it shows.
+            expect(before?.href).toBeNull();
+            expect(mark.startsWith('link ')).toBe(true);
+            let start = index;
+            while (read[start - 1]?.href === character.href) start -= 1;
+            let end = index;
+            while (read[end]?.href === character.href) end += 1;
+            const shown = read
+              .slice(start, end)
+              .map((part) => part.text)
+              .join('');
+            expect(encoded(shown)).toBe(character.href);
+          }
+        });
+      }
+    });
+
+    it('gives the stripper the document’s words, with no backslash of its own', () => {
+      let checked = 0;
+      for (const { json, markdown } of written()) {
+        const normal = normalizeFormattedText(json);
+        if (stripperKeepsMarkers(normal)) continue;
+        checked += 1;
+        const stripped = toPlainText(markdown);
+        if (!sameWords(stripped, words(normal)))
+          expect({ markdown, stripped }).toEqual({
+            markdown,
+            stripped: words(normal),
+          });
+      }
+      expect(checked).toBeGreaterThan(150);
+    });
+  },
+);

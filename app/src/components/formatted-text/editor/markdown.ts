@@ -565,14 +565,20 @@ export function normalizeFormattedText(doc: JSONContent): JSONContent {
 /* Writing a line                                                           */
 /* ------------------------------------------------------------------------ */
 
-type Variant = { flipItalic: boolean; bareLinks: boolean };
+type Variant = { flipItalic: boolean; bareLinks: boolean; tags: boolean };
 
-const VARIANTS: readonly Variant[] = [
-  { flipItalic: false, bareLinks: true },
-  { flipItalic: true, bareLinks: true },
-  { flipItalic: false, bareLinks: false },
-  { flipItalic: true, bareLinks: false },
-];
+/**
+ * The ways a line is tried, in order: italic as `*` or `_`, an address bare
+ * or bracketed, and last every `<` that opens an HTML tag or comment escaped
+ * (`<span class="a_b">`, `<!-- … -->`): the reader shows raw HTML as typed,
+ * escapes and all, so markers inside one can only be written that way. The
+ * stripper then shows those backslashes (`plain.ts` does not unescape `<`).
+ */
+const VARIANTS: readonly Variant[] = [false, true].flatMap((tags) =>
+  [true, false].flatMap((bareLinks) =>
+    [false, true].map((flipItalic) => ({ flipItalic, bareLinks, tags })),
+  ),
+);
 
 /** Always written escaped: the dialect reads each anywhere in a line. */
 const ESCAPED = new Set(['\\', '*', '_', '~', '`', '[', ']', '|']);
@@ -600,6 +606,7 @@ function escapedCharacters(
   line: Line,
   prefix: string,
   everything: boolean,
+  tags: boolean,
 ): string[] {
   const characters = line.map((character) => character.text);
   if (everything)
@@ -630,17 +637,33 @@ function escapedCharacters(
   });
   // An address left unlinked (one `safeHttpUrl` refuses) must not be linked
   // by the reader: its `:` is escaped, and shows in the stripper's words.
+  // Only an address in one run of marks: a marker between `//` and the next
+  // character already stops the reader's address.
   characters.forEach((character, index) => {
     if (character !== ':' || linked(index)) return;
     // `https:` or `http:`, ending at this `:`.
-    for (const start of [index - 5, index - 4])
+    for (const start of [index - 5, index - 4]) {
+      const marks = line[start]?.marks;
       if (
         start >= 0 &&
+        marks &&
         !linked(start) &&
-        ADDRESS_START.test(characters.slice(start, index + 4).join(''))
+        ADDRESS_START.test(characters.slice(start, index + 4).join('')) &&
+        line
+          .slice(start, index + 4)
+          .every((part) => sameKeys(part.marks, marks))
       )
         written[index] = '\\:';
+    }
   });
+  if (tags)
+    characters.forEach((character, index) => {
+      if (
+        character === '<' &&
+        OPENS_HTML.test(characters.slice(index, index + 2).join(''))
+      )
+        written[index] = '\\<';
+    });
   const text = characters.join('');
   if (OPENS_BLOCK.test(text) && !written[0]?.startsWith('\\'))
     written[0] = `\\${characters[0] ?? ''}`;
@@ -748,7 +771,7 @@ function emitOnce(
   everything: boolean,
   bracketed: ReadonlySet<number>,
 ): Emitted & { bare: Bare[] } {
-  const escaped = escapedCharacters(line, prefix, everything);
+  const escaped = escapedCharacters(line, prefix, everything, variant.tags);
   const segments = segmentsOf(line);
   const open: { key: string; close: string }[] = [];
   const bares: Bare[] = [];
@@ -831,7 +854,7 @@ function plainest(line: Line, prefix: string): Emitted {
   return emit(
     linksOnly(line),
     prefix,
-    { flipItalic: false, bareLinks: false },
+    { flipItalic: false, bareLinks: false, tags: true },
     true,
   );
 }
@@ -957,8 +980,8 @@ type LineWritten = { markdown: string; line: Line };
  * off the fewest characters where it does not.
  */
 function writeLine(line: Line, prefix: string, level: Level): LineWritten {
-  if (level < 2) {
-    let current = level === 1 ? linksOnly(line) : line;
+  let current = level === 0 ? line : relinked(linksOnly(line));
+  if (level < 2)
     for (;;) {
       const written = attempt(current, prefix);
       if (written) return { markdown: written.markdown, line: current };
@@ -969,18 +992,48 @@ function writeLine(line: Line, prefix: string, level: Level): LineWritten {
       const runs = styles.length ? styles : all;
       const [first] = runs;
       if (!first) break;
+      // Once a style comes off, an address it split is linked whole. Once
+      // only links are left, a link that comes off stays off (its `:` is
+      // then escaped, so the reader does not link it either): every step
+      // takes a mark away, so the search ends.
+      const step = styles.length ? relinked : normalized;
       const options = [
         ...runs.flatMap((run) => offPunctuation(current, run)),
         ...runs.map(({ key, run }) => without(current, key, run)),
-      ].map(normalized);
+      ]
+        .map(step)
+        .filter((option) => !sameLine(option, current));
       for (const option of options) {
         const fixed = attempt(option, prefix);
         if (fixed) return { markdown: fixed.markdown, line: option };
       }
-      current = normalized(without(current, first.key, first.run));
+      current = step(without(current, first.key, first.run));
     }
-  }
-  return { markdown: plainest(line, prefix).markdown, line: linksOnly(line) };
+  return {
+    markdown: plainest(current, prefix).markdown,
+    line: linksOnly(current),
+  };
+}
+
+/**
+ * `line` normalised, with every address its marks now leave whole linked
+ * (fix round 2): once a mark comes off, an address that stopped where that
+ * mark changed is one address again, and the text read back would link it.
+ */
+function relinked(line: Line): Line {
+  return autolinked(normalized(line));
+}
+
+function sameLine(a: Line, b: Line): boolean {
+  return (
+    a.length === b.length &&
+    a.every((character, index) => {
+      const other = b[index];
+      return (
+        other?.text === character.text && sameKeys(character.marks, other.marks)
+      );
+    })
+  );
 }
 
 type Written = { markdown: string; node: JSONContent };
@@ -1123,7 +1176,9 @@ function writeTopBlock(node: JSONContent): Written {
  * `> ` quotes, `- `/`1. ` lists, `**`, `*` (`_` inside bold), `~~`, `==` and
  * `[words](https://…)` or a bare address, every literal marker escaped. What
  * it writes is `normalizeFormattedText(doc)`, less any mark the dialect cannot
- * hold where it stands. The whole text is read back before it is returned; a
+ * hold where it stands, and with an address linked to itself where dropping
+ * such a mark made it one address. The whole text is read back before it is
+ * returned; a
  * block read differently is written plainer until it reads as written. An
  * empty document is the empty string.
  */
