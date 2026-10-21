@@ -31,6 +31,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { AttachedLinksList } from '../../components/attached-link/AttachedLinksList';
+import { FormattedText } from '../../components/formatted-text/FormattedText';
 import { focusRingClass, SubHeading } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
@@ -333,12 +334,11 @@ function TaskDetails({
   return (
     <div className="flex flex-col gap-5">
       {task.description && (
-        <p
-          data-slot="task-description"
-          className="m-0 text-sm whitespace-pre-wrap wrap-anywhere"
-        >
-          {task.description}
-        </p>
+        // Formatted Text (R60); the Submission Note and the return note below
+        // stay plain.
+        <div data-slot="task-description" className="text-sm">
+          <FormattedText view="full" text={task.description} />
+        </div>
       )}
       {(task.assignmentMode !== 'public' || ownTask) && (
         <TaskStageSummary task={task} />

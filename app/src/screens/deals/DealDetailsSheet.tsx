@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { KeyRound, Pencil, Trash2 } from 'lucide-react';
+import { FormattedText } from '../../components/formatted-text/FormattedText';
 import { EmptyState } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
 import { Button } from '../../components/ui/button';
@@ -121,9 +122,11 @@ function DealDetails({
         </div>
       </SheetHeader>
 
-      <div className="text-sm leading-relaxed whitespace-pre-line text-foreground/90">
-        {deal.body}
-      </div>
+      <FormattedText
+        view="full"
+        text={deal.body}
+        className="text-sm leading-relaxed text-foreground/90"
+      />
 
       {deal.code && (
         // In the sheet the stub stands alone, a ticket of its own.

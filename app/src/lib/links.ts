@@ -6,6 +6,9 @@
  *   `sameOriginPath` — a path inside the app, or `/`.
  *   `safeHttpUrl`    — an absolute http(s) address, or `null`.
  *
+ * A Text Link inside Formatted Text (ruling R60) goes through both:
+ * `textLinkTarget`.
+ *
  * Nothing at module level touches the page: the service worker imports this
  * file too (`pwa/push-payload.ts`) and passes its own origin.
  */
@@ -78,4 +81,30 @@ export function safeHttpUrl(value: string | null | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+/** Where a Text Link goes: a path inside the app, or an address outside it. */
+export type TextLinkTarget =
+  { kind: 'app'; path: string } | { kind: 'external'; href: string };
+
+/**
+ * Where a Text Link of Formatted Text (ruling R60) may send the Member, or
+ * `null` when it may send them nowhere and the reader shows what was typed.
+ * Text Links are http(s) only, as Attached Links are (`safeHttpUrl`), so a
+ * relative path, `mailto:` or `javascript:` is no link at all. An address on
+ * the app's own origin opens inside the app, at the path `inAppPath` gives;
+ * any other address opens outside it.
+ */
+export function textLinkTarget(
+  href: string,
+  origin: string = location.origin,
+): TextLinkTarget | null {
+  const address = safeHttpUrl(href);
+  if (!address) return null;
+  const url = new URL(address);
+  if (url.origin === new URL(origin).origin) {
+    const path = inAppPath(url.pathname + url.search + url.hash, origin);
+    if (path) return { kind: 'app', path };
+  }
+  return { kind: 'external', href: address };
 }

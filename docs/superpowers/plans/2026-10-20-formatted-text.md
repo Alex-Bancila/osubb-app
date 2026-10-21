@@ -374,8 +374,13 @@ And their tests and snapshots.
     - Every other `*`, `_`, `~`, `=`, `[`, `]`, `` ` ``, `<` and `\` is escaped with `\`.
     - Line-start `- ` / `1. ` stay.
 
+- Constraints (from the final review of PR 2):
+  - **No mark across a hard break.** The editor never writes a mark (`**`, `*`, `~~`, `==`) that spans a hard break. The reader (CommonMark) joins a mark across a single line break, and the stripper (`toPlainText`, `private.formatted_text_plain`) does not, so the two would read the same text differently. The serializer closes the mark before the break and reopens it after: `**a**\n**b**`, never `**a\nb**`.
+  - **Headings outside a sheet.** The reader renders a Titlu as `h3` and a Subtitlu as `h4`. Outside a sheet that is wrong for two sites: the `EventCard`, whose title is already an `h3`, and the `TaskHistory` timeline. When this PR adds the editor's `h1`/`h2` rules, give `FormattedText` a heading-level offset or a "no headings" option for those two sites.
+
 - [ ] **Step 1: Write the failing tests.**
   - `extensions.test.ts`: create an `Editor` in jsdom with the extensions and `contentType: 'markdown'`.
+    - Bold, italic, strikethrough and highlight across a hard break (`Shift+Enter`) serialize as two marked runs (`**a**\n**b**`), never as one mark spanning the break.
     - Round trip of the spec's sample (`Ne vedem **joi**.\n\n## Ordinea de zi\n\n- unu\n- doi\n\n> citat\n\n==nou== ~~vechi~~ [formular](https://forms.gle/x)`): `getMarkdown()` reparsed gives the same JSON.
     - Typing `**a**` through `insertContent` as text stays literal stars.
     - `- ` at line start makes a bullet list.

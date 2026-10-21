@@ -1,0 +1,116 @@
+/* ============================================================================
+   Formatted Text (ruling R60): the reader's `FormattedText`, and the editor's
+   text once it lands (#1092, which writes h1/h2 where the reader writes h3/h4).
+
+   Two named sizes from the type scale, never a size picker: Titlu 19 px,
+   Subtitlu 16 px. A quote is set off by a rule in the border colour, a
+   highlight by the warning tint, never brand red. A link keeps the text's
+   colour and is told apart by its underline, since red is for actions and
+   signals (DESIGN.md). Unlayered, like the other screen stylesheets, so these
+   rules outrank preflight's list and heading resets and global.css's heading
+   margins. Every value is a token, so the dark theme follows on its own.
+   ========================================================================== */
+
+.formatted-text {
+  overflow-wrap: anywhere;
+}
+
+.formatted-text :is(p, h1, h2, h3, h4, blockquote, ul, ol) {
+  margin: 0;
+}
+
+.formatted-text
+  :is(p, h1, h2, h3, h4, blockquote, ul, ol)
+  + :is(p, blockquote, ul, ol) {
+  margin-top: var(--s-2);
+}
+
+/* A heading belongs to what follows it: more room above than below. */
+.formatted-text
+  :is(p, h1, h2, h3, h4, blockquote, ul, ol)
+  + :is(h1, h2, h3, h4) {
+  margin-top: var(--s-4);
+}
+
+.formatted-text :is(h1, h3) {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  line-height: 1.3;
+}
+
+.formatted-text :is(h2, h4) {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  line-height: 1.35;
+}
+
+.formatted-text blockquote {
+  padding-inline-start: var(--s-3);
+  border-inline-start: 3px solid var(--border);
+}
+
+.formatted-text :is(ul, ol) {
+  padding-inline-start: 1.5em;
+}
+
+/*
+  A list nested six deep stops indenting. 4000 stored characters hold hundreds
+  of levels, and 1.5em each would push the text past the edge of any sheet or
+  card; from here on the markers sit inside the item, so none hangs out into
+  the margin.
+*/
+.formatted-text
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol) {
+  padding-inline-start: 0;
+  list-style-position: inside;
+}
+
+.formatted-text ul {
+  list-style: disc;
+}
+
+.formatted-text ul ul {
+  list-style: circle;
+}
+
+.formatted-text ol {
+  list-style: decimal;
+}
+
+/* Inside a list item (a loose one has paragraphs), blocks sit closer. */
+.formatted-text li > :is(p, ul, ol) + :is(p, ul, ol) {
+  margin-top: var(--s-1);
+}
+
+.formatted-text a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.formatted-text a:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: 2px;
+}
+
+:is(.formatted-text, .formatted-text-preview) mark {
+  padding: 0 0.15em;
+  border-radius: 3px;
+  background-color: var(--warning-050);
+  color: inherit;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* A card's preview sits in muted text: bold words stand out in the text colour. */
+.formatted-text-preview strong {
+  font-weight: var(--fw-semibold);
+  color: var(--foreground);
+}

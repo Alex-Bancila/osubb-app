@@ -1,4 +1,5 @@
 import { AttachedLinksList } from '../../components/attached-link/AttachedLinksList';
+import { FormattedText } from '../../components/formatted-text/FormattedText';
 import { Card, CardContent } from '../../components/ui/card';
 import { cn } from '../../lib/utils';
 import { AnnouncementByline, cardOpenButtonClass } from './AnnouncementByline';
@@ -72,7 +73,7 @@ export default function AnnouncementCard({
         <AnnouncementTermen deadline={announcement.deadline} className="mt-2" />
 
         <p className="m-0 mt-2 line-clamp-3 text-sm text-muted-foreground">
-          {announcement.body}
+          <FormattedText view="preview" text={announcement.body} />
         </p>
 
         <AttachedLinksList

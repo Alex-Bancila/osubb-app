@@ -165,6 +165,34 @@ describe('AnnouncementDetailsSheet', () => {
     expect(screen.getByText(/18 septembrie 2026/)).toBeInTheDocument();
   });
 
+  it('reads the body as Formatted Text: bold, a list and its line breaks (R60)', () => {
+    renderSheet(
+      <AnnouncementDetailsSheet
+        announcement={presentation({
+          body: 'Ne vedem **joi**.\nLa 18:00.\n\n- unu\n- doi',
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const sheet = screen.getByRole('dialog', {
+      name: 'Ședință extraordinară BC',
+    });
+    expect(
+      within(sheet).getByText('joi', { selector: 'strong' }),
+    ).toBeVisible();
+    expect(
+      within(sheet)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['unu', 'doi']);
+    const body = sheet.querySelector('.formatted-text');
+    expect(body?.querySelector('br')).not.toBeNull();
+    // The sheet no longer carries the text as a plain, pre-line string.
+    expect(sheet.querySelector('.whitespace-pre-line')).toBeNull();
+    expect(sheet).not.toHaveTextContent('**');
+  });
+
   it('renders every Attached Link as "Deschide: <etichetă>" (R46)', () => {
     const item = presentation({
       links: [

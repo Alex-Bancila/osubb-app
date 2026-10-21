@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { inAppPath, safeHttpUrl, sameOriginPath } from './links';
+import {
+  inAppPath,
+  safeHttpUrl,
+  sameOriginPath,
+  textLinkTarget,
+} from './links';
 
 const ORIGIN = 'https://app.osubb.ro';
 
@@ -69,5 +74,48 @@ describe('safeHttpUrl', () => {
     'ftp://forms.example',
   ])('refuses %j', (value) => {
     expect(safeHttpUrl(value)).toBeNull();
+  });
+});
+
+describe('textLinkTarget (ruling R60)', () => {
+  it('opens an address on the page origin inside the app', () => {
+    expect(textLinkTarget(location.origin + '/calendar?event=1')).toEqual({
+      kind: 'app',
+      path: '/calendar?event=1',
+    });
+  });
+
+  it.each([
+    ['https://app.osubb.ro/tracker/12#istoric', '/tracker/12#istoric'],
+    ['HTTPS://APP.OSUBB.RO/anunturi', '/anunturi'],
+    ['https://app.osubb.ro', '/'],
+  ])('reads %j as the app path %j', (href, path) => {
+    expect(textLinkTarget(href, ORIGIN)).toEqual({ kind: 'app', path });
+  });
+
+  it.each([
+    'https://forms.gle/x',
+    'http://app.osubb.ro/tracker',
+    'https://osubb.ro/despre',
+  ])('opens %j outside the app', (href) => {
+    expect(textLinkTarget(href, ORIGIN)).toEqual({ kind: 'external', href });
+  });
+
+  it.each([
+    'javascript:alert(1)',
+    'JaVaScRiPt:alert(1)',
+    'data:text/html,hi',
+    'mailto:it@osubb.ro',
+    'osubb.ro',
+    '/calendar',
+    '//evil.example',
+    'https://forms.gle/a b',
+    '',
+  ])('gives no link for %j', (href) => {
+    expect(textLinkTarget(href, ORIGIN)).toBeNull();
+  });
+
+  it('refuses javascript: against the page origin too', () => {
+    expect(textLinkTarget('javascript:alert(1)')).toBeNull();
   });
 });

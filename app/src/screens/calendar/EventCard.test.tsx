@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -85,6 +87,46 @@ describe('EventCard — the meta line', () => {
   });
 });
 
+describe('EventCard — the description as Formatted Text (R60)', () => {
+  it('keeps the description’s own line breaks, which the card lost before', () => {
+    render(<EventCard event={event({ description: 'rând\nrând' })} />);
+
+    const card = screen.getByRole('article', { name: 'Ședință Educațional' });
+    const description = card.querySelector('.event-description');
+    expect(description?.querySelector('br')).not.toBeNull();
+    expect(description).toHaveTextContent('rândrând');
+  });
+
+  it('reads bold and a list inside the description, under the card’s own measure class', () => {
+    render(
+      <EventCard
+        event={event({ description: 'Aduceți **actele**.\n\n- unu\n- doi' })}
+      />,
+    );
+
+    const card = screen.getByRole('article', { name: 'Ședință Educațional' });
+    const description = card.querySelector('.event-description');
+    expect(description).not.toBeNull();
+    // `.event-description` keeps its 62ch measure, spacing and muted colour.
+    expect(description).toHaveClass('formatted-text');
+    expect(
+      within(card).getByText('actele', { selector: 'strong' }),
+    ).toBeVisible();
+    expect(
+      within(card)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['unu', 'doi']);
+  });
+
+  it('shows no description block for an Event without one', () => {
+    render(<EventCard event={event({ description: null })} />);
+
+    const card = screen.getByRole('article', { name: 'Ședință Educațional' });
+    expect(card.querySelector('.event-description')).toBeNull();
+  });
+});
+
 describe('EventCard — approval (spec 2026-10-11)', () => {
   it('marks a pending OSUBB-wide Event and says it waits for BC', () => {
     render(<EventCard event={event({ approvalStatus: 'pending' })} />);
@@ -161,6 +203,46 @@ describe('EventCard — approval (spec 2026-10-11)', () => {
         within(card).queryByRole('button', { name: /^Revizuiește/ }),
       ).toBeNull();
     }
+  });
+
+  it('lets a Text Link in the description of a reviewable card open, not the review (final review I1)', () => {
+    const onReview = vi.fn();
+    render(
+      <EventCard
+        event={event({
+          approvalStatus: 'pending',
+          description: 'Completează [formularul](https://forms.gle/x).',
+        })}
+        onReview={onReview}
+      />,
+    );
+    const card = screen.getByRole('article', { name: 'Ședință Educațional' });
+    const link = within(card).getByRole('link', { name: /^formularul/ });
+    expect(link).toHaveAttribute('href', 'https://forms.gle/x');
+    // jsdom has no layout, so what lifts the link above the card-wide hit area
+    // is read from the stylesheet below; here the click must not reach the review.
+    link.addEventListener('click', (click) => click.preventDefault());
+    link.click();
+    expect(onReview).not.toHaveBeenCalled();
+  });
+
+  it('lifts the description’s links above the review hit area in the stylesheet, as it lifts the managers’ strip', () => {
+    const css = readFileSync(path.resolve('src/theme/calendar.css'), 'utf8');
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+    const lifted = rules.find(([, selectors]) =>
+      selectors?.includes('.event-card.is-reviewable .event-description a'),
+    );
+    expect(lifted).toBeDefined();
+    expect(lifted?.[2]).toMatch(/position:\s*relative/);
+    expect(lifted?.[2]).toMatch(/z-index:\s*1\b/);
+    // The overlay it must clear is still the button's own pseudo-element.
+    expect(
+      rules.some(
+        ([, selectors, body]) =>
+          selectors?.includes('.event-review-open::after') &&
+          /inset:\s*0/.test(body ?? ''),
+      ),
+    ).toBe(true);
   });
 
   it('shows neither on an approved Event', () => {

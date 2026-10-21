@@ -1,6 +1,7 @@
 import { createElement, type CSSProperties } from 'react';
 import { Clock, MapPin, Users } from 'lucide-react';
 
+import { FormattedText } from '../../components/formatted-text/FormattedText';
 import { formatBucharestShortDay } from '../../lib/calendar-time';
 import { cn } from '../../lib/utils';
 import type { EventPresentation } from '../../queries/events';
@@ -153,7 +154,11 @@ export default function EventCard({
       </dl>
 
       {event.description && (
-        <p className="event-description">{event.description}</p>
+        <FormattedText
+          view="full"
+          text={event.description}
+          className="event-description"
+        />
       )}
 
       {cancelled ? (
