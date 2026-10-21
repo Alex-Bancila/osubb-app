@@ -41,13 +41,15 @@ export function FormattedText({ text, view, className }: FormattedTextProps) {
 /**
  * `text` read in `view`, or, should reading it fail, the text as typed: one
  * `p` with its line breaks (one line in a preview). One Announcement or Task
- * must never take down the screen that lists it (ruling 16).
+ * must never take down the screen that lists it (ruling 16). In development the
+ * error is logged, so a text that fails to read is not silently shown as typed.
  */
 function read(text: string, view: View): ReactNode {
   try {
     const tokens = lexFormattedText(text);
     return view === 'preview' ? joined(runs(tokens)) : blocks(tokens);
-  } catch {
+  } catch (error) {
+    if (import.meta.env.DEV) console.error('[formatted-text]', error);
     const typed = asTyped(text.replace(/\r\n/g, '\n'), view);
     return view === 'preview' ? typed : <p>{typed}</p>;
   }
@@ -56,6 +58,11 @@ function read(text: string, view: View): ReactNode {
 /** A Titlu or Subtitlu written with `#`, not underlined with `===` or `---`. */
 function isDialectHeading(token: Tokens.Heading): boolean {
   return /^[ \t]*#/.test(token.raw);
+}
+
+/** Nothing to show: no node, or only the nothing a blank-worded link leaves. */
+function isSilent(nodes: readonly ReactNode[]): boolean {
+  return nodes.every((node) => node === null);
 }
 
 /** Text outside the dialect, as typed: its lines in `full`, one line in `preview`. */
@@ -86,7 +93,8 @@ function linkTarget(token: Tokens.Link): TextLinkTarget | null {
 
 /**
  * A Text Link: inside the app through the router, outside it in a new tab cut
- * off from this page. A preview shows only its words.
+ * off from this page, which a screen reader is told as an Attached Link tells
+ * it (`AttachedLinkButton`). A preview shows only its words.
  */
 function linked(
   target: TextLinkTarget,
@@ -104,6 +112,7 @@ function linked(
   return (
     <a key={key} href={target.href} target="_blank" rel="noopener noreferrer">
       {words}
+      <span className="sr-only"> (se deschide într-o filă nouă)</span>
     </a>
   );
 }
@@ -132,7 +141,12 @@ function inline(tokens: readonly Token[], view: View): ReactNode[] {
         return <s key={key}>{inline(span.tokens, view)}</s>;
       case 'link': {
         const target = linkTarget(span);
-        if (target) return linked(target, inline(span.tokens, view), view, key);
+        if (target) {
+          // Words of only spaces would be a link with no name to a screen
+          // reader: no link, and nothing for the words.
+          if (!span.text.trim()) return null;
+          return linked(target, inline(span.tokens, view), view, key);
+        }
         break;
       }
     }
@@ -147,10 +161,14 @@ function blocks(tokens: readonly Token[]): ReactNode[] {
     switch (block.type) {
       case 'space':
         return null;
-      case 'paragraph':
-        return <p key={key}>{inline(block.tokens, 'full')}</p>;
+      case 'paragraph': {
+        const words = inline(block.tokens, 'full');
+        return isSilent(words) ? null : <p key={key}>{words}</p>;
+      }
       case 'heading':
         if (!isDialectHeading(block)) break;
+        // A `#` with no words titles nothing.
+        if (!block.text.trim()) return null;
         return block.depth === 1 ? (
           <h3 key={key}>{inline(block.tokens, 'full')}</h3>
         ) : (
@@ -196,6 +214,7 @@ function runs(tokens: readonly Token[]): ReactNode[][] {
         return [inline(block.tokens, 'preview')];
       case 'heading':
         if (!isDialectHeading(block)) break;
+        if (!block.text.trim()) return [];
         return [inline(block.tokens, 'preview')];
       case 'blockquote':
         return runs(block.tokens);
@@ -210,7 +229,7 @@ function runs(tokens: readonly Token[]): ReactNode[][] {
 
 function joined(parts: ReactNode[][]): ReactNode[] {
   return parts
-    .filter((part) => part.length > 0)
+    .filter((part) => !isSilent(part))
     .map((part, index) => (
       <Fragment key={index}>
         {index > 0 && ' · '}

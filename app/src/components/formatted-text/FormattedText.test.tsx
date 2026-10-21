@@ -21,6 +21,7 @@ vi.mock('../../lib/formatted-text/lex', async (importOriginal) => {
 
 afterEach(() => {
   lexing.fails = false;
+  vi.restoreAllMocks();
 });
 
 const SAMPLE = 'Ne vedem **joi**.\n\n## Ordinea de zi\n- unu\n- doi';
@@ -80,10 +81,43 @@ describe('FormattedText, full (ruling R60)', () => {
 
   it('opens a bare address in a new tab, cut off from this page', () => {
     full('https://osubb.ro');
-    const link = screen.getByRole('link', { name: 'https://osubb.ro' });
+    const link = screen.getByRole('link', {
+      name: /^https:\/\/osubb\.ro\s*\(se deschide într-o filă nouă\)$/,
+    });
     expect(link).toHaveAttribute('href', 'https://osubb.ro');
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('tells a screen reader that an outside link opens a new tab, as an Attached Link does, and an inside one does not', async () => {
+    const container = full(
+      `Vezi [formularul](https://forms.gle/x) și [ședința](${location.origin}/calendar?event=1).`,
+    );
+    // The hidden text opens with a space, which a browser keeps in the link's
+    // name and the name computation of jsdom drops; the pattern allows both.
+    const outside = screen.getByRole('link', {
+      name: /^formularul\s*\(se deschide într-o filă nouă\)$/,
+    });
+    expect(outside.querySelector('.sr-only')).toHaveTextContent(
+      '(se deschide într-o filă nouă)',
+    );
+    expect(screen.getByRole('link', { name: 'ședința' })).toBeInTheDocument();
+    const results = await axe.run(container, {
+      rules: { 'color-contrast': { enabled: false } },
+    });
+    expect(results.violations).toEqual([]);
+  });
+
+  it('renders no link, and nothing for the words, when the words are only spaces', async () => {
+    const container = full('Vezi [ ](https://x.ro) aici\n\n[ ](https://x.ro)');
+    expect(container.querySelector('a')).toBeNull();
+    // The second paragraph held nothing else: no empty `p` stays behind.
+    expect(container.querySelectorAll('p')).toHaveLength(1);
+    expect(container).toHaveTextContent(/^Vezi aici$/);
+    const results = await axe.run(container, {
+      rules: { 'color-contrast': { enabled: false } },
+    });
+    expect(results.violations).toEqual([]);
   });
 
   it('opens a Text Link to the app inside the app', () => {
@@ -132,6 +166,19 @@ describe('FormattedText, full (ruling R60)', () => {
     expect(paragraph).toHaveTextContent('Titlu===');
   });
 
+  it('renders nothing for a # or ## with no words, and still reads the line after it', () => {
+    for (const empty of ['# ', '## ', '#', '#   ']) {
+      const container = full(empty);
+      expect(container.querySelector('h3, h4')).toBeNull();
+      expect(container.firstElementChild?.childElementCount).toBe(0);
+    }
+    const container = full('#\ntext\n\n## \nmai mult');
+    expect(container.querySelector('h3, h4')).toBeNull();
+    expect(
+      [...container.querySelectorAll('p')].map((p) => p.textContent),
+    ).toEqual(['text', 'mai mult']);
+  });
+
   it('reads quotes, numbered and nested lists', () => {
     const container = full('> citat\n\n3. trei\n4. patru\n\n- unu\n  - doi');
     expect(container.querySelector('blockquote')).toHaveTextContent('citat');
@@ -171,7 +218,7 @@ describe('FormattedText, full (ruling R60)', () => {
     const container = full('[a [b](https://x.ro)');
     const paragraph = container.querySelector('p');
     expect(paragraph?.firstChild?.textContent).toBe('[a ');
-    expect(paragraph?.querySelector('a')).toHaveTextContent(/^b$/);
+    expect(paragraph?.querySelector('a')?.firstChild?.textContent).toBe('b');
     expect(paragraph?.querySelector('a')).toHaveAttribute(
       'href',
       'https://x.ro',
@@ -217,6 +264,15 @@ describe('FormattedText, preview (ruling R60)', () => {
     );
   });
 
+  it('joins around a heading with no words, and around a link with only spaces, with no stray " · "', () => {
+    expect(preview('# \n\ntext')).toHaveTextContent(/^text$/);
+    expect(preview('#\ntext')).toHaveTextContent(/^text$/);
+    expect(preview('[ ](https://x.ro)\n\ntext\n\n## ')).toHaveTextContent(
+      /^text$/,
+    );
+    expect(preview('[ ](https://x.ro)').querySelector('a')).toBeNull();
+  });
+
   it('shows an unsafe link and raw HTML as typed', () => {
     const container = preview('[rău](javascript:alert(1))\n\n<b>x</b>');
     expect(container.querySelector('a, b')).toBeNull();
@@ -259,6 +315,7 @@ describe('FormattedText, nesting and failure (rulings 16 and 17)', () => {
 
   it('shows the text as typed, in one p with its line breaks, when reading fails', () => {
     lexing.fails = true;
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const container = full('**joi**\r\n- unu');
     const paragraphs = container.querySelectorAll('p');
     expect(paragraphs).toHaveLength(1);
@@ -266,14 +323,31 @@ describe('FormattedText, nesting and failure (rulings 16 and 17)', () => {
     expect(paragraphs[0]).toHaveTextContent(/^\*\*joi\*\*- unu$/);
     expect(container.querySelector('strong, li')).toBeNull();
     expect(container.firstElementChild).toHaveClass('formatted-text');
+    // It says why it was needed, in development, as the error state does.
+    expect(logged).toHaveBeenCalledExactlyOnceWith(
+      '[formatted-text]',
+      expect.any(RangeError),
+    );
   });
 
   it('previews the text as typed, on one line, when reading fails', () => {
     lexing.fails = true;
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const container = preview('**joi**\n- unu');
     expect(container.querySelector('strong, br, p')).toBeNull();
     expect(container).toHaveTextContent(/^\*\*joi\*\* - unu$/);
     expect(container.firstElementChild).toHaveClass('formatted-text-preview');
+    expect(logged).toHaveBeenCalledExactlyOnceWith(
+      '[formatted-text]',
+      expect.any(RangeError),
+    );
+  });
+
+  it('logs nothing when the text reads', () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    full(SAMPLE);
+    preview(SAMPLE);
+    expect(logged).not.toHaveBeenCalled();
   });
 
   it('reads in-word stars with the stripper’s word class', () => {
