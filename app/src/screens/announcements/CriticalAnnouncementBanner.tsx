@@ -1,5 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '../../components/ui/button';
+import { toPlainText } from '../../lib/formatted-text/plain';
 import type { AnnouncementPresentation } from './announcements-presentation';
 
 type CriticalAnnouncementBannerProps = {
@@ -34,7 +35,7 @@ export default function CriticalAnnouncementBanner({
             Anunț critic: {announcement.title}
           </p>
           <p className="line-clamp-2 text-sm text-destructive/90">
-            {announcement.body}
+            {toPlainText(announcement.body)}
           </p>
         </div>
       </div>

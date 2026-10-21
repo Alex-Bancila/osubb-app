@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
 import { AttachedLinksList } from '../../components/attached-link/AttachedLinksList';
+import { FormattedText } from '../../components/formatted-text/FormattedText';
 import { EmptyState } from '../../components/layout';
 import { ErrorState } from '../../components/states';
 import { MemberName } from '../../components/member/MemberName';
@@ -189,9 +190,11 @@ function AnnouncementDetails({
         </p>
       )}
 
-      <div className="text-sm leading-relaxed whitespace-pre-line text-foreground/90">
-        {announcement.body}
-      </div>
+      <FormattedText
+        view="full"
+        text={announcement.body}
+        className="text-sm leading-relaxed text-foreground/90"
+      />
 
       {/* R46: each link reads "Deschide: <etichetă>" here; the list drops
           any address that is not http(s) (`safeHttpUrl`). */}

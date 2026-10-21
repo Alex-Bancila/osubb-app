@@ -749,6 +749,14 @@ describe('The detailed Task row of a Member’s own lists', () => {
     ).toBeTruthy();
   });
 
+  it('shows the description as plain words on its one line, whatever Formatted Text it holds (R60)', () => {
+    detailedRow({ description: '**a** _b_\n\n- c\n- [d](https://osubb.ro)' });
+    const description = screen.getByText('a b • c • d');
+    expect(description).toHaveAttribute('data-slot', 'task-row-description');
+    expect(description).toHaveClass('line-clamp-1');
+    expect(description.querySelector('strong, em, li, a')).toBeNull();
+  });
+
   it('puts the Executor’s actions at the row’s end, above its open area: full width on a phone, natural width from sm', () => {
     const task = toTaskPresentation(
       taskRow({ status: 'in_progress' }),

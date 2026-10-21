@@ -810,6 +810,47 @@ describe('Task details sheet', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('reads the description as Formatted Text, and the Submission Note as the text typed (R60, R7)', async () => {
+    useTaskDetails.mockReturnValue({
+      data: {
+        task: taskRow({
+          status: 'in_progress',
+          review_round: 1,
+          description: 'Tipărește **40** de exemplare.\nLa Copy Center.',
+          submission: [
+            {
+              id: 12,
+              kind: 'submitted',
+              note: 'Am pus **prezentarea** în folder.',
+              details: {},
+              occurred_at: '2026-09-15T09:30:00Z',
+            },
+          ],
+        }),
+        executorName: null,
+        subtasks: [],
+      },
+    });
+    render(<TaskDetailsSheet taskId={1} onClose={vi.fn()} />);
+    const sheet = await screen.findByRole('dialog', { name: TITLE });
+    const description = sheet.querySelector('[data-slot="task-description"]');
+    expect(description).not.toBeNull();
+    expect(
+      within(description as HTMLElement).getByText('40', {
+        selector: 'strong',
+      }),
+    ).toBeVisible();
+    expect(description?.querySelector('br')).not.toBeNull();
+    expect(description?.className ?? '').not.toMatch(/whitespace-pre/);
+    expect(description?.querySelector('.whitespace-pre-wrap')).toBeNull();
+    // The Submission Note is plain by ruling R7: its stars stay.
+    const note = within(sheet).getByRole('region', {
+      name: 'Notă la trimitere',
+    });
+    expect(note).toHaveTextContent('Am pus **prezentarea** în folder.');
+    expect(note.querySelector('strong')).toBeNull();
+  });
+
   it('shows the latest Submission Note with its link whenever one exists', async () => {
     useTaskDetails.mockReturnValue({
       data: {

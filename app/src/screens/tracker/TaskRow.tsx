@@ -3,6 +3,7 @@ import { Clock, UserRound } from 'lucide-react';
 import { AttachedLinksList } from '../../components/attached-link/AttachedLinksList';
 import { ListRow } from '../../components/layout';
 import { MemberName } from '../../components/member/MemberName';
+import { toPlainText } from '../../lib/formatted-text/plain';
 import { formatPoints } from '../../lib/format';
 import type { TaskProgressInput } from '../../queries/task-progress';
 import type { OnGaveUp } from './give-up-receipt';
@@ -261,7 +262,7 @@ export function TaskRow({
                     data-slot="task-row-description"
                     className="m-0 line-clamp-1 wrap-anywhere text-muted-foreground"
                   >
-                    {task.description}
+                    {toPlainText(task.description)}
                   </p>
                 )}
                 {!readOnly && (task.assignmentMode !== 'public' || ownTask) && (

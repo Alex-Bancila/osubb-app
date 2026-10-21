@@ -212,6 +212,55 @@ describe('Authorized Task timeline', () => {
     );
     expect(screen.getByText('Task actualizat')).toBeVisible();
   });
+  it('shows a description edit as each version looked, under Înainte and După (R60)', () => {
+    render(
+      <TaskTimeline
+        activity={[
+          activity({
+            kind: 'task_updated',
+            note: 'Motiv cu **stele**',
+            details: {
+              changed: ['title', 'description'],
+              before: { title: 'Vechi **titlu**', description: 'a' },
+              after: { title: 'Nou **titlu**', description: '**a**' },
+            },
+          }),
+        ]}
+      />,
+    );
+    const before = screen.getByText('Înainte').parentElement as HTMLElement;
+    const after = screen.getByText('După').parentElement as HTMLElement;
+    expect(within(after).getByText('a', { selector: 'strong' })).toBeVisible();
+    expect(before.querySelector('strong')).toBeNull();
+    expect(within(before).getByText('a')).toBeVisible();
+    expect(within(after).getByText('Descriere:')).toBeVisible();
+    // Every other field, and every note, stays the text as it was typed.
+    expect(screen.getByText('Titlu: Vechi **titlu**')).toBeVisible();
+    expect(screen.getByText('Titlu: Nou **titlu**')).toBeVisible();
+    expect(screen.getByText('Motiv cu **stele**')).toBeVisible();
+  });
+
+  it('shows an emptied description as a dash, and a plain one as it was', () => {
+    render(
+      <TaskTimeline
+        activity={[
+          activity({
+            kind: 'task_updated',
+            note: null,
+            details: {
+              before: { description: 'Primul rând\nAl doilea rând' },
+              after: { description: null },
+            },
+          }),
+        ]}
+      />,
+    );
+    const before = screen.getByText('Înainte').parentElement as HTMLElement;
+    expect(before.querySelector('br')).not.toBeNull();
+    expect(before).toHaveTextContent('Primul rândAl doilea rând');
+    expect(screen.getByText('Descriere: —')).toBeVisible();
+  });
+
   it('explains empty or partial legacy history', () => {
     render(<TaskTimeline activity={[]} />);
     expect(

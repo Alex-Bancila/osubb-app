@@ -49,6 +49,28 @@ describe('AnnouncementCard', () => {
     expect(screen.getByText('18 sept. · 18:00')).toBeInTheDocument();
   });
 
+  it('previews the body as Formatted Text on its three lines: styles kept, blocks run on (R60)', () => {
+    render(
+      <AnnouncementCard
+        announcement={presentation({
+          body: '# Ordinea de zi\nNe vedem **joi** pe [site](https://osubb.ro).\n\n- unu\n- doi',
+        })}
+        onOpen={vi.fn()}
+      />,
+    );
+
+    const preview = document.querySelector('.formatted-text-preview');
+    expect(preview).toHaveTextContent(
+      'Ordinea de zi · Ne vedem joi pe site. · unu · doi',
+    );
+    expect(preview?.querySelector('strong')).toHaveTextContent('joi');
+    // The card is the tap target: no list, no heading, no link inside it.
+    expect(preview?.querySelector('li, h3, h4, a')).toBeNull();
+    // Still the one clamped paragraph.
+    expect(preview?.parentElement).toHaveClass('line-clamp-3');
+    expect(preview?.parentElement?.tagName).toBe('P');
+  });
+
   it('renders pinned badge when pinned is true', () => {
     render(
       <AnnouncementCard

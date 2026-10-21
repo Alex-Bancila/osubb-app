@@ -84,6 +84,21 @@ describe('DealCard (R45)', () => {
     expect(stub).toHaveClass('rounded-b-md');
   });
 
+  it('previews the description as Formatted Text on its three lines (R60)', () => {
+    renderCard(
+      <DealCard
+        deal={{ ...DEAL, body: 'Cafea **gratis**\n\n- luni\n- marți' }}
+        onOpen={() => {}}
+      />,
+    );
+    const card = screen.getByRole('article', { name: DEAL.title });
+    const preview = card.querySelector('.formatted-text-preview');
+    expect(preview).toHaveTextContent('Cafea gratis · luni · marți');
+    expect(preview?.querySelector('strong')).toHaveTextContent('gratis');
+    expect(preview?.querySelector('li')).toBeNull();
+    expect(preview?.parentElement).toHaveClass('line-clamp-3');
+  });
+
   it('gives a Deal without a code no stub', () => {
     renderCard(<DealCard deal={{ ...DEAL, code: null }} onOpen={() => {}} />);
     const card = screen.getByRole('article', { name: DEAL.title });

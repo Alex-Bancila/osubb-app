@@ -53,6 +53,23 @@
   padding-inline-start: 1.5em;
 }
 
+/*
+  A list nested six deep stops indenting. 4000 stored characters hold hundreds
+  of levels, and 1.5em each would push the text past the edge of any sheet or
+  card; from here on the markers sit inside the item, so none hangs out into
+  the margin.
+*/
+.formatted-text
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol)
+  :is(ul, ol) {
+  padding-inline-start: 0;
+  list-style-position: inside;
+}
+
 .formatted-text ul {
   list-style: disc;
 }

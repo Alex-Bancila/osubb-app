@@ -68,6 +68,21 @@ describe('CriticalAnnouncementBanner', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows the body as plain words on its two lines, whatever Formatted Text it holds (R60)', () => {
+    render(
+      <CriticalAnnouncementBanner
+        announcement={presentation({
+          body: '**a** _b_\n\n- c\n- [d](https://osubb.ro)',
+        })}
+        onOpen={vi.fn()}
+      />,
+    );
+
+    const body = screen.getByText('a b • c • d');
+    expect(body).toHaveClass('line-clamp-2');
+    expect(body.querySelector('strong, em, li, a')).toBeNull();
+  });
+
   it('calls onOpen when action button is clicked', async () => {
     const user = userEvent.setup();
     const onOpen = vi.fn();

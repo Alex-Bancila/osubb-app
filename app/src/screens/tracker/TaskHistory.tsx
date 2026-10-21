@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { AttachedLinkButton } from '../../components/attached-link/AttachedLinkButton';
+import { FormattedText } from '../../components/formatted-text/FormattedText';
 import { DifficultyMark } from '../../components/tasks/DifficultyMark';
 import { Button } from '../../components/ui/button';
 import { formatBucharestShort } from '../../lib/calendar-time';
@@ -119,9 +120,10 @@ function submittedLink(details: Json) {
     : null;
 }
 // One before/after line: its text keys it, its content is what shows. A
-// Difficulty reads as its mark — stars, a medal or a role (R29a, #986); every
-// other value is plain text.
-type ChangeLine = { key: string; content: ReactNode };
+// Difficulty reads as its mark — stars, a medal or a role (R29a, #986); a
+// description reads as Formatted Text, as each version looked (R60), in a block
+// of its own (`formatted`); every other value is plain text.
+type ChangeLine = { key: string; content: ReactNode; formatted?: boolean };
 function changes(
   details: Json,
   side: 'before' | 'after',
@@ -153,6 +155,19 @@ function changes(
         {
           key: `difficulty:${value}`,
           content: <DifficultyMark value={value} label="Dificultate:" />,
+        },
+      ];
+    if (field === 'description' && typeof value === 'string' && value !== '')
+      return [
+        {
+          key: `${fields.description}: ${value}`,
+          formatted: true,
+          content: (
+            <>
+              <p>{fields.description}:</p>
+              <FormattedText view="full" text={value} />
+            </>
+          ),
         },
       ];
     const text =
@@ -257,11 +272,15 @@ export function TaskTimeline({
                     <p className="font-medium">
                       {side === 'before' ? 'Înainte' : 'După'}
                     </p>
-                    {lines.map((line) => (
-                      <p key={line.key} className="whitespace-pre-wrap">
-                        {line.content}
-                      </p>
-                    ))}
+                    {lines.map((line) =>
+                      line.formatted ? (
+                        <div key={line.key}>{line.content}</div>
+                      ) : (
+                        <p key={line.key} className="whitespace-pre-wrap">
+                          {line.content}
+                        </p>
+                      ),
+                    )}
                   </div>
                 ) : null;
               })}

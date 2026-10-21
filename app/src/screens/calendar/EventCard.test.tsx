@@ -85,6 +85,46 @@ describe('EventCard — the meta line', () => {
   });
 });
 
+describe('EventCard — the description as Formatted Text (R60)', () => {
+  it('keeps the description’s own line breaks, which the card lost before', () => {
+    render(<EventCard event={event({ description: 'rând\nrând' })} />);
+
+    const card = screen.getByRole('article', { name: 'Ședință Educațional' });
+    const description = card.querySelector('.event-description');
+    expect(description?.querySelector('br')).not.toBeNull();
+    expect(description).toHaveTextContent('rândrând');
+  });
+
+  it('reads bold and a list inside the description, under the card’s own measure class', () => {
+    render(
+      <EventCard
+        event={event({ description: 'Aduceți **actele**.\n\n- unu\n- doi' })}
+      />,
+    );
+
+    const card = screen.getByRole('article', { name: 'Ședință Educațional' });
+    const description = card.querySelector('.event-description');
+    expect(description).not.toBeNull();
+    // `.event-description` keeps its 62ch measure, spacing and muted colour.
+    expect(description).toHaveClass('formatted-text');
+    expect(
+      within(card).getByText('actele', { selector: 'strong' }),
+    ).toBeVisible();
+    expect(
+      within(card)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['unu', 'doi']);
+  });
+
+  it('shows no description block for an Event without one', () => {
+    render(<EventCard event={event({ description: null })} />);
+
+    const card = screen.getByRole('article', { name: 'Ședință Educațional' });
+    expect(card.querySelector('.event-description')).toBeNull();
+  });
+});
+
 describe('EventCard — approval (spec 2026-10-11)', () => {
   it('marks a pending OSUBB-wide Event and says it waits for BC', () => {
     render(<EventCard event={event({ approvalStatus: 'pending' })} />);

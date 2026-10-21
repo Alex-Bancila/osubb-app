@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { AttachedLinksList } from '../../components/attached-link/AttachedLinksList';
+import { FormattedText } from '../../components/formatted-text/FormattedText';
 import { Card, CardContent, CardFooter } from '../../components/ui/card';
 import { cn } from '../../lib/utils';
 import {
@@ -90,7 +91,7 @@ export default function DealCard({
         <AnnouncementTermen deadline={deal.deadline} className="mt-2" />
 
         <p className="m-0 mt-2 line-clamp-3 text-sm text-muted-foreground">
-          {deal.body}
+          <FormattedText view="preview" text={deal.body} />
         </p>
 
         <AttachedLinksList

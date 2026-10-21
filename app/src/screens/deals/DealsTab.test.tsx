@@ -154,6 +154,44 @@ describe('Anunțuri › OSUBB Deals (R45)', () => {
     expect(within(sheet).queryByText(/Codul a fost deschis/)).toBeNull();
   });
 
+  it('reads a Deal as Formatted Text: a card runs it on, the sheet shows it whole (R60)', async () => {
+    supabaseMock.order.mockReturnValue(
+      answered({
+        data: [
+          deal({
+            id: 9,
+            title: 'Bilete la teatru',
+            body: 'Aduceți **actele**.\n\n- unu\n- doi',
+          }),
+        ],
+        error: null,
+      }),
+    );
+    renderAt('/anunturi/deals?deal=9');
+    const sheet = await screen.findByRole('dialog', {
+      name: 'Bilete la teatru',
+    });
+    expect(
+      within(sheet).getByText('actele', { selector: 'strong' }),
+    ).toBeVisible();
+    expect(
+      within(sheet)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['unu', 'doi']);
+    expect(sheet.querySelector('.whitespace-pre-line')).toBeNull();
+
+    // The card behind it keeps the three-line preview: blocks joined by " · ".
+    const card = screen.getByRole('article', {
+      name: 'Bilete la teatru',
+      hidden: true,
+    });
+    expect(card.querySelector('.formatted-text-preview')).toHaveTextContent(
+      'Aduceți actele. · unu · doi',
+    );
+    expect(card.querySelector('li')).toBeNull();
+  });
+
   it("reads an opened Deal's notifications, even one read before (R53)", async () => {
     supabaseMock.order.mockReturnValue(
       answered({
