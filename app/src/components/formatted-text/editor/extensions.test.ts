@@ -175,6 +175,42 @@ describe('the editor’s configuration (ruling R60, decision 15)', () => {
       ['5*3*2 și ', []],
       ['gras', ['bold']],
     ]);
+    editor.commands.setContent('## Nou\n\n- unu', { contentType: 'markdown' });
+    expect(editor.getMarkdown()).toBe('## Nou\n\n- unu');
+    editor.commands.insertContentAt(editor.state.doc.content.size, '==a==', {
+      contentType: 'markdown',
+    });
+    expect(editor.getMarkdown()).toBe('## Nou\n\n- unu\n\n==a==');
+    editor.commands.setContent('**a**');
+    expect(texts(editor.getJSON())).toEqual([['**a**', []]]);
+  });
+
+  it('adds no paragraph after a text that ends in a list (ruling 24)', () => {
+    const markdown = 'Ordinea de zi:\n\n- unu\n- doi';
+    const editor = editorWith(markdown);
+    editor.commands.setTextSelection(3);
+    editor.commands.setTextSelection(editor.state.doc.content.size - 1);
+    expect(editor.getJSON().content?.at(-1)?.type).toBe('bulletList');
+    expect(editor.getMarkdown()).toBe(markdown);
+  });
+
+  it.each([
+    ['0740123456. ', 'paragraph'],
+    ['1234. ', 'paragraph'],
+    ['12. ', 'orderedList'],
+  ])(
+    'reads %s at the start of a line by its digits (ruling 25)',
+    (start, node) => {
+      const editor = editorWith('');
+      type(editor, start);
+      expect(editor.getJSON().content?.[0]?.type).toBe(node);
+    },
+  );
+
+  it('starts a numbered list at the number typed', () => {
+    const editor = editorWith('');
+    type(editor, '12. doisprezece');
+    expect(editor.getMarkdown()).toBe('12. doisprezece');
   });
 });
 

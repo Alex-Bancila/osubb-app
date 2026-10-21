@@ -161,17 +161,20 @@ describe('the editor’s Markdown (ruling R60, ruling 21)', () => {
       ['blank lines', 'a\n\n\n\nb', 'a\n\nb'],
       ['a code fence', '```\ncod\n```', '\\`\\`\\`\ncod\n\\`\\`\\`'],
       ['inline code', 'un `cod`', 'un \\`cod\\`'],
-      ['raw HTML', '<b>x</b>', '<b>x</b>'],
+      // A `<` opening a line would open an HTML block, which the reader
+      // shows raw, escapes and all: it is escaped. The stripper then keeps
+      // the backslash (`plain.ts` does not unescape `<`).
+      ['raw HTML', '<b>x</b>', '\\<b>x</b>'],
       ['a table', '| a | b |\n|---|---|', '\\| a \\| b \\|\n\\|---\\|---\\|'],
       [
         'a javascript: link',
         '[x](javascript:alert(1))',
-        '\\[x\\](javascript:alert(1))',
+        '\\[x\\]\\(javascript:alert(1))',
       ],
       [
         'a www. address and an e-mail',
         'www.osubb.ro și a@b.ro',
-        'www.osubb.ro și a@b.ro',
+        'www\\.osubb.ro și a@b.ro',
       ],
       ['a checklist box', '- [ ] sarcină', '- \\[ \\] sarcină'],
       ['an underlined heading', 'Setext\n===', 'Setext\n\\=\\=\\='],
@@ -218,16 +221,6 @@ describe('the editor’s Markdown (ruling R60, ruling 21)', () => {
         'a = b',
       ],
       ['strike around a tilde', paragraph(text('a~b', strike)), 'a\\~b'],
-      [
-        'bold closing on punctuation before a letter',
-        paragraph(text('x.', bold), text('a')),
-        'x.a',
-      ],
-      [
-        'a link with brackets in its words',
-        paragraph(text('a[b]', link('https://x.ro'))),
-        'a\\[b\\]',
-      ],
       [
         'a link to a refused address',
         paragraph(text('rău', link('javascript:alert(1)'))),
@@ -330,11 +323,10 @@ describe('the editor’s Markdown (ruling R60, ruling 21)', () => {
               },
             ],
           },
-          { type: 'listItem', content: [paragraph()] },
         ],
       });
       const markdown = written(json);
-      expect(markdown).toBe('9. a\n   b\n10. c\n\n    d\n    - e\n11.');
+      expect(markdown).toBe('9. a\n   b\n10. c\n\n    d\n    - e');
       expect(parseFormattedText(markdown)).toEqual(json);
     });
 
@@ -362,5 +354,197 @@ describe('the editor’s Markdown (ruling R60, ruling 21)', () => {
       expect(reader(markdown)).toContain('Atenție!<a');
       expect(toPlainText(markdown)).toBe('Atenție!formular');
     });
+  });
+});
+
+/**
+ * `json` written, then checked as every written text must be: rewriting it is
+ * byte for byte the same, and reading it gives the document it was written
+ * from, less only the marks the dialect cannot hold.
+ */
+function stableWrite(json: JSONContent): string {
+  const markdown = written(json);
+  expect(rewritten(markdown)).toBe(markdown);
+  return markdown;
+}
+
+describe('cases the task review found (fix round 1)', () => {
+  it('drops an empty nested item, whose lone - would underline the words above it', () => {
+    const markdown = stableWrite(
+      doc({
+        type: 'bulletList',
+        content: [
+          {
+            type: 'listItem',
+            content: [
+              paragraph(text('Important', bold), text(': vineri')),
+              {
+                type: 'bulletList',
+                content: [{ type: 'listItem', content: [paragraph()] }],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(markdown).toBe('- **Important**: vineri');
+    expect(reader(markdown)).toContain(
+      '<li><strong>Important</strong>: vineri</li>',
+    );
+  });
+
+  it('keeps a nested list whose first item opens with a list a line below the words', () => {
+    const nested = (content: JSONContent[]): JSONContent => ({
+      type: 'bulletList',
+      content: [{ type: 'listItem', content }],
+    });
+    const json = doc(
+      nested([
+        paragraph(text('a')),
+        nested([paragraph(), nested([paragraph(text('b'))])]),
+      ]),
+    );
+    const markdown = stableWrite(json);
+    expect(markdown).toBe('- a\n\n  -\n    - b');
+    expect(parseFormattedText(markdown)).toEqual(json);
+  });
+
+  it.each([
+    ['[vezi https://x.ro]', '\\[vezi [https://x.ro](https://x.ro)\\]'],
+    ['https://x.ro*', '[https://x.ro](https://x.ro)\\*'],
+    ['https://x.ro/a~', '[https://x.ro/a](https://x.ro/a)\\~'],
+    ['vezi https://x.ro.', 'vezi https://x.ro.'],
+    [
+      'http://y.ro:_= și http://z.ro',
+      '[http://y.ro](http://y.ro):\\_= și http://z.ro',
+    ],
+  ])(
+    'links the address in %s where the reader’s link ends',
+    (words, markdown) => {
+      expect(stableWrite(doc(paragraph(text(words))))).toBe(markdown);
+      expect(toPlainText(markdown)).toBe(words);
+      expect(reader(markdown)).not.toContain('\\');
+    },
+  );
+
+  it.each(['<div>', '<p>', '<br>', '<!x', '<script>x', '</b>'])(
+    'escapes %s opening a line, which would open an HTML block',
+    (words) => {
+      const markdown = stableWrite(doc(paragraph(text('a'), br, text(words))));
+      expect(markdown).toBe(`a\n\\${words}`);
+      expect(reader(markdown)).toContain(
+        words.replace(/</g, '&lt;').replace(/>/g, '&gt;'),
+      );
+    },
+  );
+
+  it('keeps <!-- from hiding the paragraphs after it', () => {
+    const markdown = stableWrite(
+      doc(paragraph(text('<!-- notă **a**')), paragraph(text('după', bold))),
+    );
+    expect(markdown).toBe('\\<!-- notă \\*\\*a\\*\\*\n\n**după**');
+    expect(reader(markdown)).toContain('<p><strong>după</strong></p>');
+  });
+
+  it('escapes the ( after an escaped ], which the stripper would read as a Text Link', () => {
+    const markdown = stableWrite(
+      doc(paragraph(text('![img](https://x.ro/i.png)'))),
+    );
+    expect(markdown).toBe('!\\[img\\]\\(https://x.ro/i.png)');
+    expect(toPlainText(markdown)).toBe('![img](https://x.ro/i.png)');
+    expect(rewritten('![img](https://x.ro/i.png)')).toBe(markdown);
+  });
+
+  it('writes a line plainer when marked would pair its marker with the next line’s', () => {
+    const json = doc(
+      paragraph(text('[<', italic), br, text('*'), text(':x\\>', bold)),
+    );
+    const markdown = stableWrite(json);
+    expect(markdown).toBe('\\[<\n\\***:x\\\\>**');
+    expect(reader(markdown)).toBe(
+      '<div class="formatted-text"><p>[&lt;<br>*<strong>:x\\&gt;</strong></p></div>',
+    );
+    expect(toPlainText(markdown)).toBe('[<\n*:x\\>');
+  });
+
+  it('escapes a spaced rule under words', () => {
+    const markdown = stableWrite(doc(paragraph(text('a'), br, text('-- -'))));
+    expect(markdown).toBe('a\n\\-- -');
+    expect(reader(markdown)).toBe(
+      '<div class="formatted-text"><p>a<br>-- -</p></div>',
+    );
+  });
+
+  it('escapes the dot of a www. address, which marked would run on through the markers after it', () => {
+    const markdown = stableWrite(
+      doc(paragraph(text('vezi www.osubb.ro'), text('acum', bold))),
+    );
+    expect(markdown).toBe('vezi www\\.osubb.ro**acum**');
+    expect(toPlainText(markdown)).toBe('vezi www.osubb.roacum');
+    expect(reader(markdown)).toContain('www.osubb.ro<strong>acum</strong>');
+  });
+});
+
+describe('a mark comes off the fewest characters (fix round 1)', () => {
+  it('takes a Text Link off only the brackets in its words', () => {
+    const json = doc(
+      paragraph(text('[PDF] Regulament', link('https://x.ro/r.pdf'))),
+    );
+    const markdown = stableWrite(json);
+    expect(markdown).toBe(
+      '\\[[PDF](https://x.ro/r.pdf)\\] [Regulament](https://x.ro/r.pdf)',
+    );
+    const html = reader(markdown);
+    expect(html).toMatch(
+      /^<div class="formatted-text"><p>\[<a href="https:\/\/x\.ro\/r\.pdf"[^>]*>PDF<span/,
+    );
+    expect(html).toMatch(
+      /<\/a>\] <a href="https:\/\/x\.ro\/r\.pdf"[^>]*>Regulament<span/,
+    );
+    expect(toPlainText(markdown)).toBe('[PDF] Regulament');
+  });
+
+  it('keeps the address of a link whose words end in brackets', () => {
+    const markdown = stableWrite(
+      doc(paragraph(text('a[b]', link('https://x.ro')))),
+    );
+    expect(markdown).toBe('[a](https://x.ro)\\[[b](https://x.ro)\\]');
+    expect(toPlainText(markdown)).toBe('a[b]');
+  });
+
+  it('drops a Text Link last, since an address unlinked is linked again when read', () => {
+    // Found by the property test: dropping the link first wrote
+    // `https\://x.ro/a\* \[ș)`, which read back as a link and was then
+    // written differently.
+    const markdown = stableWrite(
+      doc(
+        paragraph(
+          text('https://x.ro/a* [', italic),
+          text('ș'),
+          text(')', italic),
+        ),
+      ),
+    );
+    expect(markdown).toBe('[https://x.ro/a](https://x.ro/a)\\* \\[ș)');
+    expect(toPlainText(markdown)).toBe('https://x.ro/a* [ș)');
+  });
+
+  it('takes bold off the punctuation that ends it before a letter', () => {
+    const markdown = stableWrite(doc(paragraph(text('x.', bold), text('a'))));
+    expect(markdown).toBe('**x**.a');
+    expect(reader(markdown)).toContain('<strong>x</strong>.a');
+    expect(toPlainText(markdown)).toBe('x.a');
+  });
+
+  it('keeps bold and drops italic right after it, where no form reads the same in both', () => {
+    // The reader reads both forms as bold then italic; the stripper keeps
+    // the italic's markers in each.
+    expect(toPlainText('**a***b*')).toBe('a*b*');
+    expect(toPlainText('**a**_b_')).toBe('a_b_');
+    const markdown = stableWrite(
+      doc(paragraph(text('a', bold), text('b', italic))),
+    );
+    expect(markdown).toBe('**a**b');
+    expect(toPlainText(markdown)).toBe('ab');
   });
 });

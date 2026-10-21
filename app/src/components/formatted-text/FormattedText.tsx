@@ -1,6 +1,10 @@
 import { Fragment, useMemo, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import type { MarkedToken, Token, Tokens } from 'marked';
+import {
+  isDialectHeading,
+  isWrittenTextLink,
+} from '../../lib/formatted-text/dialect';
 import { lexFormattedText } from '../../lib/formatted-text/lex';
 import { textLinkTarget, type TextLinkTarget } from '../../lib/links';
 import { cn } from '../../lib/utils';
@@ -55,15 +59,6 @@ function read(text: string, view: View): ReactNode {
   }
 }
 
-/**
- * A Titlu or Subtitlu written with `#`, not underlined with `===` or `---`.
- * The `#` run must end the word, as the stripper's `#{1,6}[ \t]+` does:
- * `#voluntariat` underlined with `---` is an underlined heading, shown as typed.
- */
-function isDialectHeading(token: Tokens.Heading): boolean {
-  return /^[ \t]*#{1,6}(?:[ \t]|\n|$)/.test(token.raw);
-}
-
 /** Nothing to show: no node, or only the nothing a blank-worded link leaves. */
 function isSilent(nodes: readonly ReactNode[]): boolean {
   return nodes.every((node) => node === null);
@@ -88,11 +83,7 @@ function asTyped(raw: string, view: View): ReactNode {
  * that `marked` also reads as a link is not, and neither is one with no words.
  */
 function linkTarget(token: Tokens.Link): TextLinkTarget | null {
-  const written =
-    (token.raw.startsWith('[') && token.raw.endsWith(')')) ||
-    token.raw === token.href;
-  if (!written || !token.tokens.length) return null;
-  return textLinkTarget(token.href);
+  return isWrittenTextLink(token) ? textLinkTarget(token.href) : null;
 }
 
 /**

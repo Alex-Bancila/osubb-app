@@ -34,11 +34,11 @@ const ADDRESS = /https?:\/\/[^\s<]*[^\s<?!.,:;*_~'")\]]/giu;
  * the address starts with `h`, and its own last character last when that is a
  * letter or digit, so the word boundaries around it stay what they were.
  */
-const STAND_IN = /h(\d+)./gu;
+const STAND_IN = /h\uE000(\d+)\uE001./gu;
 
 function standIn(address: string, index: number): string {
   const last = address.at(-1) ?? '/';
-  return `h${index}${/[\p{L}\p{N}]/u.test(last) ? last : '/'}`;
+  return `h\uE000${index}\uE001${/[\p{L}\p{N}]/u.test(last) ? last : '/'}`;
 }
 
 function convert(text: string): string {

@@ -1,6 +1,13 @@
-import type { EditorOptions, Extensions, JSONContent } from '@tiptap/core';
+import {
+  commands,
+  Extension,
+  wrappingInputRule,
+  type Content,
+  type EditorOptions,
+  type Extensions,
+  type JSONContent,
+} from '@tiptap/core';
 import { Highlight } from '@tiptap/extension-highlight';
-import { Markdown, MarkdownManager } from '@tiptap/markdown';
 import { Fragment, Slice } from '@tiptap/pm/model';
 import type { EditorView } from '@tiptap/pm/view';
 import StarterKit from '@tiptap/starter-kit';
@@ -14,55 +21,109 @@ import { whatsappToMarkdown } from './whatsapp';
  * stripper read it (`markdown.ts`).
  */
 
+/** What `content` is: Formatted Text, or Tiptap's own JSON or HTML. */
+export type FormattedTextContentType = 'markdown' | 'json' | 'html';
+
+declare module '@tiptap/core' {
+  interface Editor {
+    /** The document as Formatted Text (`serializeFormattedText`). */
+    getMarkdown: () => string;
+  }
+
+  interface EditorOptions {
+    /** `'markdown'`: a string `content` is Formatted Text. */
+    contentType?: FormattedTextContentType;
+  }
+
+  interface SetContentOptions {
+    /** `'markdown'`: a string `content` is Formatted Text. */
+    contentType?: FormattedTextContentType;
+  }
+
+  interface InsertContentOptions {
+    /** `'markdown'`: a string `value` is Formatted Text. */
+    contentType?: FormattedTextContentType;
+  }
+
+  interface InsertContentAtOptions {
+    /** `'markdown'`: a string `value` is Formatted Text. */
+    contentType?: FormattedTextContentType;
+  }
+}
+
 /** A Text Link goes only to an http(s) address (decision 7): `osubb.ro` stays text. */
 function isTextLinkAddress(url: string): boolean {
   return safeHttpUrl(url) !== null;
 }
 
-/**
- * `@tiptap/markdown`'s manager with the dialect's reading and writing. Its
- * own would write `&amp;` for `&`, `  \n` for a line break and `&nbsp;` for an
- * empty paragraph, read raw HTML as formatting and a single line break as a
- * space, none of which the reader and the stripper read the same way.
- */
-class FormattedTextMarkdownManager extends MarkdownManager {
-  constructor() {
-    super({ extensions: [] });
-  }
-
-  override parse(markdown: string): JSONContent {
-    return parseFormattedText(markdown);
-  }
-
-  override serialize(doc: JSONContent): string {
-    return serializeFormattedText(doc);
-  }
+function read<T>(content: T, contentType?: FormattedTextContentType) {
+  return contentType === 'markdown' && typeof content === 'string'
+    ? (parseFormattedText(content) as Content)
+    : content;
 }
 
 /**
- * `Markdown` with the dialect's manager: `editor.getMarkdown()`,
- * `contentType: 'markdown'`, and `setContent` / `insertContent` with that
- * content type all read and write Formatted Text.
+ * Formatted Text in and out of the editor (ruling 23): `editor.getMarkdown()`,
+ * and `contentType: 'markdown'` on the editor's options and on `setContent`,
+ * `insertContent` and `insertContentAt`.
  */
-const FormattedTextMarkdown = Markdown.extend({
-  addStorage() {
-    return { manager: new FormattedTextMarkdownManager() };
-  },
+const FormattedTextMarkdown = Extension.create({
+  name: 'formattedTextMarkdown',
 
   onBeforeCreate() {
-    const { manager } = this.storage;
-    this.editor.markdown = manager;
-    this.editor.getMarkdown = () => manager.serialize(this.editor.getJSON());
+    this.editor.getMarkdown = () =>
+      serializeFormattedText(this.editor.getJSON());
     const { content, contentType } = this.editor.options;
     if (contentType === 'markdown' && typeof content === 'string')
-      this.editor.options.content = manager.parse(content);
+      this.editor.options.content = parseFormattedText(content);
+  },
+
+  addCommands() {
+    return {
+      setContent: (content, options) =>
+        commands.setContent(read(content, options?.contentType), options),
+      insertContent: (value, options) =>
+        commands.insertContent(read(value, options?.contentType), options),
+      insertContentAt: (position, value, options) =>
+        commands.insertContentAt(
+          position,
+          read(value, options?.contentType),
+          options,
+        ),
+    };
+  },
+});
+
+/**
+ * `1. ` at the start of a line opens a numbered list, with one to three
+ * digits only (ruling 25): a phone number typed `0740123456. ` stays words.
+ */
+const NumberedListShortcut = Extension.create({
+  name: 'numberedListShortcut',
+
+  addInputRules() {
+    const type = this.editor.schema.nodes.orderedList;
+    if (!type) return [];
+    return [
+      wrappingInputRule({
+        find: /^(\d{1,3})\.\s$/,
+        type,
+        getAttributes: (match) => ({ start: Number(match[1]) }),
+        // Joins a list just above that this number continues.
+        joinPredicate: (match, node) =>
+          (!node.attrs.type || node.attrs.type === '1') &&
+          node.childCount + Number(node.attrs.start) === Number(match[1]),
+      }),
+    ];
   },
 });
 
 /**
  * The extensions of one editor; call it once per editor. Nothing here writes a
  * `style` attribute: no text style, colour, font or alignment, and Highlight in
- * one colour, a plain `<mark>`.
+ * one colour, a plain `<mark>`. No trailing paragraph is added after a list,
+ * a quote or a title (ruling 24), so a text opened and left alone is written
+ * back as it was.
  */
 export function formattedTextExtensions(): Extensions {
   return [
@@ -72,6 +133,7 @@ export function formattedTextExtensions(): Extensions {
       codeBlock: false,
       horizontalRule: false,
       underline: false,
+      trailingNode: false,
       link: {
         autolink: true,
         linkOnPaste: true,
@@ -81,6 +143,7 @@ export function formattedTextExtensions(): Extensions {
       },
     }),
     Highlight.configure({ multicolor: false }),
+    NumberedListShortcut,
     FormattedTextMarkdown,
   ];
 }
@@ -156,13 +219,18 @@ function handlePaste(view: EditorView, event: ClipboardEvent): boolean {
  * The options every Formatted Text editor is created with. No injected style
  * sheet (the CSP forbids inline `<style>`; the few rules live in our
  * stylesheet). Of the typing shortcuts, only the line-start ones: `# `, `## `,
- * `- `, `1. `, `> ` (decision 15); `**word**` typed inside a line stays the
- * symbols it is. Of the paste rules, only Link's: a pasted address becomes a
- * Text Link.
+ * `- `, `1. ` (one to three digits), `> ` (decision 15); `**word**` typed
+ * inside a line stays the symbols it is. Of the paste rules, only Link's: a
+ * pasted address becomes a Text Link.
  */
 export const EDITOR_OPTIONS = {
   injectCSS: false,
-  enableInputRules: ['heading', 'bulletList', 'orderedList', 'blockquote'],
+  enableInputRules: [
+    'heading',
+    'bulletList',
+    'numberedListShortcut',
+    'blockquote',
+  ],
   enablePasteRules: ['link'],
   editorProps: { handlePaste, transformPastedHTML },
 } satisfies Partial<EditorOptions>;
