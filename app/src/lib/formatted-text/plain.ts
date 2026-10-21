@@ -24,8 +24,11 @@ import { charLength } from '../normalize';
  *     of whitespace.
  */
 
-/** The characters a single-character marker may not touch (`5*3*2` is text). */
-const WORD = '0-9A-Za-z\\u00C0-\\u024F';
+/**
+ * The characters a single-character marker may not touch (`5*3*2` is text),
+ * as a character-class body. The reader (`lex.ts`) escapes with the same class.
+ */
+export const WORD = '0-9A-Za-z\\u00C0-\\u024F';
 const SPACE = ' \\t\\n\\r\\f\\v';
 
 /**

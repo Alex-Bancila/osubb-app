@@ -4,6 +4,7 @@ import {
   type TokenizerExtension,
   type Tokens,
 } from 'marked';
+import { WORD } from './plain';
 
 /**
  * The tokens of a Formatted Text (ruling R60), read by `FormattedText`. One
@@ -15,9 +16,10 @@ import {
  * Where the reader and the stripper (`plain.ts`, `private.formatted_text_plain`)
  * must agree on what is a marker:
  *
- *   - a single `*` or `~` between two letters or digits is text (`5*3*2`,
- *     `5~10 și 20~30`), escaped before lexing; `_` inside a word is already
- *     text in CommonMark (`nume_prenume`);
+ *   - a single `*` or `~` between two of the stripper's word characters
+ *     (`WORD`: digits, Latin letters and U+00C0–U+024F, every Romanian letter)
+ *     is text (`5*3*2`, `5~10 și 20~30`), escaped before lexing; `_` inside a
+ *     word is already text in CommonMark (`nume_prenume`);
  *   - `**`, `~~` and `==` pair only around words (`2 ** 3 ** 4` is text),
  *     and `==` only within one line with no `=` inside;
  *   - in `[a [b](https://x.ro)` the innermost brackets are the link.
@@ -51,32 +53,99 @@ const highlight: TokenizerExtension = {
 
 const reader = new Marked({ gfm: true, breaks: true, extensions: [highlight] });
 
-/** A single `*` or `~` between two letters or digits: text, not a marker. */
-const INTRAWORD_MARKER = /(?<=[\p{L}\p{N}])[*~](?=[\p{L}\p{N}])/gu;
+/** A single `*` or `~` between two word characters: text, not a marker. */
+const INTRAWORD_MARKER = new RegExp(`(?<=[${WORD}])[*~](?=[${WORD}])`, 'gu');
 
 /** The escape `INTRAWORD_MARKER` added, wherever a token keeps its source. */
-const ADDED_ESCAPE = /(?<=[\p{L}\p{N}])\\([*~])(?=[\p{L}\p{N}])/gu;
+const ADDED_ESCAPE = new RegExp(`(?<=[${WORD}])\\\\([*~])(?=[${WORD}])`, 'gu');
 
 function withoutAddedEscapes(value: string): string {
   return value.replace(ADDED_ESCAPE, '$1');
 }
 
 /**
+ * How deep quotes and lists may nest (ruling 16). `marked` recurses once per
+ * level, so a line of 2000 `>` (within every limit) would overflow the stack;
+ * past this depth a line's markers are text.
+ */
+const MAX_DEPTH = 8;
+
+/** A quote, bullet or number opening a container, with the spaces around it. */
+const CONTAINER = /^[ \t]*(?:>|[-*+](?=[ \t]|$)|\d{1,9}[.)](?=[ \t]|$))[ \t]?/;
+
+/** A rule (`- - -`, `***`): no container, and left as it is. */
+const RULE = /^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
+
+/** The escape `capNesting` puts on a marker: `\>`, `\-`, `\*`, `\+`, `1\.`. */
+const CAP_ESCAPE = /^[ \t]*(?:\\[>*+-]|\d{1,9}\\[.)])/;
+
+/** The container marker `rest` opens with, or `null`. */
+function containerAt(rest: string): string | null {
+  return RULE.test(rest) ? null : (CONTAINER.exec(rest)?.[0] ?? null);
+}
+
+/**
+ * `line` with the container past `MAX_DEPTH` turned into text: its marker is
+ * escaped, so `marked` opens nothing deeper and the rest reads as words.
+ */
+function capNesting(line: string): string {
+  let at = 0;
+  for (let depth = 0; depth < MAX_DEPTH; depth += 1) {
+    const marker = containerAt(line.slice(at));
+    if (!marker) return line;
+    at += marker.length;
+  }
+  const marker = containerAt(line.slice(at));
+  if (!marker) return line;
+  const cut = at + marker.search(/[>*+.)-]/);
+  return `${line.slice(0, cut)}\\${line.slice(cut)}`;
+}
+
+/**
+ * `capNesting` undone in a token's source, line by line: the escape it put
+ * after at most `MAX_DEPTH` markers (a nested token's source has lost the
+ * markers of the containers around it).
+ */
+function uncapNesting(source: string): string {
+  return source
+    .split('\n')
+    .map((line) => {
+      let at = 0;
+      for (let depth = 0; depth <= MAX_DEPTH; depth += 1) {
+        const escape = CAP_ESCAPE.exec(line.slice(at));
+        if (escape) {
+          const cut = at + escape[0].indexOf('\\');
+          return line.slice(0, cut) + line.slice(cut + 1);
+        }
+        const marker = containerAt(line.slice(at));
+        if (!marker) return line;
+        at += marker.length;
+      }
+      return line;
+    })
+    .join('\n');
+}
+
+/**
  * Every token's `raw` back as it was typed, since the reader shows the `raw` of
  * whatever is outside the dialect. A bare address is read with no escapes in
- * it, so its address and words get the same treatment.
+ * it, so its address and words get the same treatment. The nesting escapes are
+ * undone only when `capNesting` changed a line, so a text nested no deeper than
+ * the cap keeps every escape its writer typed.
  */
-function restoreSource(tokens: readonly Token[]): void {
+function restoreSource(tokens: readonly Token[], capped: boolean): void {
   for (const token of tokens as Tokens.Generic[]) {
-    token.raw = withoutAddedEscapes(token.raw);
+    token.raw = withoutAddedEscapes(
+      capped ? uncapNesting(token.raw) : token.raw,
+    );
     if (token.type === 'link' && !token.raw.startsWith('[')) {
       token.href = withoutAddedEscapes(token.href);
       token.text = withoutAddedEscapes(token.text);
       for (const child of token.tokens ?? [])
         if (child.type === 'text') child.text = withoutAddedEscapes(child.text);
     }
-    restoreSource(token.tokens ?? []);
-    if (token.type === 'list') restoreSource(token.items);
+    restoreSource(token.tokens ?? [], capped);
+    if (token.type === 'list') restoreSource(token.items, capped);
   }
 }
 
@@ -129,16 +198,20 @@ function joinText(tokens: Token[]): Token[] {
 
 /**
  * The block tokens of `markdown`, Formatted Text (ruling R60). Line ends are
- * folded to `\n` and a single `*` or `~` inside a word is escaped first; the
- * tokens come back with their `raw` as typed, checklist boxes as text, and
- * each run of words in one `text` token. A highlight is a token of its own:
+ * folded to `\n`, each line's quotes and lists are capped at `MAX_DEPTH`, and
+ * a single `*` or `~` inside a word is escaped first; the tokens come back
+ * with their `raw` as typed, checklist boxes as text, and each run of words in
+ * one `text` token. A highlight is a token of its own:
  * `{ type: 'highlight', raw, text, tokens }`.
  */
 export function lexFormattedText(markdown: string): Token[] {
-  const source = markdown
-    .replace(/\r\n/g, '\n')
-    .replace(INTRAWORD_MARKER, '\\$&');
+  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+  const capped = lines.map(capNesting);
+  const source = capped.join('\n').replace(INTRAWORD_MARKER, '\\$&');
   const tokens = joinText(reader.lexer(source));
-  restoreSource(tokens);
+  restoreSource(
+    tokens,
+    capped.some((line, index) => line !== lines[index]),
+  );
   return tokens;
 }

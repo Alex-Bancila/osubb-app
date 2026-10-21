@@ -30,16 +30,27 @@ type FormattedTextProps = {
  * shows as it was typed. The styles live in `theme/formatted-text.css`.
  */
 export function FormattedText({ text, view, className }: FormattedTextProps) {
-  const tokens = useMemo(() => lexFormattedText(text), [text]);
+  const content = useMemo(() => read(text, view), [text, view]);
   if (view === 'preview')
     return (
-      <span className={cn('formatted-text-preview', className)}>
-        {joined(runs(tokens))}
-      </span>
+      <span className={cn('formatted-text-preview', className)}>{content}</span>
     );
-  return (
-    <div className={cn('formatted-text', className)}>{blocks(tokens)}</div>
-  );
+  return <div className={cn('formatted-text', className)}>{content}</div>;
+}
+
+/**
+ * `text` read in `view`, or, should reading it fail, the text as typed: one
+ * `p` with its line breaks (one line in a preview). One Announcement or Task
+ * must never take down the screen that lists it (ruling 16).
+ */
+function read(text: string, view: View): ReactNode {
+  try {
+    const tokens = lexFormattedText(text);
+    return view === 'preview' ? joined(runs(tokens)) : blocks(tokens);
+  } catch {
+    const typed = asTyped(text.replace(/\r\n/g, '\n'), view);
+    return view === 'preview' ? typed : <p>{typed}</p>;
+  }
 }
 
 /** A Titlu or Subtitlu written with `#`, not underlined with `===` or `---`. */

@@ -134,4 +134,74 @@ describe('lexFormattedText (ruling R60)', () => {
       expect.objectContaining({ type: 'text', text: '[ ] sarcină' }),
     );
   });
+
+  // Ruling 17: "inside a word" is the stripper's word class, not every
+  // letter, so a star between two Cyrillic letters pairs as it does there.
+  it('reads in-word stars with the stripper’s word class', () => {
+    expect(toPlainText('д*д*д')).toBe('ддд');
+    expect(firstLine('д*д*д').map((token) => token.type)).toEqual([
+      'text',
+      'em',
+      'text',
+    ]);
+    expect(toPlainText('ș*ț*ă')).toBe('ș*ț*ă');
+    expect(types('ș*ț*ă')).not.toContain('em');
+  });
+});
+
+/** How many containers open, one inside the other, from the first token. */
+function depth(tokens: readonly Token[]): number {
+  const [first] = tokens as Tokens.Generic[];
+  if (first?.type === 'blockquote') return 1 + depth(first.tokens ?? []);
+  if (first?.type === 'list') return 1 + depth(first.items?.[0]?.tokens ?? []);
+  return 0;
+}
+
+/** The words where the nesting stops. */
+function innermost(tokens: readonly Token[]): string {
+  const [first] = tokens as Tokens.Generic[];
+  if (first?.type === 'blockquote') return innermost(first.tokens ?? []);
+  if (first?.type === 'list') return innermost(first.items?.[0]?.tokens ?? []);
+  return flatten(first?.tokens ?? [])
+    .filter((token) => !token.tokens)
+    .map((token) => token.text)
+    .join('');
+}
+
+describe('lexFormattedText nesting (ruling 16)', () => {
+  it('survives 5000 quote markers, nesting no deeper than 8', () => {
+    const markdown = '>'.repeat(5000) + 'x';
+    expect(() => lexFormattedText(markdown)).not.toThrow();
+    expect(depth(lexFormattedText(markdown))).toBe(8);
+    expect(innermost(lexFormattedText(markdown))).toBe('>'.repeat(4992) + 'x');
+  });
+
+  it.each([
+    ['quotes', '> '.repeat(12) + 'x', '> > > > x'],
+    ['bullets', '- '.repeat(12) + 'x', '- - - - x'],
+    ['numbers', '1. '.repeat(12) + 'x', '1. 1. 1. 1. x'],
+    ['quotes and bullets', '> - '.repeat(6) + 'x', '> - > - x'],
+  ])('stops %s at depth 8 and shows the rest as text', (_, markdown, rest) => {
+    const tokens = lexFormattedText(markdown);
+    expect(depth(tokens)).toBe(8);
+    expect(innermost(tokens)).toBe(rest);
+  });
+
+  it('nests 8 deep as written', () => {
+    expect(depth(lexFormattedText('> '.repeat(8) + 'x'))).toBe(8);
+    expect(innermost(lexFormattedText('- '.repeat(8) + 'x'))).toBe('x');
+  });
+
+  it('leaves a spaced rule alone', () => {
+    expect(types('- - - - - - - - - - - -')).toEqual(['hr']);
+  });
+
+  it('shows a capped line as typed, with no escape of its own', () => {
+    const tokens = lexFormattedText(
+      '>'.repeat(9) + 'x\n' + '>'.repeat(8) + '===',
+    );
+    expect(depth(tokens)).toBe(8);
+    const heading = flatten(tokens).find((token) => token.type === 'heading');
+    expect(heading?.raw).toBe('>x\n===');
+  });
 });

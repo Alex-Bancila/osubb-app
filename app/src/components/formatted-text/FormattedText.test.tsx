@@ -1,8 +1,27 @@
 import * as axe from 'axe-core';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { toPlainText } from '../../lib/formatted-text/plain';
 import { FormattedText } from './FormattedText';
+
+// The real lexer, unless a test makes it throw (ruling 16's fallback).
+const lexing = vi.hoisted(() => ({ fails: false }));
+vi.mock('../../lib/formatted-text/lex', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../lib/formatted-text/lex')>();
+  return {
+    lexFormattedText: (markdown: string) => {
+      if (lexing.fails)
+        throw new RangeError('Maximum call stack size exceeded');
+      return actual.lexFormattedText(markdown);
+    },
+  };
+});
+
+afterEach(() => {
+  lexing.fails = false;
+});
 
 const SAMPLE = 'Ne vedem **joi**.\n\n## Ordinea de zi\n- unu\n- doi';
 
@@ -204,5 +223,65 @@ describe('FormattedText, preview (ruling R60)', () => {
     expect(container).toHaveTextContent(
       '[rău](javascript:alert(1)) · <b>x</b>',
     );
+  });
+});
+
+describe('FormattedText, nesting and failure (rulings 16 and 17)', () => {
+  it('renders 5000 quote markers 8 quotes deep, the rest as text', () => {
+    const container = full('>'.repeat(5000) + 'x');
+    expect(container.querySelectorAll('blockquote')).toHaveLength(8);
+    expect(container).toHaveTextContent('>'.repeat(4992) + 'x');
+    expect(container.textContent).not.toContain('\\');
+  });
+
+  it('stops a quote nested deeper than 8 at the cap', () => {
+    const container = full('> '.repeat(10) + 'citat');
+    expect(container.querySelectorAll('blockquote')).toHaveLength(8);
+    const innermost = [...container.querySelectorAll('blockquote')].at(-1);
+    expect(innermost?.querySelector('blockquote')).toBeNull();
+    expect(innermost).toHaveTextContent(/^> > citat$/);
+  });
+
+  it('stops a list nested deeper than 8 at the cap', () => {
+    const container = full('- '.repeat(10) + 'punct');
+    expect(container.querySelectorAll('ul')).toHaveLength(8);
+    expect(container.querySelectorAll('li')).toHaveLength(8);
+    expect([...container.querySelectorAll('li')].at(-1)).toHaveTextContent(
+      /^- - punct$/,
+    );
+  });
+
+  it('previews deep nesting as one run', () => {
+    const container = preview('> - '.repeat(1000) + 'x');
+    expect(container.textContent).toMatch(/^> - > - /);
+    expect(container.textContent?.endsWith('> - x')).toBe(true);
+  });
+
+  it('shows the text as typed, in one p with its line breaks, when reading fails', () => {
+    lexing.fails = true;
+    const container = full('**joi**\r\n- unu');
+    const paragraphs = container.querySelectorAll('p');
+    expect(paragraphs).toHaveLength(1);
+    expect(paragraphs[0]?.querySelector('br')).not.toBeNull();
+    expect(paragraphs[0]).toHaveTextContent(/^\*\*joi\*\*- unu$/);
+    expect(container.querySelector('strong, li')).toBeNull();
+    expect(container.firstElementChild).toHaveClass('formatted-text');
+  });
+
+  it('previews the text as typed, on one line, when reading fails', () => {
+    lexing.fails = true;
+    const container = preview('**joi**\n- unu');
+    expect(container.querySelector('strong, br, p')).toBeNull();
+    expect(container).toHaveTextContent(/^\*\*joi\*\* - unu$/);
+    expect(container.firstElementChild).toHaveClass('formatted-text-preview');
+  });
+
+  it('reads in-word stars with the stripper’s word class', () => {
+    const container = full('д*д*д și ș*ț*ă');
+    expect(toPlainText('д*д*д și ș*ț*ă')).toBe('ддд și ș*ț*ă');
+    expect(
+      [...container.querySelectorAll('em')].map((em) => em.textContent),
+    ).toEqual(['д']);
+    expect(container).toHaveTextContent('ддд și ș*ț*ă');
   });
 });
