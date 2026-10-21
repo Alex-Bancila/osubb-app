@@ -55,9 +55,13 @@ function read(text: string, view: View): ReactNode {
   }
 }
 
-/** A Titlu or Subtitlu written with `#`, not underlined with `===` or `---`. */
+/**
+ * A Titlu or Subtitlu written with `#`, not underlined with `===` or `---`.
+ * The `#` run must end the word, as the stripper's `#{1,6}[ \t]+` does:
+ * `#voluntariat` underlined with `---` is an underlined heading, shown as typed.
+ */
 function isDialectHeading(token: Tokens.Heading): boolean {
-  return /^[ \t]*#/.test(token.raw);
+  return /^[ \t]*#{1,6}(?:[ \t]|\n|$)/.test(token.raw);
 }
 
 /** Nothing to show: no node, or only the nothing a blank-worded link leaves. */

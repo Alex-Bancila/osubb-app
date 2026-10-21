@@ -166,6 +166,17 @@ describe('FormattedText, full (ruling R60)', () => {
     expect(paragraph).toHaveTextContent('Titlu===');
   });
 
+  it('shows an underlined heading whose first word starts with # as typed', () => {
+    for (const [typed, shown] of [
+      ['#voluntariat\n---', '#voluntariat---'],
+      ['#1\n===', '#1==='],
+    ] as const) {
+      const container = full(typed);
+      expect(container.querySelector('h3, h4')).toBeNull();
+      expect(container).toHaveTextContent(shown);
+    }
+  });
+
   it('renders nothing for a # or ## with no words, and still reads the line after it', () => {
     for (const empty of ['# ', '## ', '#', '#   ']) {
       const container = full(empty);
