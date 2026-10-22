@@ -91,7 +91,10 @@ export function TextLinkDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => onOpenChange(next)}>
-      <DialogContent finalFocus={() => editorElement(editor)}>
+      <DialogContent
+        data-formatted-text-panel=""
+        finalFocus={() => editorElement(editor)}
+      >
         <TextLinkForm editor={editor} onDone={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>

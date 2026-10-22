@@ -45,6 +45,10 @@ const nextMonth = new Date();
 nextMonth.setUTCDate(1);
 nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
 const DEADLINE = `${nextMonth.toISOString().slice(0, 7)}-15T12:30`;
+// Each case walks the Task form end to end, which loads the Formatted Text
+// editor (R60); on a loaded machine that can pass the 5 s default without
+// anything being wrong, as in TaskForm.test.tsx.
+vi.setConfig({ testTimeout: 15_000 });
 
 const options = {
   groups: [

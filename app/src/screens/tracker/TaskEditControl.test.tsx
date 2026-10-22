@@ -91,17 +91,6 @@ async function openEditor(user = userEvent.setup()) {
   await screen.findByRole('dialog', { name: 'Editează taskul' });
   return user;
 }
-/**
- * Salvează opens once the form holds a change; a typed description reaches
- * the form when typing rests (R60, ruling 33).
- */
-async function saveOpens() {
-  await waitFor(() =>
-    expect(
-      screen.getByRole('button', { name: 'Salvează modificările' }),
-    ).toBeEnabled(),
-  );
-}
 const modeGroup = () =>
   screen.getByRole('radiogroup', { name: 'Mod de atribuire' });
 const audienceGroup = () =>
@@ -655,7 +644,6 @@ it('prevents duplicate updates and retains confirmation when refetch completes t
   const view = render(<TaskEditControl task={task} canManage />);
   const user = await openEditor();
   await user.type(await findFormattedText('Descriere (opțional)'), 'Detalii');
-  await saveOpens();
   await user.dblClick(
     screen.getByRole('button', { name: 'Salvează modificările' }),
   );
@@ -666,6 +654,16 @@ it('prevents duplicate updates and retains confirmation when refetch completes t
   await act(async () => resolve({ id: 1 }));
   expect(screen.getByRole('status')).toHaveTextContent('salvate');
 });
+it('opens Salvează on the first key typed in the Descriere, with no wait (R60, ruling 35)', async () => {
+  render(<TaskEditControl task={task} canManage />);
+  const user = await openEditor();
+  const save = screen.getByRole('button', { name: 'Salvează modificările' });
+  expect(save).toBeDisabled();
+
+  await user.type(await findFormattedText('Descriere (opțional)'), 'P');
+
+  expect(save).toBeEnabled();
+});
 it('puts a server refusal of the Descriere under it (R60)', async () => {
   state.mutate.mockRejectedValueOnce({
     code: 'PT400',
@@ -675,7 +673,6 @@ it('puts a server refusal of the Descriere under it (R60)', async () => {
   const user = await openEditor();
   const description = await findFormattedText('Descriere (opțional)');
   await user.type(description, 'Plan');
-  await saveOpens();
   await user.click(
     screen.getByRole('button', { name: 'Salvează modificările' }),
   );
@@ -705,7 +702,6 @@ it('edits an Umbrella without deadline, Campaign, mode or audience', async () =>
   expect(screen.queryByLabelText(/Campanie/)).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Mod de atribuire')).not.toBeInTheDocument();
   await user.type(await findFormattedText('Descriere (opțional)'), 'Plan');
-  await saveOpens();
   await user.click(
     screen.getByRole('button', { name: 'Salvează modificările' }),
   );

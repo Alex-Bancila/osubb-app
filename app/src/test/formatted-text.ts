@@ -18,6 +18,8 @@ export async function findFormattedText(
         throw new Error(`The editor of “${String(name)}” is still loading.`);
       return field;
     },
-    { timeout: 5000 },
+    // Under the 5 s test timeout, so a chunk that never loads fails here,
+    // with this message.
+    { timeout: 4000 },
   );
 }

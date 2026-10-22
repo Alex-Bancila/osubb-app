@@ -100,6 +100,7 @@ export function FormattedTextToolbar({
               className="z-80 outline-none"
             >
               <Menu.Popup
+                data-formatted-text-panel=""
                 finalFocus={() => editorElement(editor)}
                 className="min-w-56 origin-(--transform-origin) rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 transition-[opacity,scale] outline-none motion-reduce:transition-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0"
               >

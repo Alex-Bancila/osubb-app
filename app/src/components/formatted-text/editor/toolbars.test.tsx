@@ -10,15 +10,7 @@ import {
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EDITOR_OPTIONS, formattedTextExtensions } from './extensions';
 import {
   FormattedTextKeyboardBar,
@@ -29,23 +21,6 @@ import { FormattedTextToolbar } from './FormattedTextToolbar';
 const ADDRESS_ERROR = 'Adresa trebuie să înceapă cu http:// sau https://.';
 
 const editors: Editor[] = [];
-
-// A focused editor scrolls its selection into view, measuring a text range;
-// jsdom lays nothing out and has no range geometry, so it measures nothing.
-const rangeGeometry = ['getClientRects', 'getBoundingClientRect'] as const;
-beforeAll(() => {
-  Object.defineProperties(Range.prototype, {
-    getClientRects: { configurable: true, value: () => [] },
-    getBoundingClientRect: {
-      configurable: true,
-      value: () => DOMRect.fromRect(),
-    },
-  });
-});
-afterAll(() => {
-  for (const name of rangeGeometry)
-    Reflect.deleteProperty(Range.prototype, name);
-});
 
 afterEach(() => {
   cleanup();

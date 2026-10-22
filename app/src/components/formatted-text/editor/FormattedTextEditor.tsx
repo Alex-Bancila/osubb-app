@@ -17,19 +17,46 @@ import {
 import { FormattedTextToolbar } from './FormattedTextToolbar';
 
 /**
- * How long typing rests before the text goes to the form. Writing the
- * Markdown takes a few milliseconds at 2000 characters, too long to repeat on
- * every key; a blur sends it at once.
+ * How long typing rests before the rest of a burst goes to the form. Writing
+ * the Markdown takes a few milliseconds at 2000 characters, too long to
+ * repeat on every key; the first change of a burst and a blur send it at once.
  */
 const SETTLE_MS = 150;
 
 /**
- * The field's surface: the one field look (`fieldControlClass`) drawn around
- * the toolbar and the text, its focus ring and invalid border following the
- * text's own element. A long text scrolls inside it, under the toolbar.
+ * The field's surface: the look of `fieldControlClass` (`ui/input.tsx`) drawn
+ * around the toolbar and the text. That class styles the control itself
+ * (`focus-visible:`, `aria-invalid:`, `disabled:`); here the same border,
+ * background, ring and muted look follow the text's own element
+ * (`.ProseMirror`) through `has-[…]`. A long text scrolls inside it, under
+ * the toolbar.
  */
 const SURFACE =
-  'max-h-80 w-full min-w-0 overflow-y-auto rounded-lg border border-border bg-background font-sans text-sm text-foreground transition-colors [scrollbar-color:var(--border)_transparent] [scrollbar-width:thin] motion-reduce:transition-none dark:border-input dark:bg-input/30 has-[.ProseMirror:focus-visible]:border-ring has-[.ProseMirror:focus-visible]:outline-3 has-[.ProseMirror:focus-visible]:outline-offset-2 has-[.ProseMirror:focus-visible]:outline-ring has-[.ProseMirror:focus-visible]:outline-solid has-[.ProseMirror:focus-visible]:ring-3 has-[.ProseMirror:focus-visible]:ring-ring/50 has-[[aria-invalid=true]]:border-destructive has-[[aria-invalid=true]]:ring-3 has-[[aria-invalid=true]]:ring-destructive/20 has-[[contenteditable=false]]:bg-muted has-[[contenteditable=false]]:text-muted-foreground';
+  'max-h-80 w-full min-w-0 overflow-y-auto rounded-lg border border-border bg-background font-sans text-sm text-foreground transition-colors [scrollbar-color:var(--border)_transparent] [scrollbar-width:thin] motion-reduce:transition-none dark:border-input dark:bg-input/30 has-[.ProseMirror:focus-visible]:border-ring has-[.ProseMirror:focus-visible]:outline-3 has-[.ProseMirror:focus-visible]:outline-offset-2 has-[.ProseMirror:focus-visible]:outline-ring has-[.ProseMirror:focus-visible]:outline-solid has-[.ProseMirror:focus-visible]:ring-3 has-[.ProseMirror:focus-visible]:ring-ring/50 has-[.ProseMirror[aria-invalid=true]]:border-destructive has-[.ProseMirror[aria-invalid=true]]:ring-3 has-[.ProseMirror[aria-invalid=true]]:ring-destructive/20 has-[.ProseMirror[contenteditable=false]]:bg-muted has-[.ProseMirror[contenteditable=false]]:text-muted-foreground';
+
+/**
+ * The sticky toolbar's background, opaque so text scrolling under it never
+ * shows through, and the colour the surface shows: `bg-background` in light,
+ * as the surface is; in dark the surface is `--input` at 30% over the sheet's
+ * `--card`, which is this mix, channel for channel.
+ */
+const TOOLBAR_SURFACE =
+  'dark:bg-[color-mix(in_srgb,var(--input)_30%,var(--card))]';
+
+/**
+ * Whether focus at `target` is still with the field: its text, its toolbar or
+ * keyboard bar, or a panel one of them opened (the Stil menu and the link
+ * dialog, drawn in portals and marked `data-formatted-text-panel`).
+ */
+function withinField(surface: HTMLElement | null, target: EventTarget | null) {
+  if (!(target instanceof Element)) return false;
+  if (surface?.contains(target)) return true;
+  return (
+    target.closest(
+      '[data-slot="formatted-text-keyboard-bar"], [data-formatted-text-panel]',
+    ) !== null
+  );
+}
 
 export type FormattedTextEditorProps = {
   id: string;
@@ -65,10 +92,16 @@ function assignRef(ref: Ref<HTMLElement> | undefined, element: HTMLElement) {
  *
  * The text goes to the form only after a change to the document, so a text
  * opened and left alone is submitted exactly as it was stored, even where the
- * editor would write it differently. A change goes after typing rests, or at
- * once on a blur, when the change is made without the text's focus (the Aa
- * panel, the link dialog) and when the field closes; a blur is checked by the
- * form only once that text has reached it.
+ * editor would write it differently. The first change of a burst goes at
+ * once, so a Save that a change enables is never left waiting (ruling 35);
+ * the rest go when typing rests, and at once on a blur, when a change is made
+ * without the text's focus (the Aa panel, the link dialog) and when the field
+ * closes.
+ *
+ * The form checks the field once its text has reached it, and only when
+ * focus leaves the field: a move into the field's own panels (Aa, the Stil
+ * menu, the link dialog) is not leaving it, so an empty Mesaj is not called
+ * missing while a Member picks Titlu.
  *
  * Touch gets the keyboard bar, a mouse the top toolbar (decision 5). The bar
  * is drawn inside the field, so it stays in the sheet's own tree: Base UI
@@ -87,6 +120,9 @@ export default function FormattedTextEditor({
 }: FormattedTextEditorProps) {
   const coarse = useCoarsePointer();
   const [mode, setMode] = useState<KeyboardBarMode>('hidden');
+  // The bar's mode as last asked for: Aa asks for the panel, then blurs the
+  // text, before the new mode renders.
+  const modeAsked = useRef<KeyboardBarMode>('hidden');
   const surface = useRef<HTMLDivElement>(null);
 
   const latest = useRef({ onChange, onBlur });
@@ -96,29 +132,55 @@ export default function FormattedTextEditor({
 
   /** The Markdown the form last had from this field, or gave it. */
   const sent = useRef(value);
+  /** A change the form has not had yet. */
+  const unsent = useRef(false);
+  /** Running while typing goes on: until it ends, a change waits. */
   const settle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   function send(editor: Editor) {
-    clearTimeout(settle.current);
-    settle.current = undefined;
+    unsent.current = false;
     const markdown = editor.getMarkdown();
     sent.current = markdown;
     latest.current.onChange(markdown);
   }
 
   function flush(editor: Editor) {
-    if (settle.current !== undefined) send(editor);
+    if (unsent.current) send(editor);
   }
 
-  // A blur waits for the text it sent to render, then the form checks it:
-  // `onBlur` judges the values of the render it came from.
-  const [blurs, setBlurs] = useState(0);
-  const checkedBlurs = useRef(0);
+  // The form's check, once the text it judges has rendered: `onBlur` judges
+  // the values of the render it came from.
+  const [checks, setChecks] = useState(0);
+  const checked = useRef(0);
   useEffect(() => {
-    if (blurs === checkedBlurs.current) return;
-    checkedBlurs.current = blurs;
+    if (checks === checked.current) return;
+    checked.current = checks;
     latest.current.onBlur?.();
-  }, [blurs]);
+  }, [checks]);
+
+  /** The text lost focus to the field's own panels: the check waits. */
+  const checkWaits = useRef(false);
+
+  // Focus that lands outside the field ends the wait.
+  useEffect(() => {
+    const focusMoved = (event: FocusEvent) => {
+      if (!checkWaits.current || withinField(surface.current, event.target))
+        return;
+      checkWaits.current = false;
+      setChecks((count) => count + 1);
+    };
+    document.addEventListener('focusin', focusMoved);
+    return () => document.removeEventListener('focusin', focusMoved);
+  }, []);
+
+  // So does the bar put away with focus nowhere (Ascunde tastatura from the
+  // panel), but not the panel giving way to the link dialog.
+  useEffect(() => {
+    if (mode !== 'hidden' || !checkWaits.current) return;
+    if (withinField(surface.current, document.activeElement)) return;
+    checkWaits.current = false;
+    setChecks((count) => count + 1);
+  }, [mode]);
 
   const [extensions] = useState(formattedTextExtensions);
   const [content] = useState(value);
@@ -154,32 +216,49 @@ export default function FormattedTextEditor({
         send(current);
         return;
       }
+      if (settle.current === undefined) send(current);
+      else unsent.current = true;
       clearTimeout(settle.current);
-      settle.current = setTimeout(() => send(current), SETTLE_MS);
+      settle.current = setTimeout(() => {
+        settle.current = undefined;
+        flush(current);
+      }, SETTLE_MS);
     },
-    onBlur: ({ editor: current }) => {
+    onFocus: () => {
+      checkWaits.current = false;
+    },
+    onBlur: ({ editor: current, event }) => {
       flush(current);
-      setBlurs((count) => count + 1);
+      if (
+        modeAsked.current === 'panel' ||
+        withinField(surface.current, event.relatedTarget)
+      ) {
+        checkWaits.current = true;
+        return;
+      }
+      setChecks((count) => count + 1);
     },
   });
 
-  // Closing the form with a change still settling sends it.
+  // Closing the form with a change still waiting sends it.
   useEffect(
     () => () => {
-      if (settle.current === undefined || editor.isDestroyed) return;
       clearTimeout(settle.current);
       settle.current = undefined;
+      if (!unsent.current || editor.isDestroyed) return;
+      unsent.current = false;
       latest.current.onChange(editor.getMarkdown());
     },
     [editor],
   );
 
   // A text the form set itself (a reset) replaces the field's, and wins over
-  // a change still settling.
+  // a change still waiting, which is dropped.
   useEffect(() => {
     if (value === sent.current || editor.isDestroyed) return;
     clearTimeout(settle.current);
     settle.current = undefined;
+    unsent.current = false;
     sent.current = value;
     editor.commands.setContent(value, {
       contentType: 'markdown',
@@ -216,14 +295,19 @@ export default function FormattedTextEditor({
   return (
     <>
       <div ref={surface} data-slot="formatted-text-input" className={SURFACE}>
-        {!coarse && <FormattedTextToolbar editor={editor} />}
+        {!coarse && (
+          <FormattedTextToolbar editor={editor} className={TOOLBAR_SURFACE} />
+        )}
         <EditorContent editor={editor} />
       </div>
       {coarse && (
         <FormattedTextKeyboardBar
           editor={editor}
           mode={mode}
-          onModeChange={setMode}
+          onModeChange={(next) => {
+            modeAsked.current = next;
+            setMode(next);
+          }}
         />
       )}
     </>

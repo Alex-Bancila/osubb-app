@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState, type ComponentType } from 'react';
+import axe from 'axe-core';
+import { useEffect, useState, type ComponentType } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { requiredFormattedText } from '../../lib/schemas/text';
@@ -118,21 +119,77 @@ describe('FormattedTextField (R60, §C)', () => {
     await waitFor(() => expect(field).toHaveFocus());
   });
 
-  it('sends Markdown once typing rests', async () => {
-    const user = userEvent.setup();
+  it('sends the first key of a burst at once, the rest once typing rests (ruling 35)', async () => {
     const onChange = vi.fn();
     render(<Form initial="**a**" onChange={onChange} />);
     const field = await findFormattedText('Mesaj');
+    // Real timers: Testing Library's async wrapper waits on a `setTimeout`
+    // that Vitest's fake timers would hold for ever.
+    const user = userEvent.setup();
     await user.click(field);
 
     await user.keyboard('b');
 
-    // Nothing goes while the key is fresh; once typing rests, the Markdown.
-    expect(onChange).not.toHaveBeenCalled();
-    await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
-    // jsdom has no layout, so the press leaves the caret at the start, in
-    // the bold run.
-    expect(onChange).toHaveBeenLastCalledWith('**ba**');
+    // At once, with no wait. jsdom has no layout, so the press leaves the
+    // caret at the start, in the bold run.
+    expect(onChange.mock.calls).toEqual([['**ba**']]);
+
+    await user.keyboard('cd');
+    // The keys that follow wait for typing to rest…
+    expect(onChange).toHaveBeenCalledTimes(1);
+    // …and then go as one.
+    await waitFor(() =>
+      expect(onChange.mock.calls).toEqual([['**ba**'], ['**bcda**']]),
+    );
+  });
+
+  it('drops a change still waiting when the form resets the text (ruling 35)', async () => {
+    const onChange = vi.fn();
+    // The form's own reset, called from the test with no press (a press
+    // would blur the text and send it first).
+    const form = { reset: () => {} };
+    function Resettable() {
+      const [body, setBody] = useState('');
+      useEffect(() => {
+        form.reset = () => setBody('');
+      });
+      return (
+        <>
+          <label id="body-label" htmlFor="body">
+            Mesaj
+          </label>
+          <FormattedTextField
+            id="body"
+            labelId="body-label"
+            name="body"
+            value={body}
+            onChange={(next) => {
+              onChange(next);
+              setBody(next);
+            }}
+          />
+          <input aria-label="Alt câmp" />
+        </>
+      );
+    }
+    const view = render(<Resettable />);
+    const field = await findFormattedText('Mesaj');
+    const user = userEvent.setup();
+    await user.click(field);
+    await user.keyboard('ab');
+    // The first key went at once; "ab" waits for typing to rest.
+    expect(onChange.mock.calls).toEqual([['a']]);
+
+    // The form empties the field (Escape closing the compose sheet) before
+    // typing rests.
+    act(() => form.reset());
+    expect(field.textContent).toBe('');
+
+    // Neither the settling, nor the blur, nor closing the field sends "ab".
+    await act(() => new Promise((done) => setTimeout(done, 300)));
+    await user.click(screen.getByLabelText('Alt câmp'));
+    view.unmount();
+    expect(onChange.mock.calls).toEqual([['a']]);
   });
 
   it('submits what was just typed, when the submit button follows at once (ruling 33)', async () => {
@@ -266,7 +323,7 @@ describe('FormattedTextField (R60, §C)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Golește' }));
 
-    expect(field).toHaveTextContent('');
+    expect(field.textContent).toBe('');
     expect(screen.getByText('0 / 2000 caractere')).toBeInTheDocument();
   });
 
@@ -295,6 +352,128 @@ describe('FormattedTextField (R60, §C)', () => {
 
     rerender(<Locked disabled={false} />);
     expect(field).toHaveAttribute('contenteditable', 'true');
+  });
+
+  it('never sends a text it did not change, whatever its props do (Minor 6)', async () => {
+    const onChange = vi.fn();
+    const legacy = '* unu\n* doi\n5*3*2';
+    function Field(props: Partial<FormattedTextFieldProps>) {
+      return (
+        <>
+          <label id="body-label" htmlFor="body">
+            Mesaj
+          </label>
+          <FormattedTextField
+            id="body"
+            labelId="body-label"
+            name="body"
+            value={legacy}
+            onChange={onChange}
+            {...props}
+          />
+        </>
+      );
+    }
+    const view = render(<Field />);
+    const field = await findFormattedText('Mesaj');
+
+    // A refusal marks the field and names its message.
+    view.rerender(<Field aria-invalid aria-describedby="refuz" />);
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field.getAttribute('aria-describedby')).toMatch(/^refuz /);
+    // The Member edits another field: the message goes.
+    view.rerender(<Field aria-describedby="alt" />);
+    expect(field).not.toHaveAttribute('aria-invalid');
+    expect(field.getAttribute('aria-describedby')).toMatch(/^alt /);
+    view.unmount();
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('passes axe once the editor has loaded', async () => {
+    const { container } = render(<Form initial="**Ședința** e joi." />);
+    await findFormattedText('Mesaj');
+
+    expect((await axe.run(container)).violations).toEqual([]);
+  });
+});
+
+describe('the form’s check while the field opens its own panels (Minor 2)', () => {
+  const MISSING = 'Scrie mesajul.';
+
+  it('waits while the Aa panel is open, and runs once focus leaves the field', async () => {
+    touchDevice();
+    const user = userEvent.setup();
+    render(<Form />);
+    const field = await findFormattedText('Mesaj');
+    await user.click(field);
+
+    await user.click(screen.getByRole('button', { name: 'Stiluri' }));
+    await waitFor(() => expect(field).not.toHaveFocus());
+
+    expect(
+      screen.getByRole('toolbar', { name: 'Stiluri' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(MISSING)).toBeNull();
+    expect(field).not.toHaveAttribute('aria-invalid');
+
+    await user.click(screen.getByLabelText('Alt câmp'));
+
+    expect(await screen.findByText(MISSING)).toBeInTheDocument();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('runs once Ascunde tastatura puts the panel away', async () => {
+    touchDevice();
+    const user = userEvent.setup();
+    render(<Form />);
+    const field = await findFormattedText('Mesaj');
+    await user.click(field);
+    await user.click(screen.getByRole('button', { name: 'Stiluri' }));
+    await waitFor(() => expect(field).not.toHaveFocus());
+    expect(screen.queryByText(MISSING)).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Ascunde tastatura' }));
+
+    expect(await screen.findByText(MISSING)).toBeInTheDocument();
+  });
+
+  it('waits while the Stil menu is open, and runs once focus leaves the field', async () => {
+    const user = userEvent.setup();
+    render(<Form />);
+    const field = await findFormattedText('Mesaj');
+    await user.click(field);
+
+    await user.click(screen.getByRole('button', { name: /^Stil/ }));
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
+
+    expect(screen.queryByText(MISSING)).toBeNull();
+    expect(field).not.toHaveAttribute('aria-invalid');
+
+    await user.click(screen.getByLabelText('Alt câmp'));
+
+    expect(await screen.findByText(MISSING)).toBeInTheDocument();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('waits while the link dialog is open, and while focus is back in the text', async () => {
+    const user = userEvent.setup();
+    render(<Form />);
+    const field = await findFormattedText('Mesaj');
+    await user.click(field);
+
+    await user.click(screen.getByRole('button', { name: 'Link' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Adaugă link' });
+    expect(screen.queryByText(MISSING)).toBeNull();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Renunță' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(field).toHaveFocus());
+    expect(screen.queryByText(MISSING)).toBeNull();
+
+    await user.click(screen.getByLabelText('Alt câmp'));
+
+    expect(await screen.findByText(MISSING)).toBeInTheDocument();
   });
 });
 
