@@ -31,10 +31,12 @@ import { safeHttpUrl } from '../../../lib/links';
  *     it.
  *
  * Where a check fails, that part is written plainer: its marks dropped and
- * its links kept, then every punctuation mark escaped. What is written is
- * always what the reader shows, and writing it again gives the same text. No
- * mark spans a hard break: each line closes its marks, so `**a**\n**b**`,
- * never `**a\nb**`.
+ * its links kept, then every punctuation mark escaped. A line's search reads
+ * back at most `LINE_CHECKS` ways before it settles for its links only
+ * (ruling 27), since the editor writes the whole text on every change. What
+ * is written is always what the reader shows, and writing it again gives the
+ * same text. No mark spans a hard break: each line closes its marks, so
+ * `**a**\n**b**`, never `**a\nb**`.
  */
 
 type Mark = { type: string; attrs?: Record<string, unknown> };
@@ -565,18 +567,31 @@ export function normalizeFormattedText(doc: JSONContent): JSONContent {
 /* Writing a line                                                           */
 /* ------------------------------------------------------------------------ */
 
-type Variant = { flipItalic: boolean; bareLinks: boolean; tags: boolean };
+type Variant = {
+  flipItalic: boolean;
+  bareLinks: boolean;
+  tags: boolean;
+  ftp: boolean;
+};
 
 /**
  * The ways a line is tried, in order: italic as `*` or `_`, an address bare
- * or bracketed, and last every `<` that opens an HTML tag or comment escaped
- * (`<span class="a_b">`, `<!-- … -->`): the reader shows raw HTML as typed,
- * escapes and all, so markers inside one can only be written that way. The
- * stripper then shows those backslashes (`plain.ts` does not unescape `<`).
+ * or bracketed, and last with every `<` on the line that opens an HTML tag or
+ * comment escaped, not only the one holding a marker (`<span class="a_b">`,
+ * `<!-- … -->`): the reader shows raw HTML as typed, escapes and all, so a
+ * marker inside one can only be written that way. The stripper then shows
+ * those backslashes (`plain.ts` does not unescape `<`). Before the tags, an
+ * `ftp://` address with its `:` escaped: `marked` reads one as an address
+ * and the reader shows it as typed, so one that holds a marker (`ftp://x/a_b`)
+ * would show its escapes. One that holds none is written as it is.
  */
-const VARIANTS: readonly Variant[] = [false, true].flatMap((tags) =>
+const VARIANTS: readonly Variant[] = [
+  { tags: false, ftp: false },
+  { tags: false, ftp: true },
+  { tags: true, ftp: true },
+].flatMap(({ tags, ftp }) =>
   [true, false].flatMap((bareLinks) =>
-    [false, true].map((flipItalic) => ({ flipItalic, bareLinks, tags })),
+    [false, true].map((flipItalic) => ({ flipItalic, bareLinks, tags, ftp })),
   ),
 );
 
@@ -597,8 +612,12 @@ const OPENS_NUMBERED = /^\d{1,9}(?=[.)](?:[ \t]|$))/;
 /** An HTML block opening at the start of a line: `<div>`, `</p>`, `<!--`, `<?`. */
 const OPENS_HTML = /^<[A-Za-z/!?]/;
 
-/** Where `marked` starts a bare address. */
-const ADDRESS_START = /^https?:\/\/[a-zA-Z0-9-]/i;
+/**
+ * Where `marked` starts a bare address: `http://`, `https://` or `ftp://`
+ * and a character of a host. The reader shows one it does not link (`ftp://`,
+ * or an address `safeHttpUrl` refuses) as typed, escapes and all.
+ */
+const ADDRESS_START = /^(?:https?|ftp):\/\/[a-zA-Z0-9-]/i;
 const WWW = /^www\.[a-zA-Z0-9-]/;
 
 /** Each character of `line` as it is written, escaped where the dialect needs it. */
@@ -606,7 +625,7 @@ function escapedCharacters(
   line: Line,
   prefix: string,
   everything: boolean,
-  tags: boolean,
+  { tags, ftp }: Pick<Variant, 'tags' | 'ftp'>,
 ): string[] {
   const characters = line.map((character) => character.text);
   if (everything)
@@ -635,14 +654,16 @@ function escapedCharacters(
     if (WWW.test(characters.slice(index, index + 5).join('')))
       written[index + 3] = '\\.';
   });
-  // An address left unlinked (one `safeHttpUrl` refuses) must not be linked
-  // by the reader: its `:` is escaped, and shows in the stripper's words.
-  // Only an address in one run of marks: a marker between `//` and the next
-  // character already stops the reader's address.
+  // An address left unlinked (one `safeHttpUrl` refuses, or an `ftp://`
+  // one in the `ftp` way) must not be read as one: its `:` is escaped, and
+  // shows in the stripper's words. Only an address in one run of marks: a
+  // marker between `//` and the next character already stops the reader's.
   characters.forEach((character, index) => {
     if (character !== ':' || linked(index)) return;
-    // `https:` or `http:`, ending at this `:`.
-    for (const start of [index - 5, index - 4]) {
+    // `https:`, `http:` or `ftp:`, ending at this `:`.
+    for (const start of ftp
+      ? [index - 5, index - 4, index - 3]
+      : [index - 5, index - 4]) {
       const marks = line[start]?.marks;
       if (
         start >= 0 &&
@@ -771,7 +792,7 @@ function emitOnce(
   everything: boolean,
   bracketed: ReadonlySet<number>,
 ): Emitted & { bare: Bare[] } {
-  const escaped = escapedCharacters(line, prefix, everything, variant.tags);
+  const escaped = escapedCharacters(line, prefix, everything, variant);
   const segments = segmentsOf(line);
   const open: { key: string; close: string }[] = [];
   const bares: Bare[] = [];
@@ -854,7 +875,7 @@ function plainest(line: Line, prefix: string): Emitted {
   return emit(
     linksOnly(line),
     prefix,
-    { flipItalic: false, bareLinks: false, tags: true },
+    { flipItalic: false, bareLinks: false, tags: true, ftp: true },
     true,
   );
 }
@@ -891,17 +912,34 @@ function readBack(markdown: string): JSONContent[] {
 
 /**
  * Whether the reader and the stripper read `written`, a line after `prefix`
- * (a Titlu's `# ` or `## `, or nothing), as `line`.
+ * (a Titlu's `# ` or `## `, or nothing), as `line`: `-1` when both do,
+ * else about where in `line` one of them first reads it differently, for the
+ * search to look there first.
  */
-function agrees(written: Emitted, line: Line, prefix: string): boolean {
+function disagreement(written: Emitted, line: Line, prefix: string): number {
   const source = prefix + written.markdown;
   const expected = prefix
     ? headingNode(prefix === '# ' ? 1 : 2, inlineOf([line]))
     : paragraphNode(inlineOf([line]));
-  return (
-    same(readBack(source), [expected]) &&
-    toPlainText(source) === trimSpaces(written.plain)
-  );
+  const back = readBack(source);
+  if (!same(back, [expected])) {
+    const [read = []] =
+      back.length === 1 ? linesOf(back[0]?.content ?? []) : [[]];
+    const at = line.findIndex((character, index) => {
+      const other = read[index];
+      return (
+        other?.text !== character.text ||
+        !sameKeys(other.marks, character.marks)
+      );
+    });
+    return at === -1 ? line.length : at;
+  }
+  const read = toPlainText(source);
+  const plain = trimSpaces(written.plain);
+  if (read === plain) return -1;
+  let at = 0;
+  while (read[at] === plain[at]) at += 1;
+  return Math.min(at, line.length);
 }
 
 /** `line` with the mark `key` taken off its characters `[start, end)`. */
@@ -919,15 +957,47 @@ function without(
 }
 
 /** `line` written in the first way both readers read as `line`, or `null`. */
-function attempt(line: Line, prefix: string): Emitted | null {
+/**
+ * How many ways of writing one line the search reads back before it settles
+ * for the line's links only (ruling 27). The editor writes its whole text on
+ * every change, and a line with many marks the dialect cannot hold would
+ * otherwise try thousands; a line that is written as typed takes one to four.
+ */
+export const LINE_CHECKS = 32;
+
+type Budget = { left: number };
+
+type Attempt = { written: Emitted | null; at: number };
+
+/**
+ * `line` written in the first way both readers read as `line`, or `null`
+ * with where the first way tried was read differently. Each way read back
+ * spends one check of `budget`; none is tried once it is spent.
+ */
+function attempt(
+  line: Line,
+  prefix: string,
+  budget: Budget = { left: Infinity },
+): Attempt {
   const tried = new Set<string>();
+  let at = -1;
   for (const variant of VARIANTS) {
     const written = emit(line, prefix, variant);
     if (tried.has(written.markdown)) continue;
     tried.add(written.markdown);
-    if (agrees(written, line, prefix)) return written;
+    if (budget.left <= 0) break;
+    budget.left -= 1;
+    const where = disagreement(written, line, prefix);
+    if (where < 0) return { written, at: -1 };
+    if (at < 0) at = where;
   }
-  return null;
+  return { written: null, at: Math.max(at, 0) };
+}
+
+/** How far `run` is from the character `at`: 0 when it holds it. */
+function distance([start, end]: [number, number], at: number): number {
+  if (at < start) return start - at;
+  return at >= end ? at - end + 1 : 0;
 }
 
 const WORD_CHARACTER = /[\p{L}\p{N}]/u;
@@ -980,39 +1050,80 @@ type LineWritten = { markdown: string; line: Line };
  * off the fewest characters where it does not.
  */
 function writeLine(line: Line, prefix: string, level: Level): LineWritten {
-  let current = level === 0 ? line : relinked(linksOnly(line));
-  if (level < 2)
-    for (;;) {
-      const written = attempt(current, prefix);
-      if (written) return { markdown: written.markdown, line: current };
-      // A Text Link is the last mark to go: an address unlinked would be
-      // linked again when the text is read back.
-      const all = runsIn(current);
-      const styles = all.filter(({ key }) => !key.startsWith(LINK));
-      const runs = styles.length ? styles : all;
-      const [first] = runs;
-      if (!first) break;
-      // Once a style comes off, an address it split is linked whole. Once
-      // only links are left, a link that comes off stays off (its `:` is
-      // then escaped, so the reader does not link it either): every step
-      // takes a mark away, so the search ends.
-      const step = styles.length ? relinked : normalized;
-      const options = [
-        ...runs.flatMap((run) => offPunctuation(current, run)),
-        ...runs.map(({ key, run }) => without(current, key, run)),
-      ]
-        .map(step)
-        .filter((option) => !sameLine(option, current));
-      for (const option of options) {
-        const fixed = attempt(option, prefix);
-        if (fixed) return { markdown: fixed.markdown, line: option };
-      }
-      current = step(without(current, first.key, first.run));
-    }
+  if (level === 0) {
+    const found = search(line, prefix, { left: LINE_CHECKS });
+    if (found) return found;
+  }
+  // The last resort keeps every Text Link: the line's links only, its
+  // addresses linked whole, written as usual or else every mark escaped.
+  const links = relinked(linksOnly(line));
+  const written = level < 2 ? attempt(links, prefix).written : null;
   return {
-    markdown: plainest(current, prefix).markdown,
-    line: linksOnly(current),
+    markdown: (written ?? plainest(links, prefix)).markdown,
+    line: links,
   };
+}
+
+/**
+ * The search for `line`: its own marks where the dialect holds them, a mark
+ * off the fewest characters where it does not, within `budget`. The runs
+ * nearest where the readers first disagree are tried first. `null` when the
+ * budget is spent or no mark is left to take off.
+ */
+function search(
+  line: Line,
+  prefix: string,
+  budget: Budget,
+): LineWritten | null {
+  let current = line;
+  for (;;) {
+    const { written, at } = attempt(current, prefix, budget);
+    if (written) return { markdown: written.markdown, line: current };
+    if (budget.left <= 0) return null;
+    // A Text Link is the last mark to go: an address unlinked would be
+    // linked again when the text is read back. The runs nearest where the
+    // readers first disagree are tried first.
+    const all = runsIn(current);
+    const styles = all.filter(({ key }) => !key.startsWith(LINK));
+    const runs = (styles.length ? styles : all).sort(
+      (a, b) => distance(a.run, at) - distance(b.run, at),
+    );
+    const [first] = runs;
+    if (!first) return null;
+    // Once a style comes off, an address it split is linked whole. Once
+    // only links are left, a link that comes off stays off (its `:` is
+    // then escaped, so the reader does not link it either): every step
+    // takes a mark away, so the search ends.
+    const step = styles.length ? relinked : normalized;
+    for (const option of lighterLines(current, runs, step)) {
+      const fixed = attempt(option, prefix, budget).written;
+      if (fixed) return { markdown: fixed.markdown, line: option };
+      if (budget.left <= 0) return null;
+    }
+    current = step(without(current, first.key, first.run));
+  }
+}
+
+/**
+ * The lines one step lighter than `line`, run by run in the order given,
+ * built one at a time as the search reads them (most are never read within
+ * its budget): the run's mark off the punctuation at its edges, then off the
+ * whole run.
+ */
+function* lighterLines(
+  line: Line,
+  runs: readonly Run[],
+  step: (line: Line) => Line,
+): Generator<Line> {
+  for (const run of runs) {
+    for (const option of [
+      ...offPunctuation(line, run),
+      without(line, run.key, run.run),
+    ]) {
+      const lighter = step(option);
+      if (!sameLine(lighter, line)) yield lighter;
+    }
+  }
 }
 
 /**

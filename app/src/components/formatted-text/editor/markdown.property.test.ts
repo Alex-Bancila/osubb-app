@@ -40,11 +40,13 @@ const MIXED = [
 
 /**
  * Addresses in pieces, each piece with its own marks, among the punctuation
- * an address ends on (fix round 2: an address split by marks).
+ * an address ends on (fix round 2: an address split by marks), and `ftp://`,
+ * which `marked` reads as an address the reader shows as typed (fix round 3).
  */
 const ADDRESSES = [
   'https://',
   'http://',
+  'ftp://',
   'x.ro',
   'b.ro',
   'www.',
@@ -199,19 +201,24 @@ const unspaced = (value: string) => value.replace(/\s/g, '');
 
 /**
  * Whether `stripped` holds exactly `expected`'s words, spaces aside, with no
- * backslash the document did not have but the ruled one before a `<` that
- * opens a line (`plain.ts` does not unescape `<`, a database follow-up).
+ * backslash the document did not have but two the stripper keeps, since
+ * `plain.ts` unescapes neither `<` nor `:` (database follow-ups): one before
+ * a `<` anywhere (a `<` opening a line, or any tag's on a line whose raw HTML
+ * holds a marker), and one before the `:` of an `ftp://` address.
  */
 function sameWords(stripped: string, expected: string): boolean {
   const left = unspaced(stripped);
   const right = unspaced(expected);
+  const kept = (to: number) =>
+    right[to] === '<' ||
+    (right[to] === ':' && /ftp$/i.test(right.slice(Math.max(0, to - 3), to)));
   let at = 0;
   let to = 0;
   while (at < left.length && to < right.length) {
     if (left[at] === right[to]) {
       at += 1;
       to += 1;
-    } else if (left[at] === '\\' && left[at + 1] === '<' && right[to] === '<')
+    } else if (left[at] === '\\' && left[at + 1] === right[to] && kept(to))
       at += 1;
     else return false;
   }

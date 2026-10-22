@@ -556,7 +556,7 @@ describe('a mark comes off the fewest characters (fix round 1)', () => {
     ['x <span class="a_b">y', 'x \\<span class="a\\_b">y'],
     ['Q&A <b>x</b> 1 < 2', 'Q&A <b>x</b> 1 < 2'],
   ])(
-    'escapes the < of raw HTML in %j only where a marker inside it would show (fix round 2)',
+    'escapes every < opening a tag on a line whose raw HTML holds a marker, as in %j (fix round 2)',
     (words, markdown) => {
       // The reader shows raw HTML as typed, escapes and all.
       expect(stableWrite(doc(paragraph(text(words))))).toBe(markdown);
@@ -584,6 +584,53 @@ describe('a mark comes off the fewest characters (fix round 1)', () => {
       expect(toPlainText(markdown)).not.toContain('\\');
     },
   );
+
+  it.each([
+    [
+      paragraph(text('site', link('https://x.ro/a')), text(' ftp://x.ro/a_b')),
+      '[site](https://x.ro/a) ftp\\://x.ro/a\\_b',
+    ],
+    [
+      paragraph(
+        text('vezi', bold),
+        text(' '),
+        text('formular', link('https://forms.gle/x')),
+        text(' sau ftp://x.ro/a_b'),
+      ),
+      '**vezi** [formular](https://forms.gle/x) sau ftp\\://x.ro/a\\_b',
+    ],
+    [
+      paragraph(
+        text('a', link('https://x.ro/a')),
+        text(' si '),
+        text('b', link('https://x.ro/b')),
+        text(' ftp://x.ro/~u'),
+      ),
+      '[a](https://x.ro/a) si [b](https://x.ro/b) ftp\\://x.ro/\\~u',
+    ],
+  ])(
+    'keeps every mark beside an ftp:// address, which marked reads as one (fix round 3)',
+    (block, markdown) => {
+      // The reader shows an ftp:// address marked reads as typed, escapes
+      // and all; its `:` is escaped so marked reads none.
+      expect(stableWrite(doc(block))).toBe(markdown);
+      const html = reader(markdown);
+      expect(html).toContain('</a>');
+      expect(html).toMatch(/ftp:\/\/x\.ro\/(a_b|~u)<\/p>/);
+      // The stripper shows that `\:` (a database follow-up).
+      expect(toPlainText(markdown)).toContain('ftp\\://x.ro/');
+    },
+  );
+
+  it('writes an ftp:// address with no marker in it as it is (fix round 3)', () => {
+    const markdown = stableWrite(
+      doc(
+        paragraph(text('site', link('https://x.ro/a')), text(' ftp://x.ro/a')),
+      ),
+    );
+    expect(markdown).toBe('[site](https://x.ro/a) ftp://x.ro/a');
+    expect(toPlainText(markdown)).toBe('site ftp://x.ro/a');
+  });
 
   it('takes bold off the punctuation that ends it before a letter', () => {
     const markdown = stableWrite(doc(paragraph(text('x.', bold), text('a'))));
