@@ -187,20 +187,24 @@ function TextLinkForm({
         <FieldError {...form.errorProps('url')} />
       </div>
       <DialogFooter>
+        <DialogClose render={<Button type="button" variant="outline" />}>
+          Renunță
+        </DialogClose>
+        {/* A link already there is saved, not added (ruling 28). */}
+        <Button type="submit">{target.editing ? 'Salvează' : 'Adaugă'}</Button>
         {target.editing && (
+          // The destructive action comes last at every width, tinted, never
+          // filled (DESIGN.md, ruling 30): the rightmost from `sm`, and the
+          // bottom under it, where the footer stacks in reverse.
           <Button
             type="button"
             variant="destructive"
-            className="sm:mr-auto"
+            className="max-sm:order-first"
             onClick={remove}
           >
             Elimină linkul
           </Button>
         )}
-        <DialogClose render={<Button type="button" variant="outline" />}>
-          Renunță
-        </DialogClose>
-        <Button type="submit">Adaugă</Button>
       </DialogFooter>
     </form>
   );

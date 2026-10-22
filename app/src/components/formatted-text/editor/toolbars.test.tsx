@@ -252,7 +252,11 @@ describe('the link dialog (R60, decisions 6 and 7)', () => {
     const editor = editorWith('');
     const { user, dialog } = await openLinkDialog(editor);
 
-    await user.type(within(dialog).getByLabelText(/^Text/), 'formular');
+    // An optional field says so (DESIGN.md; ruling 29).
+    await user.type(
+      within(dialog).getByLabelText('Text (opțional)'),
+      'formular',
+    );
     await user.type(
       within(dialog).getByLabelText('Adresa'),
       'https://forms.gle/x',
@@ -263,36 +267,51 @@ describe('the link dialog (R60, decisions 6 and 7)', () => {
     expect(editor.getMarkdown()).toBe('[formular](https://forms.gle/x)');
   });
 
-  it('changes the address of a link the caret is in', async () => {
+  it('changes the address of a link the caret is in, with Salvează', async () => {
     const editor = editorWith('vezi [site](https://osubb.ro)');
     editor.commands.setTextSelection(8);
     const { user, dialog } = await openLinkDialog(editor);
     expect(dialog).toHaveAccessibleName('Modifică linkul');
+    // Ruling 28: an existing link is saved, not added.
+    expect(within(dialog).queryByRole('button', { name: 'Adaugă' })).toBeNull();
     const address = within(dialog).getByLabelText('Adresa');
     expect(address).toHaveValue('https://osubb.ro');
 
     await user.clear(address);
     await user.type(address, 'https://ubbcluj.ro');
-    await user.click(within(dialog).getByRole('button', { name: 'Adaugă' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Salvează' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(editor.getMarkdown()).toBe('vezi [site](https://ubbcluj.ro)');
   });
 
-  it('removes a link with Elimină linkul, keeping its words', async () => {
+  it('removes a link with Elimină linkul, last in the footer, keeping its words', async () => {
     const editor = editorWith('vezi [site](https://osubb.ro)');
     editor.commands.setTextSelection(8);
     const { user, dialog } = await openLinkDialog(editor);
+    // Ruling 30: the destructive action comes last, at every width (the
+    // footer stacks in reverse under `sm`, so it is ordered first there),
+    // and is never filled.
+    const footer = dialog.querySelector('[data-slot="dialog-footer"]');
+    const buttons = within(footer as HTMLElement).getAllByRole('button');
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      'Renunță',
+      'Salvează',
+      'Elimină linkul',
+    ]);
+    const remove = within(dialog).getByRole('button', {
+      name: 'Elimină linkul',
+    });
+    expect(remove).toHaveClass('max-sm:order-first', 'text-destructive');
+    expect(remove).not.toHaveClass('bg-primary', 'sm:mr-auto');
 
-    await user.click(
-      within(dialog).getByRole('button', { name: 'Elimină linkul' }),
-    );
+    await user.click(remove);
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(editor.getMarkdown()).toBe('vezi site');
   });
 
-  it('offers no Elimină linkul for a new link', async () => {
+  it('offers no Elimină linkul nor Salvează for a new link', async () => {
     const editor = editorWith('x');
     selectWords(editor);
     const { dialog } = await openLinkDialog(editor);
@@ -301,7 +320,13 @@ describe('the link dialog (R60, decisions 6 and 7)', () => {
       within(dialog).queryByRole('button', { name: 'Elimină linkul' }),
     ).toBeNull();
     expect(
+      within(dialog).queryByRole('button', { name: 'Salvează' }),
+    ).toBeNull();
+    expect(
       within(dialog).getByRole('button', { name: 'Renunță' }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: 'Adaugă' }),
     ).toBeInTheDocument();
   });
 
@@ -409,6 +434,40 @@ describe('the keyboard bar, for touch (R60, decision 1)', () => {
     expect(editor.view.dom).toHaveFocus();
     expect(shownMode()).toBe('keyboard');
     expect(bold).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('keeps the focus when a tap misses every button, inside a focusable sheet', async () => {
+    const user = userEvent.setup();
+    const editor = editorWith('x');
+    // A FormSheet popup is focusable (Base UI gives it tabindex="-1"): a
+    // press on the bar's gaps or padding would otherwise focus it.
+    render(
+      <div tabIndex={-1} data-testid="sheet">
+        <Field editor={editor} />
+      </div>,
+    );
+    focusText(editor);
+    const surface = document.querySelector<HTMLElement>(
+      '[data-slot="formatted-text-keyboard-bar"]',
+    );
+    if (!surface) throw new Error('no bar');
+
+    expect(fireEvent.pointerDown(surface)).toBe(false);
+    expect(fireEvent.mouseDown(surface)).toBe(false);
+    await user.click(surface);
+    await user.click(bar());
+
+    expect(editor.view.dom).toHaveFocus();
+    expect(shownMode()).toBe('keyboard');
+
+    await user.click(within(bar()).getByRole('button', { name: 'Stiluri' }));
+    await waitFor(() => expect(editor.view.dom).not.toHaveFocus());
+    const panel = screen.getByRole('toolbar', { name: 'Stiluri' });
+
+    await user.click(panel);
+
+    expect(screen.getByTestId('sheet')).not.toHaveFocus();
+    expect(shownMode()).toBe('panel');
   });
 
   it('Aa swaps the keyboard for the panel, keeping the selection; the text brings the keyboard back', async () => {

@@ -54,9 +54,12 @@ const STYLE_LOOK: Readonly<Record<BlockStyle, string>> = {
 };
 
 /**
- * On every bar control: a press keeps the focus (and so the phone's
- * keyboard) where it is, as `mousedown` and `pointerdown` do nothing of their
- * own; the control acts on `click`.
+ * On the bar's whole surface (its controls, the gaps between them, its
+ * padding and the panel's): a press keeps the focus (and so the phone's
+ * keyboard) where it is, as `mousedown` and `pointerdown` do nothing of
+ * their own. A control acts on `click`. A press that missed every control
+ * would otherwise focus the focusable sheet around the bar (Base UI gives
+ * its popup `tabindex="-1"`), and the keyboard would close.
  */
 const KEEP_FOCUS = {
   onMouseDown: keepFocus,
@@ -170,7 +173,6 @@ export function FormattedTextKeyboardBar({
         aria-label={control.label}
         aria-pressed={state[name]}
         className={className}
-        {...KEEP_FOCUS}
         onClick={() => run(control.run)}
       >
         <Icon aria-hidden="true" />
@@ -184,7 +186,6 @@ export function FormattedTextKeyboardBar({
         aria-label={LINK.label}
         aria-haspopup="dialog"
         className={className}
-        {...KEEP_FOCUS}
         onClick={() => setLinkOpen(true)}
       >
         <LINK.icon aria-hidden="true" />
@@ -200,6 +201,7 @@ export function FormattedTextKeyboardBar({
         <div
           ref={surface}
           data-slot="formatted-text-keyboard-bar"
+          {...KEEP_FOCUS}
           className="fixed inset-x-0 bottom-(--keyboard-inset) z-80 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] text-card-foreground keyboard:pb-0"
         >
           <Toolbar.Root
@@ -211,7 +213,6 @@ export function FormattedTextKeyboardBar({
               aria-expanded={panel}
               aria-controls={panel ? panelId : undefined}
               className={iconControl}
-              {...KEEP_FOCUS}
               onClick={() => {
                 if (current.current === 'panel') {
                   setMode('keyboard');
@@ -231,7 +232,6 @@ export function FormattedTextKeyboardBar({
             <Toolbar.Button
               aria-label="Ascunde tastatura"
               className={cn(iconControl, 'ml-auto')}
-              {...KEEP_FOCUS}
               onClick={() => {
                 setMode('hidden');
                 editor.commands.blur();
@@ -252,7 +252,6 @@ export function FormattedTextKeyboardBar({
                     key={choice.style}
                     aria-pressed={state.style === choice.style}
                     className={cn(panelControl, STYLE_LOOK[choice.style])}
-                    {...KEEP_FOCUS}
                     onClick={() =>
                       run((chain) => setBlockStyle(editor, chain, choice.style))
                     }
@@ -274,7 +273,6 @@ export function FormattedTextKeyboardBar({
                 <Toolbar.Button
                   aria-label={CLEAR.label}
                   className={panelControl}
-                  {...KEEP_FOCUS}
                   onClick={() => run(clearFormatting)}
                 >
                   <CLEAR.icon aria-hidden="true" />
