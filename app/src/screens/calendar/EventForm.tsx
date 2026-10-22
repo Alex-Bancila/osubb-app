@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 
+import { FormattedTextField } from '../../components/formatted-text/FormattedTextField';
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
 import { ChoiceRow } from '../../components/ui/radio-group';
@@ -27,7 +28,7 @@ import {
 import { DateTimePicker } from '../../components/ui/date-picker';
 import { FormSheetFooter } from '../../components/ui/form-sheet';
 import { InfoHint } from '../../components/ui/info-hint';
-import { Input, Textarea } from '../../components/ui/input';
+import { Input } from '../../components/ui/input';
 import { eventSchema, fieldForReason } from '../../lib/schemas/event';
 import { useFormValidation } from '../../lib/use-form-validation';
 import {
@@ -369,16 +370,21 @@ export function EventForm({
         </div>
 
         <div className="grid gap-1.5">
-          <label className="grid gap-1.5" htmlFor={`${id}-description`}>
-            <span className="text-sm font-medium">Descriere (opțional)</span>
-            <Textarea
-              id={`${id}-description`}
-              rows={4}
-              value={values.description}
-              onChange={(event) => update({ description: event.target.value })}
-              {...form.field('description')}
-            />
+          <label
+            id={`${id}-description-label`}
+            htmlFor={`${id}-description`}
+            className="text-sm font-medium"
+          >
+            Descriere (opțional)
           </label>
+          <FormattedTextField
+            id={`${id}-description`}
+            labelId={`${id}-description-label`}
+            name="description"
+            value={values.description}
+            onChange={(description) => update({ description })}
+            {...form.field('description')}
+          />
           <FieldError {...form.errorProps('description')} />
         </div>
 

@@ -6,10 +6,11 @@ import {
   type ReactNode,
 } from 'react';
 import { AttachedLinksFields } from '../../components/attached-link/AttachedLinksFields';
+import { FormattedTextField } from '../../components/formatted-text/FormattedTextField';
 import { Button } from '../../components/ui/button';
 import { DateTimePicker } from '../../components/ui/date-picker';
 import { FormSheetFooter } from '../../components/ui/form-sheet';
-import { Input, Textarea } from '../../components/ui/input';
+import { Input } from '../../components/ui/input';
 import { Select } from '../../components/ui/select';
 import { FieldError } from '../../components/ui/field';
 import { InfoHint } from '../../components/ui/info-hint';
@@ -328,14 +329,19 @@ export function TaskForm({
         <FieldError {...form.errorProps('title')} />
       </div>
       <div className="grid gap-1.5">
-        <label htmlFor={`${id}-description`} className="text-sm font-medium">
+        <label
+          id={`${id}-description-label`}
+          htmlFor={`${id}-description`}
+          className="text-sm font-medium"
+        >
           Descriere (opțional)
         </label>
-        <Textarea
+        <FormattedTextField
           id={`${id}-description`}
-          rows={4}
+          labelId={`${id}-description-label`}
+          name="description"
           value={values.description}
-          onChange={(event) => update({ description: event.target.value })}
+          onChange={(description) => update({ description })}
           {...form.field('description')}
         />
         <FieldError {...form.errorProps('description')} />

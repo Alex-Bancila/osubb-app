@@ -4,6 +4,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { findFormattedText } from '../../test/formatted-text';
 import { resetSupabaseMock, supabaseMock } from '../../test/supabase-mock';
 
 const viewer = vi.hoisted(() => ({
@@ -633,7 +634,7 @@ describe('AnnouncementDetailsSheet', () => {
       });
       const title = within(sheet).getByRole('textbox', { name: 'Titlu' });
       expect(title).toHaveValue('Recrutare toamnă');
-      expect(within(sheet).getByRole('textbox', { name: 'Mesaj' })).toHaveValue(
+      expect(await findFormattedText('Mesaj', sheet)).toHaveTextContent(
         'Detalii în formular.',
       );
       // The Group and Audience are shown, never offered.
@@ -675,10 +676,7 @@ describe('AnnouncementDetailsSheet', () => {
       const sheet = await screen.findByRole('dialog', {
         name: 'Editează anunțul',
       });
-      await user.type(
-        within(sheet).getByRole('textbox', { name: 'Mesaj' }),
-        ' Mulțumim!',
-      );
+      await user.type(await findFormattedText('Mesaj', sheet), 'Mulțumim! ');
       await user.click(
         within(sheet).getByRole('button', { name: 'Salvează modificările' }),
       );

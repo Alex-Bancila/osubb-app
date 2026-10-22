@@ -1,13 +1,14 @@
 import { Toast } from '../../components/ui/toast';
 import { useId, useState, type FormEvent } from 'react';
 import { Plus } from 'lucide-react';
+import { FormattedTextField } from '../../components/formatted-text/FormattedTextField';
 import { FabAction } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { FieldError } from '../../components/ui/field';
 import { DateTimePicker } from '../../components/ui/date-picker';
 import { FormSheet, FormSheetFooter } from '../../components/ui/form-sheet';
 import { InfoHint } from '../../components/ui/info-hint';
-import { Input, Textarea } from '../../components/ui/input';
+import { Input } from '../../components/ui/input';
 import { bucharestWallTimeToIso } from '../../lib/calendar-time';
 import { useCapability } from '../../lib/capabilities';
 import {
@@ -180,16 +181,20 @@ function DealForm({
         <FieldError {...form.errorProps('title')} />
       </div>
       <div className="grid gap-1.5">
-        <label htmlFor={`${id}-body`} className="text-sm font-medium">
+        <label
+          id={`${id}-body-label`}
+          htmlFor={`${id}-body`}
+          className="text-sm font-medium"
+        >
           Descriere
         </label>
-        <Textarea
+        <FormattedTextField
           id={`${id}-body`}
+          labelId={`${id}-body-label`}
           name="body"
           required
-          rows={4}
           value={draft.body}
-          onChange={(event) => patch({ body: event.target.value })}
+          onChange={(body) => patch({ body })}
           {...form.field('body')}
         />
         <FieldError {...form.errorProps('body')} />

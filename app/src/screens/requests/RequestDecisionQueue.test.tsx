@@ -67,6 +67,7 @@ vi.mock('../../queries/completed-tasks', () => ({
   useCompletedTaskExecutors: () => ({ data: [], isSuccess: true }),
 }));
 import { RequestDecisionQueue } from './RequestDecisionQueue';
+import { findFormattedText } from '../../test/formatted-text';
 import { chooseOption } from '../../test/select';
 import { CommandError } from '../../lib/command-reasons';
 vi.mock(
@@ -206,13 +207,12 @@ it('evaluates in a form sheet, listing the Request once (#855, R1)', async () =>
   // The Request under decision shows once in the dialog, and the list keeps
   // its one row instead of gaining a copy.
   // (The Task's Detalii, prefilled from it, is a field, not a second copy.)
-  expect(
-    within(dialog).getAllByText(request.description, { selector: 'p' }),
-  ).toHaveLength(1);
+  const field = { selector: 'p', ignore: 'script, style, [contenteditable] p' };
+  expect(within(dialog).getAllByText(request.description, field)).toHaveLength(
+    1,
+  );
   expect(screen.getAllByRole('listitem', { hidden: true })).toHaveLength(1);
-  expect(
-    screen.getAllByText(request.description, { selector: 'p' }),
-  ).toHaveLength(2);
+  expect(screen.getAllByText(request.description, field)).toHaveLength(2);
   await user.click(within(dialog).getByRole('button', { name: 'Renunță' }));
   expect(state.mutate).not.toHaveBeenCalled();
 });
@@ -318,9 +318,8 @@ it('prefills the Task from the Request and approves it as the decider shaped it 
   expect(dialog.querySelector('[data-slot="completed-volunteer"]')).toBeNull();
   const title = within(dialog).getByLabelText('Titlu');
   expect(title).toHaveValue(request.description);
-  expect(within(dialog).getByLabelText('Detalii (opțional)')).toHaveValue(
-    request.description,
-  );
+  const details = await findFormattedText('Detalii (opțional)', dialog);
+  expect(details).toHaveTextContent(request.description);
   expect(
     within(dialog).getByRole('combobox', {
       name: 'Grup principal',
@@ -332,7 +331,7 @@ it('prefills the Task from the Request and approves it as the decider shaped it 
 
   await user.clear(title);
   await user.type(title, 'Materiale pentru atelier');
-  await user.clear(within(dialog).getByLabelText('Detalii (opțional)'));
+  await user.clear(details);
   await chooseOption(
     user,
     within(dialog).getByLabelText('Campanie (opțional)'),

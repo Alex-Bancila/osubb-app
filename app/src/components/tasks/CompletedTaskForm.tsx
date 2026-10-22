@@ -1,12 +1,13 @@
 import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { AttachedLinksFields } from '../attached-link/AttachedLinksFields';
+import { FormattedTextField } from '../formatted-text/FormattedTextField';
 import { SubHeading } from '../layout';
 import { MemberName } from '../member/MemberName';
 import { Button } from '../ui/button';
 import { FieldError } from '../ui/field';
 import { FormSheetFooter } from '../ui/form-sheet';
 import { InfoHint } from '../ui/info-hint';
-import { Input, Textarea } from '../ui/input';
+import { Input } from '../ui/input';
 import { Select } from '../ui/select';
 import {
   completedTaskFieldForReason,
@@ -287,14 +288,19 @@ export function CompletedTaskForm({
           <FieldError {...form.errorProps('title')} />
         </div>
         <div className="grid gap-1.5">
-          <label htmlFor={`${id}-description`} className="text-sm font-medium">
+          <label
+            id={`${id}-description-label`}
+            htmlFor={`${id}-description`}
+            className="text-sm font-medium"
+          >
             Detalii (opțional)
           </label>
-          <Textarea
+          <FormattedTextField
             id={`${id}-description`}
-            rows={3}
+            labelId={`${id}-description-label`}
+            name="description"
             value={values.description}
-            onChange={(event) => update({ description: event.target.value })}
+            onChange={(description) => update({ description })}
             {...form.field('description')}
           />
           <FieldError {...form.errorProps('description')} />

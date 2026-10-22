@@ -10,6 +10,19 @@
 export const NAVIGATION_DENYLIST = [/^\/auth\/(?:callback|confirm)(?:[/?]|$)/];
 
 /**
+ * The Formatted Text editor's chunk (R60, §C): Vite's
+ * `assets/FormattedTextEditor-<hash>.js`, left out of the precache
+ * (`pwa-config.ts`) since only a form that publishes needs it, and kept in its
+ * own cache from the first form that loads it. Same origin only.
+ */
+export function isEditorChunk(url: URL, origin: string): boolean {
+  return (
+    url.origin === origin &&
+    /^\/assets\/FormattedTextEditor-[\w-]+\.js$/.test(url.pathname)
+  );
+}
+
+/**
  * Matches every request to the Supabase origin (REST, Auth, Realtime,
  * Functions), which the worker sends network-only: member data is never
  * cached. `null` when the build carried no usable URL, so the worker still

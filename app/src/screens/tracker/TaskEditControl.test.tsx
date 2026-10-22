@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import axe from 'axe-core';
 import { taskRow } from '../../test/task-fixtures';
+import { findFormattedText } from '../../test/formatted-text';
 import { chooseOption } from '../../test/select';
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 // R57: the editor's Level, which caps Cine îl vede (0 unless a case sets it).
@@ -89,6 +90,17 @@ async function openEditor(user = userEvent.setup()) {
   await user.click(screen.getByRole('button', { name: 'Editează taskul' }));
   await screen.findByRole('dialog', { name: 'Editează taskul' });
   return user;
+}
+/**
+ * Salvează opens once the form holds a change; a typed description reaches
+ * the form when typing rests (R60, ruling 33).
+ */
+async function saveOpens() {
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Salvează modificările' }),
+    ).toBeEnabled(),
+  );
 }
 const modeGroup = () =>
   screen.getByRole('radiogroup', { name: 'Mod de atribuire' });
@@ -642,7 +654,8 @@ it('prevents duplicate updates and retains confirmation when refetch completes t
   );
   const view = render(<TaskEditControl task={task} canManage />);
   const user = await openEditor();
-  await user.type(screen.getByLabelText('Descriere (opțional)'), 'Detalii');
+  await user.type(await findFormattedText('Descriere (opțional)'), 'Detalii');
+  await saveOpens();
   await user.dblClick(
     screen.getByRole('button', { name: 'Salvează modificările' }),
   );
@@ -652,6 +665,27 @@ it('prevents duplicate updates and retains confirmation when refetch completes t
   );
   await act(async () => resolve({ id: 1 }));
   expect(screen.getByRole('status')).toHaveTextContent('salvate');
+});
+it('puts a server refusal of the Descriere under it (R60)', async () => {
+  state.mutate.mockRejectedValueOnce({
+    code: 'PT400',
+    message: 'description_too_long',
+  });
+  render(<TaskEditControl task={task} canManage />);
+  const user = await openEditor();
+  const description = await findFormattedText('Descriere (opțional)');
+  await user.type(description, 'Plan');
+  await saveOpens();
+  await user.click(
+    screen.getByRole('button', { name: 'Salvează modificările' }),
+  );
+
+  await waitFor(() =>
+    expect(description).toHaveAccessibleDescription(
+      /Descrierea are cel mult 2000 de caractere/,
+    ),
+  );
+  expect(description).toHaveAttribute('aria-invalid', 'true');
 });
 it('edits an Umbrella without deadline, Campaign, mode or audience', async () => {
   render(
@@ -670,7 +704,8 @@ it('edits an Umbrella without deadline, Campaign, mode or audience', async () =>
   const user = await openEditor();
   expect(screen.queryByLabelText(/Campanie/)).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Mod de atribuire')).not.toBeInTheDocument();
-  await user.type(screen.getByLabelText('Descriere (opțional)'), 'Plan');
+  await user.type(await findFormattedText('Descriere (opțional)'), 'Plan');
+  await saveOpens();
   await user.click(
     screen.getByRole('button', { name: 'Salvează modificările' }),
   );

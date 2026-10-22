@@ -26,6 +26,7 @@ import {
   bucharestWallTimeToIso,
 } from '../../lib/calendar-time';
 import { pickDate } from '../../test/date-picker';
+import { findFormattedText } from '../../test/formatted-text';
 import { NewEventControl } from './NewEventControl';
 import { clearEventReceipts, useEventReceipt } from './event-receipts';
 
@@ -191,10 +192,9 @@ describe('NewEventControl', () => {
         'data-slot',
         'input',
       );
-    expect(screen.getByLabelText('Descriere (opțional)')).toHaveAttribute(
-      'data-slot',
-      'textarea',
-    );
+    expect(
+      (await findFormattedText('Descriere (opțional)')).closest('[data-slot]'),
+    ).toHaveAttribute('data-slot', 'formatted-text-input');
     for (const label of [
       'Începe — ora României',
       'Se încheie (opțional) — ora României',
@@ -393,6 +393,28 @@ describe('NewEventControl', () => {
       ),
     );
     expect(field).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('puts a server refusal of the Descriere under it (R60)', async () => {
+    state.mutateAsync.mockRejectedValue({
+      code: 'PT400',
+      message: 'description_too_long',
+    });
+    const user = setup();
+    await open(user);
+    await fillRequired(user);
+    const description = await findFormattedText('Descriere (opțional)');
+    await user.type(description, 'Agenda');
+    await user.click(
+      screen.getByRole('button', { name: 'Creează evenimentul' }),
+    );
+
+    await waitFor(() =>
+      expect(description).toHaveAccessibleDescription(
+        expect.stringContaining('Descrierea are cel mult 2000 de caractere'),
+      ),
+    );
+    expect(description).toHaveAttribute('aria-invalid', 'true');
   });
 
   it('keeps the draft and shows safe Romanian feedback after refusal', async () => {

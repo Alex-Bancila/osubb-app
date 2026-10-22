@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createPwaOptions } from './pwa-config';
-import { NAVIGATION_DENYLIST, supabaseOriginPattern } from './sw-routes';
+import {
+  isEditorChunk,
+  NAVIGATION_DENYLIST,
+  supabaseOriginPattern,
+} from './sw-routes';
 
 describe('PWA build options', () => {
   it('builds our own service worker from src/pwa/sw.ts (ADR-0010)', () => {
@@ -18,6 +22,12 @@ describe('PWA build options', () => {
       'splash.css',
       'theme-init.js',
       'assets/*.{js,css,woff2,png,svg,ico}',
+    ]);
+  });
+
+  it('leaves the Formatted Text editor out of the precache (R60)', () => {
+    expect(createPwaOptions().injectManifest.globIgnores).toEqual([
+      'assets/FormattedTextEditor-*.js',
     ]);
   });
 
@@ -71,6 +81,23 @@ describe('service worker cache boundary', () => {
     expect(supabaseOriginPattern(undefined)).toBeNull();
     expect(supabaseOriginPattern('')).toBeNull();
     expect(supabaseOriginPattern('not a url')).toBeNull();
+  });
+
+  it('caches the Formatted Text editor’s chunk on first use, from this origin only (R60)', () => {
+    const origin = 'https://app.osubb.ro';
+    const chunk = (href: string) => isEditorChunk(new URL(href), origin);
+
+    expect(chunk(`${origin}/assets/FormattedTextEditor-B3x_k-9Q.js`)).toBe(
+      true,
+    );
+
+    expect(
+      chunk('https://cdn.example.com/assets/FormattedTextEditor-a1.js'),
+    ).toBe(false);
+    expect(chunk(`${origin}/assets/FormattedText-a1.js`)).toBe(false);
+    expect(chunk(`${origin}/assets/FormattedTextEditor-a1.css`)).toBe(false);
+    expect(chunk(`${origin}/assets/index-a1.js`)).toBe(false);
+    expect(chunk(`${origin}/x/assets/FormattedTextEditor-a1.js`)).toBe(false);
   });
 
   it('keeps emailed-link landings out of the navigation fallback', () => {

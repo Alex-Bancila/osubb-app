@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { Pencil } from 'lucide-react';
 import { AttachedLinksFields } from '../../components/attached-link/AttachedLinksFields';
+import { FormattedTextField } from '../../components/formatted-text/FormattedTextField';
 import {
   attachedLinksFrom,
   sameAttachedLinks,
@@ -18,7 +19,7 @@ import { DateTimePicker } from '../../components/ui/date-picker';
 import { FieldError } from '../../components/ui/field';
 import { FormSheet, FormSheetFooter } from '../../components/ui/form-sheet';
 import { InfoHint } from '../../components/ui/info-hint';
-import { Input, Textarea } from '../../components/ui/input';
+import { Input } from '../../components/ui/input';
 import { Select } from '../../components/ui/select';
 import {
   Dialog,
@@ -495,16 +496,18 @@ function TaskEditForm({
           </div>
           <div className="grid gap-1.5">
             <label
+              id={`${id}-description-label`}
               htmlFor={`${id}-description`}
               className="text-sm font-medium"
             >
               Descriere (opțional)
             </label>
-            <Textarea
+            <FormattedTextField
               id={`${id}-description`}
-              rows={4}
+              labelId={`${id}-description-label`}
+              name="description"
               value={description}
-              onChange={(event) => setDescription(event.target.value)}
+              onChange={setDescription}
               {...form.field('description')}
             />
             <FieldError {...form.errorProps('description')} />
