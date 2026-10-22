@@ -130,6 +130,9 @@
      in the visible area: from `--visible-top`, `--visible-height` tall. */
   --keyboard-inset: 0px;
   --keyboard-offset-top: 0px;
+  /* The Formatted Text keyboard bar's height while it shows above the
+     keyboard (R60, FormattedTextKeyboardBar); sheets end above it. */
+  --format-bar-h: 0px;
   --visible-top: var(--keyboard-offset-top);
   --visible-height: calc(
     100dvh - var(--keyboard-inset) - var(--keyboard-offset-top)
