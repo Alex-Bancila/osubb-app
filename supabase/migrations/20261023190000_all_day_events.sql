@@ -407,7 +407,7 @@ create function private.update_event_impl(
   p_description text,
   p_min_level integer,
   p_campaign_id bigint,
-  p_all_day boolean default false
+  p_all_day boolean default null
 )
 returns public.events
 language plpgsql
@@ -425,6 +425,7 @@ declare
   v_fields text[];
   v_parts text[];
   v_constraint text;
+  v_all_day boolean;
 begin
   -- 1. Malformed input, judged for everyone before the gate.
   if p_title is null or p_title !~ '[^[:space:]]' then
@@ -441,8 +442,10 @@ begin
   if p_starts_at is null or (p_ends_at is not null and p_ends_at <= p_starts_at) then
     raise sqlstate 'PT400' using message = 'invalid_event_interval';
   end if;
-  -- #1098 (R63): events_all_day_bounds_ck, create_event's reason.
-  if coalesce(p_all_day, false) and (
+  -- #1098 (R63): events_all_day_bounds_ck, create_event's reason. A null
+  -- p_all_day (a client from before it) keeps the Event's own, judged at
+  -- step 5 once the row is loaded.
+  if p_all_day and (
        p_ends_at is null
        or (p_starts_at at time zone 'Europe/Bucharest')::time <> time '00:00'
        or (p_ends_at at time zone 'Europe/Bucharest')::time <> time '00:00') then
@@ -542,6 +545,16 @@ begin
   if v_level < 9 and p_min_level > v_level then
     raise sqlstate 'PT400' using message = 'event_min_level_above_actor';
   end if;
+  -- #1098 (R63): Toată ziua as asked, or -- p_all_day null, a client from
+  -- before it -- as the Event already is, so such an edit never turns an
+  -- all-day Event into a timed one; its bounds then answer to the kept value.
+  v_all_day := coalesce(p_all_day, v_event.all_day);
+  if p_all_day is null and v_all_day and (
+       p_ends_at is null
+       or (p_starts_at at time zone 'Europe/Bucharest')::time <> time '00:00'
+       or (p_ends_at at time zone 'Europe/Bucharest')::time <> time '00:00') then
+    raise sqlstate 'PT400' using message = 'invalid_all_day_bounds';
+  end if;
 
   -- 6. Terminal state.
   if v_event.cancelled_at is not null then
@@ -569,7 +582,7 @@ begin
   begin
     update public.events set title = btrim(p_title), type = p_type::public.event_type,
       group_id = p_group_id, starts_at = p_starts_at, ends_at = p_ends_at,
-      all_day = coalesce(p_all_day, false),
+      all_day = v_all_day,
       location = nullif(btrim(p_location), ''), capacity = p_capacity,
       description = nullif(btrim(p_description), ''), min_level = p_min_level,
       campaign_id = p_campaign_id
@@ -648,7 +661,7 @@ end;
 $$;
 
 comment on function private.update_event_impl(bigint, text, text, bigint, timestamptz, timestamptz, text, integer, text, integer, bigint, boolean) is
-  'Replaces an Event''s whole editable state, authorized by Group Role (ADR-0009 Wave 2, #248). This is a full-state REPLACE, not a patch: every editable column is written from its argument, so a null clears a nullable column (ends_at, location, capacity, description, campaign_id) rather than leaving the old value -- a client that wants to keep a field must send it back; p_all_day (#1098, R63) is written too, null and absent meaning a timed Event. Malformed input is judged first, for everyone, with the same reasons as create_event including event_group_required and invalid_all_day_bounds. A caller who cannot see the Event (below its min_level) is answered PT404 event_not_found, the same as an id that does not exist: hidden is never distinguishable from missing. Authority on the SOURCE: an Organization Group Event (since #582 the Group carrying groups.is_organization) belongs to its creator or to level >= 6; every other Event goes through private.require_group_work_manager, so a Group Manager or Group Responsible of the Group or any ancestor on its path qualifies. Moving the Event re-runs the rule on the TARGET Group, where an Organization target takes create_event''s rule -- level >= 6 or any live Group Role anywhere -- because the Organization Group is a root Group with no ancestors of its own (one root among several: every Department, Independent Team and Project Group is a root too, and most Group paths never contain it), so nobody could reach it through an ancestor role. A MOVE''s target must be active. An edit that leaves the Event in its own Group is NOT refused when that Group has since been archived: this is a full-state replace, so every call names a Group, and an ungated check would leave such an Event uncorrectable while cancel_event -- same authority rule -- still cancelled it. Who may still edit it is decided by the source rule above alone: BC/Moderator always, a Group Role only while the Group is active, which is can_manage_group_work''s own status gate. Minimum Level is then judged against the target Group and the live actor (PT400 event_min_level_below_group / event_min_level_above_actor), and a cancelled Event is PT409 event_cancelled. The Campaign (#691, ADR-0008 amended 2026-09-23) must be owned by the Event''s Group -- the new one, on a move -- or a Group above it, and a newly attached one must be active (events_validate_campaign); anything else is PT400 invalid_campaign, and a Campaign deactivated after it was attached is kept when sent back unchanged. R53 (2026-10-14): every content change -- title, description, type, schedule (an all-day switch included), location, capacity, Group, Minimum Level -- notifies, in one notice per edit that names what changed and carries the current schedule (for an all-day Event its days and "toată ziua", no hour) and place, the current going attendees and the new Group''s Group Audience as Notifications reach it (private.group_notification_audience: #601, minus every live BC member and Moderator, #929, plus the BC members whose Group position reaches it, R42), plus the old Group''s when the Event moved, every recipient filtered through private.can_read_event at the new Minimum Level, link /calendar?event=<id>: private.notify_event tells whoever knows the Event "Eveniment actualizat" (event:<id>:changed) and whoever does not "Eveniment nou"; a Campaign alone notifies nobody. #934: the source-authority rule is private.can_manage_event, the one definition event_attendance_read also reads; the command holds the roster rows it rests on FOR SHARE and asks it again. Spec 2026-10-11 (final review of 2026-10-13): a pending or rejected OSUBB-wide Event moved off the Organization Group is published by the move (private.stamp_approval) -- its new Group hears "Eveniment nou" through private.notify_event_created and no change notice is sent; the old Group''s audience is told of a move only when the Event had been approved.';
+  'Replaces an Event''s whole editable state, authorized by Group Role (ADR-0009 Wave 2, #248). This is a full-state REPLACE, not a patch: every editable column is written from its argument, so a null clears a nullable column (ends_at, location, capacity, description, campaign_id) rather than leaving the old value -- a client that wants to keep a field must send it back; p_all_day (#1098, R63) is written too when given; null or absent (a client from before it) keeps the Event''s own all_day, and the bounds are then judged against it (PT400 invalid_all_day_bounds at step 5). Malformed input is judged first, for everyone, with the same reasons as create_event including event_group_required and invalid_all_day_bounds. A caller who cannot see the Event (below its min_level) is answered PT404 event_not_found, the same as an id that does not exist: hidden is never distinguishable from missing. Authority on the SOURCE: an Organization Group Event (since #582 the Group carrying groups.is_organization) belongs to its creator or to level >= 6; every other Event goes through private.require_group_work_manager, so a Group Manager or Group Responsible of the Group or any ancestor on its path qualifies. Moving the Event re-runs the rule on the TARGET Group, where an Organization target takes create_event''s rule -- level >= 6 or any live Group Role anywhere -- because the Organization Group is a root Group with no ancestors of its own (one root among several: every Department, Independent Team and Project Group is a root too, and most Group paths never contain it), so nobody could reach it through an ancestor role. A MOVE''s target must be active. An edit that leaves the Event in its own Group is NOT refused when that Group has since been archived: this is a full-state replace, so every call names a Group, and an ungated check would leave such an Event uncorrectable while cancel_event -- same authority rule -- still cancelled it. Who may still edit it is decided by the source rule above alone: BC/Moderator always, a Group Role only while the Group is active, which is can_manage_group_work''s own status gate. Minimum Level is then judged against the target Group and the live actor (PT400 event_min_level_below_group / event_min_level_above_actor), and a cancelled Event is PT409 event_cancelled. The Campaign (#691, ADR-0008 amended 2026-09-23) must be owned by the Event''s Group -- the new one, on a move -- or a Group above it, and a newly attached one must be active (events_validate_campaign); anything else is PT400 invalid_campaign, and a Campaign deactivated after it was attached is kept when sent back unchanged. R53 (2026-10-14): every content change -- title, description, type, schedule (an all-day switch included), location, capacity, Group, Minimum Level -- notifies, in one notice per edit that names what changed and carries the current schedule (for an all-day Event its days and "toată ziua", no hour) and place, the current going attendees and the new Group''s Group Audience as Notifications reach it (private.group_notification_audience: #601, minus every live BC member and Moderator, #929, plus the BC members whose Group position reaches it, R42), plus the old Group''s when the Event moved, every recipient filtered through private.can_read_event at the new Minimum Level, link /calendar?event=<id>: private.notify_event tells whoever knows the Event "Eveniment actualizat" (event:<id>:changed) and whoever does not "Eveniment nou"; a Campaign alone notifies nobody. #934: the source-authority rule is private.can_manage_event, the one definition event_attendance_read also reads; the command holds the roster rows it rests on FOR SHARE and asks it again. Spec 2026-10-11 (final review of 2026-10-13): a pending or rejected OSUBB-wide Event moved off the Organization Group is published by the move (private.stamp_approval) -- its new Group hears "Eveniment nou" through private.notify_event_created and no change notice is sent; the old Group''s audience is told of a move only when the Event had been approved.';
 
 revoke execute on function private.update_event_impl(bigint, text, text, bigint, timestamptz, timestamptz, text, integer, text, integer, bigint, boolean)
   from public, anon, authenticated, service_role;
@@ -667,7 +680,7 @@ create function public.update_event(
   p_description text,
   p_min_level integer,
   p_campaign_id bigint,
-  p_all_day boolean default false
+  p_all_day boolean default null
 )
 returns public.events
 language sql
@@ -679,7 +692,7 @@ as $$
 $$;
 
 comment on function public.update_event(bigint, text, text, bigint, timestamptz, timestamptz, text, integer, text, integer, bigint, boolean) is
-  'Security-invoker wrapper over private.update_event_impl (#248; p_campaign_id #691; p_all_day #1098). A full-state replace: p_campaign_id has no default, and null clears the Campaign; p_all_day defaults to a timed Event, so a client that predates it keeps sending timed edits.';
+  'Security-invoker wrapper over private.update_event_impl (#248; p_campaign_id #691; p_all_day #1098). A full-state replace: p_campaign_id has no default, and null clears the Campaign; p_all_day defaults to null, which keeps the Event''s own all_day, so a client that predates it never turns an all-day Event into a timed one.';
 
 revoke execute on function public.update_event(bigint, text, text, bigint, timestamptz, timestamptz, text, integer, text, integer, bigint, boolean)
   from public, anon, authenticated, service_role;

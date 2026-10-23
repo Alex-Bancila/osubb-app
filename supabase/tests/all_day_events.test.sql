@@ -9,7 +9,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(33);
+select plan(38);
 
 create function pg_temp.u98(n integer) returns uuid language sql immutable as $$
   select ('10980000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -184,6 +184,36 @@ select throws_ok(
   'PT400', 'invalid_all_day_bounds', 'update_event refuses an all-day Event without an end');
 select pg_temp.test_clear_jwt();
 reset role;
+
+-- A client from before #1098 sends no p_all_day: the Event keeps its own.
+insert into public.events(title, type, group_id, starts_at, ends_at, all_day) values
+  ('Keep #1098', 'eveniment', pg_temp.grp(), pg_temp.midnight('2030-11-20'), pg_temp.midnight('2030-11-22'), true);
+select pg_temp.login();
+select lives_ok(
+  $$ select public.update_event((select id from public.events where title = 'Keep #1098'),
+       'Keep #1098 nou', 'eveniment', pg_temp.grp(), pg_temp.midnight('2030-11-20'), pg_temp.midnight('2030-11-22'),
+       null, null, null, 0, null) $$,
+  'update_event without p_all_day takes an edit of an all-day Event');
+select pg_temp.test_clear_jwt();
+reset role;
+select ok((select all_day from public.events where title = 'Keep #1098 nou'),
+          'an edit that names no p_all_day keeps the Event all-day');
+select pg_temp.login();
+select throws_ok(
+  $$ select public.update_event((select id from public.events where title = 'Keep #1098 nou'),
+       'Keep #1098 nou', 'eveniment', pg_temp.grp(), '2030-11-20 18:00+02', pg_temp.midnight('2030-11-22'),
+       null, null, null, 0, null) $$,
+  'PT400', 'invalid_all_day_bounds',
+  'a kept all-day Event still answers to all-day bounds');
+select lives_ok(
+  $$ select public.update_event((select id from public.events where title = 'Keep #1098 nou'),
+       'Keep #1098 nou', 'eveniment', pg_temp.grp(), '2030-11-20 18:00+02', pg_temp.midnight('2030-11-22'),
+       null, null, null, 0, null, false) $$,
+  'an explicit p_all_day false takes exact times');
+select pg_temp.test_clear_jwt();
+reset role;
+select is((select all_day from public.events where title = 'Keep #1098 nou'), false,
+          'an explicit false turns Toată ziua off');
 
 -- ==================== The reminder ====================
 -- Wednesday 13 November 2030, two days; a one-day one on the same Wednesday.
