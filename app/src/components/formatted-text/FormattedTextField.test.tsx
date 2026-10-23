@@ -657,4 +657,32 @@ describe('FormattedTextField while its chunk loads', () => {
 
     expect(onSubmit).toHaveBeenCalledWith('Ședința e joi');
   });
+
+  it('tries the chunk again in the next field that opens, once a load failed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.resetModules();
+    let failures = 1;
+    vi.doMock('./editor/FormattedTextEditor', async (importOriginal) => {
+      if (failures > 0) {
+        failures -= 1;
+        throw new Error('Failed to fetch dynamically imported module');
+      }
+      return importOriginal();
+    });
+    const { FormattedTextField: Flaky } = await import('./FormattedTextField');
+
+    // Offline: the first field opens as a plain text area.
+    const first = render(<Form Field={Flaky} />);
+    await waitFor(() => {
+      const field = screen.getByRole('textbox', { name: 'Mesaj' });
+      expect(field.tagName).toBe('TEXTAREA');
+      expect(field).not.toHaveAttribute('readonly');
+    });
+    first.unmount();
+
+    // Back online: the next field loads the editor.
+    render(<Form Field={Flaky} />);
+    const field = await findFormattedText('Mesaj');
+    expect(field).toHaveAttribute('contenteditable', 'true');
+  });
 });

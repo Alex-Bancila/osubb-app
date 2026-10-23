@@ -1,8 +1,7 @@
 import type { Editor } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
-import { z } from 'zod';
-import { safeHttpUrl } from '../../../lib/links';
+import { fieldForReason, textLinkSchema } from '../../../lib/schemas/text-link';
 import { useFormValidation } from '../../../lib/use-form-validation';
 import { Button } from '../../ui/button';
 import {
@@ -16,27 +15,6 @@ import {
 import { FieldError } from '../../ui/field';
 import { Input } from '../../ui/input';
 import { editorElement } from './formatting';
-
-/**
- * A Text Link goes to an http(s) address only (decision 7), the rule an
- * Attached Link follows (`safeHttpUrl`), refused with the same copy:
- * `osubb.ro` stays text.
- */
-const textLinkSchema = z
-  .object({ text: z.string(), url: z.string() })
-  .transform(({ text, url }) => ({ text: text.trim(), url: url.trim() }))
-  .superRefine(({ url }, ctx) => {
-    if (safeHttpUrl(url) === null)
-      ctx.addIssue({
-        code: 'custom',
-        path: ['url'],
-        message: 'link_url_invalid',
-      });
-  });
-
-const fieldForReason: Readonly<Record<string, string>> = {
-  link_url_invalid: 'url',
-};
 
 function isLinkShortcut(event: KeyboardEvent): boolean {
   return (

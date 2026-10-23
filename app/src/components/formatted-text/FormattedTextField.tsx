@@ -13,7 +13,19 @@ import { Textarea } from '../ui/input';
 /** The visible characters a Formatted Text may hold (decision 10). */
 const VISIBLE_LIMIT = 2000;
 
-const FormattedTextEditor = lazy(() => import('./editor/FormattedTextEditor'));
+/**
+ * The editor's chunk, loaded by the first field that opens. `lazy` keeps a
+ * failed load for the life of the page, so a failure (offline, or an old page
+ * after a Release) makes a fresh one: the next field that opens tries again.
+ */
+let FormattedTextEditor = lazy(loadEditor);
+
+function loadEditor() {
+  return import('./editor/FormattedTextEditor').catch((error: unknown) => {
+    FormattedTextEditor = lazy(loadEditor);
+    throw error;
+  });
+}
 
 export type FormattedTextFieldProps = {
   id: string;
