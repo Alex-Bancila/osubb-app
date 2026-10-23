@@ -1,7 +1,8 @@
 -- event_rsvp_managers.test.sql — #934: an Event's RSVPs are read by the people
 -- who manage it (private.can_manage_event, the rule update_event and
 -- cancel_event apply) and by each Member for their own row; no rank reads
--- other Members' answers by itself.
+-- other Members' answers below BCE; every live BCE and above reads them all
+-- on the Events they can read (R61, #1096).
 -- Runs in one transaction and rolls back — leaves no residue in the local db.
 begin;
 \set osubb_test_suite true
@@ -9,7 +10,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(24);
+select plan(26);
 
 -- ==================== Fixtures ====================
 -- 01 bc · 02 Group Manager of A · 03 Group Responsible of A · 04 member of A
@@ -106,9 +107,13 @@ select is(pg_temp.visible_rsvps(), 'A #934:3',
   'a Group Responsible reads every RSVP on their Group''s Event');
 reset role;
 
+-- 10 is a BCE, so since R61 (#1096) the rank alone reads every RSVP; the
+-- ancestor rule is asked of the predicate directly.
 select pg_temp.test_login_leadership(pg_temp.u934(10));
-select is(pg_temp.visible_rsvps(), 'Team #934:1',
-  'a Group Manager of a Group above reads the RSVPs of an Event in the Group below');
+select ok(private.can_manage_event((select id from ex where title = 'Team #934')),
+  'can_manage_event: a Group Manager of a Group above manages an Event in the Group below');
+select ok(not private.can_manage_event((select id from ex where title = 'A #934')),
+  'can_manage_event: and not an Event of a Group off their path');
 reset role;
 
 select pg_temp.test_login_leadership(pg_temp.u934(9));
@@ -127,10 +132,10 @@ select is(pg_temp.visible_rsvps(), 'A #934:3, B #934:1, Org #934:2, Org other #9
 reset role;
 
 select pg_temp.test_login_leadership(pg_temp.u934(5));
-select is(pg_temp.visible_rsvps(), '',
-  'a BCE who manages none of these Events reads no colleague RSVP (the level >= 5 read is gone)');
+select is(pg_temp.visible_rsvps(), 'A #934:3, B #934:1, Org #934:2, Org other #934:1, Team #934:1',
+  'R61 (#1096): a BCE who manages none of these Events reads every RSVP on every Event they can read');
 select ok(not private.can_manage_event((select id from ex where title = 'B #934')),
-  'can_manage_event: a rank alone manages nothing');
+  'can_manage_event: a rank alone manages nothing -- reading the RSVPs is not managing');
 reset role;
 
 select pg_temp.test_login_leadership(pg_temp.u934(4));
@@ -158,7 +163,11 @@ reset role;
 
 select pg_temp.test_login_leadership(pg_temp.u934(5));
 select throws_ok($q$select public.cancel_event((select id from ex where title = 'B #934'), 'Motiv')$q$,
-  '42501', 'calendar_manage_forbidden', 'the BCE who may not read the RSVPs may not cancel the Event either');
+  '42501', 'calendar_manage_forbidden', 'R61: the BCE who reads the RSVPs still may not cancel an Event they do not manage');
+select throws_ok($q$select public.update_event((select id from ex where title = 'B #934'), 'Alt titlu', 'sedinta',
+                   (select group_id from public.events where title = 'B #934'), now() + interval '3 days',
+                   null, null, null, null, 0, null)$q$,
+  '42501', 'calendar_manage_forbidden', 'R61: nor edit it');
 reset role;
 
 select pg_temp.test_login_leadership(pg_temp.u934(9));

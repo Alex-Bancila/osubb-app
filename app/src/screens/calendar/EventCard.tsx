@@ -36,8 +36,9 @@ type EventCardProps = {
   showDay?: boolean;
   /**
    * Offer **Editează** / **Anulează evenimentul** to those the commands accept
-   * (#849), and **Cine participă** (#934), to the Event's managers: on the
-   * Calendar's cards, not on Acasă's preview.
+   * (#849) to the Event's managers, and **Cine participă** to them (#934)
+   * and to every BCE and above (R61): on the Calendar's cards, not on Acasă's
+   * preview.
    */
   manageable?: boolean;
   /**
@@ -194,8 +195,9 @@ export default function EventCard({
         ))
       )}
 
-      {/* Cine participă (#934): the Event's managers read every answer —
-          history too, on a past or cancelled Event. A deadline takes none. */}
+      {/* Cine participă (#934, R61): the Event's managers and every BCE and
+          above read every answer — history too, on a past or cancelled
+          Event. A deadline takes none. */}
       {manageable && takesRsvp && <EventAttendance event={event} />}
 
       {manageable && <EventManageControls event={event} groups={groups} />}

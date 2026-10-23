@@ -302,7 +302,7 @@ An Event of a Group whose Group Audience includes the Member, which includes eve
 A visible Event of a Group the Member does not belong to, presented separately until the Member answers “Vin”.
 
 **RSVP**:
-A Member’s “Vin” or “Nu vin” response to an Event.
+A Member’s “Vin” or “Nu vin” response to an Event. A Member reads their own; every answer on an Event (**Cine participă**) is read by the Event’s managers and by every BCE, BC member and the Moderator on every Event they can read (ruling R61). Reading the answers grants nothing else: editing and cancelling stay with the managers.
 
 **Capacity**:
 Informational attendance guidance for an Event. It does not reject an RSVP or create a waitlist.
