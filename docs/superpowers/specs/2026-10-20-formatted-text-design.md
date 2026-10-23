@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-20
 - **Decided by:** Alex Băncilă, in the grill session of 2026-10-20 (ruling R60), after comparing five clickable options on the comparison page (Artifact `https://claude.ai/artifact/Ush78bHjV1UEBEkR7K2Mg9`, private to Alex).
-- **Status:** approved, not yet built.
+- **Status:** approved; built in three PRs: the server (PR #1094, issue #1090), the reader (PR #1095, issue #1091) and the editor (issue #1092).
 - **Supersedes:**
   - Ruling R7's "Text stays plain (no Markdown, no inline URL detection)" (`docs/superpowers/plans/2026-09-23-prod-readiness-grill.md`), for the four kinds of Formatted Text only. The Submission Note stays plain, as R7 said.
   - The sentence "Text fields stay plain text and never carry links themselves" that the Attached Link glossary entry carried since ruling R46.
@@ -165,7 +165,7 @@ Styles live in our stylesheet, never inline. Headings and quotes use the app's t
   - edit: title "Modifică linkul", buttons Renunță / Salvează / Elimină linkul (destructive last)
 - **DESIGN.md** gains two rows in its component table when this is built:
   - **Formatted text field** → `FormattedTextField`: "Toolbar by input: the keyboard bar with Aa on touch, the top toolbar with a mouse."
-  - **Formatted text** → `FormattedText`: "`full`, `preview` or `plain`; never innerHTML."
+  - **Formatted text** → `FormattedText`: "`full` or `preview` (plain words: `toPlainText`); `headings="text"` on a card or timeline that has its own headings; never innerHTML."
 
 ### F. Existing rows: the scan
 
