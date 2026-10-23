@@ -220,10 +220,8 @@ describe('RequestsView', () => {
     // Which Group to choose is behind the field's "i", still its description.
     expect(
       screen.getByRole('combobox', { name: 'Grup' }),
-    ).toHaveAccessibleDescription(/departamentul, echipa sau proiectul/);
-    expect(
-      screen.getByText(/departamentul, echipa sau proiectul/),
-    ).not.toBeVisible();
+    ).toHaveAccessibleDescription(/chiar dacă nu ești membru/);
+    expect(screen.getByText(/chiar dacă nu ești membru/)).not.toBeVisible();
     await user.click(screen.getByRole('combobox', { name: 'Grup' }));
     await user.click(
       await screen.findByRole('option', { name: /^Echipa Media/ }),
