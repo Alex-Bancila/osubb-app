@@ -9,7 +9,22 @@ import {
   ComboboxValue,
   MemberOption,
 } from '../../components/ui/combobox';
+import { memberComboboxFilter } from '../../lib/member-search';
 import type { AppointableMember } from '../../queries/groups-admin';
+
+/**
+ * Typing matches the Nickname, the full name and the Role label alike (#1100);
+ * the "nobody" row is found by its own label.
+ */
+const appointableFilter = memberComboboxFilter((member: AppointableMember) =>
+  member.memberId === ''
+    ? { fullName: member.name }
+    : {
+        nickname: member.nickname,
+        fullName: member.name,
+        extra: [member.roleLabel],
+      },
+);
 
 /** The row that stands for "nobody" when a picker offers an empty choice. */
 function noneOption(label: string): AppointableMember {
@@ -69,6 +84,7 @@ export function MemberPicker({
           ? member.name
           : `${member.name} · ${member.roleLabel}`
       }
+      filter={appointableFilter}
       isItemEqualToValue={(left, right) => left.memberId === right.memberId}
     >
       <ComboboxTrigger

@@ -121,6 +121,9 @@ export type CompletedTaskVolunteer = {
   id: string;
   /** The Nickname when set (R5), else the full name. */
   name: string;
+  /** What typing in the picker also matches (#1100): Nickname and full name. */
+  nickname: string | null;
+  fullName: string;
   avatarColor: string | null;
 };
 
@@ -139,6 +142,8 @@ export async function fetchCompletedTaskExecutors(
     .map((row) => ({
       id: row.member_id,
       name: row.nickname?.trim() || row.full_name || 'Membru OSUBB',
+      nickname: row.nickname?.trim() || null,
+      fullName: row.full_name ?? '',
       avatarColor: row.avatar_color,
     }))
     .sort(

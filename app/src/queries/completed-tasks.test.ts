@@ -83,8 +83,20 @@ it('names the volunteers of a Group by Nickname, in Romanian order', async () =>
     ]),
   );
   expect(await fetchCompletedTaskExecutors(9)).toEqual([
-    { id: 'a', name: 'Anca', avatarColor: '#284C93' },
-    { id: 'b', name: 'Ștefan Pop', avatarColor: null },
+    {
+      id: 'a',
+      name: 'Anca',
+      nickname: 'Anca',
+      fullName: 'Ana Ionescu',
+      avatarColor: '#284C93',
+    },
+    {
+      id: 'b',
+      name: 'Ștefan Pop',
+      nickname: null,
+      fullName: 'Ștefan Pop',
+      avatarColor: null,
+    },
   ]);
   expect(api.rpc).toHaveBeenCalledWith('completed_task_executors', {
     p_group_id: 9,
