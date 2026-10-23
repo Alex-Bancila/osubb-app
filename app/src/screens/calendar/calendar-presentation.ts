@@ -663,11 +663,13 @@ export type CalendarDayItems = {
 /**
  * Events (chronological) and Task chips, by Bucharest day. An Event is on
  * every day it touches (#1098, R63), so a day lists — and counts — the
- * weekend it is part of, not only the Events that start on it.
+ * weekend it is part of, not only the Events that start on it. Given the
+ * visible days, an Event is placed only on those.
  */
 export function itemsByDay(
   events: readonly EventPresentation[],
   tasks: readonly CalendarTask[],
+  window?: { first: string; last: string },
 ): Map<string, CalendarDayItems> {
   const days = new Map<string, CalendarDayItems>();
   const at = (dayKey: string) => {
@@ -682,7 +684,10 @@ export function itemsByDay(
     for (const event of day.events) {
       const last =
         event.lastDayKey > event.dayKey ? event.lastDayKey : event.dayKey;
-      for (let key = event.dayKey; key <= last; key = addDays(key, 1))
+      const from =
+        window && window.first > event.dayKey ? window.first : event.dayKey;
+      const to = window && window.last < last ? window.last : last;
+      for (let key = from; key <= to; key = addDays(key, 1))
         at(key).events.push(event);
     }
   for (const items of days.values())

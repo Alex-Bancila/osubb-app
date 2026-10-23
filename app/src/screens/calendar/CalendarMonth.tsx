@@ -103,7 +103,7 @@ export function CalendarMonth({
     () => buildMonthGrid(month, todayKey),
     [month, todayKey],
   );
-  const grid = gridBounds(weeks);
+  const grid = useMemo(() => gridBounds(weeks), [weeks]);
   const range = useMemo(
     () => (filter.params ? eventRangeForDays(grid.first, grid.last) : null),
     [filter.params, grid.first, grid.last],
@@ -155,8 +155,9 @@ export function CalendarMonth({
         filterTasks(tasks, filter.value).filter(
           (task) => task.source !== 'managed' || keepGroup(task.groupId),
         ),
+        grid,
       ),
-    [shownEvents, tasks, filter.value, keepGroup],
+    [shownEvents, tasks, filter.value, keepGroup, grid],
   );
   // #1098 (R63): each week row's several-day Events, laid out in lanes.
   const barsByWeek = useMemo(

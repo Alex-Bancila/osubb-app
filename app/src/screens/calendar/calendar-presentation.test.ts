@@ -730,6 +730,18 @@ describe('several-day Events on the month grid', () => {
     );
   });
 
+  it('places an Event that runs for centuries only on the visible days', () => {
+    const byDay = itemsByDay([spanning(19, '2026-09-20', '2206-01-01')], [], {
+      first: '2026-09-28',
+      last: '2026-11-08',
+    });
+    expect(byDay.size).toBe(42);
+    expect(byDay.get('2026-09-28')?.events.map((e) => e.id)).toEqual([19]);
+    expect(byDay.get('2026-11-08')?.events.map((e) => e.id)).toEqual([19]);
+    expect(byDay.has('2026-09-27')).toBe(false);
+    expect(byDay.has('2026-11-09')).toBe(false);
+  });
+
   it('keeps a several-day Event in a range any of its days fall in', () => {
     const camp = spanning(18, '2026-09-28', '2026-10-02');
     expect(
