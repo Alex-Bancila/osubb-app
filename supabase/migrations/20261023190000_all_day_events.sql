@@ -12,11 +12,16 @@
 -- 3. create_event / update_event gain p_all_day (rebuilt from main's newest
 --    bodies, 20261020213926_formatted_text.sql): PT400 invalid_all_day_bounds,
 --    starts_at_in_past judged by day for an all-day Event, the edit notice's
---    Programare line without times.
+--    Programare line without times; update_event's p_all_day defaults to null,
+--    which keeps the Event's own (a client from before it never unticks it),
+--    and an all-day Event's Announcement has no Termen.
 -- 4. private.notify_event and private.approve_event_impl pass all_day to the
 --    body (from 20261014160759_reminders.sql and
---    20261013090000_org_wide_approval_review.sql).
+--    20261013090000_org_wide_approval_review.sql); the Announcement approve_event
+--    writes for an all-day Event has no Termen and is written while the Event
+--    lasts, a timed one's only before it starts.
 -- 5. private.send_reminders: an all-day Event's reminder names no hour.
+-- 6. events_ends_at_idx, so the Calendar's overlap read can use both bounds.
 
 -- ==================== 1. events.all_day ====================
 alter table public.events add column all_day boolean not null default false;
@@ -65,7 +70,7 @@ declare
   v_body text;
 begin
   if coalesce(p_all_day, false) and v_end is not null then
-    -- #1098 (R63): "Vineri, 24 octombrie 2026, toată ziua", or with its last
+    -- #1098 (R63): "Sâmbătă, 24 octombrie 2026, toată ziua", or with its last
     -- day -- the day before the exclusive end -- when it spans several.
     v_last := (v_end - interval '1 day')::date;
     v_line := v_days[extract(dow from v_start)::int + 1] || ', '
@@ -160,7 +165,7 @@ end;
 $$;
 
 comment on function private.event_announcement_body(timestamptz, timestamptz, text, text, boolean) is
-  '#909: the body of the Announcement create_event(p_announce) publishes -- "Miercuri, 30 septembrie 2026, 18:40–20:40 · Sala 305", a blank line and the description, in Romania''s time zone. #1098 (R63): with p_all_day the date line names no hour -- "Vineri, 24 octombrie 2026, toată ziua", or "Vineri, 24 octombrie 2026 – duminică, 26 octombrie 2026, toată ziua" for several days (the last day is the one before the exclusive end). R60: the description stays Formatted Text. When the body would pass the 2000 visible characters (private.formatted_text_plain) or the 4000 stored ones an Announcement body allows, lines go from the end of the description until it fits with "…" closing it on a line of its own, so a cut never lands inside a marker; the date line is never dropped. If not even the first line fits (one long paragraph) the copy keeps that line''s plain words -- markers gone -- cut at the last space inside the 2000 characters (at the limit when it has no space), then "…" on its own line: a description is never dropped whole.';
+  '#909: the body of the Announcement create_event(p_announce) publishes -- "Miercuri, 30 septembrie 2026, 18:40–20:40 · Sala 305", a blank line and the description, in Romania''s time zone. #1098 (R63): with p_all_day the date line names no hour -- "Sâmbătă, 24 octombrie 2026, toată ziua", or "Sâmbătă, 24 octombrie 2026 – luni, 26 octombrie 2026, toată ziua" for several days (the last day is the one before the exclusive end). R60: the description stays Formatted Text. When the body would pass the 2000 visible characters (private.formatted_text_plain) or the 4000 stored ones an Announcement body allows, lines go from the end of the description until it fits with "…" closing it on a line of its own, so a cut never lands inside a marker; the date line is never dropped. If not even the first line fits (one long paragraph) the copy keeps that line''s plain words -- markers gone -- cut at the last space inside the 2000 characters (at the limit when it has no space), then "…" on its own line: a description is never dropped whole.';
 
 revoke execute on function private.event_announcement_body(timestamptz, timestamptz, text, text, boolean)
   from public, anon, authenticated, service_role;
@@ -338,10 +343,10 @@ begin
               v_created.group_id,
               case when v_group.is_organization then 'org' else 'local' end,
               v_created.min_level,
-              -- The Termen is the Event's start. #1098: an all-day Event of
-              -- today started at midnight, which the Termen guard refuses as
-              -- past: it is happening now, so its Announcement has no Termen.
-              case when v_created.starts_at >= now() then v_created.starts_at end,
+              -- The Termen is the Event's start. #1098 (R63): an all-day Event
+              -- starts at a midnight and lasts its whole days, so its
+              -- Announcement has no Termen (a timed start is never past here).
+              case when not v_created.all_day then v_created.starts_at end,
               v_actor);
     perform set_config('osubb.announcement_event', '', true);
   else
@@ -353,7 +358,7 @@ end;
 $$;
 
 comment on function private.create_event_impl(text, text, bigint, timestamptz, timestamptz, text, integer, text, integer, bigint, boolean, boolean) is
-  'Creates an Event on a Group, authorized by Group Role (ADR-0009 Wave 2, #370). Malformed input is judged first, for everyone, so a caller without organization claims learns what is wrong with the call: PT400 invalid_event_title / invalid_event_type / invalid_event_interval / invalid_all_day_bounds / invalid_event_capacity / invalid_event_min_level / event_group_required. #1098 (R63): p_all_day = true stores a Toată ziua Event, whose bounds must be Bucharest midnights with an end (exclusive, the midnight after its last day) -- anything else is PT400 invalid_all_day_bounds, the rule of events_all_day_bounds_ck -- and whose start is judged against today by its Bucharest day (PT400 starts_at_in_past only for a day before today). The Organization Group — since #582 the Group carrying groups.is_organization, not the row mirroring the legacy org pseudo-department — is open to any live Member holding any Group Role anywhere, which is how a Department''s leadership gets an organization-wide Event, or to level >= 6; every other Group goes through private.require_group_work_manager, so a Group Manager or Group Responsible on the path, an ancestor''s included, qualifies and an ordinary member does not. Every refusal is the single non-disclosing 42501 calendar_manage_forbidden, so a missing, archived or forbidden Group are indistinguishable. Minimum Level is then judged against the loaded rows: PT400 event_min_level_below_group (an Event may not be more open than its Group) and PT400 event_min_level_above_actor (nobody raises an Event above their own live level), the latter with Moderator exempt. An optional Campaign (#691, ADR-0008 amended 2026-09-23) must be owned by the Event''s Group or a Group above it and be active (events_validate_campaign); anything else is PT400 invalid_campaign, the string create_task uses for the same condition. #909: p_announce = true also publishes one Announcement in the same transaction (title, a Romanian date/time/place/description body from private.event_announcement_body, the Event''s Group, audience org for the Organization Group else local, min_level = the Event''s, deadline = starts_at -- none for an all-day Event of today, whose start has passed, #1098 --, the caller as author, normal fan-out); it is judged before the Event is written by the announcements_create predicate private.can_publish_announcement (42501 announcement_publish_forbidden). Any refusal, including the Announcement''s own row guards, leaves no Event behind. Ruling R39 (2026-10-06): without p_announce the new Event notifies its audience once -- private.event_notification_recipients (the Group Audience that Notifications reach, minus BC and the Moderator per R32 save a BC member whose Group position reaches the Event''s Group per R42, read through private.can_read_event: Minimum Level and Private Groups), never the creator -- with kind event, title Eveniment nou: <title>, the date line and place of private.event_announcement_body as body, link /calendar?event=<id> and dedupe key event:<id>:created (subject event:<id>, R37), in one private.notify insert. With p_announce the Announcement''s fan-out is that notice, so no Event Notification is written: one notice per Member. Every creation spends the event_create daily cap (50 per Member in any 24 hours, private.require_daily_cap; PT409 rate_limited), judged after the gate and before the Event is written. Spec 2026-10-11: an OSUBB-wide Event by a writer below BC is written pending (private.stamp_approval), tells nobody and keeps p_announce as announce_on_approval for approve_event; the "Eveniment nou" notice lives in private.notify_event_created.';
+  'Creates an Event on a Group, authorized by Group Role (ADR-0009 Wave 2, #370). Malformed input is judged first, for everyone, so a caller without organization claims learns what is wrong with the call: PT400 invalid_event_title / invalid_event_type / invalid_event_interval / invalid_all_day_bounds / invalid_event_capacity / invalid_event_min_level / event_group_required. #1098 (R63): p_all_day = true stores a Toată ziua Event, whose bounds must be Bucharest midnights with an end (exclusive, the midnight after its last day) -- anything else is PT400 invalid_all_day_bounds, the rule of events_all_day_bounds_ck -- and whose start is judged against today by its Bucharest day (PT400 starts_at_in_past only for a day before today). The Organization Group — since #582 the Group carrying groups.is_organization, not the row mirroring the legacy org pseudo-department — is open to any live Member holding any Group Role anywhere, which is how a Department''s leadership gets an organization-wide Event, or to level >= 6; every other Group goes through private.require_group_work_manager, so a Group Manager or Group Responsible on the path, an ancestor''s included, qualifies and an ordinary member does not. Every refusal is the single non-disclosing 42501 calendar_manage_forbidden, so a missing, archived or forbidden Group are indistinguishable. Minimum Level is then judged against the loaded rows: PT400 event_min_level_below_group (an Event may not be more open than its Group) and PT400 event_min_level_above_actor (nobody raises an Event above their own live level), the latter with Moderator exempt. An optional Campaign (#691, ADR-0008 amended 2026-09-23) must be owned by the Event''s Group or a Group above it and be active (events_validate_campaign); anything else is PT400 invalid_campaign, the string create_task uses for the same condition. #909: p_announce = true also publishes one Announcement in the same transaction (title, a Romanian date/time/place/description body from private.event_announcement_body, the Event''s Group, audience org for the Organization Group else local, min_level = the Event''s, deadline = starts_at -- none for an all-day Event, #1098 --, the caller as author, normal fan-out); it is judged before the Event is written by the announcements_create predicate private.can_publish_announcement (42501 announcement_publish_forbidden). Any refusal, including the Announcement''s own row guards, leaves no Event behind. Ruling R39 (2026-10-06): without p_announce the new Event notifies its audience once -- private.event_notification_recipients (the Group Audience that Notifications reach, minus BC and the Moderator per R32 save a BC member whose Group position reaches the Event''s Group per R42, read through private.can_read_event: Minimum Level and Private Groups), never the creator -- with kind event, title Eveniment nou: <title>, the date line and place of private.event_announcement_body as body, link /calendar?event=<id> and dedupe key event:<id>:created (subject event:<id>, R37), in one private.notify insert. With p_announce the Announcement''s fan-out is that notice, so no Event Notification is written: one notice per Member. Every creation spends the event_create daily cap (50 per Member in any 24 hours, private.require_daily_cap; PT409 rate_limited), judged after the gate and before the Event is written. Spec 2026-10-11: an OSUBB-wide Event by a writer below BC is written pending (private.stamp_approval), tells nobody and keeps p_announce as announce_on_approval for approve_event; the "Eveniment nou" notice lives in private.notify_event_created.';
 
 revoke execute on function private.create_event_impl(text, text, bigint, timestamptz, timestamptz, text, integer, text, integer, bigint, boolean, boolean)
   from public, anon, authenticated, service_role;
@@ -772,7 +777,10 @@ begin
   -- stamp honours osubb.announcement_author), approved since BC inserts it,
   -- with its own fan-out -- and never "Anunț nou" to that author. Not once the
   -- Event has started: its Termen would be in the past (I1); the notice then.
-  if v_announce and v_row.starts_at > now() then
+  -- #1098 (R63): an all-day Event's Announcement has no Termen, so it is
+  -- written while the Event lasts.
+  if v_announce and (case when v_row.all_day then v_row.ends_at > now()
+                          else v_row.starts_at > now() end) then
     perform set_config('osubb.announcement_author', v_row.created_by::text, true);
     -- R53: the Announcement records the Event it was written for.
     perform set_config('osubb.announcement_event', v_row.id::text, true);
@@ -783,7 +791,8 @@ begin
               v_row.group_id,
               case when v_group.is_organization then 'org' else 'local' end,
               v_row.min_level,
-              v_row.starts_at,
+              -- #1098 (R63): the Termen is the start, except an all-day Event's.
+              case when not v_row.all_day then v_row.starts_at end,
               v_row.created_by);
     perform set_config('osubb.announcement_author', '', true);
     perform set_config('osubb.announcement_event', '', true);
@@ -917,3 +926,9 @@ begin
   return v_count;
 end;
 $$;
+
+-- ==================== 6. events_ends_at_idx ====================
+-- The Calendar reads every Event that overlaps its window: one that starts in
+-- it (events_starts_min_level_idx) or is still going when it opens (this one),
+-- so an open-ended read (Ce urmează, Acasă) never scans the whole history.
+create index events_ends_at_idx on public.events (ends_at) where ends_at is not null;

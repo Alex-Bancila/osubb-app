@@ -4,6 +4,7 @@ import { EVENT_MINIMUM_LEVELS } from '../minimum-level';
 import {
   EVENT_TYPE_CHOICES,
   eventCampaignsFor,
+  endDayOf,
   mayAnnounceEvent,
   shiftDay,
   type EventDraft,
@@ -68,7 +69,8 @@ export function eventSchema(
         // #1098 (R63): days only, the last one inclusive and required; the
         // start is in the past only from the day after (today's may begin).
         const first = values.startsAt.slice(0, 10);
-        const last = values.endsAt.slice(0, 10);
+        // An end at 00:00 closes the day before (endDayOf), as it did timed.
+        const last = endDayOf(values.endsAt);
         if (!first) issue('startsAt', 'all_day_start_required');
         else if (creating && first < (bucharestDayKey(now()) ?? ''))
           issue('startsAt', 'starts_at_in_past');
@@ -153,7 +155,7 @@ export function eventBounds(
 ): { startsAt: string; endsAt: string | null } {
   if (values.allDay) {
     const first = values.startsAt.slice(0, 10);
-    const last = values.endsAt.slice(0, 10);
+    const last = endDayOf(values.endsAt);
     return {
       startsAt: bucharestWallTimeToIso(`${first}T00:00`) ?? '',
       endsAt: last

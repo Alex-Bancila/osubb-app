@@ -108,6 +108,7 @@ export function shiftDay(day: string, count: number): string {
  * end at 00:00 closes the day before (a party until midnight is one day).
  */
 export function endDayOf(endsAt: string): string {
+  if (!endsAt) return '';
   const day = endsAt.slice(0, 10);
   return endsAt.slice(11, 16) === '00:00' ? shiftDay(day, -1) : day;
 }
@@ -116,6 +117,16 @@ export function endDayOf(endsAt: string): string {
 export function withDay(value: string, day: string, time: string): string {
   const kept = /T(\d{2}:\d{2})$/.exec(value)?.[1];
   return `${day}T${kept ?? time}`;
+}
+
+/**
+ * **Toată ziua**'s last day, chosen: the end's time is kept for an untick,
+ * except a 00:00, which would read as the day before (`endDayOf`) — the
+ * default time then takes its place.
+ */
+export function withLastDay(endsAt: string, day: string, time: string): string {
+  const next = withDay(endsAt, day, time);
+  return next.endsWith('T00:00') ? `${day}T${time}` : next;
 }
 
 /**

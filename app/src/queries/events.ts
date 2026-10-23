@@ -2,6 +2,7 @@ import { skipToken, useQuery } from '@tanstack/react-query';
 
 import {
   bucharestDayKey,
+  bucharestLastDayKey,
   formatBucharestDay,
   formatBucharestTime,
 } from '../lib/calendar-time';
@@ -106,26 +107,13 @@ export type EventPresentation = {
   rejectionReason: string | null;
 };
 
-/**
- * The last Bucharest day an Event touches. An end at a midnight is the end of
- * the day before (an all-day Event's exclusive end, or a party until 00:00),
- * and an end before the day of the start — which no row has — is the start's.
- */
-export function eventLastDayKey(dayKey: string, endsAt: string | null): string {
-  if (!endsAt) return dayKey;
-  const end = Date.parse(endsAt);
-  if (!Number.isFinite(end)) return dayKey;
-  const last = bucharestDayKey(new Date(end - 1));
-  return last && last > dayKey ? last : dayKey;
-}
-
 /** Convert database naming and instants once, before any calendar UI sees it. */
 export function toEventPresentation(row: EventRow): EventPresentation | null {
   if (!row.starts_at) return null;
 
   const dayKey = bucharestDayKey(row.starts_at);
   if (!dayKey) return null;
-  const lastDayKey = eventLastDayKey(dayKey, row.ends_at);
+  const lastDayKey = bucharestLastDayKey(dayKey, row.ends_at);
 
   return {
     id: row.id,

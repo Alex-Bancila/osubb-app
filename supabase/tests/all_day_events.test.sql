@@ -9,20 +9,20 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(38);
+select plan(44);
 
 create function pg_temp.u98(n integer) returns uuid language sql immutable as $$
   select ('10980000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
 $$;
 insert into auth.users(id, email)
-select pg_temp.u98(n), 'allday.' || n || '.1098@test.local' from generate_series(1, 3) n;
+select pg_temp.u98(n), 'allday.' || n || '.1098@test.local' from generate_series(1, 5) n;
 insert into profiles(id, full_name, email, role, status)
-select pg_temp.u98(n), 'Toată ziua #1098 ' || n, 'allday.' || n || '.1098@test.local', 'voluntar', 'activ'
-  from generate_series(1, 3) n;
+select pg_temp.u98(n), 'Toată ziua #1098 ' || n, 'allday.' || n || '.1098@test.local', (case n when 4 then 'bce' when 5 then 'bc' else 'voluntar' end)::public.member_role, 'activ'
+  from generate_series(1, 5) n;
 insert into groups(name, category, min_level) values ('Toată ziua #1098', 'team', 0);
 insert into group_members(group_id, member_id, group_role)
 select grp.id, pg_temp.u98(roster.n), roster.role
-  from (values (1, 'responsible'), (2, 'member'), (3, 'member')) as roster(n, role)
+  from (values (1, 'responsible'), (2, 'member'), (3, 'member'), (4, 'manager')) as roster(n, role)
  cross join groups as grp
  where grp.name = 'Toată ziua #1098';
 
@@ -227,6 +227,37 @@ select is(pg_temp.body(2, 'Mâine: Trip #1098'), 'Toată ziua, până la 14.11.2
           'a several-day all-day Event''s reminder names its last day, no hour');
 select is(pg_temp.body(2, 'Mâine: Day #1098'), 'Toată ziua.',
           'a one-day all-day Event''s reminder says "Toată ziua"');
+
+-- ==================== The Announcement of an all-day Event ====================
+-- It lasts its whole days from a midnight, so its Announcement has no Termen
+-- (a timed Event's is its start), whether published at once or at approval.
+select pg_temp.login();
+select lives_ok(
+  $$ select public.create_event(p_title => 'Anunț zi #1098', p_type => 'eveniment', p_group_id => pg_temp.grp(),
+       p_starts_at => pg_temp.midnight('2030-12-05'), p_ends_at => pg_temp.midnight('2030-12-07'),
+       p_all_day => true, p_announce => true) $$,
+  'an all-day Event publishes its Announcement');
+select pg_temp.test_clear_jwt();
+reset role;
+select is((select count(*)::int from public.announcements where title = 'Anunț zi #1098' and deadline is null), 1,
+          'which has no Termen');
+select pg_temp.test_login_leadership(pg_temp.u98(4));
+select lives_ok(
+  $$ select public.create_event(p_title => 'Cerere zi #1098', p_type => 'eveniment',
+       p_group_id => (select id from public.groups where is_organization),
+       p_starts_at => pg_temp.midnight('2030-12-12'), p_ends_at => pg_temp.midnight('2030-12-14'),
+       p_all_day => true, p_announce => true) $$,
+  'a BCE asks for an OSUBB-wide all-day Event with its Announcement');
+reset role;
+select is((select approval_status from public.events where title = 'Cerere zi #1098'), 'pending',
+          'it waits for BC');
+select pg_temp.test_login_leadership(pg_temp.u98(5));
+select lives_ok(
+  $$ select public.approve_event((select id from public.events where title = 'Cerere zi #1098')) $$,
+  'BC approves it');
+reset role;
+select is((select count(*)::int from public.announcements where title = 'Cerere zi #1098' and deadline is null), 1,
+          'its Announcement, written at the approval, has no Termen');
 
 select * from finish();
 rollback;

@@ -33,12 +33,14 @@ import { useFormValidation } from '../../lib/use-form-validation';
 import {
   EVENT_TYPE_CHOICES,
   emptyEventFormValues,
+  endDayOf,
   eventCampaignsFor,
   mayAnnounceEvent,
   minimumLevelChoices,
   withAllDay,
   withDay,
   withEventDates,
+  withLastDay,
   type EventDraft,
   type EventFormGroup,
   type EventFormOptions,
@@ -148,13 +150,13 @@ export function EventForm({
   /** Toată ziua: a first day moved past the last one takes the last along. */
   function chooseFirstDay(day: string) {
     setValues((current) => {
-      const lastDay = current.endsAt.slice(0, 10);
+      const lastDay = endDayOf(current.endsAt);
       return {
         ...current,
         startsAt: withDay(current.startsAt, day, DEFAULT_START_TIME),
         endsAt:
           lastDay && lastDay < day
-            ? withDay(current.endsAt, day, defaultEndTime(current.startsAt))
+            ? withLastDay(current.endsAt, day, defaultEndTime(current.startsAt))
             : current.endsAt,
       };
     });
@@ -382,10 +384,11 @@ export function EventForm({
                 disabled={pending}
                 min={values.startsAt.slice(0, 10) || undefined}
                 openOn={values.startsAt.slice(0, 10) || undefined}
-                value={values.endsAt.slice(0, 10)}
+                // An end at 00:00 closes the day before, as it did timed.
+                value={endDayOf(values.endsAt)}
                 onChange={(day) =>
                   update({
-                    endsAt: withDay(
+                    endsAt: withLastDay(
                       values.endsAt,
                       day,
                       defaultEndTime(values.startsAt),

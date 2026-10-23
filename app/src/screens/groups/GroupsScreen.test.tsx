@@ -712,6 +712,30 @@ it('a Group page Event title opens the Calendar on that Event (D5)', () => {
   // The short date every card uses: weekday, day, month, time — no year.
   expect(link.closest('li')).toHaveTextContent('lun., 5 oct. · 18:00 · Sala 2');
 });
+// #1098 (R63): an all-day weekend names its days and its last one, no hour.
+it('a Group page names an all-day Event by its days, never 00:00', () => {
+  api.events.mockReturnValue(
+    ready([
+      {
+        id: 42,
+        title: 'Tabăra de toamnă',
+        // Saturday 24 to Monday 26 October 2026, Bucharest midnights.
+        starts_at: '2026-10-23T21:00:00.000Z',
+        ends_at: '2026-10-26T22:00:00.000Z',
+        all_day: true,
+        location: 'Cluj',
+      },
+    ]),
+  );
+  detail();
+  const row = screen
+    .getByRole('link', { name: 'Tabăra de toamnă' })
+    .closest('li');
+  expect(row).toHaveTextContent(
+    /sâm\., 24 oct\.( 2026)? · Toată ziua · până luni, 26 oct\.( 2026)? · Cluj/,
+  );
+  expect(row).not.toHaveTextContent('00:00');
+});
 it('hides Coordonare when nobody holds a position (B29)', () => {
   api.roster.mockReturnValue(
     ready([{ memberId: 'x', fullName: 'Ana', groupRole: 'member' }]),

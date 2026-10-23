@@ -195,24 +195,35 @@ export function useApplicationCommand() {
       ]),
   });
 }
+/**
+ * A Group's Events still to come, or still going (#1098, R63): the
+ * Calendar's overlap read from now, so an all-day Event stays on the page
+ * through its day and a weekend until it ends.
+ */
+export async function fetchGroupUpcomingEvents(
+  groupId: number,
+  now: Date = new Date(),
+) {
+  const from = now.toISOString();
+  const { data, error } = await supabase
+    .from('events')
+    .select('id, title, starts_at, ends_at, all_day, location')
+    .eq('group_id', groupId)
+    .is('cancelled_at', null)
+    .or(`starts_at.gte."${from}",ends_at.gt."${from}"`)
+    .order('starts_at')
+    .limit(20);
+  if (error) throw error;
+  return data;
+}
+
 export function useGroupUpcomingEvents(groupId: number) {
   const memberId = useAuth().session?.user.id;
   return useQuery({
     queryKey: ['events', 'group', { memberId, groupId }],
     queryFn:
       memberId && Number.isSafeInteger(groupId) && groupId > 0
-        ? async () => {
-            const { data, error } = await supabase
-              .from('events')
-              .select('id, title, starts_at, all_day, location')
-              .eq('group_id', groupId)
-              .is('cancelled_at', null)
-              .gte('starts_at', new Date().toISOString())
-              .order('starts_at')
-              .limit(20);
-            if (error) throw error;
-            return data;
-          }
+        ? () => fetchGroupUpcomingEvents(groupId)
         : skipToken,
   });
 }

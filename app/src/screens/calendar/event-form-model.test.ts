@@ -6,6 +6,7 @@ import {
   minimumLevelChoices,
   withAllDay,
   withEventDates,
+  withLastDay,
 } from './event-form-model';
 
 // The Event draft's rules are lib/schemas/event.ts's (event.test.ts).
@@ -98,6 +99,31 @@ describe('Toată ziua', () => {
         allDayTouched: true,
         endsAt: '2026-10-24T20:00',
       },
+    );
+  });
+});
+
+// An end at exactly 00:00 is read one way everywhere: it closes the day
+// before, so Friday 20:00 to Sunday 00:00 is Friday and Saturday.
+describe('an end at midnight', () => {
+  const friday = {
+    ...emptyEventFormValues,
+    startsAt: '2026-10-23T20:00',
+    endsAt: '2026-10-23T22:00',
+  };
+
+  it('ticks Toată ziua with Saturday as the last day', () => {
+    const ticked = withEventDates(friday, { endsAt: '2026-10-25T00:00' });
+    expect(ticked.allDay).toBe(true);
+    expect(endDayOf(ticked.endsAt)).toBe('2026-10-24');
+  });
+
+  it('keeps the end time for an untick, but never a midnight that would move the day', () => {
+    expect(withLastDay('2026-10-24T14:00', '2026-10-26', '20:00')).toBe(
+      '2026-10-26T14:00',
+    );
+    expect(withLastDay('2026-10-25T00:00', '2026-10-26', '20:00')).toBe(
+      '2026-10-26T20:00',
     );
   });
 });

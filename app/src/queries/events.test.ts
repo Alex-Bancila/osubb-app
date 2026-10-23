@@ -1,6 +1,7 @@
 import { answered } from '../test/postgrest-fake';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { bucharestLastDayKey } from '../lib/calendar-time';
 import type { Database } from '../lib/database.types';
 import { resetSupabaseMock, supabaseMock } from '../test/supabase-mock';
 
@@ -12,7 +13,6 @@ vi.mock('../lib/supabase', async () => {
 });
 
 import {
-  eventLastDayKey,
   eventsRangeQueryOptions,
   fetchEvent,
   fetchEventsInRange,
@@ -147,13 +147,13 @@ describe('event presentation', () => {
   });
 
   it('puts an end at a midnight on the day before it, and a later end on its own day', () => {
-    expect(eventLastDayKey('2026-10-24', '2026-10-24T21:00:00.000Z')).toBe(
+    expect(bucharestLastDayKey('2026-10-24', '2026-10-24T21:00:00.000Z')).toBe(
       '2026-10-24',
     );
-    expect(eventLastDayKey('2026-10-24', '2026-10-24T21:30:00.000Z')).toBe(
+    expect(bucharestLastDayKey('2026-10-24', '2026-10-24T21:30:00.000Z')).toBe(
       '2026-10-25',
     );
-    expect(eventLastDayKey('2026-10-24', null)).toBe('2026-10-24');
+    expect(bucharestLastDayKey('2026-10-24', null)).toBe('2026-10-24');
   });
 
   it('keeps a Group this member may not read as null rather than inventing one', () => {

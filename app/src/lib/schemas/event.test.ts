@@ -294,3 +294,20 @@ describe('an all-day Event', () => {
     ]);
   });
 });
+
+it('ends a ticked Friday 20:00 to Sunday 00:00 after Saturday, as the timed end read', () => {
+  expect(
+    eventSchema(options, 6, { now }).parse({
+      ...valid,
+      allDay: true,
+      allDayTouched: false,
+      startsAt: '2026-10-23T20:00',
+      endsAt: '2026-10-25T00:00',
+    }),
+  ).toMatchObject({
+    allDay: true,
+    // Friday 23 October 00:00 EEST to Sunday 25 October 00:00 EEST.
+    startsAt: '2026-10-22T21:00:00.000Z',
+    endsAt: '2026-10-24T21:00:00.000Z',
+  });
+});

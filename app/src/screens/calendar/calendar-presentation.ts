@@ -9,6 +9,8 @@ import {
 
 import {
   bucharestDayKey,
+  bucharestLastDayKey,
+  formatBucharestShort,
   formatBucharestShortDay,
   formatBucharestTime,
 } from '../../lib/calendar-time';
@@ -141,6 +143,38 @@ export function eventTimeLabel(
   return event.endTime
     ? `${event.startTime}–${event.endTime}`
     : event.startTime;
+}
+
+/**
+ * An Event's day and time in one short line, away from the Calendar's day
+ * headings (a Group's page): `lun., 5 oct. · 18:00`, `sâm., 24 oct. · Toată
+ * ziua · până luni, 26 oct.`, or both ends of a timed Event over several days.
+ */
+export function eventWhenLine(
+  event: {
+    starts_at: string;
+    ends_at?: string | null;
+    all_day?: boolean | null;
+  },
+  now: Date = new Date(),
+): string {
+  const endsAt = event.ends_at ?? null;
+  const dayKey = bucharestDayKey(event.starts_at) ?? '';
+  const lastDayKey = bucharestLastDayKey(dayKey, endsAt);
+  const span = {
+    startsAt: event.starts_at,
+    endsAt,
+    allDay: event.all_day ?? false,
+    dayKey,
+    lastDayKey,
+    multiDay: lastDayKey !== dayKey,
+    startTime: formatBucharestTime(event.starts_at),
+    endTime: endsAt ? formatBucharestTime(endsAt) : null,
+  };
+  if (span.allDay)
+    return `${formatBucharestShortDay(event.starts_at, now)} · ${eventTimeLabel(span, now)}`;
+  if (span.multiDay) return eventTimeLabel(span, now);
+  return formatBucharestShort(event.starts_at, now);
 }
 
 /**

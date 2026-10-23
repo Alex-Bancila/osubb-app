@@ -124,3 +124,19 @@ export function isoToBucharestWallTime(value: string): string {
   const date = validDate(value);
   return date ? wallValue(date) : '';
 }
+
+/**
+ * The last Bucharest day an Event touches (#1098, R63). An end at a midnight
+ * is the end of the day before (an all-day Event's exclusive end, or a party
+ * until 00:00), and an end before the day of the start is the start's.
+ */
+export function bucharestLastDayKey(
+  dayKey: string,
+  endsAt: Instant | null,
+): string {
+  if (!endsAt) return dayKey;
+  const end = validDate(endsAt);
+  if (!end) return dayKey;
+  const last = bucharestDayKey(new Date(end.getTime() - 1));
+  return last && last > dayKey ? last : dayKey;
+}
