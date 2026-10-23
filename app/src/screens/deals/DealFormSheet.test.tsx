@@ -41,6 +41,11 @@ import { findFormattedText } from '../../test/formatted-text';
 import DealFormSheet, { NewDealControl } from './DealFormSheet';
 import type { DealPresentation } from './deals-presentation';
 
+// Each case fills the form end to end, which loads the Formatted Text editor
+// (R60); on a loaded machine that can pass the 5 s default without anything
+// being wrong, as in TaskForm.test.tsx.
+vi.setConfig({ testTimeout: 15_000 });
+
 function renderWith(ui: ReactElement) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },

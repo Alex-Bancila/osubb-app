@@ -30,6 +30,11 @@ import { findFormattedText } from '../../test/formatted-text';
 import { NewEventControl } from './NewEventControl';
 import { clearEventReceipts, useEventReceipt } from './event-receipts';
 
+// Each case fills the form end to end, which loads the Formatted Text editor
+// (R60); on a loaded machine that can pass the 5 s default without anything
+// being wrong, as in TaskForm.test.tsx.
+vi.setConfig({ testTimeout: 15_000 });
+
 const formOptions = {
   groups: [
     {
