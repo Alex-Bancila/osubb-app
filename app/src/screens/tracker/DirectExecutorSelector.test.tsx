@@ -14,8 +14,20 @@ import { DirectExecutorSelector } from './DirectExecutorSelector';
 
 const data: DirectExecutorData = {
   members: [
-    { id: 'ana', name: 'Ana Șerban', level: 1, avatarColor: '#123456' },
-    { id: 'mihai', name: 'Mihai Pop', level: 3, avatarColor: null },
+    {
+      id: 'ana',
+      name: 'Ana Șerban',
+      nickname: null,
+      level: 1,
+      avatarColor: '#123456',
+    },
+    {
+      id: 'mihai',
+      name: 'Mihai Pop',
+      nickname: 'Mishu',
+      level: 3,
+      avatarColor: null,
+    },
   ],
   groups: [
     {
@@ -84,6 +96,26 @@ it('searches names inside the Executor dropdown, ignoring diacritics, and return
   await waitFor(() => expect(optionNames()).toEqual(['AȘAna Șerban']));
   await user.keyboard('{ArrowDown}{Enter}');
   expect(change).toHaveBeenLastCalledWith('ana');
+});
+
+it('finds a Member by the full name or by the Nickname, and still shows the full name', async () => {
+  const user = userEvent.setup();
+  render(
+    <DirectExecutorSelector
+      originGroupId={1}
+      value={null}
+      onChange={vi.fn()}
+    />,
+  );
+  await user.click(executorBox());
+  const search = await screen.findByRole('combobox', {
+    name: 'Caută un membru',
+  });
+  await user.type(search, 'mih');
+  await waitFor(() => expect(optionNames()).toEqual(['MPMihai Pop']));
+  await user.clear(search);
+  await user.type(search, 'MISHU');
+  await waitFor(() => expect(optionNames()).toEqual(['MPMihai Pop']));
 });
 
 it('shows a small initials avatar on the member colour, never a full image', async () => {

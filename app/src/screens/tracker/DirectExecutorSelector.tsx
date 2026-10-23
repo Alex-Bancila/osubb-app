@@ -1,6 +1,7 @@
 import { XIcon } from 'lucide-react';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { Button } from '../../components/ui/button';
+import { memberComboboxFilter } from '../../lib/member-search';
 import {
   Combobox,
   ComboboxContent,
@@ -21,6 +22,12 @@ import {
   type DirectExecutor,
   type DirectExecutorGroup,
 } from '../../queries/direct-executors';
+
+/** Typing matches the Nickname and the full name alike (#1100). */
+const executorFilter = memberComboboxFilter((member: DirectExecutor) => ({
+  nickname: member.nickname,
+  fullName: member.name,
+}));
 
 /** Parents before their children, siblings alphabetically. */
 function compareInTreeOrder(
@@ -132,6 +139,7 @@ export function DirectExecutorSelector({
           value={selected}
           onValueChange={(member) => onChange(member?.id ?? null)}
           itemToStringLabel={(member) => member.name}
+          filter={executorFilter}
           isItemEqualToValue={(a, b) => a.id === b.id}
           disabled={disabled || !eligible.length}
         >

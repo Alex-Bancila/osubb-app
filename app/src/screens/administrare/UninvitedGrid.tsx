@@ -45,7 +45,7 @@ import {
   type ContactField,
   type UninvitedMember,
 } from '../../queries/volunteer-import';
-import { normalizeSearch } from '../volunteers/directory-filters';
+import { normalizeSearch } from '../../lib/member-search';
 import { planDepartmentChange } from './department-edit';
 import { editorLayerClass, revealBesidePinned } from './grid-reveal';
 import { describePlacements } from './placement-labels';
