@@ -852,8 +852,8 @@ select is((select count(*) from public.completed_work_requests
 select is((select count(*) from public.task_evaluations as evaluation
             where evaluation.task_id in (select task_id from public.completed_work_requests
                                           where task_id is not null
-                                            and requester_id::text like '34400000-%')), 9::bigint,
-  'and each approved Request carries exactly one Evaluation -- nine approvals so far in this suite, nine Evaluations');
+                                            and requester_id::text like '34400000-%')), 10::bigint,
+  'and each approved Request carries exactly one Evaluation -- ten approvals so far in this suite (section 2''s outsider Request among them), ten Evaluations');
 
 -- ==================== 8b. No requester decides their own Request (#522) ====================
 select pg_temp.test_login('34400000-0000-0000-0000-000000000006', jsonb_build_object(
