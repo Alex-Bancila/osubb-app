@@ -290,7 +290,7 @@ A deferred BC/Moderator action that may reduce a Member’s Personal Score and m
 ## Calendar
 
 **Event**:
-A future or past OSUBB activity owned by one Group. Creating it notifies its Group Audience once, unless its Announcement is published with it and speaks for it (ruling R39). An Event of the Organization Group created by a Member below BC is a Cerere de aprobare until BC or the Moderator approve it; that notice, and its Announcement if asked for, go out at the approval (ruling R49).
+A future or past OSUBB activity owned by one Group. Creating it notifies its Group Audience once, unless its Announcement is published with it and speaks for it (ruling R39). An Event of the Organization Group created by a Member below BC is a Cerere de aprobare until BC or the Moderator approve it; that notice, and its Announcement if asked for, go out at the approval (ruling R49). It has a start and usually an end, and may be **Toată ziua**: it then runs from midnight on its first day to midnight after its last, Romania's time, and shows no time anywhere (ruling R63). An Event over several days is one bar across them in the month grid and is listed once, under its first day.
 
 **Event Scope**:
 The Group that owns an Event. An organization-wide Event belongs to the Organization Group.
