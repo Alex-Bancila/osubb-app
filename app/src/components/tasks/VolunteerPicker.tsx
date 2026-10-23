@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo } from 'react';
+import { memberComboboxFilter } from '../../lib/member-search';
 import { Button } from '../ui/button';
 import {
   Combobox,
@@ -15,6 +16,14 @@ import {
   useCompletedTaskExecutors,
   type CompletedTaskVolunteer,
 } from '../../queries/completed-tasks';
+
+/** Typing matches the Nickname and the full name alike (#1100). */
+const volunteerFilter = memberComboboxFilter(
+  (member: CompletedTaskVolunteer) => ({
+    nickname: member.nickname,
+    fullName: member.fullName,
+  }),
+);
 
 /**
  * Voluntar: the Members the caller may credit in the chosen Group
@@ -90,6 +99,7 @@ export function VolunteerPicker({
           value={selected}
           onValueChange={(member) => onChange(member?.id ?? null)}
           itemToStringLabel={(member) => member.name}
+          filter={volunteerFilter}
           isItemEqualToValue={(a, b) => a.id === b.id}
           disabled={disabled || !members.length}
         >

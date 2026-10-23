@@ -1,3 +1,4 @@
+import { normalizeSearch } from '../../lib/member-search';
 import type { DirectoryMember } from '../../queries/member-directory';
 import type { Group } from '../../queries/reference';
 
@@ -27,14 +28,6 @@ export const statusLabels: Record<string, string> = {
 
 export function statusLabel(status: string) {
   return statusLabels[status] ?? status;
-}
-
-/** Case- and diacritic-blind, so "stefan" finds "Ștefan". */
-export function normalizeSearch(text: string) {
-  return text
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLocaleLowerCase('ro');
 }
 
 export function matchesFilters(
