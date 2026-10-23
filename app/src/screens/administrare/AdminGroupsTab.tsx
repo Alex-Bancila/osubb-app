@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -34,6 +35,7 @@ import { useAuth } from '../../lib/auth';
 import { minimumLevelText } from '../../lib/minimum-level';
 import { useMyGroups, useRoles } from '../../queries/reference';
 import {
+  groupAuthority,
   useAdminGroups,
   useAppointableMembers,
   useGroupCommand,
@@ -43,8 +45,10 @@ import {
 } from '../../queries/groups-admin';
 import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { GroupCreateDialog, GroupCreatedReceipt } from './GroupCreateDialog';
+import { GroupUnarchiveDialog, UnarchiveButton } from './GroupUnarchiveDialog';
 import type { GroupsListState } from './group-delete-summary';
 import {
+  archivedTree,
   buildTree,
   categoryLabel,
   expandableIds,
@@ -53,8 +57,11 @@ import {
   groupStatusLabel,
   leadsAny,
   ledTree,
+  parentIsArchived,
+  returningSubgroups,
   varies,
   visibleRows,
+  type ArchivedRow,
   type LedRow,
   type TreeRow,
 } from './group-tree';
@@ -410,6 +417,58 @@ function ledColumns(rows: readonly LedRow[]): DataTableColumn<LedRow>[] {
   ];
 }
 
+/**
+ * Arhivate (#1110, ruling R65): the archived Groups in tree order, an active
+ * parent greyed as context without a link, and **Dezarhivează** on each one
+ * the viewer may archive — disabled, with the reason, under an archived
+ * parent. The button only chooses the Group: the confirmation lives outside
+ * the table, so a click inside it never reaches the row.
+ */
+function archivedColumns(
+  rows: readonly ArchivedRow[],
+  byId: ReadonlyMap<number, AdminGroup>,
+  canUnarchive: (group: AdminGroup) => boolean,
+  choose: (group: AdminGroup) => void,
+): DataTableColumn<ArchivedRow>[] {
+  const next = new Map(rows.map((row, index) => [row, rows[index + 1]]));
+  const archived = rows.filter((row) => !row.context);
+  const columns: DataTableColumn<ArchivedRow>[] = [
+    {
+      id: 'name',
+      accessorFn: (row) => row.group.name,
+      header: 'Grup',
+      enableSorting: false,
+      cell: ({ row }) => (
+        <TreeName
+          row={row.original}
+          gutter={false}
+          stem={(next.get(row.original)?.depth ?? 0) > row.original.depth}
+          link={!row.original.context}
+        />
+      ),
+    },
+    ...detailColumns(archived),
+  ];
+  if (archived.some((row) => canUnarchive(row.group)))
+    columns.push({
+      id: 'unarchive',
+      header: 'Acțiuni',
+      enableSorting: false,
+      cell: ({ row }) => {
+        const { group, context } = row.original;
+        if (context || !canUnarchive(group)) return null;
+        return (
+          <UnarchiveButton
+            group={group}
+            parentArchived={parentIsArchived(group, byId)}
+            onClick={() => choose(group)}
+          />
+        );
+      },
+    });
+  return columns;
+}
+
 /* Under 640 px the tree is the names: a long one wraps, the detail columns
    wait for the Group page, and a header over one column of names says
    nothing, so it goes too (`hideHeaderUnderSm`). The name cell anchors the rail and keeps its first
@@ -420,22 +479,28 @@ const treeColumnClass = {
   category: 'max-sm:hidden',
   min_level: 'max-sm:hidden',
   members: 'max-sm:hidden',
+  unarchive: 'text-end [&:is(td)]:py-0.5',
+};
+
+const VIEW_LABELS: Record<GroupsView, string> = {
+  all: 'Toate',
+  led: 'Conduse de mine',
+  archived: 'Arhivate',
 };
 
 function ViewToggle({
+  views,
   view,
   onChange,
 }: {
+  views: readonly GroupsView[];
   view: GroupsView;
   onChange: (view: GroupsView) => void;
 }) {
   return (
     <SegmentedToggle
       label="Grupuri afișate"
-      options={[
-        { value: 'all', label: 'Toate' },
-        { value: 'led', label: 'Conduse de mine' },
-      ]}
+      options={views.map((value) => ({ value, label: VIEW_LABELS[value] }))}
       value={view}
       onChange={onChange}
       className="max-sm:min-w-0 max-sm:flex-1 max-sm:*:flex-auto max-sm:*:px-3"
@@ -617,6 +682,88 @@ function LedGroups({
   );
 }
 
+function ArchivedGroups({
+  rows,
+  groups,
+  label,
+  viewToggle,
+  canUnarchive,
+  onUnarchive,
+}: {
+  rows: ArchivedRow[];
+  /** Every Group the viewer reads: the parents and the subtree to list. */
+  groups: AdminGroup[];
+  label: string;
+  viewToggle?: ReactNode;
+  canUnarchive: (group: AdminGroup) => boolean;
+  onUnarchive: (
+    groupId: number,
+    onFailure: (failure: unknown) => void,
+  ) => Promise<boolean>;
+}) {
+  const navigate = useNavigate();
+  const [target, setTarget] = useState<AdminGroup | null>(null);
+  const [open, setOpen] = useState(false);
+  const byId = useMemo(
+    () => new Map(groups.map((group) => [group.id, group])),
+    [groups],
+  );
+  const columns = useMemo(
+    () =>
+      archivedColumns(rows, byId, canUnarchive, (group) => {
+        setTarget(group);
+        setOpen(true);
+      }),
+    [rows, byId, canUnarchive],
+  );
+  const subgroups = useMemo(
+    () => (target ? returningSubgroups(target, groups) : []),
+    [target, groups],
+  );
+  const count = rows.filter((row) => !row.context).length;
+  return (
+    <>
+      <GroupsList
+        label={label}
+        toolbar={
+          <>
+            {viewToggle}
+            {count > 0 && (
+              <GroupCount
+                count={count}
+                quiet={viewToggle ? 'phone' : 'always'}
+              />
+            )}
+          </>
+        }
+      >
+        <DataTable
+          columns={columns}
+          data={rows}
+          columnClassName={treeColumnClass}
+          hideHeaderUnderSm
+          emptyTitle="Niciun grup arhivat."
+          rowClassName={(row) =>
+            cn(!row.context && rowLinkClass, 'text-muted-foreground')
+          }
+          onRowClick={(row) => {
+            if (!row.context) void navigate(groupPath(row.group.id));
+          }}
+        />
+      </GroupsList>
+      {target && (
+        <GroupUnarchiveDialog
+          group={target}
+          subgroups={subgroups}
+          open={open}
+          onOpenChange={setOpen}
+          onUnarchive={(onFailure) => onUnarchive(target.id, onFailure)}
+        />
+      )}
+    </>
+  );
+}
+
 /**
  * Administrare → Grupuri, scoped by authority (ADR-0009 §Management surface;
  * #825). BC and Moderator see the whole Group tree and create a top-level
@@ -625,8 +772,11 @@ function LedGroups({
  * they lead. A Group Manager or Responsible sees exactly those — including
  * the Child Groups they reach only through an ancestor (ruling R14) — and
  * never a Group they are only a Member of (relevance B47), so for them the
- * page is already Conduse de mine and needs no switch. The same Group screen
- * opens from either list, so there is one flow and one command set.
+ * page opens on Conduse de mine. Every viewer also has **Arhivate**
+ * (`?vedere=arhivate`, #1110, ruling R65): Toate and Conduse de mine list
+ * active Groups only, and the archived ones wait there, with **Dezarhivează**
+ * for whoever may archive them. The same Group screen opens from every list,
+ * so there is one flow and one command set.
  */
 export default function AdminGroupsTab() {
   const capabilities = useCapabilities();
@@ -669,16 +819,51 @@ export default function AdminGroupsTab() {
     [groups],
   );
   const mine = myGroupsQuery.data;
-  const ledReady =
-    mine !== undefined && !rosterQuery.isPending && !rosterQuery.isError;
-  const led = useMemo(
-    () => (mine && ledReady ? ledTree(groups, mine, rosterRows) : []),
-    [groups, mine, ledReady, rosterRows],
+  // Toate and Conduse de mine list active Groups only; every archived Group
+  // the viewer can see is in Arhivate (#1110, ruling R65).
+  const activeMine = useMemo(
+    () => mine?.filter((row) => row.status === 'active'),
+    [mine],
   );
-  // The switch is for BC and Moderator holding a Group Role: anyone else
-  // sees one list here, so it would choose between the same rows.
-  const canSwitch = createTopLevel && ledReady && leadsAny(mine);
-  const [view, chooseView] = useGroupsView(canSwitch);
+  const ledReady =
+    activeMine !== undefined && !rosterQuery.isPending && !rosterQuery.isError;
+  const led = useMemo(
+    () =>
+      activeMine && ledReady
+        ? ledTree(activeGroups, activeMine, rosterRows)
+        : [],
+    [activeGroups, activeMine, ledReady, rosterRows],
+  );
+  // Arhivate holds what the viewer's other list would: for BC and the
+  // Moderator every archived Group, for anyone else the archived Groups they
+  // lead (relevance B47).
+  const archived = useMemo(() => {
+    const shown = createTopLevel
+      ? groups.map((group) => group.id)
+      : (mine ?? [])
+          .filter(
+            (row) =>
+              row.group_role === 'manager' || row.group_role === 'responsible',
+          )
+          .map((row) => row.id);
+    return archivedTree(groups, new Set(shown));
+  }, [createTopLevel, groups, mine]);
+  const canUnarchive = useCallback(
+    (group: AdminGroup) => groupAuthority(group, mine, createTopLevel).archive,
+    [mine, createTopLevel],
+  );
+  // BC and the Moderator choose Toate, Conduse de mine when they hold a Group
+  // Role, and Arhivate; anyone else has their own Groups and Arhivate.
+  const views = useMemo<GroupsView[]>(
+    () =>
+      createTopLevel
+        ? ledReady && leadsAny(activeMine ?? [])
+          ? ['all', 'led', 'archived']
+          : ['all', 'archived']
+        : ['led', 'archived'],
+    [createTopLevel, ledReady, activeMine],
+  );
+  const [view, chooseView] = useGroupsView(views);
   const levels = useMemo(
     () => [
       ...new Set([...(rolesQuery.data?.values() ?? [])].map((r) => r.level)),
@@ -701,6 +886,8 @@ export default function AdminGroupsTab() {
           <GroupCreatedReceipt
             manager={createdGroupManager(next, membersQuery.data ?? [])}
           />
+        ) : next.kind === 'unarchive' ? (
+          'Grupul a fost dezarhivat.'
         ) : (
           'Grupul a fost creat.'
         ),
@@ -730,16 +917,18 @@ export default function AdminGroupsTab() {
     : myGroupsQuery.isError || rosterQuery.isError;
   // The list's accessible name; nothing on the page repeats "Grupuri".
   const label =
-    createTopLevel && view === 'all'
-      ? 'Structura grupurilor'
-      : 'Grupurile mele';
+    view === 'archived'
+      ? 'Grupuri arhivate'
+      : createTopLevel && view === 'all'
+        ? 'Structura grupurilor'
+        : 'Grupurile mele';
   const retry = () =>
     void (createTopLevel
       ? groupsQuery.refetch()
       : Promise.all([myGroupsQuery.refetch(), rosterQuery.refetch()]));
-  const viewToggle = canSwitch ? (
-    <ViewToggle view={view} onChange={chooseView} />
-  ) : undefined;
+  const viewToggle = (
+    <ViewToggle views={views} view={view} onChange={chooseView} />
+  );
 
   return (
     <>
@@ -775,8 +964,23 @@ export default function AdminGroupsTab() {
         <GroupsList label={label}>
           <ErrorState text="Nu am putut încărca grupurile." onRetry={retry} />
         </GroupsList>
+      ) : view === 'archived' ? (
+        <ArchivedGroups
+          rows={archived}
+          groups={groups}
+          label={label}
+          viewToggle={viewToggle}
+          canUnarchive={canUnarchive}
+          onUnarchive={(groupId, onFailure) =>
+            run({ kind: 'unarchive', groupId }, onFailure)
+          }
+        />
       ) : createTopLevel && view === 'all' ? (
-        <GroupTree groups={groups} label={label} viewToggle={viewToggle} />
+        <GroupTree
+          groups={activeGroups}
+          label={label}
+          viewToggle={viewToggle}
+        />
       ) : (
         <LedGroups rows={led} label={label} viewToggle={viewToggle} />
       )}

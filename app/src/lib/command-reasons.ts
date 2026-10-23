@@ -99,6 +99,12 @@ const REASON_COPY = new Map<string, string>([
   ['group_name_taken', 'Există deja un grup cu acest nume. Alege altul.'],
   ['group_archived', 'Grupul este arhivat.'],
   ['group_already_archived', 'Grupul este deja arhivat.'],
+  /* ---- Unarchiving (#1110, R65) ---- */
+  ['group_not_archived', 'Grupul este deja activ.'],
+  [
+    'group_parent_archived',
+    'Grupul părinte este arhivat. Dezarhivează-l întâi pe el.',
+  ],
   [
     'group_min_level_below_parent',
     'Nivelul minim nu poate fi sub nivelul minim al grupului părinte.',

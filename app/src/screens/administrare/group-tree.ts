@@ -295,6 +295,75 @@ export function ledTree(
   }));
 }
 
+/** One row of **Arhivate**: an archived Group, or an ancestor shown as context. */
+export type ArchivedRow = TreeRow & {
+  /** True for a Group shown only so an archived one does not float alone. */
+  context: boolean;
+};
+
+/**
+ * **Arhivate** (#1110, ruling R65): the archived Groups among `shown`, in
+ * tree order, each with its readable ancestors kept as context — greyed,
+ * without a link — the way **Conduse de mine** keeps a led Child Group's
+ * parent, so an archived subgroup under an active Department still reads as
+ * that Department's.
+ */
+export function archivedTree(
+  groups: readonly AdminGroup[],
+  shown: ReadonlySet<number>,
+): ArchivedRow[] {
+  const byId = new Map(groups.map((group) => [group.id, group]));
+  const archived = (group: AdminGroup) =>
+    group.status === 'archived' && shown.has(group.id);
+  const kept = new Map<number, AdminGroup>();
+  for (const group of groups) {
+    if (!archived(group)) continue;
+    for (const ancestor of group.path) {
+      const found = byId.get(ancestor);
+      if (found) kept.set(found.id, found);
+    }
+  }
+  return buildTree([...kept.values()]).map((row) => ({
+    ...row,
+    context: !archived(row.group),
+  }));
+}
+
+/**
+ * The archived Groups that return with this one (#1110), in tree order:
+ * every archived Group below it. Exact for whoever may unarchive it — BC, the
+ * Moderator and a Group Manager on its path read its whole subtree — and
+ * below an archived Group everything is archived, so nothing else returns.
+ */
+export function returningSubgroups(
+  group: Pick<AdminGroup, 'id'>,
+  groups: readonly AdminGroup[],
+): AdminGroup[] {
+  return buildTree(
+    groups.filter(
+      (row) =>
+        row.id !== group.id &&
+        row.path.includes(group.id) &&
+        row.status === 'archived',
+    ),
+  ).map((row) => row.group);
+}
+
+/**
+ * Whether a Group's parent is archived (#1110): a Child Group comes back only
+ * with its parent, so its own Dezarhivează waits. A parent the viewer cannot
+ * read counts as not archived; the server still answers
+ * `group_parent_archived`.
+ */
+export function parentIsArchived(
+  group: Pick<AdminGroup, 'parent_id'>,
+  byId: ReadonlyMap<number, Pick<AdminGroup, 'status'>>,
+): boolean {
+  return (
+    group.parent_id !== null && byId.get(group.parent_id)?.status === 'archived'
+  );
+}
+
 /** Whether the viewer holds any Group Role (the **Conduse de mine** test). */
 export function leadsAny(mine: readonly { group_role: string }[]): boolean {
   return mine.some(
