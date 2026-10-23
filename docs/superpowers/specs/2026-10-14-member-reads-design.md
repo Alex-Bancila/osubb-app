@@ -118,6 +118,7 @@ This mirrors #1053:
 - what the page reads today, with the reader's own `read_at`;
 - narrowed by Grupuri preferate (R43: a preferred Group, or critical, or organization-wide, or the caller's own) and by the Group filter (the chosen Group and every Group below it);
 - ordered by R15 (pinned, then unread, then read; newest first in each; id last);
+  - _Amended 2026-10-23 (ruling R62, #1097):_ the Announcements past their Termen at `p_as_of` come after every other, under **Termen expirat**, each list in R15's order; each row carries `expired`;
 - 20 rows a page, with the unpaged count.
 
 `public.announcement_feed_summary(p_preferred)` returns the unread count the header shows and the newest unread critical Announcement the banner points at.
@@ -162,6 +163,7 @@ Nothing there grows without bound, so "past Calendar Events" in the list of impr
 
 - **R55 (amends R10 for the Member's own list):** Taskurile mele shows its open Tasks first and its finished Tasks after them under **Taskuri încheiate**, newest first, 50 at a time. This is De gestionat's R54, applied to the Member's own list. Today finished Tasks are mixed in by deadline.
 - **R56:** Anunțuri shows its newest 20 and loads more on scroll. The R15 order is unchanged.
+  - _Amended 2026-10-23 (ruling R62):_ the expired Announcements now follow every other, under **Termen expirat**; R15's order holds inside each list.
 
 ## Delivery
 

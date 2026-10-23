@@ -2854,6 +2854,7 @@ export type Database = {
           body: string
           created_by: string
           deadline: string
+          expired: boolean
           group_id: number
           id: number
           links: Json
