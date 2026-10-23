@@ -64,6 +64,32 @@ export function managesEvent(
   return viewer.options.groups.some((group) => group.id === event.groupId);
 }
 
+export type EventAttendanceViewer = {
+  memberId: string | undefined;
+  capabilities: Pick<Capabilities, 'createTopLevelGroups' | 'seeLeadership'>;
+  /** Not needed for a BCE and above, so a card need not wait for it. */
+  options: Pick<EventFormOptions, 'groups'> | undefined;
+};
+
+/**
+ * Whether the viewer reads every answer on this Event (**Cine participă**):
+ * its managers (#934), and every BCE, BC member and the Moderator on every
+ * Event they can read (R61, `seeLeadership` — the live rank BCE+). The
+ * server's `event_attendance_read`. Reading grants nothing else: Editează and
+ * Anulează stay with `managesEvent`.
+ */
+export function readsEventAttendance(
+  event: Omit<ManagedEvent, 'cancelledAt'>,
+  viewer: EventAttendanceViewer,
+): boolean {
+  if (!viewer.memberId) return false;
+  if (viewer.capabilities.seeLeadership) return true;
+  return (
+    viewer.options !== undefined &&
+    managesEvent(event, { ...viewer, options: viewer.options })
+  );
+}
+
 /** The edit form, prefilled from the Event as its card shows it. */
 export function eventFormValuesFor(event: EventPresentation): EventFormValues {
   return {
