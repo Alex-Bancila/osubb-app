@@ -252,8 +252,8 @@ export function RequestsView() {
                     Grup
                   </span>
                   <InfoHint label="Despre grup" id="request-origin-help">
-                    Alege grupul pentru care ai lucrat: departamentul, echipa
-                    sau proiectul.
+                    Alege grupul pentru care ai lucrat: un departament, o
+                    echipă sau un proiect, chiar dacă nu ești membru.
                   </InfoHint>
                 </div>
                 <Combobox<RequestOrigin>

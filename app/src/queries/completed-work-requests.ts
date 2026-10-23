@@ -4,31 +4,21 @@ import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { readAllRows } from './read-all';
 import { keys } from './keys';
-import { fetchMyGroups, isMemberOf, type MyGroup } from './my-groups';
 
 /** A Group a Completed-work Request may name as its Origin. */
-export type RequestOrigin = Pick<MyGroup, 'id' | 'name' | 'path'>;
+export type RequestOrigin = { id: number; name: string; path: number[] };
 
 /**
- * Whether a Member may name this Group as the one they worked for: an active
- * Group they are a member of (ruling R31: their own roster row or Automatic
- * Membership — a Group reached only through a managed ancestor is not one they
- * worked for as a member), except a Group they belong to automatically, such as
- * the Adunarea Generală: nobody works "for" the assembly (#855, B31). The
- * Organization Group stays, for work done for OSUBB as a whole.
+ * The Groups a Member may file a Request for, read live from
+ * `request_origins()`, the command's own rule (ruling R64): any active Group
+ * they can see whose Minimum Level they meet, member of it or not, except an
+ * Automatic-Membership Group other than the Organization Group (#855, B31:
+ * nobody works "for" the Adunarea Generală).
  */
-export function isRequestOrigin(group: MyGroup): boolean {
-  return (
-    isMemberOf(group) &&
-    group.status === 'active' &&
-    (!group.automatic || group.is_organization)
-  );
-}
-
-/** The Groups a Member may file a Request for (`isRequestOrigin`), read live. */
 export async function fetchRequestOrigins(): Promise<RequestOrigin[]> {
-  return (await fetchMyGroups())
-    .filter(isRequestOrigin)
+  const { data, error } = await supabase.rpc('request_origins');
+  if (error) throw error;
+  return (data ?? [])
     .map(({ id, name, path }) => ({ id, name, path }))
     .sort((a, b) => a.name.localeCompare(b.name, 'ro') || a.id - b.id);
 }

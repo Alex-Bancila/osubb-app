@@ -180,7 +180,7 @@ describe('RequestsView', () => {
 
     const box = screen.getByRole('combobox', { name: 'Grup' });
     expect(box).toHaveAccessibleDescription(
-      'Alege grupul pentru care ai lucrat: departamentul, echipa sau proiectul.',
+      'Alege grupul pentru care ai lucrat: un departament, o echipă sau un proiect, chiar dacă nu ești membru.',
     );
     await user.click(box);
     await screen.findByRole('listbox');

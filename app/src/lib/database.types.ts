@@ -4368,6 +4368,14 @@ export type Database = {
         Args: { p_email: string; p_ip_hash: string }
         Returns: string
       }
+      request_origins: {
+        Args: never
+        Returns: {
+          id: number
+          name: string
+          path: number[]
+        }[]
+      }
       return_task_to_progress: {
         Args: { p_note: string; p_task_id: number }
         Returns: {
