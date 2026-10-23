@@ -35,8 +35,9 @@ const separator = 'mx-0.5 h-6 w-px shrink-0 bg-border';
  * Listă numerotată | Link, Evidențiază, Fără formatare. One `toolbar` the
  * arrow keys move through; every control is 44 px, a Romanian name, a
  * tooltip naming its shortcut, and `aria-pressed` where it is on or off. It
- * sticks to the top of the field while a long text scrolls. A click keeps the
- * focus in the text; each command then runs on the selection as it was.
+ * sticks to the top of the field while a long text scrolls. A press anywhere
+ * on it keeps the focus in the text; each command then runs on the selection
+ * as it was.
  */
 export function FormattedTextToolbar({
   editor,
@@ -60,7 +61,6 @@ export function FormattedTextToolbar({
         aria-pressed={state[name]}
         title={withShortcut(control.label, control.keys)}
         className={iconControl}
-        onMouseDown={keepFocus}
         onClick={() => control.run(editor.chain().focus()).run()}
       >
         <Icon aria-hidden="true" />
@@ -73,6 +73,10 @@ export function FormattedTextToolbar({
       <Toolbar.Root
         aria-label="Formatare"
         data-slot="formatted-text-toolbar"
+        // On the whole toolbar, the Stil trigger, the gaps and the padding too:
+        // a press keeps the focus, and so the caret and the selection, in the
+        // text. A control acts on `click`.
+        onMouseDown={keepFocus}
         className={cn(
           'sticky top-0 z-1 flex flex-wrap items-center gap-0.5 border-b border-border bg-background p-1',
           className,
@@ -155,7 +159,6 @@ export function FormattedTextToolbar({
           aria-haspopup="dialog"
           title={withShortcut(LINK.label, LINK.keys)}
           className={iconControl}
-          onMouseDown={keepFocus}
           onClick={() => setLinkOpen(true)}
         >
           <LINK.icon aria-hidden="true" />
@@ -165,7 +168,6 @@ export function FormattedTextToolbar({
           aria-label={CLEAR.label}
           title={CLEAR.label}
           className={iconControl}
-          onMouseDown={keepFocus}
           onClick={() => clearFormatting(editor.chain().focus()).run()}
         >
           <CLEAR.icon aria-hidden="true" />

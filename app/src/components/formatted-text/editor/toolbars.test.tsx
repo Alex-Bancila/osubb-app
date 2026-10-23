@@ -174,6 +174,28 @@ describe('the top toolbar, for a mouse (R60, decision 4)', () => {
     ).toBe(false);
   });
 
+  it('keeps the focus in the text on Stil and on a press that misses every control', async () => {
+    const user = userEvent.setup();
+    const editor = editorWith('x');
+    render(<FormattedTextToolbar editor={editor} />);
+    focusText(editor);
+    const prevented: boolean[] = [];
+    const watch = (event: MouseEvent) => prevented.push(event.defaultPrevented);
+    document.addEventListener('mousedown', watch);
+    try {
+      await user.click(screen.getByRole('toolbar', { name: 'Formatare' }));
+      expect(editor.view.dom).toHaveFocus();
+
+      // Safari and Firefox on a Mac never focus a clicked button: a press on
+      // Stil that the page let through would leave the text for nothing.
+      await user.click(screen.getByRole('button', { name: /^Stil/ }));
+      expect(await screen.findByRole('menu')).toBeInTheDocument();
+      expect(prevented).toEqual([true, true]);
+    } finally {
+      document.removeEventListener('mousedown', watch);
+    }
+  });
+
   it.each([
     ['Ctrl', { ctrlKey: true }],
     ['Cmd', { metaKey: true }],

@@ -128,19 +128,29 @@ describe('FormattedTextField (R60, §C)', () => {
     const user = userEvent.setup();
     await user.click(field);
 
-    await user.keyboard('b');
+    // One burst: within one `keyboard` call the next key always comes before
+    // the burst's timer, however slow the machine.
+    await user.keyboard('bcd');
 
-    // At once, with no wait. jsdom has no layout, so the press leaves the
-    // caret at the start, in the bold run.
-    expect(onChange.mock.calls).toEqual([['**ba**']]);
-
-    await user.keyboard('cd');
-    // The keys that follow wait for typing to rest…
-    expect(onChange).toHaveBeenCalledTimes(1);
-    // …and then go as one.
+    // The first key went at once and alone; the rest as one once typing
+    // rested. jsdom has no layout, so the press left the caret at the start,
+    // in the bold run.
     await waitFor(() =>
       expect(onChange.mock.calls).toEqual([['**ba**'], ['**bcda**']]),
     );
+  });
+
+  it('sends a change still waiting when the field closes', async () => {
+    const onChange = vi.fn();
+    const view = render(<Form onChange={onChange} />);
+    const field = await findFormattedText('Mesaj');
+    const user = userEvent.setup();
+    await user.click(field);
+
+    await user.keyboard('ab');
+    view.unmount();
+
+    expect(onChange.mock.calls).toEqual([['a'], ['ab']]);
   });
 
   it('drops a change still waiting when the form resets the text (ruling 35)', async () => {
@@ -436,6 +446,18 @@ describe('the form’s check while the field opens its own panels (Minor 2)', ()
     await user.click(screen.getByRole('button', { name: 'Ascunde tastatura' }));
 
     expect(await screen.findByText(MISSING)).toBeInTheDocument();
+  });
+
+  it('does not run on a press on the toolbar that misses every control', async () => {
+    const user = userEvent.setup();
+    render(<Form />);
+    const field = await findFormattedText('Mesaj');
+    await user.click(field);
+
+    await user.click(screen.getByRole('toolbar', { name: 'Formatare' }));
+
+    expect(field).toHaveFocus();
+    expect(screen.queryByText(MISSING)).toBeNull();
   });
 
   it('waits while the Stil menu is open, and runs once focus leaves the field', async () => {

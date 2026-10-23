@@ -32,16 +32,17 @@ const SETTLE_MS = 150;
  * the toolbar.
  */
 const SURFACE =
-  'max-h-80 w-full min-w-0 overflow-y-auto rounded-lg border border-border bg-background font-sans text-sm text-foreground transition-colors [scrollbar-color:var(--border)_transparent] [scrollbar-width:thin] motion-reduce:transition-none dark:border-input dark:bg-input/30 has-[.ProseMirror:focus-visible]:border-ring has-[.ProseMirror:focus-visible]:outline-3 has-[.ProseMirror:focus-visible]:outline-offset-2 has-[.ProseMirror:focus-visible]:outline-ring has-[.ProseMirror:focus-visible]:outline-solid has-[.ProseMirror:focus-visible]:ring-3 has-[.ProseMirror:focus-visible]:ring-ring/50 has-[.ProseMirror[aria-invalid=true]]:border-destructive has-[.ProseMirror[aria-invalid=true]]:ring-3 has-[.ProseMirror[aria-invalid=true]]:ring-destructive/20 has-[.ProseMirror[contenteditable=false]]:bg-muted has-[.ProseMirror[contenteditable=false]]:text-muted-foreground';
+  'group/field max-h-80 w-full min-w-0 overflow-y-auto rounded-lg border border-border bg-background font-sans text-sm text-foreground transition-colors [scrollbar-color:var(--border)_transparent] [scrollbar-width:thin] motion-reduce:transition-none dark:border-input dark:bg-input/30 has-[.ProseMirror:focus-visible]:border-ring has-[.ProseMirror:focus-visible]:outline-3 has-[.ProseMirror:focus-visible]:outline-offset-2 has-[.ProseMirror:focus-visible]:outline-ring has-[.ProseMirror:focus-visible]:outline-solid has-[.ProseMirror:focus-visible]:ring-3 has-[.ProseMirror:focus-visible]:ring-ring/50 has-[.ProseMirror[aria-invalid=true]]:border-destructive has-[.ProseMirror[aria-invalid=true]]:ring-3 has-[.ProseMirror[aria-invalid=true]]:ring-destructive/20 has-[.ProseMirror[contenteditable=false]]:bg-muted has-[.ProseMirror[contenteditable=false]]:text-muted-foreground';
 
 /**
  * The sticky toolbar's background, opaque so text scrolling under it never
  * shows through, and the colour the surface shows: `bg-background` in light,
  * as the surface is; in dark the surface is `--input` at 30% over the sheet's
- * `--card`, which is this mix, channel for channel.
+ * `--card`, which is this mix, channel for channel. A locked text (a save
+ * running) turns the surface muted, and the toolbar with it.
  */
 const TOOLBAR_SURFACE =
-  'dark:bg-[color-mix(in_srgb,var(--input)_30%,var(--card))]';
+  'dark:bg-[color-mix(in_srgb,var(--input)_30%,var(--card))] group-has-[.ProseMirror[contenteditable=false]]/field:bg-muted';
 
 /**
  * Whether focus at `target` is still with the field: its text, its toolbar or
