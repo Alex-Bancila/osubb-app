@@ -1,6 +1,7 @@
 import { answered } from '../test/postgrest-fake';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { bucharestLastDayKey } from '../lib/calendar-time';
 import type { Database } from '../lib/database.types';
 import { resetSupabaseMock, supabaseMock } from '../test/supabase-mock';
 
@@ -55,6 +56,7 @@ function eventRow(overrides: Partial<EventRow> = {}): EventRow {
     updated_at: '2026-08-20T10:00:00.000Z',
     created_by: null,
     has_qr: false,
+    all_day: false,
     min_level: 0,
     cancelled_at: null,
     cancel_reason: null,
@@ -76,7 +78,10 @@ describe('event presentation', () => {
       campaignId: null,
       startsAt: '2026-08-29T21:30:00.000Z',
       endsAt: '2026-08-29T23:00:00.000Z',
+      allDay: false,
       dayKey: '2026-08-30',
+      lastDayKey: '2026-08-30',
+      multiDay: false,
       dayLabel: 'duminică, 30 august 2026',
       startTime: '00:30',
       endTime: '02:00',
@@ -117,6 +122,40 @@ describe('event presentation', () => {
     );
   });
 
+  // #1098 (R63): an all-day Event's end is the midnight after its last day.
+  it('reads an all-day Event as the days it covers, its exclusive end the day after', () => {
+    const event = toEventPresentation(
+      eventRow({
+        all_day: true,
+        // Saturday 24 to Monday 26 October 2026 00:00 in Bucharest, across
+        // the end of summer time (EEST, then EET).
+        starts_at: '2026-10-23T21:00:00.000Z',
+        ends_at: '2026-10-25T22:00:00.000Z',
+      }),
+    );
+    expect(event).toMatchObject({
+      allDay: true,
+      dayKey: '2026-10-24',
+      lastDayKey: '2026-10-25',
+      multiDay: true,
+    });
+  });
+
+  it('reads a row from before #1098 as timed', () => {
+    const { all_day: _ignored, ...row } = eventRow();
+    expect(toEventPresentation(row)?.allDay).toBe(false);
+  });
+
+  it('puts an end at a midnight on the day before it, and a later end on its own day', () => {
+    expect(bucharestLastDayKey('2026-10-24', '2026-10-24T21:00:00.000Z')).toBe(
+      '2026-10-24',
+    );
+    expect(bucharestLastDayKey('2026-10-24', '2026-10-24T21:30:00.000Z')).toBe(
+      '2026-10-25',
+    );
+    expect(bucharestLastDayKey('2026-10-24', null)).toBe('2026-10-24');
+  });
+
   it('keeps a Group this member may not read as null rather than inventing one', () => {
     expect(toEventPresentation(eventRow({ group: null }))?.group).toBeNull();
   });
@@ -132,7 +171,7 @@ describe('events range query', () => {
     to: '2026-10-31T22:00:00.000Z',
   };
 
-  it('reads a start window, half-open, in chronological order', async () => {
+  it('reads the Events that overlap a window, half-open, in chronological order', async () => {
     supabaseMock.order.mockReturnValue(
       answered({ data: [eventRow()], error: null }),
     );
@@ -141,9 +180,11 @@ describe('events range query', () => {
 
     expect(supabaseMock.from).toHaveBeenCalledWith('events');
     expect(supabaseMock.select).toHaveBeenCalledWith(
-      'id, title, type, group_id, campaign_id, starts_at, ends_at, location, capacity, description, min_level, created_by, cancelled_at, cancel_reason, approval_status, rejection_reason, group:groups(name, short, color, category, path, is_organization)',
+      'id, title, type, group_id, campaign_id, starts_at, ends_at, all_day, location, capacity, description, min_level, created_by, cancelled_at, cancel_reason, approval_status, rejection_reason, group:groups(name, short, color, category, path, is_organization)',
     );
-    expect(supabaseMock.gte).toHaveBeenCalledWith('starts_at', range.from);
+    expect(supabaseMock.or).toHaveBeenCalledWith(
+      `starts_at.gte."${range.from}",ends_at.gt."${range.from}"`,
+    );
     expect(supabaseMock.lt).toHaveBeenCalledWith('starts_at', range.to);
     expect(supabaseMock.order).toHaveBeenCalledWith('starts_at', {
       ascending: true,
@@ -163,7 +204,7 @@ describe('events range query', () => {
 
     await fetchEventsInRange({});
 
-    expect(supabaseMock.gte).not.toHaveBeenCalled();
+    expect(supabaseMock.or).not.toHaveBeenCalled();
     expect(supabaseMock.lt).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
@@ -173,7 +214,9 @@ describe('events range query', () => {
 
     await fetchEventsInRange({ from: range.from });
 
-    expect(supabaseMock.gte).toHaveBeenCalledWith('starts_at', range.from);
+    expect(supabaseMock.or).toHaveBeenCalledWith(
+      `starts_at.gte."${range.from}",ends_at.gt."${range.from}"`,
+    );
     expect(supabaseMock.lt).not.toHaveBeenCalled();
   });
 

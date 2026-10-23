@@ -254,10 +254,10 @@ create temporary table expected_function_privs (
 ) on commit drop;
 
 insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) values
-  ('update_event', 'p_event_id bigint, p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer, p_campaign_id bigint', false, true, false, false),
+  ('update_event', 'p_event_id bigint, p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer, p_campaign_id bigint, p_all_day boolean', false, true, false, false),
   ('cancel_event', 'p_event_id bigint, p_reason text', false, true, false, false),
   -- #345 dropped public.claim_open_task; its row went with it.
-  ('create_event', 'p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer, p_campaign_id bigint, p_announce boolean', false, true, false, false),
+  ('create_event', 'p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer, p_campaign_id bigint, p_announce boolean, p_all_day boolean', false, true, false, false),
   ('rating_mult',        'r integer',                                false, true,  true,  false),
   ('auth_level',         '',                                         false, true,  true,  false),
   ('auth_role',          '',                                         false, true,  true,  false),
@@ -667,9 +667,9 @@ insert into pinned_private_functions (proname, args, category) values
   ('require_group_work_manager', 'p_group_id bigint', 'require'),
   ('group_managers', 'p_group_id bigint', 'none'),
   ('cancel_event_impl', 'p_event_id bigint, p_reason text', 'impl'),
-  ('update_event_impl', 'p_event_id bigint, p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer, p_campaign_id bigint', 'impl'),
+  ('update_event_impl', 'p_event_id bigint, p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer, p_campaign_id bigint, p_all_day boolean', 'impl'),
   ('event_notification_recipients', 'p_event_id bigint', 'none'),
-  ('create_event_impl', 'p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer, p_campaign_id bigint, p_announce boolean', 'impl'),
+  ('create_event_impl', 'p_title text, p_type text, p_group_id bigint, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_capacity integer, p_description text, p_min_level integer, p_campaign_id bigint, p_announce boolean, p_all_day boolean', 'impl'),
   ('withdraw_task_interest_impl',                 'p_task_id bigint',                                                                                                   'impl'),
   -- #576: the live "holds a Group Role anywhere" policy helper (T8's
   -- Organization-Group compose arm), and the two read bodies behind
@@ -887,7 +887,7 @@ insert into pinned_private_functions (proname, args, category) values
   -- Event Announcement body only create_event_impl calls as definer.
   ('guard_announcement_settings',        '',                  'trigger'),
   ('can_publish_announcement',           'p_group_id bigint, p_kind text', 'predicate'),
-  ('event_announcement_body',            'p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_description text', 'none'),
+  ('event_announcement_body',            'p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_location text, p_description text, p_all_day boolean', 'none'),
   -- #934: who manages an Event -- one rule for update_event, cancel_event and
   -- the event_attendance_read policy, so authenticated keeps execute.
   ('can_manage_event',                   'p_event_id bigint', 'predicate'),

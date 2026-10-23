@@ -13,18 +13,22 @@ import {
   buildMonthGrid,
   calendarTasks,
   countLabel,
+  dayCellLayout,
   daySummary,
   eventAccentColor,
   eventGroupIcon,
   eventGroupLabel,
+  eventIsPast,
   eventRangeForDays,
   eventRelevance,
+  eventTimeLabel,
   eventTypeLabel,
   filterEvents,
   filterTasks,
   gridBounds,
   groupEventsByDay,
   itemsByDay,
+  layoutWeekBars,
   monthBounds,
   monthLabel,
   relevanceColor,
@@ -90,6 +94,9 @@ function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
     startsAt: '2026-08-30T07:00:00.000Z',
     endsAt: null,
     dayKey: '2026-08-30',
+    allDay: false,
+    lastDayKey: overrides.dayKey ?? '2026-08-30',
+    multiDay: false,
     dayLabel: 'duminică, 30 august 2026',
     startTime: '10:00',
     endTime: null,
@@ -574,5 +581,238 @@ describe('the Work Filter over the Calendar', () => {
     const byDay = itemsByDay(events, tasks);
     expect(byDay.get('2026-08-30')?.events.map((e) => e.id)).toEqual([1, 2]);
     expect(byDay.get('2026-10-26')?.tasks.map((t) => t.id)).toEqual([10, 11]);
+  });
+});
+
+/* ------------------------------------------------------------------------ */
+/* #1098 (ruling R63): all-day and several-day Events                        */
+/* ------------------------------------------------------------------------ */
+
+/** An Event from `first` to `last`, both Bucharest days, inclusive. */
+function spanning(
+  id: number,
+  first: string,
+  last: string,
+  overrides: Partial<EventPresentation> = {},
+): EventPresentation {
+  return event({
+    id,
+    title: `Eveniment ${id}`,
+    dayKey: first,
+    lastDayKey: last,
+    multiDay: last !== first,
+    allDay: true,
+    startsAt: `${first}T00:00:00+03:00`,
+    endsAt: `${last}T23:59:00+03:00`,
+    ...overrides,
+  });
+}
+
+describe('several-day Events on the month grid', () => {
+  // October 2026: Monday 28 September to Sunday 1 November, five rows.
+  const weeks = buildMonthGrid('2026-10', '2026-10-14');
+  const row = (index: number) => weeks[index] ?? [];
+
+  it('draws one bar over the three days of a weekend', () => {
+    const [bar] = layoutWeekBars(row(3), [
+      spanning(1, '2026-10-23', '2026-10-25'),
+    ]);
+    expect(bar).toMatchObject({
+      startColumn: 4,
+      span: 3,
+      lane: 0,
+      continuesBefore: false,
+      continuesAfter: false,
+    });
+  });
+
+  it('breaks a bar at the week boundary and goes on in the next row', () => {
+    const trip = spanning(2, '2026-10-17', '2026-10-20');
+    expect(layoutWeekBars(row(2), [trip])[0]).toMatchObject({
+      startColumn: 5,
+      span: 2,
+      continuesBefore: false,
+      continuesAfter: true,
+    });
+    expect(layoutWeekBars(row(3), [trip])[0]).toMatchObject({
+      startColumn: 0,
+      span: 2,
+      continuesBefore: true,
+      continuesAfter: false,
+    });
+  });
+
+  it('clamps a bar to the visible grid across the month boundary', () => {
+    // From 26 September (before the grid's Monday 28) to 2 October.
+    const camp = spanning(3, '2026-09-26', '2026-10-02');
+    expect(layoutWeekBars(row(0), [camp])[0]).toMatchObject({
+      startColumn: 0,
+      span: 5,
+      continuesBefore: true,
+      continuesAfter: false,
+    });
+    // The last row ends on Sunday 1 November; the Event goes on.
+    const festival = spanning(4, '2026-10-30', '2026-11-03');
+    expect(layoutWeekBars(row(4), [festival])[0]).toMatchObject({
+      startColumn: 4,
+      span: 3,
+      continuesAfter: true,
+    });
+  });
+
+  it('stacks overlapping bars in lanes and reuses a lane once it is free', () => {
+    const bars = layoutWeekBars(row(2), [
+      spanning(5, '2026-10-12', '2026-10-14'),
+      spanning(6, '2026-10-13', '2026-10-16'),
+      spanning(7, '2026-10-15', '2026-10-17'),
+    ]);
+    const laneOf = (id: number) =>
+      bars.find((bar) => bar.event.id === id)?.lane;
+    expect(laneOf(5)).toBe(0);
+    expect(laneOf(6)).toBe(1);
+    expect(laneOf(7)).toBe(0);
+  });
+
+  it('puts the longer of two bars starting the same day in the upper lane', () => {
+    const bars = layoutWeekBars(row(2), [
+      spanning(8, '2026-10-12', '2026-10-13'),
+      spanning(9, '2026-10-12', '2026-10-16'),
+    ]);
+    expect(bars.find((bar) => bar.event.id === 9)?.lane).toBe(0);
+  });
+
+  it('leaves a one-day Event to the chips', () => {
+    expect(
+      layoutWeekBars(row(2), [spanning(10, '2026-10-14', '2026-10-14')]),
+    ).toEqual([]);
+  });
+
+  it('keeps every bar level, stops at the chip limit and counts the rest in "+N"', () => {
+    const bars = layoutWeekBars(row(2), [
+      spanning(11, '2026-10-12', '2026-10-13'),
+      spanning(12, '2026-10-13', '2026-10-14'),
+    ]);
+    // Wednesday 14 October: only the lower bar reaches it, so the upper lane
+    // is left empty to keep that bar level with its row.
+    const wednesday = dayCellLayout(2, bars, 2, 3);
+    expect(wednesday.lanes.map((bar) => bar?.event.id ?? null)).toEqual([
+      null,
+      12,
+    ]);
+    expect(wednesday).toMatchObject({ chipsShown: 1, overflow: 1 });
+    // Four bars over one Monday: three lanes drawn, the fourth is "+1".
+    const crowded = layoutWeekBars(row(2), [
+      spanning(13, '2026-10-12', '2026-10-13'),
+      spanning(14, '2026-10-12', '2026-10-13'),
+      spanning(15, '2026-10-12', '2026-10-13'),
+      spanning(16, '2026-10-12', '2026-10-13'),
+    ]);
+    expect(dayCellLayout(0, crowded, 0, 3)).toMatchObject({
+      chipsShown: 0,
+      overflow: 1,
+    });
+    expect(dayCellLayout(0, crowded, 0, 3).lanes).toHaveLength(3);
+    // A day without bars keeps today's three chips and "+N".
+    expect(dayCellLayout(6, crowded, 5, 3)).toEqual({
+      lanes: [],
+      chipsShown: 3,
+      overflow: 2,
+    });
+  });
+
+  it('lists a several-day Event on every day it touches, and counts it', () => {
+    const byDay = itemsByDay([spanning(17, '2026-10-30', '2026-11-02')], []);
+    for (const day of ['2026-10-30', '2026-10-31', '2026-11-01', '2026-11-02'])
+      expect(byDay.get(day)?.events.map((e) => e.id)).toEqual([17]);
+    expect(byDay.has('2026-11-03')).toBe(false);
+    expect(daySummary('2026-11-01', byDay.get('2026-11-01'))).toBe(
+      'duminică, 1 noiembrie 2026: 1 eveniment',
+    );
+  });
+
+  it('places an Event that runs for centuries only on the visible days', () => {
+    const byDay = itemsByDay([spanning(19, '2026-09-20', '2206-01-01')], [], {
+      first: '2026-09-28',
+      last: '2026-11-08',
+    });
+    expect(byDay.size).toBe(42);
+    expect(byDay.get('2026-09-28')?.events.map((e) => e.id)).toEqual([19]);
+    expect(byDay.get('2026-11-08')?.events.map((e) => e.id)).toEqual([19]);
+    expect(byDay.has('2026-09-27')).toBe(false);
+    expect(byDay.has('2026-11-09')).toBe(false);
+  });
+
+  it('keeps a several-day Event in a range any of its days fall in', () => {
+    const camp = spanning(18, '2026-09-28', '2026-10-02');
+    expect(
+      filterEvents([camp], { from: '2026-10-01', to: '2026-10-31' }),
+    ).toEqual([camp]);
+    expect(filterEvents([camp], { from: '2026-10-03' })).toEqual([]);
+    expect(filterEvents([camp], { to: '2026-09-27' })).toEqual([]);
+  });
+});
+
+describe('the day list of several-day Events', () => {
+  it('lists a several-day Event once, under its first day', () => {
+    const days = groupEventsByDay([
+      spanning(1, '2026-10-24', '2026-10-26'),
+      event({ id: 2, dayKey: '2026-10-25', startsAt: '2026-10-25T07:00:00Z' }),
+    ]);
+    expect(
+      days.map((day) => [day.dayKey, day.events.map((e) => e.id)]),
+    ).toEqual([
+      ['2026-10-24', [1]],
+      ['2026-10-25', [2]],
+    ]);
+  });
+
+  const now = new Date('2026-10-20T10:00:00Z');
+
+  it('says "Toată ziua", and its last day when it has several', () => {
+    expect(eventTimeLabel(spanning(1, '2026-10-24', '2026-10-24'), now)).toBe(
+      'Toată ziua',
+    );
+    expect(eventTimeLabel(spanning(2, '2026-10-24', '2026-10-26'), now)).toBe(
+      'Toată ziua · până luni, 26 oct.',
+    );
+    expect(eventTimeLabel(spanning(3, '2026-12-30', '2027-01-02'), now)).toBe(
+      'Toată ziua · până sâmbătă, 2 ian. 2027',
+    );
+  });
+
+  it('gives a timed Event over several days both ends with their days', () => {
+    const party = event({
+      startsAt: '2026-10-23T15:00:00.000Z',
+      endsAt: '2026-10-25T12:00:00.000Z',
+      dayKey: '2026-10-23',
+      lastDayKey: '2026-10-25',
+      multiDay: true,
+      startTime: '18:00',
+      endTime: '14:00',
+    });
+    expect(eventTimeLabel(party, now)).toBe(
+      'vin., 23 oct., 18:00 → dum., 25 oct., 14:00',
+    );
+    expect(
+      eventTimeLabel(event({ startTime: '18:00', endTime: '20:00' }), now),
+    ).toBe('18:00–20:00');
+  });
+
+  it('keeps an all-day or several-day Event answerable until it ends', () => {
+    // Saturday 24 to Monday 26 October 2026: its end is the 27th's midnight.
+    const weekend = spanning(1, '2026-10-24', '2026-10-26', {
+      startsAt: '2026-10-23T21:00:00.000Z',
+      endsAt: '2026-10-26T22:00:00.000Z',
+    });
+    expect(eventIsPast(weekend, Date.parse('2026-10-25T09:00:00Z'))).toBe(
+      false,
+    );
+    expect(eventIsPast(weekend, Date.parse('2026-10-26T22:00:00Z'))).toBe(true);
+    // A timed one-day Event is past once it has started (ADR-0008).
+    const meeting = event({
+      startsAt: '2026-10-24T15:00:00.000Z',
+      endsAt: '2026-10-24T17:00:00.000Z',
+    });
+    expect(eventIsPast(meeting, Date.parse('2026-10-24T16:00:00Z'))).toBe(true);
   });
 });

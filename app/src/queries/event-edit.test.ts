@@ -106,6 +106,9 @@ function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
     startsAt: '2030-10-01T15:00:31.021Z',
     endsAt: '2030-10-01T17:00:31.021Z',
     dayKey: '2030-10-01',
+    allDay: false,
+    lastDayKey: overrides.dayKey ?? '2030-10-01',
+    multiDay: false,
     dayLabel: 'marți, 1 octombrie 2030',
     startTime: '18:00',
     endTime: '20:00',
@@ -263,6 +266,8 @@ describe('the edit form', () => {
       description: 'Planificarea lunii.',
       minLevel: 3,
       campaignId: 3,
+      allDay: false,
+      allDayTouched: false,
       announce: false,
     });
     expect(
@@ -312,6 +317,48 @@ describe('the edit form', () => {
     ]);
   });
 
+  // #1098 (R63): its first and last day, the times an untick would give.
+  it('starts an all-day Event from its days, the last one before its end', () => {
+    const weekend = event({
+      allDay: true,
+      multiDay: true,
+      dayKey: '2030-10-05',
+      lastDayKey: '2030-10-06',
+      startsAt: '2030-10-04T21:00:00.000Z',
+      endsAt: '2030-10-06T21:00:00.000Z',
+    });
+    expect(eventFormValuesFor(weekend)).toMatchObject({
+      allDay: true,
+      allDayTouched: true,
+      startsAt: '2030-10-05T09:00',
+      endsAt: '2030-10-06T17:00',
+    });
+  });
+
+  it('sends the new bounds when only Toată ziua changed', () => {
+    const initial = eventFormValuesFor(event());
+    const draft = {
+      title: 'Ședință Educațional',
+      type: 'sedinta' as const,
+      groupId: 7,
+      startsAt: '2030-09-30T21:00:00.000Z',
+      endsAt: '2030-10-01T21:00:00.000Z',
+      allDay: true,
+      location: 'Sala 305',
+      capacity: 25,
+      description: null,
+      minLevel: 3,
+      campaignId: null,
+      announce: false,
+    };
+    expect(
+      keepUntouchedTimes(draft, { ...initial, allDay: true }, initial, event()),
+    ).toMatchObject({
+      startsAt: '2030-09-30T21:00:00.000Z',
+      endsAt: '2030-10-01T21:00:00.000Z',
+    });
+  });
+
   it('sends an untouched time back exactly as stored', () => {
     const initial = eventFormValuesFor(event());
     const draft = {
@@ -325,6 +372,7 @@ describe('the edit form', () => {
       description: null,
       minLevel: 3,
       campaignId: null,
+      allDay: false,
       announce: false,
     };
     expect(keepUntouchedTimes(draft, initial, initial, event())).toMatchObject({
@@ -363,6 +411,7 @@ describe('the commands', () => {
         description: null,
         minLevel: 0,
         campaignId: 4,
+        allDay: false,
         announce: false,
       },
     });
@@ -378,6 +427,7 @@ describe('the commands', () => {
       p_description: null,
       p_min_level: 0,
       p_campaign_id: 4,
+      p_all_day: false,
     });
   });
 

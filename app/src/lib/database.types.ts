@@ -574,6 +574,7 @@ export type Database = {
       }
       events: {
         Row: {
+          all_day: boolean
           announce_on_approval: boolean
           approval_decided_at: string | null
           approval_decided_by: string | null
@@ -598,6 +599,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          all_day?: boolean
           announce_on_approval?: boolean
           approval_decided_at?: string | null
           approval_decided_by?: string | null
@@ -622,6 +624,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          all_day?: boolean
           announce_on_approval?: boolean
           approval_decided_at?: string | null
           approval_decided_by?: string | null
@@ -2985,6 +2988,7 @@ export type Database = {
       approve_event: {
         Args: { p_id: number }
         Returns: {
+          all_day: boolean
           announce_on_approval: boolean
           approval_decided_at: string | null
           approval_decided_by: string | null
@@ -3124,6 +3128,7 @@ export type Database = {
       cancel_event: {
         Args: { p_event_id: number; p_reason: string }
         Returns: {
+          all_day: boolean
           announce_on_approval: boolean
           approval_decided_at: string | null
           approval_decided_by: string | null
@@ -3474,6 +3479,7 @@ export type Database = {
       }
       create_event: {
         Args: {
+          p_all_day?: boolean
           p_announce?: boolean
           p_campaign_id?: number
           p_capacity?: number
@@ -3487,6 +3493,7 @@ export type Database = {
           p_type: string
         }
         Returns: {
+          all_day: boolean
           announce_on_approval: boolean
           approval_decided_at: string | null
           approval_decided_by: string | null
@@ -4255,6 +4262,7 @@ export type Database = {
       reject_event: {
         Args: { p_id: number; p_reason: string }
         Returns: {
+          all_day: boolean
           announce_on_approval: boolean
           approval_decided_at: string | null
           approval_decided_by: string | null
@@ -5007,6 +5015,7 @@ export type Database = {
       }
       update_event: {
         Args: {
+          p_all_day?: boolean
           p_campaign_id: number
           p_capacity: number
           p_description: string
@@ -5020,6 +5029,7 @@ export type Database = {
           p_type: string
         }
         Returns: {
+          all_day: boolean
           announce_on_approval: boolean
           approval_decided_at: string | null
           approval_decided_by: string | null
