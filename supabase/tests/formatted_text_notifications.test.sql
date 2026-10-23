@@ -19,7 +19,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(16);
+select plan(17);
 
 create function pg_temp.u60(n integer) returns uuid language sql immutable as $$
   select ('10900000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -76,6 +76,17 @@ select is((select title || ' | ' || body from public.notifications
               and member_id = pg_temp.u60(2)),
   E'Anunț actualizat: Anunț cu format R60N | Ne vedem joi.\n• sala 2/I',
   'a Member who already holds the notice is told again with the words, not the Markdown');
+
+-- #1109: a quote typed inside a Citat, as the editor writes it, reaches the
+-- Notification as its words alone, like an escape the editor writes.
+select pg_temp.test_login_leadership(pg_temp.u60(1));
+insert into public.announcements(title, body, group_id, audience)
+values ('Citat în citat R60N', E'> > Ședința\n\\<b> la 18', pg_temp.dept(), 'local');
+reset role;
+select is((select body from public.notifications
+            where title = 'Anunț nou: Citat în citat R60N' and member_id = pg_temp.u60(2)),
+  E'Ședința\n<b> la 18',
+  'a quote inside a quote and an escaped tag reach the Notification as words (#1109)');
 
 -- ==================== 2. the Event copy is cut at whole lines ====================
 -- 30 lines of 70 visible characters (74 stored): with the date line and a
