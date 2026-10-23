@@ -416,6 +416,11 @@ const REASON_COPY = new Map<string, string>([
     'invalid_event_capacity',
     'Capacitatea este un număr întreg între 1 și 1000.',
   ],
+  // #1098 (R63): an all-day Event runs midnight to midnight, with an end.
+  [
+    'invalid_all_day_bounds',
+    'Un eveniment de toată ziua are o primă și o ultimă zi.',
+  ],
   ['invalid_event_min_level', 'Alege un nivel minim valid.'],
   ['event_group_required', 'Alege grupul evenimentului.'],
   ['event_not_found', 'Evenimentul nu mai este disponibil. Reîncarcă pagina.'],
@@ -448,6 +453,9 @@ const REASON_COPY = new Map<string, string>([
   ['starts_at_required', 'Alege ora de început.'],
   ['starts_at_invalid', 'Ora de început nu există în fusul orar al României.'],
   ['ends_at_invalid', 'Ora de încheiere nu există în fusul orar al României.'],
+  ['all_day_start_required', 'Alege prima zi.'],
+  ['all_day_end_required', 'Alege ultima zi.'],
+  ['all_day_interval', 'Ultima zi nu poate fi înaintea primei zile.'],
 
   /* ---- Announcements ---- */
   /* browser */

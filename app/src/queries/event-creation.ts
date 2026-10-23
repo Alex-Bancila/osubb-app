@@ -133,6 +133,7 @@ export async function createEvent(draft: EventDraft) {
     p_min_level: draft.minLevel,
     p_campaign_id: draft.campaignId,
     p_announce: draft.announce,
+    p_all_day: draft.allDay,
   };
   // PostgreSQL accepts NULL for optional values while generated optional RPC
   // properties omit nullability. Keep that generated-type mismatch local.

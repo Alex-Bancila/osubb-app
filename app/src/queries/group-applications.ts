@@ -204,7 +204,7 @@ export function useGroupUpcomingEvents(groupId: number) {
         ? async () => {
             const { data, error } = await supabase
               .from('events')
-              .select('id, title, starts_at, location')
+              .select('id, title, starts_at, all_day, location')
               .eq('group_id', groupId)
               .is('cancelled_at', null)
               .gte('starts_at', new Date().toISOString())

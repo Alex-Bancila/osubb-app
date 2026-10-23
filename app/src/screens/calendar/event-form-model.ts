@@ -42,6 +42,14 @@ export type EventFormValues = {
   description: string;
   minLevel: number;
   campaignId: number | null;
+  /**
+   * **Toată ziua** (ruling R63). The two dates keep their times while it is
+   * ticked, so unticking it gives the author's times back; ticked, the end's
+   * day is the last day, inclusive.
+   */
+  allDay: boolean;
+  /** The author ticked or unticked it: it never changes by itself again. */
+  allDayTouched: boolean;
   /** "Creează și un anunț" (#909): unticked until the author ticks it. */
   announce: boolean;
 };
@@ -57,6 +65,8 @@ export const emptyEventFormValues: EventFormValues = {
   description: '',
   minLevel: 0,
   campaignId: null,
+  allDay: false,
+  allDayTouched: false,
   announce: false,
 };
 
@@ -64,8 +74,11 @@ export type EventDraft = {
   title: string;
   type: EventType;
   groupId: number;
+  /** For an all-day Event, 00:00 Bucharest on its first day. */
   startsAt: string;
+  /** For an all-day Event, 00:00 Bucharest after its last day (exclusive). */
   endsAt: string | null;
+  allDay: boolean;
   location: string | null;
   capacity: number | null;
   description: string | null;
@@ -74,6 +87,73 @@ export type EventDraft = {
   /** Publish the matching Announcement in the same call (#909). */
   announce: boolean;
 };
+
+/* ------------------------------------------------------------------------ */
+/* Toată ziua (ruling R63)                                                   */
+/* ------------------------------------------------------------------------ */
+
+/** The times an all-day Event's dates get back when the box is unticked. */
+export const ALL_DAY_UNTICK_START = '09:00';
+export const ALL_DAY_UNTICK_END = '17:00';
+
+/** `YYYY-MM-DD` `count` days away. Pure date arithmetic: DST cannot touch it. */
+export function shiftDay(day: string, count: number): string {
+  const date = new Date(`${day}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + count);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * The Bucharest day a form value's end falls on, as a calendar reads it: an
+ * end at 00:00 closes the day before (a party until midnight is one day).
+ */
+export function endDayOf(endsAt: string): string {
+  const day = endsAt.slice(0, 10);
+  return endsAt.slice(11, 16) === '00:00' ? shiftDay(day, -1) : day;
+}
+
+/** The value with its day replaced, its time kept (or `time` when it has none). */
+export function withDay(value: string, day: string, time: string): string {
+  const kept = /T(\d{2}:\d{2})$/.exec(value)?.[1];
+  return `${day}T${kept ?? time}`;
+}
+
+/**
+ * The form after the author moves a date: when the end falls on another
+ * Bucharest day than the start, **Toată ziua** ticks itself — unless the
+ * author has ticked or unticked it before, whose choice is never undone. The
+ * times stay in the values, so unticking it keeps them.
+ */
+export function withEventDates(
+  values: EventFormValues,
+  patch: Pick<Partial<EventFormValues>, 'startsAt' | 'endsAt'>,
+): EventFormValues {
+  const next = { ...values, ...patch };
+  const spansDays =
+    next.startsAt !== '' &&
+    next.endsAt !== '' &&
+    endDayOf(next.endsAt) > next.startsAt.slice(0, 10);
+  if (!next.allDay && !next.allDayTouched && spansDays)
+    return { ...next, allDay: true };
+  return next;
+}
+
+/**
+ * The author ticks or unticks **Toată ziua**: from now on it is theirs. A
+ * ticked box needs a last day, so an empty end becomes the start's day — a
+ * one-day all-day Event; the times stay, ready for an untick.
+ */
+export function withAllDay(
+  values: EventFormValues,
+  allDay: boolean,
+  defaultEndTime: string,
+): EventFormValues {
+  const endsAt =
+    allDay && values.endsAt === '' && values.startsAt !== ''
+      ? withDay('', values.startsAt.slice(0, 10), defaultEndTime)
+      : values.endsAt;
+  return { ...values, allDay, allDayTouched: true, endsAt };
+}
 
 export const EVENT_TYPE_CHOICES: ReadonlyArray<{
   value: EventType;

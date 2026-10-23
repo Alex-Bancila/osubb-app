@@ -1,10 +1,11 @@
 import { z } from 'zod';
-import { bucharestWallTimeToIso } from '../calendar-time';
+import { bucharestDayKey, bucharestWallTimeToIso } from '../calendar-time';
 import { EVENT_MINIMUM_LEVELS } from '../minimum-level';
 import {
   EVENT_TYPE_CHOICES,
   eventCampaignsFor,
   mayAnnounceEvent,
+  shiftDay,
   type EventDraft,
   type EventFormOptions,
   type EventFormValues,
@@ -51,6 +52,8 @@ export function eventSchema(
       description: optionalFormattedText({ tooLong: 'description_too_long' }),
       minLevel: z.number(),
       campaignId: z.number().nullable(),
+      allDay: z.boolean(),
+      allDayTouched: z.boolean(),
       announce: z.boolean(),
     })
     .superRefine((values, ctx) => {
@@ -61,19 +64,35 @@ export function eventSchema(
       const group = options.groups.find((item) => item.id === values.groupId);
       if (!group) issue('groupId', 'event_group_required');
 
-      const startsAt = values.startsAt
-        ? bucharestWallTimeToIso(values.startsAt)
-        : null;
-      if (!values.startsAt) issue('startsAt', 'starts_at_required');
-      else if (!startsAt) issue('startsAt', 'starts_at_invalid');
-      else if (creating && Date.parse(startsAt) < now().getTime())
-        issue('startsAt', 'starts_at_in_past');
-      const endsAt = values.endsAt
-        ? bucharestWallTimeToIso(values.endsAt)
-        : null;
-      if (values.endsAt && !endsAt) issue('endsAt', 'ends_at_invalid');
-      else if (endsAt && startsAt && Date.parse(endsAt) <= Date.parse(startsAt))
-        issue('endsAt', 'invalid_event_interval');
+      if (values.allDay) {
+        // #1098 (R63): days only, the last one inclusive and required; the
+        // start is in the past only from the day after (today's may begin).
+        const first = values.startsAt.slice(0, 10);
+        const last = values.endsAt.slice(0, 10);
+        if (!first) issue('startsAt', 'all_day_start_required');
+        else if (creating && first < (bucharestDayKey(now()) ?? ''))
+          issue('startsAt', 'starts_at_in_past');
+        if (!last) issue('endsAt', 'all_day_end_required');
+        else if (first && last < first) issue('endsAt', 'all_day_interval');
+      } else {
+        const startsAt = values.startsAt
+          ? bucharestWallTimeToIso(values.startsAt)
+          : null;
+        if (!values.startsAt) issue('startsAt', 'starts_at_required');
+        else if (!startsAt) issue('startsAt', 'starts_at_invalid');
+        else if (creating && Date.parse(startsAt) < now().getTime())
+          issue('startsAt', 'starts_at_in_past');
+        const endsAt = values.endsAt
+          ? bucharestWallTimeToIso(values.endsAt)
+          : null;
+        if (values.endsAt && !endsAt) issue('endsAt', 'ends_at_invalid');
+        else if (
+          endsAt &&
+          startsAt &&
+          Date.parse(endsAt) <= Date.parse(startsAt)
+        )
+          issue('endsAt', 'invalid_event_interval');
+      }
 
       const capacity = values.capacity.trim();
       if (capacity) {
@@ -103,8 +122,8 @@ export function eventSchema(
       title: values.title,
       type: values.type as EventType,
       groupId: values.groupId ?? 0,
-      startsAt: bucharestWallTimeToIso(values.startsAt) ?? '',
-      endsAt: values.endsAt ? bucharestWallTimeToIso(values.endsAt) : null,
+      ...eventBounds(values),
+      allDay: values.allDay,
       location: values.location,
       capacity: values.capacity.trim() ? Number(values.capacity) : null,
       description: values.description,
@@ -122,6 +141,32 @@ export function eventSchema(
     }));
 }
 
+/**
+ * The instants the commands store. A timed Event's wall-clock values are read
+ * in Romania. An all-day one (#1098, ruling R63) runs from 00:00 Bucharest on
+ * its first day to 00:00 Bucharest after its last, which the form shows
+ * inclusive — so the end is the day after the last one, at midnight, a day
+ * that lasts 23 or 25 hours across a DST change.
+ */
+export function eventBounds(
+  values: Pick<EventFormValues, 'startsAt' | 'endsAt' | 'allDay'>,
+): { startsAt: string; endsAt: string | null } {
+  if (values.allDay) {
+    const first = values.startsAt.slice(0, 10);
+    const last = values.endsAt.slice(0, 10);
+    return {
+      startsAt: bucharestWallTimeToIso(`${first}T00:00`) ?? '',
+      endsAt: last
+        ? bucharestWallTimeToIso(`${shiftDay(last, 1)}T00:00`)
+        : null,
+    };
+  }
+  return {
+    startsAt: bucharestWallTimeToIso(values.startsAt) ?? '',
+    endsAt: values.endsAt ? bucharestWallTimeToIso(values.endsAt) : null,
+  };
+}
+
 /** Where each reason an Event command (or this schema) raises is shown. */
 export const fieldForReason: Readonly<Record<string, keyof EventFormValues>> = {
   invalid_event_title: 'title',
@@ -136,6 +181,10 @@ export const fieldForReason: Readonly<Record<string, keyof EventFormValues>> = {
   starts_at_in_past: 'startsAt',
   ends_at_invalid: 'endsAt',
   invalid_event_interval: 'endsAt',
+  all_day_start_required: 'startsAt',
+  all_day_end_required: 'endsAt',
+  all_day_interval: 'endsAt',
+  invalid_all_day_bounds: 'endsAt',
   invalid_event_capacity: 'capacity',
   invalid_event_min_level: 'minLevel',
   event_min_level_below_group: 'minLevel',

@@ -4,11 +4,13 @@ import type { Capabilities } from '../lib/capabilities';
 import { isoToBucharestWallTime } from '../lib/calendar-time';
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
-import type {
-  EventDraft,
-  EventFormCampaign,
-  EventFormOptions,
-  EventFormValues,
+import {
+  ALL_DAY_UNTICK_END,
+  ALL_DAY_UNTICK_START,
+  type EventDraft,
+  type EventFormCampaign,
+  type EventFormOptions,
+  type EventFormValues,
 } from '../screens/calendar/event-form-model';
 import type { EventPresentation } from './events';
 import { keys } from './keys';
@@ -64,19 +66,33 @@ export function managesEvent(
   return viewer.options.groups.some((group) => group.id === event.groupId);
 }
 
-/** The edit form, prefilled from the Event as its card shows it. */
+/**
+ * The edit form, prefilled from the Event as its card shows it. An all-day
+ * Event (#1098, R63) shows its first and last day — the one before its
+ * exclusive end — carrying the times an untick would give it. An Event that
+ * already spans days was decided by its author: the box never ticks itself.
+ */
 export function eventFormValuesFor(event: EventPresentation): EventFormValues {
   return {
     title: event.title,
     type: event.type,
     groupId: event.groupId,
-    startsAt: isoToBucharestWallTime(event.startsAt),
-    endsAt: event.endsAt ? isoToBucharestWallTime(event.endsAt) : '',
+    ...(event.allDay
+      ? {
+          startsAt: `${event.dayKey}T${ALL_DAY_UNTICK_START}`,
+          endsAt: `${event.lastDayKey}T${ALL_DAY_UNTICK_END}`,
+        }
+      : {
+          startsAt: isoToBucharestWallTime(event.startsAt),
+          endsAt: event.endsAt ? isoToBucharestWallTime(event.endsAt) : '',
+        }),
     location: event.location ?? '',
     capacity: event.capacity === null ? '' : String(event.capacity),
     description: event.description ?? '',
     minLevel: event.minLevel,
     campaignId: event.campaignId,
+    allDay: event.allDay,
+    allDayTouched: event.multiDay,
     announce: false,
   };
 }
@@ -129,7 +145,8 @@ export function editEventFormOptions(
 /**
  * The form shows minutes; a stored time may carry seconds. A time the member
  * did not touch is sent back exactly as stored, so a title edit is never read
- * as a new schedule (which would notify the Group).
+ * as a new schedule (which would notify the Group). Ticking or unticking
+ * **Toată ziua** is a new schedule, whatever the dates say (#1098).
  */
 export function keepUntouchedTimes(
   draft: EventDraft,
@@ -137,6 +154,7 @@ export function keepUntouchedTimes(
   initial: EventFormValues,
   event: Pick<EventPresentation, 'startsAt' | 'endsAt'>,
 ): EventDraft {
+  if (values.allDay !== initial.allDay) return draft;
   return {
     ...draft,
     startsAt:
@@ -168,6 +186,7 @@ export async function updateEvent({
     p_description: draft.description,
     p_min_level: draft.minLevel,
     p_campaign_id: draft.campaignId,
+    p_all_day: draft.allDay,
   };
   // As in createEvent: PostgreSQL takes NULL for the optional values, which
   // the generated optional RPC properties do not spell.

@@ -17,7 +17,10 @@ import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import { Badge } from '../../components/ui/badge';
 import { buttonVariants } from '../../components/ui/button';
 import { useAuth } from '../../lib/auth';
-import { formatBucharestShort } from '../../lib/calendar-time';
+import {
+  formatBucharestShort,
+  formatBucharestShortDay,
+} from '../../lib/calendar-time';
 import { useCapabilities } from '../../lib/capabilities';
 import { parsePositiveInt } from '../../lib/ids';
 import { MemberName } from '../../components/member/MemberName';
@@ -252,7 +255,11 @@ export default function MemberGroupScreen() {
                     {event.title}
                   </Link>
                   <p className="m-0 text-sm text-muted-foreground">
-                    {event.starts_at && formatBucharestShort(event.starts_at)}
+                    {/* #1098 (R63): an all-day Event names its day, no hour. */}
+                    {event.starts_at &&
+                      (event.all_day
+                        ? `${formatBucharestShortDay(event.starts_at)} · Toată ziua`
+                        : formatBucharestShort(event.starts_at))}
                     {event.location && ` · ${event.location}`}
                   </p>
                 </ListRow>

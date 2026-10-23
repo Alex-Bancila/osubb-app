@@ -7,7 +7,11 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-import { bucharestDayKey, formatBucharestTime } from '../../lib/calendar-time';
+import {
+  bucharestDayKey,
+  formatBucharestShortDay,
+  formatBucharestTime,
+} from '../../lib/calendar-time';
 import { parsePositiveInt } from '../../lib/ids';
 import {
   chosenGroupId,
@@ -82,6 +86,80 @@ export function groupEventsByDay(events: EventPresentation[]): EventDayGroup[] {
 
 export function eventTypeLabel(type: EventPresentation['type']): string {
   return EVENT_TYPE_LABELS[type];
+}
+
+/* ------------------------------------------------------------------------ */
+/* All-day and multi-day Events (ruling R63)                                 */
+/* ------------------------------------------------------------------------ */
+
+type EventSpan = Pick<
+  EventPresentation,
+  'startsAt' | 'endsAt' | 'allDay' | 'dayKey' | 'lastDayKey' | 'multiDay'
+>;
+
+const UNTIL_DAY = new Intl.DateTimeFormat('ro-RO', {
+  timeZone: 'UTC',
+  weekday: 'long',
+  day: 'numeric',
+  month: 'short',
+});
+
+const UNTIL_DAY_WITH_YEAR = new Intl.DateTimeFormat('ro-RO', {
+  timeZone: 'UTC',
+  weekday: 'long',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
+/** `duminică, 26 oct.` for a Bucharest day key; the year when not this one. */
+function untilDayLabel(dayKey: string, now: Date): string {
+  const sameYear =
+    dayKey.slice(0, 4) === (bucharestDayKey(now) ?? '').slice(0, 4);
+  return (sameYear ? UNTIL_DAY : UNTIL_DAY_WITH_YEAR).format(
+    new Date(`${dayKey}T00:00:00Z`),
+  );
+}
+
+/**
+ * The time line of an Event's card: `18:00–20:00` for an evening,
+ * `Toată ziua` for one all-day day, `Toată ziua · până duminică, 26 oct.` for
+ * several, and both ends with their days for a timed Event that crosses
+ * midnight — `vin., 23 oct., 18:00 → dum., 25 oct., 14:00`. An all-day Event
+ * never shows a time.
+ */
+export function eventTimeLabel(
+  event: EventSpan & Pick<EventPresentation, 'startTime' | 'endTime'>,
+  now: Date = new Date(),
+): string {
+  if (event.allDay)
+    return event.multiDay
+      ? `Toată ziua · până ${untilDayLabel(event.lastDayKey, now)}`
+      : 'Toată ziua';
+  if (event.multiDay && event.endsAt)
+    return `${formatBucharestShortDay(event.startsAt, now)}, ${event.startTime} → ${formatBucharestShortDay(event.endsAt, now)}, ${event.endTime ?? ''}`;
+  return event.endTime
+    ? `${event.startTime}–${event.endTime}`
+    : event.startTime;
+}
+
+/**
+ * Whether an Event is behind us, so it takes no RSVP: a timed one-day Event
+ * once it has started (ADR-0008), an all-day or several-day one only once it
+ * has ended — a weekend trip is still answerable on its Saturday.
+ */
+export function eventIsPast(event: EventSpan, now: number): boolean {
+  if ((event.allDay || event.multiDay) && event.endsAt)
+    return Date.parse(event.endsAt) <= now;
+  return Date.parse(event.startsAt) < now;
+}
+
+/** Whether an Event touches a Bucharest day: from its first day to its last. */
+export function eventTouchesDay(
+  event: Pick<EventPresentation, 'dayKey' | 'lastDayKey'>,
+  dayKey: string,
+): boolean {
+  return event.dayKey <= dayKey && dayKey <= event.lastDayKey;
 }
 
 /** The icon beside an Event's Group, chosen by the Group's category. */
@@ -268,7 +346,8 @@ export function dayInRange(
 /**
  * The Work Filter applied to Events: the chosen Group means it and every Group
  * below it (the Event's Group path contains it), the Campaign is the Event's
- * own label, and the range reads the Event's start day.
+ * own label, and the range keeps an Event any of whose days fall in it — a
+ * weekend that began in September is October's too (#1098).
  */
 export function filterEvents(
   events: readonly EventPresentation[],
@@ -281,7 +360,8 @@ export function filterEvents(
         (event.group?.path.includes(groupId) ?? event.groupId === groupId)) &&
       (filter.campaignId === undefined ||
         event.campaignId === filter.campaignId) &&
-      dayInRange(event.dayKey, filter.from, filter.to),
+      (!filter.to || event.dayKey <= filter.to) &&
+      (!filter.from || event.lastDayKey >= filter.from),
   );
 }
 
@@ -546,7 +626,11 @@ export type CalendarDayItems = {
   tasks: CalendarTask[];
 };
 
-/** Events (chronological) and Task chips, by Bucharest day. */
+/**
+ * Events (chronological) and Task chips, by Bucharest day. An Event is on
+ * every day it touches (#1098, R63), so a day lists — and counts — the
+ * weekend it is part of, not only the Events that start on it.
+ */
 export function itemsByDay(
   events: readonly EventPresentation[],
   tasks: readonly CalendarTask[],
@@ -561,9 +645,125 @@ export function itemsByDay(
     return items;
   };
   for (const day of groupEventsByDay([...events]))
-    at(day.dayKey).events.push(...day.events);
+    for (const event of day.events) {
+      const last =
+        event.lastDayKey > event.dayKey ? event.lastDayKey : event.dayKey;
+      for (let key = event.dayKey; key <= last; key = addDays(key, 1))
+        at(key).events.push(event);
+    }
+  for (const items of days.values())
+    items.events.sort(
+      (left, right) =>
+        Date.parse(left.startsAt) - Date.parse(right.startsAt) ||
+        left.id - right.id,
+    );
   for (const task of tasks) at(task.dayKey).tasks.push(task);
   return days;
+}
+
+/**
+ * One week row's piece of a several-day Event (#1098, R63): the month grid
+ * draws it as one bar from `startColumn` over `span` days, in its `lane`
+ * (0 is the top). `continuesBefore` / `continuesAfter` say the Event goes on
+ * past the row's edge — into the week before or after, or off the grid.
+ */
+export type WeekBar = {
+  event: EventPresentation;
+  lane: number;
+  startColumn: number;
+  span: number;
+  continuesBefore: boolean;
+  continuesAfter: boolean;
+};
+
+/**
+ * The several-day Events of one week row, laid out in lanes: earliest first,
+ * a longer bar before a shorter one starting the same day, each in the
+ * lowest lane free over all its days, so overlapping bars stack and never
+ * collide. Clamped to the row: the month's grid is its rows, so a bar never
+ * leaves the visible days.
+ */
+export function layoutWeekBars(
+  week: readonly CalendarDay[],
+  events: readonly EventPresentation[],
+): WeekBar[] {
+  const first = week[0]?.dayKey;
+  const last = week.at(-1)?.dayKey;
+  if (!first || !last) return [];
+  const column = (dayKey: string) =>
+    week.findIndex((day) => day.dayKey === dayKey);
+  const pieces = events
+    .filter(
+      (event) =>
+        event.multiDay && event.dayKey <= last && event.lastDayKey >= first,
+    )
+    .map((event) => {
+      const startColumn = column(event.dayKey < first ? first : event.dayKey);
+      const endColumn = column(
+        event.lastDayKey > last ? last : event.lastDayKey,
+      );
+      return {
+        event,
+        lane: 0,
+        startColumn,
+        span: endColumn - startColumn + 1,
+        continuesBefore: event.dayKey < first,
+        continuesAfter: event.lastDayKey > last,
+      };
+    })
+    .sort(
+      (a, b) =>
+        a.startColumn - b.startColumn ||
+        b.span - a.span ||
+        Date.parse(a.event.startsAt) - Date.parse(b.event.startsAt) ||
+        a.event.id - b.event.id,
+    );
+  // taken[lane][column]: whether a bar already sits there.
+  const taken: boolean[][] = [];
+  for (const piece of pieces) {
+    let lane = 0;
+    const free = (row: boolean[] | undefined) =>
+      !row ||
+      !row
+        .slice(piece.startColumn, piece.startColumn + piece.span)
+        .some(Boolean);
+    while (!free(taken[lane])) lane += 1;
+    const row = (taken[lane] ??= []);
+    for (let index = 0; index < piece.span; index += 1)
+      row[piece.startColumn + index] = true;
+    piece.lane = lane;
+  }
+  return pieces;
+}
+
+/**
+ * What one day cell of the month grid draws (#1098, R63), within `limit`
+ * lines: its bar lanes from the top — a lane the day has no bar in, below
+ * one it has, is left empty so every bar stays level along its row — then
+ * as many of its own chips as still fit; whatever is left, bars in a lane
+ * past the limit included, is the "+N".
+ */
+export function dayCellLayout(
+  column: number,
+  bars: readonly WeekBar[],
+  chipCount: number,
+  limit: number,
+): { lanes: Array<WeekBar | null>; chipsShown: number; overflow: number } {
+  const here = bars.filter(
+    (bar) => bar.startColumn <= column && column < bar.startColumn + bar.span,
+  );
+  const visible = here.filter((bar) => bar.lane < limit);
+  const depth = visible.reduce((most, bar) => Math.max(most, bar.lane + 1), 0);
+  const lanes = Array.from(
+    { length: depth },
+    (_, lane) => visible.find((bar) => bar.lane === lane) ?? null,
+  );
+  const chipsShown = Math.max(0, Math.min(chipCount, limit - depth));
+  return {
+    lanes,
+    chipsShown,
+    overflow: here.length - visible.length + (chipCount - chipsShown),
+  };
 }
 
 /** Romanian counted nouns: 1 eveniment, 2 evenimente, 20 de evenimente. */

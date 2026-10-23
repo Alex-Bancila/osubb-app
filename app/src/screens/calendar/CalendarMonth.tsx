@@ -25,13 +25,16 @@ import {
   awaitsDecision,
   buildMonthGrid,
   calendarTasks,
+  dayCellLayout,
   dayKeyHeading,
   daySummary,
+  eventIsPast,
   eventRangeForDays,
   filterEvents,
   filterTasks,
   gridBounds,
   itemsByDay,
+  layoutWeekBars,
   monthBounds,
   monthLabel,
   monthOfDay,
@@ -43,6 +46,7 @@ import {
   type CalendarTask,
   type EventRelevance,
   type MonthKey,
+  type WeekBar,
 } from './calendar-presentation';
 import { CalendarGroupEmpty } from './CalendarGroupEmpty';
 import EventCard from './EventCard';
@@ -56,6 +60,8 @@ const keepAll = () => true;
 /**
  * **Lună**: the month grid (#692). Each day carries the readable Events that
  * start on it and the member's Task deadlines; tapping a day lists it below.
+ * An Event over several days (#1098, R63) is one bar across them, broken at
+ * the week rows, above the day's own chips; the day lists it on each of them.
  * The Work Filter's range picks the month (its first day's) and bounds the
  * chips; the arrows move a whole month by writing that month as the range.
  */
@@ -138,15 +144,24 @@ export function CalendarMonth({
       groups,
     ],
   );
+  const shownEvents = useMemo(
+    () => filterEvents(events.data ?? [], filter.value).filter(keepEvent),
+    [events.data, filter.value, keepEvent],
+  );
   const byDay = useMemo(
     () =>
       itemsByDay(
-        filterEvents(events.data ?? [], filter.value).filter(keepEvent),
+        shownEvents,
         filterTasks(tasks, filter.value).filter(
           (task) => task.source !== 'managed' || keepGroup(task.groupId),
         ),
       ),
-    [events.data, tasks, filter.value, keepEvent, keepGroup],
+    [shownEvents, tasks, filter.value, keepGroup],
+  );
+  // #1098 (R63): each week row's several-day Events, laid out in lanes.
+  const barsByWeek = useMemo(
+    () => weeks.map((week) => layoutWeekBars(week, shownEvents)),
+    [weeks, shownEvents],
   );
 
   // The day listed below the grid; today's when today is in this month. A day
@@ -185,6 +200,23 @@ export function CalendarMonth({
     selected && (selected.events.length > 0 || selected.tasks.length > 0),
   );
   const heading = selectedDay ? dayKeyHeading(selectedDay) : null;
+
+  function eventChip(event: EventPresentation): MonthChip {
+    return {
+      key: `e${event.id}`,
+      // Only a request opens its review (review I1).
+      reviewId: awaitsDecision(event) ? event.id : null,
+      kind: 'event',
+      title: event.title,
+      color: relevanceColor(event, relevanceOf(event), groups),
+      other: relevanceOf(event) === 'other',
+      cancelled: event.cancelledAt !== null,
+      // A request BC or its author reads before it is
+      // published (spec 2026-10-11): marked, not hidden.
+      pending: event.approvalStatus === 'pending',
+      rejected: event.approvalStatus === 'rejected',
+    };
+  }
   // R40: a chosen Group with no Event or deadline in this month says so in
   // place of an empty grid — once the deadlines have settled, so a slow or
   // failed Task read never reads as "nothing".
@@ -280,29 +312,15 @@ export function CalendarMonth({
               </tr>
             </thead>
             <tbody>
-              {weeks.map((week) => (
+              {weeks.map((week, row) => (
                 <tr key={week[0]?.dayKey}>
-                  {week.map((day) => {
+                  {week.map((day, column) => {
                     const items = byDay.get(day.dayKey);
+                    // A several-day Event is drawn as its bar, not a chip.
                     const chips = [
-                      ...(items?.events ?? []).map((event) => ({
-                        key: `e${event.id}`,
-                        // Only a request opens its review (review I1).
-                        reviewId: awaitsDecision(event) ? event.id : null,
-                        kind: 'event' as const,
-                        title: event.title,
-                        color: relevanceColor(
-                          event,
-                          relevanceOf(event),
-                          groups,
-                        ),
-                        other: relevanceOf(event) === 'other',
-                        cancelled: event.cancelledAt !== null,
-                        // A request BC or its author reads before it is
-                        // published (spec 2026-10-11): marked, not hidden.
-                        pending: event.approvalStatus === 'pending',
-                        rejected: event.approvalStatus === 'rejected',
-                      })),
+                      ...(items?.events ?? [])
+                        .filter((event) => !event.multiDay)
+                        .map(eventChip),
                       ...(items?.tasks ?? []).map((task) => ({
                         key: `t${task.id}`,
                         reviewId: null,
@@ -315,7 +333,12 @@ export function CalendarMonth({
                         rejected: false,
                       })),
                     ];
-                    const overflow = chips.length - CHIPS_PER_DAY;
+                    const cell = dayCellLayout(
+                      column,
+                      barsByWeek[row] ?? [],
+                      chips.length,
+                      CHIPS_PER_DAY,
+                    );
                     return (
                       <td
                         key={day.dayKey}
@@ -346,7 +369,23 @@ export function CalendarMonth({
                             {day.dayNumber}
                           </span>
                           <span className="calendar-chips" aria-hidden="true">
-                            {chips.slice(0, CHIPS_PER_DAY).map((chip) => (
+                            {cell.lanes.map((bar, lane) =>
+                              bar ? (
+                                <BarSegment
+                                  key={`b${bar.event.id}`}
+                                  bar={bar}
+                                  column={column}
+                                  chip={eventChip(bar.event)}
+                                  reviewable={onReview !== undefined}
+                                />
+                              ) : (
+                                <span
+                                  key={`gap${lane}`}
+                                  className="calendar-chip is-lane-gap"
+                                />
+                              ),
+                            )}
+                            {chips.slice(0, cell.chipsShown).map((chip) => (
                               <span
                                 key={chip.key}
                                 data-review-event={
@@ -376,9 +415,9 @@ export function CalendarMonth({
                                 </span>
                               </span>
                             ))}
-                            {overflow > 0 && (
+                            {cell.overflow > 0 && (
                               <span className="calendar-chip-more">
-                                +{overflow}
+                                +{cell.overflow}
                               </span>
                             )}
                           </span>
@@ -456,7 +495,7 @@ export function CalendarMonth({
                           event={event}
                           groups={groups}
                           relevance={relevanceOf(event)}
-                          past={Date.parse(event.startsAt) < now}
+                          past={eventIsPast(event, now)}
                           manageable
                           onReview={onReview}
                         />
@@ -479,6 +518,66 @@ export function CalendarMonth({
         </>
       )}
     </div>
+  );
+}
+
+/** One line of a day cell: an Event's or a Task deadline's chip. */
+type MonthChip = {
+  key: string;
+  reviewId: number | null;
+  kind: 'event' | 'task';
+  title: string;
+  color: string;
+  other: boolean;
+  cancelled: boolean;
+  pending: boolean;
+  rejected: boolean;
+};
+
+/**
+ * A several-day Event's piece in one day cell (#1098, R63): the cells of a
+ * row join into one bar — square where the bar goes on, rounded at its two
+ * ends — and the first day of each row carries its title, drawn across the
+ * days it still covers in that row.
+ */
+function BarSegment({
+  bar,
+  column,
+  chip,
+  reviewable,
+}: {
+  bar: WeekBar;
+  column: number;
+  chip: MonthChip;
+  reviewable: boolean;
+}) {
+  const last = bar.startColumn + bar.span - 1;
+  const head = column === bar.startColumn;
+  return (
+    <span
+      data-review-event={reviewable ? (chip.reviewId ?? undefined) : undefined}
+      data-event-bar={bar.event.id}
+      className={cn(
+        'calendar-chip is-span',
+        head && 'is-span-head',
+        (column > bar.startColumn || bar.continuesBefore) && 'goes-on-before',
+        (column < last || bar.continuesAfter) && 'goes-on-after',
+        column > bar.startColumn && 'joins-before',
+        column < last && 'joins-after',
+        chip.other && 'is-other',
+        chip.cancelled && 'is-cancelled',
+        chip.pending && 'is-pending',
+        chip.rejected && 'is-rejected',
+      )}
+      style={
+        {
+          '--chip-color': chip.color,
+          '--span-days': last - column + 1,
+        } as CSSProperties
+      }
+    >
+      {head && <span className="calendar-chip-text">{chip.title}</span>}
+    </span>
   );
 }
 

@@ -11,6 +11,7 @@ import {
   eventCardId,
   eventGroupIcon,
   eventGroupLabel,
+  eventTimeLabel,
   eventTypeLabel,
   relevanceColor,
   type EventRelevance,
@@ -62,9 +63,10 @@ export default function EventCard({
   // The category icon is painted from the same variable.
   const accent = relevanceColor(event, relevance, groups);
   const titleId = `calendar-event-${event.id}`;
-  const timeLabel = event.endTime
-    ? `${event.startTime}–${event.endTime}`
-    : event.startTime;
+  // #1098 (R63): "Toată ziua", or both ends' days for a timed several-day
+  // Event, which then needs no day of its own in front.
+  const timeLabel = eventTimeLabel(event);
+  const dayShown = showDay && (event.allDay || !event.multiDay);
   // Nobody answers a deadline (B25): it is a date to keep, not a gathering.
   const takesRsvp = event.type !== 'deadline';
   // A cancelled Event stays readable history (ADR-0008): no RSVP, its reason.
@@ -119,7 +121,7 @@ export default function EventCard({
           <dt className="sr-only">{showDay ? 'Data și ora' : 'Ora'}</dt>
           <dd>
             <Clock className="event-detail-icon" aria-hidden="true" />
-            {showDay && (
+            {dayShown && (
               <>
                 <time dateTime={event.dayKey}>
                   {formatBucharestShortDay(event.startsAt)}
