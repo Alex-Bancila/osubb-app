@@ -119,6 +119,23 @@ describe('EventCard — the description as Formatted Text (R60)', () => {
     ).toEqual(['unu', 'doi']);
   });
 
+  it('reads a Titlu in the description as text, so the card title stays its only heading (ruling 22)', () => {
+    render(
+      <EventCard event={event({ description: '# Program\n\nLa 18:00.' })} />,
+    );
+
+    const card = screen.getByRole('article', { name: 'Ședință Educațional' });
+    expect(
+      within(card)
+        .getAllByRole('heading')
+        .map((heading) => heading.textContent),
+    ).toEqual(['Ședință Educațional']);
+    const description = card.querySelector('.event-description');
+    expect(
+      description?.querySelector('p.formatted-text-title'),
+    ).toHaveTextContent('Program');
+  });
+
   it('shows no description block for an Event without one', () => {
     render(<EventCard event={event({ description: null })} />);
 

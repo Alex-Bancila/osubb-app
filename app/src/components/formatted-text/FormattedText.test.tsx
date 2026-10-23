@@ -190,6 +190,106 @@ describe('FormattedText, full (ruling R60)', () => {
     ).toEqual(['text', 'mai mult']);
   });
 
+  it('reads a Titlu and a Subtitlu as text with no heading role under headings="text" (ruling 22)', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <FormattedText
+          text={'# Titlu\n## Sub\n### Mic\ntext'}
+          view="full"
+          headings="text"
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.queryAllByRole('heading')).toEqual([]);
+    expect(container.querySelector('h1, h2, h3, h4, h5, h6')).toBeNull();
+    expect(container.querySelector('p.formatted-text-title')).toHaveTextContent(
+      'Titlu',
+    );
+    expect(
+      [...container.querySelectorAll('p.formatted-text-subtitle')].map(
+        (p) => p.textContent,
+      ),
+    ).toEqual(['Sub', 'Mic']);
+    expect(container.querySelectorAll('p')).toHaveLength(4);
+  });
+
+  it('keeps the dialect check and the empty-heading rule under headings="text"', () => {
+    for (const typed of [
+      'Titlu\n===',
+      '#voluntariat\n---',
+      '#1\n===',
+      '# ',
+      '## ',
+      '#',
+    ]) {
+      const { container } = render(
+        <MemoryRouter>
+          <FormattedText text={typed} view="full" headings="text" />
+        </MemoryRouter>,
+      );
+      expect(
+        container.querySelector(
+          '.formatted-text-title, .formatted-text-subtitle',
+        ),
+      ).toBeNull();
+    }
+    const { container } = render(
+      <MemoryRouter>
+        <FormattedText
+          text={'#\ntext\n\n## \nmai mult'}
+          view="full"
+          headings="text"
+        />
+      </MemoryRouter>,
+    );
+    expect(
+      [...container.querySelectorAll('p')].map((p) => p.textContent),
+    ).toEqual(['text', 'mai mult']);
+  });
+
+  it('reads a Titlu with its bold and links under headings="text", and reads a quote’s Titlu too', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <FormattedText
+          text={'# Cu **bold**\n\n> ## În citat'}
+          view="full"
+          headings="text"
+        />
+      </MemoryRouter>,
+    );
+    expect(
+      container.querySelector('p.formatted-text-title strong'),
+    ).toHaveTextContent('bold');
+    expect(
+      container.querySelector('blockquote p.formatted-text-subtitle'),
+    ).toHaveTextContent('În citat');
+    expect(screen.queryAllByRole('heading')).toEqual([]);
+  });
+
+  it('keeps headings="outline" the default, byte for byte', () => {
+    const typed = '# Titlu\n## Sub\ntext';
+    const plain = full(typed).innerHTML;
+    const { container } = render(
+      <MemoryRouter>
+        <FormattedText text={typed} view="full" headings="outline" />
+      </MemoryRouter>,
+    );
+    expect(container.innerHTML).toBe(plain);
+    expect(plain).toBe(
+      '<div class="formatted-text"><h3>Titlu</h3><h4>Sub</h4><p>text</p></div>',
+    );
+  });
+
+  it('never makes a heading in a preview, whatever headings says', () => {
+    for (const headings of ['outline', 'text'] as const) {
+      const { container } = render(
+        <FormattedText text="# Titlu" view="preview" headings={headings} />,
+      );
+      expect(container.querySelector('h1, h2, h3, h4, p')).toBeNull();
+      expect(container).toHaveTextContent('Titlu');
+    }
+  });
+
   it('reads quotes, numbered and nested lists', () => {
     const container = full('> citat\n\n3. trei\n4. patru\n\n- unu\n  - doi');
     expect(container.querySelector('blockquote')).toHaveTextContent('citat');
