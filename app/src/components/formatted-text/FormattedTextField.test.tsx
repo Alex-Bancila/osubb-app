@@ -1,3 +1,4 @@
+import type { Editor } from '@tiptap/core';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
@@ -119,50 +120,32 @@ describe('FormattedTextField (R60, §C)', () => {
     await waitFor(() => expect(field).toHaveFocus());
   });
 
-  it('sends the first key of a burst at once, the rest once typing rests (ruling 35)', async () => {
+  it('gives back the stored text when a change is put back (ruling 36)', async () => {
+    // The editor writes three line breaks as two.
+    const legacy = 'Salut!\n\n\nȘedința';
     const onChange = vi.fn();
-    render(<Form initial="**a**" onChange={onChange} />);
-    const field = await findFormattedText('Mesaj');
-    // Real timers: Testing Library's async wrapper waits on a `setTimeout`
-    // that Vitest's fake timers would hold for ever.
-    const user = userEvent.setup();
-    await user.click(field);
-
-    // One burst: within one `keyboard` call the next key always comes before
-    // the burst's timer, however slow the machine.
-    await user.keyboard('bcd');
-
-    // The first key went at once and alone; the rest as one once typing
-    // rested. jsdom has no layout, so the press left the caret at the start,
-    // in the bold run.
-    await waitFor(() =>
-      expect(onChange.mock.calls).toEqual([['**ba**'], ['**bcda**']]),
-    );
-  });
-
-  it('sends a change still waiting when the field closes', async () => {
-    const onChange = vi.fn();
-    const view = render(<Form onChange={onChange} />);
+    const onSubmit = vi.fn();
+    render(<Form initial={legacy} onChange={onChange} onSubmit={onSubmit} />);
     const field = await findFormattedText('Mesaj');
     const user = userEvent.setup();
     await user.click(field);
 
-    await user.keyboard('ab');
-    view.unmount();
+    await user.keyboard('x');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0]?.[0]).toContain('x');
+    await user.keyboard('{Backspace}');
+    await user.click(screen.getByLabelText('Alt câmp'));
 
-    expect(onChange.mock.calls).toEqual([['a'], ['ab']]);
+    expect(onChange).toHaveBeenLastCalledWith(legacy);
+    await user.click(screen.getByRole('button', { name: 'Publică' }));
+    expect(onSubmit).toHaveBeenCalledWith(legacy);
   });
 
-  it('drops a change still waiting when the form resets the text (ruling 35)', async () => {
+  it('gives back the text a reset gave, when a change is put back (ruling 36)', async () => {
+    const legacy = 'Salut!\n\n\nȘedința';
     const onChange = vi.fn();
-    // The form's own reset, called from the test with no press (a press
-    // would blur the text and send it first).
-    const form = { reset: () => {} };
     function Resettable() {
-      const [body, setBody] = useState('');
-      useEffect(() => {
-        form.reset = () => setBody('');
-      });
+      const [body, setBody] = useState('vechi');
       return (
         <>
           <label id="body-label" htmlFor="body">
@@ -178,28 +161,137 @@ describe('FormattedTextField (R60, §C)', () => {
               setBody(next);
             }}
           />
+          <button type="button" onClick={() => setBody(legacy)}>
+            Reia
+          </button>
           <input aria-label="Alt câmp" />
         </>
       );
     }
-    const view = render(<Resettable />);
+    render(<Resettable />);
+    const field = await findFormattedText('Mesaj');
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Reia' }));
+    expect(field).toHaveTextContent('Salut!Ședința');
+
+    await user.click(field);
+    await user.keyboard('x{Backspace}');
+    await user.click(screen.getByLabelText('Alt câmp'));
+
+    expect(onChange).toHaveBeenLastCalledWith(legacy);
+  });
+
+  describe('on a fake clock', () => {
+    // The fake clock moves 20 ms at a time, and only between tasks: within
+    // one `keyboard` call (user-event moves it 0 ms between keys) it stands
+    // still, and after one it has moved a step at most, so however slow the
+    // machine a burst ends only when the test moves the clock past 150 ms.
+    // It still moves on its own, as Testing Library's wrapper needs: that
+    // waits on a `setTimeout` it advances only under Jest.
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function fakeClock() {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      return userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    }
+
+    it('sends the first key of a burst at once, the rest once typing rests (ruling 35)', async () => {
+      const onChange = vi.fn();
+      render(<Form initial="**a**" onChange={onChange} />);
+      const field = await findFormattedText('Mesaj');
+      const user = fakeClock();
+      await user.click(field);
+
+      await user.keyboard('bcd');
+
+      // The first key went at once and alone. jsdom has no layout, so the
+      // press left the caret at the start, in the bold run.
+      expect(onChange.mock.calls).toEqual([['**ba**']]);
+
+      // The rest went as one once typing rested.
+      act(() => vi.advanceTimersByTime(150));
+      expect(onChange.mock.calls).toEqual([['**ba**'], ['**bcda**']]);
+    });
+
+    it('gives back the stored text when the field closes on a change put back (ruling 36)', async () => {
+      const legacy = 'Salut!\n\n\nȘedința';
+      const onChange = vi.fn();
+      const view = render(<Form initial={legacy} onChange={onChange} />);
+      const field = await findFormattedText('Mesaj');
+      const user = fakeClock();
+      await user.click(field);
+
+      await user.keyboard('x{Backspace}');
+      // The key went at once; putting it back waits for typing to rest.
+      expect(onChange).toHaveBeenCalledTimes(1);
+      view.unmount();
+
+      expect(onChange).toHaveBeenLastCalledWith(legacy);
+    });
+
+    it('drops a change still waiting when the form resets the text (ruling 35)', async () => {
+      const onChange = vi.fn();
+      // The form's own reset, called from the test with no press (a press
+      // would blur the text and send it first).
+      const form = { reset: () => {} };
+      function Resettable() {
+        const [body, setBody] = useState('');
+        useEffect(() => {
+          form.reset = () => setBody('');
+        });
+        return (
+          <>
+            <label id="body-label" htmlFor="body">
+              Mesaj
+            </label>
+            <FormattedTextField
+              id="body"
+              labelId="body-label"
+              name="body"
+              value={body}
+              onChange={(next) => {
+                onChange(next);
+                setBody(next);
+              }}
+            />
+            <input aria-label="Alt câmp" />
+          </>
+        );
+      }
+      const view = render(<Resettable />);
+      const field = await findFormattedText('Mesaj');
+      const user = fakeClock();
+      await user.click(field);
+      await user.keyboard('ab');
+      // The first key went at once; "ab" waits for typing to rest.
+      expect(onChange.mock.calls).toEqual([['a']]);
+
+      // The form empties the field (Escape closing the compose sheet) before
+      // typing rests.
+      act(() => form.reset());
+      expect(field.textContent).toBe('');
+
+      // Neither the settling, nor the blur, nor closing the field sends "ab".
+      act(() => vi.advanceTimersByTime(300));
+      await user.click(screen.getByLabelText('Alt câmp'));
+      view.unmount();
+      expect(onChange.mock.calls).toEqual([['a']]);
+    });
+  });
+
+  it('sends a change still waiting when the field closes', async () => {
+    const onChange = vi.fn();
+    const view = render(<Form onChange={onChange} />);
     const field = await findFormattedText('Mesaj');
     const user = userEvent.setup();
     await user.click(field);
+
     await user.keyboard('ab');
-    // The first key went at once; "ab" waits for typing to rest.
-    expect(onChange.mock.calls).toEqual([['a']]);
-
-    // The form empties the field (Escape closing the compose sheet) before
-    // typing rests.
-    act(() => form.reset());
-    expect(field.textContent).toBe('');
-
-    // Neither the settling, nor the blur, nor closing the field sends "ab".
-    await act(() => new Promise((done) => setTimeout(done, 300)));
-    await user.click(screen.getByLabelText('Alt câmp'));
     view.unmount();
-    expect(onChange.mock.calls).toEqual([['a']]);
+
+    expect(onChange.mock.calls).toEqual([['a'], ['ab']]);
   });
 
   it('submits what was just typed, when the submit button follows at once (ruling 33)', async () => {
@@ -288,6 +380,31 @@ describe('FormattedTextField (R60, §C)', () => {
     expect(
       within(bar as HTMLElement).getByRole('button', { name: 'Stiluri' }),
     ).toBeInTheDocument();
+  });
+
+  it('scrolls the caret clear of the top toolbar, and only where it shows', async () => {
+    // What ProseMirror reads when it scrolls the caret into view; jsdom lays
+    // nothing out to scroll.
+    const view = (field: HTMLElement) =>
+      (field as HTMLElement & { editor: Editor }).editor.view;
+    const mouse = render(<Form initial="x" />);
+    const field = await findFormattedText('Mesaj');
+    expect(view(field).someProp('scrollMargin')).toEqual({
+      top: 60,
+      right: 5,
+      bottom: 5,
+      left: 5,
+    });
+    expect(view(field).someProp('scrollThreshold')).toEqual(
+      view(field).someProp('scrollMargin'),
+    );
+    mouse.unmount();
+
+    touchDevice();
+    render(<Form initial="x" />);
+    const touched = await findFormattedText('Mesaj');
+    expect(view(touched).someProp('scrollMargin')).toBeUndefined();
+    expect(view(touched).someProp('scrollThreshold')).toBeUndefined();
   });
 
   it('sends a change made without the text’s focus at once (the Aa panel)', async () => {

@@ -956,7 +956,6 @@ function without(
   });
 }
 
-/** `line` written in the first way both readers read as `line`, or `null`. */
 /**
  * How many ways of writing one line the search reads back before it settles
  * for the line's links only (ruling 27). The editor writes its whole text on
@@ -1065,10 +1064,10 @@ function writeLine(line: Line, prefix: string, level: Level): LineWritten {
 }
 
 /**
- * The search for `line`: its own marks where the dialect holds them, a mark
+ * The search for `line`: its own marks where the dialect holds them, a style
  * off the fewest characters where it does not, within `budget`. The runs
  * nearest where the readers first disagree are tried first. `null` when the
- * budget is spent or no mark is left to take off.
+ * budget is spent or no style is left to take off.
  */
 function search(
   line: Line,
@@ -1080,27 +1079,23 @@ function search(
     const { written, at } = attempt(current, prefix, budget);
     if (written) return { markdown: written.markdown, line: current };
     if (budget.left <= 0) return null;
-    // A Text Link is the last mark to go: an address unlinked would be
-    // linked again when the text is read back. The runs nearest where the
-    // readers first disagree are tried first.
-    const all = runsIn(current);
-    const styles = all.filter(({ key }) => !key.startsWith(LINK));
-    const runs = (styles.length ? styles : all).sort(
-      (a, b) => distance(a.run, at) - distance(b.run, at),
-    );
+    // A Text Link never comes off here: once only links are left, the last
+    // resort (`writeLine`) writes them, every one kept. A line that still
+    // disagrees then holds a link whose address the reader reads otherwise
+    // (`\*` in it, from pasted HTML), and dropping the link would lose it.
+    const runs = runsIn(current)
+      .filter(({ key }) => !key.startsWith(LINK))
+      .sort((a, b) => distance(a.run, at) - distance(b.run, at));
     const [first] = runs;
     if (!first) return null;
-    // Once a style comes off, an address it split is linked whole. Once
-    // only links are left, a link that comes off stays off (its `:` is
-    // then escaped, so the reader does not link it either): every step
-    // takes a mark away, so the search ends.
-    const step = styles.length ? relinked : normalized;
-    for (const option of lighterLines(current, runs, step)) {
+    // Once a style comes off, an address it split is linked whole: every
+    // step takes a style away, so the search ends.
+    for (const option of lighterLines(current, runs)) {
       const fixed = attempt(option, prefix, budget).written;
       if (fixed) return { markdown: fixed.markdown, line: option };
       if (budget.left <= 0) return null;
     }
-    current = step(without(current, first.key, first.run));
+    current = relinked(without(current, first.key, first.run));
   }
 }
 
@@ -1108,19 +1103,15 @@ function search(
  * The lines one step lighter than `line`, run by run in the order given,
  * built one at a time as the search reads them (most are never read within
  * its budget): the run's mark off the punctuation at its edges, then off the
- * whole run.
+ * whole run, with every address it split linked whole.
  */
-function* lighterLines(
-  line: Line,
-  runs: readonly Run[],
-  step: (line: Line) => Line,
-): Generator<Line> {
+function* lighterLines(line: Line, runs: readonly Run[]): Generator<Line> {
   for (const run of runs) {
     for (const option of [
       ...offPunctuation(line, run),
       without(line, run.key, run.run),
     ]) {
-      const lighter = step(option);
+      const lighter = relinked(option);
       if (!sameLine(lighter, line)) yield lighter;
     }
   }
@@ -1270,6 +1261,11 @@ function writeBlock(node: JSONContent, level: Level): Written {
  * text depends on the block alone; the whole-text check still runs each time.
  */
 const writtenBlocks = new Map<string, Written>();
+
+/** Forget the blocks already written, so a test counts a write whole; for tests only. */
+export function resetWrittenBlocksForTests() {
+  writtenBlocks.clear();
+}
 
 function writeTopBlock(node: JSONContent): Written {
   const key = JSON.stringify(node);

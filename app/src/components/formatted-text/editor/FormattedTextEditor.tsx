@@ -15,6 +15,7 @@ import {
   type KeyboardBarMode,
 } from './FormattedTextKeyboardBar';
 import { FormattedTextToolbar } from './FormattedTextToolbar';
+import { parseFormattedText, serializeFormattedText } from './markdown';
 
 /**
  * How long typing rests before the rest of a burst goes to the form. Writing
@@ -45,6 +46,14 @@ const TOOLBAR_SURFACE =
   'dark:bg-[color-mix(in_srgb,var(--input)_30%,var(--card))] group-has-[.ProseMirror[contenteditable=false]]/field:bg-muted';
 
 /**
+ * Where the caret is scrolled to when it nears the surface's edges, in
+ * pixels: at the top, clear of the sticky toolbar (about 53 px tall), which
+ * would otherwise cover it. ProseMirror's own margin is 5. The keyboard bar
+ * on touch sits outside the scroller and needs none.
+ */
+const CLEAR_OF_TOOLBAR = { top: 60, right: 5, bottom: 5, left: 5 };
+
+/**
  * Whether focus at `target` is still with the field: its text, its toolbar or
  * keyboard bar, or a panel one of them opened (the Stil menu and the link
  * dialog, drawn in portals and marked `data-formatted-text-panel`).
@@ -73,6 +82,31 @@ export type FormattedTextEditorProps = {
   describedBy?: string;
 };
 
+/** A text, and that text as the editor writes it. */
+type Canonical = { of: string; markdown: string };
+
+/**
+ * What the form gets for `markdown`, the editor's document: `given`, the text
+ * the form gave the field, byte for byte when the document is that text again
+ * (ruling 36). A legacy text the editor writes differently (three line
+ * breaks, a `1)` list) that the Member touched and put back reads the same
+ * either way, so it is not rewritten, recorded as changed or announced to an
+ * audience. `memo` keeps `given` as the editor writes it, worked out once.
+ */
+function toForm(
+  markdown: string,
+  given: string,
+  memo: { current: Canonical | null },
+): string {
+  if (markdown === given) return markdown;
+  if (memo.current?.of !== given)
+    memo.current = {
+      of: given,
+      markdown: serializeFormattedText(parseFormattedText(given)),
+    };
+  return markdown === memo.current.markdown ? given : markdown;
+}
+
 function assignRef(ref: Ref<HTMLElement> | undefined, element: HTMLElement) {
   if (typeof ref === 'function') {
     ref(element);
@@ -93,11 +127,11 @@ function assignRef(ref: Ref<HTMLElement> | undefined, element: HTMLElement) {
  *
  * The text goes to the form only after a change to the document, so a text
  * opened and left alone is submitted exactly as it was stored, even where the
- * editor would write it differently. The first change of a burst goes at
- * once, so a Save that a change enables is never left waiting (ruling 35);
- * the rest go when typing rests, and at once on a blur, when a change is made
- * without the text's focus (the Aa panel, the link dialog) and when the field
- * closes.
+ * editor would write it differently; so is one changed and then put back
+ * (ruling 36). The first change of a burst goes at once, so a Save that a
+ * change enables is never left waiting (ruling 35); the rest go when typing
+ * rests, and at once on a blur, when a change is made without the text's
+ * focus (the Aa panel, the link dialog) and when the field closes.
  *
  * The form checks the field once its text has reached it, and only when
  * focus leaves the field: a move into the field's own panels (Aa, the Stil
@@ -133,6 +167,10 @@ export default function FormattedTextEditor({
 
   /** The Markdown the form last had from this field, or gave it. */
   const sent = useRef(value);
+  /** The text the form last gave the field: at its opening, or a reset. */
+  const original = useRef(value);
+  /** `original` as the editor writes it, once a change has needed it. */
+  const canonical = useRef<Canonical | null>(null);
   /** A change the form has not had yet. */
   const unsent = useRef(false);
   /** Running while typing goes on: until it ends, a change waits. */
@@ -140,7 +178,7 @@ export default function FormattedTextEditor({
 
   function send(editor: Editor) {
     unsent.current = false;
-    const markdown = editor.getMarkdown();
+    const markdown = toForm(editor.getMarkdown(), original.current, canonical);
     sent.current = markdown;
     latest.current.onChange(markdown);
   }
@@ -198,8 +236,12 @@ export default function FormattedTextEditor({
         ...(describedBy && { 'aria-describedby': describedBy }),
         class: 'formatted-text min-h-24 px-4 py-2.5 outline-none',
       },
+      ...(!coarse && {
+        scrollMargin: CLEAR_OF_TOOLBAR,
+        scrollThreshold: CLEAR_OF_TOOLBAR,
+      }),
     }),
-    [id, labelId, required, invalid, describedBy],
+    [id, labelId, required, invalid, describedBy, coarse],
   );
 
   const editor = useEditor({
@@ -248,7 +290,9 @@ export default function FormattedTextEditor({
       settle.current = undefined;
       if (!unsent.current || editor.isDestroyed) return;
       unsent.current = false;
-      latest.current.onChange(editor.getMarkdown());
+      latest.current.onChange(
+        toForm(editor.getMarkdown(), original.current, canonical),
+      );
     },
     [editor],
   );
@@ -261,6 +305,7 @@ export default function FormattedTextEditor({
     settle.current = undefined;
     unsent.current = false;
     sent.current = value;
+    original.current = value;
     editor.commands.setContent(value, {
       contentType: 'markdown',
       emitUpdate: false,

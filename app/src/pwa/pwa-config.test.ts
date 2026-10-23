@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createPwaOptions } from './pwa-config';
 import {
+  isCacheableEditorChunk,
   isEditorChunk,
   NAVIGATION_DENYLIST,
   supabaseOriginPattern,
@@ -98,6 +99,27 @@ describe('service worker cache boundary', () => {
     expect(chunk(`${origin}/assets/FormattedTextEditor-a1.css`)).toBe(false);
     expect(chunk(`${origin}/assets/index-a1.js`)).toBe(false);
     expect(chunk(`${origin}/x/assets/FormattedTextEditor-a1.js`)).toBe(false);
+  });
+
+  it('keeps an answer for the editor’s chunk only when it is a script (R60)', () => {
+    const answer = (status: number, type?: string) =>
+      isCacheableEditorChunk(
+        new Response(null, {
+          status,
+          headers: type ? { 'content-type': type } : {},
+        }),
+      );
+
+    expect(answer(200, 'application/javascript')).toBe(true);
+    expect(answer(200, 'application/javascript; charset=utf-8')).toBe(true);
+    expect(answer(200, 'text/javascript')).toBe(true);
+
+    // After a Release, Pages answers a removed chunk with the app's page.
+    expect(answer(200, 'text/html; charset=utf-8')).toBe(false);
+    expect(answer(200, 'application/javascript-x')).toBe(false);
+    expect(answer(200)).toBe(false);
+    expect(answer(404, 'application/javascript')).toBe(false);
+    expect(answer(503, 'text/javascript')).toBe(false);
   });
 
   it('keeps emailed-link landings out of the navigation fallback', () => {

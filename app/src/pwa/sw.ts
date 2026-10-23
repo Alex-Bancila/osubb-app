@@ -20,6 +20,7 @@ import { NOTIFICATION_BADGE, NOTIFICATION_ICON } from './app-icons';
 import { openTappedNotification, parsePushPayload } from './push-payload';
 import { renewSubscription } from './push-renewal';
 import {
+  isCacheableEditorChunk,
   isEditorChunk,
   NAVIGATION_DENYLIST,
   supabaseOriginPattern,
@@ -46,12 +47,19 @@ if (supabaseRequests) registerRoute(supabaseRequests, new NetworkOnly());
 /* The Formatted Text editor is not precached (R60): the first form that opens
    it fetches it, and from then on it comes from its own cache. A file's name
    carries its hash, so a cached one never goes stale; the two newest are
-   kept, the one in use and the one a new release brings. */
+   kept, the one in use and the one a new release brings. Only a script is
+   kept: the page Pages sends for a chunk a Release removed is not. */
 registerRoute(
   ({ url }) => isEditorChunk(url, self.location.origin),
   new CacheFirst({
     cacheName: 'osubb-editor',
-    plugins: [new ExpirationPlugin({ maxEntries: 2 })],
+    plugins: [
+      {
+        cacheWillUpdate: async ({ response }) =>
+          isCacheableEditorChunk(response) ? response : null,
+      },
+      new ExpirationPlugin({ maxEntries: 2 }),
+    ],
   }),
 );
 

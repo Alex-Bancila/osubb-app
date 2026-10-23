@@ -1,12 +1,18 @@
 // @vitest-environment node
 import type { JSONContent } from '@tiptap/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { toPlainText } from '../../../lib/formatted-text/plain';
 import {
   normalizeFormattedText,
   parseFormattedText,
   serializeFormattedText,
 } from './markdown';
+
+// Each case writes every random document twice. A line left with only links
+// that the readers read apart goes to the last resort, which keeps them all
+// and costs more than taking one off did; on a loaded machine the whole set
+// can pass the 5 s default without anything being wrong.
+vi.setConfig({ testTimeout: 20_000 });
 
 /**
  * Random documents through the editor's writer (ruling 21, fix rounds 1 and

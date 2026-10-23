@@ -1,9 +1,10 @@
 // @vitest-environment node
 import type { JSONContent } from '@tiptap/core';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   LINE_CHECKS,
   parseFormattedText,
+  resetWrittenBlocksForTests,
   serializeFormattedText,
 } from './markdown';
 
@@ -25,7 +26,10 @@ vi.mock('../../../lib/formatted-text/lex', async (importOriginal) => {
   };
 });
 
-afterEach(() => {
+// The writer keeps the blocks it has written: a test that wrote a document
+// an earlier test wrote would count none of its search.
+beforeEach(() => {
+  resetWrittenBlocksForTests();
   lexed.calls = 0;
 });
 

@@ -664,6 +664,49 @@ it('opens Salvează on the first key typed in the Descriere, with no wait (R60, 
 
   expect(save).toBeEnabled();
 });
+it('closes Salvează again when a Descriere typed in is put back (R60, ruling 36)', async () => {
+  // A description written before R60: the editor writes its three line
+  // breaks as two.
+  render(
+    <TaskEditControl
+      task={{ ...task, description: 'Salut!\n\n\nȘedința' }}
+      canManage
+    />,
+  );
+  const user = await openEditor();
+  const save = screen.getByRole('button', { name: 'Salvează modificările' });
+
+  await user.type(await findFormattedText('Descriere (opțional)'), 'x');
+  expect(save).toBeEnabled();
+  await user.keyboard('{Backspace}');
+  await user.click(screen.getByLabelText('Titlu'));
+
+  expect(save).toBeDisabled();
+});
+it('saves a Descriere it never changed exactly as stored (R60, Review Focus 1)', async () => {
+  // Markers the editor would write escaped: `* ` opens a list in the dialect
+  // and `5*3*2` holds two asterisks.
+  const legacy = '* unu\n5*3*2';
+  render(<TaskEditControl task={{ ...task, description: legacy }} canManage />);
+  const user = await openEditor();
+  // The editor itself holds the text, not the read-only text area it shows
+  // while its chunk loads.
+  await findFormattedText('Descriere (opțional)');
+
+  await user.type(screen.getByLabelText('Titlu'), ' nou');
+  await user.click(
+    screen.getByRole('button', { name: 'Salvează modificările' }),
+  );
+
+  await waitFor(() =>
+    expect(state.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: `${task.title} nou`,
+        description: legacy,
+      }),
+    ),
+  );
+});
 it('puts a server refusal of the Descriere under it (R60)', async () => {
   state.mutate.mockRejectedValueOnce({
     code: 'PT400',

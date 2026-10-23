@@ -651,3 +651,65 @@ describe('a mark comes off the fewest characters (fix round 1)', () => {
     expect(toPlainText(markdown)).toBe('ab');
   });
 });
+
+describe('cases the final review found', () => {
+  it.each([
+    ['alone', [] as JSONContent[]],
+    ['beside bold', [text(' azi', bold)]],
+  ])(
+    'keeps a Text Link whose address the reader reads otherwise, %s',
+    (_, after) => {
+      // An address from pasted HTML with a backslash in it: marked reads
+      // `\*` in an address as `*`, so no way of writing the line reads back
+      // as it is. The last resort keeps the link, its address as marked
+      // reads it.
+      const markdown = written(
+        doc(
+          paragraph(
+            text('vezi '),
+            text('formular', link(String.raw`https://x.ro/a\*b`)),
+            ...after,
+          ),
+        ),
+      );
+      expect(markdown).toContain(
+        String.raw`vezi [formular](https://x.ro/a\*b)`,
+      );
+      expect(reader(markdown)).toMatch(
+        /vezi <a href="https:\/\/x\.ro\/a\*b"[^>]*>formular</,
+      );
+      expect(toPlainText(markdown)).toMatch(/^vezi formular/);
+    },
+  );
+
+  it.each([
+    [
+      'its own words',
+      text('formular', link('https://x.ro/a(b)')),
+      'vezi [formular](https://x.ro/a%28b%29)',
+      'vezi formular',
+    ],
+    [
+      'its address as typed',
+      text('https://x.ro/a(b)', link('https://x.ro/a(b)')),
+      'vezi [https://x.ro/a(b)](https://x.ro/a%28b%29)',
+      'vezi https://x.ro/a(b)',
+    ],
+    [
+      'its address as written, bare',
+      text('https://x.ro/a%28b%29', link('https://x.ro/a(b)')),
+      'vezi https://x.ro/a%28b%29',
+      'vezi https://x.ro/a%28b%29',
+    ],
+  ])(
+    'writes the parentheses of a Text Link’s address as %%28 and %%29, under %s',
+    (_, words, markdown, plain) => {
+      // The stripper's Text Link ends at the first `)`.
+      expect(stableWrite(doc(paragraph(text('vezi '), words)))).toBe(markdown);
+      expect(reader(markdown)).toMatch(
+        /vezi <a href="https:\/\/x\.ro\/a%28b%29"/,
+      );
+      expect(toPlainText(markdown)).toBe(plain);
+    },
+  );
+});
