@@ -20,7 +20,7 @@ export type Capabilities = {
   manageTasks: boolean;
   /** Rank BCE+ (the `member_contacts()` gate the volunteer directory needs). */
   seeDirectory: boolean;
-  /** Rank BCE+ (leaderboard, Department Cup, member history). */
+  /** Rank BCE+ (leaderboard, Department Cup, member history, every Event's Cine participă — R61). */
   seeLeadership: boolean;
   manageRoles: boolean;
   provisionMembers: boolean;

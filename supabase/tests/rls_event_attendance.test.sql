@@ -6,7 +6,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(26);
+select plan(30);
 
 
 -- ==================== Structure and grants ====================
@@ -51,11 +51,19 @@ insert into pg_temp.fixture_member_departments (member_id, dept_id) values
 -- to stay the one Event hidden from a level-1 Voluntar below (the fixture
 -- this file needs for "a member cannot RSVP to an event hidden by event
 -- RLS"). Colleague attendance is read by an Event's managers since #934
--- (event_rsvp_managers.test.sql); no rank reads it here, whatever the token says.
+-- (event_rsvp_managers.test.sql) and by every live BCE and above since R61
+-- (#1096); below BCE no rank reads it, whatever the token says.
 insert into events (title, type, group_id, min_level, starts_at) values
   ('RSVP organizație', 'sedinta', pg_temp.dept_group('org'), 0, now() + interval '1 day'),
   ('RSVP educațional', 'sedinta', pg_temp.dept_group('edu'), 0, now() + interval '2 days'),
   ('RSVP imagine', 'sedinta', pg_temp.dept_group('pr'), 3, now() + interval '3 days');
+
+-- R61 (#1096): a Private Group nobody here belongs to, so its Event is hidden
+-- from a BCE (private.can_see_group admits level >= 6 and roster rows only).
+insert into groups (name, category, is_private) values ('Grup privat #1096', 'team', true);
+insert into events (title, type, group_id, min_level, starts_at)
+select 'RSVP privat', 'sedinta', id, 0, now() + interval '4 days'
+  from groups where name = 'Grup privat #1096';
 
 insert into event_attendance (event_id, member_id, status)
 select id, 'a1000000-0000-0000-0000-000000000063'::uuid, 'going'
@@ -66,6 +74,9 @@ select id, 'b2000000-0000-0000-0000-000000000063'::uuid, 'declined'
 insert into event_attendance (event_id, member_id, status)
 select id, 'b2000000-0000-0000-0000-000000000063'::uuid, 'going'
   from events where title = 'RSVP imagine';
+insert into event_attendance (event_id, member_id, status)
+select id, 'b2000000-0000-0000-0000-000000000063'::uuid, 'going'
+  from events where title = 'RSVP privat';
 
 -- Keep ids available after SET ROLE. Looking them up through events as an
 -- unauthorized persona could return no rows and make a write test pass hollow.
@@ -73,7 +84,8 @@ create temp table attendance_fx as
 select
   (select id from events where title = 'RSVP organizație') as org_event_id,
   (select id from events where title = 'RSVP educațional') as edu_event_id,
-  (select id from events where title = 'RSVP imagine') as pr_event_id;
+  (select id from events where title = 'RSVP imagine') as pr_event_id,
+  (select id from events where title = 'RSVP privat') as private_event_id;
 grant select on attendance_fx to authenticated;
 
 -- ==================== Active member: read and self-write ====================
@@ -159,30 +171,47 @@ select pg_temp.test_login('c3000000-0000-0000-0000-000000000063', '{"member_role
 select is((select count(*) from event_attendance),0::bigint,'level 4 cannot read colleague attendance');
 reset role;
 -- M4: the level is read from the live Profile, so a level-5 token over a vot
--- Profile reads nothing. Since #934 a real BCE Profile reads nothing either:
--- colleague answers belong to the Event's managers (event_rsvp_managers.test.sql).
+-- Profile reads nothing. R61 (#1096): a live BCE Profile reads every answer on
+-- every Event they can read, managing none of them, and nothing on an Event
+-- hidden from them.
 select pg_temp.test_login('c3000000-0000-0000-0000-000000000063', '{"member_role":"bce","member_level":5}');
 select is((select count(*) from event_attendance),0::bigint,'a stale level-5 token over a vot Profile reads no colleague attendance');
 reset role;
 update profiles set role = 'bce' where id = 'c3000000-0000-0000-0000-000000000063';
 select pg_temp.test_login('c3000000-0000-0000-0000-000000000063', '{"member_role":"bce","member_level":5}');
-select is((select count(*) from event_attendance),0::bigint,'#934: a live BCE who manages none of these Events reads no colleague attendance -- the level >= 5 limb is gone');
+select ok(not private.can_manage_event((select org_event_id from attendance_fx)),
+  'R61: the live BCE manages none of these Events');
+select is(
+  (select count(*) from event_attendance
+    where event_id = (select org_event_id from attendance_fx)),
+  2::bigint, 'R61: a live BCE who manages nothing reads every colleague''s answer on a readable Event');
+select is(
+  (select status from event_attendance
+    where event_id = (select pr_event_id from attendance_fx)
+      and member_id = 'b2000000-0000-0000-0000-000000000063'),
+  'going', 'R61: the BCE reads a colleague''s answer on an Event of another Department');
+select is(
+  (select count(*) from event_attendance
+    where event_id = (select private_event_id from attendance_fx)),
+  0::bigint, 'R61: the BCE reads no attendance on a Private Group''s Event they cannot read');
+select is((select count(*) from event_attendance), 4::bigint,
+  'R61: the BCE reads exactly the answers on the Events they can read');
 
--- #936: a manager's read access never extended to a colleague's row, and now
--- no direct write reaches event_attendance at all -- same refusal either way.
+-- #936, R61: the BCE now reads this colleague's row, and still no direct write
+-- reaches event_attendance at all.
 select throws_ok(
   format($$ update event_attendance set status = 'going'
             where member_id = 'b2000000-0000-0000-0000-000000000063'
               and event_id = %s $$,
          (select org_event_id from attendance_fx)),
-  '42501', null, 'a manager''s read access does not extend to a direct write on a colleague''s RSVP (#936)');
+  '42501', null, 'the BCE''s read access does not extend to a direct write on a colleague''s RSVP (#936, R61)');
 
 reset role;
 select is(
   (select status from event_attendance
     where member_id = 'b2000000-0000-0000-0000-000000000063'
       and event_id = (select org_event_id from attendance_fx)),
-  'declined', 'manager read access does not permit rewriting a colleague RSVP');
+  'declined', 'read access does not permit rewriting a colleague RSVP');
 
 -- ==================== Real uid without organisation claims ====================
 select pg_temp.test_login('d4000000-0000-0000-0000-000000000063', jsonb_build_object('provider', 'email'));
