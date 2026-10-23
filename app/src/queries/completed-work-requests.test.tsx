@@ -15,7 +15,6 @@ import {
   submitCompletedWork,
 } from './completed-work-requests';
 import { keys } from './keys';
-import type { MyGroup } from './my-groups';
 
 describe('completed-work Request mutation', () => {
   beforeEach(resetSupabaseMock);
@@ -56,71 +55,22 @@ describe('completed-work Request mutation', () => {
     expect(eq).toHaveBeenCalledWith('requester_id', 'member-1');
   });
 });
-function myGroup(overrides: Partial<MyGroup>): MyGroup {
-  return {
-    id: 1,
-    name: 'Grup',
-    short: 'GRP',
-    category: 'department',
-    color: '#123456',
-    path: [1],
-    min_level: 0,
-    status: 'active',
-    is_organization: false,
-    group_role: 'member',
-    explicit: true,
-    automatic: false,
-    ...overrides,
-  };
-}
-
-it('offers the active Groups the Member works for, without the automatic ones but the Organization Group (#855, B31)', async () => {
+it('offers exactly the Groups the server accepts, a visible non-member Group included (R64, #1099)', async () => {
   resetSupabaseMock();
+  // request_origins() is the command's own rule; the Member is in none of
+  // these but the Organization Group, and the picker shows them all.
   supabaseMock.rpc.mockResolvedValue({
     data: [
-      myGroup({ id: 4, name: 'Educațional', path: [4] }),
-      myGroup({ id: 21, name: 'Echipa Media', path: [4, 21] }),
-      // Automatic Membership of the Organization Group: work for OSUBB itself.
-      myGroup({
-        id: 1,
-        name: 'OSUBB',
-        path: [1],
-        explicit: false,
-        automatic: true,
-        is_organization: true,
-      }),
-      // Automatic Membership elsewhere: nobody works "for" the assembly, not
-      // even a Member who also holds a roster row there.
-      myGroup({
-        id: 6,
-        name: 'Adunarea Generală',
-        path: [6],
-        explicit: false,
-        automatic: true,
-      }),
-      myGroup({
-        id: 7,
-        name: 'Adunarea Generală bis',
-        path: [7],
-        group_role: 'responsible',
-        explicit: true,
-        automatic: true,
-      }),
-      // Reached only through a managed ancestor: authority, not membership.
-      myGroup({
-        id: 22,
-        name: 'Echipa Evenimente',
-        path: [4, 22],
-        group_role: 'manager',
-        explicit: false,
-      }),
-      myGroup({ id: 30, name: 'Arhivă', path: [30], status: 'archived' }),
+      { id: 4, name: 'Educațional', path: [4] },
+      { id: 1, name: 'OSUBB', path: [1] },
+      { id: 21, name: 'Echipa Media', path: [4, 21] },
     ],
     error: null,
   });
 
   const origins = await fetchRequestOrigins();
-  expect(supabaseMock.rpc).toHaveBeenCalledWith('my_groups');
+  expect(supabaseMock.rpc).toHaveBeenCalledWith('request_origins');
+  expect(supabaseMock.rpc).not.toHaveBeenCalledWith('my_groups');
   expect(supabaseMock.from).not.toHaveBeenCalled();
   expect(origins).toEqual([
     { id: 21, name: 'Echipa Media', path: [4, 21] },
@@ -129,7 +79,7 @@ it('offers the active Groups the Member works for, without the automatic ones bu
   ]);
 });
 
-it('surfaces a my_groups() error instead of an empty picker', async () => {
+it('surfaces a request_origins() error instead of an empty picker', async () => {
   resetSupabaseMock();
   supabaseMock.rpc.mockResolvedValue({
     data: null,
