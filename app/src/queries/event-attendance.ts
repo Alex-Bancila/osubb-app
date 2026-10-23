@@ -13,8 +13,9 @@ export type EventAttendance = {
 
 /**
  * Every RSVP on this Event (#934). `event_attendance_read` answers every row
- * only to the Event's managers (`private.can_manage_event`); anyone else gets
- * their own answer at most, which is why the screen asks only for a manager.
+ * only to the Event's managers (`private.can_manage_event`) and to every live
+ * BCE and above (R61); anyone else gets their own answer at most, which is why
+ * the screen asks only for one of them (`readsEventAttendance`).
  */
 export async function fetchEventAttendance(
   eventId: number,

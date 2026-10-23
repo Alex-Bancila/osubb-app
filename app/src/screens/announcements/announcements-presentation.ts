@@ -23,6 +23,11 @@ export type AnnouncementPriority =
 export type RawAnnouncementRow =
   Database['public']['Tables']['announcements']['Row'] & {
     announcement_reads?: { read_at: string }[] | null;
+    /**
+     * The feed's answer (R62): past its Termen at the page's moment. Absent
+     * on a row read by its id, which no list holds.
+     */
+    expired?: boolean;
   };
 
 export type AnnouncementGroup = {
@@ -65,6 +70,11 @@ export type AnnouncementPresentation = {
   publishedLabel: string;
   /** The optional Termen (#909), an ISO instant; null when there is none. */
   deadline: string | null;
+  /**
+   * Listed under Termen expirat (R62): the server's answer at the page's
+   * moment, so reading a card never moves it between the lists.
+   */
+  expired: boolean;
   /** The Minimum Level (#909); 0 is everyone in the Audience. */
   minLevel: number;
   /**
@@ -241,6 +251,7 @@ export function toAnnouncementPresentation(
     publishedAt: row.published_at,
     publishedLabel: formatAnnouncementDate(row.published_at),
     deadline: row.deadline ?? null,
+    expired: row.expired ?? false,
     minLevel: row.min_level ?? 0,
     minLevelLabel: minLevelLabel(row.min_level ?? 0),
     approvalStatus: approvalStatusOf(row.approval_status),

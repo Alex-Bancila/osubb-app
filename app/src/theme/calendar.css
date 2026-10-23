@@ -133,6 +133,7 @@
   width: 100%;
   height: 100%;
   min-height: 44px;
+  --cell-pad-x: 6px;
   padding: 6px;
   border: 0;
   background: transparent;
@@ -259,6 +260,48 @@
   color: var(--text-muted);
   font-size: 11px;
   font-weight: var(--fw-bold);
+}
+
+/* #1098 (R63): an Event over several days is one bar across them. Each day
+   cell draws its piece; the pieces of a row reach over the cell padding and
+   the 1px rule between cells so they read as one, square where the bar goes
+   on (into the next row too) and rounded at its two ends. Only the first
+   piece of a row carries the title, drawn across the days it still covers. */
+.calendar-chip.is-span.goes-on-before {
+  border-left-width: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.calendar-chip.is-span.goes-on-after {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.calendar-chip.is-span.joins-before {
+  margin-left: calc(-1 * var(--cell-pad-x));
+}
+
+.calendar-chip.is-span.joins-after {
+  margin-right: calc(-1 * var(--cell-pad-x) - 1px);
+}
+
+.calendar-chip.is-span-head .calendar-chip-text {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  width: calc(var(--span-days) * 100%);
+}
+
+/* A piece without its title, and the empty lane that keeps a bar level with
+   its row, are one line tall like every chip. */
+.calendar-chip.is-span:not(.is-span-head)::after,
+.calendar-chip.is-lane-gap::after {
+  content: '\00a0';
+}
+
+.calendar-chip.is-lane-gap {
+  visibility: hidden;
 }
 
 .calendar-legend {
@@ -1032,6 +1075,7 @@
 
   .calendar-cell {
     align-items: center;
+    --cell-pad-x: 3px;
     padding: 4px 3px;
   }
 

@@ -56,8 +56,9 @@ export type {
  * Anunțuri by the page (ruling R56, spec 2026-10-14 member reads, part 4).
  * The server reads the feed: what the Member reads (exactly
  * `announcements_read`, never a Deal), narrowed by Grupuri preferate (R43)
- * and the Group filter, in R15's order — pinned, then unread, then read,
- * newest first in each — 20 rows a page with the unpaged count. Around it,
+ * and the Group filter, the expired ones last (R62) and R15's order inside
+ * each list — pinned, then unread, then read, newest first in each — 20 rows
+ * a page with the unpaged count. Around it,
  * `announcement_feed_summary` answers the header's unread count, the
  * critical banner and the empty states, so nothing here counts or orders.
  */
@@ -89,6 +90,11 @@ export type AnnouncementFeedRpcRow = {
   rejection_reason: string | null;
   /** The reader's own read time; null while unread. */
   read_at: string | null;
+  /**
+   * Past its Termen at the page's moment (R62): the server lists these after
+   * every other, under Termen expirat.
+   */
+  expired: boolean;
   total: number;
   /** The moment the page was cut against (`p_as_of`, or the server's now). */
   as_of: string;

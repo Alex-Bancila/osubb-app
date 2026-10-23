@@ -18,6 +18,7 @@ import {
   awaitsDecision,
   eventCardId,
   countLabel,
+  eventIsPast,
   eventRangeForDays,
   filterEvents,
   groupEventsByDay,
@@ -44,7 +45,9 @@ const keepAll = () => true;
  * Event start. Without a range it starts today and is open-ended — **Ce
  * urmează**. A `?event=<id>` link widens the range to the Event's day, and the
  * Event is shown even when the filter's Group or Campaign would hide it, then
- * scrolled to and focused.
+ * scrolled to and focused. An Event over several days is listed once, under
+ * its first day, naming the day it ends (#1098, R63) — one still going when
+ * the range opens is read too, under the day it began.
  */
 export function CalendarAgenda({
   now,
@@ -217,7 +220,7 @@ export function CalendarAgenda({
                         event={event}
                         groups={groups}
                         relevance={relevanceOf(event)}
-                        past={Date.parse(event.startsAt) < now}
+                        past={eventIsPast(event, now)}
                         highlighted={event.id === linkedId}
                         manageable
                         onReview={onReview}

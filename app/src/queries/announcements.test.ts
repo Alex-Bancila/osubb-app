@@ -84,6 +84,7 @@ function feedRpcRow(
     approval_status: 'approved',
     rejection_reason: null,
     read_at: null,
+    expired: false,
     total: 1,
     as_of: '2026-10-14T09:00:00.000Z',
     ...overrides,
@@ -136,7 +137,13 @@ describe('the Anunțuri feed, read by the page (R56)', () => {
       rpc.mockResolvedValue({
         data: [
           feedRpcRow({ id: 9, total: 45, read_at: '2026-10-02T08:00:00Z' }),
-          feedRpcRow({ id: 8, total: 45 }),
+          // Past its Termen at the page's moment (R62).
+          feedRpcRow({
+            id: 8,
+            total: 45,
+            deadline: '2026-10-10T10:00:00Z',
+            expired: true,
+          }),
         ],
         error: null,
       });
@@ -166,7 +173,11 @@ describe('the Anunțuri feed, read by the page (R56)', () => {
           announcement_reads: [{ read_at: '2026-10-02T08:00:00Z' }],
         },
         {
-          ...feedRpcRow({ id: 8 }),
+          ...feedRpcRow({
+            id: 8,
+            deadline: '2026-10-10T10:00:00Z',
+            expired: true,
+          }),
           read_at: undefined,
           total: undefined,
           as_of: undefined,
@@ -176,6 +187,8 @@ describe('the Anunțuri feed, read by the page (R56)', () => {
       expect(page.rows[0]).not.toHaveProperty('total');
       expect(page.rows[0]).not.toHaveProperty('read_at');
       expect(page.rows[0]).not.toHaveProperty('as_of');
+      // Where Termen expirat starts is the server's answer, carried as is.
+      expect(page.rows.map((row) => row.expired)).toEqual([false, true]);
     });
 
     it('starts a reading at the moment the server answers for its first page', async () => {
@@ -387,14 +400,19 @@ describe('the Anunțuri feed, read by the page (R56)', () => {
     });
 
     // Fails if a later page is cut against a later moment than the first:
-    // the cards read meanwhile move to the read band (R15), every card after
-    // them moves up, and the next page skips as many as were read.
+    // the cards read meanwhile move to the read band (R15), those whose
+    // Termen passed meanwhile to Termen expirat (R62), every card after them
+    // moves up, and the next page skips as many as moved.
     it('cuts every page of one reading at its first page’s moment, so reading cards skips none', async () => {
-      // The server: 35 unread Announcements, newest (id 1) first, in R15's
-      // order as of `p_as_of` (its own now when absent).
+      // The server: 35 unread Announcements, newest (id 1) first, the
+      // expired ones last (R62) and R15's order inside each list, as of
+      // `p_as_of` (its own now when absent). The Termen of 5 and 25 passes a
+      // minute and a half into the reading.
       const start = '2026-10-14T09:00:00.000Z';
       let now = Date.parse(start);
       const readAt = new Map<number, string>();
+      const termen = new Date(Date.parse(start) + 90_000).toISOString();
+      const deadline = (id: number) => (id === 5 || id === 25 ? termen : null);
       rpc.mockImplementation(
         (
           _name: string,
@@ -405,8 +423,17 @@ describe('the Anunțuri feed, read by the page (R56)', () => {
             const read = readAt.get(id);
             return read === undefined || read > asOf;
           };
+          const expired = (id: number) => {
+            const at = deadline(id);
+            return at !== null && at < asOf;
+          };
           const ordered = Array.from({ length: 35 }, (_, index) => index + 1)
-            .sort((a, b) => Number(unread(b)) - Number(unread(a)) || a - b)
+            .sort(
+              (a, b) =>
+                Number(expired(a)) - Number(expired(b)) ||
+                Number(unread(b)) - Number(unread(a)) ||
+                a - b,
+            )
             .slice(args.p_offset, args.p_offset + args.p_limit);
           return Promise.resolve({
             data: ordered.map((id) =>
@@ -414,6 +441,8 @@ describe('the Anunțuri feed, read by the page (R56)', () => {
                 id,
                 total: 35,
                 read_at: readAt.get(id) ?? null,
+                deadline: deadline(id),
+                expired: expired(id),
                 as_of: asOf,
               }),
             ),

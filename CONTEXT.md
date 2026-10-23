@@ -276,7 +276,7 @@ A BCE/BC/Moderator view of Members ordered by Task Points only, counted from the
 A BCE/BC/Moderator comparison of Task Points earned from the Points Start Date (or, on the Clasament page, from an explicit earlier "De la", the same lookback as the Leadership Leaderboard) in the top-level Groups set to compete and in every Group below them set to count toward them. Only a top-level Department may be set to compete (ruling R52, 2026-10-13); Project and Independent-Team work never contributes.
 
 **Completed-work Request**:
-A Member’s request to recognize work already completed for one Origin. Approval creates the completed Task, Assignment, Evaluation, and Task Points together; the decider may first change the Task's title, details, Group, Attached Link and Campaign. A Group's managers can also add such a completed Task directly, without a Request, for any active Member at or above the Group's Minimum Level, member of the Group or not (ruling R51, 2026-10-13) — never for themselves, a BC member or the Moderator, and a Group Responsible never for a Member who holds a Manager or Responsible role on that Group's path; its points count for the Group the work was done for.
+A Member’s request to recognize work already completed for one Origin. A Member may file it for any active Group they can see whose Minimum Level they meet, member of it or not (ruling R64, 2026-10-23); a Private Group they are not in stays hidden and is refused like an unknown Group, and no Group of Automatic Membership other than the Organization Group takes one (nobody works "for" the Adunarea Generală). The Request is decided by that Group's own deciders, as any other. Approval creates the completed Task, Assignment, Evaluation, and Task Points together; the decider may first change the Task's title, details, Group, Attached Link and Campaign. A Group's managers can also add such a completed Task directly, without a Request, for any active Member at or above the Group's Minimum Level, member of the Group or not (ruling R51, 2026-10-13) — never for themselves, a BC member or the Moderator, and a Group Responsible never for a Member who holds a Manager or Responsible role on that Group's path; its points count for the Group the work was done for.
 In the app the Requests are **Cereri**: a view of Taskuri, not a page of its own, reached with the Taskuri · Cereri toggle by every Member: a volunteer files there, leadership and the Group Managers decide there. Administrare → Cereri is a different thing: Group Applications.
 _Avoid_: Award request, new-task request, `task_requests`
 
@@ -290,7 +290,7 @@ A deferred BC/Moderator action that may reduce a Member’s Personal Score and m
 ## Calendar
 
 **Event**:
-A future or past OSUBB activity owned by one Group. Creating it notifies its Group Audience once, unless its Announcement is published with it and speaks for it (ruling R39). An Event of the Organization Group created by a Member below BC is a Cerere de aprobare until BC or the Moderator approve it; that notice, and its Announcement if asked for, go out at the approval (ruling R49).
+A future or past OSUBB activity owned by one Group. Creating it notifies its Group Audience once, unless its Announcement is published with it and speaks for it (ruling R39). An Event of the Organization Group created by a Member below BC is a Cerere de aprobare until BC or the Moderator approve it; that notice, and its Announcement if asked for, go out at the approval (ruling R49). It has a start and usually an end, and may be **Toată ziua**: it then runs from midnight on its first day to midnight after its last, Romania's time, and shows no time anywhere (ruling R63). An Event over several days is one bar across them in the month grid and is listed once, under its first day.
 
 **Event Scope**:
 The Group that owns an Event. An organization-wide Event belongs to the Organization Group.
@@ -302,7 +302,7 @@ An Event of a Group whose Group Audience includes the Member, which includes eve
 A visible Event of a Group the Member does not belong to, presented separately until the Member answers “Vin”.
 
 **RSVP**:
-A Member’s “Vin” or “Nu vin” response to an Event.
+A Member’s “Vin” or “Nu vin” response to an Event. A Member reads their own; every answer on an Event (**Cine participă**) is read by the Event’s managers and by every BCE, BC member and the Moderator on every Event they can read (ruling R61). Reading the answers grants nothing else: editing and cancelling stay with the managers.
 
 **Capacity**:
 Informational attendance guidance for an Event. It does not reject an RSVP or create a waitlist.
@@ -310,7 +310,7 @@ Informational attendance guidance for an Event. It does not reject an RSVP or cr
 ## Communication
 
 **Announcement**:
-An OSUBB message posted on behalf of one Group, its Origin, by one of that Group's Managers or Responsibles, with an Announcement Audience, a normal, important, or critical Priority, up to five Attached Links, an optional **Termen** (the date by which its readers should act, never in the past when posted), and a Minimum Level: only Members of its Audience at or above it read the Announcement or are notified of it (everyone by default). An Announcement of the Organization Group may be posted by anyone holding a Group Role; once posted, BC, the Moderator and its author edit or delete it, nobody else (ruling R48, #1042), and only BC and the Moderator pin it or any other organisation-wide Announcement (ruling R50, 2026-10-13). An Announcement of the Organization Group, or one with the organisation Audience, posted by a Member below BC is a Cerere de aprobare until BC or the Moderator approve it (ruling R49). Creating an Event may publish its Announcement in the same step, with the Event's Group, Audience and Minimum Level and Termen = the Event's start.
+An OSUBB message posted on behalf of one Group, its Origin, by one of that Group's Managers or Responsibles, with an Announcement Audience, a normal, important, or critical Priority, up to five Attached Links, an optional **Termen** (the date by which its readers should act, never in the past when posted), and a Minimum Level: only Members of its Audience at or above it read the Announcement or are notified of it (everyone by default). An Announcement of the Organization Group may be posted by anyone holding a Group Role; once posted, BC, the Moderator and its author edit or delete it, nobody else (ruling R48, #1042), and only BC and the Moderator pin it or any other organisation-wide Announcement (ruling R50, 2026-10-13). An Announcement of the Organization Group, or one with the organisation Audience, posted by a Member below BC is a Cerere de aprobare until BC or the Moderator approve it (ruling R49). Creating an Event may publish its Announcement in the same step, with the Event's Group, Audience and Minimum Level and Termen = the Event's start, except an all-day Event's, which has none (ruling R63).
 _Avoid_: Post, news item, broadcast when the Audience is local
 
 **Cerere de aprobare** (Approval Request):

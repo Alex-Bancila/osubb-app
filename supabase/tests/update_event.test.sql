@@ -35,7 +35,7 @@ insert into public.event_attendance(event_id,member_id,status)
 select id,'24800000-0000-0000-0000-000000000007','declined' from ex where title='Event a #248';
 insert into public.event_attendance(event_id,member_id,status)
 select id,'24800000-0000-0000-0000-000000000009','going' from ex where title='Event a #248';
-select ok(not (select prosecdef from pg_proc where oid='public.update_event(bigint,text,text,bigint,timestamptz,timestamptz,text,integer,text,integer,bigint)'::regprocedure),'update wrapper is invoker');
+select ok(not (select prosecdef from pg_proc where oid='public.update_event(bigint,text,text,bigint,timestamptz,timestamptz,text,integer,text,integer,bigint,boolean)'::regprocedure),'update wrapper is invoker');
 -- #248: the recipient set carries the live-profile rule itself. Every other
 -- assertion here reads it through private.notify, which drops a deactivated
 -- Member on its own -- so the filter inside the set is invisible end to end and

@@ -258,6 +258,7 @@ describe('create Event command', () => {
     description: null,
     minLevel: 0,
     campaignId: 3,
+    allDay: false,
     announce: false,
   };
 
@@ -276,6 +277,7 @@ describe('create Event command', () => {
       p_min_level: 0,
       p_campaign_id: 3,
       p_announce: false,
+      p_all_day: false,
     });
   });
 

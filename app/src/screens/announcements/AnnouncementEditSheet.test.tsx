@@ -57,6 +57,7 @@ function pending(): AnnouncementPresentation {
     approvalStatus: 'pending',
     rejectionReason: null,
     deadline: null,
+    expired: false,
     minLevel: 0,
     minLevelLabel: null,
     isRead: false,

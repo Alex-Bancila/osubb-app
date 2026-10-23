@@ -11,6 +11,7 @@ import {
   eventCardId,
   eventGroupIcon,
   eventGroupLabel,
+  eventTimeLabel,
   eventTypeLabel,
   relevanceColor,
   type EventRelevance,
@@ -36,8 +37,9 @@ type EventCardProps = {
   showDay?: boolean;
   /**
    * Offer **Editează** / **Anulează evenimentul** to those the commands accept
-   * (#849), and **Cine participă** (#934), to the Event's managers: on the
-   * Calendar's cards, not on Acasă's preview.
+   * (#849) to the Event's managers, and **Cine participă** to them (#934)
+   * and to every BCE and above (R61): on the Calendar's cards, not on Acasă's
+   * preview.
    */
   manageable?: boolean;
   /**
@@ -62,9 +64,10 @@ export default function EventCard({
   // The category icon is painted from the same variable.
   const accent = relevanceColor(event, relevance, groups);
   const titleId = `calendar-event-${event.id}`;
-  const timeLabel = event.endTime
-    ? `${event.startTime}–${event.endTime}`
-    : event.startTime;
+  // #1098 (R63): "Toată ziua", or both ends' days for a timed several-day
+  // Event, which then needs no day of its own in front.
+  const timeLabel = eventTimeLabel(event);
+  const dayShown = showDay && (event.allDay || !event.multiDay);
   // Nobody answers a deadline (B25): it is a date to keep, not a gathering.
   const takesRsvp = event.type !== 'deadline';
   // A cancelled Event stays readable history (ADR-0008): no RSVP, its reason.
@@ -119,7 +122,7 @@ export default function EventCard({
           <dt className="sr-only">{showDay ? 'Data și ora' : 'Ora'}</dt>
           <dd>
             <Clock className="event-detail-icon" aria-hidden="true" />
-            {showDay && (
+            {dayShown && (
               <>
                 <time dateTime={event.dayKey}>
                   {formatBucharestShortDay(event.startsAt)}
@@ -194,8 +197,9 @@ export default function EventCard({
         ))
       )}
 
-      {/* Cine participă (#934): the Event's managers read every answer —
-          history too, on a past or cancelled Event. A deadline takes none. */}
+      {/* Cine participă (#934, R61): the Event's managers and every BCE and
+          above read every answer — history too, on a past or cancelled
+          Event. A deadline takes none. */}
       {manageable && takesRsvp && <EventAttendance event={event} />}
 
       {manageable && <EventManageControls event={event} groups={groups} />}

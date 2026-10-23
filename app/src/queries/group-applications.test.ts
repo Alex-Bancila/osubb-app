@@ -29,6 +29,15 @@ vi.mock('../lib/supabase', () => {
         rows = rows.filter((row) => values.includes(row[column]));
         return builder;
       },
+      is: (column: string, value: unknown) => {
+        tables.calls.push([table, 'is', column, value]);
+        return builder;
+      },
+      or: (filter: string) => {
+        tables.calls.push([table, 'or', filter]);
+        return builder;
+      },
+      limit: () => Promise.resolve({ data: rows, error: null }),
       range: () => Promise.resolve({ data: rows, error: null }),
     };
     return builder;
@@ -37,6 +46,7 @@ vi.mock('../lib/supabase', () => {
 });
 import {
   fetchGroupCoordination,
+  fetchGroupUpcomingEvents,
   fetchManagedGroupApplications,
   runApplicationCommand,
   useApplicationCommand,
@@ -234,4 +244,21 @@ it('keeps the managed queue under the key a decision invalidates (#825)', async 
     }),
   );
   expect(client.getQueryState(managed)?.isInvalidated).toBe(true);
+});
+
+// #1098 (R63): an all-day Event is on its Group's page through its day, a
+// weekend until it ends -- the Calendar's overlap read, from now.
+it('reads a Group’s Events still to come or still going, with their end and Toată ziua', async () => {
+  tables.calls = [];
+  tables.rows.events = [];
+  await fetchGroupUpcomingEvents(5, new Date('2026-10-24T09:00:00.000Z'));
+  expect(tables.calls).toEqual([
+    ['events', 'eq', 'group_id', 5],
+    ['events', 'is', 'cancelled_at', null],
+    [
+      'events',
+      'or',
+      'starts_at.gte."2026-10-24T09:00:00.000Z",ends_at.gt."2026-10-24T09:00:00.000Z"',
+    ],
+  ]);
 });

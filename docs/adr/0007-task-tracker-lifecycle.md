@@ -149,6 +149,8 @@ Supabase Realtime is only a signal to invalidate TanStack Query caches. The brow
 
 A **Completed-work Request** contains a description and exactly one Origin chosen from the requester's memberships. It replaces both award requests and new-task requests. Legacy `task_requests` (`award` and `new_task`) is retired in the Task Tracker backend milestone; the request commands ship with the core lifecycle.
 
+> **Amended 2026-10-23 by ruling R64 (#1099).** The Origin is no longer chosen from the requester's memberships: it is any active Group the requester can see whose Minimum Level they meet, member of it or not, except an Automatic-Membership Group other than the Organization Group. A Private Group the requester is not in is refused like an unknown Group (`42501 request_origin_forbidden`). Deciders are unchanged: the Group's own, judged by the requester's positions on its path.
+
 Approval creates the completed Task, requester Assignment, Evaluation, and Task-ledger entry in one transaction. Department requests are decided by local BCE/BC/Moderator; Project requests by the lead/BC/Moderator; Department-Team requests by local BCE/BC/Moderator; Independent-Team requests by BC/Moderator. Rejection requires a note. Concurrent or repeated decisions return a stable conflict.
 
 ## Consequences
