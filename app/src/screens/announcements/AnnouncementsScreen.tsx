@@ -37,6 +37,7 @@ import {
   Page,
   PageGrid,
   PageHeader,
+  Panel,
 } from '../../components/layout';
 import { PreferredGroupsScope } from '../../components/preferred-groups/PreferredGroupsScope';
 import { usePreferredGroups } from '../../components/preferred-groups/preferred-groups';
@@ -247,6 +248,17 @@ function AnnouncementsContent({
     () => new Map(announcements.map((item) => [item.id, item])),
     [announcements],
   );
+  // R62: the server lists the expired ones last, so the loaded rows split
+  // at the first of them; Termen expirat appears once one has loaded.
+  const [unexpired, expired] = useMemo((): [
+    AnnouncementPresentation[],
+    AnnouncementPresentation[],
+  ] => {
+    const first = announcements.findIndex((item) => item.expired);
+    return first === -1
+      ? [announcements, []]
+      : [announcements.slice(0, first), announcements.slice(first)];
+  }, [announcements]);
   const linkedFound = useMemo(
     () => presented(linkedRead.data, groupsQuery.data, authors),
     [linkedRead.data, groupsQuery.data, authors],
@@ -453,21 +465,42 @@ function AnnouncementsContent({
             />
           )}
 
-          <PageGrid
-            columns={1}
-            as="ul"
-            role="list"
-            aria-label="Flux de anunțuri"
-          >
-            {announcements.map((announcement) => (
-              <li key={announcement.id}>
-                <AnnouncementCard
-                  announcement={announcement}
-                  onOpen={handleOpenAnnouncement}
-                />
-              </li>
-            ))}
-          </PageGrid>
+          {unexpired.length > 0 && (
+            <PageGrid
+              columns={1}
+              as="ul"
+              role="list"
+              aria-label="Flux de anunțuri"
+            >
+              {unexpired.map((announcement) => (
+                <li key={announcement.id}>
+                  <AnnouncementCard
+                    announcement={announcement}
+                    onOpen={handleOpenAnnouncement}
+                  />
+                </li>
+              ))}
+            </PageGrid>
+          )}
+          {expired.length > 0 && (
+            <Panel bare title="Termen expirat">
+              <PageGrid
+                columns={1}
+                as="ul"
+                role="list"
+                aria-label="Anunțuri cu termen expirat"
+              >
+                {expired.map((announcement) => (
+                  <li key={announcement.id}>
+                    <AnnouncementCard
+                      announcement={announcement}
+                      onOpen={handleOpenAnnouncement}
+                    />
+                  </li>
+                ))}
+              </PageGrid>
+            </Panel>
+          )}
           {/* The next page holds its place under the ones read so far. */}
           {feed.isLoadingMore && (
             <Loading label="Se încarcă mai multe anunțuri…" />
