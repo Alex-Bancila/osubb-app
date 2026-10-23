@@ -19,7 +19,7 @@ export async function fetchDirectExecutors() {
     readAllRows((from, to) =>
       supabase
         .from('profiles_directory')
-        .select('id, full_name, role, status, avatar_color')
+        .select('id, full_name, nickname, role, status, avatar_color')
         .eq('status', 'activ')
         .order('id')
         .range(from, to),
@@ -56,6 +56,8 @@ export async function fetchDirectExecutors() {
               {
                 id: profile.id,
                 name: profile.full_name ?? 'Membru OSUBB',
+                /** Typing in the picker matches it too (#1100). */
+                nickname: profile.nickname,
                 level,
                 avatarColor: profile.avatar_color,
               },

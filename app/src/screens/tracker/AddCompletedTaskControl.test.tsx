@@ -38,8 +38,20 @@ vi.mock('../../queries/reference', () => ({
 }));
 // Dept 7 and its Team 9; Ana belongs to the Team, Bogdan only to the Dept.
 const people = {
-  ana: { id: 'ana', name: 'Ana', avatarColor: null },
-  bogdan: { id: 'bogdan', name: 'Bogdan', avatarColor: null },
+  ana: {
+    id: 'ana',
+    name: 'Ana',
+    nickname: null,
+    fullName: 'Ana',
+    avatarColor: null,
+  },
+  bogdan: {
+    id: 'bogdan',
+    name: 'Bogdan',
+    nickname: null,
+    fullName: 'Bogdan',
+    avatarColor: null,
+  },
 };
 vi.mock('../../queries/completed-tasks', () => ({
   useCompletedTaskOptions: () => ({

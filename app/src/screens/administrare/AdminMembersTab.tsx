@@ -23,7 +23,8 @@ import {
   type AppointableMember,
 } from '../../queries/groups-admin';
 import { useUninvitedMembers } from '../../queries/volunteer-import';
-import { normalizeSearch, statusLabel } from '../volunteers/directory-filters';
+import { normalizeSearch } from '../../lib/member-search';
+import { statusLabel } from '../volunteers/directory-filters';
 import { MemberCount } from '../volunteers/MemberCount';
 import { CsvImportDialog } from './CsvImportDialog';
 import { InviteMemberDialog, type InvitedMember } from './InviteMemberDialog';

@@ -42,7 +42,9 @@ it('paginates every read, reads only directory basics, and reads no Campaign dat
   expect(selects.join(' ')).not.toMatch(
     /email|phone|dept_id|team_id|project_id|category|campaign/,
   );
-  expect(selects).toContain('id, full_name, role, status, avatar_color');
+  expect(selects).toContain(
+    'id, full_name, nickname, role, status, avatar_color',
+  );
   expect(result.members[0]).toHaveProperty('avatarColor');
 });
 
@@ -94,4 +96,37 @@ it('never offers BC or the Moderator as a direct Executor (F-27, Alex 2026-09-29
     'bce',
     'vol',
   ]);
+});
+
+it('carries each Member Nickname onto the row so the picker can search it (#1100)', async () => {
+  api.from.mockImplementation((table: string) => {
+    const builder = {
+      select: () => builder,
+      eq: () => builder,
+      order: () => builder,
+      range: async () => ({
+        data:
+          table === 'profiles_directory'
+            ? [
+                {
+                  id: 'vol',
+                  full_name: 'Ștefan Ionescu',
+                  nickname: 'Stefi',
+                  role: 'voluntar',
+                  status: 'activ',
+                },
+              ]
+            : table === 'roles'
+              ? [{ id: 'voluntar', level: 1 }]
+              : [],
+        error: null,
+      }),
+    };
+    return builder;
+  });
+  const result = await fetchDirectExecutors();
+  expect(result.members[0]).toMatchObject({
+    name: 'Ștefan Ionescu',
+    nickname: 'Stefi',
+  });
 });
