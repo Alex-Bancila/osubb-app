@@ -88,7 +88,7 @@ export function FormattedTextToolbar({
             className={cn(
               buttonVariants({ variant: 'ghost' }),
               toolbarControlClass,
-              'min-w-30 justify-between px-3',
+              'min-w-26 justify-between px-3',
             )}
           >
             <span>
