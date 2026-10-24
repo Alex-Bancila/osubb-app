@@ -5,12 +5,14 @@
 -- line it computes.
 --
 -- private.role_evaluation_rows(kind, from, to, floor, percent, cutoff) ranks
--- one cohort -- every active Member below BCE for the Voluntar Activ kind, the
--- Voluntar cu Drept de Vot holders for the Adunarea Generală kind. A Member
--- below the Eligibility Floor is evaluated but not ranked; the share is taken
--- over the ranked alone (ceil(percent x ranked / 100)); the line is the Task
--- Points of the share-th ranked Member and everyone at or above it is inside;
--- a Voluntar who joined on or before the cutoff is listable.
+-- one pool for both kinds -- every live active Member below BCE (Recrut,
+-- Voluntar, Voluntar Activ, Voluntar cu Drept de Vot); the Adunarea Generală
+-- kind ranks the very pool the Voluntar Activ kind does (Alex, 2026-10-24) and
+-- only its judging differs (it judges the voters alone and lists nobody). A
+-- Member below the Eligibility Floor is evaluated but not ranked; the share is
+-- taken over the ranked alone (ceil(percent x ranked / 100)); the line is the
+-- Task Points of the share-th ranked Member and everyone at or above it is
+-- inside; a Voluntar who joined on or before the cutoff is listable.
 -- public.simulate_role_evaluation returns those rows and writes nothing;
 -- public.run_role_evaluation records them, lists Candidates (listable and
 -- inside), raises Signals (a holder not inside: below_line when ranked,
@@ -22,10 +24,11 @@
 -- In order: 0. public.retention_signals' shape; 1. the shares at home
 -- (evaluation_settings, migration log rows, org_settings without y); 2. the
 -- Simulation's shape and grants; 3. the Voluntar Activ Simulation; 4. it
--- wrote nothing; 5. its refusals; 6. the Adunarea Generală Simulation; 7. a
--- finalised Voluntar Activ run; 8. a run that ranks nobody (Review Focus 3);
--- 9. the ranking of a recorded run; 10. set_evaluation_percent writes the
--- share home.
+-- wrote nothing; 5. its refusals; 6. the Adunarea Generală Simulation (the
+-- whole pool, a BCE, a BC and a Moderator left out); 7. a finalised Voluntar
+-- Activ run; 8. a run that ranks nobody (Review Focus 3); 9. the ranking of a
+-- recorded run; 10. a finalised Adunarea Generală run (the whole pool ranked,
+-- the voters alone judged); 11. set_evaluation_percent writes the share home.
 --
 -- Fixtures: _r58_fixtures.psql (Members A-J and a BC member; their Task
 -- Points inside [2026-03-01, 2026-09-30]). With Floor 10, 35 % and the cutoff
@@ -49,6 +52,11 @@
 --     measured against the Floor";
 --   * the Simulation's cutoff check judging every kind again -> "a cutoff
 --     tomorrow is not judged for the Adunarea Generală kind";
+--   * (2026-10-24) the core's adunarea_generala arm back to `profile.role =
+--     'vot'` -> "the Adunarea Generală kind ranks the same pool ...", "the
+--     Adunarea Generală line is read over the whole pool ...", "the finalised
+--     Adunarea Generală run ranked the whole pool ..." and the rest of section
+--     10 (the line, the Signals, the Notification, the ranking);
 --   * (2026-10-20, a run writes back only the share) section 9 writing the
 --     Floor back again -> "the run logs exactly the hand-over (45 -> 40)
 --     naming itself...", "Setări keeps the Prag minim and the Data limită de
@@ -60,9 +68,24 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(68);
+select plan(78);
 
 \ir _r58_fixtures.psql
+
+-- Three Members who are never in a pool, whatever they earn (Alex,
+-- 2026-10-24: every Member below BCE, so not the BCE, the BC or the
+-- Moderator): each credited as much as the best-ranked Member, so a pool that
+-- let one in would show it among the first rows. The fixture's BC is the first.
+insert into auth.users (id, email) values
+  ('58589000-0000-0000-0000-0000000000b1', 'bce-r58@test.local'),
+  ('58589000-0000-0000-0000-0000000000b2', 'moderator-r58@test.local');
+insert into public.profiles (id, full_name, email, role, status, joined_at) values
+  ('58589000-0000-0000-0000-0000000000b1', 'BCE R58',       'bce-r58@test.local',       'bce',       'activ', '2020-01-01'),
+  ('58589000-0000-0000-0000-0000000000b2', 'Moderator R58', 'moderator-r58@test.local', 'moderator', 'activ', '2020-01-01');
+select pg_temp.r58_credit(excluded.member_id, 10, 5)
+  from (values (pg_temp.r58('BC')),
+               ('58589000-0000-0000-0000-0000000000b1'::uuid),
+               ('58589000-0000-0000-0000-0000000000b2'::uuid)) as excluded (member_id);
 
 -- The Voluntar Activ line in force before any run of this suite.
 update public.promotion_thresholds set threshold = 45 where kind = 'voluntar_activ';
@@ -110,6 +133,25 @@ insert into va58 values
   (pg_temp.r58('J'), 'vot',       5, false, null, 10, 8, 3, 40, false, false),
   (pg_temp.r58('B'), 'recrut',    0, false, null, 10, 8, 3, 40, false, false);
 grant select on va58 to authenticated;
+
+-- The expected Adunarea Generală ranking: the same pool, Floor 10, 25 %, no
+-- cutoff -- 8 ranked, share ceil(25 x 8 / 100) = 2, so the line is C's 50 and
+-- only A and C are inside; nobody is listable.
+create temp table ag58 (member_id uuid, role public.member_role, task_points integer, ranked boolean,
+                        rank integer, evaluated_count integer, ranked_count integer, share_size integer,
+                        line integer, inside boolean, listable boolean);
+insert into ag58 values
+  (pg_temp.r58('A'), 'recrut',   60, true,  1,    10, 8, 2, 50, true,  false),
+  (pg_temp.r58('C'), 'voluntar', 50, true,  2,    10, 8, 2, 50, true,  false),
+  (pg_temp.r58('D'), 'voluntar', 40, true,  3,    10, 8, 2, 50, false, false),
+  (pg_temp.r58('E'), 'voluntar', 30, true,  4,    10, 8, 2, 50, false, false),
+  (pg_temp.r58('F'), 'voluntar', 25, true,  5,    10, 8, 2, 50, false, false),
+  (pg_temp.r58('G'), 'activ',    20, true,  6,    10, 8, 2, 50, false, false),
+  (pg_temp.r58('H'), 'activ',    15, true,  7,    10, 8, 2, 50, false, false),
+  (pg_temp.r58('I'), 'vot',      10, true,  8,    10, 8, 2, 50, false, false),
+  (pg_temp.r58('J'), 'vot',       5, false, null, 10, 8, 2, 50, false, false),
+  (pg_temp.r58('B'), 'recrut',    0, false, null, 10, 8, 2, 50, false, false);
+grant select on ag58 to authenticated;
 
 create function pg_temp.sim58() returns text language sql as $$
   select $q$ select * from public.simulate_role_evaluation('voluntar_activ', '2026-03-01', '2026-09-30', 10, 35, '2026-03-01') $q$
@@ -272,11 +314,19 @@ reset role;
 
 select pg_temp.test_login_leadership(pg_temp.r58('BC'));
 select results_eq(
-  $$ select member_id, ranked, rank, evaluated_count, ranked_count, share_size, line, inside, listable
+  $$ select * from public.simulate_role_evaluation('adunarea_generala', '2026-03-01', '2026-09-30', 10, 25) $$,
+  $$ select * from ag58 order by task_points desc, member_id $$,
+  'the Adunarea Generală kind ranks the same pool as the Voluntar Activ kind -- the Recruți, Voluntari, Voluntari Activi and holders beside the voters -- needs no cutoff and lists nobody');
+select results_eq(
+  $$ select distinct line, share_size, evaluated_count, ranked_count
        from public.simulate_role_evaluation('adunarea_generala', '2026-03-01', '2026-09-30', 10, 25) $$,
-  $$ values (pg_temp.r58('I'), true,  1,          2, 1, 1, 10, true,  false),
-            (pg_temp.r58('J'), false, null::int,  2, 1, 1, 10, false, false) $$,
-  'the Adunarea Generală kind ranks the two voters alone, needs no cutoff: 2 evaluated, 1 ranked (J below the Floor), line 10');
+  $$ values (50, 2, 10, 8) $$,
+  'the Adunarea Generală line is read over the whole pool: the second of 8 ranked, C''s 50 -- the voters alone would have read 10');
+select is(
+  (select count(*) from public.simulate_role_evaluation('adunarea_generala', '2026-03-01', '2026-09-30', 10, 25)
+    where member_id in (pg_temp.r58('BC'), '58589000-0000-0000-0000-0000000000b1', '58589000-0000-0000-0000-0000000000b2')),
+  0::bigint,
+  'a BC, a BCE and the Moderator are in no pool, whatever they earned: the Adunarea Generală Simulation holds none of the three');
 select lives_ok(
   format($$ select * from public.simulate_role_evaluation('adunarea_generala', '2026-03-01', '2026-09-30', 10, 25, %L) $$,
          (now() at time zone 'Europe/Bucharest')::date + 1),
@@ -511,7 +561,66 @@ select is(
   'a claimless session reads nothing, with no error (house rule 12)');
 reset role;
 
--- ==================== 10. set_evaluation_percent writes the share home ====================
+-- ==================== 10. A finalised Adunarea Generală run ====================
+-- Alex, 2026-10-24: the run ranks the whole pool and judges the voters alone.
+-- Floor 10, 25 %: the line is C's 50 (A 60, C 50), so I (10, ranked) is
+-- below_line and J (5) below_floor; G and H, Voluntari Activi below the line,
+-- are ranked and get no Signal from this kind.
+
+select pg_temp.test_login_leadership(pg_temp.r58('BC'));
+select lives_ok(
+  $$ insert into runs58 select 'ag1', * from public.run_role_evaluation(
+       'adunarea_generala', '2026-03-01', '2026-09-30', 'Evaluare AG S1', 10, 25) $$,
+  'BC finalises an Adunarea Generală run with the values simulated');
+reset role;
+
+select results_eq($$ select candidates, retention_signals from runs58 where label = 'ag1' $$,
+  $$ values (0, 2) $$, 'the run returns no Promotion Candidate and two Retention Signals, both of voters');
+select results_eq(
+  $$ select run.kind, run.eligibility_floor, run.percent_used, run.membership_cutoff,
+            run.evaluated_count, run.ranked_count, run.threshold_computed
+       from public.role_evaluations as run
+      where run.id = (select role_evaluation_id from runs58 where label = 'ag1') $$,
+  $$ values ('adunarea_generala'::text, 10, 25, null::date, 10, 8, 50) $$,
+  'the finalised Adunarea Generală run ranked the whole pool: 10 evaluated, 8 ranked, the line C''s 50, no cutoff');
+select results_eq(
+  $$ select kind, member_id, role_at_listing, reason, task_points, threshold_used, closed_at
+       from public.retention_signals
+      where role_evaluation_id = (select role_evaluation_id from runs58 where label = 'ag1')
+      order by member_id $$,
+  $$ values ('adunarea_generala'::text, pg_temp.r58('I'), 'vot'::public.member_role, 'below_line'::text, 10, 50, null::timestamptz),
+            ('adunarea_generala', pg_temp.r58('J'), 'vot', 'below_floor', 5, 10, null) $$,
+  'the run stores Signals for the voters alone: I below the line (50), J below the Floor (10)');
+select is(
+  (select count(*) from public.retention_signals
+    where role_evaluation_id = (select role_evaluation_id from runs58 where label = 'ag1')
+      and member_id in (pg_temp.r58('G'), pg_temp.r58('H'), pg_temp.r58('A'), pg_temp.r58('B'), pg_temp.r58('C'),
+                        pg_temp.r58('D'), pg_temp.r58('E'), pg_temp.r58('F')))
+  + (select count(*) from public.promotion_candidates
+      where role_evaluation_id = (select role_evaluation_id from runs58 where label = 'ag1')),
+  0::bigint,
+  'the Voluntari Activi G and H, ranked below the line, get no Signal from this kind, no other non-voter does, and the run lists no Promotion Candidate');
+select is(
+  (select threshold from public.promotion_thresholds where kind = 'adunarea_generala'), 50,
+  'the line the run computed over the whole pool, 50, is the Adunarea Generală threshold in force');
+select results_eq(
+  $$ select title, body from public.notifications
+      where member_id = pg_temp.r58('BC')
+        and dedupe_key = 'retention_signal:' || (select role_evaluation_id from runs58 where label = 'ag1')
+                         || ':' || pg_temp.r58('I') $$,
+  $$ values ('Semnal de retenție: Vot I R58'::text,
+             'Vot I R58 (Voluntar cu Drept de Vot) are 10 puncte de task în evaluarea „Evaluare AG S1” (01.03.2026–30.09.2026), '
+             || 'sub pragul Adunării Generale de 50 puncte. Rolul nu se retrage automat: decizia îi aparține BC.') $$,
+  'a voter below the whole pool''s line hears the Adunarea Generală line, 50');
+select pg_temp.test_login_leadership(pg_temp.r58('BC'));
+select results_eq(
+  format($$ select * from public.role_evaluation_ranking(%s) $$,
+         (select role_evaluation_id from runs58 where label = 'ag1')),
+  $$ select * from public.simulate_role_evaluation('adunarea_generala', '2026-03-01', '2026-09-30', 10, 25) $$,
+  'the ranking of the run is the Simulation it finalised: the whole pool, recomputed from the run''s own Floor and share');
+reset role;
+
+-- ==================== 11. set_evaluation_percent writes the share home ====================
 
 select pg_temp.test_login_leadership(pg_temp.r58('BC'));
 select lives_ok($$ select public.set_evaluation_percent('voluntar_activ', 40) $$, 'BC sets x to 40 %');

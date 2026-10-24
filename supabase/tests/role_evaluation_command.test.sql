@@ -36,10 +36,13 @@
 --     (V3 joined after the cutoff; R1 is a Recrut). Signals: A3 and G1 below
 --     the line, G2 below the Floor; A2 at exactly 15 is not one. The threshold
 --     in force before the first run is 20: V4 is listed below it.
---   Adunarea Generală kind: at Floor 5 G1 is ranked alone (G2 below the
---     Floor), share 1, line 12; at Floor 1 both are ranked, share 1, line 12,
---     and G2 is below the line. G1 is also the Adunarea Generală Group's
---     Responsible.
+--   Adunarea Generală kind (Alex, 2026-10-24: the same pool as the Voluntar
+--     Activ kind, judging the voters alone): at Floor 5 the same 10 evaluated
+--     and 9 ranked, share ceil(25 x 9 / 100) = 3, line A1's 25 (R1, V3, A1);
+--     at Floor 1 and 40 % all 10 are ranked, share 4, line V1's 20, so G1 and
+--     G2, the voters, are below the line -- and A2 and A3, below it too, are
+--     no business of this kind. (The voters alone would have read the line 12,
+--     then 12.) G1 is also the Adunarea Generală Group's Responsible.
 --
 -- Mutation guards, first run 2026-09-27 against main's body and re-run
 -- 2026-10-18 against R58's (scratch copies of this file that redefine
@@ -68,6 +71,13 @@
 --     written without its log row -> the two Setări assertions alone; the
 --     share no longer written -> "only the share the run used..." and "the
 --     Adunarea Generală run writes through and logs only its share...";
+--   * (2026-10-24) the core's adunarea_generala arm back to `profile.role =
+--     'vot'` -> "it records no threshold used, computes 25 ...", "the
+--     Adunarea Generală kind (Floor 1) ranks the whole pool ...", "the
+--     Adunarea Generală Retention Signals are about the voters below the
+--     line", "an Adunarea Generală Signal below the line names ...", "the
+--     Adunarea Generală line computed by the run is in force ..." and "a run
+--     that ranks nobody records no line ...";
 --   (The held-lock probe runs in a remote session, which sees only committed
 --   code, so it was not run as a mutation: without the (47, 1) call the
 --   remote run meets no held lock and completes, so the probe discriminates.)
@@ -78,7 +88,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(75);
+select plan(76);
 
 -- ==================== 1. The lock ====================
 -- A held-lock probe, as #52's suite probes (52, 1): a run must wait on
@@ -356,7 +366,9 @@ select is((select count(*) from public.role_evaluations where name like 'Evaluar
 
 -- ==================== 5. A kind's first run needs no threshold in force ====================
 -- R58 (decision 17): a run measures against the line it computes, so the
--- Adunarea Generală kind's first run succeeds with no threshold entered.
+-- Adunarea Generală kind's first run succeeds with no threshold entered. It
+-- ranks the whole pool (Alex, 2026-10-24): 9 of 10 ranked at Floor 5, so the
+-- 25 % share is 3 and the line is A1's 25.
 
 select pg_temp.test_login_leadership('82600000-0000-0000-0000-000000000001');
 select lives_ok(
@@ -369,8 +381,8 @@ select results_eq(
             (select threshold from public.promotion_thresholds where kind = 'adunarea_generala')
        from public.role_evaluations as run
       where run.id = (select role_evaluation_id from runs826 where label = 'ag_first') $$,
-  $$ values (null::int, 12, 12) $$,
-  'it records no threshold used, computes 12 (G1, the one voter at the Floor) and hands it over as the first Adunarea Generală threshold');
+  $$ values (null::int, 25, 25) $$,
+  'it records no threshold used, computes 25 (A1, the third of the nine ranked over the whole pool) and hands it over as the first Adunarea Generală threshold');
 
 -- ==================== 6. BC runs a Voluntar Activ Role Evaluation ====================
 
@@ -602,8 +614,8 @@ select results_eq(
             run.threshold_computed, run.membership_cutoff
        from runs826 as r join public.role_evaluations as run on run.id = r.role_evaluation_id
       where r.label = 'ag1' $$,
-  $$ values (0, 1, 2, 2, 10, 12, null::date) $$,
-  'the Adunarea Generală kind (Floor 1) ranks only the two Voluntar cu Drept de Vot holders, lists no candidate, signals the one below the line and computes 12 (top 40 % of two, one Member); it records no cutoff');
+  $$ values (0, 2, 10, 10, 10, 20, null::date) $$,
+  'the Adunarea Generală kind (Floor 1) ranks the whole pool of ten, lists no candidate, signals the two voters below the line and computes 20 (top 40 % of ten, the fourth); it records no cutoff');
 select results_eq(
   $$ select kind, field, from_value, to_value, source, changed_by
        from public.promotion_threshold_changes
@@ -620,12 +632,20 @@ select is(
   (select count(*) from public.promotion_candidates
     where role_evaluation_id = (select role_evaluation_id from runs826 where label = 'ag1')),
   0::bigint, 'the Adunarea Generală kind writes no Promotion Candidate row');
+select results_eq(
+  $$ select member_id, role_at_listing::text, reason, task_points, threshold_used
+       from public.retention_signals
+      where role_evaluation_id = (select role_evaluation_id from runs826 where label = 'ag1')
+      order by member_id $$,
+  $$ values ('82600000-0000-0000-0000-000000000031'::uuid, 'vot', 'below_line', 12, 20),
+            ('82600000-0000-0000-0000-000000000032'::uuid, 'vot', 'below_line', 3, 20) $$,
+  'the Adunarea Generală kind stores Signals for the voters below the line alone: A2 (15) and A3 (5), Voluntari Activi under the same line of 20, get none');
 select is(
-  (select array_agg(split_part(dedupe_key, ':', 3)::uuid) from (
+  (select array_agg(split_part(dedupe_key, ':', 3)::uuid order by split_part(dedupe_key, ':', 3)::uuid) from (
      select distinct dedupe_key from public.notifications
       where dedupe_key like 'retention_signal:' || (select role_evaluation_id from runs826 where label = 'ag1') || ':%') as k),
-  array['82600000-0000-0000-0000-000000000032'::uuid],
-  'the Adunarea Generală Retention Signal is about the Voluntar cu Drept de Vot below the line');
+  array['82600000-0000-0000-0000-000000000031'::uuid, '82600000-0000-0000-0000-000000000032'::uuid],
+  'the Adunarea Generală Retention Signals are about the Voluntari cu Drept de Vot below the line');
 select results_eq(
   $$ select title, body, link from public.notifications
       where member_id = '82600000-0000-0000-0000-000000000001'
@@ -634,12 +654,12 @@ select results_eq(
   $$ select 'Semnal de retenție: Vot Doi',
             'Vot Doi (Voluntar cu Drept de Vot) are 3 puncte de task în evaluarea „AG #826” ('
             || to_char(d_from, 'DD.MM.YYYY') || '–' || to_char(d_to, 'DD.MM.YYYY')
-            || '), sub pragul Adunării Generale de 12 puncte. Rolul nu se retrage automat: decizia îi aparține BC.',
+            || '), sub pragul Adunării Generale de 20 puncte. Rolul nu se retrage automat: decizia îi aparține BC.',
             '/tracker/membru/82600000-0000-0000-0000-000000000032'
        from fx826 $$,
   'an Adunarea Generală Signal below the line names the Adunarea Generală''s line, not the Promotion Threshold');
-select is((select threshold from public.promotion_thresholds where kind = 'adunarea_generala'), 12,
-  'the Adunarea Generală line computed by the run is in force until its next run');
+select is((select threshold from public.promotion_thresholds where kind = 'adunarea_generala'), 20,
+  'the Adunarea Generală line computed by the run, over the whole pool, is in force until its next run');
 
 -- ==================== 11. A run that ranks nobody hands nothing over ====================
 -- A range nobody earned in: nobody reaches the Floor, so there is no line.
@@ -657,8 +677,8 @@ select results_eq(
               where role_evaluation_id = run.id and field = 'threshold')
        from public.role_evaluations as run
       where run.id = (select role_evaluation_id from runs826 where label = 'ag0') $$,
-  $$ values (null::int, 0, 12, 0::bigint) $$,
-  'a run that ranks nobody records no line and hands nothing over: 12 stays in force, no threshold change row');
+  $$ values (null::int, 0, 20, 0::bigint) $$,
+  'a run that ranks nobody records no line and hands nothing over: 20 stays in force, no threshold change row');
 select results_eq(
   $$ select eligibility_floor, membership_cutoff from public.evaluation_settings where id = 1 $$,
   $$ values (7, date '1999-12-31') $$,

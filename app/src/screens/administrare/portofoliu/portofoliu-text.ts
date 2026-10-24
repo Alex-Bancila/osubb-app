@@ -161,7 +161,7 @@ export function finalizeConsequences({
 }): string {
   if (line === null)
     return `Nimeni nu atinge pragul minim: evaluarea se înregistrează fără un nou ${THRESHOLD_LABEL[kind]}, iar toți deținătorii devin semnale de retenție.`;
-  const ranked = `Clasăm punctele de task primite între ${formatDay(from)} și ${formatDay(to)} de toți membrii ${kind === 'voluntar_activ' ? 'sub BCE' : 'Adunării Generale'} care au cel puțin ${formatPointCount(floor)}.`;
+  const ranked = `Clasăm punctele de task primite între ${formatDay(from)} și ${formatDay(to)} de toți membrii sub BCE care au cel puțin ${formatPointCount(floor)}.`;
   const handed = `${kind === 'voluntar_activ' ? 'Pragul de promovare' : 'Pragul Adunarea Generală'} devine punctele ultimului membru din primii ${percent} %: ${formatPointCount(line)}.`;
   const outcome =
     kind === 'voluntar_activ'
