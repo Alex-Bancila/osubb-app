@@ -74,8 +74,8 @@ select plan(78);
 
 -- Three Members who are never in a pool, whatever they earn (Alex,
 -- 2026-10-24: every Member below BCE, so not the BCE, the BC or the
--- Moderator): each credited more than anyone, so a pool that let one in would
--- show it as the first row. The fixture's BC is the first.
+-- Moderator): each credited as much as the best-ranked Member, so a pool that
+-- let one in would show it among the first rows. The fixture's BC is the first.
 insert into auth.users (id, email) values
   ('58589000-0000-0000-0000-0000000000b1', 'bce-r58@test.local'),
   ('58589000-0000-0000-0000-0000000000b2', 'moderator-r58@test.local');

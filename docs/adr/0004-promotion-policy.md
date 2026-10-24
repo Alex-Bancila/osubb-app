@@ -77,7 +77,7 @@ Ruling R28 (`docs/superpowers/plans/2026-09-23-prod-readiness-grill.md`). It sup
 
 **Voluntar → Voluntar Activ is BC-confirmed.** The Voluntar Activ kind ranks active Voluntar and Voluntar Activ holders. A Voluntar with the required tenure (the tenure gate stands) at or above the threshold becomes a **Promotion Candidate**: a row in the candidates list and one Notification per Member per run to BC and Moderator. Nobody is promoted by the run; BC promotes by hand in the Role panel, which writes `role_history` and notifies the Member as the 2026-09-20 amendment rules. Decision 1's automatic Voluntar → Membru Activ is withdrawn; **Recrut → Voluntar by tenure is the only automatic promotion left**, and the daily job keeps only that rule.
 
-**Retention Signals.** The Voluntar Activ kind raises one for each Voluntar Activ below the top x%; the Adunarea Generală kind judges only current Voluntar cu Drept de Vot holders (it ranks the same pool as the Voluntar Activ kind since 2026-10-24, amended; the first R58 text ranked the voters alone) and raises one for each below the top y%, with no promotion path. Decision 3 stands: nothing lowers a Role automatically.
+**Retention Signals.** The Voluntar Activ kind raises one for each Voluntar Activ below the top x%; the Adunarea Generală kind judges only current Voluntar cu Drept de Vot holders (it ranks the same pool as the Voluntar Activ kind since 2026-10-24, amended; R28 and the first R58 text ranked the voters alone) and raises one for each below the top y%, with no promotion path. Decision 3 stands: nothing lowers a Role automatically.
 
 **AG Eligibility** still follows from the Voluntar Activ Role alone; no threshold leads to Drept de Vot, which only BC's confirmation grants.
 

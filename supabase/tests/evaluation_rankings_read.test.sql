@@ -300,7 +300,7 @@ reset role;
 
 select pg_temp.test_login_leadership('51200000-0000-0000-0000-000000000004');
 select is((select count(*) from public.role_evaluation_ranking((select run_id from fx512))), 0::bigint,
-  'a BCE with no Group Role reads only their own row -- none here (a BCE is never a Drept de Vot holder): level 5 is not the full read');
+  'a BCE with no Group Role reads only their own row -- none here (a BCE is in neither kind pool): level 5 is not the full read');
 reset role;
 
 select pg_temp.test_login_leadership('51200000-0000-0000-0000-000000000011');
