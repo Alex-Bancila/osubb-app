@@ -148,23 +148,23 @@ select lives_ok(
   'Requests older than 24 hours no longer count');
 reset role;
 
--- ==================== task_create: 100 per 24 hours ====================
+-- ==================== task_create: 300 per 24 hours (100 until 2026-10-23) ====================
 
 insert into public.task_activity (task_id, kind, actor_id)
 select (select t1 from cap_tasks), 'created', pg_temp.cap_uid(1)
-  from generate_series(1, 99 - (select count(*)::int from public.task_activity
+  from generate_series(1, 299 - (select count(*)::int from public.task_activity
                                   where actor_id = pg_temp.cap_uid(1) and kind = 'created'));
 
 select pg_temp.test_login_leadership(pg_temp.cap_uid(1));
 select lives_ok(
-  format($$ select public.create_task('Plafon 100', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => %s) $$,
+  format($$ select public.create_task('Plafon 300', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => %s) $$,
          pg_temp.cap_group('Plafon Lucru')),
-  'the hundredth Task in 24 hours is created');
+  'the three-hundredth Task in 24 hours is created');
 select throws_ok(
-  format($$ select public.create_task('Plafon 101', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => %s) $$,
+  format($$ select public.create_task('Plafon 301', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => %s) $$,
          pg_temp.cap_group('Plafon Lucru')),
   'PT409', 'rate_limited',
-  'the hundred-and-first Task in 24 hours is refused');
+  'the three-hundred-and-first Task in 24 hours is refused');
 select throws_ok(
   format($$ select public.create_task('  ', 'd', now() + interval '7 days', 'local', 'direct', p_group_id => %s) $$,
          pg_temp.cap_group('Plafon Lucru')),

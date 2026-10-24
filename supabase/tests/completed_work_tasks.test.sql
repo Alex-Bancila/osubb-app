@@ -487,19 +487,19 @@ select is((select jsonb_array_length(task.links) from public.tasks as task
 -- 'created' rows written as the owner (rolled back).
 insert into public.task_activity (task_id, kind, actor_id)
 select pg_temp.t915('Task finalizat #915'), 'created', pg_temp.u915(2)
-  from generate_series(1, 99 - (select count(*) from public.task_activity
+  from generate_series(1, 299 - (select count(*) from public.task_activity
                                   where actor_id = pg_temp.u915(2) and kind = 'created'
                                     and created_at > clock_timestamp() - interval '24 hours'));
 
 select pg_temp.test_login_leadership(pg_temp.u915(2));
 select lives_ok(format($q$
-  select public.create_completed_task(%L, %s, 'Al o suta-lea task #915', null, null, null, null, 1, 3, 'n')
+  select public.create_completed_task(%L, %s, 'Al trei suta-lea task #915', null, null, null, null, 1, 3, 'n')
 $q$, pg_temp.u915(4), pg_temp.g915('Echipa A1 #915')),
-  'the hundredth Task in 24 hours is added');
+  'the three-hundredth Task in 24 hours is added');
 select throws_ok(format($q$
   select public.create_completed_task(%L, %s, 'Peste plafon #915', null, null, null, null, 1, 3, 'n')
 $q$, pg_temp.u915(4), pg_temp.g915('Echipa A1 #915')),
-  'PT409', 'rate_limited', 'the hundred-and-first is refused -- create_task''s cap, shared');
+  'PT409', 'rate_limited', 'the three-hundred-and-first is refused -- create_task''s cap, shared');
 reset role;
 
 select * from finish();
