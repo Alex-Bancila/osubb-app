@@ -566,8 +566,8 @@ describe('a mark comes off the fewest characters (fix round 1)', () => {
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;'),
       );
-      // The stripper keeps the backslash before `<` (a database follow-up).
-      expect(toPlainText(markdown)).toBe(markdown.replace(/\\_/g, '_'));
+      // The stripper unescapes it, as the reader does (#1109).
+      expect(toPlainText(markdown)).toBe(words);
     },
   );
 
@@ -617,8 +617,9 @@ describe('a mark comes off the fewest characters (fix round 1)', () => {
       const html = reader(markdown);
       expect(html).toContain('</a>');
       expect(html).toMatch(/ftp:\/\/x\.ro\/(a_b|~u)<\/p>/);
-      // The stripper shows that `\:` (a database follow-up).
-      expect(toPlainText(markdown)).toContain('ftp\\://x.ro/');
+      // The stripper unescapes that `\:`, as the reader does (#1109).
+      expect(toPlainText(markdown)).toMatch(/ftp:\/\/x\.ro\/(a_b|~u)$/);
+      expect(toPlainText(markdown)).not.toContain('\\');
     },
   );
 

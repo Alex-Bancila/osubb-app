@@ -579,8 +579,8 @@ type Variant = {
  * or bracketed, and last with every `<` on the line that opens an HTML tag or
  * comment escaped, not only the one holding a marker (`<span class="a_b">`,
  * `<!-- … -->`): the reader shows raw HTML as typed, escapes and all, so a
- * marker inside one can only be written that way. The stripper then shows
- * those backslashes (`plain.ts` does not unescape `<`). Before the tags, an
+ * marker inside one can only be written that way; the stripper unescapes
+ * them, as the reader does (#1109). Before the tags, an
  * `ftp://` address with its `:` escaped: `marked` reads one as an address
  * and the reader shows it as typed, so one that holds a marker (`ftp://x/a_b`)
  * would show its escapes. One that holds none is written as it is.
@@ -597,9 +597,6 @@ const VARIANTS: readonly Variant[] = [
 
 /** Always written escaped: the dialect reads each anywhere in a line. */
 const ESCAPED = new Set(['\\', '*', '_', '~', '`', '[', ']', '|']);
-
-/** What the stripper unescapes (`plain.ts`): any other escape stays visible. */
-const UNESCAPED = new Set('\\`*_{}[]()#+.!~=>|-');
 
 /**
  * At the start of a line, what would open a block: a Titlu, a quote, a list
@@ -704,11 +701,14 @@ function escapedCharacters(
   return written;
 }
 
-/** What the stripper shows for one written character. */
+/**
+ * What the stripper shows for one written character: an escaped ASCII
+ * punctuation mark as itself, as CommonMark and the reader read it (#1109).
+ */
 function stripped(written: string): string {
   return written.length === 2 &&
     written.startsWith('\\') &&
-    UNESCAPED.has(written.slice(1))
+    PUNCTUATION.test(written.slice(1))
     ? written.slice(1)
     : written;
 }
@@ -869,7 +869,7 @@ const PUNCTUATION = /^[!-/:-@[-`{-~]$/;
 /**
  * `line` with its links only and every ASCII punctuation mark escaped: a form
  * the reader always reads as these words, written only when nothing else
- * agrees. The stripper then shows the backslashes it does not unescape.
+ * agrees. The stripper unescapes them all, as the reader does (#1109).
  */
 function plainest(line: Line, prefix: string): Emitted {
   return emit(

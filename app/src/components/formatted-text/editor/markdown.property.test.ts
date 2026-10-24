@@ -189,46 +189,17 @@ function words(node: JSONContent): string {
   return content.map(words).join('');
 }
 
-/**
- * The two shapes whose markers the stripper keeps (a database follow-up,
- * like `\<`): a quote inside a quote, and a list item that opens with no
- * words of its own.
- */
-function stripperKeepsMarkers(node: JSONContent, inQuote = false): boolean {
-  if (node.type === 'blockquote' && inQuote) return true;
-  if (node.type === 'listItem' && !node.content?.[0]?.content?.length)
-    return true;
-  return (node.content ?? []).some((child) =>
-    stripperKeepsMarkers(child, inQuote || node.type === 'blockquote'),
-  );
-}
-
 const unspaced = (value: string) => value.replace(/\s/g, '');
 
 /**
- * Whether `stripped` holds exactly `expected`'s words, spaces aside, with no
- * backslash the document did not have but two the stripper keeps, since
- * `plain.ts` unescapes neither `<` nor `:` (database follow-ups): one before
- * a `<` anywhere (a `<` opening a line, or any tag's on a line whose raw HTML
- * holds a marker), and one before the `:` of an `ftp://` address.
+ * Whether `stripped` holds exactly `expected`'s words, spaces aside: no
+ * marker and no backslash the document did not have. Since #1109 the
+ * stripper unescapes every ASCII punctuation escape the writer adds (`\<`,
+ * `ftp\:`), strips a quote inside a quote and joins an item that opens on
+ * the next line, so every document is held to it.
  */
 function sameWords(stripped: string, expected: string): boolean {
-  const left = unspaced(stripped);
-  const right = unspaced(expected);
-  const kept = (to: number) =>
-    right[to] === '<' ||
-    (right[to] === ':' && /ftp$/i.test(right.slice(Math.max(0, to - 3), to)));
-  let at = 0;
-  let to = 0;
-  while (at < left.length && to < right.length) {
-    if (left[at] === right[to]) {
-      at += 1;
-      to += 1;
-    } else if (left[at] === '\\' && left[at + 1] === right[to] && kept(to))
-      at += 1;
-    else return false;
-  }
-  return at === left.length && to === right.length;
+  return unspaced(stripped) === unspaced(expected);
 }
 
 /** A Text Link's address as the writer keeps it: parentheses encoded. */
@@ -286,11 +257,8 @@ describe.each(VARIANTS)(
     });
 
     it('gives the stripper the document’s words, with no backslash of its own', () => {
-      let checked = 0;
       for (const { json, markdown } of written()) {
         const normal = normalizeFormattedText(json);
-        if (stripperKeepsMarkers(normal)) continue;
-        checked += 1;
         const stripped = toPlainText(markdown);
         if (!sameWords(stripped, words(normal)))
           expect({ markdown, stripped }).toEqual({
@@ -298,7 +266,6 @@ describe.each(VARIANTS)(
             stripped: words(normal),
           });
       }
-      expect(checked).toBeGreaterThan(150);
     });
   },
 );
