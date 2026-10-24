@@ -61,8 +61,8 @@ The university a Member studies at, chosen from a list on which Universitatea Ba
 _Avoid_: Faculty, school, "UBB student" as a flag, "Nu sunt student"
 
 **Group**:
-A named body of OSUBB people and work, created by BC or Moderator with its own name and settings. A Group holds one roster of Members with Group roles and one Minimum Level. Departments, Teams, Projects, and the Adunarea Generală are Groups; every Task Origin and Event Scope is a Group.
-_Avoid_: Scope, structure, org unit, entity
+A named body of OSUBB people and work, created by BC or Moderator with its own name and settings. A Group holds one roster of Members with Group roles and one Minimum Level. Departments, Teams, Projects, and the Adunarea Generală are Groups; every Task Origin and Event Scope is a Group. A Group is active or archived. Archiving takes the Groups below it too, keeps their history and rosters, cancels their future Events and declines their pending Applications; an archived Group cannot be changed. Whoever may archive a Group may unarchive it: it comes back with the archived Groups below it, but cancelled Events and declined Applications stay as they are, and a Child Group cannot come back while its parent is archived (ruling R65, 2026-10-24). Administrare lists archived Groups under Arhivate.
+_Avoid_: Scope, structure, org unit, entity, "restore" or "reactivate" for unarchiving
 
 **Child Group**:
 A Group created inside a parent Group and overseen by the parent's Group Managers; a Child Group may have Child Groups of its own, to any depth. Its parent is chosen at creation and never changes; a wrongly placed Group is archived and created again, or deleted for good by whoever may archive it (ruling R38). A Department Team is a Child Group of its Department; a Child Group's Task Points count toward the Department Cup of its nearest competing ancestor when every Group on the path is set to count.

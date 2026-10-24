@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import type { AdminGroup, AppointableMember } from '../../queries/groups-admin';
 import {
+  archivedTree,
   buildTree,
   categoryLabel,
   competesAbove,
@@ -19,6 +20,8 @@ import {
   ledTree,
   membersBelowLevel,
   minLevelChoices,
+  parentIsArchived,
+  returningSubgroups,
   rosterBackState,
   unfinishedTasksPath,
   varies,
@@ -536,4 +539,56 @@ it('says whether a Group above this one competes in the Department Cup', () => {
   expect(competesAbove(department, all)).toBe(false);
   // A Group above that the list does not hold counts as not competing.
   expect(competesAbove(team, [team, squad])).toBe(false);
+});
+
+/* #1110 (ruling R65): Arhivate and what unarchiving brings back. */
+const archivedTreeFixture = [
+  group(1, 'Educațional', [1], null),
+  group(3, 'Amfiteatru', [1, 3], 1, { status: 'archived' }),
+  group(5, 'Foto', [1, 3, 5], 3, { status: 'archived' }),
+  group(6, 'Atelier', [1, 3, 6], 3, { status: 'archived' }),
+  group(2, 'Logistică', [1, 2], 1),
+  group(4, 'Balul Bobocilor', [4], null, { status: 'archived' }),
+];
+
+it('lists the archived Groups shown as a tree, an active parent kept as context (R65)', () => {
+  const rows = archivedTree(
+    archivedTreeFixture,
+    new Set(archivedTreeFixture.map((row) => row.id)),
+  );
+  expect(rows.map((row) => [row.group.name, row.depth, row.context])).toEqual([
+    ['Balul Bobocilor', 0, false],
+    ['Educațional', 0, true],
+    ['Amfiteatru', 1, false],
+    ['Atelier', 2, false],
+    ['Foto', 2, false],
+  ]);
+  // A viewer shown only Foto sees it under its readable ancestors, both context.
+  expect(
+    archivedTree(archivedTreeFixture, new Set([5])).map((row) => [
+      row.group.name,
+      row.context,
+    ]),
+  ).toEqual([
+    ['Educațional', true],
+    ['Amfiteatru', true],
+    ['Foto', false],
+  ]);
+  expect(archivedTree(archivedTreeFixture, new Set([2]))).toEqual([]);
+});
+
+it('names the archived subgroups that return with a Group, in tree order (R65)', () => {
+  expect(
+    returningSubgroups({ id: 3 }, archivedTreeFixture).map((row) => row.name),
+  ).toEqual(['Atelier', 'Foto']);
+  expect(returningSubgroups({ id: 4 }, archivedTreeFixture)).toEqual([]);
+});
+
+it('says whether a Group waits for an archived parent (R65)', () => {
+  const byId = new Map(archivedTreeFixture.map((row) => [row.id, row]));
+  expect(parentIsArchived({ parent_id: 3 }, byId)).toBe(true);
+  expect(parentIsArchived({ parent_id: 1 }, byId)).toBe(false);
+  expect(parentIsArchived({ parent_id: null }, byId)).toBe(false);
+  // A parent the viewer cannot read: the server decides.
+  expect(parentIsArchived({ parent_id: 99 }, byId)).toBe(false);
 });
