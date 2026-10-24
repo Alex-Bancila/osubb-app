@@ -165,7 +165,7 @@ function changes(
           content: (
             <>
               <p>{fields.description}:</p>
-              <FormattedText view="full" text={value} />
+              <FormattedText view="full" headings="text" text={value} />
             </>
           ),
         },

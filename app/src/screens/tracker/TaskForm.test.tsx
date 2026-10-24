@@ -11,6 +11,7 @@ import { chooseOption, optionNames } from '../../test/select';
 import * as axe from 'axe-core';
 import { expect, it, vi } from 'vitest';
 import { pickDate } from '../../test/date-picker';
+import { findFormattedText } from '../../test/formatted-text';
 import { bucharestWallTimeToIso } from '../../lib/calendar-time';
 import { TaskForm } from './TaskForm';
 // A deadline next month: always in the future, and one page away in the
@@ -673,6 +674,28 @@ it('puts a server refusal under the field it names, and the rest above the butto
     ),
   );
   expect(title).not.toHaveAttribute('aria-invalid');
+});
+it('puts a server refusal of the Descriere under it (R60)', async () => {
+  const onDraft = vi
+    .fn()
+    .mockRejectedValueOnce({ code: 'PT400', message: 'description_too_long' });
+  render(<TaskForm options={options} onDraft={onDraft} />);
+  const user = await content();
+  await pick(user, groupBox(), 'Tineret');
+  await choose(user, modeGroup(), 'Public');
+  const description = await findFormattedText('Descriere (opțional)');
+  await user.type(description, 'Plan');
+  await user.click(screen.getByRole('button', { name: 'Continuă' }));
+
+  expect(onDraft).toHaveBeenCalledWith(
+    expect.objectContaining({ description: 'Plan' }),
+  );
+  await waitFor(() =>
+    expect(description).toHaveAccessibleDescription(
+      /Descrierea are cel mult 2000 de caractere\./,
+    ),
+  );
+  await waitFor(() => expect(description).toHaveFocus());
 });
 it('explains when the caller has no managed Groups', () => {
   render(

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
@@ -87,7 +89,7 @@ describe('a dialog above a phone keyboard (#1013)', () => {
 });
 
 describe('a sheet above a phone keyboard (#1013)', () => {
-  async function openSheet(side: 'left' | 'right') {
+  async function openSheet(side: 'left' | 'right' | 'bottom') {
     const user = userEvent.setup();
     render(
       <Sheet>
@@ -107,18 +109,35 @@ describe('a sheet above a phone keyboard (#1013)', () => {
     return screen.findByRole('dialog');
   }
 
-  it.each(['left', 'right'] as const)(
-    'ends where the keyboard starts (%s)',
+  // R60: and above the Formatted Text keyboard bar while it shows; with no
+  // bar `--format-bar-h` is 0px, so the sheet ends where it always did.
+  it.each(['left', 'right', 'bottom'] as const)(
+    'ends where the keyboard (and a format bar) starts (%s)',
     async (side) => {
       const sheet = await openSheet(side);
 
       expect(sheet).toHaveClass(
-        'top-(--visible-top)',
-        'bottom-(--keyboard-inset)',
+        'bottom-[calc(var(--keyboard-inset)+var(--format-bar-h))]',
       );
+      if (side !== 'bottom') expect(sheet).toHaveClass('top-(--visible-top)');
       expect(sheet).not.toHaveClass('inset-y-0');
     },
   );
+
+  it('rises from the bottom no taller than the space above the keyboard and a format bar', async () => {
+    const sheet = await openSheet('bottom');
+
+    expect(sheet).toHaveClass(
+      'max-h-[calc(100dvh-var(--keyboard-inset)-var(--format-bar-h)-var(--keyboard-offset-top)-3rem)]',
+    );
+  });
+
+  it('reads no format bar until one publishes its height (R60)', () => {
+    const css = readFileSync(path.resolve('src/theme/tailwind.css'), 'utf8');
+    const root = /^:root \{([\s\S]*?)^\}/m.exec(css)?.[1] ?? '';
+
+    expect(root).toMatch(/^\s*--format-bar-h: 0px;$/m);
+  });
 
   it('scrolls its body and pins its footer above the keyboard', async () => {
     const sheet = await openSheet('right');

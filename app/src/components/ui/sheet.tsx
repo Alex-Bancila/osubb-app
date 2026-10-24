@@ -41,20 +41,22 @@ function SheetBackdrop({
 // The left and right sides fill the area a phone keyboard leaves visible (#1013), from
 // where iOS panned it to down to the keyboard: the sheet's own
 // scroll then reaches every field, and its footer pins above the keyboard.
+// Every side ends above the Formatted Text keyboard bar too while it shows
+// (R60): `--format-bar-h` is its height then, and 0px otherwise.
 const sheetSides = {
   // The navigation drawer: narrow, from the left.
-  left: 'top-(--visible-top) bottom-(--keyboard-inset) left-0 w-[min(280px,calc(100%-2rem))] data-ending-style:-translate-x-full data-starting-style:-translate-x-full',
+  left: 'top-(--visible-top) bottom-[calc(var(--keyboard-inset)+var(--format-bar-h))] left-0 w-[min(280px,calc(100%-2rem))] data-ending-style:-translate-x-full data-starting-style:-translate-x-full',
   // A details or form panel: the full width of a phone, from the right, and
   // slides in and out on that side. Set the width cap (`max-w-md`, …) and the
   // padding at the call site.
   right:
-    'top-(--visible-top) bottom-(--keyboard-inset) right-0 w-full overflow-y-auto data-ending-style:translate-x-full data-starting-style:translate-x-full',
+    'top-(--visible-top) bottom-[calc(var(--keyboard-inset)+var(--format-bar-h))] right-0 w-full overflow-y-auto data-ending-style:translate-x-full data-starting-style:translate-x-full',
   // A few controls (a filter): on a phone a panel as tall as its content,
   // rising from the bottom edge with the page still visible above it; from
   // `sm` the same right-hand panel as `right`. Set the width cap from `sm`
   // (`sm:max-w-md`) and the padding at the call site.
   bottom:
-    'inset-x-0 bottom-(--keyboard-inset) max-h-[calc(100dvh-var(--keyboard-inset)-var(--keyboard-offset-top)-3rem)] overflow-y-auto rounded-t-2xl data-ending-style:translate-y-full data-starting-style:translate-y-full sm:inset-x-auto sm:top-(--visible-top) sm:right-0 sm:max-h-none sm:w-full sm:rounded-none sm:data-ending-style:translate-x-full sm:data-ending-style:translate-y-0 sm:data-starting-style:translate-x-full sm:data-starting-style:translate-y-0',
+    'inset-x-0 bottom-[calc(var(--keyboard-inset)+var(--format-bar-h))] max-h-[calc(100dvh-var(--keyboard-inset)-var(--format-bar-h)-var(--keyboard-offset-top)-3rem)] overflow-y-auto rounded-t-2xl data-ending-style:translate-y-full data-starting-style:translate-y-full sm:inset-x-auto sm:top-(--visible-top) sm:right-0 sm:max-h-none sm:w-full sm:rounded-none sm:data-ending-style:translate-x-full sm:data-ending-style:translate-y-0 sm:data-starting-style:translate-x-full sm:data-starting-style:translate-y-0',
 } as const;
 
 function SheetPopup({

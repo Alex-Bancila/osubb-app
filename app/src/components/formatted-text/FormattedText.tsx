@@ -1,11 +1,18 @@
 import { Fragment, useMemo, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import type { MarkedToken, Token, Tokens } from 'marked';
+import {
+  isDialectHeading,
+  isWrittenTextLink,
+} from '../../lib/formatted-text/dialect';
 import { lexFormattedText } from '../../lib/formatted-text/lex';
 import { textLinkTarget, type TextLinkTarget } from '../../lib/links';
 import { cn } from '../../lib/utils';
 
 type View = 'full' | 'preview';
+
+/** `outline`: a Titlu is an `h3`, a Subtitlu an `h4`. `text`: a `p` with their look. */
+type Headings = 'outline' | 'text';
 
 type FormattedTextProps = {
   /** An Announcement's or Deal's body, or a Task's or an Event's description. */
@@ -18,6 +25,13 @@ type FormattedTextProps = {
    * target. The page's own `line-clamp-*` shortens it.
    */
   view: View;
+  /**
+   * `outline` (the default): a Titlu is an `h3` and a Subtitlu an `h4`, as in a
+   * sheet whose own title is the heading above. `text`: the same look in a `p`
+   * with no heading role, for a card or a timeline entry that is not a sheet and
+   * has headings of its own (ruling 22). Only `full` has headings to place.
+   */
+  headings?: Headings;
   className?: string;
 };
 
@@ -29,8 +43,16 @@ type FormattedTextProps = {
  * underlined with `===`, a reference link, a link `textLinkTarget` refuses)
  * shows as it was typed. The styles live in `theme/formatted-text.css`.
  */
-export function FormattedText({ text, view, className }: FormattedTextProps) {
-  const content = useMemo(() => read(text, view), [text, view]);
+export function FormattedText({
+  text,
+  view,
+  headings = 'outline',
+  className,
+}: FormattedTextProps) {
+  const content = useMemo(
+    () => read(text, view, headings),
+    [text, view, headings],
+  );
   if (view === 'preview')
     return (
       <span className={cn('formatted-text-preview', className)}>{content}</span>
@@ -44,24 +66,15 @@ export function FormattedText({ text, view, className }: FormattedTextProps) {
  * must never take down the screen that lists it (ruling 16). In development the
  * error is logged, so a text that fails to read is not silently shown as typed.
  */
-function read(text: string, view: View): ReactNode {
+function read(text: string, view: View, headings: Headings): ReactNode {
   try {
     const tokens = lexFormattedText(text);
-    return view === 'preview' ? joined(runs(tokens)) : blocks(tokens);
+    return view === 'preview' ? joined(runs(tokens)) : blocks(tokens, headings);
   } catch (error) {
     if (import.meta.env.DEV) console.error('[formatted-text]', error);
     const typed = asTyped(text.replace(/\r\n/g, '\n'), view);
     return view === 'preview' ? typed : <p>{typed}</p>;
   }
-}
-
-/**
- * A Titlu or Subtitlu written with `#`, not underlined with `===` or `---`.
- * The `#` run must end the word, as the stripper's `#{1,6}[ \t]+` does:
- * `#voluntariat` underlined with `---` is an underlined heading, shown as typed.
- */
-function isDialectHeading(token: Tokens.Heading): boolean {
-  return /^[ \t]*#{1,6}(?:[ \t]|\n|$)/.test(token.raw);
 }
 
 /** Nothing to show: no node, or only the nothing a blank-worded link leaves. */
@@ -88,11 +101,7 @@ function asTyped(raw: string, view: View): ReactNode {
  * that `marked` also reads as a link is not, and neither is one with no words.
  */
 function linkTarget(token: Tokens.Link): TextLinkTarget | null {
-  const written =
-    (token.raw.startsWith('[') && token.raw.endsWith(')')) ||
-    token.raw === token.href;
-  if (!written || !token.tokens.length) return null;
-  return textLinkTarget(token.href);
+  return isWrittenTextLink(token) ? textLinkTarget(token.href) : null;
 }
 
 /**
@@ -158,8 +167,32 @@ function inline(tokens: readonly Token[], view: View): ReactNode[] {
   });
 }
 
+/**
+ * A Titlu or a Subtitlu: an `h3` or an `h4`, or, where the page already has
+ * headings of its own, a `p` that only looks like one (`.formatted-text-title`
+ * and `.formatted-text-subtitle`).
+ */
+function heading(
+  level: 'title' | 'subtitle',
+  words: ReactNode[],
+  headings: Headings,
+  key: number,
+): ReactNode {
+  if (headings === 'text')
+    return (
+      <p key={key} className={`formatted-text-${level}`}>
+        {words}
+      </p>
+    );
+  return level === 'title' ? (
+    <h3 key={key}>{words}</h3>
+  ) : (
+    <h4 key={key}>{words}</h4>
+  );
+}
+
 /** The `full` view: one element per block. */
-function blocks(tokens: readonly Token[]): ReactNode[] {
+function blocks(tokens: readonly Token[], headings: Headings): ReactNode[] {
   return tokens.map((token, key) => {
     const block = token as MarkedToken;
     switch (block.type) {
@@ -173,16 +206,19 @@ function blocks(tokens: readonly Token[]): ReactNode[] {
         if (!isDialectHeading(block)) break;
         // A `#` with no words titles nothing.
         if (!block.text.trim()) return null;
-        return block.depth === 1 ? (
-          <h3 key={key}>{inline(block.tokens, 'full')}</h3>
-        ) : (
-          <h4 key={key}>{inline(block.tokens, 'full')}</h4>
+        return heading(
+          block.depth === 1 ? 'title' : 'subtitle',
+          inline(block.tokens, 'full'),
+          headings,
+          key,
         );
       case 'blockquote':
-        return <blockquote key={key}>{blocks(block.tokens)}</blockquote>;
+        return (
+          <blockquote key={key}>{blocks(block.tokens, headings)}</blockquote>
+        );
       case 'list': {
         const items = block.items.map((item, index) => (
-          <li key={index}>{blocks(item.tokens)}</li>
+          <li key={index}>{blocks(item.tokens, headings)}</li>
         ));
         if (!block.ordered) return <ul key={key}>{items}</ul>;
         const start =

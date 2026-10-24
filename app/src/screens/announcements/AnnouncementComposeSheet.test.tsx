@@ -1,7 +1,8 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { findFormattedText } from '../../test/formatted-text';
 import { chooseOption } from '../../test/select';
 import type { MyGroup } from '../../queries/my-groups';
 import type { Group } from '../../queries/reference';
@@ -138,7 +139,7 @@ describe('Announcement composer', () => {
       'Ședință',
     );
     await user.type(
-      within(dialog).getByRole('textbox', { name: 'Mesaj' }),
+      await findFormattedText('Mesaj', dialog),
       'Vineri la 18:00',
     );
     // The list holds only the Groups the author may publish from.
@@ -189,7 +190,7 @@ describe('Announcement composer', () => {
       'Ședință',
     );
     await user.type(
-      within(dialog).getByRole('textbox', { name: 'Mesaj' }),
+      await findFormattedText('Mesaj', dialog),
       'Vineri la 18:00',
     );
     await user.click(
@@ -217,7 +218,7 @@ describe('Announcement composer', () => {
       'Ședință',
     );
     await user.type(
-      within(dialog).getByRole('textbox', { name: 'Mesaj' }),
+      await findFormattedText('Mesaj', dialog),
       'Vineri la 18:00',
     );
     await user.click(
@@ -296,8 +297,8 @@ describe('Announcement composer', () => {
       within(dialog).getByRole('textbox', { name: 'Titlu' }),
     ).toHaveAttribute('data-slot', 'input');
     expect(
-      within(dialog).getByRole('textbox', { name: 'Mesaj' }),
-    ).toHaveAttribute('data-slot', 'textarea');
+      (await findFormattedText('Mesaj', dialog)).closest('[data-slot]'),
+    ).toHaveAttribute('data-slot', 'formatted-text-input');
     expect(
       within(dialog).getByRole('checkbox', { name: 'Fixează anunțul' }),
     ).not.toBeChecked();
@@ -324,7 +325,7 @@ describe('Announcement composer', () => {
       'Ședință',
     );
     await user.type(
-      within(dialog).getByRole('textbox', { name: 'Mesaj' }),
+      await findFormattedText('Mesaj', dialog),
       'Vineri la 18:00',
     );
     await chooseOption(
@@ -351,7 +352,7 @@ describe('Announcement composer', () => {
       'Înscrieri',
     );
     await user.type(
-      within(dialog).getByRole('textbox', { name: 'Mesaj' }),
+      await findFormattedText('Mesaj', dialog),
       'Formularul se închide vineri.',
     );
     await chooseOption(
@@ -407,7 +408,7 @@ describe('Announcement composer', () => {
       'Adunare',
     );
     await user.type(
-      within(dialog).getByRole('textbox', { name: 'Mesaj' }),
+      await findFormattedText('Mesaj', dialog),
       'Doar pentru votanți.',
     );
     await chooseOption(
@@ -442,10 +443,7 @@ describe('Announcement composer', () => {
       within(dialog).getByRole('textbox', { name: 'Titlu' }),
       'Titlu',
     );
-    await user.type(
-      within(dialog).getByRole('textbox', { name: 'Mesaj' }),
-      'Mesaj',
-    );
+    await user.type(await findFormattedText('Mesaj', dialog), 'Mesaj');
     await chooseOption(
       user,
       within(dialog).getByRole('combobox', { name: 'Grup de origine' }),
@@ -460,6 +458,36 @@ describe('Announcement composer', () => {
     expect(within(dialog).getByRole('textbox', { name: 'Titlu' })).toHaveValue(
       'Titlu',
     );
+  });
+
+  it('puts a server refusal of the Mesaj under it (R60)', async () => {
+    mutateAsync.mockRejectedValue({ code: 'PT400', message: 'body_too_long' });
+    const user = userEvent.setup();
+    render(<AnnouncementComposeSheet />);
+    await user.click(screen.getByRole('button', { name: 'Anunț nou' }));
+    const dialog = screen.getByRole('dialog', { name: 'Anunț nou' });
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'Titlu' }),
+      'Titlu',
+    );
+    const message = await findFormattedText('Mesaj', dialog);
+    await user.type(message, 'Mesaj');
+    await chooseOption(
+      user,
+      within(dialog).getByRole('combobox', { name: 'Grup de origine' }),
+      'Echipa A',
+    );
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Publică anunțul' }),
+    );
+
+    await waitFor(() =>
+      expect(message).toHaveAccessibleDescription(
+        /Mesajul are cel mult 2000 de caractere\./,
+      ),
+    );
+    expect(message).toHaveAttribute('aria-invalid', 'true');
+    await waitFor(() => expect(message).toHaveFocus());
   });
 
   it('does not call the Origin missing while its list is open', async () => {
@@ -487,7 +515,7 @@ describe('Announcement composer', () => {
     await user.click(screen.getByRole('button', { name: 'Anunț nou' }));
     const dialog = screen.getByRole('dialog', { name: 'Anunț nou' });
     const title = within(dialog).getByRole('textbox', { name: 'Titlu' });
-    const message = within(dialog).getByRole('textbox', { name: 'Mesaj' });
+    const message = await findFormattedText('Mesaj', dialog);
     const publish = within(dialog).getByRole('button', {
       name: 'Publică anunțul',
     });

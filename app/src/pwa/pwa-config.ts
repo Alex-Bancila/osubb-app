@@ -24,6 +24,10 @@ function createInjectManifestOptions() {
       'theme-init.js',
       'assets/*.{js,css,woff2,png,svg,ico}',
     ],
+    /* The Formatted Text editor (R60, §C) is fetched by the first form that
+       needs it and cached then (`sw.ts`): publishing needs the network
+       anyway, and no member pays for it on install. */
+    globIgnores: ['assets/FormattedTextEditor-*.js'],
   } satisfies VitePWAOptions['injectManifest'];
 }
 

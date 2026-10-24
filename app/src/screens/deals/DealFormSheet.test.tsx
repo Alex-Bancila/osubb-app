@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -37,8 +37,14 @@ import {
   bucharestWallTimeToIso,
 } from '../../lib/calendar-time';
 import { pickDate } from '../../test/date-picker';
+import { findFormattedText } from '../../test/formatted-text';
 import DealFormSheet, { NewDealControl } from './DealFormSheet';
 import type { DealPresentation } from './deals-presentation';
+
+// Each case fills the form end to end, which loads the Formatted Text editor
+// (R60); on a loaded machine that can pass the 5 s default without anything
+// being wrong, as in TaskForm.test.tsx.
+vi.setConfig({ testTimeout: 15_000 });
 
 function renderWith(ui: ReactElement) {
   const client = new QueryClient({
@@ -110,10 +116,9 @@ describe('Deal nou (R45)', () => {
       'data-slot',
       'input',
     );
-    expect(within(sheet).getByLabelText('Descriere')).toHaveAttribute(
-      'data-slot',
-      'textarea',
-    );
+    expect(
+      (await findFormattedText('Descriere', sheet)).closest('[data-slot]'),
+    ).toHaveAttribute('data-slot', 'formatted-text-input');
     const termen = within(sheet).getByLabelText(
       'Termen (opțional) — ora României',
     );
@@ -151,7 +156,7 @@ describe('Deal nou (R45)', () => {
     renderWith(<NewDealControl />);
     const sheet = await openCompose(user);
     await user.type(within(sheet).getByLabelText('Titlu'), 'Acces gratuit');
-    await user.type(within(sheet).getByLabelText('Descriere'), 'Detalii.');
+    await user.type(await findFormattedText('Descriere', sheet), 'Detalii.');
     const termen = within(sheet).getByLabelText(
       'Termen (opțional) — ora României',
     );
@@ -174,7 +179,7 @@ describe('Deal nou (R45)', () => {
     renderWith(<NewDealControl />);
     const sheet = await openCompose(user);
     await user.type(within(sheet).getByLabelText('Titlu'), '  Reducere 20%  ');
-    await user.type(within(sheet).getByLabelText('Descriere'), 'Cărți.');
+    await user.type(await findFormattedText('Descriere', sheet), 'Cărți.');
     for (const [n, label, url] of [
       [1, 'Magazin', 'https://example.ro'],
       [2, 'Regulament', 'https://example.ro/r'],
@@ -228,7 +233,7 @@ describe('Deal nou (R45)', () => {
     renderWith(<NewDealControl />);
     const sheet = await openCompose(user);
     await user.type(within(sheet).getByLabelText('Titlu'), 'Acces gratuit');
-    await user.type(within(sheet).getByLabelText('Descriere'), 'Detalii.');
+    await user.type(await findFormattedText('Descriere', sheet), 'Detalii.');
     await user.click(
       within(sheet).getByRole('button', { name: 'Publică deal-ul' }),
     );
@@ -242,7 +247,7 @@ describe('Deal nou (R45)', () => {
     renderWith(<NewDealControl />);
     const sheet = await openCompose(user);
     await user.type(within(sheet).getByLabelText('Titlu'), 'Acces gratuit');
-    await user.type(within(sheet).getByLabelText('Descriere'), 'Detalii.');
+    await user.type(await findFormattedText('Descriere', sheet), 'Detalii.');
     await user.type(within(sheet).getByLabelText(/Cod/), 'X'.repeat(81));
     await user.click(
       within(sheet).getByRole('button', { name: 'Publică deal-ul' }),
@@ -261,7 +266,7 @@ describe('Deal nou (R45)', () => {
     renderWith(<NewDealControl />);
     const sheet = await openCompose(user);
     await user.type(within(sheet).getByLabelText('Titlu'), 'Acces gratuit');
-    await user.type(within(sheet).getByLabelText('Descriere'), 'Detalii.');
+    await user.type(await findFormattedText('Descriere', sheet), 'Detalii.');
     await user.click(
       within(sheet).getByRole('button', { name: 'Publică deal-ul' }),
     );
@@ -270,6 +275,28 @@ describe('Deal nou (R45)', () => {
         'Doar echipa OSUBB Deals publică și modifică deal-uri.',
       ),
     ).toBeVisible();
+  });
+
+  it('puts a server refusal of the Descriere under it (R60)', async () => {
+    const user = userEvent.setup();
+    supabaseMock.insert.mockResolvedValue({
+      error: { code: 'PT400', message: 'body_too_long' },
+    });
+    renderWith(<NewDealControl />);
+    const sheet = await openCompose(user);
+    await user.type(within(sheet).getByLabelText('Titlu'), 'Acces gratuit');
+    const body = await findFormattedText('Descriere', sheet);
+    await user.type(body, 'Detalii.');
+    await user.click(
+      within(sheet).getByRole('button', { name: 'Publică deal-ul' }),
+    );
+
+    await waitFor(() =>
+      expect(body).toHaveAccessibleDescription(
+        /Mesajul are cel mult 2000 de caractere\./,
+      ),
+    );
+    expect(body).toHaveAttribute('aria-invalid', 'true');
   });
 });
 

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { CommandError } from '../../lib/command-reasons';
+import { findFormattedText } from '../../test/formatted-text';
 import { chooseOption } from '../../test/select';
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -203,7 +204,7 @@ it('adds the completed Task with every chosen field and reports it (#915)', asyn
   await pick(user, volunteerBox(), 'Ana');
   await user.type(within(dialog).getByLabelText('Titlu'), '  Atelier  ');
   await user.type(
-    within(dialog).getByLabelText('Detalii (opțional)'),
+    await findFormattedText('Detalii (opțional)', dialog),
     'Sala 2',
   );
   await chooseOption(
@@ -300,6 +301,40 @@ it('puts a server refusal under the field it names, in Romanian', async () => {
   expect(onAdded).not.toHaveBeenCalled();
   // The draft stays for another try.
   expect(within(dialog).getByLabelText('Titlu')).toHaveValue('Stand');
+});
+
+it('puts a server refusal of the Detalii under them (R60)', async () => {
+  const user = userEvent.setup();
+  state.createMany.mockRejectedValue(
+    new CommandError(
+      { code: 'PT400', message: 'description_too_long' },
+      'fallback',
+    ),
+  );
+  const dialog = await open(user);
+  await pick(
+    user,
+    within(dialog).getByRole('combobox', {
+      name: 'Grup principal',
+    }),
+    /^Educație/,
+  );
+  await pick(user, volunteerBox(), 'Bogdan');
+  await user.type(within(dialog).getByLabelText('Titlu'), 'Stand');
+  const details = await findFormattedText('Detalii (opțional)', dialog);
+  await user.type(details, 'Sala 2');
+  await evaluate(user, dialog);
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Adaugă și acordă punctele' }),
+  );
+
+  await waitFor(() =>
+    expect(details).toHaveAccessibleDescription(
+      /Descrierea are cel mult 2000 de caractere\./,
+    ),
+  );
+  expect(details).toHaveAttribute('aria-invalid', 'true');
+  expect(onAdded).not.toHaveBeenCalled();
 });
 
 it('sets the Evaluation from the guide of the chosen Group (#986)', async () => {

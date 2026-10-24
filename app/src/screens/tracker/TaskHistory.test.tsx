@@ -240,6 +240,31 @@ describe('Authorized Task timeline', () => {
     expect(screen.getByText('Motiv cu **stele**')).toBeVisible();
   });
 
+  it('reads a Titlu in a description change as text, adding no heading to the timeline (ruling 22)', () => {
+    render(
+      <TaskTimeline
+        activity={[
+          activity({
+            kind: 'task_updated',
+            note: null,
+            details: {
+              before: { description: 'a' },
+              after: { description: '# Titlu\n## Sub\ntext' },
+            },
+          }),
+        ]}
+      />,
+    );
+    expect(screen.queryAllByRole('heading')).toEqual([]);
+    const after = screen.getByText('După').parentElement as HTMLElement;
+    expect(after.querySelector('p.formatted-text-title')).toHaveTextContent(
+      'Titlu',
+    );
+    expect(after.querySelector('p.formatted-text-subtitle')).toHaveTextContent(
+      'Sub',
+    );
+  });
+
   it('shows an emptied description as a dash, and a plain one as it was', () => {
     render(
       <TaskTimeline
