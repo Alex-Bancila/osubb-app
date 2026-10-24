@@ -26,9 +26,10 @@ const FIXTURE_PREFIX = "select is(private.formatted_text_plain(E'";
 
 /**
  * The suite's assertions that are not fixtures: null in, null out; the
- * stripper is immutable; authenticated cannot execute it.
+ * stripper is immutable; authenticated cannot execute it; it stays fast on a
+ * long run of markers.
  */
-const CONTRACT_ASSERTIONS = 3;
+const CONTRACT_ASSERTIONS = 4;
 
 const PLAN = Number(/^select plan\((\d+)\);$/m.exec(SUITE_TEXT)?.[1]);
 
@@ -94,6 +95,22 @@ describe('toPlainText against the SQL suite', () => {
         charLength(input),
       );
     }
+  });
+});
+
+describe('toPlainText on a long run of markers (#1109)', () => {
+  // Every block step is anchored at a line start and the join only grows a
+  // line by what follows it, so a whole text is one pass: under a millisecond
+  // here, as in the database (pinned there too).
+  it.each([
+    ['quote markers', '>'.repeat(4000)],
+    ['list markers', '- '.repeat(2000)],
+    ['backslashes', '\\'.repeat(4000)],
+    ['items opening on the next line', '-\n  '.repeat(1000)],
+  ])('strips 4000 characters of %s in under 50 ms', (_, input) => {
+    const start = performance.now();
+    toPlainText(input);
+    expect(performance.now() - start).toBeLessThan(50);
   });
 });
 

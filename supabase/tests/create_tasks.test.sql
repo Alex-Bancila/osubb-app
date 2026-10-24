@@ -160,17 +160,17 @@ update public.groups set min_level = 0, application_level = 0 where id = pg_temp
 -- ==================== The daily cap, counted per copy ====================
 insert into public.task_activity (task_id, kind, actor_id)
 select (select id from g521_tasks where name = 'umbrela47'), 'created', pg_temp.g521_uid(1)
-  from generate_series(1, 99 - (select count(*)::int from public.task_activity
+  from generate_series(1, 299 - (select count(*)::int from public.task_activity
                                   where actor_id = pg_temp.g521_uid(1) and kind = 'created'));
 select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
-select throws_ok($$select count(*) from public.create_tasks('Plafon 101 #47', 'd', now() + interval '7 days', 'local', 'public',
+select throws_ok($$select count(*) from public.create_tasks('Plafon 301 #47', 'd', now() + interval '7 days', 'local', 'public',
   p_group_id => pg_temp.project(), p_copies => 2)$$,
   'PT409', 'rate_limited', 'two copies with one slot left: the second hits the cap and the first rolls back too');
-select is((select count(*) from public.create_tasks('Plafon 100 #47', 'd', now() + interval '7 days', 'local', 'public',
+select is((select count(*) from public.create_tasks('Plafon 300 #47', 'd', now() + interval '7 days', 'local', 'public',
   p_group_id => pg_temp.project(), p_copies => 1))::int, 1,
-  'one copy still fits: the hundredth creation of the day');
+  'one copy still fits: the three-hundredth creation of the day');
 reset role;
-select is((select count(*) from public.tasks where title = 'Plafon 101 #47')::int, 0,
+select is((select count(*) from public.tasks where title = 'Plafon 301 #47')::int, 0,
   'the refused pair left nothing behind');
 
 select * from finish();

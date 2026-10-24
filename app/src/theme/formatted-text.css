@@ -25,20 +25,25 @@
   margin-top: var(--s-2);
 }
 
-/* A heading belongs to what follows it: more room above than below. */
+/*
+  A heading belongs to what follows it: more room above than below.
+  .formatted-text-title and .formatted-text-subtitle are a Titlu and a
+  Subtitlu on a card or a timeline entry (headings="text", ruling 22): a p
+  with the size, weight and room of h3/h4 and no heading role.
+*/
 .formatted-text
   :is(p, h1, h2, h3, h4, blockquote, ul, ol)
-  + :is(h1, h2, h3, h4) {
+  + :is(h1, h2, h3, h4, .formatted-text-title, .formatted-text-subtitle) {
   margin-top: var(--s-4);
 }
 
-.formatted-text :is(h1, h3) {
+.formatted-text :is(h1, h3, .formatted-text-title) {
   font-size: var(--fs-lg);
   font-weight: var(--fw-bold);
   line-height: 1.3;
 }
 
-.formatted-text :is(h2, h4) {
+.formatted-text :is(h2, h4, .formatted-text-subtitle) {
   font-size: var(--fs-md);
   font-weight: var(--fw-semibold);
   line-height: 1.35;
@@ -113,4 +118,68 @@
 .formatted-text-preview strong {
   font-weight: var(--fw-semibold);
   color: var(--foreground);
+}
+
+/*
+  The editor's text (`FormattedTextField`). Tiptap runs with `injectCSS:
+  false`, since the CSP forbids an injected <style>; these are the rules of
+  its style sheet the dialect needs. ProseMirror keeps every space typed and
+  breaks long words itself only with `pre-wrap`.
+*/
+.ProseMirror {
+  position: relative;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  white-space: break-spaces;
+  -webkit-font-variant-ligatures: none;
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0;
+}
+
+.ProseMirror [contenteditable='false'] {
+  white-space: normal;
+}
+
+img.ProseMirror-separator {
+  display: inline !important;
+  border: none !important;
+  margin: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* The caret between two blocks with no line between them (after a list). */
+.ProseMirror-gapcursor {
+  display: none;
+  pointer-events: none;
+  position: absolute;
+  margin: 0;
+}
+
+.ProseMirror-gapcursor::after {
+  content: '';
+  display: block;
+  position: absolute;
+  top: -2px;
+  width: 20px;
+  border-top: 1px solid currentColor;
+  animation: ProseMirror-cursor-blink 1.1s steps(2, start) infinite;
+}
+
+@keyframes ProseMirror-cursor-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+.ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
+}
+
+.ProseMirror-hideselection *::selection {
+  background: transparent;
+}
+
+.ProseMirror-hideselection * {
+  caret-color: transparent;
 }

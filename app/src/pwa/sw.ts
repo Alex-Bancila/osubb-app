@@ -13,12 +13,18 @@ import {
   createHandlerBoundToURL,
   precacheAndRoute,
 } from 'workbox-precaching';
+import { ExpirationPlugin } from 'workbox-expiration';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
-import { NetworkOnly } from 'workbox-strategies';
+import { CacheFirst, NetworkOnly } from 'workbox-strategies';
 import { NOTIFICATION_BADGE, NOTIFICATION_ICON } from './app-icons';
 import { openTappedNotification, parsePushPayload } from './push-payload';
 import { renewSubscription } from './push-renewal';
-import { NAVIGATION_DENYLIST, supabaseOriginPattern } from './sw-routes';
+import {
+  isCacheableEditorChunk,
+  isEditorChunk,
+  NAVIGATION_DENYLIST,
+  supabaseOriginPattern,
+} from './sw-routes';
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -37,6 +43,25 @@ const supabaseRequests = supabaseOriginPattern(
   import.meta.env.VITE_SUPABASE_URL,
 );
 if (supabaseRequests) registerRoute(supabaseRequests, new NetworkOnly());
+
+/* The Formatted Text editor is not precached (R60): the first form that opens
+   it fetches it, and from then on it comes from its own cache. A file's name
+   carries its hash, so a cached one never goes stale; the two newest are
+   kept, the one in use and the one a new release brings. Only a script is
+   kept: the page Pages sends for a chunk a Release removed is not. */
+registerRoute(
+  ({ url }) => isEditorChunk(url, self.location.origin),
+  new CacheFirst({
+    cacheName: 'osubb-editor',
+    plugins: [
+      {
+        cacheWillUpdate: async ({ response }) =>
+          isCacheableEditorChunk(response) ? response : null,
+      },
+      new ExpirationPlugin({ maxEntries: 2 }),
+    ],
+  }),
+);
 
 /* `registerType: 'prompt'`: a new worker waits until the member accepts the
    update in PwaUpdatePrompt, whose `updateServiceWorker(true)` posts this. */

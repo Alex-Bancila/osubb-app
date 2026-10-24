@@ -159,6 +159,7 @@ export default function EventCard({
       {event.description && (
         <FormattedText
           view="full"
+          headings="text"
           text={event.description}
           className="event-description"
         />

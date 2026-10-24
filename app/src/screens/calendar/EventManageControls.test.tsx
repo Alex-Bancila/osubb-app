@@ -51,6 +51,11 @@ import { CommandError } from '../../lib/command-reasons';
 import { EditEventSheet, EventManageControls } from './EventManageControls';
 import { clearEventReceipts, useCalendarReceipt } from './event-receipts';
 
+// Each case fills the form end to end, which loads the Formatted Text editor
+// (R60); on a loaded machine that can pass the 5 s default without anything
+// being wrong, as in TaskForm.test.tsx.
+vi.setConfig({ testTimeout: 15_000 });
+
 const MEMBER = 'd0000000-0000-0000-0000-000000000006';
 
 const managerOptions = {

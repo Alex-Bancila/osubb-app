@@ -1,8 +1,9 @@
 import { useId, type ReactNode } from 'react';
 import { AttachedLinksFields } from '../../components/attached-link/AttachedLinksFields';
+import { FormattedTextField } from '../../components/formatted-text/FormattedTextField';
 import { DateTimePicker } from '../../components/ui/date-picker';
 import { FieldError } from '../../components/ui/field';
-import { Input, Textarea } from '../../components/ui/input';
+import { Input } from '../../components/ui/input';
 import { Select } from '../../components/ui/select';
 import { SegmentedRadio } from '../../components/ui/segmented-radio';
 import type { MinimumLevelOption } from '../../lib/minimum-level';
@@ -65,16 +66,20 @@ export function AnnouncementFields({
         <FieldError {...form.errorProps('title')} />
       </div>
       <div className="grid gap-1.5">
-        <label htmlFor={`${id}-body`} className="text-sm font-medium">
+        <label
+          id={`${id}-body-label`}
+          htmlFor={`${id}-body`}
+          className="text-sm font-medium"
+        >
           Mesaj
         </label>
-        <Textarea
+        <FormattedTextField
           id={`${id}-body`}
+          labelId={`${id}-body-label`}
           name="body"
           required
-          rows={4}
           value={draft.body}
-          onChange={(event) => onChange({ body: event.target.value })}
+          onChange={(body) => onChange({ body })}
           {...form.field('body')}
         />
         <FieldError {...form.errorProps('body')} />

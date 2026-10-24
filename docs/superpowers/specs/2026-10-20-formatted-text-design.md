@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-20
 - **Decided by:** Alex Băncilă, in the grill session of 2026-10-20 (ruling R60), after comparing five clickable options on the comparison page (Artifact `https://claude.ai/artifact/Ush78bHjV1UEBEkR7K2Mg9`, private to Alex).
-- **Status:** approved, not yet built.
+- **Status:** approved; built in three PRs: the server (PR #1094, issue #1090), the reader (PR #1095, issue #1091) and the editor (issue #1092).
 - **Supersedes:**
   - Ruling R7's "Text stays plain (no Markdown, no inline URL detection)" (`docs/superpowers/plans/2026-09-23-prod-readiness-grill.md`), for the four kinds of Formatted Text only. The Submission Note stays plain, as R7 said.
   - The sentence "Text fields stay plain text and never carry links themselves" that the Attached Link glossary entry carried since ruling R46.
@@ -98,7 +98,7 @@ Emphasis markers inside a word are literal (decision 16). Everything outside the
 
 ### B. Reading: one component, three views
 
-`FormattedText` (in `app/src/components`) lexes with `marked`, the parser `@tiptap/markdown` already uses, and maps tokens to React elements. It never sets `dangerouslySetInnerHTML`. HTML tokens become text.
+`FormattedText` (in `app/src/components`) lexes with `marked` (`lexFormattedText`, which the editor reads through too) and maps tokens to React elements. It never sets `dangerouslySetInnerHTML`. HTML tokens become text.
 
 The three views:
 
@@ -120,7 +120,7 @@ Styles live in our stylesheet, never inline. Headings and quotes use the app's t
 
 ### C. Writing: one editor, two toolbars
 
-- **The component.** `FormattedTextField` replaces `Textarea` at the six sites listed under Fields. It is built on Tiptap 3 (`@tiptap/react`, `@tiptap/pm`, `@tiptap/markdown`) with only the extensions for the dialect:
+- **The component.** `FormattedTextField` replaces `Textarea` at the six sites listed under Fields. It is built on Tiptap 3 (`@tiptap/react`, `@tiptap/pm`, `@tiptap/starter-kit`, `@tiptap/extension-highlight`) with its own Markdown extension instead of `@tiptap/markdown`, which could neither read nor write the dialect: it reads through the reader's `lexFormattedText`, and writes only what the reader and the stripper read back the same, line by line and for the whole text. It has only the extensions for the dialect:
   - Document, Paragraph, Text, HardBreak
   - Heading (levels 1–2)
   - Bold, Italic, Strike, Highlight (single colour, renders `<mark>`)
@@ -132,7 +132,7 @@ Styles live in our stylesheet, never inline. Headings and quotes use the app's t
 - **Choosing the toolbar.** `matchMedia('(pointer: coarse)')`, observed live:
   - **Coarse (touch):** the keyboard bar of decision 1. It shows only while the field has focus. It docks above the keyboard through `keyboard-inset`, and sits at the bottom of the visible area when no keyboard is up. Aa replaces the keyboard with its panel; tapping Aa again, or into the text, brings the keyboard back.
   - **Fine (mouse or trackpad):** the top toolbar of decision 4. It stays at the top of the field while a long text scrolls. Every control has a 44 px hit area, `aria-pressed`, a Romanian `aria-label`, and a tooltip naming its shortcut.
-- **The link dialog.** It is a `Dialog` with at most two fields: **Adresa** (`https://…`), plus **Text** when nothing is selected. A link already there offers **Elimină linkul**. An address that fails `safeHttpUrl` is refused under the field: "Adresa trebuie să înceapă cu http:// sau https://."
+- **The link dialog.** It is a `Dialog` with at most two fields: **Adresa** (`https://…`), plus **Text (opțional)** when nothing is selected (left empty, the address is the link's words). A link already there is saved with **Salvează** and offers **Elimină linkul**, last in the footer. An address that fails `safeHttpUrl` is refused under the field: "Adresa trebuie să înceapă cu http:// sau https://."
 - **Pasting** (decision 14).
   - Tiptap's HTML paste goes through the dialect's schema, so anything outside it falls away.
   - A plain-text paste is first run through a WhatsApp converter. `*x*` becomes bold, `_x_` italic and `~x~` strikethrough, only where the markers sit at word boundaries.
@@ -140,7 +140,8 @@ Styles live in our stylesheet, never inline. Headings and quotes use the app's t
 - **Counter and limits.** Under the field is "N / 2000 caractere", counting the `plain` view's characters. The zod schemas check the visible length (≤ 2000) and the Markdown length (≤ 4000) and keep the reason codes `body_too_long` and `description_too_long`.
 - **Loading.**
   - The editor is lazy-loaded with the form sheets, so no reading screen imports it.
-  - Its chunk is left out of the service worker's precache (`globIgnores`) and cached at runtime on first use, because publishing needs the network anyway.
+  - Its chunk is left out of the service worker's precache (`globIgnores`) and cached at runtime on first use (`CacheFirst`, its own cache, two entries), because publishing needs the network anyway. Until it loads the text shows read-only; if it cannot load (offline the first time, or an old page after a Release), the field is the plain text area it was before.
+  - The text goes to the form only after a change, so a text opened and left alone is saved exactly as stored. The first change of a burst goes at once, the rest when typing rests (150 ms) or on a blur.
   - Tiptap runs with `injectCSS: false`, and its few rules move into our stylesheet, because the CSP forbids inline `<style>`.
   - No extension that writes `style=""` (text style, colour, font, alignment) is installed.
 
@@ -160,11 +161,11 @@ Styles live in our stylesheet, never inline. Headings and quotes use the app's t
 
 - **Controls:** Stil (Text ▾), Titlu, Subtitlu, Text, Citat, Aldin, Cursiv, Tăiat, Evidențiază, Listă, Listă numerotată, Link, Fără formatare, Ascunde tastatura, Stiluri (Aa).
 - **The link dialog:**
-  - add: title "Adaugă link", buttons Renunță / Adaugă
-  - edit: title "Modifică linkul", plus Elimină linkul
+  - add: title "Adaugă link", fields "Text (opțional)" and "Adresa", buttons Renunță / Adaugă
+  - edit: title "Modifică linkul", buttons Renunță / Salvează / Elimină linkul (destructive last)
 - **DESIGN.md** gains two rows in its component table when this is built:
   - **Formatted text field** → `FormattedTextField`: "Toolbar by input: the keyboard bar with Aa on touch, the top toolbar with a mouse."
-  - **Formatted text** → `FormattedText`: "`full`, `preview` or `plain`; never innerHTML."
+  - **Formatted text** → `FormattedText`: "`full` or `preview` (plain words: `toPlainText`); `headings="text"` on a card or timeline that has its own headings; never innerHTML."
 
 ### F. Existing rows: the scan
 
@@ -215,10 +216,12 @@ All sizes are minified and gzipped, with React excluded:
 
 - **`marked` without HTML output.** `marked` emits `<script>` and `javascript:` links when used to produce HTML, which is why the reader maps tokens and never outputs HTML.
 - **Today's bundle.** The entry chunk is 842 KB raw (252 KB gzip). All JavaScript is 1.90 MB raw (584 KB gzip). The precache is 61 entries, 2,283 KiB. The 2 MB `chunkSizeWarningLimit` is per chunk; the editor chunk is about 0.5 MB raw.
+- **As built (PR 3, 2026-10-23).** The editor chunk is 437 KB raw (140 KB gzip), without `@tiptap/markdown`. The precache went from 63 to 66 entries (2,357 → 2,364 KiB): three small chunks the editor shares with the app split out, and the editor itself is not among them.
 
 ## Calls made in writing this up (for Alex to check)
 
-- Titlu renders as h3 and Subtitlu as h4. Deeper headings from a paste read as Subtitlu.
+- Titlu renders as h3 and Subtitlu as h4. Deeper headings from a paste read as Subtitlu. On an Event card and in Task history, which are not sheets, they keep their look as text with no heading role.
+- Editing a link says "Salvează", not "Adaugă" (a control states what it does).
 - Lists may nest.
 - The phone bar shows only while the field has focus.
 - The laptop toolbar stays at the top of the field while a long text scrolls.
