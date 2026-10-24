@@ -40,7 +40,9 @@ describe('the confirmation of Finalizează (R58, spec F)', () => {
     );
   });
 
-  it('mirrors it over the voters for the Adunarea Generală, with no cutoff', () => {
+  // Alex, 2026-10-24: both kinds rank the same pool; the Adunarea Generală
+  // run only judges the voters, and lists nobody.
+  it('ranks the same pool for the Adunarea Generală, judges only the voters, with no cutoff', () => {
     expect(
       finalizeConsequences({
         ...base,
@@ -51,7 +53,7 @@ describe('the confirmation of Finalizează (R58, spec F)', () => {
         floor: 1,
       }),
     ).toBe(
-      'Clasăm punctele de task primite între 01.07.2026 și 28.09.2026 de toți membrii Adunării Generale care au cel puțin 1 punct. Pragul Adunarea Generală devine punctele ultimului membru din primii 25 %: 12 puncte. Voluntarii cu Drept de Vot sub el, sau sub pragul minim, devin semnale de retenție. Nimeni nu este promovat sau retrogradat automat.',
+      'Clasăm punctele de task primite între 01.07.2026 și 28.09.2026 de toți membrii sub BCE care au cel puțin 1 punct. Pragul Adunarea Generală devine punctele ultimului membru din primii 25 %: 12 puncte. Voluntarii cu Drept de Vot sub el, sau sub pragul minim, devin semnale de retenție. Nimeni nu este promovat sau retrogradat automat.',
     );
   });
 

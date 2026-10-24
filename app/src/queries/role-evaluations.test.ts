@@ -417,7 +417,7 @@ describe('simulationOutcome (R58)', () => {
     ]);
   });
 
-  it('Adunarea Generală: no Candidates, and only voters raise Signals', () => {
+  it('Adunarea Generală: the whole pool is ranked, but no Candidates and only voters raise Signals', () => {
     const outcome = simulationOutcome(
       [
         row({ memberId: 'a', role: 'vot', taskPoints: 30, inside: true }),
@@ -429,8 +429,8 @@ describe('simulationOutcome (R58)', () => {
           ranked: false,
           rank: null,
         }),
-        // A Voluntar Activ is outside this kind's population in practice; a
-        // row that says otherwise is not a voter and raises nothing.
+        // The rest of the pool is ranked beside the voters (Alex, 2026-10-24)
+        // but not judged: a Voluntar Activ under the line raises nothing.
         row({ memberId: 'd', role: 'activ', taskPoints: 2 }),
         row({ memberId: 'e', role: 'voluntar', listable: true, inside: true }),
       ],

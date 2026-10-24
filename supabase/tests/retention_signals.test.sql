@@ -41,6 +41,9 @@
 --   * trigger evaluation_settings_refresh_promotion_candidates dropped ->
 --     "Review Focus 4: moving the cutoff before the Voluntar's join date
 --     supersedes the live row at once";
+--   * (2026-10-24) the core's adunarea_generala arm back to `profile.role =
+--     'vot'` -> "the Adunarea Generală run stores its own Signals, for the
+--     voters alone ...";
 --   * the run's Signal supersede without its kind filter -> "an Adunarea
 --     Generală run leaves the Voluntar Activ run's Signals open";
 --   * the run's Signal supersede without its reason filter -> "neither
@@ -252,13 +255,15 @@ select pg_temp.test_login_leadership(pg_temp.r58('BC'));
 select lives_ok(
   $$ insert into runs5810 select 'ag1', * from public.run_role_evaluation(
        'adunarea_generala', '2026-03-01', '2026-09-30', 'Evaluare semnale AG1', 10, 25) $$,
-  'BC finalises an Adunarea Generală run: Floor 10, 25 % (I alone ranked, line 10)');
+  'BC finalises an Adunarea Generală run: Floor 10, 25 % (the whole pool ranked: A and C inside the line of 50, I ranked below it, J under the Floor)');
 reset role;
 select results_eq(
   $$ select member_id, kind, reason, task_points, threshold_used
-       from public.retention_signals where role_evaluation_id = pg_temp.run5810('ag1') $$,
-  $$ values (pg_temp.r58('J'), 'adunarea_generala'::text, 'below_floor'::text, 5, 10) $$,
-  'the Adunarea Generală run stores its own Signal: J below the Floor');
+       from public.retention_signals where role_evaluation_id = pg_temp.run5810('ag1')
+      order by member_id $$,
+  $$ values (pg_temp.r58('I'), 'adunarea_generala'::text, 'below_line'::text, 10, 50),
+            (pg_temp.r58('J'), 'adunarea_generala', 'below_floor', 5, 10) $$,
+  'the Adunarea Generală run stores its own Signals, for the voters alone though it ranks the whole pool: I below the line (50), J below the Floor (10)');
 select is(
   (select count(*) from public.retention_signals
     where role_evaluation_id = pg_temp.run5810('s1') and closed_at is null),

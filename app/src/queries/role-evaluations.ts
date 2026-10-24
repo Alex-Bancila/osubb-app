@@ -391,9 +391,10 @@ export function useRetentionSignals() {
 
 /**
  * The Roles whose holders a run of each kind measures against its line
- * (R58): the Voluntar Activ kind ranks Members below BCE but only a Voluntar
- * Activ or a Voluntar cu Drept de Vot can fall below the line; the Adunarea
- * Generală kind ranks the voters alone.
+ * (R58): both kinds rank every Member below BCE (the Adunarea Generală kind
+ * the very pool the Voluntar Activ kind does, Alex 2026-10-24), but only a
+ * Voluntar Activ or a Voluntar cu Drept de Vot can fall below the Voluntar
+ * Activ line; the Adunarea Generală kind judges the voters alone.
  */
 const SIGNAL_ROLES: Record<RoleEvaluationKind, readonly MemberRole[]> = {
   voluntar_activ: ['activ', 'vot'],

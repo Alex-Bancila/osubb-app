@@ -25,8 +25,9 @@
 -- "Adunarea Generală" sits beside AG 512. The date range and the setting are
 -- written as the owner inside this rolled-back transaction -- the fixture
 -- exception of conventions section 10 (#826's own command is exercised in
--- role_evaluation_command.test.sql). The demo seed's own Drept de Vot
--- holders are deactivated first, so full512 is exactly this suite's Members.
+-- role_evaluation_command.test.sql). The demo seed's own ladder holders
+-- (Recrut to Drept de Vot) are deactivated first, so full512 is exactly this
+-- suite's Members.
 -- The range is [today, today] in Bucharest days, so only this suite's awards
 -- (dated now()) fall inside it. Every live active Voluntar cu Drept de Vot
 -- holder is population for the adunarea_generala kind, credited or not (#826:
@@ -35,7 +36,10 @@
 -- de Vot holders too, so all three now appear at 0, tied for last; Victor
 -- also now holds Drept de Vot here (R28 dropped the generic, Role-independent
 -- ranking #47 used to test this predicate against), so his own-row read
--- still has a row of his own to read exactly.
+-- still has a row of his own to read exactly. Since Alex's amendment of
+-- 2026-10-24 the kind ranks the same pool as the Voluntar Activ one, every live
+-- active Member below BCE: the ancestor Group's Manager, a Voluntar, is in it
+-- too (at 0, below the Floor), and reads his own row where he read none.
 --
 -- Mutation guards, each named against the assertion that turns red. The
 -- Group-authority and setting mutations were run on 2026-09-25 against the
@@ -70,11 +74,13 @@ select plan(44);
 
 -- ==================== Fixtures ====================
 
--- R28's population is every live active Drept de Vot holder, credited or
--- not (#826), so the demo seed's own holders would otherwise pad full512
--- with extra 0-point rows.
+-- The population is every live active Member below BCE, credited or not
+-- (#826, R58, and since 2026-10-24 the same pool for both kinds), so the demo
+-- seed's own ladder holders would otherwise pad full512 with extra 0-point
+-- rows.
 update public.profiles set status = 'inactiv'
- where status = 'activ' and role = 'vot' and id::text not like '51200000-%';
+ where status = 'activ' and role in ('recrut', 'voluntar', 'activ', 'vot')
+   and id::text not like '51200000-%';
 
 insert into auth.users (id, email) values
   ('51200000-0000-0000-0000-000000000001', 'bc512@test.local'),
@@ -164,7 +170,7 @@ insert into public.role_evaluations
   (kind, name, period_from, period_to, run_by, threshold_used, threshold_computed, ranked_count,
    eligibility_floor, percent_used, membership_cutoff, evaluated_count)
 select 'adunarea_generala', 'Evaluare AG 512', period_from, period_to,
-       '51200000-0000-0000-0000-000000000001', null, 12, 4, 1, 25, null, 7
+       '51200000-0000-0000-0000-000000000001', null, 12, 4, 1, 25, null, 8
   from fx512;
 update fx512 set run_id = (select id from public.role_evaluations where name = 'Evaluare AG 512');
 
@@ -199,7 +205,8 @@ $$;
 -- Comisia's and the decoy's Responsibles, are live Voluntar cu Drept de Vot
 -- holders too (none of them credited), so the population includes all three
 -- at 0 points -- below the Eligibility Floor 1, so evaluated but not ranked
--- (no rank, R58).
+-- (no rank, R58); and the ancestor Group's Manager, a Voluntar, makes it four
+-- (2026-10-24).
 create temp table full512 (member_id uuid, task_points integer, rank integer);
 insert into full512 values
   ('51200000-0000-0000-0000-000000000008', 12, 1),
@@ -207,6 +214,7 @@ insert into full512 values
   ('51200000-0000-0000-0000-000000000009',  6, 3),
   ('51200000-0000-0000-0000-000000000006',  2, 4),
   ('51200000-0000-0000-0000-000000000005',  0, null),
+  ('51200000-0000-0000-0000-000000000007',  0, null),
   ('51200000-0000-0000-0000-000000000011',  0, null),
   ('51200000-0000-0000-0000-000000000012',  0, null);
 grant select on full512 to authenticated;
@@ -440,8 +448,9 @@ select results_eq(pg_temp.ranking(), $$ select * from full512 order by task_poin
   'with no Adunarea Generală named, BC still reads every row');
 reset role;
 select pg_temp.test_login_leadership('51200000-0000-0000-0000-000000000007');
-select is((select count(*) from public.role_evaluation_ranking((select run_id from fx512))), 0::bigint,
-  'with no Adunarea Generală named, no Group Role reads the full ranking -- the ancestor Manager holds no Drept de Vot Role, so he has no own row either');
+select results_eq(pg_temp.ranking(),
+  $$ values ('51200000-0000-0000-0000-000000000007'::uuid, 0, null::int) $$,
+  'with no Adunarea Generală named, no Group Role reads the full ranking -- the ancestor Manager, a Voluntar in the pool since 2026-10-24, reads his own row alone');
 reset role;
 
 select * from finish();
