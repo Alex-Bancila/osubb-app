@@ -1,4 +1,4 @@
--- #<ISSUE>: the Adunarea Generală Role Evaluation ranks the same pool as the Voluntar Activ one (R58 amendment, 2026-10-24)
+-- #1113: the Adunarea Generală Role Evaluation ranks the same pool as the Voluntar Activ one (R58 amendment, 2026-10-24)
 --
 -- Why (Alex, 2026-10-24). "The pool of volunteers should be the same as the
 -- pool of volunteers for voluntari activi ... rank every member that is not
