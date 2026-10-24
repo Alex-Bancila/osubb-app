@@ -4977,6 +4977,41 @@ export type Database = {
           tasks: number
         }[]
       }
+      unarchive_group: {
+        Args: { p_group_id: number }
+        Returns: {
+          accepts_applications: boolean
+          application_form_label: string | null
+          application_form_url: string | null
+          application_level: number | null
+          automatic_membership: boolean
+          category: string
+          color: string | null
+          competes_in_cup: boolean
+          counts_toward_parent_cup: boolean
+          created_at: string
+          created_by: string | null
+          id: number
+          is_organization: boolean
+          is_private: boolean
+          manager_title: string | null
+          min_level: number
+          name: string
+          parent_id: number | null
+          path: number[]
+          responsible_title: string | null
+          shared_work_visibility: boolean
+          short: string | null
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "groups"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       uninvited_members: {
         Args: never
         Returns: {

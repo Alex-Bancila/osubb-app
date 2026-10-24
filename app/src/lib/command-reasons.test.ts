@@ -461,3 +461,13 @@ it('says an imported Task cannot be reopened and what to do instead (Legacy Impo
     'Taskul vine din importul vechiului Task Tracker și nu poate fi redeschis. Îl poți șterge definitiv, cu punctele lui.',
   );
 });
+
+/* #1110 (ruling R65): the two unarchiving refusals. */
+it('says why a Group cannot be unarchived', () => {
+  const said = (message: string) =>
+    commandErrorMessage({ code: 'PT409', message }, 'fallback');
+  expect(said('group_not_archived')).toBe('Grupul este deja activ.');
+  expect(said('group_parent_archived')).toBe(
+    'Grupul părinte este arhivat. Dezarhivează-l întâi pe el.',
+  );
+});

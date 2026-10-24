@@ -150,6 +150,11 @@ it('sends every Administrare write through its own command, nulls included', asy
   await runGroupCommand({ kind: 'archive', groupId: 3 });
   expect(api.rpc).toHaveBeenLastCalledWith('archive_group', { p_group_id: 3 });
 
+  await runGroupCommand({ kind: 'unarchive', groupId: 3 });
+  expect(api.rpc).toHaveBeenLastCalledWith('unarchive_group', {
+    p_group_id: 3,
+  });
+
   await runGroupCommand({ kind: 'addMember', groupId: 3, memberId: 'm-1' });
   expect(api.rpc).toHaveBeenLastCalledWith('add_group_member', {
     p_group_id: 3,

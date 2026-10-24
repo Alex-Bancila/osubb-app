@@ -62,6 +62,7 @@ import { GroupCreatedReceipt } from './GroupCreateDialog';
 import { GroupRolesTab } from './GroupRolesTab';
 import { GroupRosterTab } from './GroupRosterTab';
 import { GroupSettingsTab } from './GroupSettingsTab';
+import { GroupUnarchiveDialog, UnarchiveButton } from './GroupUnarchiveDialog';
 import {
   categoryLabel,
   competesAbove,
@@ -70,6 +71,8 @@ import {
   groupPathNames,
   groupStatusLabel,
   groupTabs,
+  parentIsArchived,
+  returningSubgroups,
   type GroupTabId,
 } from './group-tree';
 
@@ -81,6 +84,7 @@ const SUCCESS: Record<GroupCommand['kind'], string> = {
   settings: 'Setările au fost salvate.',
   structure: 'Structura grupului a fost salvată.',
   archive: 'Grupul a fost arhivat.',
+  unarchive: 'Grupul a fost dezarhivat.',
   addMember: 'Membrul a fost adăugat în grup.',
   removeMember: 'Membrul a fost scos din grup.',
   setRole: 'Funcția a fost actualizată.',
@@ -219,6 +223,7 @@ export default function GroupScreen() {
   const [error, setError] = useState<string | null>(null);
   const [lastReason, setLastReason] = useState<string | undefined>(undefined);
   const submitting = useRef(false);
+  const [unarchiving, setUnarchiving] = useState(false);
 
   const groups = useMemo(() => groupsQuery.data ?? [], [groupsQuery.data]);
   const byId = useMemo(
@@ -273,6 +278,15 @@ export default function GroupScreen() {
   const canDelete = archived
     ? createTopLevel
     : group !== undefined && authority.archive;
+  // #1110 (ruling R65): whoever may archive the Group may bring it back.
+  const canUnarchive =
+    archived &&
+    group !== undefined &&
+    groupAuthority(group, myGroupsQuery.data, createTopLevel).archive;
+  const returning = useMemo(
+    () => (canUnarchive ? returningSubgroups({ id }, groups) : []),
+    [canUnarchive, id, groups],
+  );
   const tabs = groupTabs(authority, {
     canDelete,
     hasChildren: children.length > 0,
@@ -401,9 +415,19 @@ export default function GroupScreen() {
         {/* The one refusal line (relevance B49): a viewer who can change
           nothing here is told once, not once per tab. */}
         {archived ? (
-          <p className="m-0 -mt-3 text-sm text-muted-foreground">
-            Grupul este arhivat; nu se mai poate modifica.
-          </p>
+          <div className="-mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <p className="m-0 text-sm text-muted-foreground">
+              Grupul este arhivat; nu se mai poate modifica.
+            </p>
+            {canUnarchive && (
+              <UnarchiveButton
+                group={group}
+                parentArchived={parentIsArchived(group, byId)}
+                disabled={busy}
+                onClick={() => setUnarchiving(true)}
+              />
+            )}
+          </div>
         ) : (
           !authority.manageWork &&
           !authority.manageGroup &&
@@ -419,6 +443,18 @@ export default function GroupScreen() {
           <p role="alert" className="text-destructive">
             {error}
           </p>
+        )}
+
+        {canUnarchive && (
+          <GroupUnarchiveDialog
+            group={group}
+            subgroups={returning}
+            open={unarchiving}
+            onOpenChange={setUnarchiving}
+            onUnarchive={(onFailure) =>
+              run({ kind: 'unarchive', groupId: group.id }, onFailure)
+            }
+          />
         )}
 
         <GroupTabs tabs={tabs} active={tab} />
