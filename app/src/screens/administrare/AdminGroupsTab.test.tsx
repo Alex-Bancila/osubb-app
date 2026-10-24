@@ -1292,3 +1292,31 @@ it('keeps archived Groups out of Conduse de mine (R65)', () => {
   expect(screen.getByRole('link', { name: 'Educațional' })).toBeVisible();
   expect(screen.queryByRole('link', { name: /Logistică/ })).toBeNull();
 });
+
+/* CodeRabbit on #1112: Arhivate is built from the Group rows, so a Manager
+   whose Groups read failed is told so there, never shown an empty list. */
+it("says so when a Manager's Arhivate cannot be read, and retries the Groups read", async () => {
+  const user = userEvent.setup();
+  capabilities({ createTopLevelGroups: false });
+  const refetchGroups = vi.fn().mockResolvedValue(undefined);
+  const refetchMine = vi.fn().mockResolvedValue(undefined);
+  api.groups.mockReturnValue({
+    data: undefined,
+    isPending: false,
+    isError: true,
+    refetch: refetchGroups,
+  });
+  api.myGroups.mockReturnValue({
+    data: [myGroup(2, 'Logistică', 'manager', { path: [1, 2] })],
+    isPending: false,
+    isError: false,
+    refetch: refetchMine,
+  });
+  show('/administrare/grupuri?vedere=arhivate');
+  const alert = screen.getByRole('alert');
+  expect(alert).toHaveTextContent('Nu am putut încărca grupurile.');
+  expect(screen.queryByText('Niciun grup arhivat.')).toBeNull();
+  await user.click(within(alert).getByRole('button'));
+  expect(refetchGroups).toHaveBeenCalled();
+  expect(refetchMine).toHaveBeenCalled();
+});

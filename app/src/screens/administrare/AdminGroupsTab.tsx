@@ -907,14 +907,17 @@ export default function AdminGroupsTab() {
     }
   }
 
-  // A Manager's list is built from `my_groups()`; the Group rows only add
-  // the tree's context and the Privat mark, so their failure hides nothing.
+  // A Manager's led list is built from `my_groups()`; the Group rows only add
+  // the tree's context and the Privat mark, so their failure hides nothing
+  // there. Arhivate is built from the Group rows, so there it is a failure.
   const pending = createTopLevel
     ? groupsQuery.isPending
     : myGroupsQuery.isPending || rosterQuery.isPending || groupsQuery.isPending;
   const failed = createTopLevel
     ? groupsQuery.isError
-    : myGroupsQuery.isError || rosterQuery.isError;
+    : myGroupsQuery.isError ||
+      rosterQuery.isError ||
+      (view === 'archived' && groupsQuery.isError);
   // The list's accessible name; nothing on the page repeats "Grupuri".
   const label =
     view === 'archived'
@@ -925,7 +928,11 @@ export default function AdminGroupsTab() {
   const retry = () =>
     void (createTopLevel
       ? groupsQuery.refetch()
-      : Promise.all([myGroupsQuery.refetch(), rosterQuery.refetch()]));
+      : Promise.all([
+          myGroupsQuery.refetch(),
+          rosterQuery.refetch(),
+          groupsQuery.refetch(),
+        ]));
   const viewToggle = (
     <ViewToggle views={views} view={view} onChange={chooseView} />
   );
