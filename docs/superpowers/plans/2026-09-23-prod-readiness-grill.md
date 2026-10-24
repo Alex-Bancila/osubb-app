@@ -96,3 +96,7 @@ Anunțuri therefore reads its feed by the page (spec `docs/superpowers/specs/202
 - **An Announcement not among the loaded pages is read by its id:** the one a `?anunt=` link names, the one the critical banner points at, and a Cerere de aprobare BC reviews.
 
 Who reads what does not change: the feed is exactly `announcements_read`, and a Deal stays on its own tab (R45).
+
+## Amendment (2026-10-23) — Termen expirat below (ruling R62)
+
+An Announcement whose Termen has passed leaves the top of Anunțuri for a second list under it, **Termen expirat**, pinned or not, read or not (#1097; rulings in `docs/superpowers/plans/2026-10-23-calendar-announcements-requests-issue-drafts.md`). `public.announcement_feed` sorts the expired ones after every other and keeps R15's order inside each list. "Passed" is judged at the reading's moment (`p_as_of`), as being read is, so paging stays stable; each row says whether it is expired, and the page starts the second list at the first expired row. An Announcement without a Termen is never expired. The critical banner, the unread count and `announcement_feed_summary` are unchanged.

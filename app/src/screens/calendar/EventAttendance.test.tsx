@@ -72,6 +72,9 @@ function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
     startsAt: '2030-10-01T15:00:00.000Z',
     endsAt: null,
     dayKey: '2030-10-01',
+    allDay: false,
+    lastDayKey: overrides.dayKey ?? '2030-10-01',
+    multiDay: false,
     dayLabel: 'marți, 1 octombrie 2030',
     startTime: '18:00',
     endTime: null,
@@ -107,7 +110,11 @@ describe('EventAttendance — Cine participă (#934)', () => {
   beforeEach(() => {
     state.auth.mockReturnValue({ session: { user: { id: MEMBER } } });
     state.capabilities.mockReturnValue({
-      data: { createTopLevelGroups: false, managesAnyGroup: true },
+      data: {
+        createTopLevelGroups: false,
+        managesAnyGroup: true,
+        seeLeadership: false,
+      },
     });
     state.options.mockReturnValue({ data: managerOptions });
     state.identities.mockReturnValue({ data: identities, isPending: false });
@@ -152,7 +159,11 @@ describe('EventAttendance — Cine participă (#934)', () => {
 
   it('shows nothing, and reads nothing, for a Member who does not manage the Event', () => {
     state.capabilities.mockReturnValue({
-      data: { createTopLevelGroups: false, managesAnyGroup: false },
+      data: {
+        createTopLevelGroups: false,
+        managesAnyGroup: false,
+        seeLeadership: false,
+      },
     });
     state.options.mockReturnValue({
       data: { groups: [], groupNames: [], campaigns: [] },
@@ -160,6 +171,53 @@ describe('EventAttendance — Cine participă (#934)', () => {
     const { container } = render(<EventAttendance event={event()} />);
     expect(container).toBeEmptyDOMElement();
     expect(state.attendance).toHaveBeenLastCalledWith(31, false);
+  });
+
+  describe('every BCE and above reads it (R61)', () => {
+    beforeEach(() => {
+      // A BCE who manages no Group: no Group to create an Event in.
+      state.capabilities.mockReturnValue({
+        data: {
+          createTopLevelGroups: false,
+          managesAnyGroup: false,
+          seeLeadership: true,
+        },
+      });
+      state.options.mockReturnValue({
+        data: { groups: [], groupNames: [], campaigns: [] },
+      });
+    });
+
+    it('shows a BCE who manages nothing the answers on any Event', async () => {
+      const user = userEvent.setup();
+      render(<EventAttendance event={event({ groupId: 20 })} />);
+      expect(state.attendance).toHaveBeenLastCalledWith(31, true);
+      expect(screen.getByText('2 participă · 1 nu')).toBeVisible();
+      await user.click(screen.getByRole('button', { name: 'Cine participă' }));
+      expect(screen.getByRole('region', { name: 'Particip 2' })).toBeVisible();
+    });
+
+    it('does not wait for the Event form options to know a BCE', () => {
+      state.options.mockReturnValue({ data: undefined });
+      render(<EventAttendance event={event()} />);
+      expect(state.attendance).toHaveBeenLastCalledWith(31, true);
+      expect(screen.getByText('2 participă · 1 nu')).toBeVisible();
+    });
+
+    it('still shows nothing to a Member below BCE who manages nothing', () => {
+      state.capabilities.mockReturnValue({
+        data: {
+          createTopLevelGroups: false,
+          managesAnyGroup: false,
+          seeLeadership: false,
+        },
+      });
+      const { container } = render(
+        <EventAttendance event={event({ groupId: 20 })} />,
+      );
+      expect(container).toBeEmptyDOMElement();
+      expect(state.attendance).toHaveBeenLastCalledWith(31, false);
+    });
   });
 
   it("shows nothing on another Group's Event", () => {

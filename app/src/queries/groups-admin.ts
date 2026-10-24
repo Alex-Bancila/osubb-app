@@ -331,6 +331,8 @@ export type GroupCommand =
       confirmRemovals: boolean;
     }
   | { kind: 'archive'; groupId: number }
+  /** #1110 (ruling R65): the Group and its archived subtree return. */
+  | { kind: 'unarchive'; groupId: number }
   | { kind: 'addMember'; groupId: number; memberId: string }
   | { kind: 'removeMember'; groupId: number; memberId: string }
   | {
@@ -419,6 +421,8 @@ function callCommand(command: GroupCommand) {
       } as never);
     case 'archive':
       return supabase.rpc('archive_group', { p_group_id: command.groupId });
+    case 'unarchive':
+      return supabase.rpc('unarchive_group', { p_group_id: command.groupId });
     case 'addMember':
       return supabase.rpc('add_group_member', {
         p_group_id: command.groupId,
@@ -478,7 +482,10 @@ export type GroupAuthority = {
   editStructure: boolean;
   /** A Group Manager is appointed one level up (root: BC/Moderator). */
   appointManager: boolean;
-  /** A top-level Group is archived by BC/Moderator, a Child by its Managers. */
+  /**
+   * A top-level Group is archived by BC/Moderator, a Child by its Managers —
+   * and unarchived by the same people (#1110, ruling R65).
+   */
   archive: boolean;
   /** A root's Minimum Level is BC's; a Child's belongs to its Managers. */
   editMinLevel: boolean;

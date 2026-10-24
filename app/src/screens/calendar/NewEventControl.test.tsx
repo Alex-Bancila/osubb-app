@@ -296,6 +296,74 @@ describe('NewEventControl', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
+  // #1098 (R63): an end on another day ticks Toată ziua; the days become an
+  // all-day Event, midnight to the midnight after its last day.
+  it('ticks Toată ziua for an end on another day and sends its days as midnights', async () => {
+    state.mutateAsync.mockResolvedValue({ id: 46 });
+    const user = setup();
+    await open(user);
+    await fillRequired(user);
+    const box = screen.getByRole('checkbox', { name: 'Toată ziua' });
+    expect(box).not.toBeChecked();
+    const first = START.slice(0, 10);
+    const third = new Date(`${first}T00:00:00Z`);
+    third.setUTCDate(third.getUTCDate() + 2);
+    const last = third.toISOString().slice(0, 10);
+    await pickDate(
+      user,
+      screen.getByLabelText('Se încheie (opțional) — ora României'),
+      // The day alone: the box ticks as it is pressed, and days need no time.
+      last,
+    );
+
+    expect(box).toBeChecked();
+    expect(screen.getByLabelText('Prima zi')).toBeInTheDocument();
+    expect(screen.getByLabelText('Ultima zi')).toBeInTheDocument();
+    await user.click(
+      screen.getByRole('button', { name: 'Creează evenimentul' }),
+    );
+
+    await waitFor(() => expect(state.mutateAsync).toHaveBeenCalledOnce());
+    const after = new Date(`${last}T00:00:00Z`);
+    after.setUTCDate(after.getUTCDate() + 1);
+    expect(state.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allDay: true,
+        startsAt: bucharestWallTimeToIso(`${first}T00:00`),
+        endsAt: bucharestWallTimeToIso(
+          `${after.toISOString().slice(0, 10)}T00:00`,
+        ),
+      }),
+    );
+  });
+
+  it('gives the exact times back when the author unticks it, and leaves it unticked', async () => {
+    const user = setup();
+    await open(user);
+    await fillRequired(user);
+    const first = START.slice(0, 10);
+    const next = new Date(`${first}T00:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    const second = next.toISOString().slice(0, 10);
+    await pickDate(
+      user,
+      screen.getByLabelText('Se încheie (opțional) — ora României'),
+      second,
+    );
+    const box = screen.getByRole('checkbox', { name: 'Toată ziua' });
+    expect(box).toBeChecked();
+    await user.click(box);
+
+    expect(box).not.toBeChecked();
+    expect(
+      screen.getByLabelText('Se încheie (opțional) — ora României'),
+    ).toHaveAttribute('data-value', `${second}T20:00`);
+    expect(screen.getByLabelText('Începe — ora României')).toHaveAttribute(
+      'data-value',
+      START,
+    );
+  });
+
   it('offers only the active Campaigns on the chosen Group path', async () => {
     const user = setup();
     await open(user);

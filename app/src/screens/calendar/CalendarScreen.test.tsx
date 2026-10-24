@@ -248,6 +248,9 @@ function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
     startsAt: '2026-10-20T07:00:00.000Z',
     endsAt: '2026-10-20T09:00:00.000Z',
     dayKey: '2026-10-20',
+    allDay: false,
+    lastDayKey: overrides.dayKey ?? '2026-10-20',
+    multiDay: false,
     dayLabel: 'marți, 20 octombrie 2026',
     startTime: '10:00',
     endTime: '12:00',
@@ -902,6 +905,59 @@ describe('CalendarScreen', () => {
       expect(byTitle('Bal')).toHaveClass('is-rejected');
       expect(byTitle('Ședință')).not.toHaveClass('is-pending');
       expect(byTitle('Ședință')).not.toHaveClass('is-rejected');
+    });
+
+    // #1098 (R63): one bar across the days, broken at the week row, its
+    // title on the first piece of each row; each day lists the Event.
+    it('draws a several-day Event as one bar across its days and lists it on each', async () => {
+      const user = userEvent.setup();
+      stubStorage();
+      setEvents([
+        event({
+          id: 81,
+          title: 'Tabăra de toamnă',
+          allDay: true,
+          multiDay: true,
+          // Friday 23 to Tuesday 27 October 2026.
+          dayKey: '2026-10-23',
+          lastDayKey: '2026-10-27',
+          startsAt: '2026-10-22T21:00:00.000Z',
+          endsAt: '2026-10-27T22:00:00.000Z',
+        }),
+      ]);
+      renderCalendar();
+      await user.click(screen.getByRole('button', { name: 'Lună' }));
+      const pieces = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-event-bar="81"]'),
+      );
+      expect(pieces).toHaveLength(5);
+      const titled = pieces.filter((piece) => piece.textContent !== '');
+      expect(titled.map((piece) => piece.textContent)).toEqual([
+        'Tabăra de toamnă',
+        'Tabăra de toamnă',
+      ]);
+      // Friday's piece opens the bar and goes on; Sunday's ends the row.
+      expect(pieces[0]).toHaveClass('joins-after');
+      expect(pieces[0]).not.toHaveClass('goes-on-before');
+      expect(pieces[2]).toHaveClass('goes-on-after');
+      expect(pieces[2]).not.toHaveClass('joins-after');
+      expect(pieces[3]).toHaveClass('goes-on-before');
+      // It is a bar, never a chip of its own as well.
+      expect(
+        Array.from(document.querySelectorAll('.calendar-chip-text')).filter(
+          (text) => text.textContent === 'Tabăra de toamnă',
+        ),
+      ).toHaveLength(2);
+
+      await user.click(
+        screen.getByRole('button', {
+          name: 'duminică, 25 octombrie 2026: 1 eveniment',
+        }),
+      );
+      const list = screen.getByRole('list', { name: 'Evenimente' });
+      expect(
+        within(list).getByRole('article', { name: 'Tabăra de toamnă' }),
+      ).toHaveTextContent('Toată ziua · până marți, 27 oct.');
     });
 
     it('remembers the view on this device across a reload', async () => {

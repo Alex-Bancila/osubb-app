@@ -16,33 +16,33 @@ import {
   type EventAttendance as Attendance,
 } from '../../queries/event-attendance';
 import { useEventFormOptions } from '../../queries/event-creation';
-import { managesEvent } from '../../queries/event-edit';
+import { readsEventAttendance } from '../../queries/event-edit';
 import type { EventPresentation } from '../../queries/events';
 import { useMemberIdentities } from '../../queries/member-identities';
 
 /**
- * The answers on this Event, for its managers only (#934): one row on the
- * card — **Cine participă**, a thin bar of the split, the counts — which opens
- * every Member who answered, grouped Particip / Nu particip. Everyone else sees nothing here; the server's
+ * The answers on this Event, for its managers (#934) and for every BCE, BC
+ * member and the Moderator (R61): one row on the card — **Cine participă**, a
+ * thin bar of the split, the counts — which opens every Member who answered,
+ * grouped Particip / Nu particip. Everyone else sees nothing here; the server's
  * `event_attendance_read` would show them only their own answer anyway.
  */
 export function EventAttendance({ event }: { event: EventPresentation }) {
   const { session } = useAuth();
   const capabilities = useCapabilities();
   const options = useEventFormOptions();
-  const manager =
+  const reader =
     capabilities.data !== undefined &&
-    options.data !== undefined &&
-    managesEvent(event, {
+    readsEventAttendance(event, {
       memberId: session?.user.id,
       capabilities: capabilities.data,
       options: options.data,
     });
-  const attendance = useEventAttendance(event.id, manager);
+  const attendance = useEventAttendance(event.id, reader);
   const [open, setOpen] = useState(false);
   const listId = useId();
 
-  if (!manager) return null;
+  if (!reader) return null;
 
   const answers = attendance.data;
   const total = answers ? answers.going.length + answers.declined.length : 0;

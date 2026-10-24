@@ -1712,3 +1712,82 @@ it('offers the parent-Cup box only where a Group above competes in the Cup', asy
     screen.queryByRole('checkbox', { name: /cupa grupului părinte/ }),
   ).toBeNull();
 });
+
+/* #1110 (ruling R65): an archived Group's page offers Dezarhivează to whoever
+   may archive it, beside the line that says it is archived. */
+it('unarchives an archived Group from its page, naming the subgroups that return', async () => {
+  const user = userEvent.setup();
+  api.groups.mockReturnValue({
+    data: [
+      tree[0],
+      group(2, 'Logistică', [1, 2], 1, { status: 'archived' }),
+      group(5, 'Foto', [1, 2, 5], 2, { status: 'archived' }),
+    ],
+    isPending: false,
+    isError: false,
+  });
+  show();
+  expect(
+    screen.getByText('Grupul este arhivat; nu se mai poate modifica.'),
+  ).toBeVisible();
+  await user.click(
+    screen.getByRole('button', { name: 'Dezarhivează Logistică' }),
+  );
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Dezarhivează Logistică',
+  });
+  expect(
+    within(dialog).getByRole('list', { name: 'Subgrupuri care revin' }),
+  ).toHaveTextContent('Foto');
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Dezarhivează' }),
+  );
+  expect(api.mutate).toHaveBeenLastCalledWith({
+    kind: 'unarchive',
+    groupId: 2,
+  });
+  expect(await screen.findByText('Grupul a fost dezarhivat.')).toHaveAttribute(
+    'role',
+    'status',
+  );
+});
+
+it('waits for an archived parent before a Child Group can return', () => {
+  api.groups.mockReturnValue({
+    data: [
+      tree[0],
+      group(2, 'Logistică', [1, 2], 1, { status: 'archived' }),
+      group(5, 'Foto', [1, 2, 5], 2, { status: 'archived' }),
+    ],
+    isPending: false,
+    isError: false,
+  });
+  show(5);
+  const button = screen.getByRole('button', { name: 'Dezarhivează Foto' });
+  expect(button).toBeDisabled();
+  expect(
+    screen.getByText(
+      'Grupul părinte este arhivat; dezarhivează-l întâi pe el.',
+    ),
+  ).toBeVisible();
+});
+
+it('offers Dezarhivează to a Child Group’s Manager, never to its Responsible', () => {
+  api.level.value = 1;
+  capabilities(false);
+  api.groups.mockReturnValue({
+    data: [tree[0], group(2, 'Logistică', [1, 2], 1, { status: 'archived' })],
+    isPending: false,
+    isError: false,
+  });
+  api.myGroups.mockReturnValue({ data: [myGroup(2, 'responsible')] });
+  const responsible = show();
+  expect(screen.queryByRole('button', { name: /Dezarhivează/ })).toBeNull();
+  responsible.unmount();
+
+  api.myGroups.mockReturnValue({ data: [myGroup(2, 'manager')] });
+  show();
+  expect(
+    screen.getByRole('button', { name: 'Dezarhivează Logistică' }),
+  ).toBeEnabled();
+});

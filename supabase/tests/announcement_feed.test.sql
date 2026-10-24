@@ -5,9 +5,10 @@
 -- time: the Announcements (never a Deal) the caller reads -- exactly what
 -- announcements_read gives them --, narrowed by Grupuri preferate (R43: a
 -- preferred Group, or critical, or organization-wide, or their own) and by
--- the Group filter (the chosen Group and every Group below it), in R15's
--- order (pinned, then unread, then read; newest first in each; the id last),
--- with the unpaged count. public.announcement_feed_summary answers what the
+-- the Group filter (the chosen Group and every Group below it), the
+-- expired ones last (R62, #1097: past their Termen at the reading's moment)
+-- and in R15's order inside each list (pinned, then unread, then read;
+-- newest first in each; the id last), with the unpaged count. public.announcement_feed_summary answers what the
 -- page shows around it: the unread count of the header, the first unread
 -- critical Announcement the banner points at, and the counts the empty
 -- states tell apart.
@@ -20,13 +21,16 @@
 -- summary counting read ones, pending or rejected ones, or outside the view,
 -- or pointing the banner at a read one, one not yet approved or one outside
 -- the Group filter; the page order ignoring the reading's moment -- each
--- fails at least one named case or parity above.
+-- fails at least one named case or parity above. R62 (2026-10-23): the
+-- expired key dropped from the order, expired judged at now rather than
+-- p_as_of, or a missing Termen left to the comparison -- each fails at
+-- least one R62 case below.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(35);
+select plan(42);
 
 \ir _group_task_fixtures.psql
 reset role;
@@ -282,6 +286,68 @@ select is((pg_temp.af_row(pg_temp.g521_uid(5),
                 from public.announcement_feed(p_limit => 1)')),
           '{"now": true, "passed": true}'::jsonb,
           'as_of answers the moment used: now for a first page, the one passed on for the next');
+
+-- ------------------------------------------- R62: Termen expirat below
+-- Five organization-wide Announcements with a Termen, each a little older
+-- than an hour: three already past it an hour ago (one pinned, one #5 has
+-- read), one whose Termen passed half an hour ago -- after a reading begun
+-- an hour ago, before now -- and one still ahead. None is critical, so the
+-- banner and the summary below keep their answers.
+select pg_temp.af_post('expired pinned', 'Department #521', 'org', 61, p_pinned => true);
+select pg_temp.af_post('expired unread', 'Department #521', 'org', 62);
+select pg_temp.af_post('expired read', 'Department #521', 'org', 63);
+select pg_temp.af_post('termen passing', 'Department #521', 'org', 64);
+select pg_temp.af_post('termen ahead', 'Department #521', 'org', 65);
+update public.announcements as announcement
+   set deadline = now() - termen.ago
+  from (values ('expired pinned', interval '90 minutes'),
+               ('expired unread', interval '2 hours'),
+               ('expired read', interval '3 hours'),
+               ('termen passing', interval '30 minutes'),
+               ('termen ahead', interval '-1 day')) as termen(name, ago)
+ where announcement.id = pg_temp.af_id(termen.name);
+insert into public.announcement_reads(announcement_id, member_id)
+values (pg_temp.af_id('expired read'), pg_temp.g521_uid(5));
+
+select is((select ids[array_length(ids, 1) - 3:] from (select pg_temp.af_ids(pg_temp.g521_uid(5),
+            'select id from public.announcement_feed(p_limit => 100)') as ids) as q),
+          array[pg_temp.af_id('expired pinned'), pg_temp.af_id('expired unread'),
+                pg_temp.af_id('termen passing'), pg_temp.af_id('expired read')],
+          'R62: the expired ones come after every other, in R15''s order among themselves: pinned, unread newest first, read');
+select ok((select array_position(ids, pg_temp.af_id('expired pinned')) > array_position(ids, pg_temp.af_id('dept'))
+             from (select pg_temp.af_ids(pg_temp.g521_uid(5),
+                     'select id from public.announcement_feed(p_limit => 100)') as ids) as q),
+          'R62: a pinned expired Announcement sorts after an unpinned one #5 has read whose Termen has not passed');
+select is(pg_temp.af_ids(pg_temp.g521_uid(5),
+            'select id from public.announcement_feed(p_limit => 100) where expired order by id'),
+          array[pg_temp.af_id('expired pinned'), pg_temp.af_id('expired unread'),
+                pg_temp.af_id('expired read'), pg_temp.af_id('termen passing')],
+          'R62: expired is true exactly for the Announcements past their Termen now');
+select is(pg_temp.af_ids(pg_temp.g521_uid(5),
+            'select id from public.announcement_feed(p_limit => 100, p_as_of => now() - interval ''1 hour'') where expired order by id'),
+          array[pg_temp.af_id('expired pinned'), pg_temp.af_id('expired unread'), pg_temp.af_id('expired read')],
+          'R62: expired is judged at the reading''s moment -- a Termen passed after it, though before now, is not expired for that reading');
+select is(pg_temp.af_row(pg_temp.g521_uid(5),
+            'select count(*) filter (where deadline is null) > 0 as some, count(*) filter (where deadline is null and expired is not false) as expired
+               from public.announcement_feed(p_limit => 100)'),
+          '{"some": true, "expired": 0}'::jsonb,
+          'R62: an Announcement without a Termen is never expired');
+select is(
+  (select array_agg(page.id order by page_no, page.place)
+     from generate_series(0, 9) as page_no,
+          lateral unnest(pg_temp.af_ids(pg_temp.g521_uid(5), format(
+            'select id from public.announcement_feed(p_limit => 10, p_offset => %s, p_as_of => now() - interval ''1 hour'')',
+            page_no * 10))) with ordinality as page(id, place)),
+  pg_temp.af_ids(pg_temp.g521_uid(5),
+    'select id from public.announcement_feed(p_limit => 100, p_as_of => now() - interval ''1 hour'')'),
+  'R62: the pages of one reading neither skip nor repeat an Announcement whose Termen passes after its moment');
+select ok((select array_position(at_moment, pg_temp.af_id('termen passing')) < array_position(at_moment, pg_temp.af_id('expired pinned'))
+              and array_position(at_now, pg_temp.af_id('termen passing')) > array_position(at_now, pg_temp.af_id('expired pinned'))
+             from (select pg_temp.af_ids(pg_temp.g521_uid(5),
+                            'select id from public.announcement_feed(p_limit => 100, p_as_of => now() - interval ''1 hour'')') as at_moment,
+                          pg_temp.af_ids(pg_temp.g521_uid(5),
+                            'select id from public.announcement_feed(p_limit => 100)') as at_now) as q),
+          'R62: a Termen that passes after the reading''s moment keeps its place above the expired ones; a reading begun later lists it among them');
 
 -- --------------------------------------------------------------- summary
 select is(pg_temp.af_row(pg_temp.g521_uid(5), 'select unread, critical_id, everything, preferred from public.announcement_feed_summary()'),

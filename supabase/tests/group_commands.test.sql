@@ -143,7 +143,11 @@ select lives_ok($q$select public.create_task('Native',null,now()+interval '1 day
 select lives_ok($q$select public.create_campaign(pg_temp.g522_group('Native #522'),'Native Campaign')$q$,'ancestor Manager creates native child Group Campaign');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
-select lives_ok($q$select public.create_completed_work_request('Native request', pg_temp.g522_group('Native #522'))$q$,'a native Group now carries a Request; Automatic Membership admits the requester (#579)');
+-- #1099 (R64): this native Group has Automatic Membership, and an Automatic-Membership Group
+-- other than the Organization Group takes no Request (#855, B31, now on the server). A native
+-- Group carrying a Request is pinned by origin_bridge_dropped.test.sql's Native Group 579.
+select throws_ok($q$select public.create_completed_work_request('Native request', pg_temp.g522_group('Native #522'))$q$,
+  '42501','request_origin_forbidden','an Automatic-Membership Group other than the Organization Group takes no Request, even from its automatic member (#855 B31, R64)');
 reset role;
 
 -- ==================== #522 plan delta: the rulings the matrix above does not yet separate ====================
@@ -152,17 +156,17 @@ reset role;
 -- assertion above green. Each one is written against the rule it pins, not against the
 -- shape of the code that happens to satisfy it today.
 
--- Ruling D2: Request membership is PER GROUP. Manager and Responsible flow down the path
--- (private.group_role_of), plain membership never does -- in either direction. Replacing
--- create_completed_work_request_impl's `group_role_of(v_group, v_actor) is not null` with a
--- path walk over group_members leaves the whole matrix above green; these two do not.
+-- Ruling R64 (#1099) supersedes D2 for Requests: a Member files for any active Group they can
+-- see whose Minimum Level they meet, member of it or not, so a Request no longer follows
+-- membership up or down the path. Restoring `group_role_of(v_group, v_actor) is null` in
+-- create_completed_work_request_impl turns both red.
 select pg_temp.test_login_leadership(pg_temp.g521_uid(5));
-select throws_ok($q$select public.create_completed_work_request('Down the path #522', pg_temp.g522_group('Child #521'))$q$,
-  '42501','request_origin_forbidden','a Department member cannot file into the Department Team below it -- membership does not walk down the path');
+select lives_ok($q$select public.create_completed_work_request('Down the path #522', pg_temp.g522_group('Child #521'))$q$,
+  'R64: a Department member files for the Department Team below it, though not a member there');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(8));
-select throws_ok($q$select public.create_completed_work_request('Up the path #522', pg_temp.g522_group('Department #521'))$q$,
-  '42501','request_origin_forbidden','a Department-Team member cannot file into the Department above it -- membership does not walk up the path either');
+select lives_ok($q$select public.create_completed_work_request('Up the path #522', pg_temp.g522_group('Department #521'))$q$,
+  'R64: a Department-Team member files for the Department above it, though not a member there');
 reset role;
 
 -- private.can_decide_request gates on claims and liveness before it consults the decider set.

@@ -252,6 +252,15 @@ function readableById(rows: Record<number, AnnouncementFeedRow | null>) {
   );
 }
 
+/** The cards inside `container` are these Announcements, in this order. */
+function expectCards(container: HTMLElement, titles: string[]) {
+  const cards = within(container).getAllByRole('article');
+  expect(cards).toHaveLength(titles.length);
+  titles.forEach((title, index) =>
+    expect(cards[index]).toHaveAccessibleName(title),
+  );
+}
+
 /** The filters of the feed's latest read. */
 function feedFilters() {
   return hooks.useAnnouncementFeed.mock.lastCall?.[0];
@@ -588,6 +597,104 @@ describe('AnnouncementsScreen', () => {
     // The filter button waits too, and says so to a screen reader.
     expect(screen.getAllByRole('status').length).toBeGreaterThan(0);
     expect(screen.getByText('Se încarcă anunțurile…')).toBeInTheDocument();
+  });
+
+  describe('Termen expirat (R62)', () => {
+    it('lists the expired Announcements under their own heading, in the server’s order', () => {
+      showFeed(
+        [
+          createRow({ id: 1, title: 'Ședință' }),
+          createRow({
+            id: 2,
+            title: 'Regulament',
+            announcement_reads: [{ read_at: '2026-09-19T10:00:00Z' }],
+          }),
+          // Pinned and unread, yet below: the server put it there.
+          createRow({
+            id: 3,
+            title: 'Formular închis',
+            pinned: true,
+            deadline: '2026-09-20T10:00:00Z',
+            expired: true,
+          }),
+          createRow({
+            id: 4,
+            title: 'Înscrieri încheiate',
+            deadline: '2026-09-19T10:00:00Z',
+            expired: true,
+            announcement_reads: [{ read_at: '2026-09-19T12:00:00Z' }],
+          }),
+        ],
+        { total: 30, hasMore: true },
+      );
+
+      renderAt('/anunturi');
+
+      const current = screen.getByRole('list', { name: 'Flux de anunțuri' });
+      expectCards(current, ['Ședință', 'Regulament']);
+      const section = screen.getByRole('region', { name: 'Termen expirat' });
+      expect(
+        within(section).getByRole('heading', { name: 'Termen expirat' }),
+      ).toBeInTheDocument();
+      expectCards(section, ['Formular închis', 'Înscrieri încheiate']);
+      // The next page still follows the end of the whole feed.
+      expect(
+        screen.getByRole('button', { name: 'Încarcă mai multe' }),
+      ).toBeInTheDocument();
+      expect(
+        section.compareDocumentPosition(
+          screen.getByRole('button', { name: 'Încarcă mai multe' }),
+        ) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    });
+
+    it('draws no Termen expirat while no expired Announcement has loaded', () => {
+      showFeed(
+        [
+          createRow({ id: 1, title: 'Ședință' }),
+          // A Termen still ahead at the page's moment.
+          createRow({
+            id: 2,
+            title: 'Formular deschis',
+            deadline: '2026-12-01T10:00:00Z',
+            expired: false,
+          }),
+        ],
+        { total: 30, hasMore: true },
+      );
+
+      renderAt('/anunturi');
+
+      expect(
+        screen.queryByRole('region', { name: 'Termen expirat' }),
+      ).not.toBeInTheDocument();
+      expectCards(screen.getByRole('list', { name: 'Flux de anunțuri' }), [
+        'Ședință',
+        'Formular deschis',
+      ]);
+    });
+
+    it('draws only Termen expirat when every loaded Announcement has expired', () => {
+      showFeed([
+        createRow({
+          id: 3,
+          title: 'Formular închis',
+          deadline: '2026-09-20T10:00:00Z',
+          expired: true,
+        }),
+      ]);
+
+      renderAt('/anunturi');
+
+      expect(
+        screen.queryByRole('list', { name: 'Flux de anunțuri' }),
+      ).not.toBeInTheDocument();
+      expect(
+        within(
+          screen.getByRole('region', { name: 'Termen expirat' }),
+        ).getByRole('article'),
+      ).toHaveAccessibleName('Formular închis');
+    });
   });
 
   describe('the critical banner', () => {

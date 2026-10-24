@@ -25,7 +25,7 @@ import {
   GroupOption,
   groupOptionLabel,
 } from '../../components/ui/combobox';
-import { DateTimePicker } from '../../components/ui/date-picker';
+import { DatePicker, DateTimePicker } from '../../components/ui/date-picker';
 import { FormSheetFooter } from '../../components/ui/form-sheet';
 import { InfoHint } from '../../components/ui/info-hint';
 import { Input } from '../../components/ui/input';
@@ -34,9 +34,14 @@ import { useFormValidation } from '../../lib/use-form-validation';
 import {
   EVENT_TYPE_CHOICES,
   emptyEventFormValues,
+  endDayOf,
   eventCampaignsFor,
   mayAnnounceEvent,
   minimumLevelChoices,
+  withAllDay,
+  withDay,
+  withEventDates,
+  withLastDay,
   type EventDraft,
   type EventFormGroup,
   type EventFormOptions,
@@ -133,6 +138,29 @@ export function EventForm({
 
   function update(patch: Partial<EventFormValues>) {
     setValues((current) => ({ ...current, ...patch }));
+  }
+
+  // #1098 (R63): an end on another day than the start ticks Toată ziua,
+  // until the author has ticked or unticked it themselves.
+  function updateDates(
+    patch: Pick<Partial<EventFormValues>, 'startsAt' | 'endsAt'>,
+  ) {
+    setValues((current) => withEventDates(current, patch));
+  }
+
+  /** Toată ziua: a first day moved past the last one takes the last along. */
+  function chooseFirstDay(day: string) {
+    setValues((current) => {
+      const lastDay = endDayOf(current.endsAt);
+      return {
+        ...current,
+        startsAt: withDay(current.startsAt, day, DEFAULT_START_TIME),
+        endsAt:
+          lastDay && lastDay < day
+            ? withLastDay(current.endsAt, day, defaultEndTime(current.startsAt))
+            : current.endsAt,
+      };
+    });
   }
 
   function chooseGroup(group: EventFormGroup | null) {
@@ -302,41 +330,117 @@ export function EventForm({
           <FieldError {...form.errorProps('campaignId')} />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="grid gap-1.5">
-            <label htmlFor={`${id}-starts-at`} className="text-sm font-medium">
-              Începe — ora României
-            </label>
-            <DateTimePicker
-              id={`${id}-starts-at`}
-              required
-              disabled={pending}
-              defaultTime={DEFAULT_START_TIME}
-              value={values.startsAt}
-              onChange={(startsAt) => update({ startsAt })}
-              {...form.field('startsAt')}
+        {/* #1098 (R63): Toată ziua. Ticked, the pickers choose days, the
+            last one included; the times wait in the values for an untick. */}
+        <div className="flex items-center justify-between gap-2">
+          <ChoiceRow className="font-medium">
+            <Checkbox
+              checked={values.allDay}
+              aria-describedby={`${id}-all-day-hint`}
+              onCheckedChange={(next) =>
+                setValues((current) =>
+                  withAllDay(
+                    current,
+                    next === true,
+                    defaultEndTime(current.startsAt),
+                  ),
+                )
+              }
             />
-            <FieldError {...form.errorProps('startsAt')} />
-          </div>
-          <div className="grid gap-1.5">
-            <label htmlFor={`${id}-ends-at`} className="text-sm font-medium">
-              Se încheie (opțional) — ora României
-            </label>
-            <DateTimePicker
-              id={`${id}-ends-at`}
-              disabled={pending}
-              defaultTime={defaultEndTime(values.startsAt)}
-              // It ends after it starts: no day before the start's.
-              min={values.startsAt.slice(0, 10) || undefined}
-              // …and an empty end opens on the start's month, not today's.
-              openOn={values.startsAt.slice(0, 10) || undefined}
-              value={values.endsAt}
-              onChange={(endsAt) => update({ endsAt })}
-              {...form.field('endsAt')}
-            />
-            <FieldError {...form.errorProps('endsAt')} />
-          </div>
+            Toată ziua
+          </ChoiceRow>
+          <InfoHint label="Despre toată ziua" id={`${id}-all-day-hint`}>
+            Evenimentul ține de la prima la ultima zi, fără ore. Se bifează
+            singur când alegi un sfârșit în altă zi; debifează-l ca să păstrezi
+            orele exacte.
+          </InfoHint>
         </div>
+
+        {values.allDay ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <label
+                htmlFor={`${id}-starts-at`}
+                className="text-sm font-medium"
+              >
+                Prima zi
+              </label>
+              <DatePicker
+                id={`${id}-starts-at`}
+                required
+                disabled={pending}
+                value={values.startsAt.slice(0, 10)}
+                onChange={chooseFirstDay}
+                {...form.field('startsAt')}
+              />
+              <FieldError {...form.errorProps('startsAt')} />
+            </div>
+            <div className="grid gap-1.5">
+              <label htmlFor={`${id}-ends-at`} className="text-sm font-medium">
+                Ultima zi
+              </label>
+              <DatePicker
+                id={`${id}-ends-at`}
+                required
+                disabled={pending}
+                min={values.startsAt.slice(0, 10) || undefined}
+                openOn={values.startsAt.slice(0, 10) || undefined}
+                // An end at 00:00 closes the day before, as it did timed.
+                value={endDayOf(values.endsAt)}
+                onChange={(day) =>
+                  update({
+                    endsAt: withLastDay(
+                      values.endsAt,
+                      day,
+                      defaultEndTime(values.startsAt),
+                    ),
+                  })
+                }
+                {...form.field('endsAt')}
+              />
+              <FieldError {...form.errorProps('endsAt')} />
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <label
+                htmlFor={`${id}-starts-at`}
+                className="text-sm font-medium"
+              >
+                Începe — ora României
+              </label>
+              <DateTimePicker
+                id={`${id}-starts-at`}
+                required
+                disabled={pending}
+                defaultTime={DEFAULT_START_TIME}
+                value={values.startsAt}
+                onChange={(startsAt) => updateDates({ startsAt })}
+                {...form.field('startsAt')}
+              />
+              <FieldError {...form.errorProps('startsAt')} />
+            </div>
+            <div className="grid gap-1.5">
+              <label htmlFor={`${id}-ends-at`} className="text-sm font-medium">
+                Se încheie (opțional) — ora României
+              </label>
+              <DateTimePicker
+                id={`${id}-ends-at`}
+                disabled={pending}
+                defaultTime={defaultEndTime(values.startsAt)}
+                // It ends after it starts: no day before the start's.
+                min={values.startsAt.slice(0, 10) || undefined}
+                // …and an empty end opens on the start's month, not today's.
+                openOn={values.startsAt.slice(0, 10) || undefined}
+                value={values.endsAt}
+                onChange={(endsAt) => updateDates({ endsAt })}
+                {...form.field('endsAt')}
+              />
+              <FieldError {...form.errorProps('endsAt')} />
+            </div>
+          </div>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="grid gap-1.5">

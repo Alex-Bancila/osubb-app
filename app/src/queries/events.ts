@@ -2,6 +2,7 @@ import { skipToken, useQuery } from '@tanstack/react-query';
 
 import {
   bucharestDayKey,
+  bucharestLastDayKey,
   formatBucharestDay,
   formatBucharestTime,
 } from '../lib/calendar-time';
@@ -21,7 +22,7 @@ import { keys } from './keys';
 // One string literal, not a concatenation: supabase-js parses this at the type
 // level to give `data` its shape, and a `+` defeats that.
 const EVENT_FIELDS =
-  'id, title, type, group_id, campaign_id, starts_at, ends_at, location, capacity, description, min_level, created_by, cancelled_at, cancel_reason, approval_status, rejection_reason, group:groups(name, short, color, category, path, is_organization)';
+  'id, title, type, group_id, campaign_id, starts_at, ends_at, all_day, location, capacity, description, min_level, created_by, cancelled_at, cancel_reason, approval_status, rejection_reason, group:groups(name, short, color, category, path, is_organization)';
 
 type EventTableRow = Database['public']['Tables']['events']['Row'];
 type GroupRow = Database['public']['Tables']['groups']['Row'];
@@ -50,6 +51,8 @@ type EventRow = Pick<
 > & {
   /** Optional so a row read before #691 still maps; absent means none. */
   campaign_id?: EventTableRow['campaign_id'];
+  /** Optional so a row read before #1098 still maps; absent means timed. */
+  all_day?: EventTableRow['all_day'];
   /** Optional so a row read before the approval flow still maps: approved. */
   approval_status?: EventTableRow['approval_status'];
   rejection_reason?: EventTableRow['rejection_reason'];
@@ -67,7 +70,22 @@ export type EventPresentation = {
   campaignId: number | null;
   startsAt: string;
   endsAt: string | null;
+  /**
+   * **Toată ziua** (ruling R63): stored from 00:00 Bucharest on the first day
+   * to 00:00 Bucharest after the last, so `endsAt` is exclusive; no time is
+   * shown for it anywhere.
+   */
+  allDay: boolean;
+  /** The Bucharest day it starts on: the one day list it is under. */
   dayKey: string;
+  /**
+   * The last Bucharest day it touches — `dayKey` for most. An end exactly at
+   * a midnight belongs to the day before it, so an all-day Event's last day
+   * is the one before its exclusive end.
+   */
+  lastDayKey: string;
+  /** It touches more than one day: the month grid draws it as one bar. */
+  multiDay: boolean;
   dayLabel: string;
   startTime: string;
   endTime: string | null;
@@ -95,6 +113,7 @@ export function toEventPresentation(row: EventRow): EventPresentation | null {
 
   const dayKey = bucharestDayKey(row.starts_at);
   if (!dayKey) return null;
+  const lastDayKey = bucharestLastDayKey(dayKey, row.ends_at);
 
   return {
     id: row.id,
@@ -105,7 +124,10 @@ export function toEventPresentation(row: EventRow): EventPresentation | null {
     campaignId: row.campaign_id ?? null,
     startsAt: row.starts_at,
     endsAt: row.ends_at,
+    allDay: row.all_day ?? false,
     dayKey,
+    lastDayKey,
+    multiDay: lastDayKey !== dayKey,
     dayLabel: formatBucharestDay(row.starts_at),
     startTime: formatBucharestTime(row.starts_at),
     endTime: row.ends_at ? formatBucharestTime(row.ends_at) : null,
@@ -122,14 +144,16 @@ export function toEventPresentation(row: EventRow): EventPresentation | null {
 }
 
 /**
- * A half-open window on `starts_at`: `from` inclusive, `to` exclusive, both
- * instants (the Work Filter's `rangeBounds` turns its days into them). Either
- * end may be absent — no bound.
+ * A half-open window: `from` inclusive, `to` exclusive, both instants (the
+ * Work Filter's `rangeBounds` turns its days into them). Either end may be
+ * absent — no bound.
  */
 export type EventRange = { from?: string; to?: string };
 
 /**
- * Every Event whose start falls in the window, oldest first.
+ * Every Event that overlaps the window, oldest first: it starts before the
+ * window ends, and starts in it or is still going when it opens (#1098, R63)
+ * — a weekend that began on the last day of September is on October's grid.
  *
  * There is no `now` floor any more (#691, ADR-0008 amended 2026-09-23): past
  * Events are readable, and `events_read` (Minimum Level) is the whole
@@ -142,7 +166,11 @@ export async function fetchEventsInRange(
 ): Promise<EventPresentation[]> {
   const rows: EventRow[] = await readAllRows((from, to) => {
     let query = supabase.from('events').select(EVENT_FIELDS);
-    if (range.from) query = query.gte('starts_at', range.from);
+    // Quoted: an instant's `:` and `.` are reserved in a PostgREST `or`.
+    if (range.from)
+      query = query.or(
+        `starts_at.gte."${range.from}",ends_at.gt."${range.from}"`,
+      );
     if (range.to) query = query.lt('starts_at', range.to);
     return query
       .order('starts_at', { ascending: true })

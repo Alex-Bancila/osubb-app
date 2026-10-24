@@ -90,6 +90,7 @@ function presentation(
     approvalStatus: 'approved',
     rejectionReason: null,
     deadline: null,
+    expired: false,
     minLevel: 0,
     minLevelLabel: null,
     isRead: false,

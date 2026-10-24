@@ -36,7 +36,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(117);
+select plan(130);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -257,15 +257,125 @@ select is((select count(distinct notification.task_id) from public.notifications
             where notification.dedupe_key = 'request:' || (select dept_request_id from f344)::text), 0::bigint,
   'the creation notification carries no task_id -- no Task exists until the Request is approved');
 
--- ==================== 2. Create: every refusal ====================
+-- ==================== 2. Create: any Group the Member can see (R64, #1099) ====================
+-- Ruling R64: a Member files for any active Group they can see whose Minimum
+-- Level they meet, member of it or not. The pr volunteer below is in no edu
+-- Group at all. Restoring the old membership rule (private.group_role_of(...)
+-- is null) in create_completed_work_request_impl turns the first assertion red.
+--
+-- Fixture Groups for the refusals, resolved as the owner into a temp table
+-- because the Private one is unreadable to the persona under groups_read
+-- (the #328 trap). Each is refused by one clause of private.is_request_origin
+-- alone: the Private Group is active at Minimum Level 0; the high Group is
+-- public and active at Minimum Level 3; the automatic Group is public, active,
+-- at Minimum Level 0 and the persona is in it automatically.
+insert into public.groups (name, category, is_private) values ('Grup privat #1099', 'team', true);
+insert into public.groups (name, category, min_level) values ('Grup nivel 3 #1099', 'team', 3);
+insert into public.groups (name, category, automatic_membership) values ('Grup automat #1099', 'team', true);
+insert into public.group_members (group_id, member_id, group_role)
+select id, '34400000-0000-0000-0000-000000000009', 'member' from public.groups where name = 'Grup privat #1099';
+create temp table g1099 as
+select (select id from public.groups where name = 'Grup privat #1099') as private_id,
+       (select id from public.groups where name = 'Grup nivel 3 #1099') as high_id,
+       (select id from public.groups where name = 'Grup automat #1099') as automatic_id,
+       (select id from public.groups where is_organization) as organization_id;
+grant select on g1099 to authenticated;
+
 select pg_temp.test_login('34400000-0000-0000-0000-000000000005', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["pr"]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok($$ select public.create_completed_work_request('Munca in alt departament', pg_temp.dept_group('edu')) $$,
+select lives_ok($$ select public.create_completed_work_request('Munca in alt departament', pg_temp.dept_group('edu')) $$,
+  'R64: a voluntar of pr files a Request for the edu Department, a Group they can see but are not in');
+select lives_ok(format($$ select public.create_completed_work_request('Munca pentru OSUBB #1099', %s) $$,
+  (select organization_id from g1099)),
+  'the Organization Group stays a Request Group: work for OSUBB as a whole (#855, B31)');
+reset role;
+
+create temp table r1099 as
+select (select id from public.completed_work_requests
+         where description = 'Munca in alt departament') as outsider_request_id;
+grant select on r1099 to authenticated;
+
+select set_eq(format($$
+  select member_id::text from public.notifications where dedupe_key = 'request:%s'
+$$, (select outsider_request_id from r1099)),
+  array['34400000-0000-0000-0000-000000000001',
+        '34400000-0000-0000-0000-000000000002',
+        '34400000-0000-0000-0000-000000000013'],
+  'the outsider''s Request notifies edu''s own deciders -- both live local BCE plus the BC -- exactly as a member''s would');
+
+select pg_temp.test_login('34400000-0000-0000-0000-000000000002', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select is((select count(*) from public.pending_request_decisions() as pending
+            where pending.id = (select outsider_request_id from r1099)), 1::bigint,
+  'and edu''s BCE finds it in their pending queue');
+select lives_ok(format($$
+  select public.approve_completed_work_request(%s, 2, 4, 'Ajutor primit de la pr.')
+$$, (select outsider_request_id from r1099)),
+  'and approves it: nothing on the decision path requires the requester to be in the Group');
+reset role;
+
+select is((select format('%s|%s', assignment.member_id, task.group_id)
+             from public.completed_work_requests as request
+             join public.tasks as task on task.id = request.task_id
+             join public.task_assignments as assignment on assignment.task_id = task.id
+            where request.id = (select outsider_request_id from r1099)),
+  '34400000-0000-0000-0000-000000000005|' || pg_temp.dept_group('edu'),
+  'the completed Task is edu''s, executed by the outsider who filed it');
+
+select pg_temp.test_login('34400000-0000-0000-0000-000000000005', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["pr"]'::jsonb, 'team_ids', '[]'::jsonb));
+select is((select status from public.completed_work_requests
+            where id = (select outsider_request_id from r1099)), 'approved',
+  'the outsider reads their own decided Request');
+
+-- ==================== 2b. Create: every refusal ====================
+select throws_ok(format($$ select public.create_completed_work_request('Munca intr-un grup privat', %s) $$,
+  (select private_id from g1099)),
   '42501', 'request_origin_forbidden',
-  'a Member of another Department cannot file a Request against edu');
-select throws_ok($$ select public.create_completed_work_request('Munca intr-o echipa straina', pg_temp.team_group('t-344-ind')) $$,
+  'a Private Group the voluntar is not in is refused exactly as an unknown Group');
+select throws_ok(format($$ select public.create_completed_work_request('Munca peste nivel', %s) $$,
+  (select high_id from g1099)),
   '42501', 'request_origin_forbidden',
-  'a non-member cannot file a Request against an Independent Team');
+  'a Group whose Minimum Level is above the voluntar''s is refused');
+select throws_ok(format($$ select public.create_completed_work_request('Munca pentru adunare', %s) $$,
+  (select automatic_id from g1099)),
+  '42501', 'request_origin_forbidden',
+  'an Automatic-Membership Group other than the Organization Group is refused even to its automatic member (#855, B31)');
+reset role;
+
+select pg_temp.test_login('34400000-0000-0000-0000-000000000009', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '["t-344-ind"]'::jsonb));
+select lives_ok(format($$ select public.create_completed_work_request('Munca in grupul meu privat #1099', %s) $$,
+  (select private_id from g1099)),
+  'while the Private Group''s own member files there: the refusal above is visibility, not privacy as such');
+reset role;
+
+-- ==================== 2c. The picker reads the command's rule ====================
+-- public.request_origins() lists for the caller exactly the Groups
+-- private.is_request_origin accepts, so the app never offers a Group the
+-- command refuses nor hides one it accepts. The expected set is computed as
+-- the owner, over every Group, before the persona logs in.
+create temp table o1099 as
+select grp.id from public.groups as grp
+ where private.is_request_origin(grp.id, '34400000-0000-0000-0000-000000000005');
+grant select on o1099 to authenticated;
+
+select pg_temp.test_login('34400000-0000-0000-0000-000000000005', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["pr"]'::jsonb, 'team_ids', '[]'::jsonb));
+select set_eq($$ select id from public.request_origins() $$, $$ select id from o1099 $$,
+  'request_origins() is exactly the set the command accepts for its caller, under Group RLS');
+select is((select count(*) from public.request_origins() as origin
+            where origin.id in (pg_temp.dept_group('edu'), (select organization_id from g1099))), 2::bigint,
+  'it offers the outsider the edu Department and the Organization Group');
+select is((select count(*) from public.request_origins() as origin
+            where origin.id in (select private_id from g1099 union all select high_id from g1099
+                                union all select automatic_id from g1099)), 0::bigint,
+  'and none of the Private, too-high or automatic Groups the command refuses');
+reset role;
+
+select pg_temp.test_login('34400000-0000-0000-0000-000000000011', '{"provider":"email"}'::jsonb);
+select is((select count(*) from public.request_origins()), 0::bigint,
+  'a real uid without organisation claims is offered nothing');
 reset role;
 
 select pg_temp.test_login('34400000-0000-0000-0000-000000000008', jsonb_build_object(
@@ -316,7 +426,7 @@ select throws_ok($$ select public.create_completed_work_request('Anonim', pg_tem
 reset role;
 
 select is((select count(*) from public.completed_work_requests
-            where description in ('Munca in alt departament', 'Munca intr-o echipa straina',
+            where description in ('Munca intr-un grup privat', 'Munca peste nivel', 'Munca pentru adunare',
                                   'Munca pe un proiect arhivat', 'Doua origini', 'Nicio origine',
                                   'Token vechi', 'Fara claimuri', 'Anonim')), 0::bigint,
   'not one refused call left a Request behind');
@@ -742,8 +852,8 @@ select is((select count(*) from public.completed_work_requests
 select is((select count(*) from public.task_evaluations as evaluation
             where evaluation.task_id in (select task_id from public.completed_work_requests
                                           where task_id is not null
-                                            and requester_id::text like '34400000-%')), 9::bigint,
-  'and each approved Request carries exactly one Evaluation -- nine approvals so far in this suite, nine Evaluations');
+                                            and requester_id::text like '34400000-%')), 10::bigint,
+  'and each approved Request carries exactly one Evaluation -- ten approvals so far in this suite (section 2''s outsider Request among them), ten Evaluations');
 
 -- ==================== 8b. No requester decides their own Request (#522) ====================
 select pg_temp.test_login('34400000-0000-0000-0000-000000000006', jsonb_build_object(

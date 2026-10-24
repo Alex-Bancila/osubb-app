@@ -23,6 +23,7 @@ import { useAwaitingMyReview } from '../../queries/task-review';
 import { useMyTasks } from '../../queries/tasks';
 import {
   eventRangeForDays,
+  eventTimeLabel,
   eventTypeLabel,
   relevantGroupIds,
 } from '../calendar/calendar-presentation';
@@ -174,7 +175,17 @@ function UpNextPanel({
         at: event.startsAt,
         meta: metaLine([
           eventTypeLabel(event.type),
-          <When key="when" at={event.startsAt} now={now} />,
+          <When
+            key="when"
+            at={event.startsAt}
+            now={now}
+            // #1098 (R63): an all-day Event has no time to show.
+            text={
+              event.allDay || event.multiDay
+                ? eventTimeLabel(event, now)
+                : undefined
+            }
+          />,
           event.location,
           event.group?.name,
         ]),
@@ -284,11 +295,20 @@ function metaLine(parts: ReactNode[]): ReactNode {
  * The time on the meta line. The day is the date block's, which a screen
  * reader does not get, so it is said here for them.
  */
-function When({ at, now }: { at: string; now: Date }) {
+function When({
+  at,
+  now,
+  text,
+}: {
+  at: string;
+  now: Date;
+  /** In place of the time: an all-day or several-day Event's own words. */
+  text?: string;
+}) {
   return (
     <time dateTime={at}>
       <span className="sr-only">{formatBucharestShortDay(at, now)}, </span>
-      {formatBucharestTime(at)}
+      {text ?? formatBucharestTime(at)}
     </time>
   );
 }

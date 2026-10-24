@@ -1,5 +1,5 @@
 import type { EventPresentation } from '../../queries/events';
-import { eventRelevance } from '../calendar/calendar-presentation';
+import { eventIsPast, eventRelevance } from '../calendar/calendar-presentation';
 import type {
   TaskPresentationRow,
   TaskStatus,
@@ -57,7 +57,8 @@ export function ownTasksByDeadline<Row extends TaskPresentationRow>(
  * Member (`relevantGroupIds`). An Other OSUBB Event the Member said "Vin" to
  * is not promoted here: the glossary's relevance is the Audience. A cancelled
  * Event is not something to go to (#849), nor one BC has not published yet
- * (spec 2026-10-11).
+ * (spec 2026-10-11). An all-day or several-day Event stays until it ends
+ * (#1098, R63): on its first day it has already "started" at midnight.
  */
 export function upcomingRelevantEvents(
   events: readonly EventPresentation[],
@@ -68,7 +69,7 @@ export function upcomingRelevantEvents(
   return events
     .flatMap((event) => {
       const at = Date.parse(event.startsAt);
-      if (!Number.isFinite(at) || at < now) return [];
+      if (!Number.isFinite(at) || eventIsPast(event, now)) return [];
       if (event.cancelledAt !== null) return [];
       if (event.approvalStatus !== 'approved') return [];
       if (eventRelevance(event, relevant, none) === 'other') return [];

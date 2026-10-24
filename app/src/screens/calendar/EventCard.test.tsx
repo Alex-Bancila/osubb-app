@@ -33,6 +33,9 @@ function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
     startsAt: '2030-10-01T15:00:00.000Z',
     endsAt: '2030-10-01T17:00:00.000Z',
     dayKey: '2030-10-01',
+    allDay: false,
+    lastDayKey: overrides.dayKey ?? '2030-10-01',
+    multiDay: false,
     dayLabel: 'marți, 1 octombrie 2030',
     startTime: '18:00',
     endTime: '20:00',
@@ -65,6 +68,51 @@ describe('EventCard — the meta line', () => {
     expect(time).toHaveTextContent('18:00–20:00');
     // Never the long form: that is a day heading's.
     expect(within(card).queryByText(/octombrie/)).not.toBeInTheDocument();
+  });
+
+  // #1098 (R63): an all-day Event shows no time anywhere.
+  it('says "Toată ziua" and the last day of an all-day weekend, never 00:00', () => {
+    render(
+      <EventCard
+        event={event({
+          allDay: true,
+          multiDay: true,
+          dayKey: '2030-10-05',
+          lastDayKey: '2030-10-06',
+          startsAt: '2030-10-04T21:00:00.000Z',
+          endsAt: '2030-10-06T21:00:00.000Z',
+          startTime: '00:00',
+          endTime: '00:00',
+        })}
+        showDay
+      />,
+    );
+
+    const card = screen.getByRole('article', { name: 'Ședință Educațional' });
+    const line = within(card).getByText('Data și ora').nextElementSibling;
+    expect(line).toHaveTextContent(/Toată ziua · până duminică, 6 oct\./);
+    expect(line).not.toHaveTextContent('00:00');
+  });
+
+  it('names both days of a timed Event that crosses midnight, once', () => {
+    render(
+      <EventCard
+        event={event({
+          multiDay: true,
+          lastDayKey: '2030-10-02',
+          endsAt: '2030-10-02T11:00:00.000Z',
+          endTime: '14:00',
+        })}
+        showDay
+      />,
+    );
+
+    const card = screen.getByRole('article', { name: 'Ședință Educațional' });
+    const times = card.querySelectorAll('dl.event-details time');
+    expect(times).toHaveLength(1);
+    expect(times[0]).toHaveTextContent(
+      /^mar\., 1 oct\..*18:00 → mie\., 2 oct\..*14:00$/,
+    );
   });
 
   it('keeps when, where and how many in one list, each named for a screen reader', () => {

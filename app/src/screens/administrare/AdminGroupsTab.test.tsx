@@ -10,6 +10,7 @@ import {
   useParams,
 } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
+import { CommandError } from '../../lib/command-reasons';
 import type { AdminGroup, AppointableMember } from '../../queries/groups-admin';
 import type { MyGroup } from '../../queries/my-groups';
 
@@ -762,24 +763,31 @@ it("shows a Manager's own Groups' Minimum Level by Role name (R29b)", () => {
   expect(within(row as HTMLElement).queryByText('2')).toBeNull();
 });
 
-it('shows only the columns whose values differ, and an archived Group by a badge (B48)', () => {
+it('shows only the columns whose values differ, and an archived Group only in Arhivate (B48, R65)', () => {
   api.groups.mockReturnValue({
     data: [
       group(1, 'Educațional', [1], null),
+      group(2, 'Logistică', [1, 2], 1, { category: 'department' }),
       group(3, 'Balul Bobocilor', [3], null, {
-        category: 'department',
+        category: 'project',
         status: 'archived',
       }),
     ],
     isPending: false,
     isError: false,
   });
-  show();
+  const view = show();
   const headers = screen
     .getAllByRole('columnheader')
     .map((header) => header.textContent);
-  // One category, one Minimum Level, one size: none is a column. No Stare.
+  // One category, one Minimum Level, one size among the active Groups: none
+  // is a column. No Stare: Toate holds no archived Group (R65).
   expect(headers).toEqual(['Grup']);
+  expect(screen.queryByRole('link', { name: 'Balul Bobocilor' })).toBeNull();
+  expect(screen.queryByText('Arhivat')).toBeNull();
+  view.unmount();
+
+  show('/administrare/grupuri?vedere=arhivate');
   const archived = screen
     .getByRole('link', { name: 'Balul Bobocilor' })
     .closest('tr') as HTMLElement;
@@ -1012,21 +1020,30 @@ it.each([
   },
 );
 
-it('hides the switch from BC who leads no Group, and ignores the key (#921)', () => {
+it('offers BC who leads no Group Toate | Arhivate only, and ignores the led key (#921, R65)', () => {
   api.myGroups.mockReturnValue({
     data: [myGroup(9, 'OSUBB', 'member', { automatic: true })],
     isPending: false,
     isError: false,
   });
   show('/administrare/grupuri?vedere=conduse');
-  expect(screen.queryByRole('group', { name: 'Grupuri afișate' })).toBeNull();
+  const toggle = screen.getByRole('group', { name: 'Grupuri afișate' });
+  expect(
+    within(toggle)
+      .getAllByRole('button')
+      .map((button) => button.textContent),
+  ).toEqual(['Toate', 'Arhivate']);
+  expect(within(toggle).getByRole('button', { name: 'Toate' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   expect(
     screen.getByRole('region', { name: 'Structura grupurilor' }),
   ).toBeVisible();
   expect(screen.getByRole('link', { name: 'Balul Bobocilor' })).toBeVisible();
 });
 
-it('shows a Manager their led Groups with no switch: the page already is that view (#921)', () => {
+it('opens a Manager on their led Groups, with Arhivate beside them and no Toate (#921, R65)', () => {
   capabilities({ createTopLevelGroups: false });
   api.myGroups.mockReturnValue({
     data: LED_BY_BC,
@@ -1034,7 +1051,15 @@ it('shows a Manager their led Groups with no switch: the page already is that vi
     isError: false,
   });
   show();
-  expect(screen.queryByRole('group', { name: 'Grupuri afișate' })).toBeNull();
+  const toggle = screen.getByRole('group', { name: 'Grupuri afișate' });
+  expect(
+    within(toggle)
+      .getAllByRole('button')
+      .map((button) => button.textContent),
+  ).toEqual(['Conduse de mine', 'Arhivate']);
+  expect(
+    within(toggle).getByRole('button', { name: 'Conduse de mine' }),
+  ).toHaveAttribute('aria-pressed', 'true');
   expect(screen.getByRole('region', { name: 'Grupurile mele' })).toBeVisible();
   expect(screen.queryByRole('link', { name: 'Balul Bobocilor' })).toBeNull();
 });
@@ -1079,4 +1104,219 @@ it('drops Departament from the categories once a parent Group is chosen (Alex, 2
       .map((radio) => radio.textContent),
   ).toEqual(['Echipă', 'Proiect']);
   expect(within(category).getByRole('radio', { name: 'Echipă' })).toBeChecked();
+});
+
+/* #1110 (ruling R65): Arhivate, the third view, and Dezarhivează. */
+const WITH_ARCHIVED = [
+  group(1, 'Educațional', [1], null),
+  group(2, 'Logistică', [1, 2], 1, { status: 'archived' }),
+  group(4, 'Transport', [1, 2, 4], 2, { status: 'archived' }),
+  group(3, 'Balul Bobocilor', [3], null, { category: 'project' }),
+];
+
+function withArchived() {
+  api.groups.mockReturnValue({
+    data: WITH_ARCHIVED,
+    isPending: false,
+    isError: false,
+  });
+}
+
+it('keeps archived Groups out of Toate and lists them in Arhivate, by URL (R65)', async () => {
+  const user = userEvent.setup();
+  withArchived();
+  show();
+  expect(screen.getByRole('status')).toHaveTextContent('2 grupuri');
+  // Its only subgroups are archived, so Educațional has nothing to unfold.
+  expect(
+    screen.queryByRole('button', { name: 'Extinde subgrupurile Educațional' }),
+  ).toBeNull();
+  expect(screen.queryByRole('link', { name: /Logistică/ })).toBeNull();
+  expect(screen.queryByRole('link', { name: /Transport/ })).toBeNull();
+
+  await user.click(screen.getByRole('button', { name: 'Arhivate' }));
+  expect(screen.getByTestId('location')).toHaveTextContent('?vedere=arhivate');
+  const list = screen.getByRole('region', { name: 'Grupuri arhivate' });
+  expect(within(list).getByRole('status')).toHaveTextContent('2 grupuri');
+  // The archived Groups as a tree, the active parent kept as greyed context.
+  expect(
+    within(list).getByRole('link', {
+      name: 'Logistică, subgrup al Educațional',
+    }),
+  ).toBeVisible();
+  expect(
+    within(list).getByRole('link', { name: 'Transport, subgrup al Logistică' }),
+  ).toBeVisible();
+  expect(within(list).queryByRole('link', { name: 'Educațional' })).toBeNull();
+  const context = within(list).getByText('Educațional').closest('tr');
+  expect(context).toHaveClass('text-muted-foreground');
+  expect(
+    within(list).queryByRole('link', { name: 'Balul Bobocilor' }),
+  ).toBeNull();
+
+  await user.click(screen.getByRole('button', { name: 'Toate' }));
+  expect(screen.getByTestId('location')).toBeEmptyDOMElement();
+});
+
+it('says so when nothing is archived', () => {
+  show('/administrare/grupuri?vedere=arhivate');
+  expect(screen.getByRole('button', { name: 'Arhivate' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  expect(screen.getByText('Niciun grup arhivat.')).toBeVisible();
+});
+
+it('confirms Dezarhivează with the subgroups that return, then says it is done', async () => {
+  const user = userEvent.setup();
+  withArchived();
+  show('/administrare/grupuri?vedere=arhivate');
+  // A Child Group under an archived parent waits for it, and says why.
+  const child = screen.getByRole('button', { name: 'Dezarhivează Transport' });
+  expect(child).toBeDisabled();
+  expect(child).toHaveAccessibleDescription(
+    'Grupul părinte este arhivat; dezarhivează-l întâi pe el.',
+  );
+
+  await user.click(
+    screen.getByRole('button', { name: 'Dezarhivează Logistică' }),
+  );
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Dezarhivează Logistică',
+  });
+  expect(
+    within(within(dialog).getByRole('list', { name: 'Subgrupuri care revin' }))
+      .getAllByRole('listitem')
+      .map((item) => item.textContent),
+  ).toEqual(['Transport']);
+  expect(
+    within(dialog).getByText(
+      'Evenimentele anulate la arhivare rămân anulate, iar cererile de înscriere respinse rămân respinse.',
+    ),
+  ).toBeVisible();
+  expect(api.mutate).not.toHaveBeenCalled();
+
+  // A refusal stays in the dialog, in Romanian.
+  api.mutate.mockRejectedValueOnce(
+    new CommandError(
+      { code: 'PT409', message: 'group_parent_archived' },
+      'fallback',
+    ),
+  );
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Dezarhivează' }),
+  );
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+    'Grupul părinte este arhivat. Dezarhivează-l întâi pe el.',
+  );
+
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Dezarhivează' }),
+  );
+  expect(api.mutate).toHaveBeenLastCalledWith({
+    kind: 'unarchive',
+    groupId: 2,
+  });
+  await waitFor(() => expect(dialog).not.toBeInTheDocument());
+  expect(screen.getByText('Grupul a fost dezarhivat.')).toHaveAttribute(
+    'role',
+    'status',
+  );
+  // The confirmation never opened the Group: the row's link was not followed.
+  expect(screen.queryByRole('heading', { name: /Grupul 2/ })).toBeNull();
+});
+
+it('offers Dezarhivează only to whoever may archive the Group (R65)', () => {
+  capabilities({ createTopLevelGroups: false });
+  withArchived();
+  // A Responsible of Logistică leads it, so sees it in Arhivate, but may
+  // not archive it, so has nothing to press.
+  api.myGroups.mockReturnValue({
+    data: [
+      myGroup(2, 'Logistică', 'responsible', {
+        path: [1, 2],
+        status: 'archived',
+      }),
+      myGroup(4, 'Transport', 'responsible', {
+        path: [1, 2, 4],
+        status: 'archived',
+        explicit: false,
+      }),
+    ],
+    isPending: false,
+    isError: false,
+  });
+  const responsible = show('/administrare/grupuri?vedere=arhivate');
+  expect(
+    screen.getByRole('link', { name: 'Logistică, subgrup al Educațional' }),
+  ).toBeVisible();
+  expect(screen.queryByRole('button', { name: /Dezarhivează/ })).toBeNull();
+  expect(screen.queryByRole('columnheader', { name: 'Acțiuni' })).toBeNull();
+  responsible.unmount();
+
+  // Its Manager may.
+  api.myGroups.mockReturnValue({
+    data: [
+      myGroup(2, 'Logistică', 'manager', { path: [1, 2], status: 'archived' }),
+      myGroup(4, 'Transport', 'manager', {
+        path: [1, 2, 4],
+        status: 'archived',
+        explicit: false,
+      }),
+    ],
+    isPending: false,
+    isError: false,
+  });
+  show('/administrare/grupuri?vedere=arhivate');
+  expect(
+    screen.getByRole('button', { name: 'Dezarhivează Logistică' }),
+  ).toBeEnabled();
+});
+
+it('keeps archived Groups out of Conduse de mine (R65)', () => {
+  capabilities({ createTopLevelGroups: false });
+  withArchived();
+  api.myGroups.mockReturnValue({
+    data: [
+      myGroup(1, 'Educațional', 'manager', { path: [1] }),
+      myGroup(2, 'Logistică', 'manager', {
+        path: [1, 2],
+        status: 'archived',
+        explicit: false,
+      }),
+    ],
+    isPending: false,
+    isError: false,
+  });
+  show();
+  expect(screen.getByRole('link', { name: 'Educațional' })).toBeVisible();
+  expect(screen.queryByRole('link', { name: /Logistică/ })).toBeNull();
+});
+
+/* CodeRabbit on #1112: Arhivate is built from the Group rows, so a Manager
+   whose Groups read failed is told so there, never shown an empty list. */
+it("says so when a Manager's Arhivate cannot be read, and retries the Groups read", async () => {
+  const user = userEvent.setup();
+  capabilities({ createTopLevelGroups: false });
+  const refetchGroups = vi.fn().mockResolvedValue(undefined);
+  const refetchMine = vi.fn().mockResolvedValue(undefined);
+  api.groups.mockReturnValue({
+    data: undefined,
+    isPending: false,
+    isError: true,
+    refetch: refetchGroups,
+  });
+  api.myGroups.mockReturnValue({
+    data: [myGroup(2, 'Logistică', 'manager', { path: [1, 2] })],
+    isPending: false,
+    isError: false,
+    refetch: refetchMine,
+  });
+  show('/administrare/grupuri?vedere=arhivate');
+  const alert = screen.getByRole('alert');
+  expect(alert).toHaveTextContent('Nu am putut încărca grupurile.');
+  expect(screen.queryByText('Niciun grup arhivat.')).toBeNull();
+  await user.click(within(alert).getByRole('button'));
+  expect(refetchGroups).toHaveBeenCalled();
+  expect(refetchMine).toHaveBeenCalled();
 });

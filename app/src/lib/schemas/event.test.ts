@@ -46,6 +46,8 @@ const valid: EventFormValues = {
   description: '  Stabilim pașii următori.  ',
   minLevel: 0,
   campaignId: null,
+  allDay: false,
+  allDayTouched: false,
   announce: false,
 };
 const schema = (actorLevel = 5) => eventSchema(options, actorLevel, { now });
@@ -63,6 +65,7 @@ describe('eventSchema', () => {
       groupId: 7,
       startsAt: '2026-10-01T15:00:00.000Z',
       endsAt: '2026-10-01T17:00:00.000Z',
+      allDay: false,
       location: 'Sala 305',
       capacity: 30,
       description: 'Stabilim pașii următori.',
@@ -208,6 +211,7 @@ it('maps every reason an Event command raises to an Event field', () => {
       'invalid_event_title',
       'invalid_event_type',
       'invalid_event_interval',
+      'invalid_all_day_bounds',
       'invalid_event_capacity',
       'invalid_event_min_level',
       'event_group_required',
@@ -216,4 +220,94 @@ it('maps every reason an Event command raises to an Event field', () => {
       'invalid_campaign',
     ],
   );
+});
+
+// #1098 (ruling R63): Toată ziua. The form shows the last day inclusive; the
+// commands store 00:00 Bucharest on the first day and on the day after the
+// last — whatever times the values still carry for an untick.
+describe('an all-day Event', () => {
+  const allDay = (startsAt: string, endsAt: string) => ({
+    ...valid,
+    allDay: true,
+    allDayTouched: true,
+    startsAt,
+    endsAt,
+  });
+
+  it('runs from midnight on the first day to the midnight after the last day', () => {
+    expect(
+      schema(6).parse(allDay('2026-10-01T18:00', '2026-10-03T20:00')),
+    ).toMatchObject({
+      allDay: true,
+      startsAt: '2026-09-30T21:00:00.000Z',
+      endsAt: '2026-10-03T21:00:00.000Z',
+    });
+  });
+
+  it('is one whole day when the last day is the first', () => {
+    expect(
+      schema(6).parse(allDay('2026-10-01T18:00', '2026-10-01T20:00')),
+    ).toMatchObject({
+      startsAt: '2026-09-30T21:00:00.000Z',
+      endsAt: '2026-10-01T21:00:00.000Z',
+    });
+  });
+
+  it('keeps Bucharest midnights across the end of summer time (25 October 2026)', () => {
+    // Saturday 24 (EEST, UTC+3) to Sunday 25: it ends at Monday's 00:00 EET.
+    expect(
+      schema(6).parse(allDay('2026-10-24T09:00', '2026-10-25T17:00')),
+    ).toMatchObject({
+      startsAt: '2026-10-23T21:00:00.000Z',
+      endsAt: '2026-10-25T22:00:00.000Z',
+    });
+  });
+
+  it('keeps Bucharest midnights across the start of summer time (28 March 2027)', () => {
+    // Sunday 28 March 2027 has 23 hours: 00:00 EET to Monday's 00:00 EEST.
+    expect(
+      schema(6).parse(allDay('2027-03-28T09:00', '2027-03-28T17:00')),
+    ).toMatchObject({
+      startsAt: '2027-03-27T22:00:00.000Z',
+      endsAt: '2027-03-28T21:00:00.000Z',
+    });
+  });
+
+  it('needs a last day, not before the first', () => {
+    expect(check(allDay('2026-10-03T18:00', ''))).toEqual([
+      'endsAt: all_day_end_required',
+    ]);
+    expect(check(allDay('2026-10-03T18:00', '2026-10-02T20:00'))).toEqual([
+      'endsAt: all_day_interval',
+    ]);
+    expect(check(allDay('', ''))).toEqual([
+      'startsAt: all_day_start_required',
+      'endsAt: all_day_end_required',
+    ]);
+  });
+
+  it('may start today, already past its midnight, but not yesterday', () => {
+    // `now` is 24 September 2026, 13:00 in Bucharest.
+    expect(check(allDay('2026-09-24T09:00', '2026-09-24T17:00'))).toEqual([]);
+    expect(check(allDay('2026-09-23T09:00', '2026-09-24T17:00'))).toEqual([
+      'startsAt: starts_at_in_past',
+    ]);
+  });
+});
+
+it('ends a ticked Friday 20:00 to Sunday 00:00 after Saturday, as the timed end read', () => {
+  expect(
+    eventSchema(options, 6, { now }).parse({
+      ...valid,
+      allDay: true,
+      allDayTouched: false,
+      startsAt: '2026-10-23T20:00',
+      endsAt: '2026-10-25T00:00',
+    }),
+  ).toMatchObject({
+    allDay: true,
+    // Friday 23 October 00:00 EEST to Sunday 25 October 00:00 EEST.
+    startsAt: '2026-10-22T21:00:00.000Z',
+    endsAt: '2026-10-24T21:00:00.000Z',
+  });
 });
