@@ -254,6 +254,15 @@ export function countsText(ranked: number, evaluated: number): string {
 }
 
 /**
+ * Under the summary of an Adunarea Generală ranking, which lists the voters
+ * alone: their places and the line are those of everyone ranked, so the
+ * places may skip (Alex, 2026-10-25).
+ */
+export function votersOnlyText(voters: number): string {
+  return `Sunt afișați doar Voluntarii cu Drept de Vot (${voters}). Locul și linia sunt cele din clasamentul tuturor membrilor sub BCE.`;
+}
+
+/**
  * Where **Promovează** leads: Roluri on the Member, Voluntar Activ chosen, the
  * reason prefilled with the run that listed them or, for a candidate listed
  * between runs (#983), the day they qualified.
