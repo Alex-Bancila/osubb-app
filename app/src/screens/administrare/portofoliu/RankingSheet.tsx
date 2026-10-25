@@ -23,10 +23,33 @@ import {
   type RankingRow,
   type RoleEvaluation,
 } from '../../../queries/role-evaluations';
-import { countsText, lineText, roleLabel } from './portofoliu-text';
+import {
+  countsText,
+  lineText,
+  roleLabel,
+  votersOnlyText,
+} from './portofoliu-text';
 import { Name, type Identities } from './shared';
 
-function columns(identities: Identities): DataTableColumn<RankingRow>[] {
+/**
+ * The rows a kind's sheet lists. Both kinds rank everyone below BCE, but the
+ * Adunarea Generală run judges the voters alone, so its sheet lists them
+ * alone (Alex, 2026-10-25); each keeps their place in the whole ranking, the
+ * one the line is read from, so the places may skip.
+ */
+function listedRows(
+  kind: RoleEvaluationKind | undefined,
+  rows: readonly RankingRow[],
+): readonly RankingRow[] {
+  return kind === 'adunarea_generala'
+    ? rows.filter((row) => row.role === 'vot')
+    : rows;
+}
+
+function columns(
+  identities: Identities,
+  withRole: boolean,
+): DataTableColumn<RankingRow>[] {
   return [
     {
       id: 'member',
@@ -37,12 +60,17 @@ function columns(identities: Identities): DataTableColumn<RankingRow>[] {
         <Name memberId={row.original.memberId} identities={identities} />
       ),
     },
-    {
-      id: 'role',
-      accessorFn: (row) => roleLabel(row.role),
-      header: 'Rol',
-      enableSorting: false,
-    },
+    // Every row of a voters-only sheet would say the same Role.
+    ...(withRole
+      ? [
+          {
+            id: 'role',
+            accessorFn: (row: RankingRow) => roleLabel(row.role),
+            header: 'Rol',
+            enableSorting: false,
+          },
+        ]
+      : []),
     {
       id: 'points',
       accessorFn: (row) => row.taskPoints,
@@ -85,27 +113,42 @@ function columns(identities: Identities): DataTableColumn<RankingRow>[] {
   ];
 }
 
-/** The ranking of every evaluated Member, in the order the read returns them. */
-function RankingTable({ rows }: { rows: readonly RankingRow[] }) {
+/** The rows listed, in the order the read returns them. */
+function RankingTable({
+  rows,
+  votersOnly,
+}: {
+  rows: readonly RankingRow[];
+  votersOnly: boolean;
+}) {
   const identities = useMemberIdentities(rows.map((row) => row.memberId));
-  const table = useMemo(() => columns(identities.data), [identities.data]);
+  const table = useMemo(
+    () => columns(identities.data, !votersOnly),
+    [identities.data, votersOnly],
+  );
   const data = useMemo(() => [...rows], [rows]);
   return (
     <DataTable
       columns={table}
       data={data}
-      emptyTitle="Nimeni nu a fost evaluat."
+      emptyTitle={
+        votersOnly
+          ? 'Niciun Voluntar cu Drept de Vot nu a fost evaluat.'
+          : 'Nimeni nu a fost evaluat.'
+      }
     />
   );
 }
 
 /**
  * One sheet for the whole ranking of a Simulation and of a finished run
- * (R58): every Member evaluated, in the order the read gives, with their Role,
- * their points, their place — or `sub prag minim` when they did not reach the
- * Prag minim and so did not shape the percentile — and whether they fall
- * inside the line. Children replace the table while it loads, fails or has
- * nothing to show.
+ * (R58): every Member evaluated — for the Adunarea Generală, every voter
+ * evaluated — in the order the read gives, with their Role, their points,
+ * their place in the whole ranking — or `sub prag minim` when they did not
+ * reach the Prag minim and so did not shape the percentile — and whether they
+ * fall inside the line. The summary always counts everyone ranked and
+ * evaluated, the figures the line comes from. Children replace the table
+ * while it loads, fails or has nothing to show.
  */
 export function RankingSheet({
   open,
@@ -131,6 +174,8 @@ export function RankingSheet({
   children?: ReactNode;
 }) {
   const first = rows?.[0];
+  const votersOnly = kind === 'adunarea_generala';
+  const listed = listedRows(kind, rows ?? []);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetPortal>
@@ -148,8 +193,13 @@ export function RankingSheet({
                 Clasamentul tuturor membrilor evaluați.
               </SheetDescription>
             )}
+            {first && votersOnly ? (
+              <p className="m-0 text-sm text-muted-foreground">
+                {votersOnlyText(listed.length)}
+              </p>
+            ) : null}
           </SheetHeader>
-          {children ?? <RankingTable rows={rows ?? []} />}
+          {children ?? <RankingTable rows={listed} votersOnly={votersOnly} />}
         </SheetPopup>
       </SheetPortal>
     </Sheet>

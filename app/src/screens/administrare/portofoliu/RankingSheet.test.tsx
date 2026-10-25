@@ -5,6 +5,7 @@ import {
   db,
   rankedRows,
   resetDb,
+  RUN_AG,
   RUN_OLD,
   RUN_VA,
   show,
@@ -98,6 +99,85 @@ it('lists every evaluated Member in the order given, with the rank or "sub prag 
   ]);
 });
 
+/** The same ranking with Ion (1st) and Mia (under the Floor) as voters. */
+function agRows(): RankingRow[] {
+  return rows().map((row) =>
+    row.memberId === 'ion' || row.memberId === 'mia'
+      ? { ...row, role: 'vot' }
+      : row,
+  );
+}
+
+it('lists only the voters on an Adunarea Generală sheet, each at their place among everyone ranked', () => {
+  show(
+    <RankingSheet
+      open
+      onOpenChange={() => {}}
+      title="Clasamentul simulării"
+      kind="adunarea_generala"
+      rows={agRows()}
+    />,
+  );
+
+  const sheet = screen.getByRole('dialog');
+  // The line and the counts are still everyone's: they are what the line
+  // was read from.
+  expect(sheet).toHaveTextContent('Prag Adunarea Generală: 40 de puncte');
+  expect(sheet).toHaveTextContent('4 clasați din 6 evaluați');
+  expect(sheet).toHaveTextContent(
+    'Sunt afișați doar Voluntarii cu Drept de Vot (3). Locul și linia sunt cele din clasamentul tuturor membrilor sub BCE.',
+  );
+
+  const table = within(sheet).getByRole('table');
+  // Every row would say the same Role, so there is no Rol column.
+  expect(
+    within(table)
+      .getAllByRole('columnheader')
+      .map((cell) => cell.textContent),
+  ).toEqual(['Membru', 'Puncte', 'Loc', 'Atinge linia']);
+  const body = within(table)
+    .getAllByRole('row')
+    .slice(1)
+    .map((row) => within(row).getAllByRole('cell'));
+  expect(body.map(([name]) => name?.textContent)).toEqual([
+    expect.stringContaining('Ion Vlad'),
+    expect.stringContaining('Eva Rus'),
+    expect.stringContaining('Mia Toma'),
+  ]);
+  // The places skip the Members ranked 2nd and 3rd; a voter under the Floor
+  // stays listed, since the run signals them.
+  expect(
+    body.map((cells) => cells.slice(1).map((cell) => cell.textContent)),
+  ).toEqual([
+    ['55', '1', 'Da'],
+    ['11', '4', 'Nu'],
+    ['3', 'sub prag minim', 'Nu'],
+  ]);
+  expect(sheet).not.toHaveTextContent('Ana Pop');
+  expect(sheet).not.toHaveTextContent('Dănuț');
+  expect(sheet).not.toHaveTextContent('Radu Cozma');
+});
+
+it('says no voter was evaluated when an Adunarea Generală ranking holds none', () => {
+  show(
+    <RankingSheet
+      open
+      onOpenChange={() => {}}
+      title="Clasamentul simulării"
+      kind="adunarea_generala"
+      rows={rows().filter((row) => row.role !== 'vot')}
+    />,
+  );
+  const sheet = screen.getByRole('dialog');
+  expect(sheet).toHaveTextContent('4 clasați din 6 evaluați');
+  expect(sheet).toHaveTextContent(
+    'Sunt afișați doar Voluntarii cu Drept de Vot (0).',
+  );
+  expect(
+    screen.getByText('Niciun Voluntar cu Drept de Vot nu a fost evaluat.'),
+  ).toBeVisible();
+});
+
 it('says how many Members it holds when there are none', () => {
   show(
     <RankingSheet
@@ -147,6 +227,30 @@ it('reads the ranking of a finished run from the server and titles it with the r
   // does; the rows below are recomputed from today's ledger (line 40).
   expect(sheet).toHaveTextContent('Prag de promovare: 42 de puncte');
   expect(sheet).not.toHaveTextContent('Prag de promovare: 40 de puncte');
+});
+
+it('lists only the voters of a finished Adunarea Generală run', async () => {
+  db.rankings.set(
+    RUN_AG.id,
+    rankedRows().map((row) =>
+      row.member_id === 'ion' ? { ...row, role: 'vot' } : row,
+    ),
+  );
+  show(<RunRankingSheet run={RUN_AG} onClose={() => {}} />);
+
+  const sheet = await screen.findByRole('dialog');
+  const table = await within(sheet).findByRole('table');
+  const names = within(table)
+    .getAllByRole('row')
+    .slice(1)
+    .map((row) => within(row).getAllByRole('cell')[0]?.textContent);
+  expect(names).toEqual([
+    expect.stringContaining('Ion Vlad'),
+    expect.stringContaining('Eva Rus'),
+  ]);
+  expect(sheet).toHaveTextContent(
+    'Sunt afișați doar Voluntarii cu Drept de Vot (2).',
+  );
 });
 
 it('says a run from before Portofoliu Interne has no ranking any more, and asks nothing', async () => {
