@@ -175,7 +175,7 @@ export function RankingSheet({
 }) {
   const first = rows?.[0];
   const votersOnly = kind === 'adunarea_generala';
-  const listed = listedRows(kind, rows ?? []);
+  const listed = useMemo(() => listedRows(kind, rows ?? []), [kind, rows]);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetPortal>
