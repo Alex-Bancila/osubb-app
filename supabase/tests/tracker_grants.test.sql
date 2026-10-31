@@ -487,7 +487,7 @@ select is(pg_temp.public_function_mismatches(), '{}'::text[],
 create temporary table pinned_private_functions (
   proname  text not null,
   args     text not null,
-  category text not null check (category in ('impl', 'predicate', 'authenticated_only', 'require', 'trigger', 'none')),
+  category text not null check (category in ('impl', 'predicate', 'authenticated_only', 'authenticated_and_service', 'require', 'trigger', 'none')),
   primary key (proname, args)
 ) on commit drop;
 
@@ -785,7 +785,7 @@ insert into pinned_private_functions (proname, args, category) values
   -- #675: the Nickname fold (the unique index's key, called as the caller by
   -- the invoker nickname guard, so authenticated keeps execute), the guard's
   -- trigger body, and the Member Card projection body behind public.member_card.
-  ('fold_nickname',          'p_nickname text',  'authenticated_only'),
+  ('fold_nickname',          'p_nickname text',  'authenticated_and_service'),
   ('guard_profile_nickname', '',                 'trigger'),
   ('member_card_impl',       'p_member_id uuid', 'impl'),
   ('group_coordination_impl', 'p_group_id bigint', 'impl'),
@@ -1087,6 +1087,16 @@ language sql as $$
        -- require_* / trigger / none (no caller yet) all mean nobody at
        -- all, not even service_role -- only the command or trigger that
        -- runs as the table owner may call these.
+       -- authenticated_and_service (audit 2026-10-30, H4): the Nickname fold, which
+       -- the unique index profiles_nickname_fold_uidx evaluates as the writing
+       -- role -- so the secret key (reinvite-member, the invitation stamp, the
+       -- R58 backfill) executes it too. EXECUTE on an index expression needs no
+       -- schema usage: service_role still has none on private.
+       when pin.category = 'authenticated_and_service' then
+             not has_function_privilege('anon', p.oid, 'execute')
+         and     has_function_privilege('authenticated', p.oid, 'execute')
+         and     has_function_privilege('service_role', p.oid, 'execute')
+         and not has_function_privilege('public', p.oid, 'execute')
        when pin.category in ('require', 'trigger', 'none') then
              not has_function_privilege('anon', p.oid, 'execute')
          and not has_function_privilege('authenticated', p.oid, 'execute')

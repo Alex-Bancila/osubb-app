@@ -8,7 +8,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(37);
+select plan(40);
 
 -- ==================== Structure ====================
 
@@ -195,6 +195,27 @@ select throws_ok(
   $$ select nickname from public.profiles $$,
   '42501', null, 'and reads none');
 reset role;
+
+-- ==================== service_role writes a Profile that has a Nickname ====================
+-- #1119 (audit 2026-10-30, finding H4): the Edge Functions (reinvite-member's address
+-- correction, record_invitation_sent's stamp) and the R58 university backfill
+-- write profiles as service_role. The unique index evaluates
+-- private.fold_nickname on every insert and non-HOT update of a nicknamed row
+-- (an email change is never HOT: email is indexed), and the Nickname guard
+-- calls it too -- so service_role needs execute on the fold, and the guard
+-- runs as the owner.
+
+update public.profiles set nickname = 'Fold675' where id = '67500000-0000-0000-0000-000000000005';
+
+set local role service_role;
+select lives_ok(
+  $$ update public.profiles set email = 'direct.renamed.675@test.local' where id = '67500000-0000-0000-0000-000000000005' $$,
+  'service_role corrects the address of a Member who has a Nickname (reinvite-member)');
+select lives_ok(
+  $$ update public.profiles set nickname = 'Fold 675' where id = '67500000-0000-0000-0000-000000000005' $$,
+  'service_role writes a Nickname through the guard');
+reset role;
+select is(pg_temp.nick675(5), 'Fold 675', 'and it lands, trimmed and checked as for anyone');
 
 select * from finish();
 rollback;
