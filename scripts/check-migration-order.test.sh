@@ -106,6 +106,14 @@ expect_outcome "a migration dated before the newest" 1 "::error::" \
 CHECK_CWD="$work/supabase" expect_outcome "a migration dated before the newest, checked from a subdirectory" 1 "::error::" \
   20260115000000_late.sql 20260201000000_b.sql origin/main
 
+# A base migration moved back in time is an added file too, however similar
+# git finds it to the one it replaces: rename detection must not hide it.
+g checkout -q -b renamed main
+g mv supabase/migrations/20260201000000_b.sql supabase/migrations/20260115000000_b_moved.sql
+g commit -q -m "move b back in time"
+expect_outcome "a migration renamed to an earlier date" 1 "::error::" \
+  20260115000000_b_moved.sql 20260201000000_b.sql origin/main
+
 # The same version as the newest is not before it, whatever the name says.
 g checkout -q -b same-version main
 add_file supabase/migrations/20260201000000_a_twin.sql
@@ -126,14 +134,22 @@ g checkout -q main
 add_file supabase/migrations/20260115000000_late.sql
 expect_outcome "a late migration since the last Release" 0 "::warning::" \
   20260115000000_late.sql 20260201000000_b.sql --warn "$released"
-expect_pass "the Release report with nothing late" --warn HEAD
+# well-dated adds c (dated after b) since the tag: a Release with nothing late.
+g checkout -q well-dated
+expect_pass "the Release report with nothing late" --warn "$released"
 
-# A base that cannot be read is an error, never a pass.
-rc=0
-run_check nowhere/main > /dev/null || rc=$?
-if [ "$rc" != 2 ]; then
-  echo "migration order check exited $rc, not 2, for an unknown base" >&2
-  exit 1
-fi
+# A base that cannot be read, or an option the script does not know, is an
+# error, never a pass.
+expect_usage_error() { # expect_usage_error <label> [args...]
+  local label="$1" rc=0
+  shift
+  run_check "$@" > /dev/null || rc=$?
+  if [ "$rc" != 2 ]; then
+    echo "migration order check exited $rc, not 2, for $label" >&2
+    exit 1
+  fi
+}
+expect_usage_error "an unknown base" nowhere/main
+expect_usage_error "an unknown option" --bogus origin/main
 
 echo "migration order regression test passed"

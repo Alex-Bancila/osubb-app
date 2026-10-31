@@ -59,8 +59,10 @@ version() { # version <path>: the 14-digit timestamp a migration's name begins w
   printf '%s' "${name%%_*}"
 }
 
-# Added since the merge base: the migrations this branch (or this Release) brings.
-added="$(git diff --name-only --diff-filter=A "$merge_base" HEAD -- 'supabase/migrations/*.sql' | sort)"
+# Added since the merge base: the migrations this branch (or this Release)
+# brings. --no-renames: a base migration moved back in time is an added file,
+# and rename detection would pair it with the deletion and hide it from A.
+added="$(git diff --name-only --no-renames --diff-filter=A "$merge_base" HEAD -- 'supabase/migrations/*.sql' | sort)"
 if [ -z "$added" ]; then
   echo "check-migration-order: no migration added since $base."
   exit 0
