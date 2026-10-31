@@ -26,6 +26,7 @@ const api = vi.hoisted(() => ({
   applications: vi.fn(),
   level: { value: 6 },
   coordination: vi.fn(),
+  orgSettings: vi.fn(),
 }));
 
 /** The Roluri tab reads the Groups above through TanStack Query. */
@@ -46,6 +47,10 @@ vi.mock('../../lib/auth', () => ({
   }),
 }));
 vi.mock('../../queries/reference', () => ({ useRoles: api.roles }));
+// #1129: the board and AG Groups named in Setări are protected from archiving.
+vi.mock('../../queries/org-settings', () => ({
+  useOrgSettings: api.orgSettings,
+}));
 vi.mock('../../queries/groups-admin', async (original) => ({
   ...(await original<object>()),
   useAdminGroups: api.groups,
@@ -208,6 +213,11 @@ beforeEach(() => {
   api.members.mockReturnValue({ data: members });
   api.applications.mockReturnValue({
     data: [],
+    isPending: false,
+    isError: false,
+  });
+  api.orgSettings.mockReturnValue({
+    data: new Map<string, string | null>(),
     isPending: false,
     isError: false,
   });
@@ -561,6 +571,41 @@ it('sends a stored application form link back, so saving the settings never clea
       applicationFormUrl: 'https://forms.example.org/logistica',
     }),
   );
+});
+
+/*
+ * #1129 (audit M5): archive_group refuses the Organization Group, an
+ * Automatic-Membership Group, the board and AG Groups set in Setări and any
+ * Group above one (PT409 group_protected), so the page offers no Arhivează on
+ * them -- on their own Setări tab or in the parent's Subgrupuri. Here Setări
+ * names Logistică (id 2) as the board Group, which protects Educațional (1)
+ * above it and leaves Foto (5) below it as before.
+ */
+it('offers no Arhivează on a protected Group, in its Setări or in the parent Subgrupuri (#1129)', async () => {
+  const user = userEvent.setup();
+  api.orgSettings.mockReturnValue({
+    data: new Map<string, string | null>([['board_group_id', '2']]),
+    isPending: false,
+    isError: false,
+  });
+
+  const logistica = show(2);
+  expect(
+    screen.getByRole('button', { name: 'Salvează structura' }),
+  ).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Arhivează grupul' })).toBeNull();
+  await user.click(tab('Subgrupuri'));
+  // Foto, below the board Group, is not protected: its control stays.
+  expect(screen.getByRole('button', { name: 'Arhivează Foto' })).toBeVisible();
+  logistica.unmount();
+
+  show(1);
+  expect(screen.queryByRole('button', { name: 'Arhivează grupul' })).toBeNull();
+  await user.click(tab('Subgrupuri'));
+  expect(screen.getByRole('link', { name: 'Logistică' })).toBeVisible();
+  expect(
+    screen.queryByRole('button', { name: 'Arhivează Logistică' }),
+  ).toBeNull();
 });
 
 it('archives through the command and explains unfinished work in the Group', async () => {

@@ -42,9 +42,11 @@ import { parsePositiveInt } from '../../lib/ids';
 import { Loading } from '../../components/states';
 import { minimumLevelText } from '../../lib/minimum-level';
 import { useGroupApplications } from '../../queries/group-applications';
+import { useOrgSettings } from '../../queries/org-settings';
 import { useRoles } from '../../queries/reference';
 import {
   groupAuthority,
+  isProtectedGroup,
   useAdminGroups,
   useAppointableMembers,
   useGroupCommand,
@@ -261,6 +263,13 @@ export default function GroupScreen() {
   );
   const createTopLevel = capabilities.data?.createTopLevelGroups === true;
   const archived = group !== undefined && group.status !== 'active';
+  // #1129: the Groups archive_group refuses (PT409 group_protected) get no
+  // Arhivează, here and in the Subgrupuri tab: the Organization Group, an
+  // Automatic-Membership Group, the board and AG Groups named in Setări, and
+  // any Group above one. Read from the rows and the settings; the command decides.
+  const orgSettings = useOrgSettings();
+  const protectedGroup =
+    group !== undefined && isProtectedGroup(group, groups, orgSettings.data);
   const authority = useMemo(
     () =>
       archived
@@ -483,6 +492,7 @@ export default function GroupScreen() {
               lastReason={lastReason}
               onRun={run}
               canDelete={canDelete}
+              protectedGroup={protectedGroup}
             />
           )}
           {tab === 'roster' &&
@@ -529,6 +539,9 @@ export default function GroupScreen() {
                 archived
                   ? READ_ONLY
                   : groupAuthority(child, myGroupsQuery.data, createTopLevel)
+              }
+              isProtected={(child) =>
+                isProtectedGroup(child, groups, orgSettings.data)
               }
               busy={busy}
               error={error}

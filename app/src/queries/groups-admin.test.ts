@@ -10,6 +10,7 @@ import {
   fetchAppointableMembers,
   fetchGroupRoster,
   groupAuthority,
+  isProtectedGroup,
   runGroupCommand,
 } from './groups-admin';
 import type { MyGroup } from './my-groups';
@@ -542,4 +543,61 @@ it('offers exactly what each command would accept, per persona', () => {
     archive: false,
     editMinLevel: false,
   });
+});
+
+/*
+ * #1129 (audit M5): the Groups archive_group and delete_group refuse with
+ * PT409 group_protected, read by the page so it never offers Arhivează on
+ * them: the Organization Group, an Automatic-Membership Group, the board
+ * Group and the Adunarea Generala named in Setari, and every Group above one.
+ */
+it('names the protected Groups as the server does, a parent of one included (#1129)', () => {
+  const row = (
+    id: number,
+    path: number[],
+    extra: Partial<{
+      is_organization: boolean;
+      automatic_membership: boolean;
+    }> = {},
+  ) => ({
+    id,
+    path,
+    is_organization: false,
+    automatic_membership: false,
+    ...extra,
+  });
+  const groups = [
+    row(1, [1]),
+    row(2, [1, 2]),
+    row(3, [1, 2, 3], { automatic_membership: true }),
+    row(5, [5], { is_organization: true }),
+    row(7, [7]),
+    row(8, [8]),
+    row(9, [9]),
+  ];
+  const settings = new Map<string, string | null>([
+    ['board_group_id', '7'],
+    ['adunarea_generala_group_id', '8'],
+    ['adherence_form_url', 'https://example.org'],
+  ]);
+  const protectedIds = groups
+    .filter((group) => isProtectedGroup(group, groups, settings))
+    .map((group) => group.id);
+  // 1 and 2 hold the automatic Group 3 below them; 9 is an ordinary Group.
+  expect(protectedIds).toEqual([1, 2, 3, 5, 7, 8]);
+
+  // Without the settings the row flags still decide; the named Groups do not.
+  expect(isProtectedGroup(row(7, [7]), groups, undefined)).toBe(false);
+  expect(isProtectedGroup(row(5, [5]), groups, undefined)).toBe(true);
+  // A setting that is not a number names nobody.
+  expect(
+    isProtectedGroup(
+      row(9, [9]),
+      groups,
+      new Map([['board_group_id', 'nine']]),
+    ),
+  ).toBe(false);
+  expect(
+    isProtectedGroup(row(9, [9]), groups, new Map([['board_group_id', null]])),
+  ).toBe(false);
 });

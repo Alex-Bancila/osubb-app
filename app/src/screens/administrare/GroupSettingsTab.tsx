@@ -329,6 +329,7 @@ export function GroupSettingsTab({
   lastReason,
   onRun,
   canDelete = false,
+  protectedGroup = false,
 }: {
   group: AdminGroup;
   parent: AdminGroup | undefined;
@@ -354,6 +355,12 @@ export function GroupSettingsTab({
    * BC and the Moderator on an archived one.
    */
   canDelete?: boolean;
+  /**
+   * `archive_group` refuses the Group (#1129, `PT409 group_protected`): the
+   * Organization Group, an Automatic-Membership Group, the board or AG Group
+   * named in Setări, or a Group above one — so Arhivează is not offered.
+   */
+  protectedGroup?: boolean;
 }) {
   const root = group.parent_id === null;
   const categoryId = useId();
@@ -531,7 +538,8 @@ export function GroupSettingsTab({
 
   const showSettings = authority.manageGroup;
   const showStructure = authority.editStructure;
-  const showArchive = authority.archive && group.status === 'active';
+  const showArchive =
+    authority.archive && group.status === 'active' && !protectedGroup;
   // The page shows this tab only to someone with one of the three; the one
   // refusal line lives on the page, not here (relevance B49).
   if (!showSettings && !showStructure && !showArchive && !canDelete)

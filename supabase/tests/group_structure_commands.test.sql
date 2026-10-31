@@ -363,7 +363,7 @@ select throws_ok(
   format($$select public.update_group_structure(%s, 'department', false, true, false, 0, null, null, true, false)$$,
          pg_temp.g582_group('Rădăcină #582')),
   'PT409', 'organization_group_exists',
-  'update_group_structure: the Organization marker is unique -- the old Group is cleared first');
+  'update_group_structure: the Organization marker is unique -- and since #1129 it never moves through this command');
 select throws_ok(
   format($$select public.update_group_structure(%s, 'department', false, true, true, 0, null, null, false, false)$$,
          pg_temp.g582_group('Rădăcină #582')),
@@ -599,14 +599,19 @@ end;
 $$;
 
 select pg_temp.g582_bc();
-select lives_ok($$select pg_temp.g582_clear_org()$$,
-  'fixture: BC clears the Organization marker from the mirrored OSUBB Group');
-select lives_ok(
-  format($$select public.update_group_structure(%s, 'organization', false, true, false, 0, null, null, true, false)$$,
-         pg_temp.g582_group('Părinte viu #582')),
-  'fixture: and sets it on a native Group, which carries no legacy id at all');
-
+-- #1129: the marker never leaves the Organization Group through the command
+-- (there is always exactly one), so the fixture moves it as the owner below --
+-- native setup a rollback-only suite may do (conventions section 10).
+select throws_ok($$select pg_temp.g582_clear_org()$$,
+  'PT409', 'group_protected',
+  'update_group_structure: BC cannot clear the Organization marker from OSUBB (#1129)');
 reset role;
+update public.groups set is_organization = false where is_organization;
+select lives_ok(
+  format($$update public.groups set is_organization = true where id = %s$$,
+         pg_temp.g582_group('Părinte viu #582')),
+  'fixture: the owner sets the marker on a native Group, which carries no legacy id at all');
+
 select pg_temp.g582_as_vot(8);
 select lives_ok(
   format($$select public.create_event('Eveniment organizație #582', 'sedinta', %s, now() + interval '3 days')$$,
