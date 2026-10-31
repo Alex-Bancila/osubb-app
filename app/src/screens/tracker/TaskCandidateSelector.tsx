@@ -119,6 +119,8 @@ export function TaskCandidateSelector({ taskId }: { taskId: number }) {
         kind === 'invalid' ||
         kind === 'missing' ||
         kind === 'conflict' ||
+        kind === 'audience' ||
+        kind === 'level' ||
         kind === 'forbidden' ||
         kind === 'unknown';
       setError(
