@@ -24,6 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # the migration-order check reads origin/main and the merge base
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -40,6 +42,16 @@ jobs:
 
       - name: Check repository
         run: npm run check:root
+
+      # #1139: a migration dated before the newest one on main is built in
+      # order here but applied out of order by `db push --include-all` on
+      # staging and in every Release, where a `create or replace` body from an
+      # older branch then wins. The check names both files; renaming the
+      # migration is the author's job. Pull requests only: on main there is
+      # nothing added against main.
+      - name: Migrations are dated after main's newest
+        if: github.event_name == 'pull_request'
+        run: bash scripts/check-migration-order.sh origin/main
 
   db:
     name: Migrations + db tests
