@@ -31,7 +31,8 @@ const ARCHIVE_FAILED = 'Nu am putut arhiva grupul. Reîncearcă.';
  * archive it — and, for an archived Group, for BC and the Moderator. The
  * dialog reads what the subtree holds, then offers three ways out: delete
  * everything (after the Group's name is typed), archive it instead, or keep
- * it. A protected Group is never deleted; the dialog says why.
+ * it. A protected Group is never deleted nor archived (#1129); the dialog says
+ * why and offers only Păstrează.
  */
 export function GroupDeleteDialog({
   group,
@@ -184,21 +185,19 @@ function GroupDeleteBody({
       </>
     );
 
+  // #1129: archive_group refuses the same set (PT409 group_protected), so a
+  // protected Group is neither deleted nor archived here.
   if (preview.data.protected)
     return (
       <>
         <DialogDescription>
-          {group.name} nu poate fi șters definitiv. Grupul organizației,
-          grupurile cu membri adăugați automat și grupurile Biroului de
-          Conducere sau Adunării Generale alese în Setări rămân mereu, la fel ca
-          grupurile care le cuprind.
-          {onArchive ? ' Îl poți arhiva.' : ''}
+          {group.name} nu poate fi șters definitiv, nici arhivat. Grupul
+          organizației, grupurile cu membri adăugați automat și grupurile
+          Biroului de Conducere sau Adunării Generale alese în Setări rămân
+          mereu, la fel ca grupurile care le cuprind.
         </DialogDescription>
         {errorLine}
-        <DialogFooter>
-          {keepButton}
-          {archiveButton}
-        </DialogFooter>
+        <DialogFooter>{keepButton}</DialogFooter>
       </>
     );
 
