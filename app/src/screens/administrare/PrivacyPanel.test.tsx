@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import * as axe from 'axe-core';
+import { answered } from '../../test/postgrest-fake';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -65,7 +66,7 @@ beforeEach(() => {
       acknowledged_at: '2026-09-20T09:00:00Z',
     },
   ];
-  api.rpc.mockImplementation(async () => ({ data: api.rows, error: null }));
+  api.rpc.mockImplementation(() => answered({ data: api.rows, error: null }));
   identities.mockReturnValue({
     isPending: false,
     isError: false,
@@ -83,7 +84,7 @@ beforeEach(() => {
 });
 
 it('holds the place of the list while it is read, never a bare line of text', () => {
-  api.rpc.mockImplementation(() => new Promise(() => {}));
+  api.rpc.mockImplementation(() => answered(new Promise(() => {})));
   const { container } = show();
   expect(screen.getByRole('status')).toHaveTextContent(
     'Se încarcă confirmările…',
@@ -188,10 +189,12 @@ it('says so when every active Member acknowledged the current version', async ()
 });
 
 it('reports a refused or failed read instead of an empty list', async () => {
-  api.rpc.mockImplementation(async () => ({
-    data: null,
-    error: { code: '42501', message: 'privacy_acknowledgements_forbidden' },
-  }));
+  api.rpc.mockImplementation(() =>
+    answered({
+      data: null,
+      error: { code: '42501', message: 'privacy_acknowledgements_forbidden' },
+    }),
+  );
   show();
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Nu am putut încărca confirmările.',
