@@ -18,12 +18,23 @@ export type PendingTaskCandidate = {
 };
 
 export type TaskCandidateSelectionErrorKind =
-  'invalid' | 'missing' | 'conflict' | 'forbidden' | 'unknown';
+  | 'invalid'
+  | 'missing'
+  | 'conflict'
+  | 'audience'
+  | 'level'
+  | 'forbidden'
+  | 'unknown';
 
 const messages: Record<TaskCandidateSelectionErrorKind, string> = {
   invalid: 'Alege un candidat valid din coadă.',
   missing: 'Candidatura sau taskul nu mai este disponibil.',
   conflict: 'Coada s-a schimbat. Lista a fost actualizată.',
+  // #1125 (audit M1): the selection re-judges the Candidate against the
+  // Task's join rule. The Candidature stays in the queue; only this pick is
+  // refused, so the Manager reads why rather than "no permission".
+  audience: 'Candidatul nu mai face parte din grup.',
+  level: 'Candidatul e sub nivelul minim al taskului.',
   forbidden: 'Nu ai permisiunea să alegi executorul acestui task.',
   unknown: 'Nu am putut schimba executorul. Încearcă din nou.',
 };
@@ -39,17 +50,22 @@ export class TaskCandidateSelectionError extends Error {
 
 export function taskCandidateSelectionError(
   code?: string,
+  message?: string,
 ): TaskCandidateSelectionError {
   return new TaskCandidateSelectionError(
-    code === 'PT400'
-      ? 'invalid'
-      : code === 'PT404'
-        ? 'missing'
-        : code === 'PT409'
-          ? 'conflict'
-          : code === '42501'
-            ? 'forbidden'
-            : 'unknown',
+    message === 'task_audience_forbidden'
+      ? 'audience'
+      : message === 'task_level_forbidden'
+        ? 'level'
+        : code === 'PT400'
+          ? 'invalid'
+          : code === 'PT404'
+            ? 'missing'
+            : code === 'PT409'
+              ? 'conflict'
+              : code === '42501'
+                ? 'forbidden'
+                : 'unknown',
   );
 }
 
@@ -87,7 +103,7 @@ export async function selectTaskCandidate(
     p_candidate_id: candidateId,
     p_close_remaining: closeRemaining,
   });
-  if (error) throw taskCandidateSelectionError(error.code);
+  if (error) throw taskCandidateSelectionError(error.code, error.message);
   return data;
 }
 
