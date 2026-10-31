@@ -88,7 +88,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(76);
+select plan(77);
 
 -- ==================== 1. The lock ====================
 -- A held-lock probe, as #52's suite probes (52, 1): a run must wait on
@@ -326,6 +326,14 @@ select throws_ok($$ select * from public.run_role_evaluation('voluntar_activ', c
   'PT400', 'invalid_date_range', 'an end before the start is invalid_date_range');
 select throws_ok($$ select * from public.run_role_evaluation('voluntar_activ', current_date - 2, current_date + 2, 'Evaluare', 5, 50, current_date - 1) $$,
   'PT400', 'date_range_in_future', 'an Evaluation Period ending after today is date_range_in_future');
+-- #1131 (audit M10): a run covers complete days only. An award evaluated
+-- later today would fall between a run ending today and the live window
+-- that opens at period_to + 1, and role_evaluation_ranking would recompute
+-- the run's sheet over it; yesterday is the latest a run may end.
+select throws_ok(
+  format($$ select * from public.run_role_evaluation('voluntar_activ', current_date - 2, %L, 'Evaluare', 5, 50, current_date - 1) $$,
+         (now() at time zone 'Europe/Bucharest')::date),
+  'PT400', 'date_range_in_future', 'an Evaluation Period ending today is date_range_in_future: today is not a complete day');
 select throws_ok($$ select * from public.run_role_evaluation('voluntar_activ', current_date - 2, current_date - 1, 'Evaluare', 0, 50, current_date - 1) $$,
   'PT400', 'invalid_eligibility_floor', 'a Floor below 1 is invalid_eligibility_floor, before the gate');
 select throws_ok($$ select * from public.run_role_evaluation('voluntar_activ', current_date - 2, current_date - 1, 'Evaluare', 5, 101, current_date - 1) $$,

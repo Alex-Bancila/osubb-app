@@ -577,9 +577,9 @@ describe('what the tab derives', () => {
 
 describe('the commands', () => {
   it('the run form parses into the values a run takes', () => {
-    // The form's own fields; the Prag minim and the Data limită de intrare
-    // are the settings in force.
-    const values: RunValues = runSchema('2026-09-30', {
+    // The form's own fields (the range ends before today, #1131); the Prag
+    // minim and the Data limită de intrare are the settings in force.
+    const values: RunValues = runSchema('2026-10-01', {
       floor: 10,
       cutoff: '2026-03-01',
     }).parse({

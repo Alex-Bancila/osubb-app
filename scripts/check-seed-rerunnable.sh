@@ -339,8 +339,9 @@ select set_config('request.jwt.claims', jsonb_build_object(
 set local role authenticated;
 select 1 from public.set_evaluation_percent('adunarea_generala',
   case (select vot_percent from evaluation_settings where id = 1) when 40 then 41 else 40 end);
-select 1 from public.run_role_evaluation('voluntar_activ', current_date - 365, current_date, 'Evaluare demo #901', 1, 35, current_date);
-select 1 from public.run_role_evaluation('adunarea_generala', current_date - 365, current_date, 'Evaluare AG demo #901', 1,
+-- #1131: a run covers complete days, so its range ends yesterday at the latest.
+select 1 from public.run_role_evaluation('voluntar_activ', current_date - 365, current_date - 1, 'Evaluare demo #901', 1, 35, current_date);
+select 1 from public.run_role_evaluation('adunarea_generala', current_date - 365, current_date - 1, 'Evaluare AG demo #901', 1,
   (select vot_percent from evaluation_settings where id = 1));
 select 1 from public.set_promotion_threshold('voluntar_activ',
   coalesce((select threshold from promotion_thresholds where kind = 'voluntar_activ'), 0) + 1);
