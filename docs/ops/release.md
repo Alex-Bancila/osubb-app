@@ -35,8 +35,11 @@ The workflow is `.github/workflows/release-production.yml`, two jobs:
    code changed, all counted from the newest `release/*` tag (the first Release lists everything). After
    a Release that failed before its tag, some of those migrations may already be applied; production's
    own record is the `supabase migration list` that the `release` job prints before it pushes. The report
-   also warns when a migration file that was already released has been edited: `db push` never
-   re-applies one.
+   also warns when a migration file that was already released has been edited (`db push` never
+   re-applies one) and when a migration added since the last Release is dated before the newest one that
+   Release carried (`scripts/check-migration-order.sh --warn`, #1139): `db push --include-all` applies
+   such a file after the newer ones, so its body wins over what they proved. Rename it before approving
+   unless that is intended.
 2. **`release`** — waits in the `production` Environment for a required reviewer (Alex or Dobre; one
    approval is enough). Until someone approves, it has no secret and runs nothing. After approval, in
    order:
