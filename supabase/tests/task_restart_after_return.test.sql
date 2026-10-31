@@ -1,7 +1,7 @@
 -- task_restart_after_return.test.sql — a Task that was returned from review
 -- and then lost its Executor must be startable again by the next one.
 --
--- Audit 2026-10-30, finding H1. tasks_lifecycle_timestamp_order_ck used to
+-- #1117 (audit 2026-10-30, finding H1). tasks_lifecycle_timestamp_order_ck used to
 -- demand returned_to_progress_at >= started_at. give_up_task (#682) and an
 -- update_task that removes the Executor both clear started_at and keep
 -- returned_to_progress_at (review_round is history), so the next Executor's
@@ -18,11 +18,11 @@ create extension if not exists pgtap with schema extensions;
 
 select plan(10);
 
--- ==================== Fixtures — prefix 30100000-… ====================
+-- ==================== Fixtures — prefix 11170000-… ====================
 -- 1 the Group Manager (BCE); 2 and 3 Voluntari in the Group; 4 a voter in
 -- the level-3 Group.
 create function pg_temp.u_h1(n integer) returns uuid language sql immutable as $$
-  select ('30100000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
+  select ('11170000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
 $$;
 insert into auth.users (id, email)
 select pg_temp.u_h1(n), 'restart.' || n || '.h1@test.local' from generate_series(1, 4) n;

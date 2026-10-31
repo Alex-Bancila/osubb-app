@@ -197,7 +197,7 @@ select throws_ok(
 reset role;
 
 -- ==================== service_role writes a Profile that has a Nickname ====================
--- Audit 2026-10-30, finding H4: the Edge Functions (reinvite-member's address
+-- #1119 (audit 2026-10-30, finding H4): the Edge Functions (reinvite-member's address
 -- correction, record_invitation_sent's stamp) and the R58 university backfill
 -- write profiles as service_role. The unique index evaluates
 -- private.fold_nickname on every insert and non-HOT update of a nicknamed row

@@ -3,7 +3,7 @@
 -- the Group nor its Events; ADR-0008: an Event's level is never below its
 -- Group's).
 --
--- Audit 2026-10-30, finding H2. update_group (a Child Group's level, its
+-- #1118 (audit 2026-10-30, finding H2). update_group (a Child Group's level, its
 -- Managers) and update_group_structure (a top-level Group's, BC) removed the
 -- roster rows below the new level and left the Group's Events where they
 -- were. private.can_read_event compares the reader only with the Event's own
@@ -19,11 +19,11 @@ create extension if not exists pgtap with schema extensions;
 
 select plan(13);
 
--- ==================== Fixtures — prefix 30200000-… ====================
+-- ==================== Fixtures — prefix 11180000-… ====================
 -- 1 BC; 2 a Recrut (level 0); 3 a Voluntar (level 1); 4 a Voluntar Activ
 -- (level 2), Manager of the Child Group.
 create function pg_temp.u_h2(n integer) returns uuid language sql immutable as $$
-  select ('30200000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
+  select ('11180000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
 $$;
 insert into auth.users (id, email)
 select pg_temp.u_h2(n), 'raise.' || n || '.h2@test.local' from generate_series(1, 4) n;
