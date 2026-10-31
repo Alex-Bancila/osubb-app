@@ -260,7 +260,9 @@ export default function AuthConfirm() {
         <Button
           type="button"
           className="w-full"
-          disabled={verifying}
+          // Not before the stored session is read: confirm() needs to know
+          // which account this browser held (H6), and the beat is short.
+          disabled={verifying || loading}
           onClick={() => void confirm()}
         >
           {verifying && (

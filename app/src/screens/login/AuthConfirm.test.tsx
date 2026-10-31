@@ -102,6 +102,14 @@ describe('AuthConfirm', () => {
     expect(mocks.verifyOtp).not.toHaveBeenCalled();
   });
 
+  it('waits for the stored session before the Member can tap (H6: the held account must be known)', () => {
+    mocks.useAuth.mockReturnValue({ loading: true, session: null });
+    renderConfirm(inviteLink);
+    expect(
+      screen.getByRole('button', { name: 'Conectează-mă' }),
+    ).toBeDisabled();
+  });
+
   it.each(['invite', 'email', 'magiclink', 'email_change'])(
     'verifies a %s link with its token hash on tap, then follows the destination',
     async (type) => {
