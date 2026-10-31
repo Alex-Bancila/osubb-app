@@ -8,6 +8,7 @@ import { useAuth } from '../lib/auth';
 import { CommandError, commandReason } from '../lib/command-reasons';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
+import { readAllRows } from './read-all';
 
 /**
  * The Privacy Notice and Privacy Acknowledgements (#771, ruling L16).
@@ -120,14 +121,20 @@ export type PrivacyStatus = {
 };
 
 export async function fetchPrivacyStatus(): Promise<PrivacyStatus> {
-  const [currentVersion, status] = await Promise.all([
+  const [currentVersion, rows] = await Promise.all([
     fetchCurrentVersion(),
-    supabase.rpc('privacy_acknowledgement_status'),
+    // One row per active Member: it can pass 500 (#1136), so read by pages
+    // on the unique column.
+    readAllRows((from, to) =>
+      supabase
+        .rpc('privacy_acknowledgement_status')
+        .order('member_id')
+        .range(from, to),
+    ),
   ]);
-  if (status.error) throw status.error;
   return {
     currentVersion,
-    rows: (status.data ?? []).map((row) => ({
+    rows: rows.map((row) => ({
       memberId: row.member_id,
       noticeVersion: row.notice_version,
       acknowledgedAt: row.acknowledged_at,

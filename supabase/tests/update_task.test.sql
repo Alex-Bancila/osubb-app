@@ -187,32 +187,32 @@ grant select, insert on previews to authenticated;
 
 -- ==================== 1. API shape and privileges ====================
 select has_function('public', 'update_task',
-  array['bigint', 'bigint', 'text', 'text', 'timestamp with time zone', 'bigint', 'text', 'text', 'text', 'text', 'boolean', 'jsonb', 'integer'],
-  'public.update_task exists with the full-state signature (the #684 Attached Link pair, R46 p_links, R57 p_min_level) plus p_accept_consequences');
+  array['bigint', 'bigint', 'text', 'text', 'timestamp with time zone', 'bigint', 'text', 'text', 'text', 'text', 'boolean', 'jsonb', 'integer', 'timestamp with time zone'],
+  'public.update_task exists with the full-state signature (the #684 Attached Link pair, R46 p_links, R57 p_min_level) plus p_accept_consequences and the #1132 version');
 select is(pg_get_function_arguments(
-    'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean,jsonb,integer)'::regprocedure),
-  'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text DEFAULT NULL::text, p_link_url text DEFAULT NULL::text, p_accept_consequences boolean DEFAULT false, p_links jsonb DEFAULT NULL::jsonb, p_min_level integer DEFAULT NULL::integer',
-  'update_task takes no actor parameter; R57: p_min_level defaults to null, which keeps the stored Role; R46: the legacy link pair and p_links default to null (p_links not sent takes the pair; neither sent, or a sent [], clears the links -- full state, OD5), and p_accept_consequences defaults to false');
+    'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean,jsonb,integer,timestamptz)'::regprocedure),
+  'p_task_id bigint, p_group_id bigint, p_title text, p_description text, p_deadline timestamp with time zone, p_campaign_id bigint, p_assignment_mode text, p_audience text, p_link_label text DEFAULT NULL::text, p_link_url text DEFAULT NULL::text, p_accept_consequences boolean DEFAULT false, p_links jsonb DEFAULT NULL::jsonb, p_min_level integer DEFAULT NULL::integer, p_updated_at timestamp with time zone DEFAULT NULL::timestamp with time zone',
+  'update_task takes no actor parameter; #1132: p_updated_at defaults to null, which skips the version check; R57: p_min_level defaults to null, which keeps the stored Role; R46: the legacy link pair and p_links default to null (p_links not sent takes the pair; neither sent, or a sent [], clears the links -- full state, OD5), and p_accept_consequences defaults to false');
 select is(pg_get_function_result(
-    'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb,integer)'::regprocedure),
+    'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb,integer,timestamptz)'::regprocedure),
   'TABLE(consequence text, member_id uuid)',
   'preview_task_update takes the same value arguments and returns (consequence, member_id) rows');
 select is((select provolatile::text from pg_proc
-            where oid = 'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb,integer)'::regprocedure),
+            where oid = 'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb,integer,timestamptz)'::regprocedure),
   's', 'preview_task_update is stable');
 select ok(not (select prosecdef from pg_proc
-                where oid = 'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean,jsonb,integer)'::regprocedure)
+                where oid = 'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean,jsonb,integer,timestamptz)'::regprocedure)
           and not (select prosecdef from pg_proc
-                    where oid = 'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb,integer)'::regprocedure),
+                    where oid = 'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb,integer,timestamptz)'::regprocedure),
   'both public functions are security invoker wrappers');
 select ok(has_function_privilege('authenticated',
-            'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean,jsonb,integer)', 'execute')
+            'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean,jsonb,integer,timestamptz)', 'execute')
           and has_function_privilege('authenticated',
-            'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb,integer)', 'execute')
+            'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb,integer,timestamptz)', 'execute')
           and not has_function_privilege('anon',
-            'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean,jsonb,integer)', 'execute')
+            'public.update_task(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,boolean,jsonb,integer,timestamptz)', 'execute')
           and not has_function_privilege('anon',
-            'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb,integer)', 'execute'),
+            'public.preview_task_update(bigint,bigint,text,text,timestamptz,bigint,text,text,text,text,jsonb,integer,timestamptz)', 'execute'),
   'authenticated may call both, anon neither');
 select ok(not has_function_privilege('authenticated',
             'private.task_update_consequences(bigint,bigint,bigint,text,text,integer)', 'execute')

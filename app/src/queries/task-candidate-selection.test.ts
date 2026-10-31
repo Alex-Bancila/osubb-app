@@ -91,3 +91,33 @@ it('maps stable command codes to safe Romanian failures', () => {
   );
   expect(taskCandidateSelectionError('XX000').message).not.toContain('XX000');
 });
+
+// #1125 (audit M1): the selection re-judges the Candidate's eligibility and
+// answers with the two reasons express_task_interest gives; the Manager must
+// read why, not the generic forbidden copy.
+it('names a Candidate who no longer meets the join rule', () => {
+  const audience = taskCandidateSelectionError(
+    '42501',
+    'task_audience_forbidden',
+  );
+  expect(audience.kind).toBe('audience');
+  expect(audience.message).toBe('Candidatul nu mai face parte din grup.');
+  const level = taskCandidateSelectionError('42501', 'task_level_forbidden');
+  expect(level.kind).toBe('level');
+  expect(level.message).toBe('Candidatul e sub nivelul minim al taskului.');
+  expect(
+    taskCandidateSelectionError('42501', 'task_manage_forbidden').kind,
+  ).toBe('forbidden');
+});
+
+it('passes the refusal reason through from the command', async () => {
+  api.rpc.mockResolvedValue({
+    data: null,
+    error: { code: '42501', message: 'task_audience_forbidden' },
+  });
+
+  await expect(selectTaskCandidate(17, 31)).rejects.toMatchObject({
+    kind: 'audience',
+    message: 'Candidatul nu mai face parte din grup.',
+  });
+});

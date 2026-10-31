@@ -6,9 +6,11 @@ name: Release to production
 # word is Release: the glossary keeps "Promotion" for a Member moving up a
 # Role.
 #
-#   report   no Environment, no secret: what this Release would change
+#   report   no Environment, no secret: the gate (#1138), then what this
+#            Release would change
 #   release  Environment `production` (main only; reviewers Alex and Dobre,
-#            any one approval): db push → functions → web → smoke → tag
+#            any one approval): the gate again → db push → functions → web
+#            → smoke → tag
 #
 # Before approving, the reviewer takes a local `supabase db dump` of
 # production to their own encrypted disk (docs/ops/release.md). A dump is
@@ -34,6 +36,9 @@ jobs:
   report:
     name: Report what this Release changes
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # the gate reads CI's runs for this commit
     steps:
       # The production Environment admits `main` only as well; this refuses
       # sooner, before anyone is asked to approve, and says why.
@@ -49,6 +54,24 @@ jobs:
         with:
           fetch-depth: 0 # the release/* tags and the history since the last one
           persist-credentials: false
+
+      # The gate (#1138): nothing goes live that CI has not proven or that is
+      # not main's tip right now. House rule 7 lets a docs-only push reach
+      # main, so at dispatch CI may still be running or red; and "Re-run
+      # failed jobs" on an older Release re-runs it with its original SHA,
+      # which would put that commit's functions and web app over a newer
+      # production while the database stays at the newer migrations. The
+      # script refuses, naming the reason, unless every ci.yml push run for
+      # this commit concluded success, the commit is the tip of origin/main,
+      # and every release/* tag is in its history. It runs here, before anyone
+      # is asked to approve, so a refused dispatch never asks for an approval;
+      # and again in `release`, because a re-run of the failed jobs alone
+      # never comes back through this job.
+      - name: Refuse a commit CI has not proven or that is not the tip of main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: bash scripts/release-gate.sh "$GITHUB_SHA"
 
       # This job can read no production secret, so it reads the difference
       # from git: what changed under supabase/ since the newest release/* tag
@@ -120,6 +143,7 @@ jobs:
       url: https://${{ env.PRODUCTION_DOMAIN }}
     permissions:
       contents: write # the release/* tag, written last
+      actions: read # the gate reads CI's runs for this commit
     steps:
       # A Release is deliberate, so a missing value fails it rather than
       # skipping: the reviewer approved a deploy, not a no-op.
@@ -144,7 +168,19 @@ jobs:
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          fetch-depth: 0 # the gate walks the history down to every release/* tag
           persist-credentials: false
+
+      # The gate again (#1138), right before anything touches production.
+      # `report` ran it before the approval, but "Re-run failed jobs" on an
+      # older Release re-runs only this job, with the run's original SHA, and
+      # `report` is never revisited: without this step that re-run would put
+      # the old commit's functions and web app over a newer production.
+      - name: Refuse a commit CI has not proven or that is not the tip of main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: bash scripts/release-gate.sh "$GITHUB_SHA"
 
       - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1.7.1
         with:

@@ -23,6 +23,7 @@ import { fetchEventFormOptions } from './event-creation';
 import { fetchGoingEventIds } from './event-rsvp';
 import { fetchEventsInRange } from './events';
 import { fetchUnreadNotificationSubjects } from './notifications';
+import { fetchPrivacyStatus } from './privacy';
 import { fetchGroups } from './reference';
 import {
   fetchPromotionCandidates,
@@ -114,6 +115,24 @@ describe('Administrare', () => {
     expect(orders(postgrest.requestsTo('simulate_role_evaluation')[0])).toEqual(
       [['task_points', { ascending: false }], ['member_id']],
     );
+  });
+
+  it('lists every active Member’s privacy acknowledgement (#1136)', async () => {
+    postgrest.serve('org_settings', [{ value: '1.3' }]);
+    postgrest.serve(
+      'privacy_acknowledgement_status',
+      many((index) => ({
+        member_id: `member-${String(index).padStart(3, '0')}`,
+        notice_version: null,
+        acknowledged_at: null,
+      })),
+    );
+    const status = await fetchPrivacyStatus();
+    expect(status.rows).toHaveLength(ROWS);
+    expect(status.rows.at(-1)?.memberId).toBe('member-500');
+    expect(
+      orders(postgrest.requestsTo('privacy_acknowledgement_status')[0]),
+    ).toEqual([['member_id']]);
   });
 
   it('lists every open Retention Signal', async () => {

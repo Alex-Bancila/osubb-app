@@ -21,6 +21,8 @@ const input: TaskUpdateInput = {
   links: [{ label: 'Brief', url: 'https://example.org/brief' }],
   // R57: an edit that does not send the Role keeps it.
   minLevel: null,
+  // #1132: the tasks.updated_at the form was seeded from.
+  updatedAt: '2026-09-18T07:00:00.123456+00:00',
 };
 const args = {
   p_task_id: 1,
@@ -33,6 +35,7 @@ const args = {
   p_audience: 'local',
   p_links: [{ label: 'Brief', url: 'https://example.org/brief' }],
   p_min_level: null,
+  p_updated_at: '2026-09-18T07:00:00.123456+00:00',
 };
 beforeEach(() => vi.resetAllMocks());
 
@@ -177,4 +180,29 @@ it('maps refusals to safe copy and flags a needed confirmation', async () => {
   await expect(
     updateTask({ ...input, acceptConsequences: false }),
   ).rejects.toThrow('Nu am putut salva modificările');
+});
+
+// #1132 (audit M12): a form seeded from an older version of the row is
+// refused whole; a caller without a version (null) is not checked.
+it('sends the version the form was seeded from, and reads task_changed as its own refusal', async () => {
+  api.rpc.mockResolvedValue({ data: { id: 1 }, error: null });
+  await updateTask({ ...input, updatedAt: null, acceptConsequences: false });
+  expect(api.rpc).toHaveBeenLastCalledWith('update_task', {
+    ...args,
+    p_updated_at: null,
+    p_accept_consequences: false,
+  });
+  api.rpc.mockResolvedValue({
+    error: { code: 'PT409', message: 'task_changed' },
+  });
+  await expect(
+    updateTask({ ...input, acceptConsequences: false }),
+  ).rejects.toMatchObject({
+    reason: 'task_changed',
+    message:
+      'Taskul a fost modificat între timp. Reîncarcă formularul și fă din nou modificarea.',
+  });
+  await expect(previewTaskUpdate(input)).rejects.toMatchObject({
+    reason: 'task_changed',
+  });
 });

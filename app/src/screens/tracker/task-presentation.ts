@@ -34,6 +34,10 @@ export type TaskPresentationRow = Pick<
   /** Cine îl vede (R57): the Task's Minimum Level. Absent from a read that
    *  does not carry it, which then neither shows nor sends it. */
   min_level?: number;
+  /** When the row last changed (#1132): the version the edit form is seeded
+   *  from and sends back. Absent from a list row, which never opens the
+   *  form; an edit without it is not version-checked. */
+  updated_at?: string;
   /** The Task's Origin Group; null when RLS withholds it. */
   group?:
     | (Pick<

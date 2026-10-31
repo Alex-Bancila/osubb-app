@@ -20,6 +20,8 @@ export function taskRow(
     campaign_id: null,
     duplicated_from_task_id: null,
     queue_closed_at: null,
+    // #1132: the version the edit form sends back.
+    updated_at: '2026-09-18T07:00:00.123456+00:00',
     links: [],
     group: {
       name: 'Educațional',

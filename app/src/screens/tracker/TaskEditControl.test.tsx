@@ -190,6 +190,8 @@ it('edits every field through update_task after a preview with no consequences',
     links: [{ label: 'Brief', url: 'https://example.org/brief' }],
     // R57: a public Task sends its Cine îl vede (Recrut by default).
     minLevel: 0,
+    // #1132: the version the form was seeded from.
+    updatedAt: '2026-09-18T07:00:00.123456+00:00',
   };
   expect(state.refetch).toHaveBeenCalledTimes(1);
   expect(state.preview).toHaveBeenCalledWith(values);
@@ -915,4 +917,70 @@ it('disables Direct under a Role above the editor, and says why (R57)', async ()
     /Doar cineva de la BC în sus poate face taskul direct/,
   );
   auth.level = 0;
+});
+
+// #1132 (audit M12): the form is seeded once. A live change of the Task
+// under the open sheet neither flips "changed" nor leaks into what is sent:
+// the save carries the seed's deadline and the seed's version.
+it('keeps its seed when the Task changes under the open form, and sends that seed’s version', async () => {
+  const view = render(<TaskEditControl task={task} canManage />);
+  const user = await openEditor();
+  const save = screen.getByRole('button', { name: 'Salvează modificările' });
+  expect(save).toBeDisabled();
+  view.rerender(
+    <TaskEditControl
+      task={{
+        ...task,
+        title: 'Titlu de la B',
+        deadline: '2026-09-21T12:00:00Z',
+        updated_at: '2026-09-18T08:00:00+00:00',
+      }}
+      canManage
+    />,
+  );
+  expect(save).toBeDisabled();
+  expect(screen.getByLabelText('Titlu')).toHaveValue(task.title);
+  await user.clear(screen.getByLabelText('Titlu'));
+  await user.type(screen.getByLabelText('Titlu'), 'Titlu corectat');
+  await user.click(save);
+  await waitFor(() => expect(state.mutate).toHaveBeenCalledTimes(1));
+  expect(state.mutate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      title: 'Titlu corectat',
+      deadline: task.deadline,
+      updatedAt: task.updated_at,
+    }),
+  );
+});
+it('says the Task changed on a stale save and re-seeds the form from the live row on request', async () => {
+  state.mutate.mockRejectedValueOnce(
+    new TaskEditError({ code: 'PT409', message: 'task_changed' }, 'x'),
+  );
+  const view = render(<TaskEditControl task={task} canManage />);
+  const user = await openEditor();
+  await user.clear(screen.getByLabelText('Titlu'));
+  await user.type(screen.getByLabelText('Titlu'), 'Titlu corectat');
+  await user.click(
+    screen.getByRole('button', { name: 'Salvează modificările' }),
+  );
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveTextContent('Taskul a fost modificat între timp');
+  view.rerender(
+    <TaskEditControl
+      task={{
+        ...task,
+        title: 'Titlu de la B',
+        updated_at: '2026-09-18T08:00:00+00:00',
+      }}
+      canManage
+    />,
+  );
+  await user.click(
+    within(alert).getByRole('button', { name: 'Reîncarcă formularul' }),
+  );
+  expect(await screen.findByDisplayValue('Titlu de la B')).toBeInTheDocument();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(
+    screen.getByRole('button', { name: 'Salvează modificările' }),
+  ).toBeDisabled();
 });

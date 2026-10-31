@@ -241,7 +241,11 @@ jobs:
   push-staging:
     name: Push migrations to staging
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: db
+    # Every job that runs on a push to main (#1138): staging used to receive
+    # the migrations of a commit whose Edge Functions, web app, repository
+    # checks or secret scan were still red, and the deploys after this one
+    # followed the migrations.
+    needs: [repo, db, secrets, functions, frontend]
     runs-on: ubuntu-latest
     # The staging Environment scopes the Supabase secrets to `main` (#110,
     # ruling L11). An Environment that lacks a secret of some name falls back

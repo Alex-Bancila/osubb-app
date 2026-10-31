@@ -39,7 +39,9 @@ import {
   type TaskUpdateValues,
 } from '../../lib/schemas/task';
 import { useFormValidation } from '../../lib/use-form-validation';
+import { reasonCopy } from '../../lib/command-reasons';
 import {
+  TaskEditError,
   TaskEditNeedsConfirmation,
   previewTaskUpdate,
   useTaskEdit,
@@ -92,6 +94,12 @@ export function TaskEditControl({
   const [saved, setSaved] = useState(false);
   // Each opening starts from the Task as it is now; 0 until the first one.
   const [attempt, setAttempt] = useState(0);
+  // #1132: the row the form is seeded from, fixed at opening. The details
+  // query is refetched by live changes while the sheet is open; the form
+  // never sees that, so nothing the Manager did not type is sent, and the
+  // version it sends back is the one it showed. A fresh seed is taken only
+  // when the server says the Task moved on and the Manager asks for it.
+  const [seed, setSeed] = useState<TaskPresentationRow>(task);
   // Only the latest receipt in the sheet shows (Audit D-16).
   const turn = useReceiptTurn();
   const receipt = useRef<HTMLParagraphElement>(null);
@@ -114,6 +122,7 @@ export function TaskEditControl({
         <Button
           onClick={() => {
             justSaved.current = false;
+            setSeed(task);
             setAttempt((current) => current + 1);
             setOpen(true);
             setSaved(false);
@@ -126,12 +135,16 @@ export function TaskEditControl({
       {canEdit && attempt > 0 && (
         <TaskEditForm
           key={attempt}
-          task={task}
+          task={seed}
           open={open}
           finalFocus={() =>
             justSaved.current ? (receipt.current ?? false) : true
           }
           onClose={() => setOpen(false)}
+          onReseed={() => {
+            setSeed(task);
+            setAttempt((current) => current + 1);
+          }}
           onSaved={() => {
             justSaved.current = true;
             setOpen(false);
@@ -195,12 +208,16 @@ function TaskEditForm({
   finalFocus,
   onClose,
   onSaved,
+  onReseed,
 }: {
+  /** The seed: the row as it was when the sheet opened, never the live one. */
   task: TaskPresentationRow;
   open: boolean;
   finalFocus: ComponentProps<typeof FormSheet>['finalFocus'];
   onClose: () => void;
   onSaved: () => void;
+  /** Start again from the live row (#1132), after a stale save. */
+  onReseed: () => void;
 }) {
   const id = useId();
   const options = useTaskFormOptions();
@@ -234,6 +251,9 @@ function TaskEditForm({
   const [links, setLinks] = useState(initialLinks);
   const locked = groupLock(task);
   const [checking, setChecking] = useState(false);
+  // #1132: the server refused the save because the Task moved on since the
+  // seed; only a fresh seed (or Renunță) leads anywhere from here.
+  const [stale, setStale] = useState(false);
   // The values waiting for the manager to accept their consequences.
   const [confirming, setConfirming] = useState<{
     input: TaskUpdateInput;
@@ -327,6 +347,17 @@ function TaskEditForm({
         values.audience !== task.audience ||
         (values.minLevel !== null && values.minLevel !== (storedRole ?? 0))));
 
+  /** A refused save: a stale seed asks for a fresh one, anything else is
+   *  put under its field or in the form-level slot. */
+  function refuse(failure: unknown) {
+    if (failure instanceof TaskEditError && failure.reason === 'task_changed') {
+      setConfirming(null);
+      setStale(true);
+      return;
+    }
+    form.fail(failure, SAVE_FAILED);
+  }
+
   async function save(update: TaskUpdateInput, acceptConsequences: boolean) {
     try {
       await mutation.mutateAsync({ ...update, acceptConsequences });
@@ -369,8 +400,14 @@ function TaskEditForm({
     if (submitting.current) return;
     const parsed = form.validate();
     if (!parsed) return;
-    // update_task is a full-state replace: the links as the form shows them.
-    const input: TaskUpdateInput = { taskId: task.id, ...parsed };
+    // update_task is a full-state replace: the links as the form shows them,
+    // and the version of the seed (#1132), so a save over someone else's
+    // change is refused rather than applied.
+    const input: TaskUpdateInput = {
+      taskId: task.id,
+      ...parsed,
+      updatedAt: task.updated_at ?? null,
+    };
     submitting.current = true;
     setChecking(true);
     try {
@@ -405,7 +442,7 @@ function TaskEditForm({
       }
       await save(input, false);
     } catch (failure) {
-      form.fail(failure, SAVE_FAILED);
+      refuse(failure);
     } finally {
       submitting.current = false;
       setChecking(false);
@@ -419,7 +456,7 @@ function TaskEditForm({
       await save(confirming.input, true);
     } catch (failure) {
       setConfirming(null);
-      form.fail(failure, SAVE_FAILED);
+      refuse(failure);
     } finally {
       submitting.current = false;
     }
@@ -619,7 +656,19 @@ function TaskEditForm({
             </Button>
           </div>
         )}
-        <FieldError>{form.formError}</FieldError>
+        {stale ? (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center gap-2 text-sm text-destructive"
+          >
+            <span>{reasonCopy('task_changed')}</span>
+            <Button type="button" variant="outline" onClick={onReseed}>
+              Reîncarcă formularul
+            </Button>
+          </div>
+        ) : (
+          <FieldError>{form.formError}</FieldError>
+        )}
         <FormSheetFooter>
           <Button variant="outline" disabled={pending} onClick={onClose}>
             Renunță
@@ -627,7 +676,11 @@ function TaskEditForm({
           <Button
             type="submit"
             disabled={
-              !changed || pending || options.isPending || options.isError
+              !changed ||
+              stale ||
+              pending ||
+              options.isPending ||
+              options.isError
             }
           >
             Salvează modificările

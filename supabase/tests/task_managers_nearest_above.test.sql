@@ -15,7 +15,9 @@
 -- turns the R42 "a BC Manager stops the walk" and "a BC peer Responsible" assertions
 -- red; confining the walk to the Task's
 -- own Group turns the parent and grandparent assertions red; skipping the Task's own
--- Group turns the own-Group assertion red.
+-- Group turns the own-Group assertion red. Dropping the `level <= 6` filter from
+-- private.has_group_manager or private.group_managers (#1128) turns the "the
+-- Moderator's Manager row is not a Manager" assertions red.
 --
 -- Personas (prefix 941):
 --    1 bc        activ    Manager of Mid C and Root D; Responsible of Root E
@@ -40,7 +42,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(13);
+select plan(18);
 
 create function pg_temp.u941(n integer) returns uuid language sql immutable as $$
   select ('94100000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -142,6 +144,60 @@ select set_eq(
   $$select * from private.task_managers(pg_temp.t941('D'), pg_temp.u941(2))$$,
   $$values (pg_temp.u941(1))$$,
   'the Moderator acting changes nothing and is never the fallback');
+
+-- ==================== #1128: the Moderator's Manager row is not a Manager ====================
+-- Audit finding M4: has_group_manager and group_managers counted any live Manager
+-- row, task_managers only one below the Moderator. On chain E the Moderator holds
+-- the only Manager row, so a Leaf E Responsible lost can_manage_task on a peer's
+-- Task (a Manager "existed") while the notices still went to the peers. A
+-- Moderator's position row is their Atribuție (R47), never a Manager for the peer
+-- rule (D4); a BC member's (level 6) keeps counting, as in task_managers.
+
+create function pg_temp.manages941(p_uid uuid, p_task bigint) returns boolean language plpgsql as $$
+declare
+  v_answer boolean;
+begin
+  perform pg_temp.test_login_leadership(p_uid);
+  select public.can_manage_task(p_task) into v_answer;
+  perform set_config('role', 'none', true);
+  perform pg_temp.test_clear_jwt();
+  return v_answer;
+end;
+$$;
+create function pg_temp.managed941(p_uid uuid, p_task bigint) returns boolean language plpgsql as $$
+declare
+  v_answer boolean;
+begin
+  perform pg_temp.test_login_leadership(p_uid);
+  select exists (select 1 from public.task_list(p_list => 'managed') as row where row.id = p_task) into v_answer;
+  perform set_config('role', 'none', true);
+  perform pg_temp.test_clear_jwt();
+  return v_answer;
+end;
+$$;
+
+-- Task E is executed by Root E's Responsible #8, a peer of the chain, so only the
+-- "no Manager anywhere on the path" branch can let Leaf E's Responsible #5 manage it.
+insert into public.task_assignments (task_id, member_id, assigned_by, assigned_at)
+values (pg_temp.t941('E'), pg_temp.u941(8), pg_temp.u941(6), now());
+
+select ok(
+  not private.has_group_manager((select id from public.groups where name = 'Leaf E #941')),
+  'has_group_manager: the Moderator''s Manager row on Leaf E is not a Manager -- the chain has none (#1128)');
+select ok(
+  private.has_group_manager((select id from public.groups where name = 'Leaf C #941')),
+  'has_group_manager: a BC member''s Manager row on Mid C still counts for Leaf C (R42)');
+select ok(
+  pg_temp.manages941(pg_temp.u941(5), pg_temp.t941('E')),
+  'a Leaf E Responsible manages a peer''s Task on the Manager-less chain although the Moderator holds a Manager row there (D4, #1128)');
+select ok(
+  pg_temp.managed941(pg_temp.u941(5), pg_temp.t941('E')),
+  'and task_list(''managed'') lists it for them (task_list_scope reads the same helper)');
+select set_eq(
+  $$select manager from private.group_managers((select id from public.groups where name = 'Leaf E #941')) as manager
+     where manager in (select pg_temp.u941(n) from generate_series(1, 10) n)$$,
+  $$values (pg_temp.u941(1)), (pg_temp.u941(2)), (pg_temp.u941(5)), (pg_temp.u941(8))$$,
+  'group_managers falls through to the peers: the chain''s live Responsibles plus BC and the Moderator as membri de drept -- never the Moderator''s Manager row alone (#1128)');
 
 -- ==================== the creator branch is unchanged ====================
 

@@ -10,7 +10,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(101);
+select plan(104);
 
 create function pg_temp.u47(n integer) returns uuid language sql immutable as $$
   select ('47000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -356,13 +356,21 @@ select lives_ok($$select public.update_event((pg_temp.ev('Ev moved up #4700')).i
   'the Department''s Manager moves a member''s Event onto the Organization Group');
 reset role;
 select is((pg_temp.ev('Ev moved up #4700')).approval_status, 'pending', 'which makes it a request, whoever moved it');
--- R53: the Department's audience was never told of this fixture Event, so
--- the move tells it as new; the rest of the organisation hears nothing yet.
+-- #1130 (audit M7): the move made the Event pending, so events_read hides it
+-- from everyone -- the Department's own audience included -- and the move
+-- tells nobody of it, not even its old Group; they hear of it at approval, as
+-- the rest of the organisation does.
 select is((select count(*) from public.notifications as n
             where n.dedupe_key like 'event:' || (pg_temp.ev('Ev moved up #4700')).id || ':%'
-              and n.member_id::text like '47000000-%'
-              and n.member_id not in (select private.group_audience((select dept from fx47))))::int, 0,
-  'and tells the organisation nothing yet');
+              and n.member_id::text like '47000000-%')::int, 0,
+  'and tells nobody of an Event they cannot read yet, the Department''s own audience included');
+select pg_temp.test_login_leadership(pg_temp.u47(2));
+select lives_ok($$select public.approve_event((pg_temp.ev('Ev moved up #4700')).id)$$, 'BC approves the moved Event');
+reset role;
+select results_eq($$select * from pg_temp.told('Eveniment nou: Ev moved up #4700')$$, $$values (1), (5)$$,
+  'at approval the Department''s Manager and the rest of the organisation hear of it as a new Event');
+select results_eq($$select * from pg_temp.told('Evenimentul tău a fost aprobat: Ev moved up #4700')$$, $$values (4)$$,
+  'and its author, the Department''s member, that it was approved');
 
 -- M7: the decision flag covers no insert.
 select pg_temp.test_login_leadership(pg_temp.u47(1));

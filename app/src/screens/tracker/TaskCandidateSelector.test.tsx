@@ -153,6 +153,37 @@ describe('Task candidate selector', () => {
     expect(ana).toBeChecked();
   });
 
+  // #1125 (audit M1): a Candidate who left the Group or was demoted since
+  // queueing stays in the queue; the Manager reads why the selection was
+  // refused, and the choice is kept so they can pick someone else.
+  it('says why a Candidate can no longer be selected', async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn().mockResolvedValue(undefined);
+    hooks.candidates.mockReturnValue({
+      ...hooks.candidates(),
+      refetch,
+    });
+    hooks.selection.mutateAsync.mockRejectedValue(
+      Object.assign(new Error('Candidatul nu mai face parte din grup.'), {
+        kind: 'audience',
+      }),
+    );
+    render(<TaskCandidateSelector taskId={17} />);
+
+    const ana = screen.getByRole('radio', { name: /Ana Pop/ });
+    await user.click(ana);
+    await user.click(
+      screen.getByRole('radio', { name: 'Păstrează candidaturile rămase' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Alege executorul' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Candidatul nu mai face parte din grup.',
+    );
+    expect(refetch).not.toHaveBeenCalled();
+    expect(ana).toBeChecked();
+  });
+
   it('does not expose unexpected backend details', async () => {
     const user = userEvent.setup();
     hooks.selection.mutateAsync.mockRejectedValue(

@@ -471,3 +471,14 @@ it('says why a Group cannot be unarchived', () => {
     'Grupul părinte este arhivat. Dezarhivează-l întâi pe el.',
   );
 });
+
+// #1132 (audit M12): a Task edit saved from a form opened before someone
+// else's change.
+it('has copy for task_changed', () => {
+  expect(reasonCopy('task_changed')).toBe(
+    'Taskul a fost modificat între timp. Reîncarcă formularul și fă din nou modificarea.',
+  );
+  expect(commandReason({ code: 'PT409', message: 'task_changed' })).toBe(
+    'task_changed',
+  );
+});
