@@ -116,18 +116,27 @@ export function nextDay(iso: string): string {
     .slice(0, 10);
 }
 
+/** The calendar day before `iso` (`2026-07-01` → `2026-06-30`). */
+export function previousDay(iso: string): string {
+  const [year = 0, month = 1, day = 1] = iso.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day - 1))
+    .toISOString()
+    .slice(0, 10);
+}
+
 /**
  * The "De la" a new run starts from: the day after the last range, unless
- * that is after today (F-21) — a run that ended today leaves nothing to
- * prefill, so the field stays empty rather than inverted.
+ * that is after `latest`, the last day a run may end (F-21; yesterday since
+ * #1131) — a run that ended yesterday leaves nothing to prefill, so the field
+ * stays empty rather than inverted.
  */
 export function defaultRangeStart(
   lastTo: string | null | undefined,
-  today: string,
+  latest: string,
 ): string {
   if (!lastTo) return '';
   const start = nextDay(lastTo);
-  return start <= today ? start : '';
+  return start <= latest ? start : '';
 }
 
 /** An instant's day in Romania, as `01.02.2026`. */

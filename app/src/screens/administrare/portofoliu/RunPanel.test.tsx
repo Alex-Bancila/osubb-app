@@ -116,14 +116,15 @@ it('simulates, shows the line and the lists, and finalises only after a confirma
   const { container } = show(<Host />);
   const run = await ready();
 
-  // The form: De la is the day after the kind's last range, Până la is today,
-  // Procent is the kind's share in force. The app's picker, no browser field.
+  // The form: De la is the day after the kind's last range, Până la is
+  // yesterday (#1131: a run covers complete days), Procent is the kind's share
+  // in force. The app's picker, no browser field.
   const from = within(run).getByLabelText('De la');
   expect(from).toHaveAttribute('data-slot', 'date-picker');
   expect(from).toHaveAttribute('data-value', '2026-07-01');
   expect(within(run).getByLabelText('Până la')).toHaveAttribute(
     'data-value',
-    '2026-09-28',
+    '2026-09-27',
   );
   expect(run.querySelector('input[type="date"]')).toBeNull();
   expect(within(run).getByLabelText('Procent')).toHaveValue(35);
@@ -142,14 +143,14 @@ it('simulates, shows the line and the lists, and finalises only after a confirma
   expect(simulatedCall()?.[1]).toEqual({
     p_kind: 'voluntar_activ',
     p_from: '2026-07-01',
-    p_to: '2026-09-28',
+    p_to: '2026-09-27',
     p_floor: 10,
     p_percent: 35,
     p_cutoff: '2026-03-31',
   });
   // The card still names, read-only, what the Simulation used.
   expect(run).toHaveTextContent(
-    'Voluntar Activ · 01.07.2026–28.09.2026 · Prag minim 10 puncte · Procent 35 % · Data limită de intrare 31.03.2026',
+    'Voluntar Activ · 01.07.2026–27.09.2026 · Prag minim 10 puncte · Procent 35 % · Data limită de intrare 31.03.2026',
   );
   // The result: the line, the counts, the lists.
   expect(run).toHaveTextContent('Prag de promovare: 40 de puncte');
@@ -199,7 +200,7 @@ it('simulates, shows the line and the lists, and finalises only after a confirma
     }),
   ).toBeVisible();
   expect(dialog).toHaveTextContent(
-    'Clasăm punctele de task primite între 01.07.2026 și 28.09.2026 de toți membrii sub BCE care au cel puțin 10 puncte. Pragul de promovare devine punctele ultimului membru din primii 35 %: 40 de puncte. Voluntarii intrați până la 31.03.2026 care îl ating devin candidați la promovare; Voluntarii Activi și Voluntarii cu Drept de Vot sub el, sau sub pragul minim, devin semnale de retenție. Nimeni nu este promovat sau retrogradat automat.',
+    'Clasăm punctele de task primite între 01.07.2026 și 27.09.2026 de toți membrii sub BCE care au cel puțin 10 puncte. Pragul de promovare devine punctele ultimului membru din primii 35 %: 40 de puncte. Voluntarii intrați până la 31.03.2026 care îl ating devin candidați la promovare; Voluntarii Activi și Voluntarii cu Drept de Vot sub el, sau sub pragul minim, devin semnale de retenție. Nimeni nu este promovat sau retrogradat automat.',
   );
   expect(runCall()).toBeUndefined();
 
@@ -210,10 +211,56 @@ it('simulates, shows the line and the lists, and finalises only after a confirma
       'Evaluarea „Toamna 2026” a rulat: 2 candidați la promovare, 1 semnal de retenție.',
     ),
   ).toBeVisible();
-  // Back to the form, which starts the next run: the run ended today, so De
-  // la waits for a date instead of an inverted default (F-21).
+  // Back to the form, which starts the next run: the run ended yesterday, so
+  // the next would start today, which no run may end on -- De la waits for a
+  // date instead of an inverted default (F-21, #1131).
   expect(within(run).getByLabelText('De la')).toHaveAttribute('data-value', '');
   expect(within(run).getByLabelText('Nume')).toHaveValue('');
+});
+
+it('ends the Evaluation Period yesterday at the latest: Până la defaults to it, no later day can be picked, and the field says why (#1131)', async () => {
+  db.runs = [RUN_VA];
+  const user = userEvent.setup();
+  show(<Host />);
+  const run = await ready();
+
+  const to = within(run).getByLabelText('Până la');
+  expect(to).toHaveAttribute('data-value', '2026-09-27');
+  expect(to).toHaveAccessibleDescription(
+    'Ziua de azi intră în următoarea perioadă.',
+  );
+  // Today (2026-09-28) is not offered, yesterday is.
+  await user.click(to);
+  const grid = await waitFor(() => {
+    const found = document.querySelector<HTMLElement>(
+      '[data-slot="date-picker-grid"]',
+    );
+    if (!found) throw new Error('The date picker did not open.');
+    return found;
+  });
+  expect(grid.querySelector('[data-day="2026-09-28"]')).toBeDisabled();
+  expect(grid.querySelector('[data-day="2026-09-27"]')).toBeEnabled();
+  await user.keyboard('{Escape}');
+  // Nor can a run start today: De la opens on its own month (July), so page
+  // to September before looking.
+  await user.click(within(run).getByLabelText('De la'));
+  const fromGrid = await waitFor(() => {
+    const found = document.querySelector<HTMLElement>(
+      '[data-slot="date-picker-grid"]',
+    );
+    if (!found) throw new Error('The date picker did not open.');
+    return found;
+  });
+  for (
+    let guard = 0;
+    guard < 12 && fromGrid.dataset.month !== '2026-09';
+    guard++
+  )
+    await user.click(screen.getByRole('button', { name: 'Luna următoare' }));
+  expect(fromGrid.querySelector('[data-day="2026-09-28"]')).toBeDisabled();
+  expect(fromGrid.querySelector('[data-day="2026-09-27"]')).toBeEnabled();
+  await user.keyboard('{Escape}');
+  expect(simulatedCall()).toBeUndefined();
 });
 
 it('simulates and runs with the Prag minim and the Data limită de intrare in force, and writes neither back', async () => {
@@ -278,7 +325,7 @@ it('finalises with the values the Simulation used', async () => {
   expect(simulatedCall()?.[1]).toEqual({
     p_kind: 'voluntar_activ',
     p_from: '2026-07-01',
-    p_to: '2026-09-28',
+    p_to: '2026-09-27',
     p_floor: 10,
     p_percent: 40,
     p_cutoff: '2026-03-31',
@@ -316,7 +363,7 @@ it('keeps the typed values on Modifică valorile', async () => {
   );
   expect(within(run).getByLabelText('Până la')).toHaveAttribute(
     'data-value',
-    '2026-09-28',
+    '2026-09-27',
   );
   expect(within(run).getByLabelText('Nume')).toHaveValue('Toamna 2026');
   expect(within(run).getByLabelText('Procent')).toHaveValue(40);
@@ -458,7 +505,7 @@ it('sends no cutoff for the Adunarea Generală, and lists no candidates', async 
   expect(simulatedCall()?.[1]).toEqual({
     p_kind: 'adunarea_generala',
     p_from: '2026-07-01',
-    p_to: '2026-09-28',
+    p_to: '2026-09-27',
     p_floor: 10,
     p_percent: 25,
   });

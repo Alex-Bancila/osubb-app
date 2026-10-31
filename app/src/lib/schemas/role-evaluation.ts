@@ -46,7 +46,8 @@ const rankingFields = {
 
 /**
  * The rules that read several fields at once: both days of the Evaluation
- * Period, with **Până la** not before **De la** and not after `today`, and the
+ * Period, with **Până la** not before **De la** and before `today` (#1131: a
+ * run covers complete days, so it ends yesterday at the latest), and the
  * settings the run needs — the **Prag minim**, and for the Voluntar Activ kind
  * only the **Data limită de intrare**. The page does not start a run without
  * them; an unset one raised here is the form's own error.
@@ -76,7 +77,7 @@ function checkRanking(
       path: ['to'],
       message: 'invalid_date_range',
     });
-  else if (values.to > today)
+  else if (values.to >= today)
     ctx.addIssue({
       code: 'custom',
       path: ['to'],
@@ -119,8 +120,9 @@ function withSettings<T extends { kind: RoleEvaluationKind }>(
 /**
  * The **Rulează o evaluare** form, as `run_role_evaluation` (#826, R58) checks
  * it before its gate: a kind, both days of the Evaluation Period with **Până
- * la** not before **De la** and not after `today` (a Bucharest day, given by
- * the caller), a name trimmed to 3–120 characters and the **Procent** (a whole
+ * la** not before **De la** and before `today` (a Bucharest day, given by the
+ * caller; #1131: yesterday at the latest, since today is not a complete day),
+ * a name trimmed to 3–120 characters and the **Procent** (a whole
  * number from 1 to 100). The form does not hold the **Prag minim** or the
  * **Data limită de intrare**: Setări does, and the run takes the ones `inForce`
  * (the Floor for both kinds, the cutoff for the Voluntar Activ kind only,

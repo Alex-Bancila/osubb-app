@@ -624,7 +624,7 @@ const REASON_COPY = new Map<string, string>([
   ],
   ['invalid_role_evaluation_kind', 'Alege tipul evaluării.'],
   ['invalid_role_evaluation_name', 'Scrie numele evaluării.'],
-  ['date_range_in_future', 'Intervalul se poate termina cel târziu azi.'],
+  ['date_range_in_future', 'Intervalul se poate termina cel târziu ieri.'],
   // The browser's own: a date input left empty.
   ['date_required', 'Alege data.'],
   [

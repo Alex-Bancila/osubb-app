@@ -68,7 +68,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(78);
+select plan(80);
 
 \ir _r58_fixtures.psql
 
@@ -296,6 +296,16 @@ select throws_ok(
   format($$ select * from public.simulate_role_evaluation('voluntar_activ', '2026-03-01', %L, 10, 35, '2026-03-01') $$,
          (now() at time zone 'Europe/Bucharest')::date + 1),
   'PT400', 'date_range_in_future', 'an Evaluation Period ending tomorrow is date_range_in_future');
+-- #1131 (audit M10): a Simulation ends where a run may, yesterday at the
+-- latest -- today is not a complete day.
+select throws_ok(
+  format($$ select * from public.simulate_role_evaluation('voluntar_activ', '2026-03-01', %L, 10, 35, '2026-03-01') $$,
+         (now() at time zone 'Europe/Bucharest')::date),
+  'PT400', 'date_range_in_future', 'an Evaluation Period ending today is date_range_in_future: today is not a complete day');
+select lives_ok(
+  format($$ select * from public.simulate_role_evaluation('voluntar_activ', '2026-03-01', %L, 10, 35, '2026-03-01') $$,
+         (now() at time zone 'Europe/Bucharest')::date - 1),
+  'one ending yesterday is the latest a Simulation takes');
 select throws_ok($$ select * from public.simulate_role_evaluation('bogus', '2026-03-01', '2026-09-30', 10, 35, '2026-03-01') $$,
   'PT400', 'invalid_role_evaluation_kind', 'an unknown kind is invalid_role_evaluation_kind');
 reset role;

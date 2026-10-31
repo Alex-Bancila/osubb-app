@@ -7,6 +7,7 @@ import {
   formatInstantDay,
   lineText,
   nextDay,
+  previousDay,
   PERCENT_LABEL,
   pointsOrDash,
   promoteHref,
@@ -318,6 +319,14 @@ describe('Role Evaluation words moved from the old tab', () => {
     expect(nextDay('2026-06-30')).toBe('2026-07-01');
     expect(nextDay('2026-12-31')).toBe('2027-01-01');
     expect(nextDay('2028-02-28')).toBe('2028-02-29');
+  });
+
+  it('finds the calendar day before one, across a month and a year (#1131)', () => {
+    expect(previousDay('2026-07-01')).toBe('2026-06-30');
+    expect(previousDay('2027-01-01')).toBe('2026-12-31');
+    expect(previousDay('2028-03-01')).toBe('2028-02-29');
+    // Yesterday in Romania, a day apart from today whatever the clock did.
+    expect(previousDay(nextDay('2026-10-25'))).toBe('2026-10-25');
   });
 
   it('writes an instant as its day in Romania, dd.mm.yyyy', () => {
