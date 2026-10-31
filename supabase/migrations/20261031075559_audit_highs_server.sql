@@ -1,4 +1,4 @@
--- #ISSUE_H1, #ISSUE_H2, #ISSUE_H4: the audit of 2026-10-30, server side -- a Task restarts after a return, a Group's Minimum Level raise reaches its Events, service_role writes a nicknamed Profile.
+-- #1117, #1118, #1119: the audit of 2026-10-30, server side -- a Task restarts after a return, a Group's Minimum Level raise reaches its Events, service_role writes a nicknamed Profile.
 --
 -- Three findings of the codebase audit (docs/review/2026-10-30-codebase-audit.md,
 -- H1, H2 and H4), each with the pgTAP case that failed before this file:
