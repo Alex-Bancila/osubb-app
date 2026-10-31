@@ -37,11 +37,16 @@ run_check() { # run_check [args...]  (in $CHECK_CWD, default the clone's root)
   )
 }
 
-expect_pass() { # expect_pass <label> [args...]
+expect_pass() { # expect_pass <label> [args...]: exit 0 and no annotation at all
   local label="$1" out
   shift
   if ! out="$(run_check "$@")"; then
     echo "migration order check refused $label:" >&2
+    echo "$out" >&2
+    exit 1
+  fi
+  if grep -qE '^::(warning|error)::' <<< "$out"; then
+    echo "migration order check passed $label but printed an annotation:" >&2
     echo "$out" >&2
     exit 1
   fi
