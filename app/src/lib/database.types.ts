@@ -3991,6 +3991,7 @@ export type Database = {
           task_kind: string
           title: string
           unfulfilled_at: string
+          updated_at: string
         }[]
       }
       managed_work_groups: {
