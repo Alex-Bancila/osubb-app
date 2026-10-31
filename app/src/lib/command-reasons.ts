@@ -348,6 +348,11 @@ const REASON_COPY = new Map<string, string>([
     'task_parent_changed',
     'Taskul-umbrelă s-a schimbat între timp. Verifică starea actuală.',
   ],
+  // #1132 (audit M12): the edit form sends the version it was seeded from.
+  [
+    'task_changed',
+    'Taskul a fost modificat între timp. Reîncarcă formularul și fă din nou modificarea.',
+  ],
   ['task_not_direct', 'Taskul nu mai folosește atribuirea directă.'],
   [
     'task_already_assigned',
