@@ -272,7 +272,10 @@ anything on Thursday except fixes found by the acceptance run.
    ```
 
 3. **First Release** (rehearsal on the empty database): Actions → **Release to production** → _Run
-   workflow_. Read the `report` job. Take the dump even though it is empty, so the habit exists.
+   workflow_. Read the `report` job. Its first step is the gate (#1138): it refuses, and the run stops
+   before anyone is asked to approve, when CI for the commit is not green yet, when the commit is no
+   longer the tip of `main`, or when a `release/*` tag is missing from its history; a refusal touches
+   nothing, so wait or fix, then _Run workflow_ again (never re-run an old Release run). Take the dump even though it is empty, so the habit exists.
    _Why:_ `supabase db dump` writes the schema only unless told otherwise, so take both:
 
    ```bash

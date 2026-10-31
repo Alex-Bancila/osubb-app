@@ -34,6 +34,9 @@ jobs:
   report:
     name: Report what this Release changes
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # the gate reads CI's runs for this commit
     steps:
       # The production Environment admits `main` only as well; this refuses
       # sooner, before anyone is asked to approve, and says why.
@@ -49,6 +52,22 @@ jobs:
         with:
           fetch-depth: 0 # the release/* tags and the history since the last one
           persist-credentials: false
+
+      # The gate (#1138): nothing goes live that CI has not proven or that is
+      # not main's tip right now. House rule 7 lets a docs-only push reach
+      # main, so at dispatch CI may still be running or red; and "Re-run
+      # failed jobs" on an older Release re-runs it with its original SHA,
+      # which would put that commit's functions and web app over a newer
+      # production while the database stays at the newer migrations. The
+      # script refuses, naming the reason, unless every ci.yml run for this
+      # commit concluded success, the commit is the tip of origin/main, and
+      # every release/* tag is in its history. It runs here, before anyone is
+      # asked to approve, so a refused dispatch never reaches `production`.
+      - name: Refuse a commit CI has not proven or that is not the tip of main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: bash scripts/release-gate.sh "$GITHUB_SHA"
 
       # This job can read no production secret, so it reads the difference
       # from git: what changed under supabase/ since the newest release/* tag

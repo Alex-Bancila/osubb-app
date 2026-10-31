@@ -25,7 +25,12 @@ as a second lock.
 
 The workflow is `.github/workflows/release-production.yml`, two jobs:
 
-1. **`report`** — no Environment, no production secret, so it reads **git**, not production: it writes
+1. **`report`** — no Environment, no production secret. It first runs the **gate**
+   (`scripts/release-gate.sh`, #1138), which refuses the Release, naming the reason, unless all three
+   hold: every CI run for the commit concluded success; the commit is the tip of `main` at that moment;
+   and every `release/*` tag is in the commit's history. A refusal fails the job before anyone is asked to
+   approve, and touches nothing — see [When the gate refuses](#when-the-gate-refuses). Then it reads
+   **git**, not production: it writes
    to the run's summary the commit going live, the migration files added and the Edge Functions whose
    code changed, all counted from the newest `release/*` tag (the first Release lists everything). After
    a Release that failed before its tag, some of those migrations may already be applied; production's
@@ -84,12 +89,31 @@ The header and manifest checks run on `https://osubb-app.pages.dev` and, once th
 `https://app.osubb.ro` as well; before the custom domain exists (the first Release) the run notes that it
 checked the Pages address only.
 
+## When the gate refuses
+
+The `report` job's first step is the gate. A refusal is a failed `report` job with one `::error::`
+annotation per reason; the `release` job never starts, nobody is asked to approve, and production is
+untouched. The three reasons and what each one asks of you:
+
+| Refusal                                                      | What it means                                                                                                                                                                       | What to do                                                                                                                                   |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| a CI run for the commit is still running, or none exists yet | the Release was dispatched before CI finished judging this commit (a docs-only push to `main` runs CI too)                                                                          | wait for CI, then run the one command again                                                                                                  |
+| a CI run for the commit did not conclude `success`           | `main` is red; nothing red is released                                                                                                                                              | fix forward on `main`, then release the new tip                                                                                              |
+| the commit is not the tip of `main`                          | an older Release run was re-run from the Actions page (**Re-run failed jobs** keeps the run's original commit), or a merge landed between the dispatch and the gate                 | never re-run an old Release; start a new one from the tip with the one command                                                               |
+| a `release/*` tag is not an ancestor of the commit           | production has run a commit this one does not contain; releasing it would roll production's functions and web app back under the newer migrations, which `db push` never re-applies | release the tip of `main`; if the tip itself is refused, history was rewritten — stop and read the rollback rules below before anything else |
+
+The gate reads CI by commit (`gh run list --commit`), the tip live from the remote, and the tags live from
+the remote: the checkout cannot fool it. `scripts/release-gate.test.sh` (`npm run test:tooling`) holds
+each refusal against a throwaway repository.
+
 ## When a step fails
 
 The steps run in order and stop at the first failure, so the log says how far the Release got. Everything
 before the failed step is live; nothing after it ran. Fix forward on `main` and start a new Release: a
 migration that was applied stays applied, a later `db push` carries only what is still pending, and the
-functions and the web app are simply deployed again.
+functions and the web app are simply deployed again. **Re-run failed jobs** on the failed run works only
+while its commit is still the tip of `main`; once `main` has moved on, the gate refuses the re-run, and a
+new Release from the tip is the way.
 
 ## What the workflow needs
 
@@ -122,7 +146,8 @@ going "back".
    front of Members outweighs the review ritual for the minute it takes. It swaps static assets only — it
    never touches the database or Edge Functions — so use it only when the previous bundle is still
    compatible with whatever schema and functions are live right now.
-2. **Full — re-run the Release at the previous good commit.** Use this only when the previous app and Edge
+2. **Full — a new Release whose tree matches the previous good commit.** Not a re-run of the old Release's
+   workflow run: the gate refuses a commit that is no longer the tip of `main`. Use this only when the previous app and Edge
    Functions are still compatible with the schema already live — the database only ever moves forward (the
    rule above), so a migration that shipped since that commit may have changed something the old code
    depends on; when it has, fix forward instead of reverting. When Edge Functions must roll back together
