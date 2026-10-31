@@ -53,13 +53,17 @@ const normalize = (email: string) => email.trim().toLowerCase();
  *   'ok'       — this browser asked for exactly that address.
  *
  * An email change is not compared: its link carries the old address while the
- * session ends on the new one, and only a signed-in Member can start one.
+ * session ends on the new one. It is let straight in only when this browser
+ * already held the account it ends on (`sameAccount`): the Member who starts
+ * a change can forward its second link, and a tap elsewhere would otherwise
+ * enter their account unasked (audit 2026-10-30, H6).
  */
 function checkAccount(
   link: ConfirmLink,
   verified: string,
+  sameAccount: boolean,
 ): 'ok' | 'ask' | 'mismatch' {
-  if (link.type === 'email_change') return 'ok';
+  if (link.type === 'email_change') return sameAccount ? 'ok' : 'ask';
   if (link.email && normalize(verified) !== normalize(link.email))
     return 'mismatch';
   return requestedSignInFor(verified) ? 'ok' : 'ask';
@@ -142,6 +146,8 @@ export default function AuthConfirm() {
   async function confirm() {
     if (!link) return;
     setStatus({ kind: 'verifying' });
+    // The account this browser held before the link, if any (H6).
+    const heldAccount = session?.user.id ?? null;
     // Hold every tab's guarded routes until this link's account is settled.
     markAccountPending(ANY_ACCOUNT);
     try {
@@ -163,7 +169,11 @@ export default function AuthConfirm() {
         return;
       }
       const email = data.session.user.email ?? '';
-      const check = checkAccount(link, email);
+      const check = checkAccount(
+        link,
+        email,
+        heldAccount !== null && data.session.user.id === heldAccount,
+      );
       if (check === 'mismatch') await refuse();
       else if (check === 'ask') {
         markAccountPending(data.session.user.id);
@@ -250,7 +260,9 @@ export default function AuthConfirm() {
         <Button
           type="button"
           className="w-full"
-          disabled={verifying}
+          // Not before the stored session is read: confirm() needs to know
+          // which account this browser held (H6), and the beat is short.
+          disabled={verifying || loading}
           onClick={() => void confirm()}
         >
           {verifying && (

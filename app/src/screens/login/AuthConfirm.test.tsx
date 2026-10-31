@@ -102,6 +102,14 @@ describe('AuthConfirm', () => {
     expect(mocks.verifyOtp).not.toHaveBeenCalled();
   });
 
+  it('waits for the stored session before the Member can tap (H6: the held account must be known)', () => {
+    mocks.useAuth.mockReturnValue({ loading: true, session: null });
+    renderConfirm(inviteLink);
+    expect(
+      screen.getByRole('button', { name: 'Conectează-mă' }),
+    ).toBeDisabled();
+  });
+
   it.each(['invite', 'email', 'magiclink', 'email_change'])(
     'verifies a %s link with its token hash on tap, then follows the destination',
     async (type) => {
@@ -119,12 +127,25 @@ describe('AuthConfirm', () => {
                 session: { access_token: 'token' },
               });
               resolve({
-                data: { session: SESSION },
+                data: {
+                  session:
+                    type === 'email_change'
+                      ? { ...SESSION, user: { ...SESSION.user, id: 'self' } }
+                      : SESSION,
+                },
                 error: null,
               });
             };
           }),
       );
+      // An email change is let straight in only by the browser that already
+      // holds the account (audit 2026-10-30, H6): this one does.
+      if (type === 'email_change') {
+        mocks.useAuth.mockReturnValue({
+          loading: false,
+          session: { access_token: 'existing', user: { id: 'self' } },
+        });
+      }
       renderConfirm(
         `?token_hash=hash-123&type=${type}&redirect_to=${redirect}`,
       );
@@ -295,22 +316,29 @@ describe('AuthConfirm', () => {
       expect(mocks.signOut).not.toHaveBeenCalled();
     });
 
-    it('does not compare an email change, whose link names the old address', async () => {
-      mocks.verifyOtp.mockImplementation(async () => {
-        mocks.useAuth.mockReturnValue({
-          loading: false,
-          session: { access_token: 'token' },
-        });
-        return {
-          data: {
-            session: {
-              access_token: 'token',
-              user: { email: 'nou@exemplu.ro' },
-            },
-          },
-          error: null,
-        };
+    it('asks before an email-change link enters an account this browser did not hold (audit 2026-10-30, H6)', async () => {
+      signsIn('nou@exemplu.ro');
+      renderConfirm(
+        '?token_hash=hash-123&type=email_change&email=vechi%40exemplu.ro',
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Conectează-mă' }));
+
+      // The verified new address, never the link's old one, and no way in
+      // until confirmed: a forwarded second link is someone else's account.
+      await screen.findByRole('heading', { name: 'Confirmă contul' });
+      expect(screen.getByText('nou@exemplu.ro')).toBeVisible();
+      expect(screen.queryByText(/vechi/)).toBeNull();
+      expect(screen.queryByRole('heading', { name: 'Aplicație' })).toBeNull();
+      expect(pendingAccount()).toBe('id-nou@exemplu.ro');
+    });
+
+    it('lets an email-change link straight in when this browser already held that account', async () => {
+      mocks.useAuth.mockReturnValue({
+        loading: false,
+        session: { access_token: 'token', user: { id: 'id-nou@exemplu.ro' } },
       });
+      signsIn('nou@exemplu.ro');
       renderConfirm(
         '?token_hash=hash-123&type=email_change&email=vechi%40exemplu.ro',
       );

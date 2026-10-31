@@ -281,6 +281,23 @@ describe('AuthProvider cache hygiene', () => {
     );
   });
 
+  it('signs this device out only: the scope is local, never the default global (audit 2026-10-30, H3)', async () => {
+    const client = new QueryClient();
+    render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <SignOutButton />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(auth.listener()).not.toBeNull());
+
+    fireEvent.click(screen.getByText('Sign out'));
+
+    await waitFor(() => expect(auth.signOut).toHaveBeenCalled());
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
+
   it('marks a session ended by signOut() here, and only that one (#844, D25)', async () => {
     function SignedOutProbe() {
       const { signedOut, signOut } = useAuth();
