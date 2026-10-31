@@ -94,7 +94,8 @@ checked the Pages address only.
 ## When the gate refuses
 
 The gate runs twice: first in `report`, then again as the first step of `release` after the approval.
-A refusal is a failed job with one `::error::` annotation per reason and production untouched: in
+A refusal is a failed job with one `::error::` annotation per reason, closed by one summary annotation
+that counts them, and production untouched: in
 `report`, nobody is asked to approve; in `release` (a re-run of an old run, or `main` moved while the
 approval waited), nothing was pushed. The refusals and what each one asks of you:
 
