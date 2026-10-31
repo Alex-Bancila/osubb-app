@@ -27,9 +27,9 @@ The workflow is `.github/workflows/release-production.yml`, two jobs:
 
 1. **`report`** — no Environment, no production secret. It first runs the **gate**
    (`scripts/release-gate.sh`, #1138), which refuses the Release, naming the reason, unless all three
-   hold: every CI run for the commit concluded success; the commit is the tip of `main` at that moment;
-   and every `release/*` tag is in the commit's history. A refusal fails the job before anyone is asked to
-   approve, and touches nothing — see [When the gate refuses](#when-the-gate-refuses). Then it reads
+   hold: every CI push run for the commit concluded success; the commit is the tip of `main` at that
+   moment; and every `release/*` tag is in the commit's history. A refusal fails the job before anyone is
+   asked to approve, and touches nothing — see [When the gate refuses](#when-the-gate-refuses). Then it reads
    **git**, not production: it writes
    to the run's summary the commit going live, the migration files added and the Edge Functions whose
    code changed, all counted from the newest `release/*` tag (the first Release lists everything). After
@@ -41,14 +41,16 @@ The workflow is `.github/workflows/release-production.yml`, two jobs:
    approval is enough). Until someone approves, it has no secret and runs nothing. After approval, in
    order:
    1. checks the Environment has every secret and variable, and fails with their names if not;
-   2. `supabase link`, prints `supabase migration list` (production's own record of what is pending),
+   2. runs the gate again, before anything touches production: **Re-run failed jobs** on an old run
+      re-runs this job alone, with the run's original commit, and never revisits `report`;
+   3. `supabase link`, prints `supabase migration list` (production's own record of what is pending),
       then `supabase db push --include-all`;
-   3. `supabase functions deploy` for every function under `supabase/functions/`;
-   4. builds `app/` with the production variables — the build refuses a URL that is not exactly
+   4. `supabase functions deploy` for every function under `supabase/functions/`;
+   5. builds `app/` with the production variables — the build refuses a URL that is not exactly
       `https://<SUPABASE_PROJECT_REF>.supabase.co` and any key that is not the publishable one;
-   5. `wrangler pages deploy` to the `osubb-app` Pages project, branch `main`;
-   6. smoke checks, below;
-   7. tags the commit `release/<date>-<sha>`. A tag therefore means every step passed, and the next
+   6. `wrangler pages deploy` to the `osubb-app` Pages project, branch `main`;
+   7. smoke checks, below;
+   8. tags the commit `release/<date>-<sha>`. A tag therefore means every step passed, and the next
       Release's report counts from it.
 
 ## Reviewing and approving
@@ -91,9 +93,10 @@ checked the Pages address only.
 
 ## When the gate refuses
 
-The `report` job's first step is the gate. A refusal is a failed `report` job with one `::error::`
-annotation per reason; the `release` job never starts, nobody is asked to approve, and production is
-untouched. The three reasons and what each one asks of you:
+The gate runs twice: first in `report`, then again as the first step of `release` after the approval.
+A refusal is a failed job with one `::error::` annotation per reason and production untouched: in
+`report`, nobody is asked to approve; in `release` (a re-run of an old run, or `main` moved while the
+approval waited), nothing was pushed. The refusals and what each one asks of you:
 
 | Refusal                                                      | What it means                                                                                                                                                                       | What to do                                                                                                                                   |
 | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -102,9 +105,10 @@ untouched. The three reasons and what each one asks of you:
 | the commit is not the tip of `main`                          | an older Release run was re-run from the Actions page (**Re-run failed jobs** keeps the run's original commit), or a merge landed between the dispatch and the gate                 | never re-run an old Release; start a new one from the tip with the one command                                                               |
 | a `release/*` tag is not an ancestor of the commit           | production has run a commit this one does not contain; releasing it would roll production's functions and web app back under the newer migrations, which `db push` never re-applies | release the tip of `main`; if the tip itself is refused, history was rewritten — stop and read the rollback rules below before anything else |
 
-The gate reads CI by commit (`gh run list --commit`), the tip live from the remote, and the tags live from
-the remote: the checkout cannot fool it. `scripts/release-gate.test.sh` (`npm run test:tooling`) holds
-each refusal against a throwaway repository.
+The gate reads CI by commit (`gh run list --commit`, the push runs on `main` only, so a fork's pull
+request opened at the same commit cannot block a Release), the tip live from the remote, and the tags live
+from the remote: the checkout cannot fool it. `scripts/release-gate.test.sh` (`npm run test:tooling`)
+holds each refusal against a throwaway repository.
 
 ## When a step fails
 

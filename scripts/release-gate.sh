@@ -17,9 +17,12 @@
 #      run. Before the first Release there is no tag and nothing to check.
 #
 # It prints `::error::` lines, which GitHub turns into annotations, and exits
-# 1 on refusal. It runs in the Release workflow's `report` job, which needs no
-# Environment approval and no production secret, so a refused dispatch never
-# reaches `production`.
+# 1 on refusal. The Release workflow runs it twice: in `report`, which needs
+# no Environment approval and no production secret, so a refused dispatch
+# never asks anyone to approve; and again first thing in `release`, right
+# before `db push`, because "Re-run failed jobs" on an old run re-runs the
+# failed `release` job alone, with its original SHA, and never revisits
+# `report`.
 #
 # Usage: release-gate.sh [sha]        (default $GITHUB_SHA, then HEAD)
 # Env:   RELEASE_REMOTE=origin  RELEASE_BRANCH=main  CI_WORKFLOW=ci.yml
@@ -40,13 +43,14 @@ ok() { echo "ok    $1"; }
 
 # gh's --commit filter is the API's head_sha: a full SHA or nothing matches.
 if ! sha="$(git rev-parse --verify --quiet "${given}^{commit}")"; then
-  refuse "'$given' is not a commit in this checkout."
-  echo "::error::Release refused for '$given'. Nothing was touched."
+  echo "::error::Release refused: '$given' is not a commit in this checkout. Nothing was touched."
   exit 1
 fi
 
-# 1. CI concluded success for this commit.
-if ! runs="$(gh run list --commit "$sha" --workflow "$workflow" \
+# 1. CI concluded success for this commit. Only the push runs on the branch
+# count: a pull_request run at the same commit (a fork's PR opened at main's
+# tip) proves nothing about main and must not be able to refuse a Release.
+if ! runs="$(gh run list --commit "$sha" --workflow "$workflow" --event push --branch "$branch" \
   --json status,conclusion,url --jq '.[] | "\(.status)|\(.conclusion // "")|\(.url)"')"; then
   refuse "could not list the $workflow runs for $sha (gh run list failed; is GH_TOKEN set with actions: read?)."
 elif [ -z "$runs" ]; then
@@ -85,12 +89,14 @@ if tags="$(git ls-remote --tags --refs "$remote" 'refs/tags/release/*')"; then
     while read -r tag_sha tag_ref; do
       [ -n "$tag_ref" ] || continue
       tag="${tag_ref#refs/tags/}"
+      # An annotated tag is listed by its tag object; speak of its commit.
+      tag_commit="$(git rev-parse --verify --quiet "${tag_sha}^{commit}" 2>/dev/null || echo "$tag_sha")"
       rc=0
-      git merge-base --is-ancestor "$tag_sha" "$sha" 2>/dev/null || rc=$?
+      git merge-base --is-ancestor "$tag_commit" "$sha" 2>/dev/null || rc=$?
       case "$rc" in
-        0) ok "$tag (${tag_sha:0:7}) is in the history of $sha" ;;
-        1) refuse "the Release tag $tag (${tag_sha:0:7}) is not an ancestor of $sha: production has run a commit this one does not contain, so releasing it would roll production back." ;;
-        *) refuse "could not tell whether $tag (${tag_sha:0:7}) is an ancestor of $sha (git merge-base exited $rc; are the tags fetched?)." ;;
+        0) ok "$tag (${tag_commit:0:7}) is in the history of $sha" ;;
+        1) refuse "the Release tag $tag (${tag_commit:0:7}) is not an ancestor of $sha: production has run a commit this one does not contain, so releasing it would roll production back." ;;
+        *) refuse "could not tell whether $tag (${tag_commit:0:7}) is an ancestor of $sha (git merge-base exited $rc; are the tags fetched?)." ;;
       esac
     done <<< "$tags"
   fi
