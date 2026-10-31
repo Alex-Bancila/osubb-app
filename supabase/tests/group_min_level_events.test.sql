@@ -17,21 +17,22 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(13);
+select plan(20);
 
 -- ==================== Fixtures — prefix 11180000-… ====================
 -- 1 BC; 2 a Recrut (level 0); 3 a Voluntar (level 1); 4 a Voluntar Activ
--- (level 2), Manager of the Child Group.
+-- (level 2), Manager of the Child Group; 5 the Moderator.
 create function pg_temp.u_h2(n integer) returns uuid language sql immutable as $$
   select ('11180000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
 $$;
 insert into auth.users (id, email)
-select pg_temp.u_h2(n), 'raise.' || n || '.h2@test.local' from generate_series(1, 4) n;
+select pg_temp.u_h2(n), 'raise.' || n || '.h2@test.local' from generate_series(1, 5) n;
 insert into public.profiles (id, full_name, email, role, status)
 select pg_temp.u_h2(n), 'Raise H2 ' || n, 'raise.' || n || '.h2@test.local',
-       (case n when 1 then 'bc' when 2 then 'recrut' when 3 then 'voluntar' else 'activ' end)::member_role,
+       (case n when 1 then 'bc' when 2 then 'recrut' when 3 then 'voluntar'
+             when 5 then 'moderator' else 'activ' end)::member_role,
        'activ'::member_status
-  from generate_series(1, 4) n;
+  from generate_series(1, 5) n;
 
 insert into public.groups (name, category, min_level) values ('Raise #H2', 'team', 0);
 insert into public.groups (name, category, min_level, parent_id)
@@ -110,6 +111,14 @@ select lives_ok($$ select public.update_event((select id from public.events wher
   'moving the Event an hour with its stored level is accepted');
 reset role;
 
+-- The raise is scoped to the Child Group: its parent's Event is untouched.
+select is(pg_temp.event_level_h2('Sus #H2'), 0,
+  'the top-level Group''s Event is not touched by a Child Group''s raise');
+select pg_temp.test_login_leadership(pg_temp.u_h2(2));
+select is(pg_temp.sees_h2('Sus #H2'), 1,
+  'and the Recrut still reads it');
+reset role;
+
 -- ==================== 2. A top-level Group's level, raised by BC (update_group_structure) ====================
 
 select pg_temp.test_login_leadership(pg_temp.u_h2(1));
@@ -124,6 +133,26 @@ select pg_temp.test_login_leadership(pg_temp.u_h2(2));
 select is(pg_temp.sees_h2('Sus #H2'), 0,
   'the Recrut no longer reads the top-level Group''s Event either');
 reset role;
+
+-- ==================== 3. The Event ladder stops at 6: a raise to the Moderator's 9 lifts Events to 6 ====================
+
+select pg_temp.test_login_leadership(pg_temp.u_h2(5));
+select lives_ok($$ select public.update_group(pg_temp.grp_h2('Raise copil #H2'), 'Raise copil #H2',
+  null, null, false, null, false, 9, null, null, true) $$,
+  'the Moderator raises the Child Group to 9, confirming every removal');
+reset role;
+select is(pg_temp.event_level_h2('Copil #H2'), 6,
+  'the Child Group''s Event is lifted to 6, the top of the Event ladder, not 9');
+select is(pg_temp.event_level_h2('Copil sus #H2'), 6,
+  'and so is the one that was at 2');
+
+select pg_temp.test_login_leadership(pg_temp.u_h2(5));
+select lives_ok($$ select public.update_group_structure(pg_temp.grp_h2('Raise #H2'), 'team',
+  false, true, false, 9, null, null, false, false, true) $$,
+  'the Moderator raises the top-level Group to 9 too');
+reset role;
+select is(pg_temp.event_level_h2('Sus #H2'), 6,
+  'the top-level Group''s Event is lifted to 6 by the structure command');
 
 select * from finish();
 rollback;

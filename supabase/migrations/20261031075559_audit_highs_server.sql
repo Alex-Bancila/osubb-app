@@ -183,6 +183,17 @@ begin
     raise sqlstate 'PT409' using message = 'nothing_to_update';
   end if;
 
+  -- Review of PR #1123 (CodeRabbit): hold the Events this raise will lift
+  -- BEFORE the roster rows. update_event locks its Event first and then the
+  -- editor's roster row for share; taking them in the other order here would
+  -- form an ABBA cycle with a Responsible below the new level editing an
+  -- Event at the same moment (conventions section 2).
+  perform 1 from public.events as event
+    where event.group_id = p_group_id
+      and event.min_level < least(p_min_level, 6)
+    order by event.id
+    for no key update;
+
   select array_agg(membership.member_id order by membership.member_id)
     into v_below
     from public.group_members as membership
@@ -398,6 +409,17 @@ begin
       v_group.short, v_group.is_organization, v_group.is_private) then
     raise sqlstate 'PT409' using message = 'nothing_to_update';
   end if;
+
+  -- Review of PR #1123 (CodeRabbit): hold the Events this raise will lift
+  -- BEFORE the roster rows. update_event locks its Event first and then the
+  -- editor's roster row for share; taking them in the other order here would
+  -- form an ABBA cycle with a Responsible below the new level editing an
+  -- Event at the same moment (conventions section 2).
+  perform 1 from public.events as event
+    where event.group_id = p_group_id
+      and event.min_level < least(p_min_level, 6)
+    order by event.id
+    for no key update;
 
   select array_agg(membership.member_id order by membership.member_id)
     into v_below
