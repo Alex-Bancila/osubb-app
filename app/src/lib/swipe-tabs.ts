@@ -93,8 +93,14 @@ export function useSwipeTabs<T>({
   const last = useRef<Point | null>(null);
   function begin(event: TouchEvent<HTMLElement>) {
     const touch = event.touches[0];
+    // A sheet, dialog or popover over the panel is a React child but a DOM
+    // stranger (a portal under document.body): its touches bubble here
+    // through React, and the boundary walk below never meets the panel
+    // (audit 2026-10-30, H5). Only a finger on the panel itself swipes.
     if (
       event.touches.length !== 1 ||
+      !(event.target instanceof Node) ||
+      !event.currentTarget.contains(event.target) ||
       swipeStartsElsewhere(event.target, event.currentTarget)
     ) {
       start.current = null;

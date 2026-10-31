@@ -312,7 +312,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         signingOut.current = true;
         try {
-          const { error } = await supabase.auth.signOut();
+          // This device only (audit 2026-10-30, H3): auth-js defaults to
+          // `global`, which revokes every device's refresh token while their
+          // push registrations stay. The dialog promises this device.
+          const { error } = await supabase.auth.signOut({ scope: 'local' });
           if (error) throw error;
         } finally {
           signingOut.current = false;

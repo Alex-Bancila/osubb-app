@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { createPortal } from 'react-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { swipe } from '../test/swipe';
 import { readSwipe, swipeStartsElsewhere, useSwipeTabs } from './swipe-tabs';
@@ -94,6 +95,31 @@ describe('useSwipeTabs', () => {
       changedTouches: [{ clientX: 60, clientY: 100 }],
     });
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('leaves a swipe inside a portal alone: a sheet over the panel is not the panel (audit 2026-10-30, H5)', () => {
+    const onSelect = vi.fn();
+    function TabsWithSheet() {
+      const handlers = useSwipeTabs({
+        order: ['a', 'b', 'c'],
+        current: 'b',
+        onSelect,
+      });
+      return (
+        <div data-testid="panel" {...handlers}>
+          <p>Conținut</p>
+          {createPortal(
+            <p data-testid="sheet">Anunț deschis</p>,
+            document.body,
+          )}
+        </div>
+      );
+    }
+    render(<TabsWithSheet />);
+    swipe(screen.getByTestId('sheet'), 'left');
+    expect(onSelect).not.toHaveBeenCalled();
+    swipe(screen.getByTestId('panel'), 'left');
+    expect(onSelect).toHaveBeenLastCalledWith('c');
   });
 
   it('leaves a swipe that starts in a field, or on something that scrolls sideways, alone', () => {
