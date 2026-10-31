@@ -2603,6 +2603,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         Insert: {
           assignment_mode?: string | null
@@ -2636,6 +2637,7 @@ export type Database = {
           title: string
           type?: string | null
           unfulfilled_at?: string | null
+          updated_at?: string
         }
         Update: {
           assignment_mode?: string | null
@@ -2669,6 +2671,7 @@ export type Database = {
           title?: string
           type?: string | null
           unfulfilled_at?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
@@ -3088,6 +3091,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -3193,6 +3197,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -3263,6 +3268,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -3305,6 +3311,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -3395,6 +3402,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -3448,6 +3456,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }[]
         SetofOptions: {
           from: "*"
@@ -3617,6 +3626,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -3673,6 +3683,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }[]
         SetofOptions: {
           from: "*"
@@ -3760,6 +3771,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -3811,6 +3823,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -3853,6 +3866,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -3977,6 +3991,7 @@ export type Database = {
           task_kind: string
           title: string
           unfulfilled_at: string
+          updated_at: string
         }[]
       }
       managed_work_groups: {
@@ -4032,6 +4047,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -4163,6 +4179,7 @@ export type Database = {
           p_min_level?: number
           p_task_id: number
           p_title: string
+          p_updated_at?: string
         }
         Returns: {
           consequence: string
@@ -4365,6 +4382,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -4419,6 +4437,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -4498,6 +4517,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -4781,6 +4801,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -4869,6 +4890,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -4916,6 +4938,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -5204,6 +5227,7 @@ export type Database = {
           p_min_level?: number
           p_task_id: number
           p_title: string
+          p_updated_at?: string
         }
         Returns: {
           assignment_mode: string | null
@@ -5237,6 +5261,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
@@ -5309,6 +5334,7 @@ export type Database = {
           title: string
           type: string | null
           unfulfilled_at: string | null
+          updated_at: string
         }
         SetofOptions: {
           from: "*"

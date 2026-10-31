@@ -24,6 +24,10 @@ export type TaskUpdateInput = {
   /** **Cine îl vede** (R57): null keeps the stored Role (an Umbrella, or a
    *  row that did not carry it); 0 for a direct Task. */
   minLevel: number | null;
+  /** The `tasks.updated_at` the form was seeded from (#1132): the server
+   *  refuses `task_changed` when the row moved on since. Null for a row read
+   *  without it, which skips the check. */
+  updatedAt: string | null;
 };
 
 export type TaskUpdateConsequence = {
@@ -56,6 +60,7 @@ function commandArgs(input: TaskUpdateInput) {
     p_audience: input.audience,
     p_links: input.links,
     p_min_level: input.minLevel,
+    p_updated_at: input.updatedAt,
   } as unknown as Database['public']['Functions']['preview_task_update']['Args'];
 }
 
