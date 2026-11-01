@@ -36,7 +36,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
 
-select plan(130);
+select plan(148);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -1323,6 +1323,98 @@ select throws_ok($$ select public.approve_completed_work_request(0, 3, 3, repeat
 select throws_ok($$ select public.reject_completed_work_request(0, repeat('n', 1001)) $$,
   'PT400', 'note_too_long', 'a rejection note over 1000 characters is refused before the gate');
 reset role;
+
+
+-- ==================== 15. The predicate agrees with the decider set (#1141) ====================
+-- can_decide_request asks private.is_work_decider once, for the caller (audit
+-- M25), where it used to compute the whole decider set; the answer must not
+-- move for anyone. The sets are read as the owner, then every persona of
+-- this suite compares the predicate with their place in them over every
+-- Request the suite made, decided or not.
+create temp table deciders344 as
+  select request.id as request_id,
+         coalesce(array(select private.request_deciders(request.id)), '{}'::uuid[]) as deciders
+    from public.completed_work_requests as request
+   where request.requester_id::text like '34400000-%';
+grant select on deciders344 to authenticated, anon;
+select cmp_ok((select count(*) from deciders344), '>=', 12::bigint,
+  'the agreement is checked over every Request this suite made');
+create function pg_temp.decider_mismatches() returns bigint[] language sql stable as $$
+  select coalesce(array_agg(request_id order by request_id), '{}'::bigint[])
+    from deciders344
+   where private.can_decide_request(request_id) is distinct from (auth.uid() = any (deciders))
+$$;
+grant execute on function pg_temp.decider_mismatches() to authenticated, anon;
+
+select pg_temp.test_login('34400000-0000-0000-0000-000000000001', jsonb_build_object(
+  'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+select is(pg_temp.decider_mismatches(), '{}'::bigint[], 'the BC: the predicate agrees with the decider set on every Request');
+reset role;
+select pg_temp.test_login('34400000-0000-0000-0000-000000000002', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select is(pg_temp.decider_mismatches(), '{}'::bigint[], 'the edu BCE, a Group Manager: agrees');
+reset role;
+select pg_temp.test_login('34400000-0000-0000-0000-000000000003', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["pr"]'::jsonb, 'team_ids', '[]'::jsonb));
+select is(pg_temp.decider_mismatches(), '{}'::bigint[], 'the pr BCE, a Manager elsewhere: agrees');
+reset role;
+select pg_temp.test_login('34400000-0000-0000-0000-000000000004', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select is(pg_temp.decider_mismatches(), '{}'::bigint[], 'the requester of three Requests: agrees (never a decider of their own)');
+reset role;
+select pg_temp.test_login('34400000-0000-0000-0000-000000000005', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["pr"]'::jsonb, 'team_ids', '[]'::jsonb));
+select is(pg_temp.decider_mismatches(), '{}'::bigint[], 'an ordinary Member of another Department: agrees');
+reset role;
+select pg_temp.test_login('34400000-0000-0000-0000-000000000006', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select is(pg_temp.decider_mismatches(), '{}'::bigint[], 'the Project lead, a decider at level 1 and the requester of two: agrees');
+reset role;
+select pg_temp.test_login('34400000-0000-0000-0000-000000000007', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select is(pg_temp.decider_mismatches(), '{}'::bigint[], 'the Project Responsible, who reads but does not decide the lead''s Request: agrees');
+reset role;
+select pg_temp.test_login('34400000-0000-0000-0000-000000000008', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select is(pg_temp.decider_mismatches(), '{}'::bigint[], 'the Project member and requester: agrees');
+reset role;
+select pg_temp.test_login('34400000-0000-0000-0000-000000000009', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '["t-344-ind"]'::jsonb));
+select is(pg_temp.decider_mismatches(), '{}'::bigint[], 'an Independent-Team member: agrees');
+reset role;
+select pg_temp.test_login('34400000-0000-0000-0000-000000000012', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '["t-344-dt"]'::jsonb));
+select is(pg_temp.decider_mismatches(), '{}'::bigint[], 'a Department-Team member: agrees');
+reset role;
+select pg_temp.test_login('34400000-0000-0000-0000-000000000013', jsonb_build_object(
+  'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select is(pg_temp.decider_mismatches(), '{}'::bigint[], 'the second edu BCE: agrees');
+reset role;
+select pg_temp.test_login('34400000-0000-0000-0000-000000000014', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select is(pg_temp.decider_mismatches(), '{}'::bigint[], 'the requester whose Request was rejected: agrees');
+reset role;
+select pg_temp.test_login('34400000-0000-0000-0000-000000000016', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '[]'::jsonb, 'team_ids', '["t-344-ind"]'::jsonb));
+select is(pg_temp.decider_mismatches(), '{}'::bigint[], 'the second Independent-Team member: agrees');
+reset role;
+-- Deactivated Members keep their uid and their claims: outside both.
+select pg_temp.test_login('34400000-0000-0000-0000-000000000010', jsonb_build_object(
+  'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
+select is(pg_temp.decider_mismatches(), '{}'::bigint[], 'a deactivated BC: agrees (outside both)');
+select is((select count(*) from deciders344 where private.can_decide_request(request_id)), 0::bigint,
+  'and decides nothing');
+reset role;
+select pg_temp.test_login('34400000-0000-0000-0000-000000000017', jsonb_build_object(
+  'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
+select is(pg_temp.decider_mismatches(), '{}'::bigint[], 'a deactivated Member: agrees (outside both)');
+reset role;
+-- A claimless session decides nothing, whatever the set says (house rule 12).
+select pg_temp.test_login('34400000-0000-0000-0000-000000000001', '{}'::jsonb);
+select is((select count(*) from deciders344 where private.can_decide_request(request_id)), 0::bigint,
+  'the BC''s uid without organization claims decides nothing');
+reset role;
+
 
 select * from finish();
 rollback;
