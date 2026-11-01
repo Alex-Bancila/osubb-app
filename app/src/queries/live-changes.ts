@@ -153,7 +153,7 @@ const FAMILIES_BY_TABLE: ReadonlyMap<string, readonly Prefix[]> = new Map<
  * Tasks keep a Member's place in Taskuri încheiate at a cost of at most
  * three requests per change (#1135).
  */
-export const KEPT_PAGES = 3;
+const KEPT_PAGES = 3;
 
 /**
  * A list read by the page — the finished part of a Task list, 50 at a time

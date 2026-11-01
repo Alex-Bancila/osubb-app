@@ -180,8 +180,8 @@ describe('live change signals (#961)', () => {
 
     /**
      * De gestionat's finished part with `count` of its pages loaded (300
-     * finished Tasks, 50 a page); `listed` false drops the list's observer,
-     * as a tab the Member left does.
+     * finished Tasks, 50 a page); `listed` false disables the list's
+     * observer, so the query is inactive, as for a tab the Member left.
      */
     async function pagesLoaded(count: number) {
       const queryClient = new QueryClient({
