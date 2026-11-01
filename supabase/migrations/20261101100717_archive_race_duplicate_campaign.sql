@@ -16,7 +16,14 @@
 -- archive_group takes and with every structural write of a Group while
 -- concurrent creators share it. duplicate_task takes it after the source
 -- Task, the tasks-then-groups order create_task and update_task take;
--- archive_group never locks a tasks row, so no cycle forms. No signature
+-- archive_group never locks a tasks row, so no cycle forms with it.
+-- delete_group (mode everything) takes the opposite order -- the Group FOR NO
+-- KEY UPDATE, then its Tasks -- so a duplicate and a delete-for-good of the
+-- same Group in the same instant can deadlock, and Postgres answers one of
+-- them 40P01 (before this file the same race failed the delete with 23503,
+-- the copy having landed under it). update_task's move already meets
+-- delete_group in this order; no single order suits both, and the race is a
+-- BC deleting a Group while someone copies a Task in it. No signature
 -- changes: the grants and the tracker_grants roster are untouched.
 -- supabase/tests/archive_group_races.test.sql sections 4 and 5 failed before
 -- this file (both copies and both Campaigns landed).
@@ -163,9 +170,10 @@ begin
   -- #1127 (audit M3): no new Campaign in an archived Group, for the same
   -- reason create_task refuses one -- a state rule, after authority and the
   -- name rules, before the write. #1174: read with the Group row held FOR
-  -- SHARE (a row this command only reads; it locks no other row first), so a
-  -- concurrent archive_group serializes here and the status read is the one
-  -- it committed.
+  -- SHARE (a row this command only reads; before it the command holds only
+  -- the actor's Profile and roster rows, never a tasks row), so a concurrent
+  -- archive_group serializes here and the status read is the one it
+  -- committed.
   select grp.status into v_group_status
     from public.groups as grp where grp.id = p_group_id for share;
   if v_group_status <> 'active' then
