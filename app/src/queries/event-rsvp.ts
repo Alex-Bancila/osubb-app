@@ -154,7 +154,9 @@ export function eventRsvpMutationOptions(
   queryClient: QueryClient,
   memberId: string | undefined,
 ) {
+  const mutationKey = ['event-rsvp', { memberId }] as const;
   return {
+    mutationKey,
     mutationFn: setEventRsvp,
     onMutate: async ({
       eventId,
@@ -234,6 +236,24 @@ export function eventRsvpMutationOptions(
           queryKey: keys.events.attendance(eventId, memberId),
         }),
       ]);
+      // Another card's save still on its way has not reached the server, so
+      // the read just made lacks its answer: it stays on screen until that
+      // save settles in turn.
+      const siblings = queryClient
+        .getMutationCache()
+        .findAll({ mutationKey, status: 'pending' })
+        .map((mutation) => mutation.state.variables as SetEventRsvpInput)
+        .filter((input) => input && input.eventId !== eventId);
+      if (siblings.length > 0)
+        queryClient.setQueryData<MyEventAnswers>(
+          keys.events.answers(memberId),
+          (current) => {
+            if (!current) return current;
+            const next = new Map(current);
+            for (const input of siblings) next.set(input.eventId, input.status);
+            return next;
+          },
+        );
     },
   } as const;
 }
@@ -246,6 +266,8 @@ export type MyEventAnswersRead = {
   data: MyEventAnswers | undefined;
   isPending: boolean;
   isError: boolean;
+  /** Reads them again: a failed read closes every card's answers. */
+  refetch: () => unknown;
 };
 
 /**

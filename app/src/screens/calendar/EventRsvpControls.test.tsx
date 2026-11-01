@@ -266,6 +266,22 @@ describe('EventRsvpControls', () => {
     expect(supabaseMock.rpc).not.toHaveBeenCalled();
   });
 
+  // One failed read closes every card's answers: each offers the way back.
+  it('reads the answers again from the card when they could not be read', async () => {
+    const user = userEvent.setup();
+    supabaseMock.range.mockImplementationOnce(() =>
+      Promise.resolve({ data: null, error: { code: '500', message: 'down' } }),
+    );
+    renderControls();
+    await screen.findByText('Răspuns indisponibil');
+
+    await user.click(screen.getByRole('button', { name: 'Reîncearcă' }));
+
+    await loaded();
+    expect(answer('Particip')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('Răspuns indisponibil')).toBeNull();
+  });
+
   it('shows the failure and puts the earlier answer back', async () => {
     const user = userEvent.setup();
     supabaseMock.rpc.mockResolvedValueOnce({

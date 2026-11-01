@@ -1,4 +1,8 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  QueryObserver,
+} from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,6 +20,7 @@ vi.mock('../lib/auth', () => ({ useAuth: auth.useAuth }));
 
 import {
   EventRsvpMutationError,
+  type EventRsvp,
   eventRsvpMutationOptions,
   fetchMyEventAnswers,
   goingEventIds,
@@ -297,6 +302,57 @@ describe('RSVP mutation', () => {
       [42, 'going'],
       [43, 'declined'],
     ]);
+  });
+
+  // A save that settles reads every answer again; a sibling card's save
+  // still on its way has not reached the server, so the read would take its
+  // answer off the screen until that save settles too.
+  it('keeps a sibling card’s answer on screen while its save is still on its way', async () => {
+    const queryClient = new QueryClient();
+    const answersKey = ['events', 'answers', { memberId }];
+    const server = new Map<number, 'going' | 'declined'>([
+      [42, 'going'],
+      [43, 'declined'],
+    ]);
+    const unsubscribe = new QueryObserver(queryClient, {
+      queryKey: answersKey,
+      queryFn: async () => new Map(server),
+    }).subscribe(() => undefined);
+    await waitFor(() =>
+      expect(queryClient.getQueryData(answersKey)).toBeDefined(),
+    );
+    // Each save waits until the test lets its write reach the server.
+    const writes = new Map<number, () => void>();
+    const options = {
+      ...eventRsvpMutationOptions(queryClient, memberId),
+      mutationFn: (input: { eventId: number; status: 'going' | 'declined' }) =>
+        new Promise<EventRsvp>((resolve) => {
+          writes.set(input.eventId, () => {
+            server.set(input.eventId, input.status);
+            resolve({ ...input, memberId, checkedIn: false });
+          });
+        }),
+    };
+    const cache = queryClient.getMutationCache();
+    const fortyTwo = cache
+      .build(queryClient, options)
+      .execute({ eventId: 42, status: 'declined' });
+    const fortyThree = cache
+      .build(queryClient, options)
+      .execute({ eventId: 43, status: 'going' });
+    await waitFor(() => expect(writes.size).toBe(2));
+    const answer = (eventId: number) =>
+      queryClient.getQueryData<Map<number, string>>(answersKey)?.get(eventId);
+
+    writes.get(42)?.();
+    await fortyTwo;
+    expect(answer(42)).toBe('declined');
+    expect(answer(43)).toBe('going');
+
+    writes.get(43)?.();
+    await fortyThree;
+    expect(answer(43)).toBe('going');
+    unsubscribe();
   });
 
   it('writes a first answer into the member’s answers, which joins the Vin set', async () => {

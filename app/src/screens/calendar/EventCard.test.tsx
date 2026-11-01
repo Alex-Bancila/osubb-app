@@ -16,7 +16,12 @@ vi.mock('./EventManageControls', () => ({ EventManageControls: () => null }));
 import EventCard from './EventCard';
 
 /** The list's answers read; the RSVP controls themselves are stubbed here. */
-const ANSWERS = { data: new Map(), isPending: false, isError: false };
+const ANSWERS = {
+  data: new Map(),
+  isPending: false,
+  isError: false,
+  refetch: () => undefined,
+};
 
 function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
   return {

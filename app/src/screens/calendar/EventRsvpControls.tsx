@@ -154,6 +154,18 @@ export default function EventRsvpControls({
               : 'Răspuns indisponibil'}
           </span>
         )}
+        {/* The read is the list's: one failure closes every card's answers,
+            and any of them can ask for it again. */}
+        {answers.isError && (
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            onClick={() => void answers.refetch()}
+          >
+            Reîncearcă
+          </Button>
+        )}
       </div>
 
       {/* Seen and announced: the live region stays mounted so each new
