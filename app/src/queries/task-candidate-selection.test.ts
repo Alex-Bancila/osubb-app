@@ -121,3 +121,25 @@ it('passes the refusal reason through from the command', async () => {
     message: 'Candidatul nu mai face parte din grup.',
   });
 });
+
+// #1143 (audit M27): every other refusal reads its own copy from the table;
+// the class's words are the fallback for a reason with no copy. The two
+// Candidate-eligibility reasons above keep the sheet's own words: the table's
+// copy for them speaks to the Member joining, and here they are about the
+// Candidate.
+it('reads a refusal in its own copy, and the class only as the fallback (#1143)', () => {
+  const refused = taskCandidateSelectionError('PT409', 'candidate_not_pending');
+  expect(refused.kind).toBe('conflict');
+  expect(refused.message).toBe(
+    'Candidatura nu mai este în coadă: a fost retrasă sau aleasă între timp.',
+  );
+  expect(taskCandidateSelectionError('PT409', 'task_in_review').message).toBe(
+    'Taskul este în verificare și nu mai poate fi editat. Verifică starea actuală.',
+  );
+  expect(taskCandidateSelectionError('PT409', 'some_new_reason').message).toBe(
+    'Coada s-a schimbat. Lista a fost actualizată.',
+  );
+  expect(
+    taskCandidateSelectionError('42501', 'task_audience_forbidden').message,
+  ).toBe('Candidatul nu mai face parte din grup.');
+});

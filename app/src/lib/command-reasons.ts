@@ -768,6 +768,115 @@ const REASON_COPY = new Map<string, string>([
     'privacy_acknowledgements_forbidden',
     'Doar BC și Moderatorul văd confirmările politicii de confidențialitate.',
   ],
+  /*
+   * ---- #1143 (audit M27, L83): the refusals that had no copy ----
+   * The audit's 22 (event_not_visible is now event_not_found, above), then
+   * every other reason a client-callable command raises, found by the gate in
+   * command-reasons.test.ts. Malformed input the app never sends still reads
+   * as a sentence, never as the reason.
+   */
+  // The Candidate Queue and the Task lifecycle.
+  ['already_candidate', 'Ești deja în coada acestui task.'],
+  ['already_executor', 'Ești deja executorul acestui task.'],
+  [
+    'candidate_not_pending',
+    'Candidatura nu mai este în coadă: a fost retrasă sau aleasă între timp.',
+  ],
+  ['not_a_candidate', 'Nu mai ești în coada acestui task.'],
+  ['task_queue_closed', 'Coada taskului s-a închis. Nu te mai poți înscrie.'],
+  [
+    'task_not_public',
+    'Taskul e atribuit direct, așa că nu are coadă de înscriere.',
+  ],
+  // Also the table's word for select_task_candidate; its sheet names the
+  // Candidate instead (queries/task-candidate-selection.ts).
+  ['task_audience_forbidden', 'Taskul e doar pentru membrii grupului lui.'],
+  ['task_executor_forbidden', 'Doar executorul taskului poate face asta.'],
+  ['task_not_todo', 'Taskul a fost deja început. Verifică starea actuală.'],
+  [
+    'task_not_in_progress',
+    'Taskul nu mai este în lucru. Verifică starea actuală.',
+  ],
+  [
+    'task_not_in_review',
+    'Taskul nu mai este în verificare. Verifică starea actuală.',
+  ],
+  [
+    'task_already_evaluated',
+    'Taskul a fost deja evaluat. Verifică starea actuală.',
+  ],
+  [
+    'task_has_no_executor',
+    'Taskul nu are un executor. Verifică starea actuală.',
+  ],
+  ['task_not_overdue', 'Termenul taskului nu a trecut încă.'],
+  [
+    'task_not_evaluated',
+    'Doar un task încheiat poate fi redeschis. Verifică starea actuală.',
+  ],
+  [
+    'umbrella_cancelled',
+    'Taskul-umbrelă a fost anulat, așa că subtaskul lui nu poate fi redeschis.',
+  ],
+  [
+    'task_update_needs_confirmation',
+    'Modificarea afectează acum alți membri. Verifică și confirmă din nou.',
+  ],
+  ['invalid_close_flag', 'Alege ce se întâmplă cu candidații rămași.'],
+  ['invalid_queue_flag', 'Alege dacă deschizi sau închizi coada.'],
+  [
+    'invalid_links',
+    'Linkurile atașate nu sunt valide. Reîncarcă pagina și încearcă din nou.',
+  ],
+  // Lists and pages the app asks for.
+  ['invalid_list', 'Lista cerută nu este validă. Reîncarcă pagina.'],
+  ['invalid_state', 'Filtrul de stare nu este valid. Reîncarcă pagina.'],
+  ['invalid_sort', 'Ordinea cerută nu este validă. Reîncarcă pagina.'],
+  ['invalid_page', 'Pagina cerută nu este validă. Reîncarcă pagina.'],
+  ['too_many_ids', 'Prea multe elemente deodată. Reîncarcă pagina.'],
+  [
+    'campaign_report_forbidden',
+    'Nu mai ai permisiunea să vezi raportul acestei campanii.',
+  ],
+  // Groups.
+  [
+    'group_cycle',
+    'Un grup nu poate fi mutat sub unul dintre subgrupurile lui.',
+  ],
+  ['group_parent_not_found', 'Grupul părinte nu mai există. Reîncarcă pagina.'],
+  ['invalid_group_organization', 'Alege dacă grupul este grupul organizației.'],
+  ['invalid_decision_note', 'Nota nu poate conține doar spații.'],
+  // Announcements and Deals.
+  ['announcement_group_immutable', 'Grupul anunțului nu se mai poate schimba.'],
+  [
+    'announcement_audience_immutable',
+    'Audiența anunțului nu se mai poate schimba.',
+  ],
+  [
+    'announcement_kind_immutable',
+    'Un anunț nu poate deveni deal, nici un deal anunț.',
+  ],
+  ['deal_not_found', 'Dealul nu mai există. Reîncarcă pagina.'],
+  [
+    'deal_code_forbidden',
+    'Doar BC, Moderatorul și echipa OSUBB Deals văd codurile dealurilor.',
+  ],
+  ['invalid_team_role', 'Alege rolul din echipă: coordonator sau responsabil.'],
+  ['invalid_team_member', 'Membrul ales nu mai este activ.'],
+  // The Calendar, Notifications, Members, the account.
+  ['invalid_rsvp_status', 'Alege dacă participi sau nu.'],
+  ['invalid_subject', 'Notificările alese nu sunt valide. Reîncarcă pagina.'],
+  [
+    'notification_read_forbidden',
+    'Contul tău nu este activ, așa că notificările nu pot fi marcate ca citite.',
+  ],
+  [
+    'push_subscription_invalid',
+    'Browserul a dat o adresă de notificări care nu e validă. Încearcă din nou.',
+  ],
+  ['invalid_member_role', 'Alege un rol din listă.'],
+  ['invalid_member_status', 'Alege o stare din listă.'],
+  ['not_active_member', 'Contul tău nu este activ.'],
 ]);
 
 /** Every reason with copy, for tests that prove a list of reasons is covered. */

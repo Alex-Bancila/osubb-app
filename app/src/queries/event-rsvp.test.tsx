@@ -176,6 +176,40 @@ describe('RSVP mutation', () => {
     },
   );
 
+  // #1143 (audit M27): the reason the command refused with reads its own
+  // copy; the class's words above are only the fallback.
+  it.each([
+    [
+      'PT404',
+      'event_not_found',
+      'event-unavailable',
+      'Evenimentul nu mai este disponibil. Reîncarcă pagina.',
+    ],
+    [
+      'PT400',
+      'invalid_rsvp_status',
+      'invalid-status',
+      'Alege dacă participi sau nu.',
+    ],
+    ['42501', 'not_active_member', 'forbidden', 'Contul tău nu este activ.'],
+  ] as const)(
+    'reads %s %s in its own copy',
+    async (code, reason, kind, copy) => {
+      supabaseMock.rpc.mockResolvedValue({
+        data: null,
+        error: { code, message: reason },
+      });
+
+      const failure = await setEventRsvp({
+        eventId: 42,
+        status: 'going',
+      }).catch((error: unknown) => error);
+
+      expect(failure).toBeInstanceOf(EventRsvpMutationError);
+      expect(failure).toMatchObject({ kind, message: copy });
+    },
+  );
+
   it('reads the member and event, their Vin set, and the Event’s Cine participă again once settled', async () => {
     const queryClient = new QueryClient();
     const invalidate = vi

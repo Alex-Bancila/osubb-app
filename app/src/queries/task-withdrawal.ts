@@ -7,7 +7,7 @@ export async function withdrawTaskInterest(taskId: number): Promise<void> {
   const { error } = await supabase.rpc('withdraw_task_interest', {
     p_task_id: taskId,
   });
-  if (error) throw taskInterestError(error.code);
+  if (error) throw taskInterestError(error.code, error.message);
 }
 export function useWithdrawTaskInterest() {
   const client = useQueryClient();
