@@ -23,7 +23,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(21);
+select plan(22);
 
 -- ==================== Fixtures ====================
 -- 01 BC; 02 the Moderator; 03 a Volunteer with no authority anywhere.
@@ -42,17 +42,23 @@ values ('Arhivat #1127', 'team', true), ('Activ #1127', 'team', true);
 -- reads, however the Group got there.
 update public.groups set status = 'archived' where name = 'Arhivat #1127';
 
--- One direct todo Task in each Group, to duplicate.
+-- One direct todo Task in each Group, to duplicate, and an open Umbrella in
+-- the archived one: a Subtask inherits its Group, so it is judged the same.
 insert into public.tasks (title, description, deadline, group_id, audience, assignment_mode, status, created_by)
 select 'Sursa ' || grp.name, 'De copiat', '2027-03-01 09:00:00+00', grp.id, 'local', 'direct', 'todo',
        '11270000-0000-0000-0000-000000000001'
   from public.groups as grp where grp.name in ('Arhivat #1127', 'Activ #1127');
+insert into public.tasks (title, group_id, kind, audience, assignment_mode, status, created_by)
+select 'Umbrela Arhivat #1127', grp.id, 'umbrella', null, null, 'todo',
+       '11270000-0000-0000-0000-000000000001'
+  from public.groups as grp where grp.name = 'Arhivat #1127';
 
 create temp table f1127 as
 select (select id from public.groups where name = 'Arhivat #1127') as archived_id,
        (select id from public.groups where name = 'Activ #1127') as active_id,
        (select id from public.tasks where title = 'Sursa Arhivat #1127') as archived_source_id,
-       (select id from public.tasks where title = 'Sursa Activ #1127') as active_source_id;
+       (select id from public.tasks where title = 'Sursa Activ #1127') as active_source_id,
+       (select id from public.tasks where title = 'Umbrela Arhivat #1127') as archived_umbrella_id;
 grant select on f1127 to authenticated;
 
 -- ==================== 1. managed_work_groups() says which Groups are archived ====================
@@ -77,10 +83,14 @@ select throws_ok(format($$ select public.duplicate_task(%s, now() + interval '7 
   (select archived_source_id from f1127)),
   'PT409', 'group_archived',
   'BC cannot duplicate a Task whose copy would land in an archived Group');
-select throws_ok(format($$ select public.create_campaign(%s, 'Campanie #1127') $$,
+select throws_ok(format($ select public.create_campaign(%s, 'Campanie #1127') $,
   (select archived_id from f1127)),
   'PT409', 'group_archived',
   'BC cannot create a Campaign in an archived Group');
+select throws_ok(format($ select public.create_task('Subtask nou #1127', null, now() + interval '7 days', 'local', 'direct', null, null, %s, 'task', null) $,
+  (select archived_umbrella_id from f1127)),
+  'PT409', 'group_archived',
+  'nor a Subtask under an Umbrella that sits in one -- the Group it inherits is judged, not the argument');
 reset role;
 
 -- ==================== 3. The Moderator: the same three ====================
