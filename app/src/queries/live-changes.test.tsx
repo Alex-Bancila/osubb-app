@@ -171,6 +171,22 @@ describe('live change signals (#961)', () => {
     expect(invalidate).toHaveBeenCalledWith();
   });
 
+  // Fails if a reconnect leaves the signals it already covers queued: their
+  // flush would read every family again 250 ms after the full refetch.
+  it('drops the signals a reconnect already covers', async () => {
+    const { invalidate } = setup();
+    const { onChange, onStatus } = await joined();
+    act(() => onStatus('SUBSCRIBED'));
+
+    act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
+    act(() => onStatus('CHANNEL_ERROR'));
+    act(() => onStatus('SUBSCRIBED'));
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(invalidate).toHaveBeenCalledWith();
+  });
+
   describe('the finished part of a Task list, read by the page (#1053, #1135)', () => {
     /** The `p_offset` of every `task_list` request, in order. */
     const taskListOffsets = () =>
@@ -272,6 +288,57 @@ describe('live change signals (#961)', () => {
       expect(taskListOffsets()).toEqual([0, 50, 100]);
       expect(
         queryClient.getQueryData<InfiniteData<unknown>>(queryKey)?.pages,
+      ).toHaveLength(1);
+    });
+
+    // Fails if a list with no observer at all keeps its pages: the cache
+    // of a tab the Member closed would read three pages again on return.
+    it('cuts a cached list with no observer to its first page', async () => {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      );
+      supabaseMock.rpc.mockImplementation(
+        (_name: string, args: { p_offset: number }) =>
+          Promise.resolve({
+            data: Array.from({ length: FINISHED_PAGE }, (_, index) => ({
+              id: args.p_offset + index + 1,
+              executor: null,
+              total: 300,
+            })),
+            error: null,
+          }),
+      );
+      const options = finishedTasksQueryOptions('managed', {}, memberId);
+      // The live hook stays mounted on its own; only the list goes.
+      renderHook(() => useLiveChanges(memberId), { wrapper });
+      const list = renderHook(() => useInfiniteQuery(options), { wrapper });
+      await waitFor(() =>
+        expect(list.result.current.data?.pages).toHaveLength(1),
+      );
+      for (let page = 2; page <= 3; page += 1) {
+        await act(() => list.result.current.fetchNextPage());
+        await waitFor(() =>
+          expect(list.result.current.data?.pages).toHaveLength(page),
+        );
+      }
+      const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+      const { onChange } = await joined();
+      list.unmount();
+
+      act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
+
+      await waitFor(() =>
+        expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.tasks.all }),
+      );
+      expect(taskListOffsets()).toEqual([0, 50, 100]);
+      expect(
+        queryClient.getQueryData<InfiniteData<unknown>>(options.queryKey)
+          ?.pages,
       ).toHaveLength(1);
     });
 

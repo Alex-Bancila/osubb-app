@@ -235,6 +235,11 @@ export function useLiveChanges(memberId?: string) {
           },
           onResubscribe: () => {
             if (!active) return;
+            // Everything is read again: the signals still collected are
+            // covered, and their flush would read the same families twice.
+            clearTimeout(timer);
+            timer = undefined;
+            pending.clear();
             for (const [, pages] of PAGED_LISTS) keepPages(queryClient, pages);
             void queryClient.invalidateQueries();
           },
