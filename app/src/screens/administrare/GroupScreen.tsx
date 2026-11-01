@@ -355,15 +355,32 @@ export default function GroupScreen() {
     }
   }
 
+  // #1129: the settings name the board and AG Groups, so until they are read
+  // the page cannot tell a protected Group; isLoading (not isPending), because
+  // a query without a signed-in Member stays pending without ever fetching.
   if (
     parsedId !== null &&
     (groupsQuery.isPending ||
       myGroupsQuery.isPending === true ||
-      capabilities.isPending === true)
+      capabilities.isPending === true ||
+      orgSettings.isLoading)
   )
     return (
       <Page aria-label="Grup">
         <Loading label="Se încarcă grupul…" />
+      </Page>
+    );
+
+  // A refetch that fails keeps the settings already read; only a first read
+  // that fails leaves the page unable to decide.
+  if (orgSettings.isError && orgSettings.data === undefined)
+    return (
+      <Page>
+        <BackToGroups />
+        <PageHeader title="Grup" />
+        <p role="alert">
+          Nu am putut încărca setările organizației. Reîncearcă.
+        </p>
       </Page>
     );
 

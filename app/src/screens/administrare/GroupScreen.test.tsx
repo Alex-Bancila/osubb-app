@@ -608,6 +608,31 @@ it('offers no Arhivează on a protected Group, in its Setări or in the parent S
   ).toBeNull();
 });
 
+it('holds the page while the settings load and says so when their first read fails (#1129)', async () => {
+  api.orgSettings.mockReturnValue({
+    data: undefined,
+    isPending: true,
+    isLoading: true,
+    isError: false,
+  });
+  const loading = show(2);
+  expect(screen.getByText('Se încarcă grupul…')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Arhivează grupul' })).toBeNull();
+  loading.unmount();
+
+  api.orgSettings.mockReturnValue({
+    data: undefined,
+    isPending: false,
+    isLoading: false,
+    isError: true,
+  });
+  show(2);
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Nu am putut încărca setările organizației. Reîncearcă.',
+  );
+  expect(screen.queryByRole('button', { name: 'Arhivează grupul' })).toBeNull();
+});
+
 it('archives through the command and explains unfinished work in the Group', async () => {
   const user = userEvent.setup();
   api.mutate.mockRejectedValue(

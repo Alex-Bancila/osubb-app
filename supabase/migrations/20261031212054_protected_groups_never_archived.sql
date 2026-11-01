@@ -17,7 +17,9 @@
 --    so delete_group and group_delete_preview decide as before, and
 --    archive_group now reads it too.
 -- 2. archive_group refuses PT409 group_protected after its authority check and
---    the subtree lock, before any write.
+--    the subtree lock, before any write; it holds the two naming settings FOR
+--    SHARE first, so a Group named board or AG while it runs is protected or
+--    the naming waits (review of PR #1161).
 -- 3. update_group_structure refuses a null p_is_organization (PT400
 --    invalid_group_organization, the invalid_group_privacy shape) and refuses
 --    clearing the marker on the Organization Group (PT409 group_protected):
@@ -122,6 +124,19 @@ declare
   v_event_id    bigint;
   v_application record;
 begin
+  -- #1129 (review of PR #1161): hold the two settings that name a protected
+  -- Group FOR SHARE before the Group lock. set_org_setting_impl locks its
+  -- setting row FOR UPDATE and then the Group it names FOR KEY SHARE, which
+  -- no lock below conflicts with -- so without this a descendant named board
+  -- or AG while the archive runs would commit after the protection check and
+  -- be archived, its future Events cancelled for good. Settings first, then
+  -- the Group: set_org_setting_impl's own order, so the two never cycle.
+  perform 1
+     from public.org_settings as setting
+    where setting.key in ('board_group_id', 'adunarea_generala_group_id')
+    order by setting.key
+      for share;
+
   select * into v_group from public.groups where id = p_group_id for update;
   if not found then
     raise exception using errcode = '42501', message = 'group_manage_forbidden';
@@ -238,7 +253,7 @@ end;
 $function$;
 
 comment on function public.archive_group(bigint) is
-  'Archives a Group and every Group below it (#582, ADR-0009). A top-level Group is BC''s and the Moderator''s; a Child Group belongs to its Managers through private.require_group_manager. Unknown and unauthorized are the same 42501 group_manage_forbidden; an already-archived Group is PT409 group_already_archived. PT409 group_protected (#1129) for the Organization Group, an Automatic-Membership Group, the board Group or Adunarea Generală set in Setări, or a Group above one -- private.is_protected_group, the set delete_group refuses -- because the cancellations below are never undone (unarchive_group, ruling R65). ARCHIVING NEVER CANCELS A TASK (ruling R21): while the Group or any descendant holds a Task that is not completed, unfulfilled or cancelled, or a Completed-work Request still pending, the command refuses with PT409 group_has_open_work and the Manager finishes or cancels that work first, with the reasons the Tracker already demands. What has no executor it settles itself, in the same transaction: EVERY future Event of the subtree is cancelled with the reason "Grup arhivat" through private.cancel_event_effect -- the shared write-and-fan-out that carries no gate of its own -- while past Events stay as history; every pending Application of the subtree is declined with the archiver as decider and the applicant notified (#584, ruling R30); then the status cascades to the whole subtree in ONE statement, because can_manage_group_work reads the target Group''s status alone and a live Child Group under an archived parent would otherwise stay manageable (ruling R19). It deliberately does NOT go through private.cancel_event_impl: that command re-decides authority per Event from the actor, so it would refuse a Group Manager who did not create an Organization Event and answer PT404 event_not_found for any Event raised above the archiver''s own Minimum Level, aborting the whole archive with a reason that names neither the Group nor the cause. The authority for these cancellations is the GROUP, which the archiver already passed require_group_manager on, so no Event-visibility rule applies inside the cascade and the archiver''s own Level is irrelevant to it.';
+  'Archives a Group and every Group below it (#582, ADR-0009). A top-level Group is BC''s and the Moderator''s; a Child Group belongs to its Managers through private.require_group_manager. Unknown and unauthorized are the same 42501 group_manage_forbidden; an already-archived Group is PT409 group_already_archived. PT409 group_protected (#1129) for the Organization Group, an Automatic-Membership Group, the board Group or Adunarea Generală set in Setări, or a Group above one -- private.is_protected_group, the set delete_group refuses -- because the cancellations below are never undone (unarchive_group, ruling R65); the two naming settings are held FOR SHARE before the Group lock, so a Group named board or AG while the archive runs is protected or the naming waits. ARCHIVING NEVER CANCELS A TASK (ruling R21): while the Group or any descendant holds a Task that is not completed, unfulfilled or cancelled, or a Completed-work Request still pending, the command refuses with PT409 group_has_open_work and the Manager finishes or cancels that work first, with the reasons the Tracker already demands. What has no executor it settles itself, in the same transaction: EVERY future Event of the subtree is cancelled with the reason "Grup arhivat" through private.cancel_event_effect -- the shared write-and-fan-out that carries no gate of its own -- while past Events stay as history; every pending Application of the subtree is declined with the archiver as decider and the applicant notified (#584, ruling R30); then the status cascades to the whole subtree in ONE statement, because can_manage_group_work reads the target Group''s status alone and a live Child Group under an archived parent would otherwise stay manageable (ruling R19). It deliberately does NOT go through private.cancel_event_impl: that command re-decides authority per Event from the actor, so it would refuse a Group Manager who did not create an Organization Event and answer PT404 event_not_found for any Event raised above the archiver''s own Minimum Level, aborting the whole archive with a reason that names neither the Group nor the cause. The authority for these cancellations is the GROUP, which the archiver already passed require_group_manager on, so no Event-visibility rule applies inside the cascade and the archiver''s own Level is irrelevant to it.';
 
 -- ==================== 3. update_group_structure: the Organization marker ====================
 
