@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import {
+  focusManager,
   useQueryClient,
   type InfiniteData,
   type QueryClient,
@@ -147,28 +148,40 @@ const FAMILIES_BY_TABLE: ReadonlyMap<string, readonly Prefix[]> = new Map<
 ]);
 
 /**
+ * How many loaded pages a list read by the page keeps over a change while
+ * someone is looking at it, to be read again in place: three pages of 50
+ * Tasks keep a Member's place in Taskuri încheiate at a cost of at most
+ * three requests per change (#1135).
+ */
+export const KEPT_PAGES = 3;
+
+/**
  * A list read by the page — the finished part of a Task list, 50 at a time
  * (#1053) — is an infinite query, and a refetch of one reads again every
  * page it has loaded. Before its family is invalidated, each such list under
- * `queryKey` keeps only its first page, so a change costs one request per
- * list; the next pages are read again as the Member scrolls to them. The
- * first page stays on screen meanwhile.
+ * `queryKey` is cut to the pages it keeps, which the invalidation then reads
+ * again in place: up to `KEPT_PAGES` while the list is on screen, so a
+ * Member scrolled into Taskuri încheiate keeps their place over a Task
+ * changed anywhere (#1135); its first page alone when nobody is looking —
+ * no observer (a tab the Member left) or a hidden document
+ * (`focusManager`) — so a change costs it at most one request. The pages
+ * dropped are read again as the Member scrolls to them.
  *
- * The Anunțuri feed (R56) is not cut: a Member reading its fifth page would
- * lose their place over any Announcement, Group or roster changed anywhere.
- * A change reads every page it has loaded again instead.
+ * The Anunțuri feed (R56) is not cut at all: a Member reading its fifth
+ * page would lose their place over any Announcement, Group or roster
+ * changed anywhere. A change reads every page it has loaded again instead.
  */
-function keepFirstPages(queryClient: QueryClient, queryKey: QueryKey) {
-  queryClient.setQueriesData<InfiniteData<unknown, unknown>>(
-    { queryKey },
-    (data) =>
-      data && data.pages.length > 1
-        ? {
-            pages: data.pages.slice(0, 1),
-            pageParams: data.pageParams.slice(0, 1),
-          }
-        : undefined,
-  );
+function keepPages(queryClient: QueryClient, queryKey: QueryKey) {
+  const looking = focusManager.isFocused();
+  for (const query of queryClient.getQueryCache().findAll({ queryKey })) {
+    const data = query.state.data as InfiniteData<unknown, unknown> | undefined;
+    const kept = looking && query.isActive() ? KEPT_PAGES : 1;
+    if (!data || data.pages.length <= kept) continue;
+    queryClient.setQueryData<InfiniteData<unknown, unknown>>(query.queryKey, {
+      pages: data.pages.slice(0, kept),
+      pageParams: data.pageParams.slice(0, kept),
+    });
+  }
 }
 
 /** Each list read by the page, beside the family whose change re-reads it. */
@@ -203,7 +216,7 @@ export function useLiveChanges(memberId?: string) {
       }
       pending.clear();
       for (const [family, pages] of PAGED_LISTS)
-        if (prefixes.has(family)) keepFirstPages(queryClient, pages);
+        if (prefixes.has(family)) keepPages(queryClient, pages);
       for (const queryKey of prefixes) {
         void queryClient.invalidateQueries({ queryKey });
       }
@@ -222,8 +235,7 @@ export function useLiveChanges(memberId?: string) {
           },
           onResubscribe: () => {
             if (!active) return;
-            for (const [, pages] of PAGED_LISTS)
-              keepFirstPages(queryClient, pages);
+            for (const [, pages] of PAGED_LISTS) keepPages(queryClient, pages);
             void queryClient.invalidateQueries();
           },
         });
