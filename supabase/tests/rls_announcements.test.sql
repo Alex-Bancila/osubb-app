@@ -4,7 +4,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(41);
+select plan(50);
 truncate announcements, announcement_reads cascade;
 
 insert into auth.users(id,email) values
@@ -199,6 +199,66 @@ delete from announcements where title='Responsible Organization #581';
 reset role;
 select is((select count(*) from announcements where title='Responsible Organization #581'),0::bigint,
 'and deletes it');
+
+-- #1126 (audit M2): a Group Manager or Responsible appointed ON the Organization
+-- Group (R48 allows the position, for org-wide Tasks) manages its work, not its
+-- Announcements -- the rule private.can_manage_event already applies to
+-- Organization Group Events. f9 is a Voluntar appointed Responsible of OSUBB
+-- and of Imagine & PR; 'Moderator Organization #1126' is the Moderator's,
+-- published, so f9 reads it and only the policies decide.
+insert into auth.users(id,email) values ('f9000000-0000-0000-0000-0000000000f9','ann581-orgresp@test.local');
+insert into profiles(id,full_name,email,role,status) values
+('f9000000-0000-0000-0000-0000000000f9','Org Responsible','ann581-orgresp@test.local','voluntar','activ');
+insert into group_members(group_id,member_id,group_role,position_title)
+select id,'f9000000-0000-0000-0000-0000000000f9'::uuid,'responsible','Responsabil OSUBB' from groups where is_organization
+union all select id,'f9000000-0000-0000-0000-0000000000f9'::uuid,'responsible','Responsabil PR' from groups where name = 'Imagine & PR';
+select pg_temp.test_clear_jwt();
+insert into announcements(title,body,group_id,created_by)
+select 'Moderator Organization #1126','by the Moderator',id,'f8000000-0000-0000-0000-0000000000f8' from groups where is_organization;
+select pg_temp.test_publish_announcement('Moderator Organization #1126');
+
+select pg_temp.test_login_leadership('f9000000-0000-0000-0000-0000000000f9');
+select is((select count(*) from announcements where title='Moderator Organization #1126'),1::bigint,
+'a Responsible appointed on the Organization Group reads the Moderator''s organisation-wide Announcement');
+select lives_ok($$update announcements set body='edited by the Organization Responsible' where title='Moderator Organization #1126'$$,
+  'their edit of it matches no row -- refused by the policy, not by an error after the fact');
+reset role;
+select is((select body from announcements where title='Moderator Organization #1126'),'by the Moderator',
+'but cannot edit another author''s organisation-wide Announcement, the Moderator''s included (#1126)');
+
+select pg_temp.test_login_leadership('f9000000-0000-0000-0000-0000000000f9');
+delete from announcements where title='Moderator Organization #1126';
+insert into announcements(title,body,group_id)
+select 'Org Responsible own #1126','x',id from groups where is_organization;
+update announcements set body='edited by its author' where title='Org Responsible own #1126';
+update announcements set body='edited by the PR Responsible' where title='PR #581';
+reset role;
+select is((select count(*) from announcements where title='Moderator Organization #1126'),1::bigint,
+'nor delete it');
+select is((select body from announcements where title='Org Responsible own #1126'),'edited by its author',
+'while they still edit their own organisation-wide Announcement (R48)');
+select is((select body from announcements where title='PR #581'),'edited by the PR Responsible',
+'and still manage a local Announcement of a Group they are Responsible of');
+select pg_temp.test_login_leadership('f9000000-0000-0000-0000-0000000000f9');
+delete from announcements where title='Org Responsible own #1126';
+reset role;
+select is((select count(*) from announcements where title='Org Responsible own #1126'),0::bigint,
+'and delete their own');
+
+-- A Manager appointed on the Organization Group is held to the same rule.
+insert into auth.users(id,email) values ('fa000000-0000-0000-0000-0000000000fa','ann581-orgmanager@test.local');
+insert into profiles(id,full_name,email,role,status) values
+('fa000000-0000-0000-0000-0000000000fa','Org Manager','ann581-orgmanager@test.local','voluntar','activ');
+insert into group_members(group_id,member_id,group_role)
+select id,'fa000000-0000-0000-0000-0000000000fa'::uuid,'manager' from groups where is_organization;
+select pg_temp.test_login_leadership('fa000000-0000-0000-0000-0000000000fa');
+update announcements set body='edited by the Organization Manager' where title='Moderator Organization #1126';
+delete from announcements where title='Moderator Organization #1126';
+reset role;
+select is((select body from announcements where title='Moderator Organization #1126'),'by the Moderator',
+'a Manager appointed on the Organization Group cannot edit another author''s organisation-wide Announcement either (#1126)');
+select is((select count(*) from announcements where title='Moderator Organization #1126'),1::bigint,
+'nor delete it');
 
 create temp table ann_org_fx as select id from groups where is_organization;
 grant select on ann_org_fx to authenticated;

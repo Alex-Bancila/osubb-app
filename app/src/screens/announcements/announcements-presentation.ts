@@ -303,10 +303,12 @@ export function mayAskForReaders(
  * (`private.can_manage_group_work`'s level ≥ 6 arm, any Group status); a
  * Manager or Responsible on the Origin's path while the Origin is active (the
  * same function's other arm — `my_groups()` carries the Roles inherited from a
- * Group above); and, for an Organization Group Announcement, its author
- * (ruling R48: a Group Role holder may publish there, but manages only their
- * own). Being the author of a local Announcement grants nothing by itself.
- * Presentation only: the policies decide.
+ * Group above). An Organization Group Announcement is its author's and BC's
+ * alone (ruling R48: a Group Role holder may publish there, but manages only
+ * their own) — not even a Manager or Responsible appointed on the Organization
+ * Group itself (#1126, the `can_manage_event` shape). Being the author of a
+ * local Announcement grants nothing by itself. Presentation only: the policies
+ * decide.
  */
 export function mayManageAnnouncement(
   announcement: Pick<
@@ -323,12 +325,11 @@ export function mayManageAnnouncement(
   },
 ): boolean {
   if (viewer.bcOrModerator) return true;
-  if (
-    announcement.group.isOrganization === true &&
-    viewer.memberId !== null &&
-    announcement.authorMember?.memberId === viewer.memberId
-  )
-    return true;
+  if (announcement.group.isOrganization === true)
+    return (
+      viewer.memberId !== null &&
+      announcement.authorMember?.memberId === viewer.memberId
+    );
   return (viewer.groups ?? []).some(
     (group) =>
       group.id === announcement.groupId &&
