@@ -99,3 +99,44 @@ describe('a Task above the Member’s Role (R57)', () => {
     expect(taskInterestError('42501').kind).toBe('forbidden');
   });
 });
+
+// #1143 (audit M27): the reason a command refused with wins over its class;
+// the class's words are only the fallback for a reason with no copy.
+describe('a refusal reads its own copy (#1143)', () => {
+  it.each([
+    ['PT409', 'rate_limited', 'Ai atins limita zilnică. Încearcă mâine.'],
+    [
+      'PT409',
+      'task_queue_closed',
+      'Coada taskului s-a închis. Nu te mai poți înscrie.',
+    ],
+    ['PT409', 'already_candidate', 'Ești deja în coada acestui task.'],
+    [
+      '42501',
+      'task_audience_forbidden',
+      'Taskul e doar pentru membrii grupului lui.',
+    ],
+  ] as const)('%s %s', (code, reason, copy) => {
+    const refused = taskInterestError(code, reason);
+    expect(refused.message).toBe(copy);
+    // The kind keeps the class, which decides what the screen does next.
+    expect(refused.kind).toBe(code === '42501' ? 'forbidden' : 'conflict');
+  });
+
+  it('falls back to the class for a reason it has no copy for', () => {
+    expect(taskInterestError('PT409', 'some_new_reason').message).toBe(
+      'Taskul s-a schimbat. Lista a fost actualizată.',
+    );
+  });
+
+  it('passes the command’s reason through when joining is refused', async () => {
+    api.rpc.mockResolvedValue({
+      data: null,
+      error: { code: 'PT409', message: 'task_queue_closed' },
+    });
+    await expect(expressTaskInterest(17, 'member')).rejects.toMatchObject({
+      kind: 'conflict',
+      message: 'Coada taskului s-a închis. Nu te mai poți înscrie.',
+    });
+  });
+});

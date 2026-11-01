@@ -179,10 +179,10 @@ select throws_ok(
 select throws_ok(
   format($$ select public.set_event_rsvp(%s, 'going') $$,
          (select pr_event_id from rsvp_fx)),
-  'PT404', 'event_not_visible', 'a hidden event is indistinguishable from a missing event');
+  'PT404', 'event_not_found', 'a hidden event is indistinguishable from a missing event');
 select throws_ok(
   $$ select public.set_event_rsvp(9223372036854775807, 'going') $$,
-  'PT404', 'event_not_visible', 'an unknown event has the same stable not-found error');
+  'PT404', 'event_not_found', 'an unknown event has the same stable not-found error');
 reset role;
 
 select pg_temp.test_login('d4000000-0000-0000-0000-000000000237', jsonb_build_object(

@@ -5,6 +5,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
+import { commandReason, reasonCopy } from '../lib/command-reasons';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 
@@ -42,17 +43,24 @@ const messages: Record<TaskCandidateSelectionErrorKind, string> = {
 export class TaskCandidateSelectionError extends Error {
   readonly kind: TaskCandidateSelectionErrorKind;
 
-  constructor(kind: TaskCandidateSelectionErrorKind) {
-    super(messages[kind]);
+  constructor(kind: TaskCandidateSelectionErrorKind, message?: string) {
+    super(message ?? messages[kind]);
     this.kind = kind;
   }
 }
 
+/**
+ * The kind follows the code class (the sheet refetches on a conflict); the
+ * words are the reason's own copy (#1143), the class's only as the fallback.
+ * The two Candidate-eligibility reasons keep the sheet's words: the table's
+ * copy for them speaks to the Member joining, and here they are about the
+ * Candidate (#1125).
+ */
 export function taskCandidateSelectionError(
   code?: string,
   message?: string,
 ): TaskCandidateSelectionError {
-  return new TaskCandidateSelectionError(
+  const kind: TaskCandidateSelectionErrorKind =
     message === 'task_audience_forbidden'
       ? 'audience'
       : message === 'task_level_forbidden'
@@ -65,7 +73,12 @@ export function taskCandidateSelectionError(
               ? 'conflict'
               : code === '42501'
                 ? 'forbidden'
-                : 'unknown',
+                : 'unknown';
+  return new TaskCandidateSelectionError(
+    kind,
+    kind === 'audience' || kind === 'level'
+      ? undefined
+      : reasonCopy(commandReason({ message })),
   );
 }
 
@@ -81,7 +94,7 @@ export async function fetchPendingTaskCandidates(
     .eq('status', 'pending')
     .order('joined_at', { ascending: true })
     .order('id', { ascending: true });
-  if (error) throw taskCandidateSelectionError(error.code);
+  if (error) throw taskCandidateSelectionError(error.code, error.message);
 
   return data.map((candidate) => ({
     id: candidate.id,

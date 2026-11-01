@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { expect, it } from 'vitest';
 import {
   CommandError,
@@ -481,4 +483,175 @@ it('has copy for task_changed', () => {
   expect(commandReason({ code: 'PT409', message: 'task_changed' })).toBe(
     'task_changed',
   );
+});
+
+/* ---- #1143 (audit M27, L83): every refusal a client can meet has copy ---- */
+
+// The 22 reasons the audit found with no copy, each raised by a command the
+// app calls. event_not_visible is one of them under its new name: #1143
+// renames it event_not_found (conventions section 3: never a *_not_visible
+// twin), whose copy the Calendar's other commands already use.
+it.each([
+  'already_candidate',
+  'already_executor',
+  'candidate_not_pending',
+  'task_queue_closed',
+  'task_not_in_review',
+  'task_not_in_progress',
+  'task_already_evaluated',
+  'umbrella_cancelled',
+  'task_has_no_executor',
+  'not_a_candidate',
+  'task_not_todo',
+  'task_not_overdue',
+  'task_not_public',
+  'task_audience_forbidden',
+  'task_executor_forbidden',
+  'invalid_links',
+  'too_many_ids',
+  'group_cycle',
+  'deal_not_found',
+  'deal_code_forbidden',
+  'event_not_found',
+  'invalid_rsvp_status',
+])('has Romanian copy for %s (#1143)', (reason) => {
+  expect(reasonCopy(reason)).toMatch(/\S/);
+  expect(commandReason({ code: 'PT409', message: reason })).toBe(reason);
+});
+
+it('has no copy for event_not_visible, renamed event_not_found (#1143)', () => {
+  expect(knownReasons().has('event_not_visible')).toBe(false);
+});
+
+/**
+ * The gate (#1143, L83). Every reason a live `public`/`private` function
+ * raises as a literal message has copy, unless it is on the list below of
+ * reasons no client ever receives. "Live" is what the migrations leave
+ * behind: they are replayed in order, the last `create` of a function name
+ * wins and a `drop` removes it, so a reason only a retired body raised
+ * (event_not_visible, org_setting_not_settable) is not asked for. A reason
+ * built with `||` (`last_<role>_needs_replacement`, `<field>_too_long`) is
+ * not a literal and is covered by its own entries.
+ */
+const MIGRATIONS = path.resolve(
+  import.meta.dirname,
+  '../../../supabase/migrations',
+);
+
+let liveRaised: Map<string, Set<string>> | undefined;
+
+function liveRaisedReasons(): Map<string, Set<string>> {
+  liveRaised ??= readLiveRaisedReasons();
+  return liveRaised;
+}
+
+function readLiveRaisedReasons(): Map<string, Set<string>> {
+  const live = new Map<string, string>();
+  const head =
+    /\b(create(?:\s+or\s+replace)?|drop)\s+function\s+(?:if\s+exists\s+)?(public|private)\.([a-z0-9_]+)\s*\(/gi;
+  const files = readdirSync(MIGRATIONS)
+    .filter((file) => file.endsWith('.sql'))
+    .sort();
+  for (const file of files) {
+    // Whole-line comments are prose: a create, drop or raise quoted there
+    // must not change what the gate reads as live.
+    const text = readFileSync(path.join(MIGRATIONS, file), 'utf8')
+      .split('\n')
+      .filter((line) => !/^\s*--/.test(line))
+      .join('\n');
+    for (const match of text.matchAll(head)) {
+      const name = `${match[2]}.${match[3]}`.toLowerCase();
+      if (/^drop/i.test(match[1] ?? '')) {
+        live.delete(name);
+        continue;
+      }
+      const rest = text.slice(match.index);
+      const open = /\bas\s+(\$[a-z_]*\$)/i.exec(rest);
+      const tag = open?.[1];
+      if (!open || !tag) throw new Error(`${file}: no body for ${name}`);
+      const start = open.index + open[0].length;
+      const end = rest.indexOf(tag, start);
+      if (end < 0) throw new Error(`${file}: unterminated body for ${name}`);
+      live.set(name, rest.slice(start, end));
+    }
+  }
+  const literal =
+    /\bmessage\s*=\s*'([a-z][a-z0-9_]*)'(?!\s*\|\|)|\braise\s+exception\s+'([a-z][a-z0-9_]*)'/g;
+  const raised = new Map<string, Set<string>>();
+  for (const [name, body] of live) {
+    for (const match of body.matchAll(literal)) {
+      const reason = match[1] ?? match[2];
+      if (!reason) continue;
+      const by = raised.get(reason) ?? new Set<string>();
+      by.add(name);
+      raised.set(reason, by);
+    }
+  }
+  return raised;
+}
+
+/** Raised by a live function, but never by one a client role can reach. */
+const NO_CLIENT_EVER_SEES = new Set([
+  // Service-role commands: the Edge Functions and scripts holding the secret
+  // key call them, and turn every refusal into their own answer.
+  'email_required', // notify_email_delivery_problem, request_invitation_allowed
+  'email_too_long',
+  'invalid_delivery_id',
+  'invalid_email_event',
+  'invalid_ip_hash',
+  'invalid_digest_outcome', // settle_email_digest
+  'invalid_push_outcome', // settle_push_delivery
+  'invalid_limit', // claim_push_deliveries, claim_email_digests
+  'invalid_email', // import_member, import_member_lookup
+  'invalid_placements',
+  'invalid_problems',
+  'invalid_sheet_row',
+  'member_id_required',
+  'member_not_imported',
+  'too_many_emails',
+  // Internal helpers: the commands that call them pass a value they chose,
+  // so these mean a bug in the command, never a member's input.
+  'invalid_assignment_via', // open_task_assignment
+  'assignment_not_active', // end_task_assignment
+  'invalid_notification_title', // notify
+  'invalid_outcome', // evaluate_task
+  // Row guards behind a command that refuses first or converts the error,
+  // on tables no client role writes directly.
+  'task_campaign_inactive', // create_task / update_task answer invalid_campaign
+  'task_campaign_origin_mismatch',
+  'event_campaign_inactive', // create_event / update_event answer invalid_campaign
+  'event_campaign_origin_mismatch',
+  'task_hierarchy_too_deep', // create_task refuses a Subtask parent first
+  'task_parent_not_umbrella',
+  'duplicate_provenance_write_forbidden',
+  'task_activity_immutable',
+  'task_evaluation_immutable',
+  'task_evaluation_legacy_source_closed',
+  'ledger_award_instant_mismatch',
+  'role_history_immutable',
+  'voting_role_requires_bc_actor', // set_member_role refuses below BC first
+  'group_membership_identity_immutable', // the Appointment core only
+]);
+
+it('has copy for every reason a live command raises, unless no client ever sees it (#1143)', () => {
+  const raised = liveRaisedReasons();
+  const missing = [...raised.keys()]
+    .filter((reason) => !knownReasons().has(reason))
+    .filter((reason) => !NO_CLIENT_EVER_SEES.has(reason))
+    .sort()
+    .map(
+      (reason) => `${reason} (${[...(raised.get(reason) ?? [])].join(', ')})`,
+    );
+  expect(missing).toEqual([]);
+});
+
+it('lists as unseen only reasons a live command raises and that have no copy (#1143)', () => {
+  const raised = liveRaisedReasons();
+  const stale = [...NO_CLIENT_EVER_SEES].filter(
+    (reason) => !raised.has(reason),
+  );
+  const overlap = [...NO_CLIENT_EVER_SEES].filter((reason) =>
+    knownReasons().has(reason),
+  );
+  expect({ stale, overlap }).toEqual({ stale: [], overlap: [] });
 });

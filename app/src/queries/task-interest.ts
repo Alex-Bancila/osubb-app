@@ -4,6 +4,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
+import { commandReason, reasonCopy } from '../lib/command-reasons';
 import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 
@@ -25,16 +26,20 @@ const messages: Record<TaskInterestErrorKind, string> = {
 };
 export class TaskInterestError extends Error {
   readonly kind: TaskInterestErrorKind;
-  constructor(kind: TaskInterestErrorKind) {
-    super(messages[kind]);
+  constructor(kind: TaskInterestErrorKind, message?: string) {
+    super(message ?? messages[kind]);
     this.kind = kind;
   }
 }
+/**
+ * The kind follows the code class (the screen refreshes on a conflict); the
+ * words are the reason's own copy (#1143), the class's only as the fallback.
+ */
 export function taskInterestError(
   code?: string,
   message?: string,
 ): TaskInterestError {
-  return new TaskInterestError(
+  const kind: TaskInterestErrorKind =
     message === 'task_level_forbidden'
       ? 'level'
       : code === '42501'
@@ -43,8 +48,8 @@ export function taskInterestError(
           ? 'conflict'
           : code === 'PT400'
             ? 'invalid'
-            : 'unknown',
-  );
+            : 'unknown';
+  return new TaskInterestError(kind, reasonCopy(commandReason({ message })));
 }
 
 /** Explicitly self-filtered even when a manager may read other Candidates. */
@@ -58,7 +63,7 @@ export async function fetchOwnCandidature(taskId: number, memberId: string) {
     .order('id', { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (error) throw taskInterestError(error.code);
+  if (error) throw taskInterestError(error.code, error.message);
   return data;
 }
 
@@ -70,7 +75,7 @@ export async function fetchOwnQueuePosition(
     .select('my_position')
     .eq('task_id', taskId)
     .maybeSingle();
-  if (error) throw taskInterestError(error.code);
+  if (error) throw taskInterestError(error.code, error.message);
   return data?.my_position ?? null;
 }
 
@@ -90,7 +95,7 @@ export async function hasOwnActiveAssignment(
     .eq('member_id', memberId)
     .is('ended_at', null)
     .maybeSingle();
-  if (error) throw taskInterestError(error.code);
+  if (error) throw taskInterestError(error.code, error.message);
   return data !== null;
 }
 
