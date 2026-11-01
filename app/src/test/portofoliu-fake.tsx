@@ -29,6 +29,7 @@ export type Run = {
   percent_used: number | null;
   membership_cutoff: string | null;
   evaluated_count: number | null;
+  members_recorded: boolean;
 };
 export type Threshold = {
   kind: string;
@@ -174,6 +175,7 @@ export const RUN_VA: Run = {
   percent_used: 35,
   membership_cutoff: '2026-03-31',
   evaluated_count: 12,
+  members_recorded: true,
 };
 export const RUN_AG: Run = {
   id: 2,
@@ -190,6 +192,7 @@ export const RUN_AG: Run = {
   percent_used: 25,
   membership_cutoff: null,
   evaluated_count: 5,
+  members_recorded: true,
 };
 /** A run recorded before R58: no Floor, no share, no cutoff, no count. */
 export const RUN_OLD: Run = {
@@ -207,6 +210,7 @@ export const RUN_OLD: Run = {
   percent_used: null,
   membership_cutoff: null,
   evaluated_count: null,
+  members_recorded: false,
 };
 
 /** Six Members evaluated: Floor 10, 35 %, four ranked, the line 40. */
@@ -359,6 +363,7 @@ const answer = async (name: string, args: Record<string, unknown>) => {
         percent_used: Number(args.p_percent),
         membership_cutoff: (args.p_cutoff as string | undefined) ?? null,
         evaluated_count: 6,
+        members_recorded: true,
       });
       // A finalised run hands the line it computed to its kind's Promotion
       // Threshold and writes only the share it used through to the settings

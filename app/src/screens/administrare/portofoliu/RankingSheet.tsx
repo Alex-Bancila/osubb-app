@@ -157,6 +157,7 @@ export function RankingSheet({
   kind,
   line,
   rows,
+  note,
   children,
 }: {
   open: boolean;
@@ -166,11 +167,14 @@ export function RankingSheet({
   kind?: RoleEvaluationKind;
   /**
    * The line the summary states, when it is not the rows': a finished run
-   * states the one it recorded, while its rows are recomputed from today's
-   * ledger (spec C) and a later reversal may have moved theirs.
+   * states the one it recorded, while the rows of a run from before #1146
+   * are recomputed from today's ledger and a later reversal may have moved
+   * theirs.
    */
   line?: number | null;
   rows?: readonly RankingRow[];
+  /** A word about the rows, under the summary: that they are today's (#1146). */
+  note?: string;
   children?: ReactNode;
 }) {
   const first = rows?.[0];
@@ -198,6 +202,9 @@ export function RankingSheet({
                 {votersOnlyText(listed.length)}
               </p>
             ) : null}
+            {first && note ? (
+              <p className="m-0 text-sm text-muted-foreground">{note}</p>
+            ) : null}
           </SheetHeader>
           {children ?? <RankingTable rows={listed} votersOnly={votersOnly} />}
         </SheetPopup>
@@ -207,10 +214,17 @@ export function RankingSheet({
 }
 
 /**
- * The sheet of a finished run: its ranking is recomputed by the server from
- * the values the run recorded. A run recorded before Portofoliu Interne kept
- * none of them, so it has no ranking to recompute and the sheet says so.
+ * The sheet of a finished run. A run finalised since #1146 kept the
+ * population it judged, and the server answers from it: each Member's Role
+ * at the run, Points and place, whatever happened since. A run from before
+ * that is recomputed by the server from the values it recorded, over today's
+ * Roles and ledger, and the sheet says so. A run recorded before Portofoliu
+ * Interne kept none of those values, so it has no ranking to recompute and
+ * the sheet says that instead.
  */
+const RECOMPUTED_NOTE =
+  'Rolurile și locurile sunt cele de azi: evaluarea a fost rulată înainte ca lista ei să fie păstrată.';
+
 export function RunRankingSheet({
   run,
   onClose,
@@ -236,6 +250,7 @@ export function RunRankingSheet({
       kind={kind}
       line={readable ? shown.threshold_computed : undefined}
       rows={readable ? ranking.data : undefined}
+      note={readable && !shown.members_recorded ? RECOMPUTED_NOTE : undefined}
     >
       {!shown ? null : !readable ? (
         <EmptyState>
