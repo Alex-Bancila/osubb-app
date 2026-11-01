@@ -11,7 +11,7 @@ import { TaskRow } from './TaskRow';
 
 type RowOptions = Pick<
   ComponentProps<typeof TaskRow>,
-  'allowInterest' | 'joinable' | 'titleLevel'
+  'allowInterest' | 'joinable' | 'queue' | 'titleLevel'
 >;
 
 /**

@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { describe, expect, it, vi } from 'vitest';
+import type { OwnTaskQueue } from '../../queries/task-queue';
 import { TaskRow } from './TaskRow';
 import {
   toTaskPresentation,
@@ -15,8 +16,10 @@ vi.mock('../../queries/task-give-up', () => ({
     isPending: false,
   }),
 }));
+// The queue line a list hands its row (#1133), and the one a row reads.
 vi.mock('./TaskQueueStatus', () => ({
-  TaskQueueStatus: () => <p>Stare înscriere</p>,
+  OwnQueueStatus: () => <p>Stare înscriere</p>,
+  TaskQueueStatus: () => <p>Stare înscriere citită</p>,
 }));
 vi.mock('./TaskInterestControls', () => ({
   TaskInterestControls: ({
@@ -68,6 +71,8 @@ describe('The detailed Task row of a Member’s own lists', () => {
     overrides: Partial<TaskPresentationRow>,
     memberId = 'candidate',
     joinable = true,
+    // null: the list hands the row no queue.
+    queue: OwnTaskQueue | null = { status: null, position: null },
   ) {
     const task = toTaskPresentation(
       taskRow({ ...overrides, assignment_mode: 'public' }),
@@ -79,6 +84,7 @@ describe('The detailed Task row of a Member’s own lists', () => {
         task={task}
         allowInterest
         joinable={joinable}
+        queue={queue ?? undefined}
         onOpenTask={vi.fn()}
         memberId={memberId}
         pending={false}
@@ -95,6 +101,25 @@ describe('The detailed Task row of a Member’s own lists', () => {
     expect(
       screen.queryByRole('button', { name: 'Participă' }),
     ).not.toBeInTheDocument();
+  });
+  // #1133: Disponibile hands each row its queue; a row given none (a list
+  // that does not know it) reads its own.
+  it('reads its own queue line only when its list hands it none', () => {
+    const { unmount } = opportunityRow({
+      status: 'todo',
+      queue_closed_at: '2026-09-15T10:00:00Z',
+    });
+    expect(screen.queryByText('Stare înscriere citită')).toBeNull();
+    unmount();
+
+    opportunityRow(
+      { status: 'todo', queue_closed_at: '2026-09-15T10:00:00Z' },
+      'candidate',
+      true,
+      null,
+    );
+    expect(screen.getByText('Stare înscriere citită')).toBeVisible();
+    expect(screen.queryByText('Stare înscriere')).toBeNull();
   });
   it.each(['completed', 'unfulfilled', 'cancelled'] as const)(
     'shows no queue line on a finished Task (%s): it is history (Audit D-1)',

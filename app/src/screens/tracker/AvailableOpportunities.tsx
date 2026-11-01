@@ -1,9 +1,11 @@
+import { useMemo } from 'react';
 import { EmptyState, Panel } from '../../components/layout';
 import { formatTaskCount } from '../../lib/format';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import { matchesWorkFilter } from '../../lib/work-filter';
 import { usePreferredGroups } from '../../components/preferred-groups/preferred-groups';
 import type { Opportunity } from '../../queries/task-opportunities';
+import { useQueuePositions, type OwnTaskQueue } from '../../queries/task-queue';
 import { TaskRowList } from './TaskRowList';
 import {
   ClearSearchButton,
@@ -18,7 +20,9 @@ import { matchesTitle, type TitleSearch } from './use-title-search';
  * search and the Work Filter — one band of open
  * Opportunities — the Member's own Groups' and every Group's org-Audience ones
  * — each row in its Group colour (the Organization Group's in OSUBB red), in
- * the query's deadline order.
+ * the query's deadline order. Each row's own state comes from its list row,
+ * and the places in the queues the Member waits on from one read for them
+ * all (#1133): no row asks anything of its own.
  */
 export function AvailableOpportunities({
   opportunities,
@@ -32,6 +36,32 @@ export function AvailableOpportunities({
   onOpenTask: (id: number) => void;
 }) {
   const { params, active } = useWorkFilter();
+  const waitingOn = useMemo(
+    () =>
+      opportunities
+        .filter((task) => task.candidature === 'pending')
+        .map((task) => task.id),
+    [opportunities],
+  );
+  const positions = useQueuePositions(waitingOn);
+  // One object a row, kept while neither read changes: a row's props stay
+  // the same between renders.
+  const queues = useMemo(
+    () =>
+      new Map<number, OwnTaskQueue>(
+        opportunities.map((task) => [
+          task.id,
+          {
+            status: task.candidature,
+            position:
+              task.candidature === 'pending'
+                ? (positions.data?.get(task.id) ?? null)
+                : null,
+          },
+        ]),
+      ),
+    [opportunities, positions.data],
+  );
   // R43: Disponibile opens on the preferred Groups.
   const preferred = usePreferredGroups();
   const shown = params
@@ -69,6 +99,7 @@ export function AvailableOpportunities({
               row={(task) => ({
                 allowInterest: true,
                 joinable: task.joinable,
+                queue: queues.get(task.id),
                 titleLevel: 3,
               })}
             />

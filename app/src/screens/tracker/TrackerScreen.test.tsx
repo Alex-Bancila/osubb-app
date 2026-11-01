@@ -36,6 +36,8 @@ const hooks = vi.hoisted(() => ({
   /** The Points Start Date (R58): null until BC sets one. */
   pointsStartDate: null as string | null | undefined,
   useTaskQueue: vi.fn(),
+  /** Disponibile's places in the queue (#1133): none unless a test says so. */
+  queuePositions: new Map<number, number>(),
   usePendingDecisions: vi.fn(),
   join: vi.fn(),
   level: 1,
@@ -57,6 +59,11 @@ vi.mock('../../lib/capabilities', async (importOriginal) => ({
 }));
 vi.mock('../../queries/task-queue', () => ({
   useTaskQueue: hooks.useTaskQueue,
+  useQueuePositions: () => ({
+    data: hooks.queuePositions,
+    isPending: false,
+    isError: false,
+  }),
 }));
 vi.mock('../../queries/task-interest', () => ({
   useExpressTaskInterest: () => ({ mutateAsync: hooks.join }),
@@ -292,6 +299,7 @@ function query(overrides: Record<string, unknown> = {}) {
 
 describe('My tasks screen', () => {
   beforeEach(() => {
+    hooks.queuePositions = new Map();
     hooks.level = 1;
     hooks.seeLeadership = false;
     hooks.useTaskOpportunities.mockReturnValue({
@@ -895,14 +903,15 @@ describe('My tasks screen', () => {
     });
 
     it('keeps another Group’s local row the Member is queued on, so they can withdraw', async () => {
-      hooks.useTaskQueue.mockImplementation((taskId: number) => ({
-        data:
-          taskId === 15
-            ? { status: 'pending', position: 2 }
-            : { status: null, position: null },
+      // The row says the Member waits on it; the queue summary, where.
+      hooks.useTaskOpportunities.mockReturnValue({
+        data: rows.map((row) =>
+          row.id === 15 ? { ...row, candidature: 'pending' as const } : row,
+        ),
         isPending: false,
         isError: false,
-      }));
+      });
+      hooks.queuePositions = new Map([[15, 2]]);
       await openAvailable();
       const local = screen.getByRole('article', {
         name: 'Arhivă de interviuri',
@@ -931,14 +940,15 @@ describe('My tasks screen', () => {
     });
 
     it('keeps a pending Candidature on another Group’s org row, with its place', async () => {
-      hooks.useTaskQueue.mockImplementation((taskId: number) => ({
-        data:
-          taskId === 14
-            ? { status: 'pending', position: 3 }
-            : { status: null, position: null },
+      // The row says the Member waits on it; the queue summary, where.
+      hooks.useTaskOpportunities.mockReturnValue({
+        data: rows.map((row) =>
+          row.id === 14 ? { ...row, candidature: 'pending' as const } : row,
+        ),
         isPending: false,
         isError: false,
-      }));
+      });
+      hooks.queuePositions = new Map([[14, 3]]);
       await openAvailable();
       const org = within(band()).getByRole('article', {
         name: 'Sondaj pentru membri',

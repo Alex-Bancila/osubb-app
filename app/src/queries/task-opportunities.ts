@@ -40,7 +40,26 @@ export function hasOwnOrigin(
 export type Opportunity = TaskPresentationRow & {
   relevant: boolean;
   joinable: boolean;
+  /** The Member's own Candidature on it, from the list's row (#1133). */
+  candidature: OwnCandidature;
 };
+
+/**
+ * Where the Member stands in an Opportunity's queue, as `task_list` says it
+ * (`my_candidature`, the status of their newest Candidature). A `selected`
+ * one without an open Assignment is history — they gave the Task up or were
+ * replaced — so it reads as none, and they may join again (Audit D-3); a
+ * Task they execute is never an Opportunity.
+ */
+export type OwnCandidature = 'pending' | 'withdrawn' | 'closed' | null;
+
+export function ownCandidature(
+  status: string | null | undefined,
+): OwnCandidature {
+  return status === 'pending' || status === 'withdrawn' || status === 'closed'
+    ? status
+    : null;
+}
 
 function deadlineTime(task: TaskPresentationRow): number {
   const time = task.deadline ? Date.parse(task.deadline) : Number.NaN;
@@ -95,7 +114,7 @@ export type OpportunityViewer = {
  * Member executes, live in Taskurile mele — never here.
  */
 export function orderOpportunities(
-  rows: TaskPresentationRow[],
+  rows: (TaskPresentationRow & { candidature?: OwnCandidature })[],
   memberships: TaskMemberships,
   { pending = new Set(), memberId, level }: OpportunityViewer = {},
 ): Opportunity[] {
@@ -108,6 +127,7 @@ export function orderOpportunities(
       const relevant = hasOwnOrigin(task, memberships);
       return {
         ...task,
+        candidature: task.candidature ?? null,
         relevant,
         // A pending Candidate keeps their controls after leaving the Group:
         // `withdraw_task_interest` checks no Audience, so they can still leave.
@@ -127,8 +147,10 @@ export function orderOpportunities(
  * Member's Groups, and `task_list('available')` — the open public
  * Opportunities they read with a queue still open, and every Task they are a
  * pending Candidate on, whatever its queue, so they can withdraw. Each row
- * carries the Member's Candidature and the Task's Executor, so nothing more
- * is asked. Which of them the Member can join is decided here
+ * carries the Member's Candidature and the Task's Executor: the row's own
+ * state comes from it, and only the places in the queue of the rows the
+ * Member waits on are asked, once, by the page (`useQueuePositions`,
+ * #1133). Which of them the Member can join is decided here
  * (`orderOpportunities`); Grupuri preferate narrows them on the page (R43).
  */
 export async function fetchTaskOpportunities(
@@ -142,7 +164,11 @@ export async function fetchTaskOpportunities(
   const pending = new Set(
     rows.filter((row) => row.my_candidature === 'pending').map((row) => row.id),
   );
-  return orderOpportunities(rows.map(taskListRow), memberGroupIds(groups), {
+  const opportunities = rows.map((row) => ({
+    ...taskListRow(row),
+    candidature: ownCandidature(row.my_candidature),
+  }));
+  return orderOpportunities(opportunities, memberGroupIds(groups), {
     pending,
     memberId,
     level,
