@@ -20,6 +20,36 @@ export function QueuePosition({
     </p>
   );
 }
+/**
+ * What the queue says of the Member, from a queue state already known: the
+ * stage sentence with their place, then the queue line. Disponibile's rows
+ * hand it the row's own state (#1133); `TaskQueueStatus` reads one Task's.
+ */
+export function OwnQueueStatus({
+  queue,
+  task,
+}: {
+  queue: OwnTaskQueue;
+  task?: TaskPresentation;
+}) {
+  return (
+    <>
+      {task && (
+        <TaskStageSummary
+          task={{
+            ...task,
+            candidature: queue.status
+              ? { status: queue.status, position: queue.position }
+              : null,
+          }}
+        />
+      )}
+      <QueuePosition queue={queue} stageShown={task !== undefined} />
+    </>
+  );
+}
+
+/** One Task's queue, read: the details sheet, and a row given no state. */
 export function TaskQueueStatus({
   taskId,
   task,
@@ -48,19 +78,5 @@ export function TaskQueueStatus({
         </Button>
       </div>
     );
-  return (
-    <>
-      {task && (
-        <TaskStageSummary
-          task={{
-            ...task,
-            candidature: query.data.status
-              ? { status: query.data.status, position: query.data.position }
-              : null,
-          }}
-        />
-      )}
-      <QueuePosition queue={query.data} stageShown={task !== undefined} />
-    </>
-  );
+  return <OwnQueueStatus queue={query.data} task={task} />;
 }

@@ -157,6 +157,12 @@ export const keys = {
       ['tasks', 'scopes', { memberId }] as const,
     queue: (taskId: number, memberId: string | undefined) =>
       ['tasks', 'queue', { taskId, memberId }] as const,
+    /* The Member's places in the queues of these Tasks: Disponibile's rows
+       they wait on, in one read (#1133). */
+    queuePositions: (
+      memberId: string | undefined,
+      taskIds: readonly number[],
+    ) => ['tasks', 'queue-positions', { memberId }, taskIds] as const,
     candidates: (taskId: number, memberId: string | undefined) =>
       ['tasks', 'candidates', { taskId, memberId }] as const,
     history: (taskId: number, memberId: string | undefined) =>

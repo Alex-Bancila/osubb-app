@@ -17,7 +17,8 @@ import {
   TaskGroupChip,
   TaskStatusBadges,
 } from './TaskParts';
-import { TaskQueueStatus } from './TaskQueueStatus';
+import { OwnQueueStatus, TaskQueueStatus } from './TaskQueueStatus';
+import type { OwnTaskQueue } from '../../queries/task-queue';
 import { TaskStageSummary } from './TaskStageSummary';
 
 type TaskRowProps = {
@@ -40,6 +41,12 @@ type TaskRowProps = {
    * would be.
    */
   joinable?: boolean;
+  /**
+   * The Member's own place in the Task's queue, when the list knows it
+   * (Disponibile, #1133): the row then reads nothing of its own. Without it
+   * a Candidate's row reads its queue (`TaskQueueStatus`).
+   */
+  queue?: OwnTaskQueue;
   /** The title's heading level: 3 when the row sits under a band heading. */
   titleLevel?: 2 | 3;
   /** The viewer; the Executor's own row offers Start, Submit and Give up. */
@@ -111,6 +118,7 @@ export function TaskRow({
   detailed = false,
   allowInterest = false,
   joinable = true,
+  queue,
   titleLevel = 2,
   memberId,
   pending = false,
@@ -152,7 +160,7 @@ export function TaskRow({
     ['todo', 'in_progress', 'in_review'].includes(task.status);
 
   /** The row around what the queue says and the actions at its end. */
-  const frame = (queue: ReactNode, actions: ReactNode) => (
+  const frame = (queueLine: ReactNode, actions: ReactNode) => (
     <article
       id={anchor ? `task-${task.id}` : undefined}
       aria-labelledby={titleId}
@@ -268,7 +276,7 @@ export function TaskRow({
                 {!readOnly && (task.assignmentMode !== 'public' || ownTask) && (
                   <TaskStageSummary task={task} />
                 )}
-                {queue}
+                {queueLine}
                 {/* The latest Submission Note, while the Task is in review. */}
                 {!readOnly &&
                   task.status === 'in_review' &&
@@ -320,9 +328,9 @@ export function TaskRow({
     </article>
   );
 
-  if (queueOpen && joinable)
+  if (queueOpen && joinable && queue)
     return (
-      <TaskInterestControls taskId={task.id} task={task}>
+      <TaskInterestControls taskId={task.id} task={task} queue={queue}>
         {({ status, action }) =>
           frame(
             <div data-slot="task-row-queue" className={queueClass}>
@@ -336,7 +344,7 @@ export function TaskRow({
 
   return frame(
     candidate &&
-      (queueOpen ? (
+      (queueOpen && !joinable ? (
         <div data-slot="task-row-queue" className={queueClass}>
           <TaskStageSummary task={task} />
           <p
@@ -348,7 +356,11 @@ export function TaskRow({
         </div>
       ) : (
         <div data-slot="task-row-queue" className={queueClass}>
-          <TaskQueueStatus taskId={task.id} task={task} />
+          {queue ? (
+            <OwnQueueStatus queue={queue} task={task} />
+          ) : (
+            <TaskQueueStatus taskId={task.id} task={task} />
+          )}
         </div>
       )),
     !readOnly && onProgress && (
