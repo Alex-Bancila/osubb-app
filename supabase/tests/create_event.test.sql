@@ -123,7 +123,7 @@ select pg_temp.login(12);
 select throws_ok($$select public.create_event('case-12-org','sedinta',(select id from fx where name='org'),now()+interval '1 day')$$,'42501','calendar_manage_forbidden','persona 12 denied in org');
 reset role;
 select pg_temp.login(1);
-select throws_ok($$select public.create_event('case-1-archived','sedinta',(select id from fx where name='archived'),now()+interval '1 day')$$,'42501','calendar_manage_forbidden','persona 1 denied in archived');
+select throws_ok($$select public.create_event('case-1-archived','sedinta',(select id from fx where name='archived'),now()+interval '1 day')$$,'PT409','group_archived','persona 1 (BC) passes authority and hears group_archived in archived -- #1145, the creators'' one reason');
 reset role;
 select pg_temp.login(4);
 select throws_ok($$select public.create_event('case-4-archived','sedinta',(select id from fx where name='archived'),now()+interval '1 day')$$,'42501','calendar_manage_forbidden','persona 4 denied in archived');

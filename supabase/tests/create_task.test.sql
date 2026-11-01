@@ -719,6 +719,7 @@ select extensions.dblink_exec('task_lock_setup', $$
   delete from public.tasks
    where parent_task_id in (select id from public.tasks where title = 'Lock Probe Umbrella #327');
   delete from public.tasks where title = 'Lock Probe Umbrella #327';
+  delete from public.groups where name = 'Lock Probe Group #327';
   delete from auth.users where id in (
     '32700000-0000-0000-0000-000000000021', '32700000-0000-0000-0000-000000000022',
     '32700000-0000-0000-0000-000000000023');
@@ -735,18 +736,24 @@ select extensions.dblink_exec('task_lock_setup', $$
      'lock.probe.evaluator.327@test.local', 'bce', 'activ'),
     ('32700000-0000-0000-0000-000000000023', 'Lock Probe Executor 327',
      'lock.probe.executor.327@test.local', 'voluntar', 'activ');
+  -- #1145: the probe lives in a committed Group of its own. Since the creators
+  -- hold the owning Group FOR SHARE, a Group this suite's own transaction
+  -- holds FOR NO KEY UPDATE (a seed Department, locked when the fixtures
+  -- insert Child Groups under it) could never be shared by the second session.
+  insert into public.groups (name, category, shared_work_visibility)
+  values ('Lock Probe Group #327', 'team', true);
   -- #586: committed race fixtures need an explicit native Group roster.
   insert into public.group_members(group_id,member_id,group_role)
-  select g.id,md.member_id,case when p.role='bce' then 'manager' else 'member' end
-    from (values ('32700000-0000-0000-0000-000000000021'::uuid, 'edu'),
-    ('32700000-0000-0000-0000-000000000022'::uuid, 'edu'),
-    ('32700000-0000-0000-0000-000000000023'::uuid, 'edu')) md(member_id,dept_id) join public.groups g on g.name = case md.dept_id when 'edu' then 'Educațional' when 'pr' then 'Imagine & PR' when 'hr' then 'Resurse Umane' when 'fin' then 'Financiar' when 'youth' then 'Tineret' when 'diverse' then 'Diverse' when 'secretariat' then 'Secretariat' when 'org' then 'OSUBB' end
-    join public.profiles p on p.id=md.member_id
-   where md.member_id::text like '32700000-%'
+  select g.id, md.member_id, md.group_role
+    from public.groups g
+    cross join (values ('32700000-0000-0000-0000-000000000021'::uuid, 'manager'),
+    ('32700000-0000-0000-0000-000000000022'::uuid, 'manager'),
+    ('32700000-0000-0000-0000-000000000023'::uuid, 'member')) md(member_id, group_role)
+   where g.name = 'Lock Probe Group #327'
   on conflict (group_id,member_id) do nothing;
   insert into public.tasks
     (title, group_id, kind, audience, assignment_mode, difficulty, rating, status, created_by)
-  values ('Lock Probe Umbrella #327', (select id from public.groups where name = 'Educațional'), 'umbrella', null, null, null, null, 'todo',
+  values ('Lock Probe Umbrella #327', (select id from public.groups where name = 'Lock Probe Group #327'), 'umbrella', null, null, null, null, 'todo',
           '32700000-0000-0000-0000-000000000021');
   -- An EXISTING Subtask of that Umbrella, already submitted, with a live
   -- Executor: everything private.complete_task_review needs, so that the
@@ -755,7 +762,7 @@ select extensions.dblink_exec('task_lock_setup', $$
     (title, description, deadline, group_id, audience, assignment_mode, status,
      created_at, started_at, submitted_at, parent_task_id, created_by)
   select 'Lock Probe Subtask Existent #327', 'De evaluat in paralel',
-         now() + interval '7 days', (select id from public.groups where name = 'Educațional'), 'local', 'direct', 'in_review',
+         now() + interval '7 days', (select id from public.groups where name = 'Lock Probe Group #327'), 'local', 'direct', 'in_review',
          now() - interval '5 days', now() - interval '4 days', now() - interval '1 day',
          parent.id, '32700000-0000-0000-0000-000000000021'
     from public.tasks as parent where parent.title = 'Lock Probe Umbrella #327';
@@ -816,7 +823,7 @@ select ok(coalesce((
     join public.group_members as membership on membership.ctid = row_lock.locked_row
     join public.groups as authority_group on authority_group.id = membership.group_id
    where membership.member_id = '32700000-0000-0000-0000-000000000021'
-     and authority_group.name = 'Educațional'
+     and authority_group.name = 'Lock Probe Group #327'
 ), false), 'a BCE create holds the Group roster row its authority rests on FOR SHARE');
 
 -- Ruling 20's payoff, reproduced rather than argued. Session task_lock still
@@ -886,6 +893,7 @@ select extensions.dblink_exec('task_lock_setup', $$
   delete from public.tasks
    where parent_task_id in (select id from public.tasks where title = 'Lock Probe Umbrella #327');
   delete from public.tasks where title = 'Lock Probe Umbrella #327';
+  delete from public.groups where name = 'Lock Probe Group #327';
   delete from auth.users where id in (
     '32700000-0000-0000-0000-000000000021', '32700000-0000-0000-0000-000000000022',
     '32700000-0000-0000-0000-000000000023');
