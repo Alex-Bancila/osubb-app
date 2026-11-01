@@ -1,14 +1,30 @@
 import { useRegisterSW } from 'virtual:pwa-register/react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { watchForUpdates } from './update-checks';
 
 function PwaUpdatePrompt() {
   const [updateError, setUpdateError] = useState(false);
+  // An app left open or brought back looks for a new build (#1137).
+  const stopWatching = useRef<(() => void) | null>(null);
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
-  } = useRegisterSW();
+  } = useRegisterSW({
+    onRegisteredSW(_url, registration) {
+      if (!registration) return;
+      stopWatching.current?.();
+      stopWatching.current = watchForUpdates(registration);
+    },
+  });
+  useEffect(
+    () => () => {
+      stopWatching.current?.();
+      stopWatching.current = null;
+    },
+    [],
+  );
 
   if (!needRefresh) return null;
 

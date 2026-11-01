@@ -110,6 +110,7 @@ app/
     │   ├── sw.ts           # the service worker: precache, fallback, push + notificationclick (ADR-0010)
     │   ├── sw-routes.ts    # its denylist and network-only Supabase rule (tested in pwa-config.test.ts)
     │   ├── push-payload.ts # push payload parsing, tap target, focus-or-open (+ test)
+    │   ├── update-checks.ts # when an open app looks for a new build (#1137)
     │   └── PwaUpdatePrompt.tsx # asks before activating a waiting worker (+ test)
     ├── theme/
     │   ├── tokens.css       # Brand Book palette; originated as a copy of mockup/css/tokens.css,
@@ -208,6 +209,13 @@ can actually use, instead of an app that is silently empty.
   the vocabulary.
 
 ## Tooling notes
+
+- **An installed app looks for a new build on its own** (#1137, `src/pwa/update-checks.ts`):
+  when it comes back to the foreground, at most once every ten minutes, and
+  every hour while it stays on screen. A build it finds waits behind
+  **Actualizare disponibilă** until the Member taps it; the browser alone
+  would look only at the next navigation, which a phone that keeps the app
+  open may not make for days.
 
 - **oxlint, not ESLint.** It is what `create-vite` ships as the default now, it
   runs in milliseconds, and it carries the React Hooks rules that actually catch
