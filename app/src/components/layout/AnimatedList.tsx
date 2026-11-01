@@ -113,16 +113,20 @@ export function AnimatedList<T>({
       className={cn('m-0 flex min-w-0 list-none flex-col p-0', className)}
       {...props}
     >
-      {ghostsAfter(null)}
-      {live.map((entry) => [
-        <li
-          key={entry.key}
-          className={cn('min-w-0 motion-enter', itemClassName)}
-        >
-          {entry.node}
-        </li>,
-        ...ghostsAfter(entry.key),
-      ])}
+      {/* One flat list of keyed items: a row that moves keeps its instance
+          (and its state) instead of being mounted afresh (#1147). */}
+      {[
+        ...ghostsAfter(null),
+        ...live.flatMap((entry) => [
+          <li
+            key={entry.key}
+            className={cn('min-w-0 motion-enter', itemClassName)}
+          >
+            {entry.node}
+          </li>,
+          ...ghostsAfter(entry.key),
+        ]),
+      ]}
     </ul>
   );
 }

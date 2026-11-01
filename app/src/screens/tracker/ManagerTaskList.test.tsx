@@ -1294,6 +1294,32 @@ describe('ManagerTaskList renders (#1147)', () => {
   });
 });
 
+describe('ManagerTaskList, a tick that changes a row (#1147)', () => {
+  // Fails if a tick that turns one row overdue re-renders the others too.
+  it('re-renders only the open row a tick turns overdue', () => {
+    const onOpenTask = vi.fn();
+    const view = render(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList rows={rows} now={now} onOpenTask={onOpenTask} />
+      </MemoryRouter>,
+    );
+    chips.count = 0;
+    // Afișe pentru gală is due at 10:00 on the 18th; the others are not.
+    view.rerender(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList
+          rows={rows}
+          now={new Date('2026-09-18T10:00:30Z')}
+          onOpenTask={onOpenTask}
+        />
+      </MemoryRouter>,
+    );
+    expect(chips.count).toBe(1);
+    // Overdue now, it leads the list.
+    expect(titles().slice(0, 2)).toEqual(['Z urgent', 'Afișe pentru gală']);
+  });
+});
+
 describe('ManagerTaskList, the finished part held to a window (#1147)', () => {
   // Two hundred rows drawn, then moved: heavy for jsdom under coverage.
   const WINDOW_TIMEOUT = 15_000;
@@ -1385,6 +1411,55 @@ describe('ManagerTaskList, the finished part held to a window (#1147)', () => {
       expect(finishedRegion()).toContainElement(
         document.activeElement as HTMLElement,
       );
+    },
+    WINDOW_TIMEOUT,
+  );
+
+  it(
+    'moves the window on once the page it asked for has landed',
+    async () => {
+      const user = userEvent.setup();
+      const loadMore = vi.fn();
+      lists.finished.mockReturnValue(
+        finishedRead({
+          rows: thousand.slice(0, 200),
+          total: 1000,
+          hasMore: true,
+          loadMore,
+        }),
+      );
+      const view = renderList();
+      await user.click(
+        within(finishedRegion()).getByRole('button', {
+          name: 'Încarcă mai multe',
+        }),
+      );
+      expect(loadMore).toHaveBeenCalledOnce();
+      // Until the page lands, the window stays where it was.
+      expect(finishedTitles()[0]).toBe('Încheiat 1');
+
+      lists.finished.mockReturnValue(
+        finishedRead({
+          rows: thousand.slice(0, 250),
+          total: 1000,
+          hasMore: true,
+          loadMore,
+        }),
+      );
+      view.rerender(
+        <MemoryRouter initialEntries={['/tracker']}>
+          <ManagerTaskList rows={rows} now={now} onOpenTask={view.onOpenTask} />
+        </MemoryRouter>,
+      );
+      const shown = finishedTitles();
+      expect(shown).toHaveLength(200);
+      expect(shown[0]).toBe('Încheiat 51');
+      expect(shown.at(-1)).toBe('Încheiat 250');
+      expect(
+        within(finishedRegion()).getByRole('button', {
+          name: 'Arată taskurile anterioare',
+        }),
+      ).toBeVisible();
     },
     WINDOW_TIMEOUT,
   );

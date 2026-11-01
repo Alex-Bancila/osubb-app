@@ -124,10 +124,27 @@ describe('TaskRowList renders (#1147)', () => {
 
     rerender(list(ROWS, NOW));
     rerender(list(ROWS, later(5_000)));
+    // The open row turns overdue and renders again: its text is the same.
+    rerender(list(ROWS, later(30_000)));
     expect(counts.stripped).toBe(0);
 
     const edited = { ...far, description: 'Afișe noi' };
-    rerender(list([edited, due, done], later(5_000)));
+    rerender(list([edited, due, done], later(30_000)));
     expect(counts.stripped).toBe(1);
+  });
+
+  // A finished deadline drops its year while it is this year's; on New
+  // Year's night that row must say its year, though nothing else moved.
+  it('presents a finished row again once the year turns, with its year', () => {
+    const lastNight = new Date('2026-12-31T21:00:00.000Z');
+    const { container, rerender } = render(list([done], lastNight));
+    const deadline = () => container.querySelector('time')?.textContent ?? '';
+    expect(deadline()).not.toContain('2026');
+    counts.chips = 0;
+
+    rerender(list([done], new Date('2027-01-01T08:00:00.000Z')));
+
+    expect(counts.chips).toBe(1);
+    expect(deadline()).toContain('2026');
   });
 });

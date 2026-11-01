@@ -1,4 +1,10 @@
-import { memo, useId, type CSSProperties, type ReactNode } from 'react';
+import {
+  memo,
+  useId,
+  useMemo,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import { Clock, UserRound } from 'lucide-react';
 import { AttachedLinksList } from '../../components/attached-link/AttachedLinksList';
 import { ListRow } from '../../components/layout';
@@ -135,6 +141,11 @@ export const TaskRow = memo(function TaskRow({
 }: TaskRowProps) {
   const readOnly = history !== undefined;
   const titleId = useId();
+  // Stripped once per description, whatever else re-renders the row.
+  const plainDescription = useMemo(
+    () => (task.description ? toPlainText(task.description) : null),
+    [task.description],
+  );
   // The viewer holds this Task: no queue news for them (relevance B14).
   const ownTask =
     task.kind === 'task' &&
@@ -275,7 +286,7 @@ export const TaskRow = memo(function TaskRow({
                     data-slot="task-row-description"
                     className="m-0 line-clamp-1 wrap-anywhere text-muted-foreground"
                   >
-                    {toPlainText(task.description)}
+                    {plainDescription}
                   </p>
                 )}
                 {!readOnly && (task.assignmentMode !== 'public' || ownTask) && (
