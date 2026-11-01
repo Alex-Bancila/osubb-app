@@ -16,6 +16,18 @@ import { keys } from './keys';
  */
 const COALESCE_MS = 250;
 
+/**
+ * How long a family rests after it is invalidated (#1148). A signal for it
+ * meanwhile is kept, and the family is invalidated once more as the window
+ * closes, which opens the next one: leading and trailing. A burst — an
+ * import stamping one profile per row — so costs each family at most one
+ * refetch a window, and a change still shows within it. An invalidation
+ * never restarts a read already on its way (`cancelRefetch: false`); such a
+ * read may have begun before the change, so the window's end reads the
+ * family again.
+ */
+const THROTTLE_MS = 2_000;
+
 type Prefix = readonly unknown[];
 
 // Key prefixes that live outside `keys` (see keys.ts for the families).
@@ -204,6 +216,45 @@ export function useLiveChanges(memberId?: string) {
     let unsubscribe: (() => void) | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const pending = new Set<string>();
+    // Each resting family's window, and whether it closes with a re-read.
+    const windows = new Map<
+      Prefix,
+      { timer: ReturnType<typeof setTimeout>; again: boolean }
+    >();
+
+    const invalidate = (queryKey: Prefix) => {
+      for (const [family, pages] of PAGED_LISTS)
+        if (family === queryKey) keepPages(queryClient, pages);
+      void queryClient.invalidateQueries(
+        { queryKey },
+        { cancelRefetch: false },
+      );
+    };
+
+    const rest = (queryKey: Prefix, again: boolean) => {
+      windows.set(queryKey, {
+        again,
+        timer: setTimeout(() => {
+          const closing = windows.get(queryKey);
+          windows.delete(queryKey);
+          if (!active || !closing?.again) return;
+          invalidate(queryKey);
+          rest(queryKey, false);
+        }, THROTTLE_MS),
+      });
+    };
+
+    const changed = (queryKey: Prefix) => {
+      const resting = windows.get(queryKey);
+      if (resting) {
+        resting.again = true;
+        return;
+      }
+      // Asked before the invalidation starts reads of its own.
+      const busy = queryClient.isFetching({ queryKey }) > 0;
+      invalidate(queryKey);
+      rest(queryKey, busy);
+    };
 
     const flush = () => {
       timer = undefined;
@@ -215,11 +266,7 @@ export function useLiveChanges(memberId?: string) {
         }
       }
       pending.clear();
-      for (const [family, pages] of PAGED_LISTS)
-        if (prefixes.has(family)) keepPages(queryClient, pages);
-      for (const queryKey of prefixes) {
-        void queryClient.invalidateQueries({ queryKey });
-      }
+      for (const queryKey of prefixes) changed(queryKey);
     };
 
     // Lazy, like the notifications channel: the Realtime SDK path stays out
@@ -240,6 +287,7 @@ export function useLiveChanges(memberId?: string) {
             clearTimeout(timer);
             timer = undefined;
             pending.clear();
+            for (const resting of windows.values()) resting.again = false;
             for (const [, pages] of PAGED_LISTS) keepPages(queryClient, pages);
             void queryClient.invalidateQueries();
           },
@@ -250,6 +298,8 @@ export function useLiveChanges(memberId?: string) {
     return () => {
       active = false;
       clearTimeout(timer);
+      for (const resting of windows.values()) clearTimeout(resting.timer);
+      windows.clear();
       unsubscribe?.();
     };
   }, [memberId, queryClient]);
