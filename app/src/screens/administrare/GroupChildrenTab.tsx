@@ -124,6 +124,7 @@ export function GroupChildrenTab({
   actorLevel,
   authority,
   authorityFor,
+  isProtected = () => false,
   busy,
   error,
   onRun,
@@ -135,6 +136,12 @@ export function GroupChildrenTab({
   actorLevel: number;
   authority: GroupAuthority;
   authorityFor: (child: AdminGroup) => GroupAuthority;
+  /**
+   * `archive_group` refuses the Child Group (#1129, `PT409 group_protected`):
+   * an Automatic-Membership Group, the board or AG Group named in Setări, or a
+   * Group above one — so its Arhivează is not offered.
+   */
+  isProtected?: (child: AdminGroup) => boolean;
   busy: boolean;
   error: string | null;
   onRun: RunGroupCommand;
@@ -171,7 +178,8 @@ export function GroupChildrenTab({
                 key={child.id}
                 action={
                   child.status === 'active' &&
-                  authorityFor(child).archive && (
+                  authorityFor(child).archive &&
+                  !isProtected(child) && (
                     <ArchiveChildDialog
                       child={child}
                       busy={busy}

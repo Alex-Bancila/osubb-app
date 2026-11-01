@@ -222,19 +222,19 @@ it('offers no Arhivează for an archived Group', async () => {
   ).toBeVisible();
 });
 
-it('says a protected Group cannot be deleted and offers only Arhivează and Păstrează', async () => {
+it('says a protected Group cannot be deleted and offers only Păstrează -- archiving is refused too (#1129)', async () => {
   preview({ ...FULL, protected: true });
   const user = userEvent.setup();
   show();
   const dialog = await open(user);
   expect(dialog).toHaveAccessibleDescription(
-    /Logistică nu poate fi șters definitiv\. Grupul organizației, grupurile cu membri adăugați automat și grupurile Biroului de Conducere sau Adunării Generale alese în Setări rămân mereu/,
+    /Logistică nu poate fi șters definitiv, nici arhivat\. Grupul organizației, grupurile cu membri adăugați automat și grupurile Biroului de Conducere sau Adunării Generale alese în Setări rămân mereu/,
   );
   expect(
     within(dialog)
       .getAllByRole('button')
       .map((button) => button.textContent),
-  ).toEqual(['Păstrează', 'Arhivează', '']);
+  ).toEqual(['Păstrează', '']);
   expect(within(dialog).queryByRole('textbox')).toBeNull();
 });
 

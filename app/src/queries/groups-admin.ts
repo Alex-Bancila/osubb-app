@@ -515,3 +515,32 @@ export function groupAuthority(
     editMinLevel: root ? createTopLevelGroups : manageGroup,
   };
 }
+
+/**
+ * The Groups `archive_group` and `delete_group` refuse with
+ * `PT409 group_protected` (#1129, ruling R38): the Organization Group, an
+ * Automatic-Membership Group, the board Group and the Adunarea Generală named
+ * in Setări, and every Group above one of them — `private.is_protected_group`
+ * read from the rows and the settings the page already holds, so it never
+ * offers Arhivează on them. Presentation only: the command decides.
+ */
+export function isProtectedGroup(
+  group: Pick<AdminGroup, 'id'>,
+  groups: readonly Pick<
+    AdminGroup,
+    'id' | 'path' | 'is_organization' | 'automatic_membership'
+  >[],
+  settings: ReadonlyMap<string, string | null> | undefined,
+): boolean {
+  const named = new Set(
+    ['board_group_id', 'adunarea_generala_group_id']
+      .map((key) => settings?.get(key))
+      .filter((value): value is string => /^[0-9]+$/.test(value ?? ''))
+      .map(Number),
+  );
+  return groups.some(
+    (row) =>
+      row.path.includes(group.id) &&
+      (row.is_organization || row.automatic_membership || named.has(row.id)),
+  );
+}

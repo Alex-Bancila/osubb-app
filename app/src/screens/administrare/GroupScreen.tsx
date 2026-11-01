@@ -42,9 +42,11 @@ import { parsePositiveInt } from '../../lib/ids';
 import { Loading } from '../../components/states';
 import { minimumLevelText } from '../../lib/minimum-level';
 import { useGroupApplications } from '../../queries/group-applications';
+import { useOrgSettings } from '../../queries/org-settings';
 import { useRoles } from '../../queries/reference';
 import {
   groupAuthority,
+  isProtectedGroup,
   useAdminGroups,
   useAppointableMembers,
   useGroupCommand,
@@ -261,6 +263,14 @@ export default function GroupScreen() {
   );
   const createTopLevel = capabilities.data?.createTopLevelGroups === true;
   const archived = group !== undefined && group.status !== 'active';
+  // #1129: the Groups archive_group refuses (PT409 group_protected) get no
+  // Arhivează, here and in the Subgrupuri tab: the Organization Group, an
+  // Automatic-Membership Group, the board and AG Groups named in Setări, and
+  // any Group above one. Read from the rows and the settings; the command decides.
+  const orgSettings = useOrgSettings();
+  const isProtected = (candidate: { id: number }) =>
+    isProtectedGroup(candidate, groups, orgSettings.data);
+  const protectedGroup = group !== undefined && isProtected(group);
   const authority = useMemo(
     () =>
       archived
@@ -345,15 +355,32 @@ export default function GroupScreen() {
     }
   }
 
+  // #1129: the settings name the board and AG Groups, so until they are read
+  // the page cannot tell a protected Group; isLoading (not isPending), because
+  // a query without a signed-in Member stays pending without ever fetching.
   if (
     parsedId !== null &&
     (groupsQuery.isPending ||
       myGroupsQuery.isPending === true ||
-      capabilities.isPending === true)
+      capabilities.isPending === true ||
+      orgSettings.isLoading)
   )
     return (
       <Page aria-label="Grup">
         <Loading label="Se încarcă grupul…" />
+      </Page>
+    );
+
+  // A refetch that fails keeps the settings already read; only a first read
+  // that fails leaves the page unable to decide.
+  if (orgSettings.isError && orgSettings.data === undefined)
+    return (
+      <Page>
+        <BackToGroups />
+        <PageHeader title="Grup" />
+        <p role="alert">
+          Nu am putut încărca setările organizației. Reîncearcă.
+        </p>
       </Page>
     );
 
@@ -483,6 +510,7 @@ export default function GroupScreen() {
               lastReason={lastReason}
               onRun={run}
               canDelete={canDelete}
+              protectedGroup={protectedGroup}
             />
           )}
           {tab === 'roster' &&
@@ -530,6 +558,7 @@ export default function GroupScreen() {
                   ? READ_ONLY
                   : groupAuthority(child, myGroupsQuery.data, createTopLevel)
               }
+              isProtected={isProtected}
               busy={busy}
               error={error}
               onRun={run}

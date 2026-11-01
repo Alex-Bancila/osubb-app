@@ -681,6 +681,44 @@ it('lays Setări, Structura and Arhivare out as panels with their own headers (A
   expect(primaries('Arhivare')).toBe(0);
 });
 
+/*
+ * #1129 (audit M5): archive_group refuses the Organization Group, an
+ * Automatic-Membership Group, the board and AG Groups and any Group above one
+ * (PT409 group_protected), so the tab never offers Arhivează on them. The
+ * page decides `protectedGroup` from the rows and Setări (isProtectedGroup).
+ */
+it('offers no Arhivează on a protected Group (#1129)', () => {
+  const { unmount } = render(
+    <MemoryRouter>
+      <GroupSettingsTab
+        group={group({ parent_id: null, path: [2], min_level: 0 })}
+        parent={undefined}
+        roster={[]}
+        authority={{ ...authority, editStructure: true, archive: true }}
+        levels={[0, 1, 2, 3, 5, 6]}
+        actorLevel={6}
+        busy={false}
+        error={null}
+        lastReason={undefined}
+        onRun={run}
+        protectedGroup
+      />
+    </MemoryRouter>,
+  );
+  expect(screen.queryByRole('button', { name: 'Arhivează grupul' })).toBeNull();
+  // The structure form is still the BC's; only archiving is withheld.
+  expect(
+    screen.getByRole('button', { name: 'Salvează structura' }),
+  ).toBeVisible();
+  unmount();
+
+  // The same Group, unprotected: the control is back.
+  root();
+  expect(
+    screen.getByRole('button', { name: 'Arhivează grupul' }),
+  ).toBeVisible();
+});
+
 it('renders nothing for a viewer who can change none of it', () => {
   const { container } = render(
     <MemoryRouter>
