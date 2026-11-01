@@ -24,7 +24,10 @@ const COALESCE_MS = 250;
  * refetch a window, and a change still shows within it. An invalidation
  * never restarts a read already on its way (`cancelRefetch: false`); such a
  * read may have begun before the change, so the window's end reads the
- * family again.
+ * family again. A read still on its way when that window closes is left
+ * alone too, and asks for no further window: whatever it missed shows at
+ * the next signal or focus, rather than every idle query of the family
+ * being read every two seconds behind one slow read.
  */
 const THROTTLE_MS = 2_000;
 
