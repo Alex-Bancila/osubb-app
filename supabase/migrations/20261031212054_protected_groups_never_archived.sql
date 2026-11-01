@@ -44,10 +44,12 @@ as $$
      where grp.path @> array[p_group_id]
        and (grp.is_organization
             or grp.automatic_membership
-            or grp.id::text in (select setting.value
-                                  from public.org_settings as setting
-                                 where setting.key in ('board_group_id', 'adunarea_generala_group_id')
-                                   and setting.value ~ '^[0-9]+$')));
+            -- Compared as a number, as the page does (Number()), so a value
+            -- the shape check admits but spells oddly still names its Group.
+            or grp.id in (select setting.value::bigint
+                            from public.org_settings as setting
+                           where setting.key in ('board_group_id', 'adunarea_generala_group_id')
+                             and setting.value ~ '^[0-9]{1,18}$')));
 $$;
 
 comment on function private.is_protected_group(bigint) is

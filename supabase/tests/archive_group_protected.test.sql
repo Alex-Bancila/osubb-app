@@ -22,7 +22,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(16);
+select plan(17);
 
 create function pg_temp.u1129(n integer) returns uuid language sql immutable as $$
   select ('11290000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -116,6 +116,9 @@ select throws_ok(
 select throws_ok(
   format($$select public.archive_group(%s)$$, pg_temp.g1129('Părinte protejat #1129')),
   'PT409', 'group_protected', 'archive_group: nor is a Group whose subtree holds a protected Group -- the archive would cascade onto it');
+select throws_ok(
+  format($$select public.archive_group(%s)$$, pg_temp.g1129('Copil automat #1129')),
+  'PT409', 'group_protected', 'archive_group: the protected Child Group is refused on its own too, through the Child branch of the authority');
 reset role;
 
 select is(
@@ -150,9 +153,10 @@ select is(
         private.is_protected_group(pg_temp.g1129('Birou #1129')),
         private.is_protected_group(pg_temp.g1129('Adunare #1129')),
         private.is_protected_group(pg_temp.g1129('Părinte protejat #1129')),
+        private.is_protected_group(pg_temp.g1129('Copil automat #1129')),
         private.is_protected_group(999999999)],
-  array[false, true, true, true, true, true, false],
-  'is_protected_group: the Organization Group, an Automatic-Membership Group, the board and AG Groups and a Group above one; never an ordinary or unknown Group');
+  array[false, true, true, true, true, true, true, false],
+  'is_protected_group: the Organization Group, an Automatic-Membership Group, the board and AG Groups, a Group above one and the protected Child itself; never an ordinary or unknown Group');
 select is(
   public.group_delete_preview(pg_temp.g1129('Părinte protejat #1129')) -> 'protected', 'true'::jsonb,
   'group_delete_preview reads the same helper');

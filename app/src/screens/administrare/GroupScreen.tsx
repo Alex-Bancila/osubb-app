@@ -268,8 +268,9 @@ export default function GroupScreen() {
   // Automatic-Membership Group, the board and AG Groups named in Setări, and
   // any Group above one. Read from the rows and the settings; the command decides.
   const orgSettings = useOrgSettings();
-  const protectedGroup =
-    group !== undefined && isProtectedGroup(group, groups, orgSettings.data);
+  const isProtected = (candidate: { id: number }) =>
+    isProtectedGroup(candidate, groups, orgSettings.data);
+  const protectedGroup = group !== undefined && isProtected(group);
   const authority = useMemo(
     () =>
       archived
@@ -540,9 +541,7 @@ export default function GroupScreen() {
                   ? READ_ONLY
                   : groupAuthority(child, myGroupsQuery.data, createTopLevel)
               }
-              isProtected={(child) =>
-                isProtectedGroup(child, groups, orgSettings.data)
-              }
+              isProtected={isProtected}
               busy={busy}
               error={error}
               onRun={run}
