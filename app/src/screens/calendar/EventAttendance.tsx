@@ -59,7 +59,9 @@ export function EventAttendance({ event }: { event: EventPresentation }) {
           // by the chevron and aria-expanded, not by a filled pill.
           className="event-attendance-toggle -ms-2 px-2 text-sm font-extrabold text-foreground aria-expanded:bg-transparent"
           aria-expanded={open}
-          aria-controls={open ? listId : undefined}
+          // Only a list that is on the page: none while it is read, nor
+          // when nobody answered.
+          aria-controls={answers && total > 0 ? listId : undefined}
           onClick={() => setOpen((current) => !current)}
         >
           Cine participă

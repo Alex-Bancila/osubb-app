@@ -114,7 +114,13 @@ export async function setEventRsvp(
 /** What an answer replaced in the cache, to put back if the save fails. */
 export type EventRsvpSnapshot = {
   memberId: string;
-  answers: MyEventAnswers | undefined;
+  /**
+   * This Event's answer before the tap: `null` when there was none,
+   * `undefined` when the member's answers had not been read. Only this
+   * entry is put back: the map holds every card's answer, and another card
+   * may be saving its own meanwhile.
+   */
+  answer: EventRsvpStatus | null | undefined;
   attendance: EventAttendance | undefined;
 };
 
@@ -164,16 +170,17 @@ export function eventRsvpMutationOptions(
         ),
       );
 
+      const answers = queryClient.getQueryData<MyEventAnswers>(answersKey);
       const snapshot: EventRsvpSnapshot = {
         memberId,
-        answers: queryClient.getQueryData<MyEventAnswers>(answersKey),
+        answer: answers && (answers.get(eventId) ?? null),
         attendance: queryClient.getQueryData<EventAttendance>(attendanceKey),
       };
 
-      if (snapshot.answers !== undefined) {
+      if (answers !== undefined) {
         queryClient.setQueryData<MyEventAnswers>(
           answersKey,
-          new Map(snapshot.answers).set(eventId, status),
+          new Map(answers).set(eventId, status),
         );
       }
       if (snapshot.attendance !== undefined) {
@@ -190,9 +197,18 @@ export function eventRsvpMutationOptions(
       snapshot: EventRsvpSnapshot | null | undefined,
     ) => {
       if (!snapshot) return;
-      const { memberId: member } = snapshot;
-      if (snapshot.answers !== undefined) {
-        queryClient.setQueryData(keys.events.answers(member), snapshot.answers);
+      const { memberId: member, answer } = snapshot;
+      if (answer !== undefined) {
+        queryClient.setQueryData<MyEventAnswers>(
+          keys.events.answers(member),
+          (current) => {
+            if (!current) return current;
+            const next = new Map(current);
+            if (answer === null) next.delete(eventId);
+            else next.set(eventId, answer);
+            return next;
+          },
+        );
       }
       if (snapshot.attendance !== undefined) {
         queryClient.setQueryData(

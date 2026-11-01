@@ -253,8 +253,50 @@ describe('RSVP mutation', () => {
 
     options.onError(new Error('x'), input, snapshot);
 
-    expect(queryClient.getQueryData(answersKey)).toBe(before.answers);
+    expect([
+      ...(queryClient.getQueryData<Map<number, string>>(answersKey) ?? []),
+    ]).toEqual([
+      [4, 'going'],
+      [42, 'going'],
+    ]);
     expect(queryClient.getQueryData(attendanceKey)).toEqual(before.attendance);
+  });
+
+  // Every card's answer is in one map now: a failed save on one card must
+  // put back its own answer only, never the whole map it saw — that would
+  // wipe an answer another card is still saving.
+  it('puts back only its own Event’s answer when two cards save at once', async () => {
+    const queryClient = new QueryClient();
+    const answersKey = ['events', 'answers', { memberId }];
+    queryClient.setQueryData(
+      answersKey,
+      new Map([
+        [42, 'going'],
+        [43, 'declined'],
+      ]),
+    );
+    const first = eventRsvpMutationOptions(queryClient, memberId);
+    const second = eventRsvpMutationOptions(queryClient, memberId);
+    const onFortyTwo = { eventId: 42, status: 'declined' } as const;
+    const onFortyThree = { eventId: 43, status: 'going' } as const;
+
+    const fortyTwo = await first.onMutate(onFortyTwo);
+    const fortyThree = await second.onMutate(onFortyThree);
+    first.onError(new Error('x'), onFortyTwo, fortyTwo);
+
+    const answers = () => [
+      ...(queryClient.getQueryData<Map<number, string>>(answersKey) ?? []),
+    ];
+    expect(answers()).toEqual([
+      [42, 'going'],
+      [43, 'going'],
+    ]);
+
+    second.onError(new Error('x'), onFortyThree, fortyThree);
+    expect(answers()).toEqual([
+      [42, 'going'],
+      [43, 'declined'],
+    ]);
   });
 
   it('writes a first answer into the member’s answers, which joins the Vin set', async () => {

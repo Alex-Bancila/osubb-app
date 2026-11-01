@@ -251,6 +251,21 @@ describe('EventRsvpControls', () => {
     expect(answer('Particip')).toHaveAttribute('aria-pressed', 'true');
   });
 
+  // The list's read failed: the card cannot tell what was answered, so it
+  // offers no answer to send over it.
+  it('keeps both answers closed and says so when the answers cannot be read', async () => {
+    supabaseMock.range.mockImplementation(() =>
+      Promise.resolve({ data: null, error: { code: '500', message: 'down' } }),
+    );
+    renderControls();
+
+    expect(await screen.findByText('Răspuns indisponibil')).toBeVisible();
+    expect(answer('Particip')).toHaveAttribute('aria-disabled', 'true');
+    expect(answer('Nu particip')).toHaveAttribute('aria-disabled', 'true');
+    expect(answer('Particip')).toHaveAttribute('aria-pressed', 'false');
+    expect(supabaseMock.rpc).not.toHaveBeenCalled();
+  });
+
   it('shows the failure and puts the earlier answer back', async () => {
     const user = userEvent.setup();
     supabaseMock.rpc.mockResolvedValueOnce({

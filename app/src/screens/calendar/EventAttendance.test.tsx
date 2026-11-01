@@ -180,6 +180,33 @@ describe('EventAttendance — Cine participă (#934)', () => {
     expect(screen.queryByText('2 participă · 1 nu')).toBeNull();
   });
 
+  // The toggle names what it opens only once that is on the page.
+  it('points the toggle at the list only while the list is there', async () => {
+    const user = userEvent.setup();
+    state.attendance.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    const { rerender } = render(<EventAttendance event={event()} />);
+    await user.click(toggle());
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle()).not.toHaveAttribute('aria-controls');
+
+    answered([], []);
+    rerender(<EventAttendance event={event()} />);
+    expect(toggle()).not.toHaveAttribute('aria-controls');
+
+    answered(['m1'], ['m3']);
+    rerender(<EventAttendance event={event()} />);
+    const controlled = toggle().getAttribute('aria-controls');
+    expect(controlled).toBeTruthy();
+    expect(document.getElementById(controlled ?? '')).toContainElement(
+      screen.getByRole('region', { name: 'Particip 1' }),
+    );
+  });
+
   it('says the answers are on their way while they are read', async () => {
     state.attendance.mockReturnValue({
       data: undefined,
