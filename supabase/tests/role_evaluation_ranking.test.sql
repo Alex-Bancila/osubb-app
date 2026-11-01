@@ -70,7 +70,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(33);
+select plan(41);
 
 -- ==================== Fixtures ====================
 
@@ -387,6 +387,62 @@ select results_eq(
   $$ select * from private.role_evaluation_rows('voluntar_activ', '2005-01-01', '2005-06-30', 5, 25, '2004-07-01') $$,
   $$ select * from full826_va order by task_points desc, member_id $$,
   'with the Promotion Rules dropped (R58) the ranking is unchanged: it is a function of its arguments and the ledger');
+
+
+
+-- ==================== 6. The population the run judged (#1146) ====================
+-- A run recorded by the command keeps every row it ranked, and its ranking
+-- is read from them whatever the Roles do afterwards. The two runs above
+-- were written as the owner with no population, so they stand in for the
+-- runs from before #1146 and keep recomputing.
+select pg_temp.test_login_leadership('82600000-0000-0000-0000-000000000001');
+select lives_ok(
+  $$ select * from public.run_role_evaluation('adunarea_generala', '2005-01-01', '2005-06-30', 'Evaluare AG păstrată 826', 5, 25) $$,
+  'BC records an Adunarea Generală run with the values the reference rows were computed with');
+reset role;
+create temp table kept826 as
+  select id from public.role_evaluations where name = 'Evaluare AG păstrată 826';
+grant select on kept826 to authenticated, anon;
+select is((select members_recorded from public.role_evaluations where id = (select id from kept826)), true,
+  'the run says it kept its population');
+select results_eq(
+  $$ select member_id, role_at_run, points, rank, below_line, listable
+       from public.role_evaluation_members where role_evaluation_id = (select id from kept826)
+      order by points desc, member_id $$,
+  $$ select member_id, role, task_points, rank, ranked and not inside, listable
+       from full826_ag order by task_points desc, member_id $$,
+  'one kept row per evaluated Member, as the ranking stood at the run');
+select pg_temp.test_login_leadership('82600000-0000-0000-0000-000000000001');
+select results_eq(
+  $$ select * from public.role_evaluation_ranking((select id from kept826)) $$,
+  $$ select * from full826_ag order by task_points desc, member_id $$,
+  'BC reads the kept run''s ranking: the rows the run recorded, with its own counts, share and line');
+reset role;
+select pg_temp.test_login_leadership('82600000-0000-0000-0000-000000000031');
+select results_eq(
+  $$ select * from public.role_evaluation_ranking((select id from kept826)) $$,
+  $$ select * from full826_ag where member_id = '82600000-0000-0000-0000-000000000031' $$,
+  'an ordinary Drept de Vot holder reads exactly her own kept row');
+select throws_ok(
+  $$ select * from public.role_evaluation_members $$,
+  '42501', null,
+  'the kept rows are read only through role_evaluation_ranking');
+reset role;
+-- BC demotes VOT2, the voter the run signalled below the line (a Role write
+-- as the owner here): today's pool holds one voter fewer.
+update public.profiles set role = 'activ' where id = '82600000-0000-0000-0000-000000000032';
+select pg_temp.test_login_leadership('82600000-0000-0000-0000-000000000001');
+select results_eq(
+  $$ select * from public.role_evaluation_ranking((select id from kept826)) $$,
+  $$ select * from full826_ag order by task_points desc, member_id $$,
+  'the kept run''s ranking is unchanged after the demotion: VOT2 is still a voter at place 6 on its sheet');
+select is(
+  (select role::text from public.role_evaluation_ranking((select ag from runs826))
+    where member_id = '82600000-0000-0000-0000-000000000032'),
+  'activ',
+  'a run with no kept population (from before #1146) still recomputes over today''s Roles');
+reset role;
+
 
 select * from finish();
 rollback;

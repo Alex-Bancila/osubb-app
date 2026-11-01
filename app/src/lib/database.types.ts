@@ -1980,12 +1980,72 @@ export type Database = {
           },
         ]
       }
+      role_evaluation_members: {
+        Row: {
+          below_line: boolean
+          listable: boolean
+          member_id: string
+          points: number
+          rank: number | null
+          role_at_run: Database["public"]["Enums"]["member_role"]
+          role_evaluation_id: number
+        }
+        Insert: {
+          below_line: boolean
+          listable?: boolean
+          member_id: string
+          points: number
+          rank?: number | null
+          role_at_run: Database["public"]["Enums"]["member_role"]
+          role_evaluation_id: number
+        }
+        Update: {
+          below_line?: boolean
+          listable?: boolean
+          member_id?: string
+          points?: number
+          rank?: number | null
+          role_at_run?: Database["public"]["Enums"]["member_role"]
+          role_evaluation_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_evaluation_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "role_evaluation_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_evaluation_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_evaluation_members_role_evaluation_id_fkey"
+            columns: ["role_evaluation_id"]
+            isOneToOne: false
+            referencedRelation: "role_evaluations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       role_evaluations: {
         Row: {
           eligibility_floor: number | null
           evaluated_count: number | null
           id: number
           kind: string
+          members_recorded: boolean
           membership_cutoff: string | null
           name: string
           percent_used: number | null
@@ -2002,6 +2062,7 @@ export type Database = {
           evaluated_count?: number | null
           id?: never
           kind: string
+          members_recorded?: boolean
           membership_cutoff?: string | null
           name: string
           percent_used?: number | null
@@ -2018,6 +2079,7 @@ export type Database = {
           evaluated_count?: number | null
           id?: never
           kind?: string
+          members_recorded?: boolean
           membership_cutoff?: string | null
           name?: string
           percent_used?: number | null

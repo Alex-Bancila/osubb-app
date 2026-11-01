@@ -194,6 +194,13 @@ insert into retention_signals (kind, member_id, role_at_listing, reason, task_po
          (values ('ffffffff-0000-0000-0000-000000000006'::uuid),
                  ('eeeeeeee-0000-0000-0000-000000000156'::uuid)) as member (id)
    where run.name = 'rls-role-evaluation';
+-- #1146: the population a run kept; the owner writes the row as the command
+-- would. No policy and no grant: the table is read only through
+-- role_evaluation_ranking, whose own rule filters per caller.
+insert into role_evaluation_members (role_evaluation_id, member_id, role_at_run, points, rank, below_line)
+  select run.id, 'ffffffff-0000-0000-0000-000000000006', 'activ', 10, 1, false
+    from role_evaluations as run
+   where run.name = 'rls-role-evaluation';
 -- #991: the volunteer import's record has no policy at all; the row owned by
 -- the claimless uid is the one a self limb would have exposed.
 insert into member_imports (member_id, sheet_email, sheet_row, imported_by) values
