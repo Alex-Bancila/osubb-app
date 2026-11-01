@@ -456,6 +456,28 @@ describe('announcements-presentation', () => {
         ),
       ).toBe(false);
     });
+
+    it('gives a Manager or Responsible appointed on the Organization Group nothing over its Announcements (#1126)', () => {
+      // R48 lets BC appoint them there for org-wide Tasks; the Announcements
+      // stay their author's and BC's, as announcements_update now says.
+      for (const group_role of ['manager', 'responsible'])
+        expect(
+          mayManageAnnouncement(orgWide, {
+            ...none,
+            groups: [{ id: 1, group_role, status: 'active' }],
+          }),
+        ).toBe(false);
+      // Their own still is theirs.
+      expect(
+        mayManageAnnouncement(
+          { ...orgWide, authorMember: author('me') },
+          {
+            ...none,
+            groups: [{ id: 1, group_role: 'responsible', status: 'active' }],
+          },
+        ),
+      ).toBe(true);
+    });
   });
 });
 
