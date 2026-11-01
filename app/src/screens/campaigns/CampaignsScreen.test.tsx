@@ -361,3 +361,31 @@ it('never opens the one topmost managed Group by default (#908, was D22)', () =>
   expect(where()).toBe('/administrare/campanii?stare=inactive');
   expect(screen.getByRole('region', { name: 'Toate grupurile' })).toBeVisible();
 });
+
+// #1127 (audit M3): BC manages an archived Group's Campaigns, reads their
+// reports, but creates none there -- create_campaign refuses group_archived.
+it('offers no Campanie nouă on an archived Group', async () => {
+  api.options.mockReturnValue({
+    isSuccess: true,
+    data: {
+      groups: [
+        {
+          id: 2,
+          name: 'Echipa',
+          path: [1, 2],
+          min_level: 1,
+          status: 'archived',
+        },
+        { id: 4, name: 'Tineret', path: [4], min_level: 0, status: 'active' },
+      ],
+      groupNames: [{ id: 1, name: 'Educațional' }],
+      campaigns: [],
+      umbrellas: [],
+    },
+  });
+  show();
+  expect(await screen.findByText('Toamnă')).toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Campanie nouă' }),
+  ).not.toBeInTheDocument();
+});

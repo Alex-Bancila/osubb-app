@@ -4001,6 +4001,7 @@ export type Database = {
           min_level: number
           name: string
           path: number[]
+          status: string
         }[]
       }
       mark_all_notifications_read: { Args: never; Returns: number }

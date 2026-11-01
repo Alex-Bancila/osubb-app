@@ -44,6 +44,7 @@ import {
   groupLookup,
   isPrivateGroup,
   originFor,
+  offeredGroups,
   rootGroups,
   taskDraftInput,
   umbrellasFor,
@@ -116,7 +117,7 @@ export function TaskForm({
   const id = useId();
   const [values, setValues] = useState<TaskFormValues>(() => {
     // One root and nothing else to choose between: start there.
-    const roots = rootGroups(options.groups);
+    const roots = rootGroups(offeredGroups(options.groups));
     return {
       title: '',
       description: '',
@@ -241,7 +242,8 @@ export function TaskForm({
       </div>
       <div className="grid gap-1.5" {...form.slot('groupId')}>
         <TaskGroupCascade
-          groups={options.groups}
+          // #1127: a new Task goes only into a Group that still takes work.
+          groups={offeredGroups(options.groups)}
           groupsById={groupsById}
           value={origin?.id ?? values.groupId}
           onChange={chooseGroup}

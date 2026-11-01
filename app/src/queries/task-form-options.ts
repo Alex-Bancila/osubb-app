@@ -4,7 +4,10 @@ import { supabase } from '../lib/supabase';
 import { keys } from './keys';
 import { readAllRows } from './read-all';
 import { fetchCampaigns } from './campaigns';
-import type { TaskFormOptions } from '../screens/tracker/task-form-model';
+import {
+  offeredGroups,
+  type TaskFormOptions,
+} from '../screens/tracker/task-form-model';
 
 export async function fetchTaskFormOptions(): Promise<TaskFormOptions> {
   const groups = await readAllRows((from, to) =>
@@ -38,7 +41,9 @@ export async function fetchTaskFormOptions(): Promise<TaskFormOptions> {
         .range(from, to),
     ),
   ]);
-  const ids = new Set(groups.map((group) => group.id));
+  // An Umbrella takes a new Subtask only in a Group that still takes new
+  // work (#1127): the managed, active ones.
+  const ids = new Set(offeredGroups(groups).map((group) => group.id));
   return {
     groups,
     campaigns,

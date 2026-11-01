@@ -33,6 +33,8 @@ it('pages server-managed origins and readable active campaigns/umbrellas without
                   path: [from + i + 1],
                   min_level: 0,
                   category: 'team',
+                  // #1127: the first managed Group is archived.
+                  status: from + i === 0 ? 'archived' : 'active',
                 }))
               : table === 'groups'
                 ? [{ id: 1, name: 'Educațional' }]
@@ -54,6 +56,7 @@ it('pages server-managed origins and readable active campaigns/umbrellas without
                   : [
                       { id: 20, title: 'Umbrelă administrată', group_id: 501 },
                       { id: 21, title: 'Doar vizibilă', group_id: 999 },
+                      { id: 22, title: 'În grup arhivat', group_id: 1 },
                     ],
           error: null,
         };
@@ -65,6 +68,9 @@ it('pages server-managed origins and readable active campaigns/umbrellas without
   api.from.mockImplementation(builder);
   const data = await fetchTaskFormOptions();
   expect(data.groups).toHaveLength(501);
+  // #1127: the status travels with each Group; the pickers decide what to offer.
+  expect(data.groups[0]?.status).toBe('archived');
+  expect(data.groups[1]?.status).toBe('active');
   expect(calls).toContainEqual(['managed_work_groups', 'range', 500, 999]);
   expect(data.campaigns.map((row) => row.id)).toEqual([10]);
   expect(calls).toContainEqual(['tasks', 'eq', 'kind', 'umbrella']);
@@ -74,6 +80,7 @@ it('pages server-managed origins and readable active campaigns/umbrellas without
     'status',
     ['todo', 'in_progress', 'in_review'],
   ]);
+  // #1127: an Umbrella in an archived Group takes no new Subtask.
   expect(data.umbrellas).toEqual([
     { id: 20, title: 'Umbrelă administrată', group_id: 501 },
   ]);

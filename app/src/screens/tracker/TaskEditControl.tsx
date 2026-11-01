@@ -65,6 +65,7 @@ import {
   campaignsFor,
   groupLookup,
   isPrivateGroup,
+  offeredGroups,
   type ManagedWorkGroup,
   type TaskFormOptions,
 } from './task-form-model';
@@ -484,7 +485,9 @@ function TaskEditForm({
           {options.data && (
             <div className="grid gap-1.5" {...form.slot('groupId')}>
               <TaskGroupCascade
-                groups={options.data.groups}
+                // #1127: only Groups that still take work, plus the Task's
+                // own even when archived, so the edit saves without a move.
+                groups={offeredGroups(options.data.groups, task.group_id)}
                 groupsById={groupsById}
                 value={groupId}
                 onChange={chooseGroup}

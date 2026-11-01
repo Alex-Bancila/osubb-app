@@ -33,10 +33,13 @@ export default function CampaignsScreen() {
     () => groupOptions(options.data?.groups ?? []),
     [options.data],
   );
-  // `managed_work_groups()` returns only Groups the caller may manage now
-  // (active ones, or every Group for BC/Moderator), so each is offered.
+  // `managed_work_groups()` returns the Groups the caller may manage now
+  // (active ones, or every Group for BC/Moderator) with their status
+  // (#1127): the filter offers the active ones, and an archived Group's
+  // Campaigns, reached by their address, only report.
   const groups = useMemo<WorkFilterGroup[]>(
-    () => managed.map((group) => ({ ...group, status: 'active' })),
+    () =>
+      managed.map((group) => ({ ...group, status: group.status ?? 'active' })),
     [managed],
   );
   const groupsById = useMemo(
@@ -111,6 +114,9 @@ export default function CampaignsScreen() {
         {group ? (
           <CampaignsPanel
             group={group}
+            // #1127: no new Campaign in an archived Group (create_campaign
+            // refuses group_archived); its Campaigns still report.
+            readOnly={group.status === 'archived'}
             label={groupOptionLabel(group, groupsById)}
             groups={managed}
             range={filter.params}
