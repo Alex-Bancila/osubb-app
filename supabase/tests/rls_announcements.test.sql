@@ -4,7 +4,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(48);
+select plan(50);
 truncate announcements, announcement_reads cascade;
 
 insert into auth.users(id,email) values
@@ -244,6 +244,21 @@ delete from announcements where title='Org Responsible own #1126';
 reset role;
 select is((select count(*) from announcements where title='Org Responsible own #1126'),0::bigint,
 'and delete their own');
+
+-- A Manager appointed on the Organization Group is held to the same rule.
+insert into auth.users(id,email) values ('fa000000-0000-0000-0000-0000000000fa','ann581-orgmanager@test.local');
+insert into profiles(id,full_name,email,role,status) values
+('fa000000-0000-0000-0000-0000000000fa','Org Manager','ann581-orgmanager@test.local','voluntar','activ');
+insert into group_members(group_id,member_id,group_role)
+select id,'fa000000-0000-0000-0000-0000000000fa'::uuid,'manager' from groups where is_organization;
+select pg_temp.test_login_leadership('fa000000-0000-0000-0000-0000000000fa');
+update announcements set body='edited by the Organization Manager' where title='Moderator Organization #1126';
+delete from announcements where title='Moderator Organization #1126';
+reset role;
+select is((select body from announcements where title='Moderator Organization #1126'),'by the Moderator',
+'a Manager appointed on the Organization Group cannot edit another author''s organisation-wide Announcement either (#1126)');
+select is((select count(*) from announcements where title='Moderator Organization #1126'),1::bigint,
+'nor delete it');
 
 create temp table ann_org_fx as select id from groups where is_organization;
 grant select on ann_org_fx to authenticated;
