@@ -7,8 +7,9 @@ import {
 import { memberRoleLabel } from '../components/member/member-identity';
 import { useAuth } from '../lib/auth';
 import { CommandError } from '../lib/command-reasons';
-import type { Database } from '../lib/database.types';
+import type { Database, Json } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
+import { jsonCount, jsonObject } from './delete-for-good';
 import { fetchMyGroups, type MyGroup } from './my-groups';
 import { keys } from './keys';
 import { readAllRows } from './read-all';
@@ -543,4 +544,57 @@ export function isProtectedGroup(
       row.path.includes(group.id) &&
       (row.is_organization || row.automatic_membership || named.has(row.id)),
   );
+}
+
+/* ------------------------------------------------------- Archive preview */
+
+/**
+ * What archiving a Group would act on (#1149, `group_archive_preview`): every
+ * Group below it, the future Events of the subtree still standing and the
+ * pending Applications -- what archive_group cancels, declines and archives,
+ * and what Dezarhivează (ruling R65) never restores.
+ */
+export type GroupArchivePreview = {
+  subgroups: number;
+  events: number;
+  applications: number;
+};
+
+export function readGroupArchivePreview(
+  value: Json | null | undefined,
+): GroupArchivePreview {
+  const row = jsonObject(value ?? undefined);
+  return {
+    subgroups: jsonCount(row.subgroups),
+    events: jsonCount(row.events),
+    applications: jsonCount(row.applications),
+  };
+}
+
+const ARCHIVE_PREVIEW_FAILED = 'Nu am putut verifica ce ar schimba arhivarea.';
+
+export async function fetchGroupArchivePreview(
+  groupId: number,
+): Promise<GroupArchivePreview> {
+  const { data, error } = await supabase.rpc('group_archive_preview', {
+    p_group_id: groupId,
+  });
+  if (error) throw new CommandError(error, ARCHIVE_PREVIEW_FAILED);
+  return readGroupArchivePreview(data);
+}
+
+/**
+ * Read as the archive dialog opens and dropped when it closes (`gcTime: 0`),
+ * so every opening sees the subtree as it stands now; the server refuses the
+ * same callers `archive_group` refuses.
+ */
+export function useGroupArchivePreview(groupId: number) {
+  const memberId = useAuth().session?.user.id;
+  return useQuery({
+    queryKey: keys.groups.archivePreview(groupId, memberId),
+    queryFn: memberId ? () => fetchGroupArchivePreview(groupId) : skipToken,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
 }

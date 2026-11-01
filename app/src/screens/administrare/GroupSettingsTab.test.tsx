@@ -12,7 +12,19 @@ import type {
 } from '../../queries/groups-admin';
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+// #1149: the archive dialog reads what archiving would do; the counts here
+// are what the Setări tab's dialog must show.
+vi.mock('../../queries/groups-admin', async (original) => ({
+  ...(await original<object>()),
+  useGroupArchivePreview: () => ({
+    isPending: false,
+    isError: false,
+    data: { subgroups: 2, events: 1, applications: 0 },
+    refetch: vi.fn(),
+  }),
+}));
 import { chooseOption } from '../../test/select';
+import { NO_UNARCHIVE } from './group-archive-summary';
 import { GroupSettingsTab } from './GroupSettingsTab';
 import { optionNames, optionsOf } from './select-test-options';
 
@@ -679,6 +691,33 @@ it('lays Setări, Structura and Arhivare out as panels with their own headers (A
   expect(primaries('Setările grupului')).toBe(1);
   expect(primaries('Structura grupului')).toBe(1);
   expect(primaries('Arhivare')).toBe(0);
+});
+
+/*
+ * #1149 (audit M21): the archive confirmation lists what archiving does, with
+ * the counts from group_archive_preview, and says unarchiving restores none.
+ */
+it('shows what archiving would do before confirming (#1149)', async () => {
+  const user = userEvent.setup();
+  root();
+  await user.click(screen.getByRole('button', { name: 'Arhivează grupul' }));
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Arhivează Logistică',
+  });
+  const list = within(dialog).getByRole('list', {
+    name: 'Ce se întâmplă la arhivare',
+  });
+  expect(
+    within(list)
+      .getAllByRole('listitem')
+      .map((item) => item.textContent),
+  ).toEqual([
+    '2 subgrupuri arhivate',
+    '1 eveniment viitor anulat, cu notificare către participanți',
+  ]);
+  expect(dialog).toHaveTextContent(NO_UNARCHIVE);
+  await user.click(within(dialog).getByRole('button', { name: 'Arhivează' }));
+  expect(run).toHaveBeenLastCalledWith({ kind: 'archive', groupId: 2 });
 });
 
 /*

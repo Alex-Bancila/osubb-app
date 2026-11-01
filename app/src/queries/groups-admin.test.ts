@@ -11,6 +11,7 @@ import {
   fetchGroupRoster,
   groupAuthority,
   isProtectedGroup,
+  readGroupArchivePreview,
   runGroupCommand,
 } from './groups-admin';
 import type { MyGroup } from './my-groups';
@@ -600,4 +601,16 @@ it('names the protected Groups as the server does, a parent of one included (#11
   expect(
     isProtectedGroup(row(9, [9]), groups, new Map([['board_group_id', null]])),
   ).toBe(false);
+});
+
+/* #1149: the archive preview, as the dialog reads it. */
+it("reads the archive preview's counts, strings included, and zero for anything else (#1149)", () => {
+  expect(
+    readGroupArchivePreview({ subgroups: 3, events: '2', applications: 1 }),
+  ).toEqual({ subgroups: 3, events: 2, applications: 1 });
+  expect(readGroupArchivePreview(null)).toEqual({
+    subgroups: 0,
+    events: 0,
+    applications: 0,
+  });
 });

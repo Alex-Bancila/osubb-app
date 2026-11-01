@@ -1,5 +1,4 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
-import { Link } from 'react-router';
 import { Panel } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
@@ -11,14 +10,6 @@ import { ChoiceRow } from '../../components/ui/radio-group';
 import { SegmentedRadio } from '../../components/ui/segmented-radio';
 import { Select, type SelectOption } from '../../components/ui/select';
 import { SwitchRow } from '../../components/ui/switch';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../../components/ui/dialog';
 import {
   applicationFormFailure,
   fieldForReason,
@@ -40,8 +31,8 @@ import {
   membersBelowLevel,
   minLevelChoices,
   PRIVATE_GROUP_HINT,
-  unfinishedTasksPath,
 } from './group-tree';
+import { GroupArchiveDialog } from './GroupArchiveDialog';
 import { GroupDeleteDialog } from './GroupDeleteDialog';
 
 const SAVE_FAILED = 'Nu am putut salva schimbarea. Reîncearcă.';
@@ -224,88 +215,6 @@ function PrivatePreview({
         Cererile de înscriere se opresc, iar cele în așteptare se retrag.
       </p>
     </div>
-  );
-}
-
-/**
- * Archiving, in its own pop-up: history is kept, the Group stops being used.
- * A refusal for unfinished work links to exactly that work (navigation D9).
- */
-function ArchiveGroupDialog({
-  group,
-  disabled,
-  error,
-  onArchive,
-}: {
-  group: AdminGroup;
-  disabled: boolean;
-  error: string | null;
-  onArchive: () => Promise<boolean>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [attempted, setAttempted] = useState(false);
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (disabled) return;
-        setOpen(next);
-        if (next) setAttempted(false);
-      }}
-    >
-      <Button
-        type="button"
-        variant="outline"
-        disabled={disabled}
-        onClick={() => {
-          setAttempted(false);
-          setOpen(true);
-        }}
-      >
-        Arhivează grupul
-      </Button>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Arhivează {group.name}</DialogTitle>
-          <DialogDescription>
-            Grupul nu mai poate primi taskuri, evenimente sau membri noi.
-            Istoricul rămâne.
-          </DialogDescription>
-        </DialogHeader>
-        {attempted && error && (
-          <div role="alert" className="space-y-2 text-sm text-destructive">
-            <p>{error}</p>
-            <Link
-              to={unfinishedTasksPath(group)}
-              className="inline-flex min-h-11 items-center underline"
-            >
-              Vezi taskurile neterminate
-            </Link>
-          </div>
-        )}
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={disabled}
-            onClick={() => setOpen(false)}
-          >
-            Renunță
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            disabled={disabled}
-            onClick={async () => {
-              setAttempted(true);
-              if (await onArchive()) setOpen(false);
-            }}
-          >
-            Arhivează
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -979,7 +888,7 @@ export function GroupSettingsTab({
                   Grupul nu mai primește taskuri, evenimente sau membri noi.
                   Istoricul rămâne.
                 </p>
-                <ArchiveGroupDialog
+                <GroupArchiveDialog
                   group={group}
                   disabled={busy}
                   error={error}
