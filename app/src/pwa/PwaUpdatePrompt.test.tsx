@@ -188,6 +188,26 @@ describe('looking for a new build (#1137)', () => {
     expect(worker.update).toHaveBeenCalledTimes(2);
   });
 
+  // Registration resolves later than the first render: one that lands
+  // after the prompt is gone must start nothing nobody would stop.
+  it('starts nothing when the worker registers after the prompt is gone', () => {
+    const worker = {
+      update: vi.fn<() => Promise<void>>().mockResolvedValue(),
+    };
+    const { unmount } = render(<PwaUpdatePrompt />);
+    unmount();
+    act(() =>
+      registration.options?.onRegisteredSW?.(
+        '/sw.js',
+        worker as unknown as ServiceWorkerRegistration,
+      ),
+    );
+
+    act(() => vi.advanceTimersByTime(3 * 60 * MINUTE));
+
+    expect(worker.update).not.toHaveBeenCalled();
+  });
+
   it('stops looking once the prompt is gone', () => {
     const { worker, unmount } = registered();
     unmount();

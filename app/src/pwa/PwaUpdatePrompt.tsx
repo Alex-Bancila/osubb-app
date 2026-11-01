@@ -8,23 +8,27 @@ function PwaUpdatePrompt() {
   const [updateError, setUpdateError] = useState(false);
   // An app left open or brought back looks for a new build (#1137).
   const stopWatching = useRef<(() => void) | null>(null);
+  // Registration resolves after the first render: one that lands once the
+  // prompt is gone starts nothing.
+  const mounted = useRef(false);
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
   } = useRegisterSW({
     onRegisteredSW(_url, registration) {
-      if (!registration) return;
+      if (!registration || !mounted.current) return;
       stopWatching.current?.();
       stopWatching.current = watchForUpdates(registration);
     },
   });
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
       stopWatching.current?.();
       stopWatching.current = null;
-    },
-    [],
-  );
+    };
+  }, []);
 
   if (!needRefresh) return null;
 
