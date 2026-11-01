@@ -24,8 +24,10 @@
 -- creators' reason); create_task takes it where #1127 read the status --
 -- after the Umbrella, the tasks-then-groups order update_task's move takes,
 -- so no ABBA cycle forms with it, and archive_group never locks a tasks row;
--- update_event's move holds the target before the Event row, the Groups-then-
--- Events order archive_group takes. No signature changes: grants and the
+-- update_event holds the Group the call names before the Event row (always,
+-- since whether the call is a move is known only under the Event lock; an
+-- edit in place only waits), the Groups-then-Events order
+-- archive_group takes. No signature changes: grants and the
 -- tracker_grants roster are untouched. supabase/tests/archive_group_races.test.sql
 -- and create_event.test.sql's BC-on-archived pin failed before this file.
 
@@ -122,7 +124,9 @@ begin
       v_level := private.actor_level(v_actor);
       if v_level < 6 then
         -- An Organization Event needs a real live Group Role, not an old rank or JWT roster.
-        -- Lock only roster rows: Group SHARE locks conflict with legacy mirror upserts.
+        -- Lock only roster rows here; the Group row itself is held FOR SHARE
+        -- above (#1145). The legacy mirror upserts that once made a Group
+        -- SHARE lock unsafe are gone since #586.
         perform 1 from public.group_members as gm
           where gm.member_id = v_actor and gm.group_role in ('manager','responsible')
           order by gm.group_id for share of gm;
@@ -435,7 +439,6 @@ declare
   v_event public.events%rowtype;
   v_updated public.events%rowtype;
   v_target public.groups%rowtype;
-  v_old_group bigint;
   v_recipients uuid[];
   v_old_members uuid[];
   v_fields text[];
@@ -486,17 +489,17 @@ begin
     raise exception using errcode = '42501', message = 'calendar_manage_forbidden';
   end;
 
-  -- 3a. #1145 (audit M6): a move's target Group is held FOR SHARE before the
-  --     Event row -- the order archive_group takes (the Groups, then the
-  --     subtree's Events), so the two serialize instead of deadlocking, and
-  --     the target's status judged after authority is the one a concurrent
-  --     archive committed; concurrent moves share the row. This unlocked
-  --     read only learns whether the call is a move; a missing Event is
-  --     judged at the lock.
-  select event.group_id into v_old_group from public.events as event where event.id = p_event_id;
-  if p_group_id is distinct from v_old_group then
-    perform 1 from public.groups as target where target.id = p_group_id for share;
-  end if;
+  -- 3a. #1145 (audit M6): the Group the call names -- a move's target, or the
+  --     Event's own on an edit in place -- is held FOR SHARE before the Event
+  --     row, the order archive_group takes (the Groups, then the subtree's
+  --     Events), so the two serialize instead of deadlocking and a move's
+  --     target status, judged after authority, is the one a concurrent
+  --     archive committed; concurrent edits share the row. Unconditional on
+  --     purpose: whether the call is a move is known only once the Event row
+  --     is locked, and an edit in place only waits here (it is still not
+  --     refused when its Group has been archived meanwhile, the header's
+  --     reason 2). An unknown Group locks nothing and is judged below.
+  perform 1 from public.groups as target where target.id = p_group_id for share;
   -- 3. Lock the Event before inspecting its state; concurrent edits and cancellation serialize.
   select * into v_event from public.events where id = p_event_id for no key update;
   if not found or coalesce(private.actor_level(v_actor), -1) < v_event.min_level then
@@ -549,7 +552,9 @@ begin
     begin
       if v_target.is_organization then
         if v_level < 6 then
-          -- Lock only roster rows: Group SHARE locks conflict with legacy mirror upserts.
+          -- Lock only roster rows here; on a move the target Group row is
+          -- held FOR SHARE at step 3a (#1145). The legacy mirror upserts that
+          -- once made a Group SHARE lock unsafe are gone since #586.
           perform 1 from public.group_members as gm
             where gm.member_id = v_actor and gm.group_role in ('manager', 'responsible')
             order by gm.group_id for share of gm;
