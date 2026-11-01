@@ -1,12 +1,13 @@
-import type { ComponentProps } from 'react';
+import { useCallback, type ComponentProps } from 'react';
 import { AnimatedList } from '../../components/layout';
 import { useAuth } from '../../lib/auth';
-import { useTaskProgress } from '../../queries/task-progress';
-import type { OnGaveUp } from './give-up-receipt';
 import {
-  toTaskPresentation,
-  type TaskPresentationRow,
-} from './task-presentation';
+  useTaskProgress,
+  type TaskProgressInput,
+} from '../../queries/task-progress';
+import type { OnGaveUp } from './give-up-receipt';
+import { usePresentedTasks } from './presented-tasks';
+import type { TaskPresentationRow } from './task-presentation';
 import { TaskRow } from './TaskRow';
 
 type RowOptions = Pick<
@@ -20,6 +21,8 @@ type RowOptions = Pick<
  * Executor's actions go through here, and the row a `?task=` link names is
  * anchored and highlighted. The shell does the scrolling. A row that leaves —
  * given up, taken by someone else, filtered out — closes instead of snapping.
+ * A row renders again only when what it shows changes (#1147): its
+ * presentation is kept by row and clock, and its callbacks stay the same.
  */
 export function TaskRowList<Row extends TaskPresentationRow>({
   rows,
@@ -40,23 +43,29 @@ export function TaskRowList<Row extends TaskPresentationRow>({
 }) {
   const progress = useTaskProgress();
   const { session } = useAuth();
+  const presented = usePresentedTasks(rows, now);
+  const mutateAsync = progress.mutateAsync;
+  const onProgress = useCallback(
+    (input: TaskProgressInput) => mutateAsync(input),
+    [mutateAsync],
+  );
   return (
     <AnimatedList
       data-slot="task-row-list"
       className="gap-2"
-      items={rows}
-      getKey={(row) => row.id}
+      items={presented}
+      getKey={({ row }) => row.id}
     >
-      {(row) => (
+      {({ row, task }) => (
         <TaskRow
           {...options?.(row)}
           detailed
           anchor
-          task={toTaskPresentation(row, now)}
+          task={task}
           onOpenTask={onOpenTask}
           memberId={session?.user.id}
           pending={progress.isPending && progress.variables?.taskId === row.id}
-          onProgress={(input) => progress.mutateAsync(input)}
+          onProgress={onProgress}
           highlighted={row.id === highlightedId}
           onGaveUp={onGaveUp}
         />

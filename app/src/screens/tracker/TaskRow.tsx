@@ -1,4 +1,10 @@
-import { useId, type CSSProperties, type ReactNode } from 'react';
+import {
+  memo,
+  useId,
+  useMemo,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import { Clock, UserRound } from 'lucide-react';
 import { AttachedLinksList } from '../../components/attached-link/AttachedLinksList';
 import { ListRow } from '../../components/layout';
@@ -111,8 +117,13 @@ function RowActions({ children }: { children?: ReactNode }) {
  * hit area is stretched over the row. The Executor's name stays its own
  * button (their Member Card) above that area, and so do the row's actions
  * and links.
+ *
+ * Memoised (#1147): a list re-renders on every keystroke of its search and
+ * every tick of its clock, and a row renders again only when one of its
+ * props changes — its presentation (`usePresentedTasks`) and the list's
+ * callbacks are kept stable for that.
  */
-export function TaskRow({
+export const TaskRow = memo(function TaskRow({
   task,
   onOpenTask,
   detailed = false,
@@ -130,6 +141,11 @@ export function TaskRow({
 }: TaskRowProps) {
   const readOnly = history !== undefined;
   const titleId = useId();
+  // Stripped once per description, whatever else re-renders the row.
+  const plainDescription = useMemo(
+    () => (task.description ? toPlainText(task.description) : null),
+    [task.description],
+  );
   // The viewer holds this Task: no queue news for them (relevance B14).
   const ownTask =
     task.kind === 'task' &&
@@ -270,7 +286,7 @@ export function TaskRow({
                     data-slot="task-row-description"
                     className="m-0 line-clamp-1 wrap-anywhere text-muted-foreground"
                   >
-                    {toPlainText(task.description)}
+                    {plainDescription}
                   </p>
                 )}
                 {!readOnly && (task.assignmentMode !== 'public' || ownTask) && (
@@ -376,4 +392,4 @@ export function TaskRow({
       />
     ),
   );
-}
+});

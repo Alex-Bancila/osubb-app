@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { FinishedTasks } from '../../queries/task-lists';
 import { FinishedTasksPanel } from './FinishedTasksPanel';
@@ -53,5 +54,57 @@ describe('FinishedTasksPanel', () => {
     expect(
       screen.getByRole('button', { name: 'Încarcă mai multe' }),
     ).toBeEnabled();
+  });
+
+  // #1147: moving a full window on drops its first page above the button.
+  // Without scroll anchoring (Safari) the rows would jump by that page's
+  // height; the panel puts the button back where it was pressed.
+  it('keeps the button where it was pressed when the window drops its first page', async () => {
+    const user = userEvent.setup();
+    let scrollTop = 4000;
+    const scroller = document.scrollingElement ?? document.documentElement;
+    const scrollTopWas = Object.getOwnPropertyDescriptor(scroller, 'scrollTop');
+    Object.defineProperty(scroller, 'scrollTop', {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value: number) => {
+        scrollTop = value;
+      },
+    });
+    try {
+      const atStart = finished({ hasMore: true });
+      const view = render(
+        <FinishedTasksPanel finished={{ ...atStart, earlier: 0, full: true }}>
+          <p>Rândurile citite</p>
+        </FinishedTasksPanel>,
+      );
+      const button = screen.getByRole('button', { name: 'Încarcă mai multe' });
+      // 600 px down the screen when pressed; 100 px once a page above it went.
+      let top = 600;
+      button.getBoundingClientRect = () => ({ top }) as DOMRect;
+
+      await user.click(button);
+      expect(atStart.loadMore).toHaveBeenCalledOnce();
+      top = 100;
+      view.rerender(
+        <FinishedTasksPanel finished={{ ...atStart, earlier: 50, full: true }}>
+          <p>Rândurile citite</p>
+        </FinishedTasksPanel>,
+      );
+
+      expect(scrollTop).toBe(3500);
+
+      // A later render that moves nothing scrolls nothing.
+      view.rerender(
+        <FinishedTasksPanel finished={{ ...atStart, earlier: 50, full: true }}>
+          <p>Rândurile citite</p>
+        </FinishedTasksPanel>,
+      );
+      expect(scrollTop).toBe(3500);
+    } finally {
+      if (scrollTopWas)
+        Object.defineProperty(scroller, 'scrollTop', scrollTopWas);
+      else delete (scroller as { scrollTop?: number }).scrollTop;
+    }
   });
 });

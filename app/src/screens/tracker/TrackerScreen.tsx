@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSwipeTabs } from '../../lib/swipe-tabs';
 import { useSearchParams } from 'react-router';
 import { Tabs } from '@base-ui/react/tabs';
@@ -274,6 +274,15 @@ function TrackerContent() {
     id: number;
     receipt: string;
   } | null>(null);
+  // Kept for the life of the screen: the memoised rows take them (#1147).
+  const onGaveUp = useCallback(
+    (id: number, receipt: string) => setGaveUp({ id, receipt }),
+    [],
+  );
+  const openManaged = useCallback((id: number) => {
+    setOpenedManaged(id);
+    setDetailId(id);
+  }, []);
   // A Task deleted for good (#1017): its sheet closes, the list says so.
   const [deleted, setDeleted] = useState<{
     id: number;
@@ -665,7 +674,7 @@ function TrackerContent() {
                 onOpenTask={setDetailId}
                 linkedId={highlightTarget}
                 highlightedId={highlightedId}
-                onGaveUp={(id, receipt) => setGaveUp({ id, receipt })}
+                onGaveUp={onGaveUp}
               />
             </Tabs.Panel>
             <Tabs.Panel value="available" className="motion-enter">
@@ -690,10 +699,7 @@ function TrackerContent() {
                   now={now}
                   search={search}
                   empty="Nu ai taskuri de gestionat acum."
-                  onOpenTask={(id) => {
-                    setOpenedManaged(id);
-                    setDetailId(id);
-                  }}
+                  onOpenTask={openManaged}
                 />
               </Tabs.Panel>
             )}

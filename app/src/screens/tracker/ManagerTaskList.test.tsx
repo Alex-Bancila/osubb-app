@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { useMemo, type ComponentProps } from 'react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
@@ -39,6 +39,19 @@ vi.mock('../../queries/task-lists', async (importOriginal) => ({
   useFinishedTasks: (...args: unknown[]) => lists.finished(...args),
   useTaskListSummary: (...args: unknown[]) => lists.summary(...args),
 }));
+// #1147: every row draws its Group chip once, so the chip counts the row's
+// renders.
+const chips = vi.hoisted(() => ({ count: 0 }));
+vi.mock('./TaskParts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./TaskParts')>();
+  return {
+    ...actual,
+    TaskGroupChip: (props: Parameters<typeof actual.TaskGroupChip>[0]) => {
+      chips.count += 1;
+      return actual.TaskGroupChip(props);
+    },
+  };
+});
 import type {
   FinishedTasks,
   TaskListSummaryRow,
@@ -1237,4 +1250,259 @@ describe('ManagerTaskList, the finished Tasks (#1053)', () => {
       ).violations,
     ).toEqual([]);
   });
+});
+
+describe('ManagerTaskList renders (#1147)', () => {
+  // Fails if a keystroke re-renders every row: the search text changes per
+  // key, while the rows wait for the debounced needle.
+  it('re-renders no row for a keystroke the search has not applied yet', async () => {
+    const user = userEvent.setup();
+    renderList();
+    const search = screen.getByRole('searchbox', { name: 'Caută după titlu' });
+    chips.count = 0;
+
+    // Every title holds an "e": once the search applies, every row stays.
+    await user.type(search, 'e');
+
+    expect(search).toHaveValue('e');
+    expect(chips.count).toBe(0);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 300)));
+    expect(titles()).toHaveLength(rows.length);
+    expect(chips.count).toBe(0);
+  });
+
+  // Fails if each tick of the clock presents and re-renders every row.
+  it('re-renders no row on a tick that changes nothing they say', () => {
+    // The page hands the list one callback for its life.
+    const onOpenTask = vi.fn();
+    const view = render(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList rows={rows} now={now} onOpenTask={onOpenTask} />
+      </MemoryRouter>,
+    );
+    chips.count = 0;
+    view.rerender(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList
+          rows={rows}
+          now={new Date(now.getTime() + 30_000)}
+          onOpenTask={onOpenTask}
+        />
+      </MemoryRouter>,
+    );
+    expect(chips.count).toBe(0);
+  });
+});
+
+describe('ManagerTaskList, a tick that changes a row (#1147)', () => {
+  // Fails if a tick that turns one row overdue re-renders the others too.
+  it('re-renders only the open row a tick turns overdue', () => {
+    const onOpenTask = vi.fn();
+    const view = render(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList rows={rows} now={now} onOpenTask={onOpenTask} />
+      </MemoryRouter>,
+    );
+    chips.count = 0;
+    // Afișe pentru gală is due at 10:00 on the 18th; the others are not.
+    view.rerender(
+      <MemoryRouter initialEntries={['/tracker']}>
+        <ManagerTaskList
+          rows={rows}
+          now={new Date('2026-09-18T10:00:30Z')}
+          onOpenTask={onOpenTask}
+        />
+      </MemoryRouter>,
+    );
+    expect(chips.count).toBe(1);
+    // Overdue now, it leads the list.
+    expect(titles().slice(0, 2)).toEqual(['Z urgent', 'Afișe pentru gală']);
+  });
+});
+
+describe('ManagerTaskList, the finished part held to a window (#1147)', () => {
+  // Two hundred rows drawn, then moved: heavy for jsdom under coverage.
+  const WINDOW_TIMEOUT = 15_000;
+  /** A thousand finished Tasks read, newest first. */
+  const thousand = Array.from({ length: 1000 }, (_, index) =>
+    taskRow({
+      id: 1000 + index,
+      title: `Încheiat ${index + 1}`,
+      status: 'completed',
+      deadline: '2026-03-31T10:00:00Z',
+      completed_at: '2026-03-30T10:00:00Z',
+      assignments: [],
+      group: edu,
+    }),
+  );
+  const finishedRegion = () =>
+    screen.getByRole('region', { name: 'Taskuri încheiate' });
+  const finishedTitles = () =>
+    within(finishedRegion())
+      .getAllByRole('article')
+      .map((row) => row.querySelector('h3')?.textContent);
+
+  // Fails if every finished row read is drawn: after the Legacy Import a
+  // BC member scrolling Toate would hold thousands of rows in the page.
+  it(
+    'holds at most two hundred finished rows in the page, the first ones first',
+    () => {
+      lists.finished.mockReturnValue(
+        finishedRead({ rows: thousand, total: 1000 }),
+      );
+      renderList();
+
+      const shown = finishedTitles();
+      expect(shown).toHaveLength(200);
+      expect(shown[0]).toBe('Încheiat 1');
+      expect(shown.at(-1)).toBe('Încheiat 200');
+      // The rest are there to move on to.
+      expect(
+        within(finishedRegion()).getByRole('button', {
+          name: 'Încarcă mai multe',
+        }),
+      ).toBeVisible();
+      expect(
+        within(finishedRegion()).queryByRole('button', {
+          name: 'Arată taskurile anterioare',
+        }),
+      ).toBeNull();
+    },
+    WINDOW_TIMEOUT,
+  );
+
+  it(
+    'moves the window a page on, and back, without asking the server for rows it holds',
+    async () => {
+      const user = userEvent.setup();
+      const loadMore = vi.fn();
+      lists.finished.mockReturnValue(
+        finishedRead({ rows: thousand, total: 1000, loadMore }),
+      );
+      renderList();
+
+      await user.click(
+        within(finishedRegion()).getByRole('button', {
+          name: 'Încarcă mai multe',
+        }),
+      );
+      let shown = finishedTitles();
+      expect(shown).toHaveLength(200);
+      expect(shown[0]).toBe('Încheiat 51');
+      expect(shown.at(-1)).toBe('Încheiat 250');
+      expect(loadMore).not.toHaveBeenCalled();
+
+      await user.click(
+        within(finishedRegion()).getByRole('button', {
+          name: 'Arată taskurile anterioare',
+        }),
+      );
+      shown = finishedTitles();
+      expect(shown[0]).toBe('Încheiat 1');
+      expect(shown).toHaveLength(200);
+      // The button is gone with the first rows back: focus moves to them,
+      // never to the page.
+      expect(
+        within(finishedRegion()).queryByRole('button', {
+          name: 'Arată taskurile anterioare',
+        }),
+      ).toBeNull();
+      expect(document.activeElement).not.toBe(document.body);
+      expect(finishedRegion()).toContainElement(
+        document.activeElement as HTMLElement,
+      );
+    },
+    WINDOW_TIMEOUT,
+  );
+
+  it(
+    'moves the window on once the page it asked for has landed',
+    async () => {
+      const user = userEvent.setup();
+      const loadMore = vi.fn();
+      lists.finished.mockReturnValue(
+        finishedRead({
+          rows: thousand.slice(0, 200),
+          total: 1000,
+          hasMore: true,
+          loadMore,
+        }),
+      );
+      const view = renderList();
+      await user.click(
+        within(finishedRegion()).getByRole('button', {
+          name: 'Încarcă mai multe',
+        }),
+      );
+      expect(loadMore).toHaveBeenCalledOnce();
+      // Until the page lands, the window stays where it was.
+      expect(finishedTitles()[0]).toBe('Încheiat 1');
+
+      lists.finished.mockReturnValue(
+        finishedRead({
+          rows: thousand.slice(0, 250),
+          total: 1000,
+          hasMore: true,
+          loadMore,
+        }),
+      );
+      view.rerender(
+        <MemoryRouter initialEntries={['/tracker']}>
+          <ManagerTaskList rows={rows} now={now} onOpenTask={view.onOpenTask} />
+        </MemoryRouter>,
+      );
+      const shown = finishedTitles();
+      expect(shown).toHaveLength(200);
+      expect(shown[0]).toBe('Încheiat 51');
+      expect(shown.at(-1)).toBe('Încheiat 250');
+      expect(
+        within(finishedRegion()).getByRole('button', {
+          name: 'Arată taskurile anterioare',
+        }),
+      ).toBeVisible();
+    },
+    WINDOW_TIMEOUT,
+  );
+
+  // At the end of what is read, a full window asks the server for the next
+  // page, and only by the button: the end of the list coming into view no
+  // longer reads on by itself.
+  it(
+    'asks for the next page from the button once the window is full',
+    async () => {
+      const user = userEvent.setup();
+      let watching = 0;
+      vi.stubGlobal(
+        'IntersectionObserver',
+        class {
+          observe() {
+            watching += 1;
+          }
+          disconnect() {
+            watching -= 1;
+          }
+        },
+      );
+      const loadMore = vi.fn();
+      lists.finished.mockReturnValue(
+        finishedRead({
+          rows: thousand.slice(0, 200),
+          total: 1000,
+          hasMore: true,
+          loadMore,
+        }),
+      );
+      renderList();
+      expect(watching).toBe(0);
+
+      await user.click(
+        within(finishedRegion()).getByRole('button', {
+          name: 'Încarcă mai multe',
+        }),
+      );
+      expect(loadMore).toHaveBeenCalledTimes(1);
+      vi.unstubAllGlobals();
+    },
+    WINDOW_TIMEOUT,
+  );
 });
