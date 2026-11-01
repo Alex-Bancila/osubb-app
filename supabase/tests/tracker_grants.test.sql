@@ -915,6 +915,8 @@ insert into pinned_private_functions (proname, args, category) values
   -- it. Both definer, both granted to nobody.
   ('refresh_promotion_candidates',       '',                  'none'),
   ('refresh_promotion_candidates_on_write', '',               'trigger'),
+  ('flag_promotion_refresh',                '',               'trigger'), -- #1142
+  ('refresh_promotion_candidates_deferred', '',               'trigger'), -- #1142
   -- #991: the "De invitat" grid's read body behind public.uninvited_members
   -- (level 6, gated inside), granted to authenticated like every _impl.
   ('uninvited_members_impl',             '',                  'impl'),

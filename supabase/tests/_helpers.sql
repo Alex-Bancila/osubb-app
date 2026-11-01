@@ -9,6 +9,13 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 \endif
 
+-- #1142: in production the ledger's Promotion Candidate refresh is a deferred
+-- constraint trigger, run once at the end of the transaction. Every suite is
+-- one transaction that reads the list right after each award, so it fires
+-- the trigger at each statement's end instead; promotion_candidates_live
+-- section 10 sets it deferred again to prove the once-per-transaction rule.
+set constraints points_ledger_refresh_promotion_candidates immediate;
+
 -- #590: historical fixture descriptions are transaction-local data only.
 -- Work and authority assertions always target the real native Group tables.
 \ir _group_fixture_data.psql
