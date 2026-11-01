@@ -88,6 +88,13 @@ jobs:
             edited="$(git diff --name-only --diff-filter=MDR "$last..HEAD" -- supabase/migrations)"
             functions="$(git diff --name-only "$last..HEAD" -- supabase/functions | sed -n 's#^supabase/functions/\([^/]*\)/.*#\1#p' | sort -u)"
             config="$(git diff --name-only "$last..HEAD" -- supabase/config.toml)"
+            # #1139: a migration added since the last Release but dated before
+            # the newest one that Release carried is applied after the newer
+            # ones by `db push --include-all`. The script prints ::warning::
+            # annotations; the summary lists the files below.
+            order="$(bash scripts/check-migration-order.sh --warn "$last")"
+            printf '%s\n' "$order"
+            late="$(printf '%s\n' "$order" | sed -n 's/^::warning::\(supabase[^ ]*\) .*/\1/p')"
           else
             since="since the beginning: no Release yet, production is empty"
             commits="$(git rev-list --count HEAD)"
@@ -95,6 +102,7 @@ jobs:
             edited=""
             functions="$(git ls-files supabase/functions | sed -n 's#^supabase/functions/\([^_/][^/]*\)/.*#\1#p' | sort -u)"
             config=""
+            late=""
           fi
 
           bullets() { if [ -n "$1" ]; then printf '%s\n' "$1" | sed 's/^/- `/; s/$/`/'; else echo "_none_"; fi; }
@@ -116,6 +124,12 @@ jobs:
               echo "> [!WARNING]"
               echo "> Migration files already released were edited $since. \`db push\` never re-applies a migration, so production keeps the old version of:"
               printf '%s\n' "$edited" | sed 's/^/> - `/; s/$/`/'
+            fi
+            if [ -n "$late" ]; then
+              echo
+              echo "> [!WARNING]"
+              echo "> Dated before the newest migration already released (#1139): \`db push --include-all\` applies these after the newer ones, so their bodies win over what the newer migrations proved. Rename them before approving unless that is intended:"
+              printf '%s\n' "$late" | sed 's/^/> - `/; s/$/`/'
             fi
             echo
             echo "### Edge Functions changed $since"

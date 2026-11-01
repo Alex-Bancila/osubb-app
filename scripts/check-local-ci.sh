@@ -54,6 +54,10 @@ if [ "$ONLY" = all ] || [ "$ONLY" = repo ]; then
   step "repo: lint:deno"     npm run lint:deno
   step "repo: lint:templates" npm run lint:templates
   step "repo: test:tooling"  npm run test:tooling
+  # #1139. Against origin/main as last fetched: on a pull request CI compares
+  # with the merge commit against main's tip, so `git fetch origin` first to
+  # see what CI will see.
+  step "repo: migrations dated after main's newest" bash scripts/check-migration-order.sh origin/main
 fi
 
 # ------------------------------------------------------------------ db job
