@@ -1,12 +1,13 @@
 import {
   QueryClient,
   QueryClientProvider,
+  QueryObserver,
   useInfiniteQuery,
   type InfiniteData,
 } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetSupabaseMock, supabaseMock } from '../test/supabase-mock';
 import { keys } from './keys';
 
@@ -25,6 +26,9 @@ import { useLiveChanges } from './live-changes';
 import { FINISHED_PAGE, finishedTasksQueryOptions } from './task-lists';
 
 const memberId = 'a1000000-0000-0000-0000-000000000604';
+
+/** How a live change invalidates: never restarting a read on its way (#1148). */
+const LIVE = { cancelRefetch: false } as const;
 
 function setup() {
   const queryClient = new QueryClient();
@@ -79,19 +83,28 @@ describe('live change signals (#961)', () => {
     });
 
     await waitFor(() =>
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.tasks.all }),
+      expect(invalidate).toHaveBeenCalledWith(
+        { queryKey: keys.tasks.all },
+        LIVE,
+      ),
     );
-    expect(invalidate).toHaveBeenCalledWith({
-      queryKey: keys.leadership.all,
-    });
+    expect(invalidate).toHaveBeenCalledWith(
+      {
+        queryKey: keys.leadership.all,
+      },
+      LIVE,
+    );
     expect(
       invalidate.mock.calls.filter(
         ([options]) => options?.queryKey === keys.tasks.all,
       ),
     ).toHaveLength(1);
-    expect(invalidate).not.toHaveBeenCalledWith({
-      queryKey: keys.events.all,
-    });
+    expect(invalidate).not.toHaveBeenCalledWith(
+      {
+        queryKey: keys.events.all,
+      },
+      LIVE,
+    );
   });
 
   // R58: a new Points Start Date changes every total a page shows.
@@ -104,13 +117,25 @@ describe('live change signals (#961)', () => {
     );
 
     await waitFor(() =>
-      expect(invalidate).toHaveBeenCalledWith({
-        queryKey: keys.evaluation.all,
-      }),
+      expect(invalidate).toHaveBeenCalledWith(
+        {
+          queryKey: keys.evaluation.all,
+        },
+        LIVE,
+      ),
     );
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.points.all });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.campaigns.all });
-    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: keys.tasks.all });
+    expect(invalidate).toHaveBeenCalledWith(
+      { queryKey: keys.points.all },
+      LIVE,
+    );
+    expect(invalidate).toHaveBeenCalledWith(
+      { queryKey: keys.campaigns.all },
+      LIVE,
+    );
+    expect(invalidate).not.toHaveBeenCalledWith(
+      { queryKey: keys.tasks.all },
+      LIVE,
+    );
   });
 
   // R58: Retention Signals are stored rows the page reads, not a derivation.
@@ -123,12 +148,21 @@ describe('live change signals (#961)', () => {
     );
 
     await waitFor(() =>
-      expect(invalidate).toHaveBeenCalledWith({
-        queryKey: keys.evaluation.all,
-      }),
+      expect(invalidate).toHaveBeenCalledWith(
+        {
+          queryKey: keys.evaluation.all,
+        },
+        LIVE,
+      ),
     );
-    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: keys.points.all });
-    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: keys.tasks.all });
+    expect(invalidate).not.toHaveBeenCalledWith(
+      { queryKey: keys.points.all },
+      LIVE,
+    );
+    expect(invalidate).not.toHaveBeenCalledWith(
+      { queryKey: keys.tasks.all },
+      LIVE,
+    );
   });
 
   // R58 dropped the Promotion Rules: their table is no longer a signal.
@@ -282,7 +316,10 @@ describe('live change signals (#961)', () => {
       act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
 
       await waitFor(() =>
-        expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.tasks.all }),
+        expect(invalidate).toHaveBeenCalledWith(
+          { queryKey: keys.tasks.all },
+          LIVE,
+        ),
       );
       // Nothing is read for an inactive list; its first page waits.
       expect(taskListOffsets()).toEqual([0, 50, 100]);
@@ -333,7 +370,10 @@ describe('live change signals (#961)', () => {
       act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
 
       await waitFor(() =>
-        expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.tasks.all }),
+        expect(invalidate).toHaveBeenCalledWith(
+          { queryKey: keys.tasks.all },
+          LIVE,
+        ),
       );
       expect(taskListOffsets()).toEqual([0, 50, 100]);
       expect(
@@ -454,6 +494,179 @@ describe('live change signals (#961)', () => {
       await waitFor(() => expect(result.current.isFetching).toBe(false));
       expect(feedOffsets()).toEqual([0, 20, 40, 0, 20, 40]);
       expect(result.current.data?.pages).toHaveLength(3);
+    });
+  });
+
+  describe('a burst of signals (#1148)', () => {
+    afterEach(() => vi.useRealTimers());
+
+    /** The hook joined on real timers; fake timers from here on. */
+    async function joinedOnFakeTimers() {
+      const view = setup();
+      const channel = await joined();
+      vi.useFakeTimers();
+      return { ...view, ...channel };
+    }
+
+    /** The invalidations of one family, by value. */
+    const callsFor = (
+      invalidate: ReturnType<typeof setup>['invalidate'],
+      family: readonly unknown[],
+    ) =>
+      invalidate.mock.calls.filter(
+        ([options]) =>
+          JSON.stringify(options?.queryKey) === JSON.stringify(family),
+      );
+
+    // Every family a profiles stamp feeds: an import stamps one per row.
+    const PROFILE_FAMILIES = [
+      keys.profile.all,
+      keys.members.all,
+      keys.groups.all,
+      keys.tasks.all,
+      keys.points.all,
+      ['capabilities'],
+    ];
+
+    // Fails if every 250 ms flush invalidates: 100 signals over two seconds
+    // would refetch each family eight times, and the lists never settle.
+    it('invalidates each family at most twice for 100 signals in two seconds', async () => {
+      const { invalidate, onChange } = await joinedOnFakeTimers();
+
+      for (let signal = 0; signal < 100; signal += 1) {
+        act(() => onChange({ payload: { table: 'profiles', op: 'UPDATE' } }));
+        act(() => vi.advanceTimersByTime(20));
+      }
+      act(() => vi.advanceTimersByTime(10_000));
+
+      for (const family of PROFILE_FAMILIES)
+        expect(callsFor(invalidate, family)).toHaveLength(2);
+    });
+
+    // Fails if the first signal of a quiet family waits for a window to end.
+    it('invalidates the first signal of a quiet family after the 250 ms collection', async () => {
+      const { invalidate, onChange } = await joinedOnFakeTimers();
+
+      act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
+      act(() => vi.advanceTimersByTime(249));
+      expect(callsFor(invalidate, keys.tasks.all)).toHaveLength(0);
+      act(() => vi.advanceTimersByTime(1));
+      expect(callsFor(invalidate, keys.tasks.all)).toHaveLength(1);
+    });
+
+    // Fails if a change during the window is dropped, or waits for a quiet
+    // moment that a steady stream never gives.
+    it('still shows a change made during the window within two seconds', async () => {
+      const { invalidate, onChange } = await joinedOnFakeTimers();
+
+      act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
+      act(() => vi.advanceTimersByTime(300));
+      expect(callsFor(invalidate, keys.tasks.all)).toHaveLength(1);
+
+      // Changed 300 ms in, 50 ms after the first invalidation.
+      act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
+      act(() => vi.advanceTimersByTime(2_000));
+      expect(callsFor(invalidate, keys.tasks.all)).toHaveLength(2);
+
+      // Nothing more came: the window closes without a third.
+      act(() => vi.advanceTimersByTime(10_000));
+      expect(callsFor(invalidate, keys.tasks.all)).toHaveLength(2);
+    });
+
+    // Fails if a family's window holds back another family's first signal.
+    it('throttles each family on its own', async () => {
+      const { invalidate, onChange } = await joinedOnFakeTimers();
+
+      act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
+      act(() => vi.advanceTimersByTime(500));
+      act(() => onChange({ payload: { table: 'events', op: 'UPDATE' } }));
+      act(() => vi.advanceTimersByTime(250));
+
+      expect(callsFor(invalidate, keys.events.all)).toHaveLength(1);
+      expect(callsFor(invalidate, keys.tasks.all)).toHaveLength(1);
+    });
+
+    // Fails on the default `cancelRefetch: true`: an invalidation would
+    // abort the read already on its way and start it again.
+    it('lets a refetch already on its way finish', async () => {
+      const { queryClient, invalidate, onChange } = await joinedOnFakeTimers();
+      let land: (value: string) => void = () => undefined;
+      const signals: AbortSignal[] = [];
+      const queryFn = vi.fn(
+        ({ signal }: { signal: AbortSignal }) =>
+          new Promise<string>((resolve) => {
+            signals.push(signal);
+            land = resolve;
+          }),
+      );
+      // Read once already: a first load with no data is never cancelled,
+      // a refetch of data on screen is.
+      queryClient.setQueryData(['tasks', 'in-flight'], 'first');
+      const observer = new QueryObserver(queryClient, {
+        queryKey: ['tasks', 'in-flight'],
+        queryFn,
+      });
+      const unsubscribe = observer.subscribe(() => undefined);
+      try {
+        expect(queryFn).toHaveBeenCalledOnce();
+
+        act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
+        act(() => vi.advanceTimersByTime(250));
+
+        expect(invalidate).toHaveBeenCalledWith(
+          { queryKey: keys.tasks.all },
+          { cancelRefetch: false },
+        );
+        expect(queryFn).toHaveBeenCalledOnce();
+        expect(signals[0]?.aborted).toBe(false);
+
+        await act(async () => {
+          land('read');
+          await Promise.resolve();
+        });
+        expect(queryClient.getQueryData(['tasks', 'in-flight'])).toBe('read');
+
+        // That read may have begun before the change: the window's end
+        // reads the family again.
+        act(() => vi.advanceTimersByTime(2_000));
+        expect(callsFor(invalidate, keys.tasks.all)).toHaveLength(2);
+        expect(queryFn).toHaveBeenCalledTimes(2);
+      } finally {
+        unsubscribe();
+      }
+    });
+
+    // Fails if a reconnect leaves a window's re-read standing: the full
+    // refetch has read every family already.
+    it('drops a window’s re-read once a reconnect reads everything', async () => {
+      const { invalidate, onChange, onStatus } = await joinedOnFakeTimers();
+      act(() => onStatus('SUBSCRIBED'));
+
+      act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
+      act(() => vi.advanceTimersByTime(300));
+      act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
+      act(() => vi.advanceTimersByTime(300));
+      act(() => onStatus('CHANNEL_ERROR'));
+      act(() => onStatus('SUBSCRIBED'));
+      act(() => vi.advanceTimersByTime(10_000));
+
+      expect(invalidate).toHaveBeenCalledWith();
+      expect(callsFor(invalidate, keys.tasks.all)).toHaveLength(1);
+    });
+
+    // Fails if a window's timer outlives the session: a sign-out would still
+    // invalidate two seconds later.
+    it('invalidates nothing after sign-out, however a window stood', async () => {
+      const { invalidate, onChange, rerender } = await joinedOnFakeTimers();
+
+      act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
+      act(() => vi.advanceTimersByTime(300));
+      act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
+      act(() => vi.advanceTimersByTime(300));
+      rerender({ id: undefined });
+      act(() => vi.advanceTimersByTime(10_000));
+
+      expect(callsFor(invalidate, keys.tasks.all)).toHaveLength(1);
     });
   });
 
