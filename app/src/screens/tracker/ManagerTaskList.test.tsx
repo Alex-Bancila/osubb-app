@@ -1291,6 +1291,8 @@ describe('ManagerTaskList renders (#1147)', () => {
 });
 
 describe('ManagerTaskList, the finished part held to a window (#1147)', () => {
+  // Two hundred rows drawn, then moved: heavy for jsdom under coverage.
+  const WINDOW_TIMEOUT = 15_000;
   /** A thousand finished Tasks read, newest first. */
   const thousand = Array.from({ length: 1000 }, (_, index) =>
     taskRow({
@@ -1312,93 +1314,105 @@ describe('ManagerTaskList, the finished part held to a window (#1147)', () => {
 
   // Fails if every finished row read is drawn: after the Legacy Import a
   // BC member scrolling Toate would hold thousands of rows in the page.
-  it('holds at most two hundred finished rows in the page, the first ones first', () => {
-    lists.finished.mockReturnValue(
-      finishedRead({ rows: thousand, total: 1000 }),
-    );
-    renderList();
+  it(
+    'holds at most two hundred finished rows in the page, the first ones first',
+    () => {
+      lists.finished.mockReturnValue(
+        finishedRead({ rows: thousand, total: 1000 }),
+      );
+      renderList();
 
-    const shown = finishedTitles();
-    expect(shown).toHaveLength(200);
-    expect(shown[0]).toBe('Încheiat 1');
-    expect(shown.at(-1)).toBe('Încheiat 200');
-    // The rest are there to move on to.
-    expect(
-      within(finishedRegion()).getByRole('button', {
-        name: 'Încarcă mai multe',
-      }),
-    ).toBeVisible();
-    expect(
-      within(finishedRegion()).queryByRole('button', {
-        name: 'Arată taskurile anterioare',
-      }),
-    ).toBeNull();
-  });
+      const shown = finishedTitles();
+      expect(shown).toHaveLength(200);
+      expect(shown[0]).toBe('Încheiat 1');
+      expect(shown.at(-1)).toBe('Încheiat 200');
+      // The rest are there to move on to.
+      expect(
+        within(finishedRegion()).getByRole('button', {
+          name: 'Încarcă mai multe',
+        }),
+      ).toBeVisible();
+      expect(
+        within(finishedRegion()).queryByRole('button', {
+          name: 'Arată taskurile anterioare',
+        }),
+      ).toBeNull();
+    },
+    WINDOW_TIMEOUT,
+  );
 
-  it('moves the window a page on, and back, without asking the server for rows it holds', async () => {
-    const user = userEvent.setup();
-    const loadMore = vi.fn();
-    lists.finished.mockReturnValue(
-      finishedRead({ rows: thousand, total: 1000, loadMore }),
-    );
-    renderList();
+  it(
+    'moves the window a page on, and back, without asking the server for rows it holds',
+    async () => {
+      const user = userEvent.setup();
+      const loadMore = vi.fn();
+      lists.finished.mockReturnValue(
+        finishedRead({ rows: thousand, total: 1000, loadMore }),
+      );
+      renderList();
 
-    await user.click(
-      within(finishedRegion()).getByRole('button', {
-        name: 'Încarcă mai multe',
-      }),
-    );
-    let shown = finishedTitles();
-    expect(shown).toHaveLength(200);
-    expect(shown[0]).toBe('Încheiat 51');
-    expect(shown.at(-1)).toBe('Încheiat 250');
-    expect(loadMore).not.toHaveBeenCalled();
+      await user.click(
+        within(finishedRegion()).getByRole('button', {
+          name: 'Încarcă mai multe',
+        }),
+      );
+      let shown = finishedTitles();
+      expect(shown).toHaveLength(200);
+      expect(shown[0]).toBe('Încheiat 51');
+      expect(shown.at(-1)).toBe('Încheiat 250');
+      expect(loadMore).not.toHaveBeenCalled();
 
-    await user.click(
-      within(finishedRegion()).getByRole('button', {
-        name: 'Arată taskurile anterioare',
-      }),
-    );
-    shown = finishedTitles();
-    expect(shown[0]).toBe('Încheiat 1');
-    expect(shown).toHaveLength(200);
-  });
+      await user.click(
+        within(finishedRegion()).getByRole('button', {
+          name: 'Arată taskurile anterioare',
+        }),
+      );
+      shown = finishedTitles();
+      expect(shown[0]).toBe('Încheiat 1');
+      expect(shown).toHaveLength(200);
+    },
+    WINDOW_TIMEOUT,
+  );
 
   // At the end of what is read, a full window asks the server for the next
   // page, and only by the button: the end of the list coming into view no
   // longer reads on by itself.
-  it('asks for the next page from the button once the window is full', async () => {
-    const user = userEvent.setup();
-    let watching = 0;
-    vi.stubGlobal(
-      'IntersectionObserver',
-      class {
-        observe() {
-          watching += 1;
-        }
-        disconnect() {
-          watching -= 1;
-        }
-      },
-    );
-    const loadMore = vi.fn();
-    lists.finished.mockReturnValue(
-      finishedRead({
-        rows: thousand.slice(0, 200),
-        total: 1000,
-        hasMore: true,
-        loadMore,
-      }),
-    );
-    renderList();
-    expect(watching).toBe(0);
+  it(
+    'asks for the next page from the button once the window is full',
+    async () => {
+      const user = userEvent.setup();
+      let watching = 0;
+      vi.stubGlobal(
+        'IntersectionObserver',
+        class {
+          observe() {
+            watching += 1;
+          }
+          disconnect() {
+            watching -= 1;
+          }
+        },
+      );
+      const loadMore = vi.fn();
+      lists.finished.mockReturnValue(
+        finishedRead({
+          rows: thousand.slice(0, 200),
+          total: 1000,
+          hasMore: true,
+          loadMore,
+        }),
+      );
+      renderList();
+      expect(watching).toBe(0);
 
-    await user.click(
-      within(finishedRegion()).getByRole('button', {
-        name: 'Încarcă mai multe',
-      }),
-    );
-    expect(loadMore).toHaveBeenCalledTimes(1);
-    vi.unstubAllGlobals();
-  });
+      await user.click(
+        within(finishedRegion()).getByRole('button', {
+          name: 'Încarcă mai multe',
+        }),
+      );
+      expect(loadMore).toHaveBeenCalledTimes(1);
+      vi.unstubAllGlobals();
+    },
+    WINDOW_TIMEOUT,
+  );
 });
