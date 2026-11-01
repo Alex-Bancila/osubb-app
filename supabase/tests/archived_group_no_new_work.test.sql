@@ -83,11 +83,11 @@ select throws_ok(format($$ select public.duplicate_task(%s, now() + interval '7 
   (select archived_source_id from f1127)),
   'PT409', 'group_archived',
   'BC cannot duplicate a Task whose copy would land in an archived Group');
-select throws_ok(format($ select public.create_campaign(%s, 'Campanie #1127') $,
+select throws_ok(format($$ select public.create_campaign(%s, 'Campanie #1127') $$,
   (select archived_id from f1127)),
   'PT409', 'group_archived',
   'BC cannot create a Campaign in an archived Group');
-select throws_ok(format($ select public.create_task('Subtask nou #1127', null, now() + interval '7 days', 'local', 'direct', null, null, %s, 'task', null) $,
+select throws_ok(format($$ select public.create_task('Subtask nou #1127', null, now() + interval '7 days', 'local', 'direct', null, null, %s, 'task', null) $$,
   (select archived_umbrella_id from f1127)),
   'PT409', 'group_archived',
   'nor a Subtask under an Umbrella that sits in one -- the Group it inherits is judged, not the argument');
@@ -108,8 +108,8 @@ select throws_ok(format($$ select public.create_campaign(%s, 'Campanie #1127') $
   'PT409', 'group_archived',
   'the Moderator cannot create a Campaign in an archived Group');
 reset role;
-select is((select count(*) from public.tasks where group_id = (select archived_id from f1127)), 1::bigint,
-  'the archived Group still holds only its fixture Task -- every refusal wrote nothing');
+select is((select count(*) from public.tasks where group_id = (select archived_id from f1127)), 2::bigint,
+  'the archived Group still holds only its fixture Task and Umbrella -- every refusal wrote nothing');
 select is((select count(*) from public.campaigns where group_id = (select archived_id from f1127)), 0::bigint,
   'and no Campaign');
 
