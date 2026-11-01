@@ -161,13 +161,16 @@ export async function fetchTaskOpportunities(
     fetchMyGroups(),
     readWholeTaskRows({ p_list: 'available', p_finished: false }),
   ]);
-  const pending = new Set(
-    rows.filter((row) => row.my_candidature === 'pending').map((row) => row.id),
-  );
   const opportunities = rows.map((row) => ({
     ...taskListRow(row),
     candidature: ownCandidature(row.my_candidature),
   }));
+  // One reading of the row's Candidature: the joinable rule follows it.
+  const pending = new Set(
+    opportunities
+      .filter((row) => row.candidature === 'pending')
+      .map((row) => row.id),
+  );
   return orderOpportunities(opportunities, memberGroupIds(groups), {
     pending,
     memberId,
