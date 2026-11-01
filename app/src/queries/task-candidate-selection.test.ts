@@ -131,7 +131,7 @@ it('reads a refusal in its own copy, and the class only as the fallback (#1143)'
   const refused = taskCandidateSelectionError('PT409', 'candidate_not_pending');
   expect(refused.kind).toBe('conflict');
   expect(refused.message).toBe(
-    'Candidatura nu mai este în coadă: a fost retrasă sau aleasă între timp.',
+    'Candidatura nu mai este în coadă: a fost retrasă, aleasă sau închisă între timp.',
   );
   expect(taskCandidateSelectionError('PT409', 'task_in_review').message).toBe(
     'Taskul este în verificare și nu mai poate fi editat. Verifică starea actuală.',

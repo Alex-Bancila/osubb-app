@@ -780,26 +780,20 @@ const REASON_COPY = new Map<string, string>([
   ['already_executor', 'Ești deja executorul acestui task.'],
   [
     'candidate_not_pending',
-    'Candidatura nu mai este în coadă: a fost retrasă sau aleasă între timp.',
+    'Candidatura nu mai este în coadă: a fost retrasă, aleasă sau închisă între timp.',
   ],
   ['not_a_candidate', 'Nu mai ești în coada acestui task.'],
   ['task_queue_closed', 'Coada taskului s-a închis. Nu te mai poți înscrie.'],
-  [
-    'task_not_public',
-    'Taskul e atribuit direct, așa că nu are coadă de înscriere.',
-  ],
+  ['task_not_public', 'Taskul nu are coadă de înscriere.'],
   // Also the table's word for select_task_candidate; its sheet names the
   // Candidate instead (queries/task-candidate-selection.ts).
   ['task_audience_forbidden', 'Taskul e doar pentru membrii grupului lui.'],
   ['task_executor_forbidden', 'Doar executorul taskului poate face asta.'],
-  ['task_not_todo', 'Taskul a fost deja început. Verifică starea actuală.'],
-  [
-    'task_not_in_progress',
-    'Taskul nu mai este în lucru. Verifică starea actuală.',
-  ],
+  ['task_not_todo', 'Taskul nu mai este „De făcut”. Verifică starea actuală.'],
+  ['task_not_in_progress', 'Taskul nu este în lucru. Verifică starea actuală.'],
   [
     'task_not_in_review',
-    'Taskul nu mai este în verificare. Verifică starea actuală.',
+    'Taskul nu este în verificare. Verifică starea actuală.',
   ],
   [
     'task_already_evaluated',
@@ -812,7 +806,7 @@ const REASON_COPY = new Map<string, string>([
   ['task_not_overdue', 'Termenul taskului nu a trecut încă.'],
   [
     'task_not_evaluated',
-    'Doar un task încheiat poate fi redeschis. Verifică starea actuală.',
+    'Doar un task evaluat poate fi redeschis. Verifică starea actuală.',
   ],
   [
     'umbrella_cancelled',

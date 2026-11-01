@@ -538,7 +538,14 @@ const MIGRATIONS = path.resolve(
   '../../../supabase/migrations',
 );
 
+let liveRaised: Map<string, Set<string>> | undefined;
+
 function liveRaisedReasons(): Map<string, Set<string>> {
+  liveRaised ??= readLiveRaisedReasons();
+  return liveRaised;
+}
+
+function readLiveRaisedReasons(): Map<string, Set<string>> {
   const live = new Map<string, string>();
   const head =
     /\b(create(?:\s+or\s+replace)?|drop)\s+function\s+(?:if\s+exists\s+)?(public|private)\.([a-z0-9_]+)\s*\(/gi;
@@ -546,7 +553,12 @@ function liveRaisedReasons(): Map<string, Set<string>> {
     .filter((file) => file.endsWith('.sql'))
     .sort();
   for (const file of files) {
-    const text = readFileSync(path.join(MIGRATIONS, file), 'utf8');
+    // Whole-line comments are prose: a create, drop or raise quoted there
+    // must not change what the gate reads as live.
+    const text = readFileSync(path.join(MIGRATIONS, file), 'utf8')
+      .split('\n')
+      .filter((line) => !/^\s*--/.test(line))
+      .join('\n');
     for (const match of text.matchAll(head)) {
       const name = `${match[2]}.${match[3]}`.toLowerCase();
       if (/^drop/i.test(match[1] ?? '')) {
