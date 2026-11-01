@@ -431,9 +431,11 @@ echo "seed.sql re-runs after the demo Moderator ran a Role Evaluation of each ki
 # Between Role Evaluations a Voluntar is listed as a Promotion Candidate the
 # moment their Task Points reach the Voluntar Activ line (#983, R35), and on
 # staging that is live as soon as the Data limită de intrare is set (R58).
-# private.refresh_promotion_candidates runs from statement triggers on
-# points_ledger, promotion_thresholds, evaluation_settings and profiles -- so
-# the seed's own writes fire it, in its cleanup as well as in its inserts, and
+# private.refresh_promotion_candidates runs from a deferred constraint trigger on
+# points_ledger (#1142: once per transaction, or at each statement's end once the
+# constraint is set immediate, as each case below does) and from statement
+# triggers on promotion_thresholds, evaluation_settings and profiles -- so the
+# seed's own writes fire it, in its cleanup as well as in its inserts, and
 # a refresh that listed a demo Member again after the cleanup removed the
 # Candidates left a row pinning the demo profile. Each case is one transaction,
 # rolled back: the non-demo sentinel becomes a BC (a real leader the refresh
@@ -446,6 +448,9 @@ echo "seed.sql re-runs after the demo Moderator ran a Role Evaluation of each ki
 # and (b) leaves exactly the one live Candidate and one Notification its
 # inserts made.
 live_setup=$(cat <<'SQL'
+-- #1142: the ledger's refresh is deferred to the end of the transaction; fire it at
+-- each statement's end so each case reads the list its own writes changed.
+set constraints points_ledger_refresh_promotion_candidates immediate;
 update profiles set role = 'bc' where id = 'e2750000-0000-0000-0000-000000000001';
 select set_config('request.jwt.claims', jsonb_build_object(
          'sub', p.id, 'role', 'authenticated',

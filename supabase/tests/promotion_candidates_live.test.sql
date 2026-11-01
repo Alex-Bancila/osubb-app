@@ -63,7 +63,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(54);
+select plan(61);
 
 -- ==================== Fixtures ====================
 
@@ -485,6 +485,65 @@ select is(
   (select count(*) from pg_temp.open983('98300000-0000-0000-0000-000000000011')),
   0::bigint,
   'a Voluntar Activ holder has no open row');
+
+
+-- ==================== 10. One refresh per transaction (#1142) ====================
+-- In production the ledger's refresh is a deferred constraint trigger: a
+-- transaction that writes many ledger rows -- create_completed_tasks with
+-- many copies, delete_task on an Umbrella, delete_group on a Department --
+-- refreshes once, at its end, instead of once per INSERT statement under
+-- the Task, Group and roster locks it holds. Every suite fires the trigger
+-- at each statement's end instead (_helpers.sql), so the list is readable
+-- right after an award; here the production mode is restored for two
+-- transaction-shaped blocks and the queued events are fired by hand, counting
+-- the refreshes through the transaction-local counter the function keeps.
+set constraints points_ledger_refresh_promotion_candidates deferred;
+select set_config('osubb.promotion_refresh_count', '0', true) is not null;
+create temp table awards1142 as
+  select pg_temp.credit983('98300000-0000-0000-0000-000000000019', 1) as task_id
+    from generate_series(1, 10);
+select is(current_setting('osubb.promotion_refresh_count', true), '0',
+  'ten awards in one transaction queue the refresh and run none of it yet');
+set constraints points_ledger_refresh_promotion_candidates immediate;
+select is(current_setting('osubb.promotion_refresh_count', true), '1',
+  'at the end of the transaction the queued events run the refresh once, not ten times');
+
+-- Reversals take the same path: deleting the ten awarded Tasks for good, as
+-- delete_task does for an Umbrella's Subtasks, reverses ten awards in one
+-- transaction and refreshes once.
+set constraints points_ledger_refresh_promotion_candidates deferred;
+select set_config('osubb.promotion_refresh_count', '0', true) is not null;
+select count(*) from private.delete_tasks_effect(
+  (select array_agg(task_id) from awards1142), '98300000-0000-0000-0000-000000000001', 'Probă #1142');
+select is(current_setting('osubb.promotion_refresh_count', true), '0',
+  'ten reversals in one transaction queue the refresh and run none of it yet');
+set constraints points_ledger_refresh_promotion_candidates immediate;
+select is(current_setting('osubb.promotion_refresh_count', true), '1',
+  'and run it once at the end');
+
+-- The deferred refresh lists what the per-statement one did: a fresh
+-- Voluntar crossing the line in a deferred transaction is listed when the
+-- queue fires, with the row section 7 shows for a crossing at once.
+insert into auth.users (id, email) values ('98300000-0000-0000-0000-000000000020', 'm20-983@test.local');
+insert into public.profiles (id, full_name, email, role, status, joined_at)
+  values ('98300000-0000-0000-0000-000000000020', 'Voluntar Nouă 983', 'm20-983@test.local', 'voluntar', 'activ', '2000-01-01');
+set constraints points_ledger_refresh_promotion_candidates deferred;
+select pg_temp.credit983('98300000-0000-0000-0000-000000000020', 15);
+select is((select count(*) from pg_temp.open983('98300000-0000-0000-0000-000000000020')), 0::bigint,
+  'a Voluntar crossing the line in a deferred transaction is not listed before the queue fires');
+set constraints points_ledger_refresh_promotion_candidates immediate;
+select results_eq(
+  $$ select * from pg_temp.open983('98300000-0000-0000-0000-000000000020') $$,
+  $$ values (null::bigint, 15, '2000-01-01'::date, 15) $$,
+  'and is listed when it fires, with the row a crossing at once gets (section 7): the same Candidates as before');
+
+-- With the trigger firing at each statement's end, as every suite has it, a
+-- single award still refreshes at once.
+select set_config('osubb.promotion_refresh_count', '0', true) is not null;
+select pg_temp.credit983('98300000-0000-0000-0000-000000000019', 1);
+select is(current_setting('osubb.promotion_refresh_count', true), '1',
+  'a single award refreshes once, at the end of its statement');
+
 
 select * from finish();
 rollback;
