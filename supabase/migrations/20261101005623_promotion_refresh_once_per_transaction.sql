@@ -193,7 +193,8 @@ comment on function private.refresh_promotion_candidates() is
 create function private.flag_promotion_refresh()
 returns trigger
 language plpgsql
-security definer
+-- House rule 4: set_config needs no owner privilege, so no definer.
+security invoker
 set search_path = ''
 as $$
 begin
@@ -205,7 +206,7 @@ end;
 $$;
 
 comment on function private.flag_promotion_refresh() is
-  '#1142: BEFORE statement trigger body on points_ledger -- marks the transaction-local flag osubb.promotion_refresh_pending, which private.refresh_promotion_candidates_deferred reads when the ledger''s queued constraint-trigger events fire. Granted to nobody.';
+  '#1142: BEFORE statement trigger body on points_ledger (security invoker: it only sets a transaction-local setting) -- marks the transaction-local flag osubb.promotion_refresh_pending, which private.refresh_promotion_candidates_deferred reads when the ledger''s queued constraint-trigger events fire. Granted to nobody.';
 
 revoke execute on function private.flag_promotion_refresh()
   from public, anon, authenticated, service_role;

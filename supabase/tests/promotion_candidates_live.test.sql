@@ -63,7 +63,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(60);
+select plan(61);
 
 -- ==================== Fixtures ====================
 
@@ -507,8 +507,6 @@ select is(current_setting('osubb.promotion_refresh_count', true), '0',
 set constraints points_ledger_refresh_promotion_candidates immediate;
 select is(current_setting('osubb.promotion_refresh_count', true), '1',
   'at the end of the transaction the queued events run the refresh once, not ten times');
-select is(private.refresh_promotion_candidates(), 0,
-  'and that one refresh caught the list up: another lists nobody');
 
 -- Reversals take the same path: deleting the ten awarded Tasks for good, as
 -- delete_task does for an Umbrella's Subtasks, reverses ten awards in one
@@ -522,6 +520,22 @@ select is(current_setting('osubb.promotion_refresh_count', true), '0',
 set constraints points_ledger_refresh_promotion_candidates immediate;
 select is(current_setting('osubb.promotion_refresh_count', true), '1',
   'and run it once at the end');
+
+-- The deferred refresh lists what the per-statement one did: a fresh
+-- Voluntar crossing the line in a deferred transaction is listed when the
+-- queue fires, with the row section 7 shows for a crossing at once.
+insert into auth.users (id, email) values ('98300000-0000-0000-0000-000000000020', 'm20-983@test.local');
+insert into public.profiles (id, full_name, email, role, status, joined_at)
+  values ('98300000-0000-0000-0000-000000000020', 'Voluntar Nouă 983', 'm20-983@test.local', 'voluntar', 'activ', '2000-01-01');
+set constraints points_ledger_refresh_promotion_candidates deferred;
+select pg_temp.credit983('98300000-0000-0000-0000-000000000020', 15);
+select is((select count(*) from pg_temp.open983('98300000-0000-0000-0000-000000000020')), 0::bigint,
+  'a Voluntar crossing the line in a deferred transaction is not listed before the queue fires');
+set constraints points_ledger_refresh_promotion_candidates immediate;
+select results_eq(
+  $$ select * from pg_temp.open983('98300000-0000-0000-0000-000000000020') $$,
+  $$ values (null::bigint, 15, '2000-01-01'::date, 15) $$,
+  'and is listed when it fires, with the row a crossing at once gets (section 7): the same Candidates as before');
 
 -- With the trigger firing at each statement's end, as every suite has it, a
 -- single award still refreshes at once.
