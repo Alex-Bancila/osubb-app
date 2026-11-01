@@ -19,6 +19,12 @@
 -- to have blocked on the lock and re-read. On main every race lets B succeed
 -- (no exception, so throws_ok fails), and BC creating an Event in a committed
 -- archived Group hears 42501 instead of group_archived.
+--
+-- Follow-up (sections 4 and 5): duplicate_task and create_campaign, the other
+-- two creators #1127 taught to refuse an archived Group, read its status the
+-- same unlocked way, so a copy or a Campaign could land in a Group being
+-- archived in the same instant (#1174). Their four races let B succeed before
+-- the follow-up migration.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
@@ -26,7 +32,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(16);
+select plan(22);
 
 -- ==================== Committed fixtures ====================
 -- test_race's sessions cannot see this transaction's rows, so the fixtures
@@ -37,6 +43,12 @@ select extensions.dblink_connect('setup_1145', format(
 select extensions.dblink_exec('setup_1145', 'set lock_timeout = ''2s''');
 select extensions.dblink_exec('setup_1145', $setup$
   delete from public.events where title like 'Race %#1145';
+  set session_replication_role = 'replica';
+  delete from public.task_activity where task_id in (select id from public.tasks where title like 'Race %#1145');
+  delete from public.notifications where task_id in (select id from public.tasks where title like 'Race %#1145');
+  delete from public.task_assignments where task_id in (select id from public.tasks where title like 'Race %#1145');
+  set session_replication_role = 'origin';
+  delete from public.campaigns where name like 'Race %#1145';
   delete from public.tasks where title like 'Race %#1145';
   delete from public.groups where name like 'Race %#1145';
   delete from auth.users where id = '11450000-0000-0000-0000-000000000001';
@@ -51,6 +63,8 @@ select extensions.dblink_exec('setup_1145', $setup$
     ('Race event target #1145', 'team'), ('Race event parent #1145', 'team'),
     ('Race task target #1145', 'team'),  ('Race task parent #1145', 'team'),
     ('Race move target #1145', 'team'),  ('Race move parent #1145', 'team'),
+    ('Race dup target #1145', 'team'),   ('Race dup parent #1145', 'team'),
+    ('Race camp target #1145', 'team'),  ('Race camp parent #1145', 'team'),
     ('Race home #1145', 'team');
   insert into public.groups (name, category, parent_id)
   select replace(parent.name, 'parent', 'child'), 'team', parent.id
@@ -60,6 +74,14 @@ select extensions.dblink_exec('setup_1145', $setup$
          '11450000-0000-0000-0000-000000000001'
     from public.groups as home cross join (values ('one'), ('two')) as event(which)
    where home.name = 'Race home #1145';
+  insert into public.tasks
+    (title, description, deadline, group_id, audience, assignment_mode, status,
+     cancelled_at, cancel_reason, created_by)
+  select 'Race dup source ' || grp.name, 'De copiat', now() + interval '3 days', grp.id,
+         'local', 'direct', 'cancelled', now(), 'Fixture #1145',
+         '11450000-0000-0000-0000-000000000001'
+    from public.groups as grp
+   where grp.name in ('Race dup target #1145', 'Race dup child #1145');
 $setup$);
 
 create temp table f1145 as
@@ -72,6 +94,13 @@ select (select id from public.groups where name = 'Race event target #1145') as 
        (select id from public.groups where name = 'Race move target #1145') as move_target,
        (select id from public.groups where name = 'Race move parent #1145') as move_parent,
        (select id from public.groups where name = 'Race move child #1145') as move_child,
+       (select id from public.groups where name = 'Race dup target #1145') as dup_target,
+       (select id from public.groups where name = 'Race dup parent #1145') as dup_parent,
+       (select id from public.tasks where title = 'Race dup source Race dup target #1145') as dup_source,
+       (select id from public.tasks where title = 'Race dup source Race dup child #1145') as dup_child_source,
+       (select id from public.groups where name = 'Race camp target #1145') as camp_target,
+       (select id from public.groups where name = 'Race camp parent #1145') as camp_parent,
+       (select id from public.groups where name = 'Race camp child #1145') as camp_child,
        (select id from public.groups where name = 'Race home #1145') as home,
        (select id from public.events where title = 'Race move one #1145') as event_one,
        (select id from public.events where title = 'Race move two #1145') as event_two;
@@ -87,6 +116,12 @@ $$;
 create function pg_temp.create_task_sql(p_group_id bigint, p_title text) returns text language sql as $$
   select format('select (public.create_task(%L, null, now() + interval ''7 days'', %L, %L, null, null, null, %L, %s)).title',
     p_title, 'local', 'direct', 'task', p_group_id)
+$$;
+create function pg_temp.duplicate_task_sql(p_task_id bigint) returns text language sql as $$
+  select format('select (public.duplicate_task(%s, now() + interval ''7 days'')).title', p_task_id)
+$$;
+create function pg_temp.create_campaign_sql(p_group_id bigint, p_name text) returns text language sql as $$
+  select format('select (public.create_campaign(%s, %L)).name', p_group_id, p_name)
 $$;
 create function pg_temp.move_event_sql(p_event_id bigint, p_group_id bigint, p_title text) returns text language sql as $$
   select format('select (public.update_event(%s, %L, %L, %s, now() + interval ''2 days'', null, null, null, null, 0, null, false)).title',
@@ -140,7 +175,37 @@ select is((select count(*) from public.events as event
             where event.title like 'Race move %#1145' and event.group_id = (select home from f1145)), 2::bigint,
   'both Events stayed in their home Group');
 
--- ==================== 4. The committed state: the same reasons without a race ====================
+-- ==================== 4. duplicate_task against the archive ====================
+-- The copy lands in its source's Group; the sources are cancelled, so the
+-- archive has no open work to refuse.
+select throws_ok(format($r$ select * from pg_temp.test_race(%L, %L) $r$,
+    pg_temp.archive_sql((select dup_target from f1145)),
+    pg_temp.duplicate_task_sql((select dup_source from f1145))),
+  'PT409', 'group_archived',
+  'duplicate_task into the Group being archived waits for the archive and then hears group_archived');
+select throws_ok(format($r$ select * from pg_temp.test_race(%L, %L) $r$,
+    pg_temp.archive_sql((select dup_parent from f1145)),
+    pg_temp.duplicate_task_sql((select dup_child_source from f1145))),
+  'PT409', 'group_archived',
+  'and so does duplicate_task into a Child Group whose parent is being archived');
+select is((select count(*) from public.tasks where title like 'Race dup source %#1145'), 2::bigint,
+  'no copy landed in either archived Group -- only the two cancelled sources are there');
+
+-- ==================== 5. create_campaign against the archive ====================
+select throws_ok(format($r$ select * from pg_temp.test_race(%L, %L) $r$,
+    pg_temp.archive_sql((select camp_target from f1145)),
+    pg_temp.create_campaign_sql((select camp_target from f1145), 'Race campaign #1145')),
+  'PT409', 'group_archived',
+  'create_campaign in the Group being archived waits for the archive and then hears group_archived');
+select throws_ok(format($r$ select * from pg_temp.test_race(%L, %L) $r$,
+    pg_temp.archive_sql((select camp_parent from f1145)),
+    pg_temp.create_campaign_sql((select camp_child from f1145), 'Race campaign child #1145')),
+  'PT409', 'group_archived',
+  'and so does create_campaign in a Child Group whose parent is being archived');
+select is((select count(*) from public.campaigns where name like 'Race %#1145'), 0::bigint,
+  'no Campaign landed in either archived Group');
+
+-- ==================== 6. The committed state: the same reasons without a race ====================
 -- Every target is archived now. BC, who passes every authority rule, hears
 -- the creators' one reason; create_event answered 42501 before #1145.
 select pg_temp.test_login('11450000-0000-0000-0000-000000000001',
@@ -183,6 +248,12 @@ select is((select event.group_id from public.events as event where event.title =
 -- ==================== Cleanup ====================
 select extensions.dblink_exec('setup_1145', $cleanup$
   delete from public.events where title like 'Race %#1145';
+  set session_replication_role = 'replica';
+  delete from public.task_activity where task_id in (select id from public.tasks where title like 'Race %#1145');
+  delete from public.notifications where task_id in (select id from public.tasks where title like 'Race %#1145');
+  delete from public.task_assignments where task_id in (select id from public.tasks where title like 'Race %#1145');
+  set session_replication_role = 'origin';
+  delete from public.campaigns where name like 'Race %#1145';
   delete from public.tasks where title like 'Race %#1145';
   delete from public.groups where name like 'Race %#1145';
   delete from auth.users where id = '11450000-0000-0000-0000-000000000001';
