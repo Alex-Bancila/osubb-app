@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import { Panel } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
 import { Button } from '../../components/ui/button';
@@ -30,6 +31,14 @@ export function FinishedTasksPanel({
   // the loaded pages are read again after a change, nor once the window is
   // full. Re-armed when that lands, it asks at once if the end is still in
   // view.
+  // Back at the first rows, the button that brought them is gone: focus
+  // moves to the rows rather than falling to the page.
+  const earlierButton = useRef<HTMLButtonElement>(null);
+  const shownRows = useRef<HTMLDivElement>(null);
+  const showEarlier = () => {
+    flushSync(() => finished.showEarlier?.());
+    if (!earlierButton.current) shownRows.current?.focus();
+  };
   const sentinel = useInView(
     finished.loadMore,
     finished.hasMore &&
@@ -64,12 +73,18 @@ export function FinishedTasksPanel({
         >
           {(finished.earlier ?? 0) > 0 && (
             <div className="flex justify-center pb-2">
-              <Button variant="outline" onClick={finished.showEarlier}>
+              <Button
+                ref={earlierButton}
+                variant="outline"
+                onClick={showEarlier}
+              >
                 Arată taskurile anterioare
               </Button>
             </div>
           )}
-          {children}
+          <div ref={shownRows} tabIndex={-1} className="outline-none">
+            {children}
+          </div>
           {/* The next page holds its place under the rows read so far. */}
           {finished.isLoadingMore && (
             <Loading label="Se încarcă mai multe taskuri…" />

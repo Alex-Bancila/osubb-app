@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { useMemo, type ComponentProps } from 'react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
@@ -1261,9 +1261,13 @@ describe('ManagerTaskList renders (#1147)', () => {
     const search = screen.getByRole('searchbox', { name: 'Caută după titlu' });
     chips.count = 0;
 
-    await user.type(search, 'z');
+    // Every title holds an "e": once the search applies, every row stays.
+    await user.type(search, 'e');
 
-    expect(search).toHaveValue('z');
+    expect(search).toHaveValue('e');
+    expect(chips.count).toBe(0);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 300)));
+    expect(titles()).toHaveLength(rows.length);
     expect(chips.count).toBe(0);
   });
 
@@ -1370,6 +1374,17 @@ describe('ManagerTaskList, the finished part held to a window (#1147)', () => {
       shown = finishedTitles();
       expect(shown[0]).toBe('Încheiat 1');
       expect(shown).toHaveLength(200);
+      // The button is gone with the first rows back: focus moves to them,
+      // never to the page.
+      expect(
+        within(finishedRegion()).queryByRole('button', {
+          name: 'Arată taskurile anterioare',
+        }),
+      ).toBeNull();
+      expect(document.activeElement).not.toBe(document.body);
+      expect(finishedRegion()).toContainElement(
+        document.activeElement as HTMLElement,
+      );
     },
     WINDOW_TIMEOUT,
   );
