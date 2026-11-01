@@ -228,6 +228,9 @@ export const keys = {
     /* #1017: what deleting a Group for good would take with it. */
     deletePreview: (groupId: number, memberId: string | undefined) =>
       ['groups', 'delete-preview', { groupId, memberId }] as const,
+    /* #1149: what archiving a Group would act on, read as the dialog opens. */
+    archivePreview: (groupId: number, memberId: string | undefined) =>
+      ['groups', 'archive-preview', { groupId, memberId }] as const,
     /* Whom a Group may appoint: every member the caller can see at all. */
     appointable: (memberId: string | undefined) =>
       ['groups', 'appointable', { memberId }] as const,

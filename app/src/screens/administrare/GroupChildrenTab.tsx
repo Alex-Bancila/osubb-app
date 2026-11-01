@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link } from 'react-router';
 import { PrivateGroupBadge } from '../../components/group/PrivateGroupBadge';
 import {
@@ -8,108 +7,15 @@ import {
   rowListClass,
 } from '../../components/layout';
 import { Badge } from '../../components/ui/badge';
-import { Button } from '../../components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../../components/ui/dialog';
 import type {
   AdminGroup,
   AppointableMember,
   GroupAuthority,
   RunGroupCommand,
 } from '../../queries/groups-admin';
+import { GroupArchiveDialog } from './GroupArchiveDialog';
 import { GroupCreateDialog } from './GroupCreateDialog';
-import {
-  categoryLabel,
-  groupStatusLabel,
-  unfinishedTasksPath,
-  varies,
-} from './group-tree';
-
-function ArchiveChildDialog({
-  child,
-  busy,
-  error,
-  onArchive,
-}: {
-  child: AdminGroup;
-  busy: boolean;
-  error: string | null;
-  onArchive: () => Promise<boolean>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [attempted, setAttempted] = useState(false);
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (busy) return;
-        setOpen(next);
-        if (next) setAttempted(false);
-      }}
-    >
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={busy}
-        aria-label={`Arhivează ${child.name}`}
-        onClick={() => {
-          setAttempted(false);
-          setOpen(true);
-        }}
-      >
-        Arhivează
-      </Button>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Arhivează {child.name}</DialogTitle>
-          <DialogDescription>
-            Subgrupul nu mai poate primi taskuri, evenimente sau membri noi.
-            Istoricul rămâne.
-          </DialogDescription>
-        </DialogHeader>
-        {attempted && error && (
-          <div role="alert" className="space-y-2 text-sm text-destructive">
-            <p>{error}</p>
-            <Link
-              to={unfinishedTasksPath(child)}
-              className="inline-flex min-h-11 items-center underline"
-            >
-              Vezi taskurile neterminate
-            </Link>
-          </div>
-        )}
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={busy}
-            onClick={() => setOpen(false)}
-          >
-            Renunță
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            disabled={busy}
-            onClick={async () => {
-              setAttempted(true);
-              if (await onArchive()) setOpen(false);
-            }}
-          >
-            Arhivează
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
+import { categoryLabel, groupStatusLabel, varies } from './group-tree';
 
 /**
  * The Groups directly below this one. A Group's parent is fixed at creation
@@ -180,9 +86,10 @@ export function GroupChildrenTab({
                   child.status === 'active' &&
                   authorityFor(child).archive &&
                   !isProtected(child) && (
-                    <ArchiveChildDialog
-                      child={child}
-                      busy={busy}
+                    <GroupArchiveDialog
+                      group={child}
+                      variant="child"
+                      disabled={busy}
                       error={error}
                       onArchive={() =>
                         onRun({ kind: 'archive', groupId: child.id })

@@ -130,6 +130,10 @@ it('deletes everything only once the Group’s exact name is typed', async () =>
     name: 'Ce se șterge odată cu grupul',
   });
   expect(within(list).getAllByRole('listitem')).toHaveLength(8);
+  // #1149: the archive offered as the alternative is never understated.
+  expect(dialog).toHaveTextContent(
+    'Arhivarea păstrează istoricul, dar anulează evenimentele viitoare ale grupului și respinge cererile de înscriere în așteptare; dezarhivarea nu le readuce.',
+  );
   const results = await axe.run(dialog, {
     rules: { 'color-contrast': { enabled: false } },
   });

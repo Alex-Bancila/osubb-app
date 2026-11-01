@@ -27,6 +27,7 @@ const api = vi.hoisted(() => ({
   level: { value: 6 },
   coordination: vi.fn(),
   orgSettings: vi.fn(),
+  archivePreview: vi.fn(),
 }));
 
 /** The Roluri tab reads the Groups above through TanStack Query. */
@@ -58,6 +59,8 @@ vi.mock('../../queries/groups-admin', async (original) => ({
   useGroupRoster: api.roster,
   useAppointableMembers: api.members,
   useGroupCommand: () => ({ mutateAsync: api.mutate, isPending: false }),
+  // #1149: the archive dialogs read what archiving would do.
+  useGroupArchivePreview: api.archivePreview,
 }));
 // The real Cereri tab, over mocked reads: the tab's rows are what it shows.
 vi.mock('../../queries/group-applications', () => ({
@@ -220,6 +223,12 @@ beforeEach(() => {
     data: new Map<string, string | null>(),
     isPending: false,
     isError: false,
+  });
+  api.archivePreview.mockReturnValue({
+    isPending: false,
+    isError: false,
+    data: { subgroups: 0, events: 0, applications: 0 },
+    refetch: vi.fn(),
   });
   api.roles.mockReturnValue({
     data: new Map([

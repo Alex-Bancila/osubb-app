@@ -216,8 +216,9 @@ function GroupDeleteBody({
           <Consequences label="Ce se șterge odată cu grupul" items={items} />
           <p className="m-0 text-sm text-muted-foreground">
             {NO_UNDO}
+            {/* #1149: the alternative is never understated. */}
             {onArchive
-              ? ' Arhivarea păstrează istoricul și oprește grupul.'
+              ? ' Arhivarea păstrează istoricul, dar anulează evenimentele viitoare ale grupului și respinge cererile de înscriere în așteptare; dezarhivarea nu le readuce.'
               : ''}
           </p>
         </>

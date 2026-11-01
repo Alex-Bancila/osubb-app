@@ -3937,6 +3937,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      group_archive_preview: { Args: { p_group_id: number }; Returns: Json }
       group_coordination: {
         Args: { p_group_id: number }
         Returns: {
