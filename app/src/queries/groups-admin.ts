@@ -561,9 +561,9 @@ export type GroupArchivePreview = {
 };
 
 export function readGroupArchivePreview(
-  value: Json | null | undefined,
+  value: Json | undefined,
 ): GroupArchivePreview {
-  const row = jsonObject(value ?? undefined);
+  const row = jsonObject(value);
   return {
     subgroups: jsonCount(row.subgroups),
     events: jsonCount(row.events),

@@ -51,6 +51,10 @@ values ('Copil A #1149', 'team', pg_temp.g1149('Rădăcină #1149'), 0, pg_temp.
        ('Copil B #1149', 'team', pg_temp.g1149('Rădăcină #1149'), 0, pg_temp.u1149(1));
 insert into public.groups (name, category, parent_id, min_level, created_by)
 values ('Nepot #1149', 'team', pg_temp.g1149('Copil A #1149'), 0, pg_temp.u1149(1));
+-- An archived Child counts for nothing: the archive leaves it as it is.
+insert into public.groups (name, category, parent_id, min_level, created_by)
+values ('Copil arhivat #1149', 'team', pg_temp.g1149('Rădăcină #1149'), 0, pg_temp.u1149(1));
+update public.groups set status = 'archived' where name = 'Copil arhivat #1149';
 
 insert into public.group_members (group_id, member_id, group_role)
 values (pg_temp.g1149('Rădăcină #1149'), pg_temp.u1149(3), 'manager');
@@ -78,7 +82,7 @@ select pg_temp.test_login_leadership(pg_temp.u1149(1));
 select is(
   public.group_archive_preview(pg_temp.g1149('Rădăcină #1149')),
   '{"subgroups": 3, "events": 2, "applications": 1}'::jsonb,
-  'group_archive_preview: three descendants, the two future Events of the subtree, the one pending Application -- never a past or cancelled Event, a decided Application or another Group''s');
+  'group_archive_preview: the three active descendants (never one already archived), the two future Events of the subtree, the one pending Application -- never a past or cancelled Event, a decided Application or another Group''s');
 select is(
   public.group_archive_preview(pg_temp.g1149('Frunză #1149')),
   '{"subgroups": 0, "events": 1, "applications": 0}'::jsonb,

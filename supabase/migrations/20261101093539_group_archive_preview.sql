@@ -32,7 +32,11 @@ begin
       select grp.id from public.groups as grp where grp.path @> array[p_group_id]
     )
     select jsonb_build_object(
-      'subgroups',    (select count(*) - 1 from subtree),
+      -- Only the Groups the archive changes: one archived already stays as it is.
+      'subgroups',    (select count(*) from public.groups as below
+                        where below.path @> array[p_group_id]
+                          and below.id <> p_group_id
+                          and below.status = 'active'),
       'events',       (select count(*) from public.events as event
                         where event.group_id in (select subtree.id from subtree)
                           and event.cancelled_at is null
@@ -54,7 +58,7 @@ $$;
 comment on function private.group_archive_preview_impl(bigint) is
   '#1149: body of public.group_archive_preview: private.require_group_remover (archive_group''s authority), PT409 group_protected for a Group archive_group refuses (#1129, private.is_protected_group), then the counts. Reads only; no Group, Event or Application row is locked.';
 comment on function public.group_archive_preview(bigint) is
-  '#1149 (audit M21): what archiving a Group would act on, read by the archive confirmation as group_delete_preview is read by the delete dialog: subgroups (every Group below it, archived with it), events (the subtree''s future Events still standing, each cancelled with a Notification to its attendees) and applications (the subtree''s pending Applications, each declined with a Notification to the applicant) -- none of which unarchive_group (R65) restores. Callable by whoever may archive the Group (42501 group_manage_forbidden otherwise, an unknown id included); PT409 group_protected for the Organization Group, an Automatic-Membership Group, the board or AG Group set in Setări or a Group above one. Body: private.group_archive_preview_impl.';
+  '#1149 (audit M21): what archiving a Group would act on, read by the archive confirmation as group_delete_preview is read by the delete dialog: subgroups (every active Group below it, archived with it; one archived already is not counted), events (the subtree''s future Events still standing, each cancelled with a Notification to its attendees) and applications (the subtree''s pending Applications, each declined with a Notification to the applicant) -- none of which unarchive_group (R65) restores. Callable by whoever may archive the Group (42501 group_manage_forbidden otherwise, an unknown id included); PT409 group_protected for the Organization Group, an Automatic-Membership Group, the board or AG Group set in Setări or a Group above one. Body: private.group_archive_preview_impl.';
 
 revoke execute on function private.group_archive_preview_impl(bigint) from public, anon, authenticated, service_role;
 revoke execute on function public.group_archive_preview(bigint) from public, anon, authenticated, service_role;
