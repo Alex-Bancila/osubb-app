@@ -70,7 +70,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(41);
+select plan(42);
 
 -- ==================== Fixtures ====================
 
@@ -417,16 +417,16 @@ select results_eq(
   $$ select * from public.role_evaluation_ranking((select id from kept826)) $$,
   $$ select * from full826_ag order by task_points desc, member_id $$,
   'BC reads the kept run''s ranking: the rows the run recorded, with its own counts, share and line');
+select is((select count(*) from public.role_evaluation_members where role_evaluation_id = (select id from kept826)), 12::bigint,
+  'and the table itself shows BC every kept row');
 reset role;
 select pg_temp.test_login_leadership('82600000-0000-0000-0000-000000000031');
 select results_eq(
   $$ select * from public.role_evaluation_ranking((select id from kept826)) $$,
   $$ select * from full826_ag where member_id = '82600000-0000-0000-0000-000000000031' $$,
   'an ordinary Drept de Vot holder reads exactly her own kept row');
-select throws_ok(
-  $$ select * from public.role_evaluation_members $$,
-  '42501', null,
-  'the kept rows are read only through role_evaluation_ranking');
+select is((select count(*) from public.role_evaluation_members where role_evaluation_id = (select id from kept826)), 1::bigint,
+  'the table itself shows an ordinary Member their own kept row alone (role_evaluation_members_read)');
 reset role;
 -- BC demotes VOT2, the voter the run signalled below the line (a Role write
 -- as the owner here): today's pool holds one voter fewer.

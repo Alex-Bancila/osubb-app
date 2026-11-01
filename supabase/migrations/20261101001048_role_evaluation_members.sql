@@ -18,11 +18,12 @@
 -- ranking(id) answers from the kept rows for such a run and recomputes only
 -- for a Simulation (simulate_role_evaluation, untouched) or a run from before
 -- this file -- no backfill: a past run's population cannot be recovered. The
--- rows are read only through that function: its per-caller rule (every row
--- for private.can_read_evaluation_rankings, otherwise the caller's own row)
--- cannot be asked by a policy on authenticated, since the helper is granted
--- to nobody, and a policy with role_evaluations' own rule would have shown
--- every Member's Points to every Member. The table carries broadcast_change
+-- rows are read by clients through that function: its per-caller rule (every
+-- row for private.can_read_evaluation_rankings, otherwise the caller's own
+-- row) cannot be asked by a policy on authenticated, since the helper is
+-- granted to nobody, and a policy with role_evaluations' own rule would have
+-- shown every Member's Points to every Member -- so the table's own policy
+-- (every RLS table carries one) is the narrow one: own rows, or level >= 6. The table carries broadcast_change
 -- (ADR-0011): one message per run. A row names a Member, so it holds their
 -- account against delete_member (R59), as any history does.
 --
@@ -50,7 +51,7 @@ create table public.role_evaluation_members (
 create index role_evaluation_members_member_idx on public.role_evaluation_members (member_id);
 
 comment on table public.role_evaluation_members is
-  '#1146 (audit M11 of 2026-10-30): the population a finished Role Evaluation judged, one row per evaluated Member as the ranking stood at the run -- written once by run_role_evaluation, never updated, read only through role_evaluation_ranking(id) (no policy, no grant: the per-caller rule lives in that function). A run with rows here has role_evaluations.members_recorded; a run from before #1146 has none and its ranking is recomputed over today''s Roles and ledger. A row names a Member, so it holds their account against delete_member (R59).';
+  '#1146 (audit M11 of 2026-10-30): the population a finished Role Evaluation judged, one row per evaluated Member as the ranking stood at the run -- written once by run_role_evaluation, never updated, read by clients through role_evaluation_ranking(id), whose per-caller rule the table''s own policy only approximates (own rows, or BC and the Moderator). A run with rows here has role_evaluations.members_recorded; a run from before #1146 has none and its ranking is recomputed over today''s Roles and ledger. A row names a Member, so it holds their account against delete_member (R59).';
 comment on column public.role_evaluation_members.role_at_run is
   'The Member''s Role at the run: what the sheet lists and, for the Adunarea Generală kind, filters by (vot), whatever the Role is today.';
 comment on column public.role_evaluation_members.points is
@@ -64,6 +65,21 @@ comment on column public.role_evaluation_members.listable is
 
 alter table public.role_evaluation_members enable row level security;
 revoke all on table public.role_evaluation_members from public, anon, authenticated, service_role;
+grant select on table public.role_evaluation_members to authenticated, service_role;
+
+-- The table's own rule is narrow: a Member reads their own kept rows, BC and
+-- the Moderator every row. The reader clients use is role_evaluation_ranking,
+-- whose rule also lets the Adunarea Generală's Group Managers and Group
+-- Responsibles read every row (private.can_read_evaluation_rankings, granted
+-- to nobody, so a policy cannot ask it). No write policy: run_role_evaluation
+-- is the only write path.
+create policy role_evaluation_members_read on public.role_evaluation_members
+  for select to authenticated
+  using ((select public.auth_is_member()) and (select private.caller_level()) >= 0
+         and (member_id = (select auth.uid()) or (select private.caller_level()) >= 6));
+
+comment on policy role_evaluation_members_read on public.role_evaluation_members is
+  '#1146: a live active Member with organization claims (house rule 12) reads their own kept rows; BC and the Moderator (live level >= 6) read every row. The Adunarea Generală''s Group Managers and Group Responsibles read every row through role_evaluation_ranking, whose rule a policy cannot ask. No write policy: run_role_evaluation is the only write path.';
 
 -- ADR-0011: a domain table broadcasts its changes -- one statement per run.
 create trigger broadcast_change after insert or update or delete on public.role_evaluation_members

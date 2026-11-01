@@ -132,6 +132,8 @@ const FAMILIES_BY_TABLE: ReadonlyMap<string, readonly Prefix[]> = new Map<
   ['privacy_notice_acknowledgements', [keys.privacy.all]],
   ['role_history', [keys.profile.all, keys.members.all]],
   ['role_evaluations', [keys.evaluation.all, keys.points.all]],
+  /* #1146: the population a finished run kept; its sheet reads the run. */
+  ['role_evaluation_members', [keys.evaluation.all]],
   ['promotion_candidates', [keys.evaluation.all, keys.points.all]],
   /* R58: the stored Retention Signals the page reads. */
   ['retention_signals', [keys.evaluation.all]],
