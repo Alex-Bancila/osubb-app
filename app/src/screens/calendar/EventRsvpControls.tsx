@@ -5,14 +5,19 @@ import { Button } from '../../components/ui/button';
 import { cn } from '../../lib/utils';
 import {
   EventRsvpMutationError,
-  useEventRsvp,
   useSetEventRsvp,
   type EventRsvpStatus,
+  type MyEventAnswersRead,
 } from '../../queries/event-rsvp';
 
 type EventRsvpControlsProps = {
   eventId: number;
   eventTitle: string;
+  /**
+   * The viewer's answers, read once by the list the card is in (#1134):
+   * this Event's is the pressed button.
+   */
+  answers: MyEventAnswersRead;
 };
 
 type Feedback = {
@@ -63,16 +68,16 @@ const LABELS: Record<EventRsvpStatus, string> = {
 export default function EventRsvpControls({
   eventId,
   eventTitle,
+  answers,
 }: EventRsvpControlsProps) {
-  const rsvp = useEventRsvp(eventId);
   const mutation = useSetEventRsvp();
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [saving, setSaving] = useState<EventRsvpStatus | null>(null);
   // A second tap can land before React re-renders the disabled buttons.
   const inFlight = useRef(false);
   const busy = saving !== null || mutation.isPending;
-  const controlsDisabled = rsvp.isPending || rsvp.isError || busy;
-  const answer = rsvp.data?.status;
+  const controlsDisabled = answers.isPending || answers.isError || busy;
+  const answer = answers.data?.get(eventId);
 
   async function save(status: EventRsvpStatus) {
     if (controlsDisabled || inFlight.current) return;
@@ -142,10 +147,24 @@ export default function EventRsvpControls({
             );
           })}
         </div>
-        {(rsvp.isPending || rsvp.isError) && (
+        {(answers.isPending || answers.isError) && (
           <span className="event-rsvp-state">
-            {rsvp.isPending ? 'Se încarcă răspunsul…' : 'Răspuns indisponibil'}
+            {answers.isPending
+              ? 'Se încarcă răspunsul…'
+              : 'Răspuns indisponibil'}
           </span>
+        )}
+        {/* The read is the list's: one failure closes every card's answers,
+            and any of them can ask for it again. */}
+        {answers.isError && (
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            onClick={() => void answers.refetch()}
+          >
+            Reîncearcă
+          </Button>
         )}
       </div>
 

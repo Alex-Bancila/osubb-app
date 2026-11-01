@@ -859,20 +859,10 @@
   min-height: 44px;
 }
 
-.event-attendance-label,
+/* The toggle (a ghost button) reads as the section's heading through its
+   utility classes, which win over this sheet. */
 .event-attendance-tally {
   margin: 0;
-}
-
-/* The label reads as the section's heading; the toggle (a ghost button) takes
-   the same type through its utility classes, which win over this sheet. */
-.event-attendance-label {
-  color: var(--text);
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-extrabold);
-}
-
-.event-attendance-tally {
   margin-left: auto;
   color: var(--text-muted);
   font-size: var(--fs-xs);

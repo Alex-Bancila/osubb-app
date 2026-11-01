@@ -34,8 +34,7 @@ const hooks = vi.hoisted(() => ({
   useGroups: vi.fn(),
   useCampaigns: vi.fn(),
   useMyGroupRoles: vi.fn(),
-  useGoingEventIds: vi.fn(),
-  useEventRsvp: vi.fn(),
+  useMyEventAnswers: vi.fn(),
   useSetEventRsvp: vi.fn(),
   useMyTasksInRange: vi.fn(),
   usePendingCandidatureTasks: vi.fn(),
@@ -71,9 +70,14 @@ vi.mock('../../queries/my-groups', async (importActual) => ({
 }));
 vi.mock('../../queries/event-rsvp', () => ({
   EventRsvpMutationError: class EventRsvpMutationError extends Error {},
-  useEventRsvp: hooks.useEventRsvp,
   useSetEventRsvp: hooks.useSetEventRsvp,
-  useGoingEventIds: hooks.useGoingEventIds,
+  useMyEventAnswers: hooks.useMyEventAnswers,
+  goingEventIds: (answers?: ReadonlyMap<number, string>) =>
+    new Set(
+      [...(answers ?? [])]
+        .filter(([, status]) => status === 'going')
+        .map(([eventId]) => eventId),
+    ),
 }));
 vi.mock('../../queries/calendar-tasks', () => ({
   usePendingCandidatureTasks: hooks.usePendingCandidatureTasks,
@@ -369,9 +373,8 @@ describe('CalendarScreen', () => {
       query([{ id: 3, name: 'Bun venit', group_id: 7, is_active: true }]),
     );
     hooks.useMyGroupRoles.mockReturnValue(query(myGroups));
-    hooks.useGoingEventIds.mockReturnValue(query([]));
+    hooks.useMyEventAnswers.mockReturnValue(query(new Map()));
     hooks.useEvent.mockReturnValue(query(undefined, { isPending: true }));
-    hooks.useEventRsvp.mockReturnValue(query(null));
     hooks.useSetEventRsvp.mockReturnValue({
       isPending: false,
       mutateAsync: vi.fn(),
@@ -652,7 +655,7 @@ describe('CalendarScreen', () => {
       expect(screen.queryByText(/Alt eveniment OSUBB/)).not.toBeInTheDocument();
       unmount();
 
-      hooks.useGoingEventIds.mockReturnValue(query([2]));
+      hooks.useMyEventAnswers.mockReturnValue(query(new Map([[2, 'going']])));
       renderCalendar();
       const answered = screen.getByRole('article', {
         name: 'Festival deschis',
@@ -814,7 +817,7 @@ describe('CalendarScreen', () => {
 
       it('keeps an Event the member answered Particip to', () => {
         preferences.muted = new Set([20]);
-        hooks.useGoingEventIds.mockReturnValue(query([2]));
+        hooks.useMyEventAnswers.mockReturnValue(query(new Map([[2, 'going']])));
         setEvents([event(), festivalEvent]);
         renderCalendar();
         expect(

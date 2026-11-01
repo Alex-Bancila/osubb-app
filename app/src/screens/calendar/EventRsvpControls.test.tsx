@@ -15,6 +15,7 @@ vi.mock('../../lib/supabase', async () => {
 });
 vi.mock('../../lib/auth', () => ({ useAuth: auth.useAuth }));
 
+import { useMyEventAnswers } from '../../queries/event-rsvp';
 import EventRsvpControls from './EventRsvpControls';
 
 const memberId = 'a1000000-0000-0000-0000-000000000238';
@@ -48,13 +49,24 @@ function deferredRpc() {
   return (status: Row['status']) => release(status);
 }
 
+/** The controls as a list draws them: its answers read, the card's own. */
+function Controls() {
+  return (
+    <EventRsvpControls
+      eventId={7}
+      eventTitle="Ședință BC"
+      answers={useMyEventAnswers()}
+    />
+  );
+}
+
 function renderControls() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <EventRsvpControls eventId={7} eventTitle="Ședință BC" />
+      <Controls />
     </QueryClientProvider>,
   );
 }
@@ -78,8 +90,9 @@ describe('EventRsvpControls', () => {
     resetSupabaseMock();
     auth.useAuth.mockReturnValue({ session: { user: { id: memberId } } });
     stored = row('going');
-    supabaseMock.maybeSingle.mockImplementation(() =>
-      Promise.resolve({ data: stored, error: null }),
+    // The member's answers: this Event's, when there is one.
+    supabaseMock.range.mockImplementation(() =>
+      Promise.resolve({ data: stored ? [stored] : [], error: null }),
     );
     supabaseMock.rpc.mockImplementation(
       (_name: string, args: { p_status: Row['status'] }) => {
@@ -236,6 +249,37 @@ describe('EventRsvpControls', () => {
       ),
     );
     expect(answer('Particip')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  // The list's read failed: the card cannot tell what was answered, so it
+  // offers no answer to send over it.
+  it('keeps both answers closed and says so when the answers cannot be read', async () => {
+    supabaseMock.range.mockImplementation(() =>
+      Promise.resolve({ data: null, error: { code: '500', message: 'down' } }),
+    );
+    renderControls();
+
+    expect(await screen.findByText('Răspuns indisponibil')).toBeVisible();
+    expect(answer('Particip')).toHaveAttribute('aria-disabled', 'true');
+    expect(answer('Nu particip')).toHaveAttribute('aria-disabled', 'true');
+    expect(answer('Particip')).toHaveAttribute('aria-pressed', 'false');
+    expect(supabaseMock.rpc).not.toHaveBeenCalled();
+  });
+
+  // One failed read closes every card's answers: each offers the way back.
+  it('reads the answers again from the card when they could not be read', async () => {
+    const user = userEvent.setup();
+    supabaseMock.range.mockImplementationOnce(() =>
+      Promise.resolve({ data: null, error: { code: '500', message: 'down' } }),
+    );
+    renderControls();
+    await screen.findByText('Răspuns indisponibil');
+
+    await user.click(screen.getByRole('button', { name: 'Reîncearcă' }));
+
+    await loaded();
+    expect(answer('Particip')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('Răspuns indisponibil')).toBeNull();
   });
 
   it('shows the failure and puts the earlier answer back', async () => {

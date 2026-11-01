@@ -121,23 +121,27 @@ describe('EventAttendance — Cine participă (#934)', () => {
     answered(['m1', 'm2'], ['m3']);
   });
 
-  it('shows a manager the counts, then who answered, grouped with a count each', async () => {
-    const user = userEvent.setup();
-    render(<EventAttendance event={event()} />);
+  const toggle = () => screen.getByRole('button', { name: 'Cine participă' });
 
+  /** Opens Cine participă, as a manager's tap does. */
+  async function opened(shown = event()) {
+    const user = userEvent.setup();
+    render(<EventAttendance event={shown} />);
+    await user.click(toggle());
+    return user;
+  }
+
+  it('shows a manager the counts, then who answered, grouped with a count each, once opened', async () => {
+    await opened();
+
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('2 participă · 1 nu')).toBeVisible();
-    const toggle = screen.getByRole('button', { name: 'Cine participă' });
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByRole('heading', { name: /Particip/ })).toBeNull();
     // One row: the bar of the split sits between the label and the counts.
-    const row = toggle.parentElement;
+    const row = toggle().parentElement;
     expect(row).toContainElement(screen.getByText('2 participă · 1 nu'));
     const bar = row?.querySelector<HTMLElement>('.event-attendance-bar');
     expect(bar).toHaveAttribute('aria-hidden', 'true');
     expect(bar?.style.getPropertyValue('--going-share')).toMatch(/^66\.6/);
-
-    await user.click(toggle);
-    expect(toggle).toHaveAttribute('aria-expanded', 'true');
 
     const going = screen.getByRole('region', { name: 'Particip 2' });
     // Sorted by the name shown: the Nickname when there is one.
@@ -152,9 +156,68 @@ describe('EventAttendance — Cine participă (#934)', () => {
     );
   });
 
-  it('asks for the answers only once the viewer is known to manage the Event', () => {
+  // #1134: a list of sixty cards must not read sixty Events' answers, nor
+  // their names, on open and again on every change.
+  it('reads nothing until it is opened, and shows nothing it has not read', async () => {
+    const user = userEvent.setup();
     render(<EventAttendance event={event()} />);
-    expect(state.attendance).toHaveBeenCalledWith(31, true);
+
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle()).not.toHaveAttribute('aria-controls');
+    expect(state.attendance).toHaveBeenCalledWith(31, false);
+    expect(state.attendance).not.toHaveBeenCalledWith(31, true);
+    expect(screen.queryByText('2 participă · 1 nu')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(state.identities).not.toHaveBeenCalled();
+
+    await user.click(toggle());
+    expect(state.attendance).toHaveBeenLastCalledWith(31, true);
+    expect(state.identities).toHaveBeenCalledWith(['m1', 'm2', 'm3']);
+
+    // Closed again: the read stays in the cache, nothing is drawn of it.
+    await user.click(toggle());
+    expect(state.attendance).toHaveBeenLastCalledWith(31, false);
+    expect(screen.queryByText('2 participă · 1 nu')).toBeNull();
+  });
+
+  // The toggle names what it opens only once that is on the page.
+  it('points the toggle at the list only while the list is there', async () => {
+    const user = userEvent.setup();
+    state.attendance.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    const { rerender } = render(<EventAttendance event={event()} />);
+    await user.click(toggle());
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle()).not.toHaveAttribute('aria-controls');
+
+    answered([], []);
+    rerender(<EventAttendance event={event()} />);
+    expect(toggle()).not.toHaveAttribute('aria-controls');
+
+    answered(['m1'], ['m3']);
+    rerender(<EventAttendance event={event()} />);
+    const controlled = toggle().getAttribute('aria-controls');
+    expect(controlled).toBeTruthy();
+    expect(document.getElementById(controlled ?? '')).toContainElement(
+      screen.getByRole('region', { name: 'Particip 1' }),
+    );
+  });
+
+  it('says the answers are on their way while they are read', async () => {
+    state.attendance.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    await opened();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Se încarcă răspunsurile…',
+    );
   });
 
   it('shows nothing, and reads nothing, for a Member who does not manage the Event', () => {
@@ -189,17 +252,15 @@ describe('EventAttendance — Cine participă (#934)', () => {
     });
 
     it('shows a BCE who manages nothing the answers on any Event', async () => {
-      const user = userEvent.setup();
-      render(<EventAttendance event={event({ groupId: 20 })} />);
+      await opened(event({ groupId: 20 }));
       expect(state.attendance).toHaveBeenLastCalledWith(31, true);
       expect(screen.getByText('2 participă · 1 nu')).toBeVisible();
-      await user.click(screen.getByRole('button', { name: 'Cine participă' }));
       expect(screen.getByRole('region', { name: 'Particip 2' })).toBeVisible();
     });
 
-    it('does not wait for the Event form options to know a BCE', () => {
+    it('does not wait for the Event form options to know a BCE', async () => {
       state.options.mockReturnValue({ data: undefined });
-      render(<EventAttendance event={event()} />);
+      await opened();
       expect(state.attendance).toHaveBeenLastCalledWith(31, true);
       expect(screen.getByText('2 participă · 1 nu')).toBeVisible();
     });
@@ -227,28 +288,22 @@ describe('EventAttendance — Cine participă (#934)', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('still shows a cancelled Event’s answers to its managers', () => {
-    render(
-      <EventAttendance
-        event={event({ cancelledAt: '2030-09-30T10:00:00Z' })}
-      />,
-    );
+  it('still shows a cancelled Event’s answers to its managers', async () => {
+    await opened(event({ cancelledAt: '2030-09-30T10:00:00Z' }));
     expect(screen.getByText('2 participă · 1 nu')).toBeVisible();
   });
 
-  it('says so when nobody has answered, with nothing to open', () => {
+  it('says so when nobody has answered, with no list under it', async () => {
     answered([], []);
-    render(<EventAttendance event={event()} />);
+    await opened();
     expect(screen.getByText('Niciun răspuns încă')).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Cine participă' })).toBeNull();
+    expect(screen.queryByRole('region', { name: /Particip/ })).toBeNull();
   });
 
   it('writes Nimeni under an empty group', async () => {
     answered(['m1'], []);
-    const user = userEvent.setup();
-    render(<EventAttendance event={event()} />);
+    await opened();
     expect(screen.getByText('1 participă · 0 nu')).toBeVisible();
-    await user.click(screen.getByRole('button', { name: 'Cine participă' }));
     const declined = screen.getByRole('region', { name: 'Nu particip 0' });
     expect(within(declined).getByText('Nimeni.')).toBeVisible();
   });
@@ -261,8 +316,7 @@ describe('EventAttendance — Cine participă (#934)', () => {
       isError: true,
       refetch,
     });
-    const user = userEvent.setup();
-    render(<EventAttendance event={event()} />);
+    const user = await opened();
     expect(screen.getByText('Răspunsurile nu s-au încărcat.')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Reîncearcă' }));
     expect(refetch).toHaveBeenCalled();

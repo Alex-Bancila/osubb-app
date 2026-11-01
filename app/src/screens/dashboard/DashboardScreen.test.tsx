@@ -53,11 +53,6 @@ vi.mock('../../queries/my-groups', async (importActual) => ({
   ...(await importActual<typeof import('../../queries/my-groups')>()),
   useMyGroupRoles: hooks.useMyGroupRoles,
 }));
-vi.mock('../../queries/event-rsvp', () => ({
-  EventRsvpMutationError: class EventRsvpMutationError extends Error {},
-  useEventRsvp: () => ({ data: null, isPending: false, isError: false }),
-  useSetEventRsvp: () => ({ isPending: false, mutateAsync: vi.fn() }),
-}));
 vi.mock('../../queries/profile', () => ({
   useMyProfile: () => ({ data: hooks.profile }),
 }));

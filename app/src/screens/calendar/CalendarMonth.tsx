@@ -14,6 +14,7 @@ import {
   serializeWorkFilter,
 } from '../../lib/work-filter';
 import { usePendingCandidatureTasks } from '../../queries/calendar-tasks';
+import { useMyEventAnswers } from '../../queries/event-rsvp';
 import { useEventsInRange, type EventPresentation } from '../../queries/events';
 import type { Group } from '../../queries/reference';
 import {
@@ -109,6 +110,8 @@ export function CalendarMonth({
     [filter.params, grid.first, grid.last],
   );
   const events = useEventsInRange(range);
+  // The cards under the grid take their answers from one read (#1134).
+  const answers = useMyEventAnswers();
   // The Tasks with a deadline on the grid, open and finished: one month's
   // worth, never the whole list (#1053, ruling R55).
   const taskRange = useMemo(
@@ -494,6 +497,7 @@ export function CalendarMonth({
                       <li key={event.id}>
                         <EventCard
                           event={event}
+                          answers={answers}
                           groups={groups}
                           relevance={relevanceOf(event)}
                           past={eventIsPast(event, now)}

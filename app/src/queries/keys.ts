@@ -277,13 +277,14 @@ export const keys = {
        Work Filter offers only those (Rule W, #845). */
     work: (memberId: string | undefined) =>
       ['events', 'work', { memberId }] as const,
-    rsvp: (eventId: number, memberId: string) =>
-      ['events', 'rsvp', { eventId, memberId }] as const,
-    /* Every answer on one Event, which only its managers read (#934). */
+    /* Every answer on one Event, which its managers and BCE+ read (#934,
+       R61), once Cine participă is opened (#1134). */
     attendance: (eventId: number, memberId: string | undefined) =>
       ['events', 'attendance', { eventId, memberId }] as const,
-    /* The Events I answered "Vin" to: an Other OSUBB Event turns to colour. */
-    going: (memberId: string) => ['events', 'going', { memberId }] as const,
+    /* Every answer I gave, read once for the Calendar (#1134): each card's
+       pressed button, and the "Vin" set an Other OSUBB Event turns to colour
+       by. */
+    answers: (memberId: string) => ['events', 'answers', { memberId }] as const,
   },
   announcements: {
     all: ['announcements'] as const,

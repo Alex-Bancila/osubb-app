@@ -15,7 +15,7 @@ import { bucharestDayKey } from '../../lib/calendar-time';
 import { useWorkFilter } from '../../lib/use-work-filter';
 import { useDecidesApprovals } from '../../queries/approvals';
 import { useCampaigns } from '../../queries/campaigns';
-import { useGoingEventIds } from '../../queries/event-rsvp';
+import { goingEventIds, useMyEventAnswers } from '../../queries/event-rsvp';
 import type { EventPresentation } from '../../queries/events';
 import { useMyGroupRoles } from '../../queries/my-groups';
 import { useGroups } from '../../queries/reference';
@@ -109,12 +109,14 @@ function CalendarContent() {
     [groups.data],
   );
   const mine = useMyGroupRoles();
-  const going = useGoingEventIds();
+  // The member's answers: the "Vin" set here, each card's button below
+  // (#1134) — one read, shared through its key.
+  const answers = useMyEventAnswers();
   const relevant = useMemo(
     () => relevantGroupIds(mine.data ?? []),
     [mine.data],
   );
-  const goingIds = useMemo(() => new Set(going.data ?? []), [going.data]);
+  const goingIds = useMemo(() => goingEventIds(answers.data), [answers.data]);
   // R43: the Calendar opens on the preferred Groups. An Event the member
   // answered Particip to, and their own deadlines, stay whatever their Group.
   const preferred = usePreferredGroups();

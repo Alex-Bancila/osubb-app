@@ -22,9 +22,11 @@ import { useMemberIdentities } from '../../queries/member-identities';
 
 /**
  * The answers on this Event, for its managers (#934) and for every BCE, BC
- * member and the Moderator (R61): one row on the card — **Cine participă**, a
- * thin bar of the split, the counts — which opens every Member who answered,
- * grouped Particip / Nu particip. Everyone else sees nothing here; the server's
+ * member and the Moderator (R61): **Cine participă** on the card, which opens
+ * a thin bar of the split, the counts and every Member who answered, grouped
+ * Particip / Nu particip. Nothing is read until it is opened (#1134): a list
+ * of sixty cards asks for no answers and no names on open, nor on every
+ * change. Everyone else sees nothing here; the server's
  * `event_attendance_read` would show them only their own answer anyway.
  */
 export function EventAttendance({ event }: { event: EventPresentation }) {
@@ -38,41 +40,39 @@ export function EventAttendance({ event }: { event: EventPresentation }) {
       capabilities: capabilities.data,
       options: options.data,
     });
-  const attendance = useEventAttendance(event.id, reader);
   const [open, setOpen] = useState(false);
+  const attendance = useEventAttendance(event.id, reader && open);
   const listId = useId();
 
   if (!reader) return null;
 
-  const answers = attendance.data;
+  const answers = open ? attendance.data : undefined;
   const total = answers ? answers.going.length + answers.declined.length : 0;
 
   return (
     <section className="event-attendance" aria-label="Răspunsurile membrilor">
       <div className="event-attendance-head">
-        {answers && total > 0 ? (
-          <Button
-            type="button"
-            variant="ghost"
-            // Flush with the card's text, as heavy as a heading; open is said
-            // by the chevron and aria-expanded, not by a filled pill.
-            className="event-attendance-toggle -ms-2 px-2 text-sm font-extrabold text-foreground aria-expanded:bg-transparent"
-            aria-expanded={open}
-            aria-controls={listId}
-            onClick={() => setOpen((current) => !current)}
-          >
-            Cine participă
-            <ChevronDown
-              className={cn(
-                'size-4 transition-transform motion-reduce:transition-none',
-                open && 'rotate-180',
-              )}
-              aria-hidden="true"
-            />
-          </Button>
-        ) : (
-          <p className="event-attendance-label">Cine participă</p>
-        )}
+        <Button
+          type="button"
+          variant="ghost"
+          // Flush with the card's text, as heavy as a heading; open is said
+          // by the chevron and aria-expanded, not by a filled pill.
+          className="event-attendance-toggle -ms-2 px-2 text-sm font-extrabold text-foreground aria-expanded:bg-transparent"
+          aria-expanded={open}
+          // Only a list that is on the page: none while it is read, nor
+          // when nobody answered.
+          aria-controls={answers && total > 0 ? listId : undefined}
+          onClick={() => setOpen((current) => !current)}
+        >
+          Cine participă
+          <ChevronDown
+            className={cn(
+              'size-4 transition-transform motion-reduce:transition-none',
+              open && 'rotate-180',
+            )}
+            aria-hidden="true"
+          />
+        </Button>
         {/* The split, drawn thin between the label and its counts. */}
         {answers && total > 0 && (
           <span
@@ -85,18 +85,20 @@ export function EventAttendance({ event }: { event: EventPresentation }) {
             }
           />
         )}
-        <p className="event-attendance-tally" role="status">
-          {answers
-            ? total > 0
-              ? attendanceTally(answers)
-              : 'Niciun răspuns încă'
-            : attendance.isError
-              ? 'Răspunsurile nu s-au încărcat.'
-              : 'Se încarcă răspunsurile…'}
-        </p>
+        {open && (
+          <p className="event-attendance-tally" role="status">
+            {answers
+              ? total > 0
+                ? attendanceTally(answers)
+                : 'Niciun răspuns încă'
+              : attendance.isError
+                ? 'Răspunsurile nu s-au încărcat.'
+                : 'Se încarcă răspunsurile…'}
+          </p>
+        )}
       </div>
 
-      {attendance.isError && (
+      {open && attendance.isError && (
         <Button
           type="button"
           variant="outline"
@@ -108,7 +110,7 @@ export function EventAttendance({ event }: { event: EventPresentation }) {
         </Button>
       )}
 
-      {answers && open && <AttendanceList id={listId} answers={answers} />}
+      {answers && total > 0 && <AttendanceList id={listId} answers={answers} />}
     </section>
   );
 }
