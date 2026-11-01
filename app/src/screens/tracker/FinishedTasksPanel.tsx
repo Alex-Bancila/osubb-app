@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/button';
 import { formatTaskCount } from '../../lib/format';
 import { useInView } from '../../lib/use-in-view';
 import type { FinishedTasks } from '../../queries/task-lists';
+import type { FinishedPart } from './finished-part';
 
 /**
  * A Tracker list's finished part (`useFinishedPart`), under its open Tasks:
@@ -13,24 +14,29 @@ import type { FinishedTasks } from '../../queries/task-lists';
  * the end of the list — coming into view, it asks for the next page; the
  * **Încarcă mai multe** button does the same for a keyboard. A later page
  * that fails keeps what is read and offers its retry. De gestionat, Toate
- * and Taskurile mele draw it alike.
+ * and Taskurile mele draw it alike. Past a full window (`useFinishedPart`,
+ * #1147) the end of the list asks for nothing by itself: the button moves
+ * the window on, and **Arată taskurile anterioare** above the rows moves it
+ * back.
  */
 export function FinishedTasksPanel({
   finished,
   children,
 }: {
-  finished: FinishedTasks;
+  finished: FinishedTasks & Partial<Omit<FinishedPart, keyof FinishedTasks>>;
   children: ReactNode;
 }) {
   // Armed only while nothing is read: not during the next page, nor while
-  // the loaded pages are read again after a change. Re-armed when that
-  // lands, it asks at once if the end is still in view.
+  // the loaded pages are read again after a change, nor once the window is
+  // full. Re-armed when that lands, it asks at once if the end is still in
+  // view.
   const sentinel = useInView(
     finished.loadMore,
     finished.hasMore &&
       !finished.isLoadingMore &&
       !finished.isFetching &&
-      !finished.moreFailed,
+      !finished.moreFailed &&
+      !finished.full,
   );
   return (
     <>
@@ -56,6 +62,13 @@ export function FinishedTasksPanel({
             )
           }
         >
+          {(finished.earlier ?? 0) > 0 && (
+            <div className="flex justify-center pb-2">
+              <Button variant="outline" onClick={finished.showEarlier}>
+                Arată taskurile anterioare
+              </Button>
+            </div>
+          )}
           {children}
           {/* The next page holds its place under the rows read so far. */}
           {finished.isLoadingMore && (

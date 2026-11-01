@@ -33,11 +33,8 @@ import {
   matchesTaskState,
   type ManagerTaskSort,
 } from './manager-task-list';
-import {
-  isTerminalTask,
-  toTaskPresentation,
-  type TaskPresentationRow,
-} from './task-presentation';
+import { usePresentedTasks } from './presented-tasks';
+import { isTerminalTask, type TaskPresentationRow } from './task-presentation';
 
 /**
  * Stare and Ordonează appear from this many Tasks up: below it the whole list
@@ -115,10 +112,9 @@ export function ManagerTaskList({
   const listControls = rows.length + finishedCounts.total >= LIST_CONTROLS_FROM;
   const sort = listControls ? chosenSort : 'deadline';
 
-  const presented = useMemo(
-    () => rows.map((row) => ({ row, task: toTaskPresentation(row, now) })),
-    [rows, now],
-  );
+  // Kept by row and clock (#1147): a tick re-renders only the open rows
+  // whose deadline reads differently.
+  const presented = usePresentedTasks(rows, now);
   // Stare offers only the states the list holds; a chosen state the list
   // no longer holds is dropped rather than emptying the list.
   const states = useMemo(
@@ -170,9 +166,10 @@ export function ManagerTaskList({
     [params, state, needle, sort, preferred.active],
   );
   const finished = useFinishedPart(list, finishedFilters, rows);
+  const finishedPresented = usePresentedTasks(finished.rows, now);
   const finishedTasks = useMemo(
-    () => finished.rows.map((row) => toTaskPresentation(row, now)),
-    [finished.rows, now],
+    () => finishedPresented.map(({ task }) => task),
+    [finishedPresented],
   );
 
   // How many Tasks the list shows; unknown until the finished part answers.

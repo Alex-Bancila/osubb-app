@@ -1,4 +1,4 @@
-import { useId, type CSSProperties, type ReactNode } from 'react';
+import { memo, useId, type CSSProperties, type ReactNode } from 'react';
 import { Clock, UserRound } from 'lucide-react';
 import { AttachedLinksList } from '../../components/attached-link/AttachedLinksList';
 import { ListRow } from '../../components/layout';
@@ -111,8 +111,13 @@ function RowActions({ children }: { children?: ReactNode }) {
  * hit area is stretched over the row. The Executor's name stays its own
  * button (their Member Card) above that area, and so do the row's actions
  * and links.
+ *
+ * Memoised (#1147): a list re-renders on every keystroke of its search and
+ * every tick of its clock, and a row renders again only when one of its
+ * props changes — its presentation (`usePresentedTasks`) and the list's
+ * callbacks are kept stable for that.
  */
-export function TaskRow({
+export const TaskRow = memo(function TaskRow({
   task,
   onOpenTask,
   detailed = false,
@@ -376,4 +381,4 @@ export function TaskRow({
       />
     ),
   );
-}
+});
