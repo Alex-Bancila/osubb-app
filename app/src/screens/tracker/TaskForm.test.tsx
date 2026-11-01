@@ -886,3 +886,31 @@ it('offers Cine îl vede on a public Task only, by Role from the Group floor up 
     ),
   );
 });
+
+// #1127 (audit M3): BC manages archived Groups too, but no new Task may be
+// created in one -- Task nou offers only the active Groups.
+it('offers no archived Group as an Origin (#1127)', async () => {
+  const onDraft = vi.fn();
+  render(
+    <TaskForm
+      options={{
+        ...options,
+        groups: [
+          ...options.groups.map((group) => ({ ...group, status: 'active' })),
+          {
+            id: 9,
+            name: 'Arhivat',
+            path: [9],
+            min_level: 0,
+            status: 'archived',
+          },
+        ],
+      }}
+      onDraft={onDraft}
+    />,
+  );
+  const user = await content();
+  const offered = await optionNames(user, groupBox());
+  expect(offered).toContain('Tineret');
+  expect(offered).not.toContain('Arhivat');
+});

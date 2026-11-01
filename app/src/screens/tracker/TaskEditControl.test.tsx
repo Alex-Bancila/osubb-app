@@ -984,3 +984,29 @@ it('says the Task changed on a stale save and re-seeds the form from the live ro
     screen.getByRole('button', { name: 'Salvează modificările' }),
   ).toBeDisabled();
 });
+
+// #1127 (audit M3): an edit of a Task whose Group is archived keeps that
+// Group selected, so the edit can still be saved without a move.
+it('keeps an archived current Group selected and saves without a move (#1127)', async () => {
+  const archived = {
+    ...data,
+    groups: [
+      { id: 2, name: 'Echipa', path: [1, 2], min_level: 1, status: 'archived' },
+      { id: 4, name: 'Tineret', path: [4], min_level: 0, status: 'active' },
+    ],
+  };
+  state.options.mockReturnValue({ data: archived, refetch: state.refetch });
+  state.refetch.mockResolvedValue({ data: archived, isError: false });
+  render(<TaskEditControl task={task} canManage />);
+  const user = await openEditor();
+  expect(rootBox()).toHaveTextContent('Echipa');
+  await user.clear(screen.getByLabelText('Titlu'));
+  await user.type(screen.getByLabelText('Titlu'), 'Titlu corectat');
+  await user.click(
+    screen.getByRole('button', { name: 'Salvează modificările' }),
+  );
+  await waitFor(() => expect(state.mutate).toHaveBeenCalledTimes(1));
+  expect(state.mutate).toHaveBeenCalledWith(
+    expect.objectContaining({ groupId: 2, title: 'Titlu corectat' }),
+  );
+});

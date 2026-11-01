@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   campaignsFor,
   groupsBelow,
+  offeredGroups,
   rootGroups,
   rootOf,
   taskDraftInput,
@@ -167,5 +168,26 @@ describe('taskDraftInput: Cine îl vede (R57)', () => {
   });
   it('sends 0 when no Role is offered at all', () => {
     expect(sent({ ...publicOrg, groupId: 6, audience: 'local' }, 0)).toBe(0);
+  });
+});
+
+// #1127 (audit M3): BC and the Moderator manage archived Groups too, but no
+// new Task or Campaign may be created in one.
+describe('offered Groups (#1127)', () => {
+  const withArchived: ManagedWorkGroup[] = [
+    ...groups.map((group) => ({ ...group, status: 'active' })),
+    { id: 7, name: 'Arhivat', path: [7], min_level: 0, status: 'archived' },
+  ];
+  it('leaves an archived Group out of a new Task', () => {
+    expect(names(offeredGroups(withArchived))).toEqual(
+      names(groups.map((group) => ({ ...group, status: 'active' }))),
+    );
+  });
+  it('keeps an edit’s current Group even when it is archived, so the edit saves without a move', () => {
+    expect(names(offeredGroups(withArchived, 7))).toContain('Arhivat');
+    expect(names(offeredGroups(withArchived, 4))).not.toContain('Arhivat');
+  });
+  it('offers a Group whose status the read did not carry', () => {
+    expect(names(offeredGroups(groups))).toEqual(names(groups));
   });
 });

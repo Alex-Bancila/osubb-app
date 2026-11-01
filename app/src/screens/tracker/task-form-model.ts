@@ -9,7 +9,22 @@ export type ManagedWorkGroup = {
   name: string;
   path: number[];
   min_level: number;
+  /** `active` or `archived` (#1127). BC and the Moderator manage archived
+   *  Groups too, but no new Task or Campaign may be created in one; a read
+   *  from before the column counts as active. */
+  status?: string;
 };
+
+/**
+ * The Groups a form offers as an Origin (#1127): the active ones, plus
+ * `keepId` — an edit's current Group, offered even when archived so the edit
+ * can be saved without a move (`update_task` refuses a move into one).
+ */
+export function offeredGroups(groups: ManagedWorkGroup[], keepId?: number) {
+  return groups.filter(
+    (group) => (group.status ?? 'active') === 'active' || group.id === keepId,
+  );
+}
 export type TaskFormOptions = {
   groups: ManagedWorkGroup[];
   campaigns: { id: number; name: string; group_id: number }[];
