@@ -40,6 +40,12 @@ export type RoleEvaluation = {
   percent_used: number | null;
   membership_cutoff: string | null;
   evaluated_count: number | null;
+  /**
+   * The run kept the population it judged (#1146), so its ranking is those
+   * rows; false for a run from before that, whose ranking is recomputed over
+   * today's Roles and ledger.
+   */
+  members_recorded: boolean;
 };
 
 /** Every Role Evaluation, newest run first. Every live active Member reads every row. */
@@ -47,7 +53,7 @@ export async function fetchRoleEvaluations(): Promise<RoleEvaluation[]> {
   const { data, error } = await supabase
     .from('role_evaluations')
     .select(
-      'id, kind, name, period_from, period_to, run_by, run_at, threshold_used, threshold_computed, ranked_count, eligibility_floor, percent_used, membership_cutoff, evaluated_count',
+      'id, kind, name, period_from, period_to, run_by, run_at, threshold_used, threshold_computed, ranked_count, eligibility_floor, percent_used, membership_cutoff, evaluated_count, members_recorded',
     )
     .order('run_at', { ascending: false })
     .order('id', { ascending: false });

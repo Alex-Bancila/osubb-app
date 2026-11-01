@@ -66,6 +66,7 @@ const run = (extra: Partial<RoleEvaluation>): RoleEvaluation => ({
   percent_used: 35,
   membership_cutoff: '2026-03-01',
   evaluated_count: 8,
+  members_recorded: true,
   ...extra,
 });
 
@@ -128,7 +129,7 @@ describe('the Role Evaluation reads (#827 over #826)', () => {
     expect(db.calls).toContainEqual([
       'role_evaluations',
       'select',
-      'id, kind, name, period_from, period_to, run_by, run_at, threshold_used, threshold_computed, ranked_count, eligibility_floor, percent_used, membership_cutoff, evaluated_count',
+      'id, kind, name, period_from, period_to, run_by, run_at, threshold_used, threshold_computed, ranked_count, eligibility_floor, percent_used, membership_cutoff, evaluated_count, members_recorded',
     ]);
   });
 

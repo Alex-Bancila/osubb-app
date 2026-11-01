@@ -267,6 +267,39 @@ it('says a run from before Portofoliu Interne has no ranking any more, and asks 
   );
 });
 
+it('lists a kept run as it was, and says the Roles and places are today’s on a run from before the population was kept (#1146)', async () => {
+  // A run finalised since #1146 answers from the rows it kept: the stored
+  // Role is what the sheet filters by, and there is nothing to add.
+  db.rankings.set(
+    RUN_AG.id,
+    rankedRows().map((row) =>
+      row.member_id === 'ion' ? { ...row, role: 'vot' } : row,
+    ),
+  );
+  const kept = show(<RunRankingSheet run={RUN_AG} onClose={() => {}} />);
+  let sheet = await screen.findByRole('dialog');
+  await within(sheet).findByRole('table');
+  expect(sheet).toHaveTextContent('Ion Vlad');
+  expect(sheet).not.toHaveTextContent('cele de azi');
+  kept.unmount();
+
+  // A run from before #1146 is recomputed over today's Roles and ledger, and
+  // the sheet says so.
+  const recomputed = {
+    ...RUN_VA,
+    id: 4,
+    name: 'Recalculată',
+    members_recorded: false,
+  };
+  db.rankings.set(recomputed.id, rankedRows());
+  show(<RunRankingSheet run={recomputed} onClose={() => {}} />);
+  sheet = await screen.findByRole('dialog');
+  await within(sheet).findByRole('table');
+  expect(sheet).toHaveTextContent(
+    'Rolurile și locurile sunt cele de azi: evaluarea a fost rulată înainte ca lista ei să fie păstrată.',
+  );
+});
+
 it('stays closed while no run is chosen', () => {
   show(<RunRankingSheet run={null} onClose={() => {}} />);
   expect(screen.queryByRole('dialog')).toBeNull();

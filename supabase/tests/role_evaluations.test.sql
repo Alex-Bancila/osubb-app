@@ -112,8 +112,9 @@ select is(
 select columns_are('public', 'role_evaluations',
   array['id', 'kind', 'name', 'period_from', 'period_to', 'run_by', 'run_at',
         'threshold_used', 'threshold_computed', 'ranked_count',
-        'eligibility_floor', 'percent_used', 'membership_cutoff', 'evaluated_count'],
-  'role_evaluations carries kind, name, the Period bounds, who ran it and when, the threshold used and computed, ranked_count and, since R58, the Eligibility Floor, share and Membership Cutoff Date it ranked with and evaluated_count');
+        'eligibility_floor', 'percent_used', 'membership_cutoff', 'evaluated_count',
+        'members_recorded'],
+  'role_evaluations carries kind, name, the Period bounds, who ran it and when, the threshold used and computed, ranked_count and, since R58, the Eligibility Floor, share and Membership Cutoff Date it ranked with and evaluated_count -- and, since #1146, members_recorded');
 
 select throws_ok(
   $$ insert into public.role_evaluations
