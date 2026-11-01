@@ -89,7 +89,7 @@ it('takes a Simulation as simulate_role_evaluation checks it: the run without it
   ]);
 });
 
-it('needs both days, Până la not before De la and not after today', () => {
+it('needs both days, Până la not before De la and before today (#1131)', () => {
   expect(issues(run.safeParse({ ...valid, from: '' }))).toEqual([
     'from:date_required',
   ]);
@@ -102,9 +102,13 @@ it('needs both days, Până la not before De la and not after today', () => {
   expect(issues(run.safeParse({ ...valid, to: '2026-09-29' }))).toEqual([
     'to:date_range_in_future',
   ]);
-  // One day, and a range ending today, are both fine.
+  // Today is not a complete day: a range ends yesterday at the latest
+  // (#1131). One day, ending yesterday, is fine.
+  expect(issues(run.safeParse({ ...valid, to: '2026-09-28' }))).toEqual([
+    'to:date_range_in_future',
+  ]);
   expect(
-    run.safeParse({ ...valid, from: '2026-09-28', to: '2026-09-28' }).success,
+    run.safeParse({ ...valid, from: '2026-09-27', to: '2026-09-27' }).success,
   ).toBe(true);
 });
 

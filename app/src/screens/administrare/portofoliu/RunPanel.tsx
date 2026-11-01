@@ -47,6 +47,7 @@ import {
   defaultRangeStart,
   finalizeConsequences,
   KIND_LABEL,
+  previousDay,
   rangeText,
   runResultText,
   SIMULATION_NOTE,
@@ -145,11 +146,14 @@ export function RunPanel({
 }) {
   const fromId = useId();
   const toId = useId();
+  const toHintId = useId();
   const nameId = useId();
   const percentId = useId();
   const blockedId = useId();
   const staleId = useId();
   const today = bucharestDayKey(new Date()) ?? '';
+  // The last day a run may end (#1131: complete days only).
+  const yesterday = today ? previousDay(today) : '';
   const settings = useEvaluationSettings();
   const data = settings.data;
   const { edits, simulated } = draft;
@@ -178,15 +182,16 @@ export function RunPanel({
     else receiptRef.current?.focus();
   });
 
-  // "De la" starts the day after the kind's last range, never after today;
-  // "Până la" is today. The Procent is the kind's share in force, until typed
-  // over.
+  // "De la" starts the day after the kind's last range, never after yesterday;
+  // "Până la" is yesterday -- a run covers complete days, and today's later
+  // awards belong to the next period (#1131). The Procent is the kind's share
+  // in force, until typed over.
   const live: FormValues = {
     kind,
     from:
       edits.from ??
-      defaultRangeStart(latestRun(evaluations, kind)?.period_to, today),
-    to: edits.to ?? today,
+      defaultRangeStart(latestRun(evaluations, kind)?.period_to, yesterday),
+    to: edits.to ?? yesterday,
     name: edits.name ?? '',
     percent: edits.percent ?? String(data ? shareInForce(data, kind) : ''),
   };
@@ -218,7 +223,7 @@ export function RunPanel({
     runFieldForReason,
   );
   const fromField = form.field('from');
-  const toField = form.field('to');
+  const toField = form.field('to', toHintId);
 
   // Another kind on the page's switch: its own draft comes in with the props,
   // and nothing is said about the kind before it.
@@ -439,7 +444,7 @@ export function RunPanel({
                 id={fromId}
                 value={live.from}
                 required
-                max={today}
+                max={yesterday}
                 disabled={disabled}
                 onChange={edit('from')}
                 {...fromField}
@@ -454,11 +459,15 @@ export function RunPanel({
                 id={toId}
                 value={live.to}
                 required
-                max={today}
+                max={yesterday}
                 disabled={disabled}
                 onChange={edit('to')}
                 {...toField}
               />
+              {/* #1131: why the period ends yesterday at the latest. */}
+              <p id={toHintId} className="m-0 text-sm text-muted-foreground">
+                Ziua de azi intră în următoarea perioadă.
+              </p>
               <FieldError {...form.errorProps('to')} />
             </div>
             <div className="grid min-w-0 content-start gap-1.5">

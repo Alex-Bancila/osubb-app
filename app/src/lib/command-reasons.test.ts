@@ -257,7 +257,7 @@ it.each([
   ],
   ['invalid_role_evaluation_kind', 'Alege tipul evaluării.'],
   ['invalid_role_evaluation_name', 'Scrie numele evaluării.'],
-  ['date_range_in_future', 'Intervalul se poate termina cel târziu azi.'],
+  ['date_range_in_future', 'Intervalul se poate termina cel târziu ieri.'],
   [
     'promotion_threshold_manage_forbidden',
     'Doar BC și Moderatorul pot schimba pragurile.',
