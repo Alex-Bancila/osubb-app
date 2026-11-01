@@ -6,7 +6,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 create extension if not exists pgrowlocks with schema extensions;
-select plan(8);
+select plan(9);
 -- Committed remote fixtures are required for lock observations and test_race.
 -- Both setup and cleanup are idempotent so an interrupted run can be retried.
 select extensions.dblink_connect('commands_370_setup', format(
@@ -65,9 +65,16 @@ select ok(exists(select 1 from extensions.pgrowlocks('public.profiles') l
   join public.profiles p on p.ctid=l.locked_row
   where p.id='37000000-0000-0000-0000-000000000091' and 'For Share'=any(l.modes)),
   'gate holds the live actor profile FOR SHARE');
+-- #1145 (audit M6): the Group row is held FOR SHARE from the start -- the lock
+-- a concurrent archive_group (FOR UPDATE on its target, FOR NO KEY UPDATE on
+-- the subtree) waits on, while concurrent creators share the row; never FOR
+-- UPDATE or FOR NO KEY UPDATE, which would serialize independent creators.
+select ok(exists(select 1 from extensions.pgrowlocks('public.groups') l
+  join public.groups g on g.ctid=l.locked_row where g.name='Race #370' and 'For Share'=any(l.modes)),
+  'command holds the Group FOR SHARE (#1145), the lock a concurrent archive waits on');
 select is((select count(*) from extensions.pgrowlocks('public.groups') l
-  join public.groups g on g.ctid=l.locked_row where g.name='Race #370' and not ('For Key Share'=any(l.modes))),0::bigint,
-  'command only takes compatible FK Key Share on Group, never an authority Share lock');
+  join public.groups g on g.ctid=l.locked_row where g.name='Race #370' and ('For Update'=any(l.modes) or 'For No Key Update'=any(l.modes))),0::bigint,
+  'and never FOR UPDATE or FOR NO KEY UPDATE on it, which would serialize independent creators');
 select extensions.dblink_exec('commands_370_lock','rollback');
 select extensions.dblink_disconnect('commands_370_lock');
 select pg_temp.test_login('37000000-0000-0000-0000-000000000091',

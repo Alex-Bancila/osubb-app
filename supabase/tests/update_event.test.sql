@@ -221,7 +221,7 @@ reset role;
 update public.groups set status='archived' where id=(select id from gx where name='b');
 reset role;
 select pg_temp.test_login_leadership('24800000-0000-0000-0000-000000000001');
-select throws_ok($q$select public.update_event((select id from ex2 where title='Team ancestor #248'),'Updated','sedinta',(select id from gx where name='b'),'2026-10-04 12:00+00',null,null,null,null,3,null)$q$,'42501','calendar_manage_forbidden','an Event cannot be moved into an archived Group');
+select throws_ok($q$select public.update_event((select id from ex2 where title='Team ancestor #248'),'Updated','sedinta',(select id from gx where name='b'),'2026-10-04 12:00+00',null,null,null,null,3,null)$q$,'PT409','group_archived','an Event cannot be moved into an archived Group -- #1145: the creators'' one reason, judged on the target held FOR NO KEY UPDATE after its authority');
 -- #248: the other direction of the same rule. `Event a #248` already LIVES in
 -- Group b, archived a moment ago. The active requirement belongs to the MOVE:
 -- an edit that keeps the Event where it is is decided by the source authority
