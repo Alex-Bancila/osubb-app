@@ -13,6 +13,10 @@ prepare_ledger() {
   cat <<'SQL'
 begin;
 set local client_min_messages = warning;
+-- #1142: the ledger's Promotion Candidate refresh is a deferred constraint
+-- trigger; Postgres refuses ALTER TABLE on points_ledger while its events are
+-- pending, and the replayed migrations alter it after the inserts below.
+set constraints points_ledger_refresh_promotion_candidates immediate;
 alter table public.points_ledger
   drop constraint points_ledger_reason_ck,
   drop constraint points_ledger_task_reference_ck,
