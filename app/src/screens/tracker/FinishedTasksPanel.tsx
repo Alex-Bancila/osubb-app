@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { Panel } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
@@ -7,6 +7,19 @@ import { formatTaskCount } from '../../lib/format';
 import { useInView } from '../../lib/use-in-view';
 import type { FinishedTasks } from '../../queries/task-lists';
 import type { FinishedPart } from './finished-part';
+
+/** The element that scrolls `element`: the shell's, or the document's. */
+function scrollerOf(element: Element): Element {
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node);
+    if (
+      (overflowY === 'auto' || overflowY === 'scroll') &&
+      node.scrollHeight > node.clientHeight
+    )
+      return node;
+  }
+  return document.scrollingElement ?? document.documentElement;
+}
 
 /**
  * A Tracker list's finished part (`useFinishedPart`), under its open Tasks:
@@ -38,6 +51,27 @@ export function FinishedTasksPanel({
   const showEarlier = () => {
     flushSync(() => finished.showEarlier?.());
     if (!earlierButton.current) shownRows.current?.focus();
+  };
+  // Moving a full window on drops its first page above the button. Where
+  // the browser anchors the scroll nothing moves; where it does not
+  // (Safari) the button is put back where it was pressed.
+  const moreButton = useRef<HTMLButtonElement>(null);
+  const pressedAt = useRef<number | null>(null);
+  const earlier = finished.earlier ?? 0;
+  const lastEarlier = useRef(earlier);
+  useLayoutEffect(() => {
+    const moved = earlier > lastEarlier.current;
+    lastEarlier.current = earlier;
+    const before = pressedAt.current;
+    const button = moreButton.current;
+    if (!moved || before === null || !button) return;
+    pressedAt.current = null;
+    const shift = button.getBoundingClientRect().top - before;
+    if (shift !== 0) scrollerOf(button).scrollTop += shift;
+  }, [earlier]);
+  const loadMore = () => {
+    pressedAt.current = moreButton.current?.getBoundingClientRect().top ?? null;
+    finished.loadMore();
   };
   const sentinel = useInView(
     finished.loadMore,
@@ -98,9 +132,10 @@ export function FinishedTasksPanel({
             finished.hasMore && (
               <div ref={sentinel} className="flex justify-center pt-2">
                 <Button
+                  ref={moreButton}
                   variant="outline"
                   disabled={finished.isLoadingMore}
-                  onClick={finished.loadMore}
+                  onClick={loadMore}
                 >
                   {finished.isLoadingMore ? 'Se încarcă…' : 'Încarcă mai multe'}
                 </Button>
