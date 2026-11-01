@@ -55,7 +55,11 @@ vi.mock('../../queries/my-groups', async (importActual) => ({
 }));
 vi.mock('../../queries/event-rsvp', () => ({
   EventRsvpMutationError: class EventRsvpMutationError extends Error {},
-  useEventRsvp: () => ({ data: null, isPending: false, isError: false }),
+  useMyEventAnswers: () => ({
+    data: new Map(),
+    isPending: false,
+    isError: false,
+  }),
   useSetEventRsvp: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));
 vi.mock('../../queries/profile', () => ({

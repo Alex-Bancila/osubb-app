@@ -15,6 +15,7 @@ vi.mock('../../lib/supabase', async () => {
 });
 vi.mock('../../lib/auth', () => ({ useAuth: auth.useAuth }));
 
+import { useMyEventAnswers } from '../../queries/event-rsvp';
 import EventRsvpControls from './EventRsvpControls';
 
 const memberId = 'a1000000-0000-0000-0000-000000000238';
@@ -48,13 +49,24 @@ function deferredRpc() {
   return (status: Row['status']) => release(status);
 }
 
+/** The controls as a list draws them: its answers read, the card's own. */
+function Controls() {
+  return (
+    <EventRsvpControls
+      eventId={7}
+      eventTitle="Ședință BC"
+      answers={useMyEventAnswers()}
+    />
+  );
+}
+
 function renderControls() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <EventRsvpControls eventId={7} eventTitle="Ședință BC" />
+      <Controls />
     </QueryClientProvider>,
   );
 }
@@ -78,8 +90,9 @@ describe('EventRsvpControls', () => {
     resetSupabaseMock();
     auth.useAuth.mockReturnValue({ session: { user: { id: memberId } } });
     stored = row('going');
-    supabaseMock.maybeSingle.mockImplementation(() =>
-      Promise.resolve({ data: stored, error: null }),
+    // The member's answers: this Event's, when there is one.
+    supabaseMock.range.mockImplementation(() =>
+      Promise.resolve({ data: stored ? [stored] : [], error: null }),
     );
     supabaseMock.rpc.mockImplementation(
       (_name: string, args: { p_status: Row['status'] }) => {

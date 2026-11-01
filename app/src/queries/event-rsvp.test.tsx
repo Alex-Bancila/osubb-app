@@ -1,4 +1,3 @@
-import { answered } from '../test/postgrest-fake';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -18,11 +17,10 @@ vi.mock('../lib/auth', () => ({ useAuth: auth.useAuth }));
 import {
   EventRsvpMutationError,
   eventRsvpMutationOptions,
-  eventRsvpQueryOptions,
-  fetchEventRsvp,
-  fetchGoingEventIds,
+  fetchMyEventAnswers,
+  goingEventIds,
   setEventRsvp,
-  useEventRsvp,
+  useMyEventAnswers,
   useSetEventRsvp,
 } from './event-rsvp';
 
@@ -42,87 +40,76 @@ function wrapper(queryClient: QueryClient) {
   };
 }
 
-describe('current-member RSVP query', () => {
+describe('the member’s answers, one read for the Calendar (#1134)', () => {
   beforeEach(() => {
     resetSupabaseMock();
   });
 
-  it('filters one event response by the signed-in member id', async () => {
-    supabaseMock.maybeSingle.mockResolvedValue({ data: rsvpRow, error: null });
-
-    await expect(fetchEventRsvp(42, memberId)).resolves.toEqual({
-      eventId: 42,
-      memberId,
-      status: 'going',
-      checkedIn: false,
+  // Mutation this catches: dropping the self-filter, which would show a
+  // manager the answers of every member they may read as their own.
+  it('reads only my answers, by the page, as a map from Event to answer', async () => {
+    supabaseMock.range.mockResolvedValue({
+      data: [
+        { event_id: 4, status: 'going' },
+        { event_id: 9, status: 'declined' },
+      ],
+      error: null,
     });
 
-    expect(supabaseMock.from).toHaveBeenCalledWith('event_attendance');
-    expect(supabaseMock.select).toHaveBeenCalledWith(
-      'event_id, member_id, status, checked_in',
-    );
-    expect(supabaseMock.eq).toHaveBeenNthCalledWith(1, 'event_id', 42);
-    expect(supabaseMock.eq).toHaveBeenNthCalledWith(2, 'member_id', memberId);
-    expect(supabaseMock.maybeSingle).toHaveBeenCalledOnce();
-  });
+    const answers = await fetchMyEventAnswers(memberId);
 
-  it('returns null when the member has not answered', async () => {
-    supabaseMock.maybeSingle.mockResolvedValue({ data: null, error: null });
-
-    await expect(fetchEventRsvp(42, memberId)).resolves.toBeNull();
-  });
-
-  it('surfaces read failures to React Query', async () => {
-    const error = { code: '42501', message: 'permission denied' };
-    supabaseMock.maybeSingle.mockResolvedValue({ data: null, error });
-
-    await expect(fetchEventRsvp(42, memberId)).rejects.toBe(error);
-  });
-
-  it('isolates cached answers by event and member', () => {
-    const ioana = eventRsvpQueryOptions(42, memberId);
-    const vlad = eventRsvpQueryOptions(
-      42,
-      'b2000000-0000-0000-0000-000000000238',
-    );
-    const anotherEvent = eventRsvpQueryOptions(43, memberId);
-
-    expect(ioana.queryKey).toEqual([
-      'events',
-      'rsvp',
-      { eventId: 42, memberId },
+    expect([...answers]).toEqual([
+      [4, 'going'],
+      [9, 'declined'],
     ]);
-    expect(ioana.queryKey).not.toEqual(vlad.queryKey);
-    expect(ioana.queryKey).not.toEqual(anotherEvent.queryKey);
+    expect(supabaseMock.from).toHaveBeenCalledWith('event_attendance');
+    expect(supabaseMock.select).toHaveBeenCalledWith('event_id, status');
+    expect(supabaseMock.eq).toHaveBeenCalledOnce();
+    expect(supabaseMock.eq).toHaveBeenCalledWith('member_id', memberId);
+    expect(supabaseMock.order).toHaveBeenCalledWith('event_id');
+    expect(supabaseMock.range).toHaveBeenCalledWith(0, 499);
   });
 
-  it('derives the member filter from the active session', async () => {
-    supabaseMock.maybeSingle.mockResolvedValue({ data: rsvpRow, error: null });
+  it('surfaces a failed read to React Query', async () => {
+    const error = { code: '42501', message: 'permission denied' };
+    supabaseMock.range.mockResolvedValue({ data: null, error });
+
+    await expect(fetchMyEventAnswers(memberId)).rejects.toBe(error);
+  });
+
+  it('tells the Vin set apart from the rest', () => {
+    expect([
+      ...goingEventIds(
+        new Map([
+          [4, 'going'],
+          [9, 'declined'],
+          [12, 'going'],
+        ] as const),
+      ),
+    ]).toEqual([4, 12]);
+    expect(goingEventIds(undefined).size).toBe(0);
+  });
+
+  it('reads under the signed-in member and asks nothing without a session', async () => {
+    supabaseMock.range.mockResolvedValue({ data: [], error: null });
     auth.useAuth.mockReturnValue({ session: { user: { id: memberId } } });
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
-
-    const { result } = renderHook(() => useEventRsvp(42), {
+    const { result } = renderHook(() => useMyEventAnswers(), {
       wrapper: wrapper(queryClient),
     });
-
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data?.memberId).toBe(memberId);
-    expect(supabaseMock.eq).toHaveBeenCalledWith('member_id', memberId);
-  });
+    expect(
+      queryClient.getQueryData(['events', 'answers', { memberId }]),
+    ).toBeInstanceOf(Map);
 
-  it('does not issue a member query without a session', () => {
+    resetSupabaseMock();
     auth.useAuth.mockReturnValue({ session: null });
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
+    const signedOut = renderHook(() => useMyEventAnswers(), {
+      wrapper: wrapper(new QueryClient()),
     });
-
-    const { result } = renderHook(() => useEventRsvp(42), {
-      wrapper: wrapper(queryClient),
-    });
-
-    expect(result.current.fetchStatus).toBe('idle');
+    expect(signedOut.result.current.fetchStatus).toBe('idle');
     expect(supabaseMock.from).not.toHaveBeenCalled();
   });
 });
@@ -210,7 +197,7 @@ describe('RSVP mutation', () => {
     },
   );
 
-  it('reads the member and event, their Vin set, and the Event’s Cine participă again once settled', async () => {
+  it('reads the member’s answers and the Event’s Cine participă again once settled', async () => {
     const queryClient = new QueryClient();
     const invalidate = vi
       .spyOn(queryClient, 'invalidateQueries')
@@ -222,12 +209,9 @@ describe('RSVP mutation', () => {
       status: 'declined',
     });
 
-    expect(invalidate).toHaveBeenCalledTimes(3);
+    expect(invalidate).toHaveBeenCalledTimes(2);
     expect(invalidate).toHaveBeenCalledWith({
-      queryKey: ['events', 'rsvp', { eventId: 42, memberId }],
-    });
-    expect(invalidate).toHaveBeenCalledWith({
-      queryKey: ['events', 'going', { memberId }],
+      queryKey: ['events', 'answers', { memberId }],
     });
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: ['events', 'attendance', { eventId: 42, memberId }],
@@ -238,26 +222,30 @@ describe('RSVP mutation', () => {
   // through ui that their action happened"), and goes back if the save fails.
   it('shows the new answer everywhere before the server replies, and puts the old one back on failure', async () => {
     const queryClient = new QueryClient();
-    const rsvpKey = ['events', 'rsvp', { eventId: 42, memberId }];
-    const goingKey = ['events', 'going', { memberId }];
+    const answersKey = ['events', 'answers', { memberId }];
     const attendanceKey = ['events', 'attendance', { eventId: 42, memberId }];
     const before = {
-      rsvp: { eventId: 42, memberId, status: 'going', checkedIn: false },
-      going: [4, 42],
+      answers: new Map([
+        [4, 'going'],
+        [42, 'going'],
+      ]),
       attendance: { going: ['other', memberId], declined: ['third'] },
     };
-    queryClient.setQueryData(rsvpKey, before.rsvp);
-    queryClient.setQueryData(goingKey, before.going);
+    queryClient.setQueryData(answersKey, before.answers);
     queryClient.setQueryData(attendanceKey, before.attendance);
     const options = eventRsvpMutationOptions(queryClient, memberId);
     const input = { eventId: 42, status: 'declined' } as const;
 
     const snapshot = await options.onMutate(input);
 
-    expect(queryClient.getQueryData(rsvpKey)).toMatchObject({
-      status: 'declined',
-    });
-    expect(queryClient.getQueryData(goingKey)).toEqual([4]);
+    expect([
+      ...(queryClient.getQueryData<Map<number, string>>(answersKey) ?? []),
+    ]).toEqual([
+      [4, 'going'],
+      [42, 'declined'],
+    ]);
+    // The cached map is replaced, never changed in place.
+    expect(before.answers.get(42)).toBe('going');
     expect(queryClient.getQueryData(attendanceKey)).toEqual({
       going: ['other'],
       declined: ['third', memberId],
@@ -265,32 +253,27 @@ describe('RSVP mutation', () => {
 
     options.onError(new Error('x'), input, snapshot);
 
-    expect(queryClient.getQueryData(rsvpKey)).toEqual(before.rsvp);
-    expect(queryClient.getQueryData(goingKey)).toEqual(before.going);
+    expect(queryClient.getQueryData(answersKey)).toBe(before.answers);
     expect(queryClient.getQueryData(attendanceKey)).toEqual(before.attendance);
   });
 
-  it('writes a first answer into an empty cache and adds the Event to the Vin set', async () => {
+  it('writes a first answer into the member’s answers, which joins the Vin set', async () => {
     const queryClient = new QueryClient();
-    const rsvpKey = ['events', 'rsvp', { eventId: 42, memberId }];
-    const goingKey = ['events', 'going', { memberId }];
-    queryClient.setQueryData(rsvpKey, null);
-    queryClient.setQueryData(goingKey, [4]);
+    const answersKey = ['events', 'answers', { memberId }];
+    queryClient.setQueryData(answersKey, new Map([[4, 'going']]));
     const options = eventRsvpMutationOptions(queryClient, memberId);
 
     const snapshot = await options.onMutate({ eventId: 42, status: 'going' });
 
-    expect(queryClient.getQueryData(rsvpKey)).toEqual({
-      eventId: 42,
-      memberId,
-      status: 'going',
-      checkedIn: false,
-    });
-    expect(queryClient.getQueryData(goingKey)).toEqual([4, 42]);
+    const answers =
+      queryClient.getQueryData<Map<number, 'going' | 'declined'>>(answersKey);
+    expect(answers?.get(42)).toBe('going');
+    expect([...goingEventIds(answers)]).toEqual([4, 42]);
 
     options.onError(new Error('x'), { eventId: 42, status: 'going' }, snapshot);
-    expect(queryClient.getQueryData(rsvpKey)).toBeNull();
-    expect(queryClient.getQueryData(goingKey)).toEqual([4]);
+    expect([
+      ...(queryClient.getQueryData<Map<number, string>>(answersKey) ?? []),
+    ]).toEqual([[4, 'going']]);
   });
 
   it('wires the RPC and invalidation through the mutation hook', async () => {
@@ -313,30 +296,7 @@ describe('RSVP mutation', () => {
       p_status: 'going',
     });
     expect(invalidate).toHaveBeenCalledWith({
-      queryKey: ['events', 'rsvp', { eventId: 42, memberId }],
+      queryKey: ['events', 'answers', { memberId }],
     });
-  });
-});
-
-describe('the Events I said Vin to', () => {
-  beforeEach(() => {
-    resetSupabaseMock();
-  });
-
-  // One read colours every Other OSUBB Event answered "Vin" (#692). Mutation
-  // this catches: dropping the self-filter, which would colour the Events
-  // other members answered for a manager who may read their rows.
-  it('reads only my going answers', async () => {
-    supabaseMock.eq.mockReturnValueOnce(supabaseMock).mockReturnValueOnce(
-      answered({
-        data: [{ event_id: 4 }, { event_id: 9 }],
-        error: null,
-      }),
-    );
-
-    await expect(fetchGoingEventIds(memberId)).resolves.toEqual([4, 9]);
-    expect(supabaseMock.from).toHaveBeenCalledWith('event_attendance');
-    expect(supabaseMock.eq).toHaveBeenNthCalledWith(1, 'member_id', memberId);
-    expect(supabaseMock.eq).toHaveBeenNthCalledWith(2, 'status', 'going');
   });
 });

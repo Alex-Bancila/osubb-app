@@ -9,6 +9,7 @@ import {
   useEventsInRange,
   type EventPresentation,
 } from '../../queries/events';
+import { useMyEventAnswers } from '../../queries/event-rsvp';
 import {
   NO_SUBJECTS,
   useReadNotificationsAbout,
@@ -96,6 +97,8 @@ export function CalendarAgenda({
     );
   }, [filter.params, waitingForLink, linkedEvent?.dayKey, from, to]);
   const events = useEventsInRange(range);
+  // Every card's answer in one read (#1134), the screen's own.
+  const answers = useMyEventAnswers();
 
   const { shown, hiddenByPreference } = useMemo(() => {
     // The range is the query's; the Group and Campaign levels narrow here.
@@ -218,6 +221,7 @@ export function CalendarAgenda({
                     <li key={event.id}>
                       <EventCard
                         event={event}
+                        answers={answers}
                         groups={groups}
                         relevance={relevanceOf(event)}
                         past={eventIsPast(event, now)}

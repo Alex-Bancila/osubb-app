@@ -15,8 +15,6 @@ import { readAllRows } from './read-all';
 import type { EventAttendance } from './event-attendance';
 import { keys } from './keys';
 
-export const RSVP_FIELDS = 'event_id, member_id, status, checked_in';
-
 type EventAttendanceRow =
   Database['public']['Tables']['event_attendance']['Row'];
 type EventRsvpRow = Pick<
@@ -98,45 +96,6 @@ function classifyMutationError(error: unknown): EventRsvpMutationError {
   return new EventRsvpMutationError('unknown', error, copy);
 }
 
-/**
- * Read at most one answer for this exact member and event.
- *
- * Managers may read other attendance rows through RLS, so the explicit member
- * filter is essential: this hook models the caller's answer, not every answer
- * they happen to be authorised to inspect.
- */
-export async function fetchEventRsvp(
-  eventId: number,
-  memberId: string,
-): Promise<EventRsvp | null> {
-  const { data, error } = await supabase
-    .from('event_attendance')
-    .select(RSVP_FIELDS)
-    .eq('event_id', eventId)
-    .eq('member_id', memberId)
-    .maybeSingle();
-  if (error) throw error;
-
-  return data ? toEventRsvp(data) : null;
-}
-
-export function eventRsvpQueryOptions(eventId: number, memberId: string) {
-  return {
-    queryKey: keys.events.rsvp(eventId, memberId),
-    queryFn: () => fetchEventRsvp(eventId, memberId),
-  } as const;
-}
-
-export function useEventRsvp(eventId: number) {
-  const { session } = useAuth();
-  const memberId = session?.user.id;
-
-  return useQuery({
-    ...eventRsvpQueryOptions(eventId, memberId ?? ''),
-    enabled: Boolean(memberId),
-  });
-}
-
 /** Call the self-owned command; a member id is deliberately not an argument. */
 export async function setEventRsvp(
   input: SetEventRsvpInput,
@@ -155,8 +114,7 @@ export async function setEventRsvp(
 /** What an answer replaced in the cache, to put back if the save fails. */
 export type EventRsvpSnapshot = {
   memberId: string;
-  rsvp: EventRsvp | null | undefined;
-  going: number[] | undefined;
+  answers: MyEventAnswers | undefined;
   attendance: EventAttendance | undefined;
 };
 
@@ -180,10 +138,11 @@ function withAnswer(
 }
 
 /**
- * The answer shows at once, everywhere it is read: the pressed button, the
- * Calendar chip's colour (the "Vin" set, #692) and a manager's Cine participă
- * (#934). A failed save puts back what was there; either way the three are
- * read again from the server once the command settles.
+ * The answer shows at once, everywhere it is read: the pressed button and
+ * the Calendar chip's colour (the "Vin" set, #692) — both from the member's
+ * answers (#1134) — and a manager's Cine participă (#934). A failed save
+ * puts back what was there; either way both are read again from the server
+ * once the command settles.
  */
 export function eventRsvpMutationOptions(
   queryClient: QueryClient,
@@ -196,33 +155,25 @@ export function eventRsvpMutationOptions(
       status,
     }: SetEventRsvpInput): Promise<EventRsvpSnapshot | null> => {
       if (!memberId) return null;
-      const rsvpKey = keys.events.rsvp(eventId, memberId);
-      const goingKey = keys.events.going(memberId);
+      const answersKey = keys.events.answers(memberId);
       const attendanceKey = keys.events.attendance(eventId, memberId);
       // A read already in flight would land on top of the new answer.
       await Promise.all(
-        [rsvpKey, goingKey, attendanceKey].map((queryKey) =>
+        [answersKey, attendanceKey].map((queryKey) =>
           queryClient.cancelQueries({ queryKey }),
         ),
       );
 
       const snapshot: EventRsvpSnapshot = {
         memberId,
-        rsvp: queryClient.getQueryData<EventRsvp | null>(rsvpKey),
-        going: queryClient.getQueryData<number[]>(goingKey),
+        answers: queryClient.getQueryData<MyEventAnswers>(answersKey),
         attendance: queryClient.getQueryData<EventAttendance>(attendanceKey),
       };
 
-      queryClient.setQueryData<EventRsvp | null>(rsvpKey, (previous) =>
-        previous
-          ? { ...previous, status }
-          : { eventId, memberId, status, checkedIn: false },
-      );
-      if (snapshot.going !== undefined) {
-        const others = snapshot.going.filter((id) => id !== eventId);
-        queryClient.setQueryData<number[]>(
-          goingKey,
-          status === 'going' ? [...others, eventId] : others,
+      if (snapshot.answers !== undefined) {
+        queryClient.setQueryData<MyEventAnswers>(
+          answersKey,
+          new Map(snapshot.answers).set(eventId, status),
         );
       }
       if (snapshot.attendance !== undefined) {
@@ -240,14 +191,8 @@ export function eventRsvpMutationOptions(
     ) => {
       if (!snapshot) return;
       const { memberId: member } = snapshot;
-      if (snapshot.rsvp !== undefined) {
-        queryClient.setQueryData(
-          keys.events.rsvp(eventId, member),
-          snapshot.rsvp,
-        );
-      }
-      if (snapshot.going !== undefined) {
-        queryClient.setQueryData(keys.events.going(member), snapshot.going);
+      if (snapshot.answers !== undefined) {
+        queryClient.setQueryData(keys.events.answers(member), snapshot.answers);
       }
       if (snapshot.attendance !== undefined) {
         queryClient.setQueryData(
@@ -263,12 +208,10 @@ export function eventRsvpMutationOptions(
     ) => {
       if (!memberId) return;
       await Promise.all([
+        // The pressed button, and an Other OSUBB Event answered "Vin"
+        // moving into colour (#692).
         queryClient.invalidateQueries({
-          queryKey: keys.events.rsvp(eventId, memberId),
-        }),
-        // An Other OSUBB Event answered "Vin" moves into colour (#692).
-        queryClient.invalidateQueries({
-          queryKey: keys.events.going(memberId),
+          queryKey: keys.events.answers(memberId),
         }),
         // A manager answering their own Event sees Cine participă move (#934).
         queryClient.invalidateQueries({
@@ -279,30 +222,55 @@ export function eventRsvpMutationOptions(
   } as const;
 }
 
+/** The viewer's answer on each Event they answered, by Event id. */
+export type MyEventAnswers = ReadonlyMap<number, EventRsvpStatus>;
+
+/** What a card needs of that read: the answers, or that they are not in. */
+export type MyEventAnswersRead = {
+  data: MyEventAnswers | undefined;
+  isPending: boolean;
+  isError: boolean;
+};
+
 /**
- * The ids of the Events this member answered "Vin" (`going`) to, in one read
- * for the whole Calendar rather than one per chip. Explicitly self-filtered:
- * a manager may read other members' answers through RLS.
+ * Every answer this member gave, in one read for the whole Calendar (#1134)
+ * rather than one per card: each card's pressed button, and the "Vin" set
+ * that colours an Other OSUBB Event (#692). Explicitly self-filtered: a
+ * manager may read other members' answers through RLS.
  */
-export async function fetchGoingEventIds(memberId: string): Promise<number[]> {
+export async function fetchMyEventAnswers(
+  memberId: string,
+): Promise<MyEventAnswers> {
   const rows = await readAllRows((from, to) =>
     supabase
       .from('event_attendance')
-      .select('event_id')
+      .select('event_id, status')
       .eq('member_id', memberId)
-      .eq('status', 'going')
       .order('event_id')
       .range(from, to),
   );
-  return rows.map((row) => row.event_id);
+  const answers = new Map<number, EventRsvpStatus>();
+  for (const row of rows)
+    if (isEventRsvpStatus(row.status)) answers.set(row.event_id, row.status);
+  return answers;
 }
 
-export function useGoingEventIds() {
+export function useMyEventAnswers() {
   const memberId = useAuth().session?.user.id;
   return useQuery({
-    queryKey: keys.events.going(memberId ?? ''),
-    queryFn: memberId ? () => fetchGoingEventIds(memberId) : skipToken,
+    queryKey: keys.events.answers(memberId ?? ''),
+    queryFn: memberId ? () => fetchMyEventAnswers(memberId) : skipToken,
   });
+}
+
+/** The Events answered "Vin" (`going`) among `answers`. */
+export function goingEventIds(
+  answers: MyEventAnswers | undefined,
+): ReadonlySet<number> {
+  const going = new Set<number>();
+  for (const [eventId, status] of answers ?? [])
+    if (status === 'going') going.add(eventId);
+  return going;
 }
 
 export function useSetEventRsvp() {

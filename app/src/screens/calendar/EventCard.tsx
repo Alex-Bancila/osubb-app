@@ -4,6 +4,7 @@ import { Clock, MapPin, Users } from 'lucide-react';
 import { FormattedText } from '../../components/formatted-text/FormattedText';
 import { formatBucharestShortDay } from '../../lib/calendar-time';
 import { cn } from '../../lib/utils';
+import type { MyEventAnswersRead } from '../../queries/event-rsvp';
 import type { EventPresentation } from '../../queries/events';
 import type { Group } from '../../queries/reference';
 import {
@@ -22,6 +23,11 @@ import EventRsvpControls from './EventRsvpControls';
 
 type EventCardProps = {
   event: EventPresentation;
+  /**
+   * The viewer's answers, read once by the list (#1134), never by the card:
+   * its Particip / Nu particip shows this Event's.
+   */
+  answers: MyEventAnswersRead;
   groups?: Map<number, Group>;
   /** The colour band (ruling R10); an unknown relevance reads as the member's own. */
   relevance?: EventRelevance;
@@ -52,6 +58,7 @@ type EventCardProps = {
 
 export default function EventCard({
   event,
+  answers,
   groups,
   relevance = 'own',
   past = false,
@@ -194,7 +201,11 @@ export default function EventCard({
         (past ? (
           <p className="event-past">Evenimentul a avut loc.</p>
         ) : (
-          <EventRsvpControls eventId={event.id} eventTitle={event.title} />
+          <EventRsvpControls
+            eventId={event.id}
+            eventTitle={event.title}
+            answers={answers}
+          />
         ))
       )}
 

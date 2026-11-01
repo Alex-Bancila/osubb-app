@@ -15,6 +15,9 @@ vi.mock('./EventManageControls', () => ({ EventManageControls: () => null }));
 
 import EventCard from './EventCard';
 
+/** The list's answers read; the RSVP controls themselves are stubbed here. */
+const ANSWERS = { data: new Map(), isPending: false, isError: false };
+
 function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
   return {
     id: 31,
@@ -54,7 +57,7 @@ function event(overrides: Partial<EventPresentation> = {}): EventPresentation {
 
 describe('EventCard — the meta line', () => {
   it('prints the day in its short form, before the time, when asked to', () => {
-    render(<EventCard event={event()} showDay />);
+    render(<EventCard answers={ANSWERS} event={event()} showDay />);
 
     const card = screen.getByRole('article', { name: 'Ședință Educațional' });
     const when = within(card).getByText('Data și ora');
@@ -74,6 +77,7 @@ describe('EventCard — the meta line', () => {
   it('says "Toată ziua" and the last day of an all-day weekend, never 00:00', () => {
     render(
       <EventCard
+        answers={ANSWERS}
         event={event({
           allDay: true,
           multiDay: true,
@@ -97,6 +101,7 @@ describe('EventCard — the meta line', () => {
   it('names both days of a timed Event that crosses midnight, once', () => {
     render(
       <EventCard
+        answers={ANSWERS}
         event={event({
           multiDay: true,
           lastDayKey: '2030-10-02',
@@ -116,7 +121,7 @@ describe('EventCard — the meta line', () => {
   });
 
   it('keeps when, where and how many in one list, each named for a screen reader', () => {
-    render(<EventCard event={event()} />);
+    render(<EventCard answers={ANSWERS} event={event()} />);
 
     const card = screen.getByRole('article', { name: 'Ședință Educațional' });
     const terms = Array.from(card.querySelectorAll('dl.event-details dt'));
@@ -137,7 +142,12 @@ describe('EventCard — the meta line', () => {
 
 describe('EventCard — the description as Formatted Text (R60)', () => {
   it('keeps the description’s own line breaks, which the card lost before', () => {
-    render(<EventCard event={event({ description: 'rând\nrând' })} />);
+    render(
+      <EventCard
+        answers={ANSWERS}
+        event={event({ description: 'rând\nrând' })}
+      />,
+    );
 
     const card = screen.getByRole('article', { name: 'Ședință Educațional' });
     const description = card.querySelector('.event-description');
@@ -148,6 +158,7 @@ describe('EventCard — the description as Formatted Text (R60)', () => {
   it('reads bold and a list inside the description, under the card’s own measure class', () => {
     render(
       <EventCard
+        answers={ANSWERS}
         event={event({ description: 'Aduceți **actele**.\n\n- unu\n- doi' })}
       />,
     );
@@ -169,7 +180,10 @@ describe('EventCard — the description as Formatted Text (R60)', () => {
 
   it('reads a Titlu in the description as text, so the card title stays its only heading (ruling 22)', () => {
     render(
-      <EventCard event={event({ description: '# Program\n\nLa 18:00.' })} />,
+      <EventCard
+        answers={ANSWERS}
+        event={event({ description: '# Program\n\nLa 18:00.' })}
+      />,
     );
 
     const card = screen.getByRole('article', { name: 'Ședință Educațional' });
@@ -185,7 +199,9 @@ describe('EventCard — the description as Formatted Text (R60)', () => {
   });
 
   it('shows no description block for an Event without one', () => {
-    render(<EventCard event={event({ description: null })} />);
+    render(
+      <EventCard answers={ANSWERS} event={event({ description: null })} />,
+    );
 
     const card = screen.getByRole('article', { name: 'Ședință Educațional' });
     expect(card.querySelector('.event-description')).toBeNull();
@@ -194,7 +210,12 @@ describe('EventCard — the description as Formatted Text (R60)', () => {
 
 describe('EventCard — approval (spec 2026-10-11)', () => {
   it('marks a pending OSUBB-wide Event and says it waits for BC', () => {
-    render(<EventCard event={event({ approvalStatus: 'pending' })} />);
+    render(
+      <EventCard
+        answers={ANSWERS}
+        event={event({ approvalStatus: 'pending' })}
+      />,
+    );
     const card = screen.getByRole('article', { name: 'Ședință Educațional' });
     expect(within(card).getByText('În așteptare')).toHaveClass(
       'event-pending-badge',
@@ -206,6 +227,7 @@ describe('EventCard — approval (spec 2026-10-11)', () => {
   it('marks a rejected Event and shows its reason, as a cancellation shows its', () => {
     render(
       <EventCard
+        answers={ANSWERS}
         event={event({
           approvalStatus: 'rejected',
           rejectionReason: 'Se suprapune cu Adunarea Generală.',
@@ -227,19 +249,23 @@ describe('EventCard — approval (spec 2026-10-11)', () => {
     render(
       <>
         <EventCard
+          answers={ANSWERS}
           event={event({ approvalStatus: 'pending' })}
           onReview={onReview}
         />
         <EventCard
+          answers={ANSWERS}
           event={event({ id: 32, title: 'Bal', approvalStatus: 'rejected' })}
           onReview={onReview}
         />
         <EventCard
+          answers={ANSWERS}
           event={event({ id: 33, title: 'Gala' })}
           onReview={onReview}
         />
         {/* Review I1: a cancelled pending Event is no request. */}
         <EventCard
+          answers={ANSWERS}
           event={event({
             id: 34,
             title: 'Anulat',
@@ -274,6 +300,7 @@ describe('EventCard — approval (spec 2026-10-11)', () => {
     const onReview = vi.fn();
     render(
       <EventCard
+        answers={ANSWERS}
         event={event({
           approvalStatus: 'pending',
           description: 'Completează [formularul](https://forms.gle/x).',
@@ -311,7 +338,7 @@ describe('EventCard — approval (spec 2026-10-11)', () => {
   });
 
   it('shows neither on an approved Event', () => {
-    render(<EventCard event={event()} />);
+    render(<EventCard answers={ANSWERS} event={event()} />);
     const card = screen.getByRole('article', { name: 'Ședință Educațional' });
     expect(within(card).queryByText('În așteptare')).toBeNull();
     expect(within(card).queryByText('Respins')).toBeNull();

@@ -20,7 +20,7 @@ import { fetchMyCompletedWorkRequests } from './completed-work-requests';
 import { fetchDeals } from './deals';
 import { fetchEventAttendance } from './event-attendance';
 import { fetchEventFormOptions } from './event-creation';
-import { fetchGoingEventIds } from './event-rsvp';
+import { fetchMyEventAnswers } from './event-rsvp';
 import { fetchEventsInRange } from './events';
 import { fetchUnreadNotificationSubjects } from './notifications';
 import { fetchPrivacyStatus } from './privacy';
@@ -345,9 +345,12 @@ describe('Calendar', () => {
   it('reads every Event a Member goes to', async () => {
     postgrest.serve(
       'event_attendance',
-      many((index) => ({ event_id: index })),
+      many((index) => ({ event_id: index, status: 'going' })),
     );
-    await expect(fetchGoingEventIds('member')).resolves.toHaveLength(ROWS);
+    await expect(fetchMyEventAnswers('member')).resolves.toHaveProperty(
+      'size',
+      ROWS,
+    );
     expect(orders(postgrest.requestsTo('event_attendance')[0])).toEqual([
       ['event_id'],
     ]);
