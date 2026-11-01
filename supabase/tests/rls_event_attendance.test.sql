@@ -132,7 +132,7 @@ select throws_ok(
 select throws_ok(
   format($$ select public.set_event_rsvp(%s, 'going') $$,
          (select pr_event_id from attendance_fx)),
-  'PT404', 'event_not_visible', 'set_event_rsvp refuses an event hidden by event RLS -- visible event only (#936)');
+  'PT404', 'event_not_found', 'set_event_rsvp refuses an event hidden by event RLS -- visible event only (#936)');
 
 select throws_ok(
   format($$ update event_attendance set status = 'declined'

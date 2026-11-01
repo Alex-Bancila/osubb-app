@@ -214,12 +214,12 @@ describe('useFinishedTasks', () => {
     await waitFor(() => expect(result.current.rows).toHaveLength(50));
     act(() => result.current.loadMore());
     await waitFor(() => expect(result.current.rows).toHaveLength(100));
-    // A Task finishes elsewhere: the list keeps its first page and reads it
-    // again.
+    // A Task finishes elsewhere: the list keeps its loaded pages (#1135) and
+    // reads them again in place, the first one first.
     changed = true;
     act(() => live.onChange('tasks'));
     await waitFor(() => expect(offsets()).toEqual([0, 50, 0]));
-    await waitFor(() => expect(result.current.rows).toHaveLength(50));
+    expect(result.current.rows).toHaveLength(100);
     // The end of the list comes into view meanwhile: nothing is asked.
     act(() => result.current.loadMore());
     expect(offsets()).toEqual([0, 50, 0]);
@@ -235,10 +235,13 @@ describe('useFinishedTasks', () => {
     await waitFor(() => expect(result.current.isFetching).toBe(false));
     expect(result.current.rows[0]?.id).toBe(1000);
     expect(result.current.total).toBe(201);
-    // Only now is the next page asked, after the fresh first one.
-    act(() => result.current.loadMore());
-    await waitFor(() => expect(result.current.rows).toHaveLength(100));
+    // The second loaded page was read again after the fresh first one; only
+    // now is the next page asked.
     expect(offsets()).toEqual([0, 50, 0, 50]);
+    expect(result.current.rows).toHaveLength(100);
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.rows).toHaveLength(150));
+    expect(offsets()).toEqual([0, 50, 0, 50, 100]);
     expect(result.current.rows[0]?.id).toBe(1000);
   });
 

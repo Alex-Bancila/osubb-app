@@ -6,6 +6,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 
+import { commandReason, reasonCopy } from '../lib/command-reasons';
 import { queryErrorCode } from '../lib/query-error';
 import { useAuth } from '../lib/auth';
 import type { Database } from '../lib/database.types';
@@ -52,8 +53,8 @@ export class EventRsvpMutationError extends Error {
   readonly kind: EventRsvpErrorKind;
   override readonly cause: unknown;
 
-  constructor(kind: EventRsvpErrorKind, cause: unknown) {
-    super(ERROR_MESSAGES[kind]);
+  constructor(kind: EventRsvpErrorKind, cause: unknown, message?: string) {
+    super(message ?? ERROR_MESSAGES[kind]);
     this.name = 'EventRsvpMutationError';
     this.kind = kind;
     this.cause = cause;
@@ -77,19 +78,24 @@ function toEventRsvp(row: EventRsvpRow): EventRsvp {
   };
 }
 
+/**
+ * The kind follows the code class; the words are the reason's own copy
+ * (#1143), the class's only as the fallback.
+ */
 function classifyMutationError(error: unknown): EventRsvpMutationError {
   const code = queryErrorCode(error);
+  const copy = reasonCopy(commandReason(error));
 
   if (code === 'PT400') {
-    return new EventRsvpMutationError('invalid-status', error);
+    return new EventRsvpMutationError('invalid-status', error, copy);
   }
   if (code === 'PT404') {
-    return new EventRsvpMutationError('event-unavailable', error);
+    return new EventRsvpMutationError('event-unavailable', error, copy);
   }
   if (code === '42501') {
-    return new EventRsvpMutationError('forbidden', error);
+    return new EventRsvpMutationError('forbidden', error, copy);
   }
-  return new EventRsvpMutationError('unknown', error);
+  return new EventRsvpMutationError('unknown', error, copy);
 }
 
 /**

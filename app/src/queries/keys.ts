@@ -177,7 +177,8 @@ export const keys = {
       filters: Record<string, unknown>,
     ) => ['tasks', 'finished', { memberId, list }, filters] as const,
     /* Every finished part, whatever its list and filters: a live change
-       keeps only their first pages (live-changes.ts). */
+       keeps up to three loaded pages of one on screen and reads them again,
+       its first page otherwise (live-changes.ts, #1135). */
     finishedAll: ['tasks', 'finished'] as const,
     /* What a list holds: Groups, Campaigns, states, counts. */
     summary: (
