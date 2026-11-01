@@ -2,6 +2,7 @@ import {
   QueryClient,
   QueryClientProvider,
   useInfiniteQuery,
+  type InfiniteData,
 } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -170,15 +171,35 @@ describe('live change signals (#961)', () => {
     expect(invalidate).toHaveBeenCalledWith();
   });
 
-  describe('the finished part of a Task list, read by the page (#1053)', () => {
+  // Fails if a reconnect leaves the signals it already covers queued: their
+  // flush would read every family again 250 ms after the full refetch.
+  it('drops the signals a reconnect already covers', async () => {
+    const { invalidate } = setup();
+    const { onChange, onStatus } = await joined();
+    act(() => onStatus('SUBSCRIBED'));
+
+    act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
+    act(() => onStatus('CHANNEL_ERROR'));
+    act(() => onStatus('SUBSCRIBED'));
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(invalidate).toHaveBeenCalledWith();
+  });
+
+  describe('the finished part of a Task list, read by the page (#1053, #1135)', () => {
     /** The `p_offset` of every `task_list` request, in order. */
     const taskListOffsets = () =>
       supabaseMock.rpc.mock.calls
         .filter(([name]) => name === 'task_list')
         .map(([, args]) => (args as { p_offset: number }).p_offset);
 
-    /** De gestionat's finished part with three of its four pages loaded. */
-    async function threePagesLoaded() {
+    /**
+     * De gestionat's finished part with `count` of its pages loaded (300
+     * finished Tasks, 50 a page); `listed` false disables the list's
+     * observer, so the query is inactive, as for a tab the Member left.
+     */
+    async function pagesLoaded(count: number) {
       const queryClient = new QueryClient({
         defaultOptions: { queries: { retry: false } },
       });
@@ -187,65 +208,174 @@ describe('live change signals (#961)', () => {
           {children}
         </QueryClientProvider>
       );
-      // 200 finished Tasks, 50 a page.
       supabaseMock.rpc.mockImplementation(
         (_name: string, args: { p_offset: number }) =>
           Promise.resolve({
             data: Array.from({ length: FINISHED_PAGE }, (_, index) => ({
               id: args.p_offset + index + 1,
               executor: null,
-              total: 200,
+              total: 300,
             })),
             error: null,
           }),
       );
-      const { result } = renderHook(
-        () => {
+      const options = finishedTasksQueryOptions('managed', {}, memberId);
+      const { result, rerender } = renderHook(
+        ({ listed }: { listed: boolean }) => {
           useLiveChanges(memberId);
-          return useInfiniteQuery(
-            finishedTasksQueryOptions('managed', {}, memberId),
-          );
+          return useInfiniteQuery({ ...options, enabled: listed });
         },
-        { wrapper },
+        { wrapper, initialProps: { listed: true } },
       );
       await waitFor(() => expect(result.current.data?.pages).toHaveLength(1));
-      await act(() => result.current.fetchNextPage());
-      await waitFor(() => expect(result.current.data?.pages).toHaveLength(2));
-      await act(() => result.current.fetchNextPage());
-      await waitFor(() => expect(result.current.data?.pages).toHaveLength(3));
-      expect(taskListOffsets()).toEqual([0, 50, 100]);
-      return result;
+      for (let page = 2; page <= count; page += 1) {
+        await act(() => result.current.fetchNextPage());
+        await waitFor(() =>
+          expect(result.current.data?.pages).toHaveLength(page),
+        );
+      }
+      expect(taskListOffsets()).toEqual(
+        Array.from({ length: count }, (_, index) => index * FINISHED_PAGE),
+      );
+      return { result, rerender, queryClient, queryKey: options.queryKey };
     }
 
-    // Fails if a change only invalidates `['tasks']`: the infinite query
-    // then refetches every page it has loaded, one after another.
-    it('re-reads only the first page after a change and drops the others', async () => {
-      const result = await threePagesLoaded();
+    // Fails if a change cuts the list to its first page: a Member scrolled
+    // to page 3 of Taskuri încheiate would lose their place over any Task
+    // started anywhere.
+    it('keeps the loaded pages after a change and reads each again in place', async () => {
+      const { result } = await pagesLoaded(3);
       const { onChange } = await joined();
 
       act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
 
-      await waitFor(() => expect(taskListOffsets()).toHaveLength(4));
+      await waitFor(() => expect(taskListOffsets()).toHaveLength(6));
       await waitFor(() => expect(result.current.isFetching).toBe(false));
-      // One request, for the first page; the pages after it are dropped.
-      expect(taskListOffsets()).toEqual([0, 50, 100, 0]);
-      expect(result.current.data?.pages).toHaveLength(1);
+      expect(taskListOffsets()).toEqual([0, 50, 100, 0, 50, 100]);
+      expect(result.current.data?.pages).toHaveLength(3);
       expect(result.current.hasNextPage).toBe(true);
     });
 
-    // Fails if a reconnect invalidates everything without trimming first.
-    it('re-reads only the first page after a reconnect too', async () => {
-      const result = await threePagesLoaded();
+    // Fails if every loaded page is read again: a change would cost one
+    // request per page, however deep the Member scrolled.
+    it('keeps at most three pages: beyond the cap, the rest are dropped', async () => {
+      const { result } = await pagesLoaded(5);
+      const { onChange } = await joined();
+
+      act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
+
+      await waitFor(() => expect(taskListOffsets()).toHaveLength(8));
+      await waitFor(() => expect(result.current.isFetching).toBe(false));
+      expect(taskListOffsets()).toEqual([0, 50, 100, 150, 200, 0, 50, 100]);
+      expect(result.current.data?.pages).toHaveLength(3);
+      expect(result.current.hasNextPage).toBe(true);
+    });
+
+    // Fails if an inactive list keeps its pages: a tab the Member left would
+    // read three pages again the moment they came back.
+    it('cuts a list nobody is looking at to its first page', async () => {
+      const { rerender, queryClient, queryKey } = await pagesLoaded(3);
+      const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+      const { onChange } = await joined();
+      rerender({ listed: false });
+
+      act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
+
+      await waitFor(() =>
+        expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.tasks.all }),
+      );
+      // Nothing is read for an inactive list; its first page waits.
+      expect(taskListOffsets()).toEqual([0, 50, 100]);
+      expect(
+        queryClient.getQueryData<InfiniteData<unknown>>(queryKey)?.pages,
+      ).toHaveLength(1);
+    });
+
+    // Fails if a list with no observer at all keeps its pages: the cache
+    // of a tab the Member closed would read three pages again on return.
+    it('cuts a cached list with no observer to its first page', async () => {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      );
+      supabaseMock.rpc.mockImplementation(
+        (_name: string, args: { p_offset: number }) =>
+          Promise.resolve({
+            data: Array.from({ length: FINISHED_PAGE }, (_, index) => ({
+              id: args.p_offset + index + 1,
+              executor: null,
+              total: 300,
+            })),
+            error: null,
+          }),
+      );
+      const options = finishedTasksQueryOptions('managed', {}, memberId);
+      // The live hook stays mounted on its own; only the list goes.
+      renderHook(() => useLiveChanges(memberId), { wrapper });
+      const list = renderHook(() => useInfiniteQuery(options), { wrapper });
+      await waitFor(() =>
+        expect(list.result.current.data?.pages).toHaveLength(1),
+      );
+      for (let page = 2; page <= 3; page += 1) {
+        await act(() => list.result.current.fetchNextPage());
+        await waitFor(() =>
+          expect(list.result.current.data?.pages).toHaveLength(page),
+        );
+      }
+      const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+      const { onChange } = await joined();
+      list.unmount();
+
+      act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
+
+      await waitFor(() =>
+        expect(invalidate).toHaveBeenCalledWith({ queryKey: keys.tasks.all }),
+      );
+      expect(taskListOffsets()).toEqual([0, 50, 100]);
+      expect(
+        queryClient.getQueryData<InfiniteData<unknown>>(options.queryKey)
+          ?.pages,
+      ).toHaveLength(1);
+    });
+
+    // Fails if a hidden document keeps its pages: a phone in a pocket would
+    // read three pages again on every change.
+    it('cuts a list in a hidden document to its first page', async () => {
+      const { result } = await pagesLoaded(3);
+      const { onChange } = await joined();
+      const hidden = vi
+        .spyOn(document, 'visibilityState', 'get')
+        .mockReturnValue('hidden');
+      try {
+        act(() => onChange({ payload: { table: 'tasks', op: 'UPDATE' } }));
+
+        await waitFor(() => expect(taskListOffsets()).toHaveLength(4));
+        await waitFor(() => expect(result.current.isFetching).toBe(false));
+        expect(taskListOffsets()).toEqual([0, 50, 100, 0]);
+        expect(result.current.data?.pages).toHaveLength(1);
+      } finally {
+        hidden.mockRestore();
+      }
+    });
+
+    // Fails if a reconnect cuts the list: signals may have been missed, but
+    // the Member's place is kept the same way.
+    it('keeps the loaded pages after a reconnect too', async () => {
+      const { result } = await pagesLoaded(3);
       const { onStatus } = await joined();
 
       act(() => onStatus('SUBSCRIBED'));
       act(() => onStatus('CHANNEL_ERROR'));
       act(() => onStatus('SUBSCRIBED'));
 
-      await waitFor(() => expect(taskListOffsets()).toHaveLength(4));
+      await waitFor(() => expect(taskListOffsets()).toHaveLength(6));
       await waitFor(() => expect(result.current.isFetching).toBe(false));
-      expect(taskListOffsets()).toEqual([0, 50, 100, 0]);
-      expect(result.current.data?.pages).toHaveLength(1);
+      expect(taskListOffsets()).toEqual([0, 50, 100, 0, 50, 100]);
+      expect(result.current.data?.pages).toHaveLength(3);
     });
   });
 
