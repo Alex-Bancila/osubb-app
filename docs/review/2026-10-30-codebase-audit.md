@@ -1,6 +1,24 @@
 # Codebase audit — 2026-10-30
 
-**Status 2026-10-31:** the six high findings (H1–H6) are fixed and merged in PRs #1123 (server) and #1124 (client), issues #1117–#1122; every medium and low finding below is still open.
+**Status 2026-11-05:** every high finding and 23 of the 27 mediums are fixed and merged on `main`, and staging runs them. Production does not yet: the last Release is 2026-10-25 at `0e6d3781`, before any of these fixes. The findings below are kept as written on 2026-10-30.
+
+| Finding                     | Issue                                 | PR                                    |
+| --------------------------- | ------------------------------------- | ------------------------------------- |
+| H1, H2, H4                  | #1117, #1118, #1119                   | #1123                                 |
+| H3, H5, H6                  | #1120, #1121, #1122                   | #1124                                 |
+| M1 · M2 · M3 · M4 · M5      | #1125 · #1126 · #1127 · #1128 · #1129 | #1156 · #1173 · #1162 · #1155 · #1161 |
+| M6 · M7 · M10 · M11 · M12   | #1145 · #1130 · #1131 · #1146 · #1132 | #1164 · #1157 · #1160 · #1163 · #1159 |
+| M13 · M14 · M15 · M16 · M17 | #1133 · #1134 · #1147 · #1148 · #1135 | #1172 · #1171 · #1177 · #1169 · #1166 |
+| M18 · M19 · M21 · M22 · M23 | #1136 · #1137 · #1149 · #1138 · #1139 | #1154 · #1179 · #1170 · #1153 · #1158 |
+| M25 · M26 · M27, with L83   | #1141 · #1142 · #1143                 | #1165 · #1167 · #1168                 |
+
+Two races found while fixing these are fixed too: `duplicate_task` and `create_campaign` racing an archive (#1174, PR #1175, found with M6), and `delete_group` racing the naming of the board or the Adunarea Generală (#1176, PR #1178, found with M5).
+
+**Still open:**
+
+- M8 (#1150), M9 (#1151) and M20 (#1152) wait on Alex's answers in #1144, which also holds the low findings L4, L9, L30 and L40.
+- M24 (#1140): production runs Postgres 17.11 (read from the project's metadata on 2026-11-05), so the local and CI pin of 15 differs from it. Staging's version is not read yet.
+- The other 78 low findings are not filed as issues.
 
 Whole-repository audit of `main` at `0e6d3781` (PR #1116): the Postgres backend (effective schema of 273 migrations, dumped from the local stack, three newest migrations read from file), the React app (`app/src`), the Edge Functions, scripts, CI/CD, config and docs. Eight parallel read-only auditors covered one slice each; every finding listed as **confirmed** was then re-verified by reading the definition and its callers (and, for the catalog claims, by a read-only query against the local database). Nothing was executed, nothing was changed.
 
