@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SUPABASE_CLI_VERSION: 2.117.0
+  SUPABASE_CLI_VERSION: 2.122.1
   WRANGLER_VERSION: 4.139.0
   PAGES_PROJECT: osubb-app
   PRODUCTION_DOMAIN: app.osubb.ro
