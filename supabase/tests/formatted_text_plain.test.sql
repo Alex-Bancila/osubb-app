@@ -90,8 +90,8 @@ select is(
      from pg_proc p
      join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'private' and p.proname = 'formatted_text_plain'),
-  'i',
-  'the stripper is immutable');
+  's',
+  'the stripper is stable: array_to_string is stable, and the Postgres 17 lint holds it to that (#1140)');
 select ok(not has_function_privilege('authenticated', 'private.formatted_text_plain(text)', 'execute'),
   'authenticated cannot execute the stripper directly');
 
