@@ -262,6 +262,13 @@ jobs:
           answer="$( [ -n "$pooler" ] && timeout 30 psql "$pooler" -tAc 'select 1' 2>&1 || true)"
           if [ "$answer" = 1 ]; then pass "select 1 through the pooler"; else fail "select 1 through the pooler (${answer:-no pooler URL from supabase link})"; fi
 
+          # #1140: every gate runs on config.toml's Postgres major, so production
+          # must run that major too. A hosted upgrade fails this until the pin
+          # follows in its own PR, with every gate rerun on the new major.
+          pinned="$(sed -n 's/^major_version[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/\1/p' supabase/config.toml | head -1)"
+          version="$( [ -n "$pooler" ] && timeout 30 psql "$pooler" -tAc "select current_setting('server_version')" 2>&1 || true)"
+          if [ -n "$pinned" ] && [ "${version%%.*}" = "$pinned" ]; then pass "Postgres $version, the major config.toml pins ($pinned)"; else fail "production runs Postgres '${version:-unread}', config.toml pins major '${pinned:-unread}'"; fi
+
           # POST: the function checks the method before the key, so a GET is
           # 405 whatever the caller holds (#1001).
           status="$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' -X POST "${SUPABASE_URL%/}/functions/v1/send-push" || true)"
