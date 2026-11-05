@@ -77,8 +77,9 @@ if [ "$ONLY" = all ] || [ "$ONLY" = db ]; then
   # collation (and so sort order), planner choices where a query has no
   # explicit ORDER BY, and lock and isolation behaviour all move between
   # majors, and the pg_temp.test_race suites lean on the last of those.
-  # The 17.x image sits beside the pinned 15.x one in the local image store,
-  # so this is one `docker images` away from happening by accident.
+  # The 15.x image used before #1140 can still sit beside the pinned 17.x one
+  # in the local image store, so this is one `docker images` away from
+  # happening by accident.
   step "db: running postgres major version matches config.toml" bash -c '
     set -uo pipefail
     pinned="$(sed -n "s/^major_version[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/\1/p" supabase/config.toml | head -1)"

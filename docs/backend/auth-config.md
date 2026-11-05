@@ -158,6 +158,15 @@ One more, outside Authentication: **Project Settings → API Keys → _Secret ke
 
 Checklists: **#54** (staging) and **#77** (production). Run the two curl checks above against the hosted URL afterwards, and check 3 from the click-to-confirm section after pasting templates — the settings page can say the right thing while the behaviour differs, and only the behaviour matters.
 
+### Postgres version
+
+| Project                       | `server_version` | Read                                                    |
+| ----------------------------- | ---------------- | ------------------------------------------------------- |
+| production (`osubb-app-prod`) | 17.11            | 2026-11-05, from the project metadata and the database  |
+| staging                       | not read yet     | read it with `select current_setting('server_version')` |
+
+Local and CI run the major `supabase/config.toml` pins (`major_version = 17`, #1140), so every pgTAP, race and upgrade suite proves something about the engine production runs. Every Release's smoke step reads production's `server_version` and fails when its major differs from the pin. If Supabase moves a hosted project to a new major, move the pin in its own PR and rerun every gate on it before the next Release.
+
 ## Related
 
 - `docs/adr/0003-invite-only-auth.md` — why invite-only, and what deactivation means
