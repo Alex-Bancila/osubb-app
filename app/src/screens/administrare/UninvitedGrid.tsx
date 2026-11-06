@@ -117,7 +117,7 @@ const cellButtonClass = cn(
 );
 
 const inputClass =
-  'h-8 w-full min-w-0 rounded-sm border border-ring bg-background px-1.5 text-sm outline-none aria-invalid:border-destructive';
+  'h-8 w-full min-w-0 rounded-sm border border-ring bg-background px-1.5 text-sm pointer-coarse:text-base outline-none aria-invalid:border-destructive';
 
 /**
  * An open editor: lifted over the pinned columns, with the grid scrolled so
