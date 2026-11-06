@@ -6,11 +6,14 @@ import { cn } from 'cn';
  * outline button's border, background and radius, and the same focus ring —
  * what `Select`, the Combobox trigger and the date picker draw too, so
  * every control of a form reads as one kit. An invalid field takes the
- * destructive border and ring from `aria-invalid`.
+ * destructive border and ring from `aria-invalid`. Its text is 16 px on a
+ * touch screen: iOS Safari zooms the page in on a field under 16 px and
+ * stays zoomed, and a zoomed page loses the keyboard inset
+ * (`lib/keyboard-inset.ts`) and with it the Formatted Text keyboard bar.
  */
 // oxlint-disable-next-line react/only-export-components
 export const fieldControlClass =
-  'w-full min-w-0 rounded-lg border border-border bg-background px-4 font-sans text-sm text-foreground transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:border-input dark:bg-input/30';
+  'w-full min-w-0 rounded-lg border border-border bg-background px-4 font-sans text-sm pointer-coarse:text-base text-foreground transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:border-input dark:bg-input/30';
 
 /** A one-line text field. */
 export function Input({ className, ...props }: ComponentProps<'input'>) {
