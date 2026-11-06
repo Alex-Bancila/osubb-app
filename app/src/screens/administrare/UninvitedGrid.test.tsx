@@ -260,6 +260,9 @@ describe('inline edits', () => {
     const name = screen.getByRole('textbox', {
       name: 'Numele pentru Exemplu 01',
     });
+    // 16 px on a touch screen: iOS zooms in on a smaller field and stays
+    // zoomed (touch-text-size.test.tsx).
+    expect(name).toHaveClass('pointer-coarse:text-base');
     await user.clear(name);
     await user.type(name, '  Pop Ana {Enter}');
     expect(api.contact).toHaveBeenCalledWith({

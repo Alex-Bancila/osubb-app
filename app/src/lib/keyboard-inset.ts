@@ -64,7 +64,10 @@ export type ViewportSample = {
 
 export function measureKeyboard(sample: ViewportSample): KeyboardState {
   // Pinch-zoomed: the visual viewport is small because the Member zoomed in,
-  // not because of a keyboard. Leave the layout alone.
+  // not because of a keyboard. Leave the layout alone. iOS Safari also zooms
+  // in by itself when a field under 16 px takes focus, so every field is
+  // 16 px on a touch screen (`pointer-coarse:text-base`): otherwise the
+  // keyboard would count as closed and the Formatted Text bar sit under it.
   if (Math.abs(sample.scale - 1) > 0.05) return CLOSED;
   const keyboardHeight = sample.baseline - sample.visualHeight;
   // Opening needs a field in focus (a shrunk window is not a keyboard);
