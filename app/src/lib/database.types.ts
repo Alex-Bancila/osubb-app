@@ -15,6 +15,7 @@ export type Database = {
           member_id: string
           read_at: string
         }
+        ComputedFields: never
         Insert: {
           announcement_id: number
           member_id: string
@@ -73,7 +74,7 @@ export type Database = {
           group_id: number
           id: number
           kind: string
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           pinned: boolean
           priority: Database["public"]["Enums"]["announce_priority"]
@@ -81,6 +82,7 @@ export type Database = {
           rejection_reason: string | null
           title: string
         }
+        ComputedFields: never
         Insert: {
           approval_decided_at?: string | null
           approval_decided_by?: string | null
@@ -97,7 +99,7 @@ export type Database = {
           group_id: number
           id?: never
           kind?: string
-          links?: Json
+          links?: NonNullable<Json>
           min_level?: number
           pinned?: boolean
           priority?: Database["public"]["Enums"]["announce_priority"]
@@ -121,7 +123,7 @@ export type Database = {
           group_id?: number
           id?: never
           kind?: string
-          links?: Json
+          links?: NonNullable<Json>
           min_level?: number
           pinned?: boolean
           priority?: Database["public"]["Enums"]["announce_priority"]
@@ -196,6 +198,7 @@ export type Database = {
           set_by: string | null
           team_role: string
         }
+        ComputedFields: never
         Insert: {
           assignment: string
           member_id: string
@@ -265,6 +268,7 @@ export type Database = {
           name: string
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           created_by: string
@@ -327,6 +331,7 @@ export type Database = {
           status: string
           task_id: number | null
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           decided_at?: string | null
@@ -423,6 +428,7 @@ export type Database = {
           member_id: string
           revealed_at: string
         }
+        ComputedFields: never
         Insert: {
           announcement_id: number
           member_id: string
@@ -476,6 +482,7 @@ export type Database = {
           updated_by: string | null
           vot_percent: number
         }
+        ComputedFields: never
         Insert: {
           activ_percent?: number
           created_at?: string
@@ -529,6 +536,7 @@ export type Database = {
           member_id: string
           status: string
         }
+        ComputedFields: never
         Insert: {
           checked_in?: boolean | null
           event_id: number
@@ -598,6 +606,7 @@ export type Database = {
           type: Database["public"]["Enums"]["event_type"]
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           all_day?: boolean
           announce_on_approval?: boolean
@@ -719,6 +728,7 @@ export type Database = {
           note: string | null
           status: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           decided_at?: string | null
@@ -801,6 +811,7 @@ export type Database = {
           member_id: string
           position_title: string | null
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           group_id: number
@@ -873,6 +884,7 @@ export type Database = {
           status: string
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           accepts_applications?: boolean
           application_form_label?: string | null
@@ -965,6 +977,7 @@ export type Database = {
           task_id: number | null
           tracker_id: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           imported_by?: string | null
@@ -1025,6 +1038,7 @@ export type Database = {
           group_id: number
           member_id: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           group_id: number
@@ -1076,6 +1090,7 @@ export type Database = {
           sheet_row: number
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           imported_by?: string | null
@@ -1144,6 +1159,7 @@ export type Database = {
           kind: Database["public"]["Enums"]["noti_kind"]
           role: Database["public"]["Enums"]["member_role"]
         }
+        ComputedFields: never
         Insert: {
           kind: Database["public"]["Enums"]["noti_kind"]
           role: Database["public"]["Enums"]["member_role"]
@@ -1169,6 +1185,7 @@ export type Database = {
           member_id: string
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           digest_enabled?: boolean
@@ -1213,6 +1230,7 @@ export type Database = {
           push_enabled: boolean
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           kind: Database["public"]["Enums"]["noti_kind"]
@@ -1268,6 +1286,7 @@ export type Database = {
           task_id: number | null
           title: string
         }
+        ComputedFields: never
         Insert: {
           body?: string | null
           created_at?: string
@@ -1346,6 +1365,7 @@ export type Database = {
           updated_by: string | null
           value: string | null
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           key: string
@@ -1397,6 +1417,7 @@ export type Database = {
           reason: string
           task_id: number | null
         }
+        ComputedFields: never
         Insert: {
           awarded_by?: string | null
           created_at?: string
@@ -1493,6 +1514,7 @@ export type Database = {
           member_id: string
           notice_version: string
         }
+        ComputedFields: never
         Insert: {
           acknowledged_at?: string
           member_id: string
@@ -1542,6 +1564,7 @@ export type Database = {
           status: Database["public"]["Enums"]["member_status"]
           university: string | null
         }
+        ComputedFields: never
         Insert: {
           avatar_color?: string | null
           created_at?: string
@@ -1586,6 +1609,7 @@ export type Database = {
           tenure_since: string
           threshold_used: number
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           decided_at?: string | null
@@ -1679,6 +1703,7 @@ export type Database = {
           to_date: string | null
           to_value: number | null
         }
+        ComputedFields: never
         Insert: {
           changed_at?: string
           changed_by?: string | null
@@ -1753,6 +1778,7 @@ export type Database = {
           updated_at: string
           updated_by: string | null
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           kind: string
@@ -1803,6 +1829,7 @@ export type Database = {
           status: string
           token_id: string
         }
+        ComputedFields: never
         Insert: {
           attempts?: number
           created_at?: string
@@ -1850,6 +1877,7 @@ export type Database = {
           platform: string
           token: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           id?: string
@@ -1895,6 +1923,7 @@ export type Database = {
           note: string | null
           rating: number
         }
+        ComputedFields: never
         Insert: {
           label: string
           multiplier: number
@@ -1923,6 +1952,7 @@ export type Database = {
           task_points: number | null
           threshold_used: number | null
         }
+        ComputedFields: never
         Insert: {
           closed_as?: string | null
           closed_at?: string | null
@@ -1990,6 +2020,7 @@ export type Database = {
           role_at_run: Database["public"]["Enums"]["member_role"]
           role_evaluation_id: number
         }
+        ComputedFields: never
         Insert: {
           below_line: boolean
           listable?: boolean
@@ -2057,6 +2088,7 @@ export type Database = {
           threshold_computed: number | null
           threshold_used: number | null
         }
+        ComputedFields: never
         Insert: {
           eligibility_floor?: number | null
           evaluated_count?: number | null
@@ -2128,6 +2160,7 @@ export type Database = {
           to_role: string
           to_status: Database["public"]["Enums"]["member_status"] | null
         }
+        ComputedFields: never
         Insert: {
           actor_kind: string
           changed_by?: string | null
@@ -2203,6 +2236,7 @@ export type Database = {
           level: number
           name: string
         }
+        ComputedFields: never
         Insert: {
           id: Database["public"]["Enums"]["member_role"]
           level: number
@@ -2220,7 +2254,7 @@ export type Database = {
           actor_id: string | null
           assignment_id: number | null
           created_at: string
-          details: Json
+          details: NonNullable<Json>
           from_status: Database["public"]["Enums"]["task_status"] | null
           id: number
           kind: string
@@ -2229,11 +2263,12 @@ export type Database = {
           task_id: number
           to_status: Database["public"]["Enums"]["task_status"] | null
         }
+        ComputedFields: never
         Insert: {
           actor_id?: string | null
           assignment_id?: number | null
           created_at?: string
-          details?: Json
+          details?: NonNullable<Json>
           from_status?: Database["public"]["Enums"]["task_status"] | null
           id?: never
           kind: string
@@ -2246,7 +2281,7 @@ export type Database = {
           actor_id?: string | null
           assignment_id?: number | null
           created_at?: string
-          details?: Json
+          details?: NonNullable<Json>
           from_status?: Database["public"]["Enums"]["task_status"] | null
           id?: never
           kind?: string
@@ -2311,6 +2346,7 @@ export type Database = {
           member_id: string
           task_id: number
         }
+        ComputedFields: never
         Insert: {
           assigned_at?: string
           assigned_by?: string | null
@@ -2402,6 +2438,7 @@ export type Database = {
           status: string
           task_id: number
         }
+        ComputedFields: never
         Insert: {
           assignment_id?: number | null
           created_at?: string
@@ -2498,6 +2535,7 @@ export type Database = {
           label: string
           level: number
         }
+        ComputedFields: never
         Insert: {
           base_points: number
           glyph?: string | null
@@ -2532,6 +2570,7 @@ export type Database = {
           source: string
           task_id: number
         }
+        ComputedFields: never
         Insert: {
           assignment_id: number
           created_at?: string
@@ -2651,7 +2690,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -2667,6 +2706,7 @@ export type Database = {
           unfulfilled_at: string | null
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           assignment_mode?: string | null
           audience?: string | null
@@ -2685,7 +2725,7 @@ export type Database = {
           kind?: string
           link_label?: string | null
           link_url?: string | null
-          links?: Json
+          links?: NonNullable<Json>
           min_level?: number
           parent_task_id?: number | null
           queue_closed_at?: string | null
@@ -2719,7 +2759,7 @@ export type Database = {
           kind?: string
           link_label?: string | null
           link_url?: string | null
-          links?: Json
+          links?: NonNullable<Json>
           min_level?: number
           parent_task_id?: number | null
           queue_closed_at?: string | null
@@ -2805,9 +2845,10 @@ export type Database = {
     Views: {
       my_points: {
         Row: {
-          member_id: string | null
+          member_id: string
           points: number | null
         }
+        ComputedFields: never
         Relationships: []
       }
       profiles_contact: {
@@ -2816,21 +2857,23 @@ export type Database = {
           id: string | null
           phone: string | null
         }
+        ComputedFields: never
         Relationships: []
       }
       profiles_directory: {
         Row: {
           avatar_color: string | null
           board_title: string | null
-          created_at: string | null
-          full_name: string | null
-          id: string | null
+          created_at: string
+          full_name: string
+          id: string
           joined_at: string | null
           nickname: string | null
-          role: Database["public"]["Enums"]["member_role"] | null
-          status: Database["public"]["Enums"]["member_status"] | null
+          role: Database["public"]["Enums"]["member_role"]
+          status: Database["public"]["Enums"]["member_status"]
           university: string | null
         }
+        ComputedFields: never
         Insert: {
           avatar_color?: string | null
           board_title?: never
@@ -2861,8 +2904,9 @@ export type Database = {
         Row: {
           my_position: number | null
           pending_count: number | null
-          task_id: number | null
+          task_id: number
         }
+        ComputedFields: never
         Insert: {
           my_position?: never
           pending_count?: never
@@ -2973,7 +3017,7 @@ export type Database = {
         }
       }
       approval_requests: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           created_at: string
           created_by: string
@@ -3002,7 +3046,7 @@ export type Database = {
           group_id: number
           id: number
           kind: string
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           pinned: boolean
           priority: Database["public"]["Enums"]["announce_priority"]
@@ -3139,7 +3183,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -3163,10 +3207,10 @@ export type Database = {
         }
       }
       auth_in_group: { Args: { g: number }; Returns: boolean }
-      auth_is_member: { Args: never; Returns: boolean }
-      auth_level: { Args: never; Returns: number }
+      auth_is_member: { Args: Record<PropertyKey, never>; Returns: boolean }
+      auth_level: { Args: Record<PropertyKey, never>; Returns: number }
       auth_role: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: Database["public"]["Enums"]["member_role"]
       }
       campaign_report: {
@@ -3189,8 +3233,8 @@ export type Database = {
       }
       can_evaluate_task: { Args: { p_task_id: number }; Returns: boolean }
       can_manage_task: { Args: { p_task_id: number }; Returns: boolean }
-      can_manage_tasks: { Args: never; Returns: boolean }
-      can_read_all_tasks: { Args: never; Returns: boolean }
+      can_manage_tasks: { Args: Record<PropertyKey, never>; Returns: boolean }
+      can_read_all_tasks: { Args: Record<PropertyKey, never>; Returns: boolean }
       cancel_event: {
         Args: { p_event_id: number; p_reason: string }
         Returns: {
@@ -3245,7 +3289,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -3316,7 +3360,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -3359,7 +3403,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -3450,7 +3494,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -3504,7 +3548,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -3674,7 +3718,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -3731,7 +3775,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -3819,7 +3863,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -3843,7 +3887,7 @@ export type Database = {
         }
       }
       evaluation_percents: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           changed_at: string
           changed_by: string
@@ -3871,7 +3915,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -3914,7 +3958,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -3985,7 +4029,7 @@ export type Database = {
         }[]
       }
       leadership_filter_work: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           campaign_id: number
           group_id: number
@@ -4058,7 +4102,7 @@ export type Database = {
         }[]
       }
       managed_work_groups: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           id: number
           min_level: number
@@ -4067,7 +4111,10 @@ export type Database = {
           status: string
         }[]
       }
-      mark_all_notifications_read: { Args: never; Returns: number }
+      mark_all_notifications_read: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       mark_notifications_read_for: {
         Args: { p_subject: string }
         Returns: number
@@ -4097,7 +4144,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -4149,7 +4196,7 @@ export type Database = {
       member_delete_preview: { Args: { p_member_id: string }; Returns: Json }
       member_level: { Args: { p_member: string }; Returns: number }
       my_capabilities: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           administer: boolean
           create_top_level_groups: boolean
@@ -4165,7 +4212,7 @@ export type Database = {
         }[]
       }
       my_group_preferences: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           group_id: number
           locked: string
@@ -4173,7 +4220,7 @@ export type Database = {
         }[]
       }
       my_groups: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           automatic: boolean
           category: string
@@ -4190,7 +4237,7 @@ export type Database = {
         }[]
       }
       my_managed_task_ids: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           task_id: number
         }[]
@@ -4217,7 +4264,7 @@ export type Database = {
         Returns: number
       }
       pending_request_decisions: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           created_at: string
           description: string
@@ -4251,7 +4298,7 @@ export type Database = {
         }[]
       }
       privacy_acknowledgement_status: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           acknowledged_at: string
           member_id: string
@@ -4304,7 +4351,7 @@ export type Database = {
           group_id: number
           id: number
           kind: string
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           pinned: boolean
           priority: Database["public"]["Enums"]["announce_priority"]
@@ -4432,7 +4479,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -4460,7 +4507,7 @@ export type Database = {
         Returns: string
       }
       request_origins: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           id: number
           name: string
@@ -4487,7 +4534,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -4567,7 +4614,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -4851,7 +4898,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -4940,7 +4987,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -4988,7 +5035,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -5100,7 +5147,7 @@ export type Database = {
         }
       }
       uninvited_members: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           created_at: string
           email: string
@@ -5311,7 +5358,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -5384,7 +5431,7 @@ export type Database = {
           kind: string
           link_label: string | null
           link_url: string | null
-          links: Json
+          links: NonNullable<Json>
           min_level: number
           parent_task_id: number | null
           queue_closed_at: string | null
@@ -5418,13 +5465,7 @@ export type Database = {
         | "deadline"
         | "recrutare"
       member_role:
-        | "recrut"
-        | "voluntar"
-        | "activ"
-        | "vot"
-        | "bce"
-        | "bc"
-        | "moderator"
+        "recrut" | "voluntar" | "activ" | "vot" | "bce" | "bc" | "moderator"
       member_status: "activ" | "inactiv" | "alumni"
       noti_kind: "announce" | "deadline" | "event" | "task" | "system"
       task_status:
@@ -5476,8 +5517,7 @@ export type Tables<
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
@@ -5501,8 +5541,7 @@ export type TablesInsert<
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
@@ -5526,8 +5565,7 @@ export type TablesUpdate<
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["Enums"] | { schema: keyof DatabaseWithoutInternals },
   EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
@@ -5592,4 +5630,3 @@ export const Constants = {
     },
   },
 } as const
-

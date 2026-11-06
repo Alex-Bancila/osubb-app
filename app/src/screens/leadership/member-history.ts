@@ -104,7 +104,9 @@ export function memberTaskPresentation(
     campaign_id: row.campaign_id,
     duplicated_from_task_id: row.duplicated_from_task_id,
     queue_closed_at: row.queue_closed_at,
-    links: row.links,
+    // A function result types `links` as nullable; the Task column is
+    // `not null default '[]'`, so the fallback never runs (#1199).
+    links: row.links ?? [],
     group: name
       ? {
           name,

@@ -12,7 +12,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
-    "gen:types": "npx supabase gen types typescript --local --workdir .. > src/lib/database.types.ts",
+    "gen:types": "npx supabase gen types typescript --local --workdir .. | node ../scripts/format-db-types.mjs > src/lib/database.types.ts",
     "lint": "oxlint --deny-warnings",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

@@ -140,9 +140,22 @@ jobs:
       # column then fails the PR that ships it, instead of failing the demo
       # three screens away. This is the only job with a live database, which is
       # why the check lives here rather than beside the other frontend gates.
+      # From CLI 2.122 the generator prints unformatted types, so the output
+      # goes through scripts/format-db-types.mjs and the root's pinned Prettier,
+      # as `npm run gen:types` does (#1199).
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install the root tools
+        run: npm ci
+
       - name: Generated types match the schema
         run: |
-          supabase gen types typescript --local > /tmp/database.types.ts
+          set -o pipefail
+          supabase gen types typescript --local | node scripts/format-db-types.mjs > /tmp/database.types.ts
           if ! diff -q /tmp/database.types.ts app/src/lib/database.types.ts >/dev/null; then
             echo "::error::app/src/lib/database.types.ts is stale. Run 'npm run gen:types' in app/ and commit the result."
             diff -u app/src/lib/database.types.ts /tmp/database.types.ts | head -60
