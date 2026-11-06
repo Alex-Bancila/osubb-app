@@ -3,19 +3,19 @@
 Run the complete pgTAP suite with the repository's pinned Supabase CLI:
 
 ```sh
-npx --yes supabase@2.117.0 test db
+npx --yes supabase@2.122.1 test db
 ```
 
 Pass a file path to run one suite while developing:
 
 ```sh
-npx --yes supabase@2.117.0 test db supabase/tests/rls_teams_reference.test.sql
+npx --yes supabase@2.122.1 test db supabase/tests/rls_teams_reference.test.sql
 ```
 
 On NixOS, run the same commands through the compatibility wrapper:
 
 ```sh
-nix run --impure nixpkgs#steam-run -- npx --yes supabase@2.117.0 test db
+nix run --impure nixpkgs#steam-run -- npx --yes supabase@2.122.1 test db
 ```
 
 ## Shared helpers
@@ -78,13 +78,13 @@ sessions retain their existing timeouts and assertions.
 All SQL files except `demo_seed.test.sql` must pass without demo data:
 
 ```bash
-npx --yes supabase@2.117.0 db reset --no-seed
+npx --yes supabase@2.122.1 db reset --no-seed
 test_suites=()
 for suite in supabase/tests/*.sql; do
   [[ "$suite" == supabase/tests/demo_seed.test.sql ]] || test_suites+=("$suite")
 done
-npx --yes supabase@2.117.0 test db "${test_suites[@]}"
-npx --yes supabase@2.117.0 db reset
+npx --yes supabase@2.122.1 test db "${test_suites[@]}"
+npx --yes supabase@2.122.1 db reset
 ```
 
 The final reset restores the normal seeded development database.

@@ -124,8 +124,11 @@ if [ "$ONLY" = all ] || [ "$ONLY" = db ]; then
 
   step "db: seed.sql is re-runnable" bash scripts/check-seed-rerunnable.sh
 
+  # From CLI 2.122 the generator prints unformatted types; format-db-types.mjs
+  # prints them as npm run gen:types and CI do (#1199).
   step "db: generated types match the schema" bash -c '
-    npx supabase gen types typescript --local > /tmp/database.types.ts
+    set -o pipefail
+    npx supabase gen types typescript --local | node scripts/format-db-types.mjs > /tmp/database.types.ts
     if ! diff -q /tmp/database.types.ts app/src/lib/database.types.ts >/dev/null; then
       echo "database.types.ts is STALE — run npm run gen:types in app/ and commit"
       diff -u app/src/lib/database.types.ts /tmp/database.types.ts | head -60

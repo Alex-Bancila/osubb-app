@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
-  SUPABASE_CLI_VERSION: 2.117.0
+  SUPABASE_CLI_VERSION: 2.122.1
   # The deploy jobs' Wrangler, pinned so a Cloudflare release never changes a
   # deploy between two merges (wrangler-action would install `latest`).
   WRANGLER_VERSION: 4.139.0
@@ -60,10 +60,14 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
+      # The Release runs `db push` with its own copy of the pin, so a bump
+      # that misses it is refused here, before it reaches production (#1199).
       - name: CLI pin matches root package.json
         run: |
           pinned="$(node -p "require('./package.json').devDependencies.supabase")"
           test "$pinned" = "$SUPABASE_CLI_VERSION" || { echo "::error::root package.json pins supabase $pinned but CI uses $SUPABASE_CLI_VERSION"; exit 1; }
+          release="$(sed -n 's/^  SUPABASE_CLI_VERSION:[[:space:]]*\([^[:space:]]*\).*/\1/p' .github/workflows/release-production.yml | head -1)"
+          test "$release" = "$pinned" || { echo "::error::.github/workflows/release-production.yml pins supabase '${release:-unread}' but root package.json pins $pinned"; exit 1; }
 
       - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1.7.1
         with:
@@ -136,9 +140,22 @@ jobs:
       # column then fails the PR that ships it, instead of failing the demo
       # three screens away. This is the only job with a live database, which is
       # why the check lives here rather than beside the other frontend gates.
+      # From CLI 2.122 the generator prints unformatted types, so the output
+      # goes through scripts/format-db-types.mjs and the root's pinned Prettier,
+      # as `npm run gen:types` does (#1199).
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install the root tools
+        run: npm ci
+
       - name: Generated types match the schema
         run: |
-          supabase gen types typescript --local > /tmp/database.types.ts
+          set -o pipefail
+          supabase gen types typescript --local | node scripts/format-db-types.mjs > /tmp/database.types.ts
           if ! diff -q /tmp/database.types.ts app/src/lib/database.types.ts >/dev/null; then
             echo "::error::app/src/lib/database.types.ts is stale. Run 'npm run gen:types' in app/ and commit the result."
             diff -u app/src/lib/database.types.ts /tmp/database.types.ts | head -60
