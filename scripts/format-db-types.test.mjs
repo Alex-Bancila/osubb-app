@@ -68,6 +68,21 @@ test("the command line reads stdin and writes stdout", () => {
   assert.match(run.stdout, /\n {10}member_id: string\n/);
 });
 
+// The generator connects to the database before it prints, so the formatter
+// starts reading an empty pipe. On Linux that pipe can be non-blocking: a
+// synchronous read of fd 0 then fails with EAGAIN (CI, PR #1205), so the
+// formatter must wait for the stream to end.
+test("a writer that prints late is waited for, through a shell pipe as CI runs it", () => {
+  const script = join(here, "format-db-types.mjs");
+  const run = spawnSync(
+    "bash",
+    ["-c", `set -o pipefail; (sleep 1; printf '%s' "$RAW") | node "$0"`, script],
+    { env: { ...process.env, RAW }, encoding: "utf8" },
+  );
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stdout, /\n {10}member_id: string\n/);
+});
+
 test("an empty input fails, so a generator that printed nothing never empties the file", () => {
   const run = spawnSync(process.execPath, [join(here, "format-db-types.mjs")], {
     input: "\n",

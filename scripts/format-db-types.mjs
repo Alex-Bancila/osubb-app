@@ -8,7 +8,6 @@
 // semicolons) must not reach a file CI compares byte for byte.
 //
 //   supabase gen types typescript --local | node scripts/format-db-types.mjs
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { format } from "prettier";
 
@@ -16,8 +15,17 @@ export async function formatDbTypes(text) {
   return format(text, { parser: "typescript", semi: false });
 }
 
+// Read stdin as a stream, never with readFileSync(0): the generator connects
+// to the database before it prints, and on Linux an empty non-blocking pipe
+// makes a synchronous read fail with EAGAIN (PR #1205).
+async function readStdin() {
+  const chunks = [];
+  for await (const chunk of process.stdin) chunks.push(chunk);
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const input = readFileSync(0, "utf8");
+  const input = await readStdin();
   if (input.trim() === "") {
     process.stderr.write("format-db-types: no types on stdin\n");
     process.exit(1);
