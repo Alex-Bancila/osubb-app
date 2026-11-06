@@ -1,6 +1,6 @@
 # Codebase audit — 2026-10-30
 
-**Status 2026-11-05:** every high finding and 23 of the 27 mediums are fixed and merged on `main`, and staging runs them. Production does not yet: the last Release is 2026-10-25 at `0e6d3781`, before any of these fixes. The findings below are kept as written on 2026-10-30.
+**Status 2026-11-06:** every high finding and 24 of the 27 mediums are fixed, and production has run them since the Release of 2026-11-05 at `280814d1` (tag `release/2026-11-05-280814d`). Every low finding is fixed, filed or decided. The findings below are kept as written on 2026-10-30.
 
 | Finding                     | Issue                                 | PR                                    |
 | --------------------------- | ------------------------------------- | ------------------------------------- |
@@ -10,15 +10,46 @@
 | M6 · M7 · M10 · M11 · M12   | #1145 · #1130 · #1131 · #1146 · #1132 | #1164 · #1157 · #1160 · #1163 · #1159 |
 | M13 · M14 · M15 · M16 · M17 | #1133 · #1134 · #1147 · #1148 · #1135 | #1172 · #1171 · #1177 · #1169 · #1166 |
 | M18 · M19 · M21 · M22 · M23 | #1136 · #1137 · #1149 · #1138 · #1139 | #1154 · #1179 · #1170 · #1153 · #1158 |
+| M24                         | #1140                                 | #1184                                 |
 | M25 · M26 · M27, with L83   | #1141 · #1142 · #1143                 | #1165 · #1167 · #1168                 |
 
-Two races found while fixing these are fixed too: `duplicate_task` and `create_campaign` racing an archive (#1174, PR #1175, found with M6), and `delete_group` racing the naming of the board or the Adunarea Generală (#1176, PR #1178, found with M5).
+Two races found while fixing these are fixed too:
 
-**Still open:**
+- `duplicate_task` and `create_campaign` racing an archive (#1174, PR #1175, found with M6).
+- `delete_group` racing the naming of the board or the Adunarea Generală (#1176, PR #1178, found with M5).
 
-- M8 (#1150), M9 (#1151) and M20 (#1152) wait on Alex's answers in #1144, which also holds the low findings L4, L9, L30 and L40.
-- M24 (#1140): production runs Postgres 17.11 (read from the project's metadata on 2026-11-05), so the local and CI pin of 15 differs from it. Staging's version is not read yet.
-- The other 78 low findings are not filed as issues.
+M24 moved local and CI to Postgres 17, the major production runs (17.11), and the Release now fails when the two differ. Staging's version is not read yet.
+
+**Decided 2026-11-05 in #1144 (closed):**
+
+- Alex's answers cut M8 (#1150), M9 (#1151) and M20 (#1152) to one branch each.
+- They also turned four lows into issues: L4 (#1182), L9 (#1180), L30 (#1181) and L40 (#1183). #1183 is Privacy Notice 1.4, which ships in the same Release as #1151.
+- None of these is started.
+
+**Decided 2026-11-06:**
+
+- L13 is closed without a change. The migration role cannot revoke a grant `supabase_admin` made. `supabase/tests/conventions.test.sql` already pins that no `public` or `private` function calls `net.http_*`, and `net` is not exposed through the Data API. If it ever must be revoked, that is a dashboard step.
+- L81 is closed without a change. `cn@0.2.6` is shadcn's own zero-dependency drop-in for `clsx` + `tailwind-merge`, so inlining it would add two dependencies instead of removing one.
+- L82 becomes three issues: the Supabase CLI pin (#1199), react-router 8 (#1200) and marked 18 (#1201).
+
+**Filed 2026-11-06, not started:** the other 75 lows and the archive-dialog note of PR #1170, in 14 grouped issues. Each issue names its lows.
+
+| Issue | Lows                                     |
+| ----- | ---------------------------------------- |
+| #1185 | L1, L3, L8, L11, L12                     |
+| #1186 | L2, L5, L14, L15, L21, L23               |
+| #1187 | L16, L17, L18, L20, L22, L24             |
+| #1188 | L25–L29, L31                             |
+| #1189 | L6, L7, L32, L37                         |
+| #1190 | L34, L35, L36, L38                       |
+| #1191 | L10, L19, L42–L45                        |
+| #1192 | L47–L51, L56, L59, L60                   |
+| #1193 | L52–L55, L57, L58                        |
+| #1194 | L46, L61–L68, the archive-dialog note    |
+| #1195 | L69, L71–L75                             |
+| #1196 | L41, L70, L76–L79                        |
+| #1197 | L80                                      |
+| #1198 | L33, L39, the "Documentation drift" list |
 
 Whole-repository audit of `main` at `0e6d3781` (PR #1116): the Postgres backend (effective schema of 273 migrations, dumped from the local stack, three newest migrations read from file), the React app (`app/src`), the Edge Functions, scripts, CI/CD, config and docs. Eight parallel read-only auditors covered one slice each; every finding listed as **confirmed** was then re-verified by reading the definition and its callers (and, for the catalog claims, by a read-only query against the local database). Nothing was executed, nothing was changed.
 
