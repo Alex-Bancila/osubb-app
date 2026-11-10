@@ -9,11 +9,12 @@
 - **Amended:** 2026-09-27 — Declarative Web Push alongside the service-worker payload (#778); see the note under Privacy
 - **Amended:** 2026-10-06 — push stays on: self-repair on return to the foreground and before the switch reads off, one row per browser, Web Locks across tabs; see the note under Operations
 - **Amended:** 2026-10-06 — push on by default: Acasă asks once (**Pornește notificările**), and push switches itself back on, where the permission is still granted, for a Member whose session on that device ended while it was on; see the second 2026-10-06 note under Operations
+- **Amended:** 2026-11-10 — no Suppression table: Notifications are written for whoever the Fan-out decides on (rulings R32, R42, R43), and `notif_suppression`, which no Fan-out applied, is dropped (#1181, decision 3 of #1144); see Context and **Recipients and preferences**
 - **Related:** ADR-0001, ADR-0002, ADR-0005, #703 (outbox and `send-push`), #704 (service worker and device subscription), #635 (per-Member push preferences), `CONTEXT.md`
 
 ## Context
 
-In-app Notifications already exist: `notifications` rows are written by `private.notify`, the Task commands and the Fan-outs, and Suppression is applied where those rows are written — `notif_suppression` mutes BC and BCE for broadcast `task`, `event` and `deadline` kinds, while direct Notifications about a Member's own work always arrive. Nothing reaches a device that is not looking at the app.
+In-app Notifications already exist: `notifications` rows are written by `private.notify`, the Task commands and the Fan-outs, each for exactly the Members it decides on — a Group's Announcements and Events reach its Group Audience, never BC or the Moderator through membership (ruling R32) but a BC member through a Group position (R42), minus whoever unticked the Group in Grupuri preferate (R43) — while direct Notifications about a Member's own work always arrive. No Role is muted by kind: the `notif_suppression` table, which no Fan-out applied, was dropped by #1181. Nothing reaches a device that is not looking at the app.
 
 `push_tokens(member_id, token, platform)` exists with self-only select/insert/delete policies (#66) and no writer. `pg_cron` is installed (#69) and runs the daily deadline reminders. The Edge Functions `invite-member` and `csv-import` set the layout and test pattern for a function. The PWA registers a `vite-plugin-pwa` service worker in `generateSW` mode, and ADR-0002 reserved the move to `injectManifest` for the day Web Push needs a custom handler.
 
@@ -33,7 +34,7 @@ ADR-0005 deferred browser push until after the Task Tracker and Calendar and ask
 
 **Deduplication.** The in-app row is the unit of delivery. `private.notify`'s dedupe upsert of an unread row refreshes its text in place and does not push again; only an insert enqueues.
 
-**Suppression and preferences.** `notif_suppression` is honoured by construction — a `notifications` row exists only if the Fan-out decided it was deliverable — and is never re-applied at push time, which would silence BC's direct Task Notifications. The only push-time filter is #635's per-Member preferences, checked inside the enqueue trigger: a muted kind keeps its in-app row and writes no outbox row.
+**Recipients and preferences.** Who receives a Notification is decided once, where its row is written — a `notifications` row exists only if the Fan-out or the command decided its Member should have it — and is never judged again at push time, which could silence BC's direct Task Notifications. There is no Suppression table (#1181). The only push-time filter is #635's per-Member preferences, checked inside the enqueue trigger: a muted kind keeps its in-app row and writes no outbox row.
 
 **Privacy.** The payload carries the Notification's `id`, `title`, `body` and `link` and nothing else. A subscription is stored as the `PushSubscription` JSON in `push_tokens.token`, readable only by its Member, and deleted when the Member turns the device off or signs out on it.
 
@@ -56,7 +57,7 @@ ADR-0005 deferred browser push until after the Task Tracker and Calendar and ask
 
 ## Consequences
 
-- **Positive:** push rides the existing Notification rows, RLS, Suppression and `pg_cron`; one platform, one secret path, no new vendor or data processor.
+- **Positive:** push rides the existing Notification rows, RLS, the Fan-outs' recipient rules and `pg_cron`; one platform, one secret path, no new vendor or data processor.
 - **Positive:** delivery state is inspectable with SQL, and the outbox survives function or push-service outages through retries.
 - **Cost:** up to a minute of latency from the cron cadence, and one `select` per idle minute.
 - **Cost:** per environment, someone must generate the VAPID pair, set the three function secrets, create the `project_url` and `secret_key` Vault rows (`service_role_key` until #769), and deploy `send-push`. The production checklist (#77) carries this as one line; `docs/backend/push.md` (#703) is the runbook.

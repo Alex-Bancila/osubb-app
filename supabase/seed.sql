@@ -7,7 +7,7 @@
 -- with psql. See docs/backend/seeding-staging.md.
 --
 -- Reference lookups (roles, departments, rating_guide, task_difficulty_levels,
--- role levels, scoring guides, and notif_suppression) are seeded by MIGRATIONS so they exist
+-- role levels and scoring guides) are seeded by MIGRATIONS so they exist
 -- in every environment, production included. Do not duplicate them here.
 --
 -- Everything below is demo data and it never reaches production — production

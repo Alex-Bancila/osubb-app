@@ -1,11 +1,12 @@
--- #68: exact announcement broadcast recipients, suppression, and author exclusion.
+-- #68: exact announcement broadcast recipients and author exclusion.
 -- #861: the author's own read row, the announcement:<id> key and read-clears-notification.
+-- #1181: no suppression table; BCE hear a Group's Announcements like any member.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(20);
 
 create function pg_temp.u68(n integer) returns uuid language sql immutable as $$
   select ('68000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -28,24 +29,22 @@ from (values ('Root #68',1,'responsible'),('Root #68',2,'member'),
              ('Child #68',3,'member'),('Root #68',4,'member'),
              ('Child #68',5,'member')) as roster(name,n,role)
 join groups as grp on grp.name=roster.name;
-insert into notif_suppression(role,kind) values ('bce','announce');
 
 insert into announcements(title,body,group_id,audience,created_by)
 select 'Local #68','Body #68',id,'local',pg_temp.u68(1)
 from groups where name='Root #68';
 select set_eq(
 $$select member_id from notifications where title='Anunț nou: Local #68' and member_id::text like '68000000-%'$$,
-$$select pg_temp.u68(n) from (values (2),(3),(6)) v(n)$$,
-'local fan-out reaches root and descendant roster/Automatic Members, never BC (u68(8), level 6 and an Automatic Member) -- R32');
+$$select pg_temp.u68(n) from (values (2),(3),(4),(6)) v(n)$$,
+'local fan-out reaches root and descendant roster/Automatic Members, BCE included, never BC (u68(8), level 6 and an Automatic Member) -- R32');
 select is((select count(*) from notifications where title='Anunț nou: Local #68'),
-  3 + (select count(*) from profiles p join roles r on r.id=p.role
-       where p.email like '%@demo.osubb' and p.status='activ' and r.level>=3 and r.level<6
-         and not exists (select 1 from notif_suppression s where s.role=p.role and s.kind='announce')),
-'local broadcast includes every seeded Automatic Member below BC exactly once as well as the three fixture recipients (R32: no BC or Moderator)');
+  4 + (select count(*) from profiles p join roles r on r.id=p.role
+       where p.email like '%@demo.osubb' and p.status='activ' and r.level>=3 and r.level<6),
+'local broadcast includes every seeded Automatic Member below BC exactly once as well as the four fixture recipients (R32: no BC or Moderator)');
 select is((select count(*) from notifications where title='Anunț nou: Local #68' and member_id=pg_temp.u68(1)),0::bigint,
 'author receives no local Notification');
-select is((select count(*) from notifications where title='Anunț nou: Local #68' and member_id=pg_temp.u68(4)),0::bigint,
-'BCE is suppressed only because the lookup contains announce');
+select is((select count(*) from notifications where title='Anunț nou: Local #68' and member_id=pg_temp.u68(4)),1::bigint,
+'BCE on the roster receives the local broadcast (#1181: nothing suppresses it)');
 -- #843 (D14): the link opens the Announcement itself, not the feed.
 select ok((select bool_and(kind='announce' and body='Body #68'
                           and link='/anunturi?anunt=' || (select id from announcements where title='Local #68')::text)
@@ -57,30 +56,17 @@ select 'Org #68','Org body',id,'org',pg_temp.u68(1)
 from groups where name='Root #68';
 select set_eq(
 $$select member_id from notifications where title='Anunț nou: Org #68' and member_id::text like '68000000-%'$$,
-$$select pg_temp.u68(n) from (values (2),(3),(6),(7)) v(n)$$,
-'org Audience reaches every active fixture Member except author, suppressed BCE and BC (R32)');
+$$select pg_temp.u68(n) from (values (2),(3),(4),(6),(7)) v(n)$$,
+'org Audience reaches every active fixture Member except author and BC, BCE included (R32)');
 select is((select count(*) from notifications where title='Anunț nou: Org #68'),
 (select count(*) from private.group_audience((select id from groups where is_organization)) as r(member_id)
  join profiles p on p.id=r.member_id
  join roles rl on rl.id=p.role
- where r.member_id<>pg_temp.u68(1) and rl.level<6
-   and not exists (select 1 from notif_suppression s where s.role=p.role and s.kind='announce')),
-'org fan-out total exactly equals the shared Group Audience minus author, suppression, BC and the Moderator (R32)');
+ where r.member_id<>pg_temp.u68(1) and rl.level<6),
+'org fan-out total exactly equals the shared Group Audience minus author, BC and the Moderator (R32)');
 select is((select group_id from announcements where title='Org #68'),
 (select id from groups where name='Root #68'),
 'organization Audience leaves the Origin Group unchanged');
-
--- Changing reference data changes recipients without changing trigger code.
-delete from notif_suppression where role='bce' and kind='announce';
-insert into announcements(title,body,group_id,audience,created_by)
-select 'Unsuppressed #68','Body',id,'local',pg_temp.u68(1)
-from groups where name='Root #68';
-select is((select count(*) from notifications where title='Anunț nou: Unsuppressed #68'),
-  4 + (select count(*) from profiles p join roles r on r.id=p.role
-       where p.email like '%@demo.osubb' and p.status='activ' and r.level>=3 and r.level<6),
-'removing suppression restores BCE delivery while retaining all seeded Automatic Members');
-select is((select count(*) from notifications where title='Anunț nou: Unsuppressed #68' and member_id=pg_temp.u68(4)),1::bigint,
-'BCE receives the broadcast when its suppression row is absent');
 
 -- The authenticated actor wins over a forgeable created_by field for echo suppression.
 select pg_temp.test_login_leadership(pg_temp.u68(1));
