@@ -1,7 +1,7 @@
 -- privacy_notice_version.test.sql -- #860, R58, #1183: a Privacy Notice bump
 -- by migration, here the 1.4 bump.
 --
--- 20261110210428_privacy_notice_1_4.sql (the 1.4 notice, #1183) moves
+-- 20261110221753_privacy_notice_1_4.sql (the 1.4 notice, #1183) moves
 -- org_settings privacy_notice_version from 1.3 to 1.4, as
 -- 20261018180000_privacy_notice_1_3.sql (R58 part 3) moved it from 1.2 to 1.3,
 -- 20261018140000_privacy_notice_1_2.sql (R58 part 1) from 1.1 to 1.2 and
