@@ -7,9 +7,9 @@
 - **Superseded by:** —
 - **Amended:** 2026-09-25 — re-examined against OneSignal, FCM, Novu, Knock, Courier, MagicBell, Pusher Beams and a Cloudflare Worker sender and kept (ruling L8 of `docs/superpowers/plans/2026-09-25-launch-infrastructure-grill.md`); the cron-to-function authentication changes and six hardening items are added; see the notes below
 - **Amended:** 2026-09-27 — Declarative Web Push alongside the service-worker payload (#778); see the note under Privacy
-- **Amended:** 2026-11-10 — no Suppression table: Notifications are written for whoever the Fan-out decides on (rulings R32, R42, R43), and `notif_suppression`, which no Fan-out applied, is dropped (#1181, decision 3 of #1144); see Context and **Recipients and preferences**
 - **Amended:** 2026-10-06 — push stays on: self-repair on return to the foreground and before the switch reads off, one row per browser, Web Locks across tabs; see the note under Operations
 - **Amended:** 2026-10-06 — push on by default: Acasă asks once (**Pornește notificările**), and push switches itself back on, where the permission is still granted, for a Member whose session on that device ended while it was on; see the second 2026-10-06 note under Operations
+- **Amended:** 2026-11-10 — no Suppression table: Notifications are written for whoever the Fan-out decides on (rulings R32, R42, R43), and `notif_suppression`, which no Fan-out applied, is dropped (#1181, decision 3 of #1144); see Context and **Recipients and preferences**
 - **Related:** ADR-0001, ADR-0002, ADR-0005, #703 (outbox and `send-push`), #704 (service worker and device subscription), #635 (per-Member push preferences), `CONTEXT.md`
 
 ## Context
