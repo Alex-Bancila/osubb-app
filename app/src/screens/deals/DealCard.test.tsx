@@ -34,7 +34,7 @@ const DEAL: DealPresentation = {
   publishedLabel: '7 oct. · 13:00',
   deadline: null,
   links: [],
-  code: 'CAFE50',
+  hasCode: true,
   isRead: true,
   isRevealed: false,
 };
@@ -100,7 +100,9 @@ describe('DealCard (R45)', () => {
   });
 
   it('gives a Deal without a code no stub', () => {
-    renderCard(<DealCard deal={{ ...DEAL, code: null }} onOpen={() => {}} />);
+    renderCard(
+      <DealCard deal={{ ...DEAL, hasCode: false }} onOpen={() => {}} />,
+    );
     const card = screen.getByRole('article', { name: DEAL.title });
     expect(stubOf(card)).toBeNull();
     expect(card.querySelector('[data-slot="card-footer"]')).toBeNull();

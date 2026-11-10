@@ -54,7 +54,7 @@ function deal(overrides: Partial<RawDealRow>): RawDealRow {
     deadline: null,
     created_by: 'author',
     kind: 'deal',
-    code: null,
+    has_code: false,
     links: [],
     announcement_reads: [],
     deal_code_reveals: [],
@@ -67,7 +67,7 @@ const ROWS = [
     id: 1,
     title: 'Reducere la cafenea',
     published_at: '2026-10-05T10:00:00Z',
-    code: 'CAFE10',
+    has_code: true,
     links: [{ label: 'Meniu', url: 'https://cafe.example.ro' }],
   }),
   deal({
@@ -114,6 +114,23 @@ describe('Anunțuri › OSUBB Deals (R45)', () => {
     expect(titles).toEqual(['Bilete la festival', 'Reducere la cafenea']);
     expect(screen.queryByText('Ofertă expirată')).toBeNull();
     expect(supabaseMock.eq).toHaveBeenCalledWith('kind', 'deal');
+  });
+
+  it('reads has_code with the Deals, never the code itself (#1152)', async () => {
+    renderAt('/anunturi/deals');
+    await screen.findByRole('list', { name: 'Deal-uri OSUBB' });
+    const reads = supabaseMock.select.mock.calls.map(([fields]) =>
+      String(fields),
+    );
+    expect(reads.some((fields) => /\bhas_code\b/.test(fields))).toBe(true);
+    for (const fields of reads) {
+      expect(fields).not.toMatch(/(^|[\s,(])code(?=[\s,)]|$)/m);
+    }
+    // Nothing is revealed, so no code is asked for either.
+    expect(supabaseMock.rpc).not.toHaveBeenCalledWith(
+      'reveal_deal_code',
+      expect.anything(),
+    );
   });
 
   it('gives a Deal with a code its hidden stub, and one without none', async () => {

@@ -41,7 +41,7 @@ export default function DealCard({
 }: DealCardProps) {
   const titleId = `deal-title-${deal.id}`;
   const expired = !isDealActive(deal);
-  const hasStub = deal.code !== null;
+  const hasStub = deal.hasCode;
   const hasFooter = Boolean(footerMeta) || Boolean(footerActions);
 
   return (

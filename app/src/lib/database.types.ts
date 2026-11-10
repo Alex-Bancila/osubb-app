@@ -72,6 +72,7 @@ export type Database = {
           form_url: string | null
           from_event: boolean
           group_id: number
+          has_code: boolean
           id: number
           kind: string
           links: NonNullable<Json>
@@ -97,6 +98,7 @@ export type Database = {
           form_url?: string | null
           from_event?: boolean
           group_id: number
+          has_code?: never
           id?: never
           kind?: string
           links?: NonNullable<Json>
@@ -121,6 +123,7 @@ export type Database = {
           form_url?: string | null
           from_event?: boolean
           group_id?: number
+          has_code?: never
           id?: never
           kind?: string
           links?: NonNullable<Json>
@@ -3020,6 +3023,7 @@ export type Database = {
           form_url: string | null
           from_event: boolean
           group_id: number
+          has_code: boolean
           id: number
           kind: string
           links: NonNullable<Json>
@@ -3775,6 +3779,10 @@ export type Database = {
         }
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      deal_code_for_edit: {
+        Args: { p_announcement_id: number }
+        Returns: string
+      }
       deal_code_reveal_count: {
         Args: { p_announcement_id: number }
         Returns: number
@@ -4316,6 +4324,7 @@ export type Database = {
           form_url: string | null
           from_event: boolean
           group_id: number
+          has_code: boolean
           id: number
           kind: string
           links: NonNullable<Json>

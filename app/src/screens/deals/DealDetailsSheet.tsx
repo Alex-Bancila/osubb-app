@@ -128,7 +128,7 @@ function DealDetails({
         className="text-sm leading-relaxed text-foreground/90"
       />
 
-      {deal.code && (
+      {deal.hasCode && (
         // In the sheet the stub stands alone, a ticket of its own.
         <div className="overflow-clip rounded-md bg-card ring-1 ring-foreground/10">
           <DealCodeStub deal={deal} torn={false} />
@@ -146,7 +146,7 @@ function DealDetails({
         }}
       />
 
-      {deal.code && seesRevealCount(viewer) && (
+      {deal.hasCode && seesRevealCount(viewer) && (
         <DealRevealCount dealId={deal.id} />
       )}
 

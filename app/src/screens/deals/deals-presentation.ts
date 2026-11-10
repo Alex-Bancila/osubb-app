@@ -26,8 +26,12 @@ export type DealPresentation = {
   publishedLabel: string;
   deadline: string | null;
   links: AttachedLink[];
-  /** The Deal Code, or null when the Deal has none. */
-  code: string | null;
+  /**
+   * Whether the Deal has a Deal Code. The code itself is never on the row
+   * (#1152): the stub asks `reveal_deal_code`, the edit sheet
+   * `deal_code_for_edit`.
+   */
+  hasCode: boolean;
   isRead: boolean;
   /** The viewer opened the code before, on any device (`deal_code_reveals`). */
   isRevealed: boolean;
@@ -37,7 +41,6 @@ export function toDealPresentation(
   row: RawDealRow,
   members?: ReadonlyMap<string, MemberIdentity>,
 ): DealPresentation {
-  const code = row.code?.trim() || null;
   return {
     id: row.id,
     title: row.title,
@@ -54,7 +57,7 @@ export function toDealPresentation(
     publishedLabel: formatAnnouncementDate(row.published_at),
     deadline: row.deadline ?? null,
     links: attachedLinksFrom(row.links),
-    code,
+    hasCode: row.has_code === true,
     isRead: (row.announcement_reads?.length ?? 0) > 0,
     isRevealed: (row.deal_code_reveals?.length ?? 0) > 0,
   };

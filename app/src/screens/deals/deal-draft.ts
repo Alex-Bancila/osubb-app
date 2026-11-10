@@ -21,18 +21,20 @@ export const EMPTY_DEAL_DRAFT: DealDraft = {
   code: '',
 };
 
+/**
+ * The stored Deal as the form holds it. The code is not on the row (#1152):
+ * the edit sheet reads it with `deal_code_for_edit` and passes it here.
+ */
 export function draftFromDeal(
-  deal: Pick<
-    DealPresentation,
-    'title' | 'body' | 'deadline' | 'links' | 'code'
-  >,
+  deal: Pick<DealPresentation, 'title' | 'body' | 'deadline' | 'links'>,
+  code: string | null,
 ): DealDraft {
   return {
     title: deal.title,
     body: deal.body,
     deadline: deal.deadline ? isoToBucharestWallTime(deal.deadline) : '',
     links: deal.links.map((link) => ({ ...link })),
-    code: deal.code ?? '',
+    code: code ?? '',
   };
 }
 

@@ -10,7 +10,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(104);
+select plan(105);
 
 create function pg_temp.u47(n integer) returns uuid language sql immutable as $$
   select ('47000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -108,6 +108,13 @@ select pg_temp.test_login_leadership(pg_temp.u47(2));
 update announcements set pinned = true where title = 'Ann approved later #4700';
 reset role;
 select is((pg_temp.ann('Ann approved later #4700')).approval_status, 'approved', 'a pin by BC is not a content edit');
+-- #1152: has_code is computed from code after the BEFORE triggers, so it is
+-- null in the stamp's NEW; a write that changes nothing must still read as no change.
+select pg_temp.test_login_leadership(pg_temp.u47(1));
+update announcements set title = title where title = 'Ann approved later #4700';
+reset role;
+select is((pg_temp.ann('Ann approved later #4700')).approval_status, 'approved',
+  'the author''s write that changes nothing asks nobody again (#1152: has_code is no content)');
 select pg_temp.test_login_leadership(pg_temp.u47(1));
 update announcements set body = 'edited by the author' where title = 'Ann approved later #4700';
 reset role;
