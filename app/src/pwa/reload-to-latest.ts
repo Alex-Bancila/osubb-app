@@ -5,9 +5,11 @@
  * the service worker in control keeps answering navigations with the
  * precached `index.html` of the old build until a new worker takes over. So
  * this asks the registration for an update, lets a new worker that is waiting
- * (or finishes installing within a few seconds) take control with the same
- * `SKIP_WAITING` message `PwaUpdatePrompt` sends, and reloads once it does.
- * Without a service worker, or on any failure, it simply reloads.
+ * (or finishes installing within a few seconds) take control with a
+ * `SKIP_WAITING` message, and reloads once it does. With nothing waiting —
+ * the new build already active, as on a page no worker controls — or without
+ * a service worker, or on any failure, it simply reloads. `PrivacyGate` and
+ * the update prompt's tap both land here.
  */
 const INSTALL_WAIT_MS = 10_000;
 const TAKEOVER_WAIT_MS = 5_000;

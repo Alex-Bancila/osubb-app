@@ -2,10 +2,11 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { reloadToLatestVersion } from './reload-to-latest';
 import { watchForUpdates } from './update-checks';
 
 function PwaUpdatePrompt() {
-  const [updateError, setUpdateError] = useState(false);
+  const [updating, setUpdating] = useState(false);
   // An app left open or brought back looks for a new build (#1137).
   const stopWatching = useRef<(() => void) | null>(null);
   // Registration resolves after the first render: one that lands once the
@@ -13,7 +14,6 @@ function PwaUpdatePrompt() {
   const mounted = useRef(false);
   const {
     needRefresh: [needRefresh, setNeedRefresh],
-    updateServiceWorker,
   } = useRegisterSW({
     onRegisteredSW(_url, registration) {
       if (!registration || !mounted.current) return;
@@ -32,13 +32,15 @@ function PwaUpdatePrompt() {
 
   if (!needRefresh) return null;
 
-  async function applyUpdate() {
-    setUpdateError(false);
-    try {
-      await updateServiceWorker(true);
-    } catch {
-      setUpdateError(true);
-    }
+  // Not the plugin's updateServiceWorker(): it only messages a waiting
+  // worker and reloads on a controller change. A page opened before any
+  // worker existed (an installed app's first launch) is never controlled, so
+  // a build found while it stays open is already active: nothing waits and
+  // no controller changes, and the tap did nothing. The helper hands over to
+  // a waiting build or, with nothing waiting, reloads onto the active one.
+  function applyUpdate() {
+    setUpdating(true);
+    void reloadToLatestVersion();
   }
 
   return (
@@ -48,15 +50,9 @@ function PwaUpdatePrompt() {
         <AlertDescription>
           O versiune nouă a aplicației este disponibilă.
         </AlertDescription>
-        {updateError && (
-          <p className="mt-2 text-sm text-destructive">
-            Nu am putut actualiza aplicația. Verifică internetul și încearcă din
-            nou.
-          </p>
-        )}
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button onClick={() => void applyUpdate()}>
-            Actualizează aplicația
+          <Button onClick={applyUpdate} disabled={updating}>
+            {updating ? 'Se actualizează…' : 'Actualizează aplicația'}
           </Button>
           <Button variant="outline" onClick={() => setNeedRefresh(false)}>
             Mai târziu
