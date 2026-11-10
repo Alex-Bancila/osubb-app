@@ -18,7 +18,7 @@ import type { ReactNode } from 'react';
  */
 export const PRIVACY_NOTICE_VERSION = '1.4';
 /** The effective date as the document writes it (dd.mm.yyyy). */
-export const PRIVACY_NOTICE_DATE = '10.11.2026';
+export const PRIVACY_NOTICE_DATE = '11.11.2026';
 export const PRIVACY_NOTICE_TITLE =
   'Politica de confidențialitate a aplicației OSUBB';
 

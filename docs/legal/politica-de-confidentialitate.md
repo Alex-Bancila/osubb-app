@@ -3,7 +3,8 @@
   și pentru pasul de confirmare de după conectare (#771, ruling L16). Textul versiunii 1.0 a fost
   aprobat de Alex pe 2026-09-27; corecturile versiunii 1.1 (#860), pe 2026-09-29; versiunea 1.2
   (universitatea, ruling R58), aprobată de Alex pe 2026-10-18; versiunea 1.3 (deciziile automate,
-  ruling R58, partea a treia), aprobată de Alex pe 2026-10-20.
+  ruling R58, partea a treia), aprobată de Alex pe 2026-10-20; versiunea 1.4 (notificările citite,
+  jurnalele de conectare și cine află de semnalele de retenție, #1183), aprobată de Alex pe 2026-11-11.
   Regula versiunilor: orice schimbare de conținut incrementează „Versiunea” și data, în acest fișier și
   în app/src/screens/privacy/PrivacyNoticeContent.tsx, iar în același pull request o migrație ridică
   în org_settings `privacy_notice_version` la același număr; aplicația cere apoi fiecărui Membru o
@@ -13,7 +14,7 @@
 
 # Politica de confidențialitate a aplicației OSUBB
 
-**Versiunea 1.4 · în vigoare de la 10.11.2026**
+**Versiunea 1.4 · în vigoare de la 11.11.2026**
 
 Aplicația OSUBB („app.osubb.ro”) este aplicația internă a Organizației Studenților din Universitatea Babeș-Bolyai (OSUBB). Este folosită doar de membrii organizației, pe bază de invitație, pentru a organiza activitatea de voluntariat: taskuri și puncte, calendarul evenimentelor, anunțuri și notificări.
 
@@ -108,7 +109,7 @@ Când schimbăm această politică, publicăm noua versiune în aplicație, cu n
 
 ---
 
-_Versiunea 1.4 — 10.11.2026. Secțiunea „Cât păstrăm datele” spune cât se păstrează notificările citite (90 de zile) și jurnalele de conectare (7 zile, inclusiv după ștergerea contului); secțiunea „Decizii automate” spune cine primește notificările despre semnalele de retenție._
+_Versiunea 1.4 — 11.11.2026. Secțiunea „Cât păstrăm datele” spune cât se păstrează notificările citite (90 de zile) și jurnalele de conectare (7 zile, inclusiv după ștergerea contului); secțiunea „Decizii automate” spune cine primește notificările despre semnalele de retenție._
 
 _Versiunea 1.3 — 20.10.2026. Secțiunea „Decizii automate” nu mai descrie o regulă automată de promovare: nimic nu schimbă automat rolul nimănui, iar evaluările de rol sunt liste pentru BC._
 
