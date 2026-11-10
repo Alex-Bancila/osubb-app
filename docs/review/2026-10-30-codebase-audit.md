@@ -25,7 +25,7 @@ M24 moved local and CI to Postgres 17, the major production runs (17.11), and th
 
 - Alex's answers cut M8 (#1150), M9 (#1151) and M20 (#1152) to one branch each.
 - They also turned four lows into issues: L4 (#1182), L9 (#1180), L30 (#1181) and L40 (#1183). #1183 is Privacy Notice 1.4, which ships in the same Release as #1151.
-- Built 2026-11-10 and 2026-11-11, one PR each. M8, M9 and M20 are in the table above. L4 is PR #1207, L9 PR #1210 and L30 PR #1209, all merged. L40 is PR #1212, which waits for Alex to approve the Notice text.
+- Built 2026-11-10 and 2026-11-11, one PR each. M8, M9 and M20 are in the table above. L4 is PR #1207, L9 PR #1210, L30 PR #1209 and L40 PR #1212 (Privacy Notice 1.4, approved by Alex on 2026-11-11), all merged. Like M8, M9 and M20, they reach production at the next Release.
 
 **Decided 2026-11-06:**
 
