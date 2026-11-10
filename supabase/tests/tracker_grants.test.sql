@@ -124,8 +124,8 @@ select is(pg_temp.ddl_adjacent_grants('service_role'), '{}'::text[],
 -- is select-only for authenticated, since #327-#345's commands own their
 -- writes -- #345 closed the last of them, `tasks`, along with the two legacy
 -- tables that used to appear here with full DML.
--- points_ledger keeps INSERT for authenticated: the sanction path
--- (points_ledger_create_sanction) is still a direct, policy-gated write, not a command.
+-- points_ledger lost INSERT for authenticated in #1182: no client writes the
+-- ledger until #104 builds a Sanction command, and its id sequence went with it.
 -- service_role is untouched by #345 -- narrowing it further is #295's audit.
 
 create temporary table expected_table_privs (
@@ -138,7 +138,7 @@ create temporary table expected_table_privs (
 insert into expected_table_privs (object_name, role_name, expected) values
   ('tasks',                    'authenticated', 'SELECT'),
   ('tasks',                    'service_role',  'DELETE,INSERT,SELECT,UPDATE'),
-  ('points_ledger',            'authenticated', 'INSERT,SELECT'),
+  ('points_ledger',            'authenticated', 'SELECT'),
   ('points_ledger',            'service_role',  'SELECT'),
   ('task_activity',            'authenticated', 'SELECT'),
   ('task_activity',            'service_role',  'INSERT,SELECT'),
@@ -190,7 +190,7 @@ create temporary table expected_sequence_privs (
 insert into expected_sequence_privs (object_name, role_name, expected) values
   ('tasks_id_seq',                    'authenticated', 'SELECT,USAGE'),
   ('tasks_id_seq',                    'service_role',  'SELECT,USAGE'),
-  ('points_ledger_id_seq',            'authenticated', 'SELECT,USAGE'),
+  ('points_ledger_id_seq',            'authenticated', ''),
   ('points_ledger_id_seq',            'service_role',  ''),
   ('task_activity_id_seq',            'authenticated', ''),
   ('task_activity_id_seq',            'service_role',  'SELECT,USAGE'),
@@ -409,10 +409,9 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   ('simulate_role_evaluation',      'p_kind text, p_from date, p_to date, p_floor integer, p_percent integer, p_cutoff date', false, true, false, false),
   ('set_promotion_threshold',       'p_kind text, p_threshold integer', false, true, false, false),
   ('reject_promotion_candidate',    'p_candidate_id bigint, p_reason text', false, true, false, false),
-  -- #866 (ruling R30): the share command and the Praguri read. Same wrapper
-  -- shape; evaluation_percents() is a security-invoker read, so no _impl.
+  -- #866 (ruling R30): the share command. Same wrapper shape. Its Praguri
+  -- read, evaluation_percents(), was dropped by #1206.
   ('set_evaluation_percent',        'p_kind text, p_percent integer', false, true, false, false),
-  ('evaluation_percents',           '',                              false, true, false, false),
   -- #771: the Privacy Acknowledgement command and BC's status read. Same
   -- wrapper shape -- the status read's level >= 6 gate lives in the body.
   ('acknowledge_privacy_notice',    'p_version text',                false, true,  false, false),

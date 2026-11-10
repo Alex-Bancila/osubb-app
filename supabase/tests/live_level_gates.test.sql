@@ -150,10 +150,14 @@ reset role;
 select pg_temp.test_login('e4700000-0000-0000-0000-000000000006', '{"member_role":"bc","member_level":6}');
 select is((select count(*) from public.points_ledger), 1::bigint,
   'a live BC reads a colleague''s ledger row');
-select lives_ok(
+-- #1182: the ledger takes no client insert at all, so the write gate this
+-- section used to pin is gone; the stale-token reads above and below still
+-- pin the live level.
+select throws_ok(
   $$ insert into public.points_ledger (member_id, delta, reason, awarded_by, note)
      values ('e4700000-0000-0000-0000-000000000000', -2, 'sanction', 'e4700000-0000-0000-0000-000000000006', 'live bc') $$,
-  'a live BC records a sanction');
+  '42501', 'permission denied for table points_ledger',
+  'not even a live BC records a sanction by a direct insert: the table grant is gone (#1182)');
 reset role;
 
 select pg_temp.test_login('e4700000-0000-0000-0000-000000000035', '{"member_role":"bce","member_level":5}');

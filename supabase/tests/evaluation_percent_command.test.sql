@@ -5,18 +5,20 @@
 -- adunarea_generala -- since R58 evaluation_settings.activ_percent and
 -- vot_percent; before, the top_percent rule's percent and
 -- org_settings.vote_retention_percent), every change logged in
--- promotion_threshold_changes (field percent); public.evaluation_percents(),
--- the Praguri read; and set_org_setting no longer writing y.
+-- promotion_threshold_changes (field percent); and set_org_setting no longer
+-- writing y. The Praguri read, public.evaluation_percents(), is gone (#1206):
+-- the shares and their log are read from their tables.
 --
 -- In order: a held-lock probe of (47, 1), first -- before this transaction
 -- takes the lock or writes a row the remote session would then wait on
 -- (which would make the probe pass without the advisory lock); the
--- functions and their privileges; the value, answered before the gate; the
--- gate (claimless, Voluntar, BCE, deactivated BC, anon); BC's and the
--- Moderator's writes, read back and audited; PT409 nothing_to_update; the
--- log's percent shape; the read for a Member below BC; set_org_setting's
--- refusal; a Role Evaluation of each kind ranking with the share it is
--- given, and a run with another share writing it through (R58).
+-- functions and their privileges, and the dropped read; the value, answered
+-- before the gate; the gate (claimless, Voluntar, BCE, deactivated BC, anon);
+-- BC's and the Moderator's writes, read back and audited; PT409
+-- nothing_to_update; the log's percent shape; the shares and the log for a
+-- Member below BC; set_org_setting's refusal; a Role Evaluation of each kind
+-- ranking with the share it is given, and a run with another share writing
+-- it through (R58).
 --
 -- Fixtures (prefix 86600000-), written as the owner inside this rolled-back
 -- transaction. Every live active ladder holder the demo seed brings is
@@ -52,7 +54,7 @@ set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(48);
+select plan(47);
 
 -- ==================== 1. The lock ====================
 
@@ -115,26 +117,26 @@ select is(
 create temp table fns866 (fn text);
 insert into fns866 values
   ('public.set_evaluation_percent(text, integer)'),
-  ('private.set_evaluation_percent_impl(text, integer)'),
-  ('public.evaluation_percents()');
+  ('private.set_evaluation_percent_impl(text, integer)');
 
 select is(
   (select count(*) from fns866, unnest(array['anon', 'service_role', 'public']) as grantee
     where has_function_privilege(grantee, fn, 'execute')),
   0::bigint,
-  'anon, service_role and PUBLIC execute neither the command, its _impl nor the read');
+  'anon, service_role and PUBLIC execute neither the command nor its _impl');
 select is(
   (select count(*) from fns866 where has_function_privilege('authenticated', fn, 'execute')),
-  3::bigint,
-  'authenticated executes the wrapper, its _impl (called as the caller) and the read');
+  2::bigint,
+  'authenticated executes the wrapper and its _impl (called as the caller)');
 select results_eq(
   $$ select prosecdef from pg_proc
       where oid in ('private.set_evaluation_percent_impl(text, integer)'::regprocedure,
-                    'public.set_evaluation_percent(text, integer)'::regprocedure,
-                    'public.evaluation_percents()'::regprocedure)
+                    'public.set_evaluation_percent(text, integer)'::regprocedure)
       order by oid::regprocedure::text $$,
-  $$ values (false), (true), (false) $$,
-  'the _impl is security definer; the wrapper and the read (evaluation_percents, set_evaluation_percent) are security invoker');
+  $$ values (true), (false) $$,
+  'the _impl is security definer; the wrapper is security invoker');
+select hasnt_function('public', 'evaluation_percents', array[]::text[],
+  'public.evaluation_percents() is gone (#1206): Setări reads evaluation_settings and the log directly');
 
 -- ==================== Fixtures ====================
 
@@ -261,11 +263,6 @@ select results_eq(
 -- ==================== 5. BC and the Moderator write ====================
 
 select pg_temp.test_login_leadership('86600000-0000-0000-0000-000000000001');
-select results_eq(
-  $$ select kind, percent, changed_at, changed_by from public.evaluation_percents() $$,
-  $$ values ('voluntar_activ'::text, 30, null::timestamptz, null::uuid),
-            ('adunarea_generala'::text, 25, null::timestamptz, null::uuid) $$,
-  'before any change, evaluation_percents() reads x 30 and y 25, voluntar_activ first, with no last change');
 select lives_ok($$ select public.set_evaluation_percent('voluntar_activ', 40) $$,
   'BC sets x, the Voluntar Activ share, to 40 %');
 reset role;
@@ -300,13 +297,11 @@ select results_eq(
 
 select pg_temp.test_login_leadership('86600000-0000-0000-0000-000000000001');
 select results_eq(
-  $$ select kind, percent, changed_by from public.evaluation_percents() $$,
+  $$ select kind, to_value, changed_by
+      from public.promotion_threshold_changes where field = 'percent' order by id $$,
   $$ values ('voluntar_activ'::text, 40, '86600000-0000-0000-0000-000000000001'::uuid),
             ('adunarea_generala'::text, 50, '86600000-0000-0000-0000-000000000002'::uuid) $$,
-  'BC reads both shares in force and who changed each last');
-select is(
-  (select count(*) from public.evaluation_percents() where changed_at is null),
-  0::bigint, 'each share''s last change carries its instant');
+  'BC reads both percent rows of the log: each share, its new value and who changed it');
 
 -- ==================== 6. PT409 nothing_to_update ====================
 
@@ -351,18 +346,19 @@ select is(
   '''threshold''::text',
   'field defaults to threshold, so the run''s hand-over and set_promotion_threshold keep writing threshold rows');
 
--- ==================== 8. The read below BC ====================
+-- ==================== 8. The shares and the log below BC ====================
 
 select pg_temp.test_login_leadership('86600000-0000-0000-0000-000000000004');
 select results_eq(
-  $$ select kind, percent, changed_at, changed_by from public.evaluation_percents() $$,
-  $$ values ('voluntar_activ'::text, 40, null::timestamptz, null::uuid),
-            ('adunarea_generala'::text, 50, null::timestamptz, null::uuid) $$,
+  $$ select (select activ_percent from public.evaluation_settings where id = 1),
+            (select vot_percent from public.evaluation_settings where id = 1),
+            (select count(*) from public.promotion_threshold_changes where field = 'percent') $$,
+  $$ values (40, 50, 0::bigint) $$,
   'a Voluntar reads both shares but not who changed them -- the log stays level >= 6');
 reset role;
 select pg_temp.test_login('86600000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
 select is(
-  (select count(*) from public.evaluation_percents() where percent is not null),
+  (select count(*) from public.evaluation_settings),
   0::bigint, 'a claimless session reads no share (house rule 12)');
 reset role;
 
