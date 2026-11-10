@@ -51,7 +51,7 @@ function deal(overrides: Partial<RawDealRow>): RawDealRow {
     deadline: null,
     created_by: 'someone',
     kind: 'deal',
-    code: null,
+    has_code: false,
     links: [],
     announcement_reads: [],
     deal_code_reveals: [],
@@ -60,7 +60,7 @@ function deal(overrides: Partial<RawDealRow>): RawDealRow {
 }
 
 const ROWS = [
-  deal({ id: 1, title: 'Al meu', created_by: 'me', code: 'MINE' }),
+  deal({ id: 1, title: 'Al meu', created_by: 'me', has_code: true }),
   deal({
     id: 2,
     title: 'Expirat de la Coordonator',

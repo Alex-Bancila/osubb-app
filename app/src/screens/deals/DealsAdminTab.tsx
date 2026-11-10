@@ -91,7 +91,7 @@ export default function DealsAdminTab() {
                     sheet.open(opened);
                   }}
                   footerMeta={
-                    deal.code && (
+                    deal.hasCode && (
                       <DealRevealCount
                         dealId={deal.id}
                         className="m-0 flex items-center gap-1.5 text-xs text-muted-foreground"

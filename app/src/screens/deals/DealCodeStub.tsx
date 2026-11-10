@@ -3,11 +3,11 @@ import { Check, Copy, EyeOff } from 'lucide-react';
 import { focusRingInsetClass } from '../../components/layout';
 import { Button } from '../../components/ui/button';
 import { cn } from '../../lib/utils';
-import { useRevealDealCode } from '../../queries/deals';
+import { useDealCode, useRevealDealCode } from '../../queries/deals';
 import { dealCodeMask, type DealPresentation } from './deals-presentation';
 
 type DealCodeStubProps = {
-  deal: Pick<DealPresentation, 'id' | 'title' | 'code' | 'isRevealed'>;
+  deal: Pick<DealPresentation, 'id' | 'title' | 'hasCode' | 'isRevealed'>;
   /** Torn off a card (the perforation and notches); false inside a sheet. */
   torn?: boolean;
   /** An expired Deal on the team's page: the stub still works, greyed. */
@@ -23,8 +23,10 @@ type DealCodeStubProps = {
  * blurred, code-shaped mask — never the code — under "atinge ca să-l vezi",
  * and the whole stub is one button. Tapped, `reveal_deal_code` records the
  * reveal and answers the code, which shows large in monospace with Copiază.
- * A code the Member opened before, on any device, starts
- * revealed: the server remembers it, so it is asked for once.
+ * The row never carries the code (#1152): the answer is kept in the query
+ * cache. A code the Member opened before, on any device, starts revealed:
+ * the server remembers the reveal, and the stub asks the same command for
+ * the code, which records nothing new.
  */
 export function DealCodeStub({
   deal,
@@ -34,35 +36,38 @@ export function DealCodeStub({
   className,
 }: DealCodeStubProps) {
   const reveal = useRevealDealCode();
-  // The code the reveal answered on this visit; a remembered reveal reads the row.
-  const [answered, setAnswered] = useState<string | null>(null);
+  // The tap's answer and a remembered reveal's read share one cache entry.
+  const stored = useDealCode(deal.id, deal.hasCode && deal.isRevealed);
   // Animate only the reveal that happens here, not a remembered one.
   const [justRevealed, setJustRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
   const copiedTimer = useRef<number | undefined>(undefined);
   const codeRef = useRef<HTMLParagraphElement>(null);
+  const code = (deal.hasCode && stored.data) || null;
 
   useEffect(() => () => window.clearTimeout(copiedTimer.current), []);
 
-  if (!deal.code) return null;
+  // The button is gone: keep the keyboard on the code it revealed.
+  useEffect(() => {
+    if (justRevealed && code) codeRef.current?.focus();
+  }, [justRevealed, code]);
 
-  const code = answered ?? (deal.isRevealed ? deal.code : null);
+  if (!deal.hasCode) return null;
+
+  // A remembered reveal still being read shows the hidden stub, busy.
+  const opening = reveal.isPending || (stored.isFetching && !code);
   const titleId = `deal-code-label-${deal.id}`;
   const eyebrowClass = muted
     ? 'text-muted-foreground'
     : 'text-accent-foreground';
 
   function open() {
-    if (reveal.isPending) return;
+    if (opening) return;
+    setJustRevealed(true);
     reveal.mutate(deal.id, {
-      onSuccess: (value) => {
-        setAnswered(value || deal.code);
-        setJustRevealed(true);
-        onRevealed?.();
-        // The button is gone: keep the keyboard on the code it revealed.
-        window.requestAnimationFrame(() => codeRef.current?.focus());
-      },
+      onSuccess: () => onRevealed?.(),
+      onError: () => setJustRevealed(false),
     });
   }
 
@@ -152,8 +157,8 @@ export function DealCodeStub({
           <button
             type="button"
             onClick={open}
-            disabled={reveal.isPending}
-            aria-busy={reveal.isPending || undefined}
+            disabled={opening}
+            aria-busy={opening || undefined}
             aria-label={`Arată codul OSUBB pentru ${deal.title}`}
             className={cn(
               'group/stub flex w-full flex-col gap-2 rounded-[inherit] px-4 py-3.5 text-left transition-colors disabled:cursor-progress motion-reduce:transition-none',
@@ -196,7 +201,7 @@ export function DealCodeStub({
                   )}
                 >
                   <EyeOff className="size-3.5" aria-hidden="true" />
-                  {reveal.isPending ? 'Se deschide…' : 'Cod ascuns'}
+                  {opening ? 'Se deschide…' : 'Cod ascuns'}
                 </span>
               </span>
             </span>
