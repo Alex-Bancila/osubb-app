@@ -28,15 +28,20 @@ select extensions.dblink_exec('commands_522_setup', $setup$
   delete from public.completed_work_requests where description='Race request #522';
   delete from public.groups where name = 'Race #522';
   delete from auth.users where id in ('52200000-0000-0000-0000-000000000090',
-    '52200000-0000-0000-0000-000000000091','52200000-0000-0000-0000-000000000092','52200000-0000-0000-0000-000000000093');
+    '52200000-0000-0000-0000-000000000091','52200000-0000-0000-0000-000000000092','52200000-0000-0000-0000-000000000093',
+    '52200000-0000-0000-0000-000000000094');
   insert into auth.users(id,email) values
     ('52200000-0000-0000-0000-000000000090','coord.race.522@test.local'),
     ('52200000-0000-0000-0000-000000000091','resp.race.522@test.local'),
-    ('52200000-0000-0000-0000-000000000092','bc.race.522@test.local');
+    ('52200000-0000-0000-0000-000000000092','bc.race.522@test.local'),
+    ('52200000-0000-0000-0000-000000000094','member.race.522@test.local');
+  -- #1180: the Request a Responsible decides is an ordinary Member's; a BC
+  -- member's completed work is decided only by BC and the Moderator.
   insert into public.profiles(id,full_name,email,role,status) values
     ('52200000-0000-0000-0000-000000000090','Race coord','coord.race.522@test.local','voluntar','activ'),
     ('52200000-0000-0000-0000-000000000091','Race resp','resp.race.522@test.local','voluntar','activ'),
-    ('52200000-0000-0000-0000-000000000092','Race BC','bc.race.522@test.local','bc','activ');
+    ('52200000-0000-0000-0000-000000000092','Race BC','bc.race.522@test.local','bc','activ'),
+    ('52200000-0000-0000-0000-000000000094','Race member','member.race.522@test.local','voluntar','activ');
   insert into public.groups(name,category) values ('Race #522','project');
   insert into public.group_members(group_id,member_id,group_role)
     select id,'52200000-0000-0000-0000-000000000090','manager' from public.groups where name='Race #522';
@@ -103,7 +108,7 @@ select extensions.dblink_exec('commands_522_setup', $setup$
    where group_id=(select id from public.groups where name='Race #522')
      and member_id='52200000-0000-0000-0000-000000000091';
   insert into public.completed_work_requests(requester_id,group_id,description)
-    select '52200000-0000-0000-0000-000000000092',id,'Race request #522' from public.groups where name='Race #522';
+    select '52200000-0000-0000-0000-000000000094',id,'Race request #522' from public.groups where name='Race #522';
 $setup$);
 create temp table request_race_522 as select * from pg_temp.test_race(
   $q$select (public.reject_completed_work_request((select id from public.completed_work_requests where description='Race request #522'),'Decided before revocation')).status$q$,
@@ -150,7 +155,8 @@ select extensions.dblink_exec('commands_522_setup', $$
   delete from public.campaigns where name='Race campaign #522';
   delete from public.completed_work_requests where description='Race request #522';
   delete from auth.users where id in ('52200000-0000-0000-0000-000000000090',
-    '52200000-0000-0000-0000-000000000091','52200000-0000-0000-0000-000000000092','52200000-0000-0000-0000-000000000093');
+    '52200000-0000-0000-0000-000000000091','52200000-0000-0000-0000-000000000092','52200000-0000-0000-0000-000000000093',
+    '52200000-0000-0000-0000-000000000094');
 $$);
 select extensions.dblink_disconnect('commands_522_setup');
 

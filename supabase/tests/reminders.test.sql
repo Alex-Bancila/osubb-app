@@ -14,7 +14,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
-select plan(51);
+select plan(55);
 
 -- #69: a second scheduler session waits for the same advisory lock before it
 -- reads anything; both remote transactions roll back.
@@ -97,6 +97,16 @@ select event.id, pg_temp.u62(answer.n), answer.status
   from events as event
  cross join (values (2, 'going'), (3, 'declined')) as answer(n, status)
  where event.title in ('Event tomorrow #62', 'Event cancelled #62', 'Event later #62');
+-- #1151: tomorrow is a range of instants, [00:00, the next 00:00) in Bucharest.
+-- 'Long day' starts late on Sunday 27 October 2030, which lasts 25 hours: the
+-- clocks go back that night, so the day ends at 22:00 UTC, not 21:00.
+insert into events (title, type, group_id, starts_at, created_by) values
+  ('Midnight #1151',      'sedinta', pg_temp.rem(), '2030-11-13 00:00+02',    pg_temp.u62(5)),
+  ('Last second #1151',   'sedinta', pg_temp.rem(), '2030-11-13 23:59:59+02', pg_temp.u62(5)),
+  ('Next midnight #1151', 'sedinta', pg_temp.rem(), '2030-11-14 00:00+02',    pg_temp.u62(5)),
+  ('Long day #1151',      'sedinta', pg_temp.rem(), '2030-10-27 23:30+02',    pg_temp.u62(5));
+insert into event_attendance (event_id, member_id, status)
+select event.id, pg_temp.u62(2), 'going' from events as event where event.title like '% #1151';
 
 -- ==================== Announcements ====================
 insert into announcements (title, body, group_id, audience, deadline, priority, created_by) values
@@ -182,6 +192,13 @@ select is(pg_temp.got(3, 'Mâine: Event tomorrow #62'), 0, 'not someone who decl
 select is(pg_temp.got(1, 'Mâine: Event tomorrow #62'), 0, 'nor someone who never answered');
 select is(pg_temp.got_any('Mâine: Event cancelled #62'), 0, 'a cancelled Event reminds nobody');
 select is(pg_temp.got_any('Mâine: Event later #62'), 0, 'two days before an Event, nothing');
+select is(pg_temp.got(2, 'Mâine: Midnight #1151') + pg_temp.got(2, 'Mâine: Last second #1151'), 2,
+  '#1151: an Event starting at tomorrow''s first or last second is reminded');
+select is(pg_temp.got_any('Mâine: Next midnight #1151'), 0,
+  '#1151: one starting at the midnight after tomorrow is not');
+select ok(pg_get_functiondef('private.send_reminders(timestamptz)'::regprocedure)
+            !~* '\(\s*event\.starts_at\s+at\s+time\s+zone\s+''Europe/Bucharest''\s*\)\s*::\s*date\s*=',
+  '#1151: the Event reminder compares starts_at with tomorrow''s bounds instead of casting every row');
 
 select is(pg_temp.got(1, 'Termen mâine: Termen #62') + pg_temp.got(2, 'Termen mâine: Termen #62'), 2,
   'everyone the Announcement reached hears the day before its Termen');
@@ -223,6 +240,8 @@ select is(private.send_reminders(pg_temp.at9() + interval '20 minutes'), 0,
 -- Saturday 26 October 2030, still EEST (UTC+3): 06:30 UTC is 09:30.
 select cmp_ok(private.send_reminders('2030-10-26 06:30+00'), '>', 0, 'summer time: 06:30 UTC is 09:30 in Bucharest');
 select is(pg_temp.got(1, 'Termenul e mâine: Summer #62'), 1, 'and the day-before reminder goes out');
+select is(pg_temp.got(2, 'Mâine: Long day #1151'), 1,
+  '#1151: an Event late on the 25-hour day the clocks go back is still tomorrow''s');
 -- Monday 28 October 2030, EET (UTC+2): 06:30 UTC is only 08:30.
 select is(private.send_reminders('2030-10-28 06:30+00'), 0, 'winter time: 06:30 UTC is 08:30, nothing yet');
 select is(pg_temp.got(1, 'Termenul e mâine: Winter #62'), 0, 'fixture: not yet sent');

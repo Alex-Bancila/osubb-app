@@ -16,6 +16,7 @@
 - **Amended:** 2026-10-13 — #1047 (ruling R52): the Department Cup is a Department's — only a top-level Group in the Department category may be set to compete; the category is checked where that setting is written, never where a rule reads Groups
 - **Amended:** 2026-10-18 — ruling R58 (Portofoliu Interne): the Promotion hooks read as ADR-0004's amendment of the same date (nothing promotes by the calendar, Recrut → Voluntar included; a Membership Cutoff Date replaces tenure; one ranking of the eligible; Retention Signals stored, one of them live)
 - **Amended:** 2026-10-24 — ruling R65 (#1110): whoever may archive a Group may unarchive it, with its archived subgroups; Administrare → Grupuri lists archived Groups in a view of their own, Arhivate
+- **Amended:** 2026-11-10 — #1180 (audit L9, decision 1 of #1144): a Task whose Executor is BC or the Moderator (level 6 or above) is evaluated only by BC or the Moderator; no Group position reaches it, and the completed-work decider rule says the same
 - **Deciders:** Alex Băncilă (grilling sessions of 2026-09-18, 2026-09-20, and 2026-09-21)
 - **Supersedes:** the work-origin, Campaign, and authorization sections of ADR-0007; the scope model and management rules of ADR-0008; the Voluntar → Membru Activ rule of ADR-0004 (each amended by reference, none retired)
 - **Superseded by:** —
@@ -106,6 +107,8 @@ One matrix, five rows, applied to a Group and every Group below it:
 | Group Manager     | Everything inside the Group and every Group below it: roster, Applications, Group Responsibles, Child Groups, Campaigns, Events, and every Task, including evaluating Group Responsibles and their own Task.                                                                                      |
 | Group Responsible | Ordinary members' Tasks, Applications, and Events in the Group and every Group below it. May create a Task for themselves but never manages or evaluates their own Task, another Group Responsible's, or a Group Manager's; those go to the Group Manager, or to BC/Moderator when there is none. |
 | Ordinary member   | Own Tasks and Candidatures, the Opportunities their Groups' Minimum Levels admit, and every Task of a Group whose Shared Work Visibility is on.                                                                                                                                                   |
+
+One exception binds every Group position (#1180, 2026-11-10): a Task whose Executor is BC or the Moderator is evaluated only by BC or the Moderator, and only they decide that Executor's completed work; a Group Manager or Group Responsible below level 6 does neither.
 
 Direct assignment may still target any active Member (ADR-0007), except one below the Group's Minimum Level. The Task Manager remains the Task's creator; where ADR-0007 says "the Origin's managers", read the Group's Managers, then its ancestors' from the nearest up, then BC. Leadership metrics stay gated at rank 5 and above, and their Department, Team, and Project filters become one Group filter that includes every Group below it.
 
