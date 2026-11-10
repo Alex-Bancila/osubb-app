@@ -99,8 +99,8 @@ select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason, awarded_by)
      values ('a0000000-0000-0000-0000-000000000011', 99, 'manual_award',
              'a0000000-0000-0000-0000-000000000011') $$,
-  -- #162: no INSERT policy admits reason <> 'sanction', so RLS denies this
-  -- before the row ever reaches the reason CHECK constraint.
+  -- #1182: authenticated holds no INSERT on the ledger, so the table grant
+  -- refuses this before RLS or the reason CHECK constraint is consulted.
   '42501', null, 'a voluntar cannot create retired manual awards');
 
 reset role;
@@ -174,15 +174,24 @@ select pg_temp.test_login('d0000000-0000-0000-0000-000000000014', jsonb_build_ob
 -- nobody can record one by hand at all.
 select is((select count(*) from points_ledger), 2::bigint,
   'level >= 6 reads the whole ledger, and a Rating with no Evaluation added nothing to it');
-select lives_ok(
+-- #1182: not even BC writes a Sanction by a direct insert; #104's command
+-- will be the path.
+select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason, note, awarded_by)
      values ('b0000000-0000-0000-0000-000000000012', -3, 'sanction', 'test sanction',
              'd0000000-0000-0000-0000-000000000014') $$,
-  'BC may sanction');                                     -- Bianca −3
+  '42501', 'permission denied for table points_ledger',
+  'BC cannot sanction by a direct insert: the table grant refuses it (#1182)');
 select is((select count(*) from tasks), 5::bigint,
   'BC sees every task');
 
 reset role;
+
+-- Bianca's −3 is written as the owner, the way #104's command will write a
+-- Sanction, so the transparency read below still has one to show.
+insert into points_ledger (member_id, delta, reason, note, awarded_by)
+  values ('b0000000-0000-0000-0000-000000000012', -3, 'sanction', 'test sanction',
+          'd0000000-0000-0000-0000-000000000014');
 
 -- ==================== Bianca: voluntar, pr, team t-x ====================
 select pg_temp.test_login('b0000000-0000-0000-0000-000000000012', jsonb_build_object(
