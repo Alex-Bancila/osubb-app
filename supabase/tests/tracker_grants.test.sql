@@ -124,8 +124,8 @@ select is(pg_temp.ddl_adjacent_grants('service_role'), '{}'::text[],
 -- is select-only for authenticated, since #327-#345's commands own their
 -- writes -- #345 closed the last of them, `tasks`, along with the two legacy
 -- tables that used to appear here with full DML.
--- points_ledger keeps INSERT for authenticated: the sanction path
--- (points_ledger_create_sanction) is still a direct, policy-gated write, not a command.
+-- points_ledger lost INSERT for authenticated in #1182: no client writes the
+-- ledger until #104 builds a Sanction command, and its id sequence went with it.
 -- service_role is untouched by #345 -- narrowing it further is #295's audit.
 
 create temporary table expected_table_privs (
@@ -138,7 +138,7 @@ create temporary table expected_table_privs (
 insert into expected_table_privs (object_name, role_name, expected) values
   ('tasks',                    'authenticated', 'SELECT'),
   ('tasks',                    'service_role',  'DELETE,INSERT,SELECT,UPDATE'),
-  ('points_ledger',            'authenticated', 'INSERT,SELECT'),
+  ('points_ledger',            'authenticated', 'SELECT'),
   ('points_ledger',            'service_role',  'SELECT'),
   ('task_activity',            'authenticated', 'SELECT'),
   ('task_activity',            'service_role',  'INSERT,SELECT'),
@@ -190,7 +190,7 @@ create temporary table expected_sequence_privs (
 insert into expected_sequence_privs (object_name, role_name, expected) values
   ('tasks_id_seq',                    'authenticated', 'SELECT,USAGE'),
   ('tasks_id_seq',                    'service_role',  'SELECT,USAGE'),
-  ('points_ledger_id_seq',            'authenticated', 'SELECT,USAGE'),
+  ('points_ledger_id_seq',            'authenticated', ''),
   ('points_ledger_id_seq',            'service_role',  ''),
   ('task_activity_id_seq',            'authenticated', ''),
   ('task_activity_id_seq',            'service_role',  'SELECT,USAGE'),

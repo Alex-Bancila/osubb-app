@@ -5,13 +5,18 @@
 -- assertions (a manual_award insert is rejected, including one attempted by
 -- an active BC) move here now that the CHECK constraints — not a trigger —
 -- are what reject it.
+--
+-- #1182 (audit L4): no client role inserts into the ledger any more. The
+-- direct Sanction path (policy points_ledger_create_sanction and the INSERT
+-- grant to authenticated) is closed until #104 builds a Sanction command, so
+-- every direct insert by a signed-in Member stops at the table grant.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(22);
+select plan(25);
 
 -- ==================== Fixtures ====================
 insert into auth.users (id, email) values
@@ -155,17 +160,11 @@ select throws_ok(
   '23514', null,
   'an arbitrary reason string is rejected');
 
--- ==================== manual_award is doubly blocked for an authenticated actor ====================
--- The #261 trigger fired before RLS for every role, so a BC's manual_award
--- attempt used to surface 23514 regardless of privilege. Dropping it in
--- favor of the CHECK changes which layer answers first: RLS's WITH CHECK is
--- evaluated before table CHECK constraints for a non-owner role (proven by
--- the "BC may still sanction" case below, which passes RLS then fails the
--- shape CHECK when malformed — see rls_tasks_points.test.sql), and
--- points_ledger_create_sanction admits only reason = 'sanction'. So an active BC now hits
--- RLS (42501) before the constraint is ever reached; only a session that
--- bypasses RLS (e.g. the owner-run inserts above) surfaces the CHECK's
--- 23514 directly.
+-- ==================== no signed-in Member inserts directly (#1182) ====================
+-- Since #1182 authenticated holds no INSERT on the ledger, so a direct insert
+-- is refused by the table grant (42501) before RLS or any CHECK is consulted,
+-- whatever its reason. Only the owner-run inserts above, standing in for the
+-- commands, reach the CHECK constraints and their 23514.
 select pg_temp.test_login('26200000-0000-0000-0000-000000000001', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 
@@ -173,22 +172,20 @@ select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason, awarded_by)
      values ('26200000-0000-0000-0000-000000000001', 5, 'manual_award',
              '26200000-0000-0000-0000-000000000001') $$,
-  '42501', null,
-  'an active BC cannot create a manual award — no policy admits the reason, so RLS denies it');
+  '42501', 'permission denied for table points_ledger',
+  'an active BC cannot create a manual award: the table grant refuses it');
 
-select lives_ok(
+select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason, note, awarded_by)
      values ('26200000-0000-0000-0000-000000000001', -1, 'sanction', 'test sanction',
              '26200000-0000-0000-0000-000000000001') $$,
-  'an active BC may still create a properly-shaped sanction');
+  '42501', 'permission denied for table points_ledger',
+  'an active BC cannot write a Sanction by a direct insert: the path is closed until #104 builds a command (#1182)');
 
 reset role;
 
 -- ==================== an inactive BC is denied both paths ====================
--- points_ledger_create_sanction's WITH CHECK requires the caller's profile.status = 'activ',
--- checked live against the database (not the JWT) — a stale claim from
--- before deactivation cannot smuggle a row through. No policy admits
--- manual_award for anyone, active or not.
+-- The table grant refuses every signed-in Member (#1182), active or not.
 select pg_temp.test_login('26200000-0000-0000-0000-000000000002', jsonb_build_object(
   'member_role', 'bc', 'member_level', 6, 'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb));
 
@@ -196,37 +193,54 @@ select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason, awarded_by)
      values ('26200000-0000-0000-0000-000000000002', 5, 'manual_award',
              '26200000-0000-0000-0000-000000000002') $$,
-  '42501', null,
-  'an inactive BC cannot create a manual award — RLS denies it');
+  '42501', 'permission denied for table points_ledger',
+  'an inactive BC cannot create a manual award: the table grant refuses it');
 
 select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason, note, awarded_by)
      values ('26200000-0000-0000-0000-000000000002', -1, 'sanction', 'test sanction',
              '26200000-0000-0000-0000-000000000002') $$,
-  '42501', null,
-  'an inactive BC cannot create a sanction — RLS denies it');
+  '42501', 'permission denied for table points_ledger',
+  'an inactive BC cannot create a sanction: the table grant refuses it');
 
 reset role;
 
 -- ==================== a claimless session is denied too ====================
 -- Same real BC uid as above, but a token with no org claims at all (never
--- invited, or issued before the claims hook ran) — auth_is_member() fails
--- before member_level is even consulted.
+-- invited, or issued before the claims hook ran); the grant refuses it too.
 select pg_temp.test_login('26200000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
 
 select throws_ok(
   $$ insert into points_ledger (member_id, delta, reason, awarded_by)
      values ('26200000-0000-0000-0000-000000000001', 5, 'manual_award',
              '26200000-0000-0000-0000-000000000001') $$,
-  '42501', null,
-  'a claimless session cannot create a manual award — RLS denies it');
+  '42501', 'permission denied for table points_ledger',
+  'a claimless session cannot create a manual award: the table grant refuses it');
 
 reset role;
 
 -- ==================== grants shape who can even reach RLS ====================
 select ok(
-  has_table_privilege('authenticated', 'public.points_ledger', 'insert'),
-  'authenticated retains INSERT for the remaining sanction path');
+  not has_table_privilege('authenticated', 'public.points_ledger', 'insert'),
+  'authenticated holds no INSERT on the ledger: every row is written by a command (#1182)');
+select ok(
+  not has_sequence_privilege('authenticated', 'public.points_ledger_id_seq', 'usage'),
+  'nor USAGE on its id sequence, which only the direct insert needed (#1182)');
+select is_empty(
+  $$ select policyname::text from pg_policies
+      where schemaname = 'public' and tablename = 'points_ledger'
+        and cmd in ('INSERT', 'ALL') $$,
+  'no INSERT policy is left on the ledger: points_ledger_create_sanction is dropped (#1182)');
+-- Every writer runs as the owner, so the revoke cannot break a command: a
+-- security-invoker body that inserted into the ledger would now fail for its
+-- signed-in caller.
+select is_empty(
+  $$ select p.oid::regprocedure::text
+       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname in ('public', 'private')
+        and p.prosrc ~* 'insert\s+into\s+public\.points_ledger'
+        and not p.prosecdef $$,
+  'every function that inserts into the ledger is security definer (#1182)');
 select ok(
   not has_table_privilege('anon', 'public.points_ledger', 'insert'),
   'anonymous clients cannot insert ledger rows');
