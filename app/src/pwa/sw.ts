@@ -64,7 +64,8 @@ registerRoute(
 );
 
 /* `registerType: 'prompt'`: a new worker waits until the member accepts the
-   update in PwaUpdatePrompt, whose `updateServiceWorker(true)` posts this. */
+   update in PwaUpdatePrompt (or PrivacyGate reloads), whose
+   `reloadToLatestVersion()` posts this. */
 self.addEventListener('message', (event) => {
   if ((event.data as { type?: unknown } | null)?.type === 'SKIP_WAITING')
     void self.skipWaiting();
