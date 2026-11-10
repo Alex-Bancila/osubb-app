@@ -269,6 +269,13 @@ jobs:
           version="$( [ -n "$pooler" ] && timeout 30 psql "$pooler" -tAc "select current_setting('server_version')" 2>&1 || true)"
           if [ -n "$pinned" ] && [ "${version%%.*}" = "$pinned" ]; then pass "Postgres $version, the major config.toml pins ($pinned)"; else fail "production runs Postgres '${version:-unread}', config.toml pins major '${pinned:-unread}'"; fi
 
+          # #1183 (audit L40, ruling R59): deleting a Member leaves nothing in the
+          # database only while Auth writes no audit rows there. Sign-in events
+          # then live in Supabase's log store alone, for the period §6 of the
+          # Privacy Notice names (docs/backend/auth-config.md → Sign-in logs).
+          audit="$( [ -n "$pooler" ] && timeout 30 psql "$pooler" -tAc 'select count(*) from auth.audit_log_entries' 2>&1 || true)"
+          if [ "$audit" = 0 ]; then pass "auth.audit_log_entries is empty: Auth writes no audit rows to the database"; else fail "auth.audit_log_entries holds '${audit:-unread}' rows: turn on Authentication → Audit Logs → 'Disable writing auth audit logs to project database' (docs/backend/auth-config.md → Sign-in logs)"; fi
+
           # POST: the function checks the method before the key, so a GET is
           # 405 whatever the caller holds (#1001).
           status="$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' -X POST "${SUPABASE_URL%/}/functions/v1/send-push" || true)"
