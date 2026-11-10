@@ -496,7 +496,7 @@ describe('EventManageControls', () => {
       ).toBeVisible();
       expect(
         within(dialog).getByText(
-          'Un anunț publicat odată cu evenimentul rămâne.',
+          'Un anunț publicat odată cu evenimentul se șterge și el.',
         ),
       ).toBeVisible();
       await user.click(
