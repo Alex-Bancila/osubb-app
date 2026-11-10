@@ -4,7 +4,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(24);
+select plan(29);
 truncate public.push_tokens cascade; -- #703: push_deliveries references it
 -- A Member's own registration must be a real subscription on a vendor push
 -- service (security pass M2, push_tokens_guard), so the own-device rows here
@@ -68,5 +68,18 @@ select throws_ok($$select * from push_tokens$$, '42501', null, 'Anonymous cannot
 select throws_ok($$delete from push_tokens$$, '42501', null, 'Anonymous cannot delete devices');
 select throws_ok($$insert into push_tokens (member_id, token, platform) values ('06600000-0000-0000-0000-000000000001', 'anon', 'web')$$, '42501', null, 'Anonymous cannot register');
 reset role;
+
+-- The table's shape, moved here from notif_suppression.test.sql when #1181
+-- dropped the suppression table that suite was named after.
+select has_table('public', 'push_tokens', 'push_tokens table exists');
+select ok((select relrowsecurity from pg_class where relname = 'push_tokens' and relnamespace = 'public'::regnamespace), 'RLS is enabled on push_tokens');
+insert into auth.users (id, email) values ('06600000-0000-0000-0000-000000000007', 'push66-7@test.local');
+insert into profiles (id, full_name, email, role, status) values ('06600000-0000-0000-0000-000000000007', 'Device Member 7', 'push66-7@test.local', 'voluntar', 'activ');
+insert into push_tokens (member_id, token, platform) values
+  ('06600000-0000-0000-0000-000000000007', 'token-abc', 'web'),
+  ('06600000-0000-0000-0000-000000000007', 'token-xyz', 'android');
+select is((select count(*) from push_tokens where member_id = '06600000-0000-0000-0000-000000000007'), 2::bigint, 'one member may register several devices');
+select throws_ok($$insert into push_tokens (member_id, token, platform) values ('06600000-0000-0000-0000-000000000007', 'token-abc', 'web')$$, '23505', null, 'the same (member, token) pair is rejected');
+select throws_ok($$insert into push_tokens (member_id, token, platform) values ('06600000-0000-0000-0000-000000000007', 'token-new', 'blackberry')$$, '23514', 'new row for relation "push_tokens" violates check constraint "push_tokens_platform_ck"', 'platform is limited to ios/android/web');
 select * from finish();
 rollback;

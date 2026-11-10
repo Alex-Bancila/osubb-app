@@ -713,7 +713,7 @@ insert into pinned_private_functions (proname, args, category) values
   -- #581: the live announcement visibility predicate called by announcements_read.
   ('can_read_announcement', 'p_group_id bigint, p_audience text, p_min_level integer, p_created_by uuid, p_kind text, p_deadline timestamp with time zone', 'predicate'),
   -- #68: the trigger body has no client execute grant; it fans out through
-  -- private.group_audience and private.notify with broadcast suppression.
+  -- private.group_audience and private.notify.
   ('fan_out_announcement', '', 'trigger'),
   ('fan_out_announcement_row', 'p_row announcements, p_actor uuid', 'none'),
   ('approve_announcement_impl', 'p_id bigint', 'impl'),
