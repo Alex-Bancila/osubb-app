@@ -13,7 +13,7 @@
 
 # Politica de confidențialitate a aplicației OSUBB
 
-**Versiunea 1.3 · în vigoare de la 20.10.2026**
+**Versiunea 1.4 · în vigoare de la 10.11.2026**
 
 Aplicația OSUBB („app.osubb.ro”) este aplicația internă a Organizației Studenților din Universitatea Babeș-Bolyai (OSUBB). Este folosită doar de membrii organizației, pe bază de invitație, pentru a organiza activitatea de voluntariat: taskuri și puncte, calendarul evenimentelor, anunțuri și notificări.
 
@@ -49,7 +49,7 @@ Aplicația nu schimbă automat rolul nimănui. Nicio regulă nu te promovează �
 
 BC rulează evaluări de rol. O evaluare ia punctele de task primite de membri într-o perioadă aleasă de BC, ține cont doar de membrii care au cel puțin punctajul minim stabilit de BC și calculează din ele un prag de promovare. Pe această bază întocmește două liste pentru BC și Moderator: candidații la promovare (Voluntari intrați în organizație până la o dată limită stabilită de BC, care ating pragul) și semnalele de retenție (Voluntari Activi și Voluntari cu Drept de Vot care rămân sub prag sau sub punctajul minim). Un Voluntar poate apărea drept candidat la promovare și între evaluări, în clipa în care punctele lui ating pragul în vigoare. Dacă universitatea înregistrată pentru un Voluntar cu Drept de Vot se schimbă într-una care nu este Universitatea Babeș-Bolyai, un semnal de retenție apare imediat, pentru că Dreptul de Vot îl pot avea doar studenții UBB.
 
-Aceste liste sunt doar informații pentru BC, care decide singur ce face cu ele. Despre ele tu nu primești nicio notificare: notificările merg doar la conducerea organizației. Dacă BC îți schimbă rolul, primești o notificare despre noul rol. Poți cere oricând ca o promovare (sau lipsa ei) să fie verificată de o persoană, scriind BC-ului sau la [it@osubb.ro](mailto:it@osubb.ro).
+Aceste liste sunt doar informații pentru BC, care decide singur ce face cu ele. Despre ele tu nu primești nicio notificare: notificările merg doar la BC și la Moderator, iar cele despre semnalele de retenție și la membrii BCE care sunt responsabili ai Adunării Generale. Dacă BC îți schimbă rolul, primești o notificare despre noul rol. Poți cere oricând ca o promovare (sau lipsa ei) să fie verificată de o persoană, scriind BC-ului sau la [it@osubb.ro](mailto:it@osubb.ro).
 
 ## 4. Cine vede datele tale în organizație
 
@@ -74,8 +74,9 @@ Nu transmitem datele niciunui terț pentru scopurile lui. Folosim următorii fur
 ## 6. Cât păstrăm datele
 
 - **Cât ești membru:** toate datele de mai sus, pentru funcționarea aplicației.
+- **Notificările din aplicație:** cele citite se șterg la 90 de zile după ce le-ai primit; cele necitite rămân până le citești.
 - **După încheierea calității de membru:** contul devine inactiv și nu te mai poți conecta. Numele, rolurile, taskurile și punctele rămân în istoricul organizației, pentru raportări și aniversări, conform hotărârii organizației. Poți cere oricând ștergerea completă (secțiunea 7).
-- **Jurnale tehnice:** rândurile interne de livrare a notificărilor push se șterg după 7 zile; jurnalul emailurilor la Resend se păstrează 30 de zile; jurnalele de conectare ale Supabase și jurnalele de acces ale Cloudflare se păstrează conform politicilor acelor furnizori, pentru securitate.
+- **Jurnale tehnice:** rândurile interne de livrare a notificărilor push se șterg după 7 zile; jurnalul emailurilor la Resend se păstrează 30 de zile; jurnalele de conectare ale Supabase se păstrează 7 zile, inclusiv după ștergerea contului; jurnalele de acces ale Cloudflare se păstrează conform politicilor Cloudflare. Toate acestea servesc securității.
 - **Abonamentele push:** până le dezactivezi tu sau până browserul le invalidează.
 - **Copii de siguranță:** copii zilnice ale bazei de date, păstrate 7 zile.
 
@@ -106,6 +107,8 @@ Aplicația păstrează în memoria browserului tău sesiunea de conectare, adres
 Când schimbăm această politică, publicăm noua versiune în aplicație, cu numărul și data ei, și îți cerem să confirmi că ai citit-o la următoarea conectare. Confirmarea ta (versiunea și momentul) este păstrată și vizibilă pentru BC și Moderator, ca dovadă că ai fost informat; ea nu este un consimțământ și nu schimbă nimic din datele tale.
 
 ---
+
+_Versiunea 1.4 — 10.11.2026. Secțiunea „Cât păstrăm datele” spune cât se păstrează notificările citite (90 de zile) și jurnalele de conectare (7 zile, inclusiv după ștergerea contului); secțiunea „Decizii automate” spune cine primește notificările despre semnalele de retenție._
 
 _Versiunea 1.3 — 20.10.2026. Secțiunea „Decizii automate” nu mai descrie o regulă automată de promovare: nimic nu schimbă automat rolul nimănui, iar evaluările de rol sunt liste pentru BC._
 

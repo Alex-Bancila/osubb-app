@@ -167,6 +167,17 @@ Checklists: **#54** (staging) and **#77** (production). Run the two curl checks 
 
 Local and CI run the major `supabase/config.toml` pins (`major_version = 17`, #1140), so every pgTAP, race and upgrade suite proves something about the engine production runs. Every Release's smoke step reads production's `server_version` and fails when its major differs from the pin. If Supabase moves a hosted project to a new major, move the pin in its own PR and rerun every gate on it before the next Release.
 
+### Sign-in logs
+
+Member Deletion (ruling R59, `public.delete_member`) promises that nothing about a deleted Member survives in the database, and that holds only while Auth writes no audit rows there. So on production **Authentication → Configuration → Audit Logs → "Disable writing auth audit logs to project database" stays ON**. With it on, sign-in events live only in Supabase's log store (`auth_logs`, `auth_audit_logs`), for the plan's log retention, and the account's events there expire on that clock after a deletion.
+
+| Project                       | Audit rows in the database                             | Log retention      | Read                                                                     |
+| ----------------------------- | ------------------------------------------------------ | ------------------ | ------------------------------------------------------------------------ |
+| production (`osubb-app-prod`) | off: `auth.audit_log_entries` held 0 rows (2026-11-05) | 7 days (Pro plan)  | the row count from the database; the retention from Supabase's plan page |
+| staging                       | not read yet                                           | the staging plan's | read it the same way before relying on it                                |
+
+The Privacy Notice (§6, version 1.4, #1183) names the 7 days; if the plan or its retention changes, the Notice changes with it. Every Release's smoke step counts `auth.audit_log_entries` on production and fails unless it is 0, naming the setting.
+
 ## Related
 
 - `docs/adr/0003-invite-only-auth.md` — why invite-only, and what deactivation means

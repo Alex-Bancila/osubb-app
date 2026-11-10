@@ -16,9 +16,9 @@ import type { ReactNode } from 'react';
  * app older than the server's version (a tab left open across a Release)
  * offers a reload instead — see `PrivacyGate`.
  */
-export const PRIVACY_NOTICE_VERSION = '1.3';
+export const PRIVACY_NOTICE_VERSION = '1.4';
 /** The effective date as the document writes it (dd.mm.yyyy). */
-export const PRIVACY_NOTICE_DATE = '20.10.2026';
+export const PRIVACY_NOTICE_DATE = '10.11.2026';
 export const PRIVACY_NOTICE_TITLE =
   'Politica de confidențialitate a aplicației OSUBB';
 
@@ -275,10 +275,11 @@ export function PrivacyNoticeContent() {
         <p>
           Aceste liste sunt doar informații pentru BC, care decide singur ce
           face cu ele. Despre ele tu nu primești nicio notificare: notificările
-          merg doar la conducerea organizației. Dacă BC îți schimbă rolul,
-          primești o notificare despre noul rol. Poți cere oricând ca o
-          promovare (sau lipsa ei) să fie verificată de o persoană, scriind
-          BC-ului sau la <ContactLink />.
+          merg doar la BC și la Moderator, iar cele despre semnalele de retenție
+          și la membrii BCE care sunt responsabili ai Adunării Generale. Dacă BC
+          îți schimbă rolul, primești o notificare despre noul rol. Poți cere
+          oricând ca o promovare (sau lipsa ei) să fie verificată de o persoană,
+          scriind BC-ului sau la <ContactLink />.
         </p>
       </Section>
 
@@ -329,6 +330,10 @@ export function PrivacyNoticeContent() {
             funcționarea aplicației.
           </li>
           <li>
+            <Term>Notificările din aplicație:</Term> cele citite se șterg la 90
+            de zile după ce le-ai primit; cele necitite rămân până le citești.
+          </li>
+          <li>
             <Term>După încheierea calității de membru:</Term> contul devine
             inactiv și nu te mai poți conecta. Numele, rolurile, taskurile și
             punctele rămân în istoricul organizației, pentru raportări și
@@ -339,8 +344,9 @@ export function PrivacyNoticeContent() {
             <Term>Jurnale tehnice:</Term> rândurile interne de livrare a
             notificărilor push se șterg după 7 zile; jurnalul emailurilor la
             Resend se păstrează 30 de zile; jurnalele de conectare ale Supabase
-            și jurnalele de acces ale Cloudflare se păstrează conform
-            politicilor acelor furnizori, pentru securitate.
+            se păstrează 7 zile, inclusiv după ștergerea contului; jurnalele de
+            acces ale Cloudflare se păstrează conform politicilor Cloudflare.
+            Toate acestea servesc securității.
           </li>
           <li>
             <Term>Abonamentele push:</Term> până le dezactivezi tu sau până
@@ -438,9 +444,16 @@ export function PrivacyNoticeContent() {
         <p>
           Versiunea {PRIVACY_NOTICE_VERSION} —{' '}
           <time dateTime={DATE_TIME}>{PRIVACY_NOTICE_DATE}</time>. Secțiunea
-          „Decizii automate” nu mai descrie o regulă automată de promovare:
-          nimic nu schimbă automat rolul nimănui, iar evaluările de rol sunt
-          liste pentru BC.
+          „Cât păstrăm datele” spune cât se păstrează notificările citite (90 de
+          zile) și jurnalele de conectare (7 zile, inclusiv după ștergerea
+          contului); secțiunea „Decizii automate” spune cine primește
+          notificările despre semnalele de retenție.
+        </p>
+        <p>
+          Versiunea 1.3 — <time dateTime="2026-10-20">20.10.2026</time>.
+          Secțiunea „Decizii automate” nu mai descrie o regulă automată de
+          promovare: nimic nu schimbă automat rolul nimănui, iar evaluările de
+          rol sunt liste pentru BC.
         </p>
         <p>
           Versiunea 1.2 — <time dateTime="2026-10-18">18.10.2026</time>. Adaugă
