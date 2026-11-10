@@ -1154,30 +1154,6 @@ export type Database = {
           },
         ]
       }
-      notif_suppression: {
-        Row: {
-          kind: Database["public"]["Enums"]["noti_kind"]
-          role: Database["public"]["Enums"]["member_role"]
-        }
-        ComputedFields: never
-        Insert: {
-          kind: Database["public"]["Enums"]["noti_kind"]
-          role: Database["public"]["Enums"]["member_role"]
-        }
-        Update: {
-          kind?: Database["public"]["Enums"]["noti_kind"]
-          role?: Database["public"]["Enums"]["member_role"]
-        }
-        Relationships: [
-          {
-            foreignKeyName: "notif_suppression_role_fkey"
-            columns: ["role"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       notification_email_preferences: {
         Row: {
           created_at: string
@@ -3885,15 +3861,6 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
-      }
-      evaluation_percents: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          changed_at: string
-          changed_by: string
-          kind: string
-          percent: number
-        }[]
       }
       express_task_interest: {
         Args: { p_task_id: number }

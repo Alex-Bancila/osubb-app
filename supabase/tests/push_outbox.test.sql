@@ -73,8 +73,8 @@ delete from public.notifications where title = 'Pagină';
 analyze public.push_deliveries;
 
 -- ==================== Enqueue trigger ====================
--- BC is suppressed for broadcast 'task' Notifications, but a row that exists
--- was already judged deliverable -- the outbox must not re-apply the table.
+-- A row that exists was already judged deliverable where it was written -- the
+-- outbox never judges its recipient again, so BC's direct Task Notification pushes.
 select private.notify(array['70300000-0000-0000-0000-000000000001'::uuid], 'task',
   'Task nouă', 'Corp', null, null, null, '/tracker/1');
 select is(
@@ -82,7 +82,7 @@ select is(
      join public.notifications as notification on notification.id = delivery.notification_id
     where notification.member_id = '70300000-0000-0000-0000-000000000001'),
   2::bigint,
-  'a Notification for a Member with two web devices enqueues two deliveries; the android device is ignored, and BC''s direct Task Notification is not re-suppressed');
+  'a Notification for a Member with two web devices enqueues two deliveries; the android device is ignored, and BC''s direct Task Notification is pushed as written');
 select ok(
   (select bool_and(status = 'pending' and attempts = 0 and next_attempt_at <= now() and sent_at is null)
      from public.push_deliveries),

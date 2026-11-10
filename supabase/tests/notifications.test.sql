@@ -107,13 +107,13 @@ select ok(not has_table_privilege('authenticated', 'notifications', 'insert')
   and not has_table_privilege('authenticated', 'notifications', 'delete'),
   'authenticated clients cannot insert or delete notifications');
 
--- BC suppresses broadcast task notifications at fan-out time. Read policy
--- deliberately keeps a task row that was addressed directly to this BC.
+-- The read policy keeps every row addressed to this BC, a direct task row
+-- included: who is told is decided where the row is written, never at read time.
 select pg_temp.test_login_leadership('a0650000-0000-0000-0000-000000000001');
 select is((select count(*) from notifications), 1::bigint,
   'BC reads only their own notification');
 select is((select title from notifications), 'BC own Task',
-  'suppression never hides a BC own-task notification at read time');
+  'the read policy never hides a BC own-task notification');
 update notifications set read = true where title = 'BC own Task';
 select is((select read from notifications), true,
   'a member can mark their own notification read');
