@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PwaUpdatePrompt } from './PwaUpdatePrompt';
@@ -29,26 +29,44 @@ vi.mock('virtual:pwa-register/react', () => ({
   },
 }));
 
+const reload = vi.fn();
+const originalServiceWorker = Object.getOwnPropertyDescriptor(
+  navigator,
+  'serviceWorker',
+);
+
+/** The browser's service worker container, as the page sees it. */
+function withServiceWorker(container: unknown) {
+  Object.defineProperty(navigator, 'serviceWorker', {
+    configurable: true,
+    value: container,
+  });
+}
+
 describe('PwaUpdatePrompt', () => {
   beforeEach(() => {
     registration.needRefresh = true;
-    registration.updateServiceWorker.mockResolvedValue();
+    reload.mockReset();
+    vi.stubGlobal('location', { ...window.location, reload });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    if (originalServiceWorker)
+      Object.defineProperty(navigator, 'serviceWorker', originalServiceWorker);
+    else Reflect.deleteProperty(navigator, 'serviceWorker');
   });
 
-  it('asks before activating a waiting service worker', async () => {
+  it('asks before the new build takes over, and can wait', async () => {
     const user = userEvent.setup();
     render(<PwaUpdatePrompt />);
 
     expect(screen.getByRole('alert')).toHaveTextContent(
       'O versiune nouă a aplicației este disponibilă.',
     );
-    await user.click(
-      screen.getByRole('button', { name: 'Actualizează aplicația' }),
-    );
-    expect(registration.updateServiceWorker).toHaveBeenCalledWith(true);
-
     await user.click(screen.getByRole('button', { name: 'Mai târziu' }));
     expect(registration.setNeedRefresh).toHaveBeenCalledWith(false);
+    expect(reload).not.toHaveBeenCalled();
   });
 
   it('stays out of the page when no update is waiting', () => {
@@ -57,11 +75,71 @@ describe('PwaUpdatePrompt', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('keeps the prompt open and explains a failed update', async () => {
+  // The phone bug: a page opened before any worker existed (an installed
+  // app's first launch) is never controlled, so a new build found while it
+  // stays open waits for nobody and is already active. Nothing waits for
+  // SKIP_WAITING and no controller ever changes. Fails if the tap only
+  // messages a waiting worker: the prompt stays and nothing happens.
+  it('reloads onto the new build when it has already taken over (nothing waits)', async () => {
     const user = userEvent.setup();
-    registration.updateServiceWorker.mockRejectedValueOnce(
-      new Error('offline'),
+    withServiceWorker({
+      controller: null,
+      getRegistration: async () => ({
+        update: async () => {},
+        waiting: null,
+        installing: null,
+      }),
+    });
+    render(<PwaUpdatePrompt />);
+
+    await user.click(
+      screen.getByRole('button', { name: 'Actualizează aplicația' }),
     );
+
+    await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+  });
+
+  it('hands over to a waiting build, then reloads once it takes control', async () => {
+    // The handover arms a 5 s fallback reload; fake timers drop it when the
+    // test ends, while still moving with real time for the clicks.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    let onControllerChange: (() => void) | undefined;
+    const postMessage = vi.fn();
+    withServiceWorker({
+      getRegistration: async () => ({
+        update: async () => {},
+        waiting: { postMessage },
+        installing: null,
+      }),
+      addEventListener: (type: string, listener: () => void) => {
+        if (type === 'controllerchange') onControllerChange = listener;
+      },
+    });
+    render(<PwaUpdatePrompt />);
+
+    await user.click(
+      screen.getByRole('button', { name: 'Actualizează aplicația' }),
+    );
+    await waitFor(() =>
+      expect(postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' }),
+    );
+    expect(reload).not.toHaveBeenCalled();
+    act(() => onControllerChange?.());
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  // Fails if the button looks the same while the handover waits on a slow
+  // network: the Member taps again, sees nothing, and calls it broken.
+  it('shows that it is updating while the handover runs', async () => {
+    const user = userEvent.setup();
+    withServiceWorker({
+      getRegistration: async () => ({
+        update: () => new Promise<void>(() => {}),
+        waiting: null,
+        installing: null,
+      }),
+    });
     render(<PwaUpdatePrompt />);
 
     await user.click(
@@ -69,9 +147,9 @@ describe('PwaUpdatePrompt', () => {
     );
 
     expect(
-      await screen.findByText(/Nu am putut actualiza aplicația/),
-    ).toBeVisible();
-    expect(screen.getByRole('alert')).toBeVisible();
+      await screen.findByRole('button', { name: 'Se actualizează…' }),
+    ).toBeDisabled();
+    expect(reload).not.toHaveBeenCalled();
   });
 });
 
