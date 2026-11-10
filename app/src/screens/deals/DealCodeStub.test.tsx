@@ -15,12 +15,15 @@ vi.mock('../../lib/auth', () => ({
   useAuth: () => ({ session: { user: { id: 'me' } } }),
 }));
 
+import { keys } from '../../queries/keys';
 import { DealCodeStub } from './DealCodeStub';
 
+// #1152: the Deal row says only whether there is a code; the code itself is
+// the answer of reveal_deal_code, which records the reveal.
 const deal = {
   id: 42,
   title: 'Reducere la Librăria X',
-  code: 'OSUBB-2026',
+  hasCode: true,
   isRevealed: false,
 };
 
@@ -28,9 +31,10 @@ function renderStub(ui: ReactElement) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(
-    <QueryClientProvider client={client}>{ui}</QueryClientProvider>,
-  );
+  return {
+    client,
+    ...render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>),
+  };
 }
 
 beforeEach(() => {
@@ -54,11 +58,13 @@ describe('DealCodeStub (R45)', () => {
       'data-state',
       'hidden',
     );
+    // A hidden code is never fetched: nothing reaches the page before a tap.
+    expect(supabaseMock.rpc).not.toHaveBeenCalled();
   });
 
-  it('reveals on a tap: asks the server once, then shows the code and Copiază', async () => {
+  it('reveals on a tap through reveal_deal_code and shows the code it answered (#1152)', async () => {
     const user = userEvent.setup();
-    const { container } = renderStub(<DealCodeStub deal={deal} />);
+    const { client, container } = renderStub(<DealCodeStub deal={deal} />);
     await user.click(screen.getByRole('button', { name: /Arată codul/ }));
 
     expect(await screen.findByText('OSUBB-2026')).toBeVisible();
@@ -66,6 +72,10 @@ describe('DealCodeStub (R45)', () => {
     expect(supabaseMock.rpc).toHaveBeenCalledWith('reveal_deal_code', {
       p_announcement_id: 42,
     });
+    // The answer is kept in the query cache, where the stub reads it.
+    expect(client.getQueryData(keys.announcements.dealCode(42, 'me'))).toBe(
+      'OSUBB-2026',
+    );
     expect(screen.getByRole('button', { name: 'Copiază' })).toBeVisible();
     expect(screen.queryByRole('button', { name: /Arată codul/ })).toBeNull();
     expect(container.querySelector('[data-slot="deal-code"]')).toHaveAttribute(
@@ -86,24 +96,28 @@ describe('DealCodeStub (R45)', () => {
       configurable: true,
     });
     renderStub(<DealCodeStub deal={{ ...deal, isRevealed: true }} />);
-    await user.click(screen.getByRole('button', { name: 'Copiază' }));
+    await user.click(await screen.findByRole('button', { name: 'Copiază' }));
     expect(writeText).toHaveBeenCalledWith('OSUBB-2026');
     expect(await screen.findByRole('button', { name: 'Copiat' })).toBeVisible();
     expect(screen.getByText('Codul a fost copiat.')).toBeInTheDocument();
   });
 
-  it('starts revealed when the server remembers the reveal, and never asks again', () => {
+  it('starts revealed when the server remembers the reveal, asking the same command once for the code', async () => {
     renderStub(<DealCodeStub deal={{ ...deal, isRevealed: true }} />);
-    expect(screen.getByText('OSUBB-2026')).toBeVisible();
+    expect(await screen.findByText('OSUBB-2026')).toBeVisible();
     expect(screen.queryByRole('button', { name: /Arată codul/ })).toBeNull();
-    expect(supabaseMock.rpc).not.toHaveBeenCalled();
+    // reveal_deal_code is idempotent: a remembered reveal adds no reveal row.
+    expect(supabaseMock.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseMock.rpc).toHaveBeenCalledWith('reveal_deal_code', {
+      p_announcement_id: 42,
+    });
   });
 
   it('stays hidden and says so when the reveal fails', async () => {
     const user = userEvent.setup();
     supabaseMock.rpc.mockResolvedValue({
       data: null,
-      error: { code: 'PT404', message: 'announcement_not_found' },
+      error: { code: 'PT404', message: 'deal_not_found' },
     });
     const { container } = renderStub(<DealCodeStub deal={deal} />);
     await user.click(screen.getByRole('button', { name: /Arată codul/ }));
@@ -111,12 +125,16 @@ describe('DealCodeStub (R45)', () => {
       await screen.findByText('Nu am putut deschide codul. Încearcă din nou.'),
     ).toBeVisible();
     expect(container.textContent).not.toContain('OSUBB-2026');
+    expect(
+      screen.getByRole('button', { name: /Arată codul/ }),
+    ).not.toBeDisabled();
   });
 
-  it('renders nothing for a Deal without a code', () => {
+  it('renders nothing for a Deal without a code, and asks nothing', () => {
     const { container } = renderStub(
-      <DealCodeStub deal={{ ...deal, code: null }} />,
+      <DealCodeStub deal={{ ...deal, hasCode: false }} />,
     );
     expect(container).toBeEmptyDOMElement();
+    expect(supabaseMock.rpc).not.toHaveBeenCalled();
   });
 });

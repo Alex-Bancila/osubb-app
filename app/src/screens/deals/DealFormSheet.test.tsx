@@ -315,10 +315,14 @@ describe('Editează deal-ul', () => {
       { label: 'Magazin', url: 'https://example.ro' },
       { label: 'Regulament', url: 'https://example.ro/r' },
     ],
-    code: 'OSUBB20',
+    hasCode: true,
     isRead: true,
     isRevealed: false,
   };
+
+  beforeEach(() => {
+    supabaseMock.rpc.mockResolvedValue({ data: 'OSUBB20', error: null });
+  });
 
   it('sends only what changed, every link kept as it was', async () => {
     const user = userEvent.setup();
@@ -330,7 +334,7 @@ describe('Editează deal-ul', () => {
     const sheet = await screen.findByRole('dialog', {
       name: 'Editează deal-ul',
     });
-    const code = within(sheet).getByLabelText(/Cod/);
+    const code = await within(sheet).findByLabelText(/Cod/);
     await user.clear(code);
     await user.type(code, 'OSUBB25');
     await user.click(
@@ -339,5 +343,68 @@ describe('Editează deal-ul', () => {
     expect(supabaseMock.update).toHaveBeenCalledWith({ code: 'OSUBB25' });
     expect(supabaseMock.eq).toHaveBeenCalledWith('id', 5);
     expect(onDone).toHaveBeenCalled();
+  });
+
+  it('starts from the code deal_code_for_edit answers, which is no reveal (#1152)', async () => {
+    renderWith(
+      <DealFormSheet
+        deal={deal}
+        open
+        onOpenChange={vi.fn()}
+        onDone={vi.fn()}
+      />,
+    );
+    const sheet = await screen.findByRole('dialog', {
+      name: 'Editează deal-ul',
+    });
+    expect(await within(sheet).findByLabelText(/Cod/)).toHaveValue('OSUBB20');
+    expect(supabaseMock.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseMock.rpc).toHaveBeenCalledWith('deal_code_for_edit', {
+      p_announcement_id: 5,
+    });
+  });
+
+  it('opens a Deal without a code without asking for one', async () => {
+    renderWith(
+      <DealFormSheet
+        deal={{ ...deal, hasCode: false }}
+        open
+        onOpenChange={vi.fn()}
+        onDone={vi.fn()}
+      />,
+    );
+    const sheet = await screen.findByRole('dialog', {
+      name: 'Editează deal-ul',
+    });
+    expect(within(sheet).getByLabelText(/Cod/)).toHaveValue('');
+    expect(supabaseMock.rpc).not.toHaveBeenCalled();
+  });
+
+  it('says so, and offers a retry, when the code cannot be read', async () => {
+    const user = userEvent.setup();
+    supabaseMock.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: '42501', message: 'deal_code_forbidden' },
+    });
+    renderWith(
+      <DealFormSheet
+        deal={deal}
+        open
+        onOpenChange={vi.fn()}
+        onDone={vi.fn()}
+      />,
+    );
+    const sheet = await screen.findByRole('dialog', {
+      name: 'Editează deal-ul',
+    });
+    expect(
+      await within(sheet).findByText('Nu am putut deschide codul deal-ului.'),
+    ).toBeVisible();
+    // No form to save over the code it could not read.
+    expect(within(sheet).queryByLabelText(/Cod/)).toBeNull();
+    await user.click(
+      within(sheet).getByRole('button', { name: 'Încearcă din nou' }),
+    );
+    expect(await within(sheet).findByLabelText(/Cod/)).toHaveValue('OSUBB20');
   });
 });

@@ -327,6 +327,18 @@ export const keys = {
       ['announcements', 'deals', { memberId }] as const,
     dealReveals: (announcementId: number, memberId: string | undefined) =>
       ['announcements', 'deal-reveals', { announcementId, memberId }] as const,
+    /* A Deal Code (#1152): the row never carries it, so the answer of
+       `reveal_deal_code` is kept here. Under `['announcements']`, so a Deal
+       edited by its team refreshes the code a Member already opened. */
+    dealCode: (announcementId: number, memberId: string | undefined) =>
+      ['announcements', 'deal-code', { announcementId, memberId }] as const,
+    /* The code for the edit sheet (`deal_code_for_edit`, #1152). */
+    dealCodeForEdit: (announcementId: number, memberId: string | undefined) =>
+      [
+        'announcements',
+        'deal-code-for-edit',
+        { announcementId, memberId },
+      ] as const,
   },
   /* The OSUBB Deals team (R44/R47). */
   assignments: {

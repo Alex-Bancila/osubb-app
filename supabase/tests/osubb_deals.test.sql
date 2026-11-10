@@ -20,7 +20,7 @@ begin;
 \ir _helpers.sql
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(79);
+select plan(104);
 
 create function pg_temp.u45(n integer) returns uuid language sql immutable as $$
   select ('45450000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
@@ -288,6 +288,95 @@ select is(public.deal_code_reveal_count(pg_temp.deal('Deal R45 resp')), 2, 'a BC
 select throws_ok($$select public.deal_code_reveal_count(pg_temp.deal('Anunt R45 org'))$$,
   'PT404', 'deal_not_found', 'an Announcement has no reveal count');
 reset role;
+
+-- ==================== #1152: the code leaves only through a command ====================
+-- Every check reads as the Member through pg_temp.as_member, which answers
+-- "error <sqlstate> <message>" instead of aborting, so the suite runs to the
+-- end on a schema without the change.
+create function pg_temp.as_member(p_member integer, p_sql text) returns text language plpgsql as $$
+declare v text;
+begin
+  perform pg_temp.test_login_leadership(pg_temp.u45(p_member));
+  begin
+    execute p_sql into v;
+  exception when others then
+    v := 'error ' || sqlstate || ' ' || sqlerrm;
+  end;
+  perform set_config('role', 'postgres', true);
+  return v;
+end $$;
+select is(array(select column_name::text from information_schema.columns
+                 where table_schema = 'public' and table_name = 'announcements'
+                   and not has_column_privilege('authenticated', 'public.announcements', column_name, 'select')
+                 order by column_name),
+  array['code'],
+  'authenticated selects every announcements column but code (#1152)');
+select is(pg_temp.as_member(5, format('select code from public.announcements where id = %s', pg_temp.deal('Deal R45 resp'))),
+  'error 42501 permission denied for table announcements',
+  'a Member cannot read a Deal''s code from the row');
+select is(pg_temp.as_member(5, format('select count(*)::text from public.announcements where id = %s and code is not null', pg_temp.deal('Deal R45 resp'))),
+  'error 42501 permission denied for table announcements',
+  'nor test it in a filter');
+select is(pg_temp.as_member(5, 'select count(*)::text from (select * from public.announcements) as every_column'),
+  'error 42501 permission denied for table announcements',
+  'nor read it with the whole row');
+select is(pg_temp.as_member(4, format('select code from public.announcements where id = %s', pg_temp.deal('Deal R45 resp'))),
+  'error 42501 permission denied for table announcements',
+  'the Responsabil does not read their own Deal''s code from the row either');
+select is(pg_temp.as_member(5, format('select has_code::text from public.announcements where id = %s', pg_temp.deal('Deal R45 resp'))),
+  'true', 'a Member reads has_code: this Deal has a code');
+select is(pg_temp.as_member(5, format('select has_code::text from public.announcements where id = %s', pg_temp.deal('Deal R45 coord'))),
+  'false', 'and that one has none');
+select is(pg_temp.as_member(5, format('select public.reveal_deal_code(%s)', pg_temp.deal('Deal R45 resp'))),
+  'RESP45', 'the reveal is the way a Member gets the code');
+select is((select count(*) from public.deal_code_reveals
+            where announcement_id = pg_temp.deal('Deal R45 resp') and member_id = pg_temp.u45(5))::int, 1,
+  'and asking again still leaves one reveal row for the Member');
+
+-- The edit sheets' read: whoever may edit the Deal, nobody else, no reveal.
+select ok(coalesce((select not has_function_privilege('anon', p.oid, 'execute') from pg_proc as p
+                     where p.oid = to_regprocedure('public.deal_code_for_edit(bigint)')), false),
+  'deal_code_for_edit exists and anon cannot execute it');
+select is(pg_temp.as_member(4, format('select public.deal_code_for_edit(%s)', pg_temp.deal('Deal R45 resp'))),
+  'RESP45', 'the Responsabil reads their own Deal''s code for the edit sheet');
+select is((select count(*) from public.deal_code_reveals
+            where announcement_id = pg_temp.deal('Deal R45 resp') and member_id = pg_temp.u45(4))::int, 0,
+  'and that is not a reveal: the team''s count stays the Members''');
+select is(pg_temp.as_member(3, format('select public.deal_code_for_edit(%s)', pg_temp.deal('Deal R45 resp'))),
+  'RESP45', 'the Coordonator reads any Deal''s code');
+select is(pg_temp.as_member(6, format('select public.deal_code_for_edit(%s)', pg_temp.deal('Deal R45 resp'))),
+  'RESP45', 'a BC member outside the team reads any Deal''s code');
+select is(pg_temp.as_member(4, format('select coalesce(public.deal_code_for_edit(%s), ''none'')', pg_temp.deal('Deal R45 expirat'))),
+  'EXP45', 'the Responsabil reads their own expired Deal''s code');
+select is(pg_temp.as_member(4, format('select coalesce(public.deal_code_for_edit(%s), ''none'')', pg_temp.deal('Deal R45 coord'))),
+  'error 42501 deal_code_forbidden', 'the Responsabil cannot read the code of another''s Deal');
+select is(pg_temp.as_member(5, format('select public.deal_code_for_edit(%s)', pg_temp.deal('Deal R45 resp'))),
+  'error 42501 deal_code_forbidden', 'a Member outside the team cannot');
+select is(pg_temp.as_member(8, format('select public.deal_code_for_edit(%s)', pg_temp.deal('Deal R45 resp'))),
+  'error 42501 deal_code_forbidden', 'nor a Group Manager');
+select is(pg_temp.as_member(5, format('select public.deal_code_for_edit(%s)', pg_temp.deal('Deal R45 expirat'))),
+  'error PT404 deal_not_found', 'a Deal the Member cannot read is not found');
+select is(pg_temp.as_member(2, format('select public.deal_code_for_edit(%s)', pg_temp.deal('Anunt R45 org'))),
+  'error PT404 deal_not_found', 'an Announcement is not a Deal');
+select is(pg_temp.as_member(2, 'select public.deal_code_for_edit(-1)'),
+  'error PT404 deal_not_found', 'an unknown id is not found');
+select pg_temp.test_clear_jwt();
+set local role authenticated;
+select throws_ok($$select public.deal_code_for_edit(pg_temp.deal('Deal R45 resp'))$$,
+  '42501', 'deal_code_forbidden', 'a claimless caller reads no code');
+reset role;
+
+-- The author still writes the code: an update needs no read of it.
+select is(pg_temp.as_member(4, format(
+  'with changed as (update public.announcements set code = ''RESP46'' where id = %s returning id) select count(*)::text from changed',
+  pg_temp.deal('Deal R45 resp'))),
+  '1', 'the Responsabil changes their own Deal''s code, reading back only the id');
+select is(pg_temp.as_member(4, format('select public.deal_code_for_edit(%s)', pg_temp.deal('Deal R45 resp'))),
+  'RESP46', 'and the edit sheet reads the new one');
+select is(pg_temp.as_member(4, format(
+  'with changed as (update public.announcements set code = null where id = %s returning has_code) select bool_or(has_code)::text from changed',
+  pg_temp.deal('Deal R45 resp'))),
+  'false', 'clearing it clears has_code');
 
 -- ==================== Readers list ====================
 select pg_temp.test_login_leadership(pg_temp.u45(4));

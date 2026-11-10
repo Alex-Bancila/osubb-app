@@ -84,6 +84,7 @@ function rawRow(
     links: [],
     kind: 'announcement',
     code: null,
+    has_code: false,
     published_at: '2026-09-18T15:00:00.000Z',
     deadline: null,
     event_id: null,
