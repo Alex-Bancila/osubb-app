@@ -33,6 +33,12 @@ A Deal is a row of `public.announcements` with `kind = 'deal'` and an optional `
 - **Read.** `private.can_read_announcement(…, kind, deadline)`: every live Member until the Termen; afterwards only the team and live level ≥ 6. The unread badge, `public.my_unread_announcements_count(p_kind default null)`, counts one tab when asked and never an expired Deal.
 - **Fan-out.** The organization-wide Announcement rule (R32, R43), titled "Deal nou: <titlu>", linking `/anunturi/deals?deal=<id>`, subject `announcement:<id>`. The readers list (`announcement_readers`) is open to the team for a Deal.
 - **Deal Code reveal.** `public.reveal_deal_code(p_announcement_id)` returns the code to a live Member who can read the Deal and records one `public.deal_code_reveals` row (idempotent; nothing is recorded for a Deal without a code). A Member reads their own reveals (PostgREST can embed `deal_code_reveals(revealed_at)` beside `announcement_reads(read_at)`); the team, BC and the Moderator read the count through `public.deal_code_reveal_count(p_announcement_id)`. `deal_code_reveals` is excluded from the live-change broadcast: a personal record nobody else watches live.
+- **The code is a secret (#1152, audit M20).** Since `20261110213807_deal_code_secret.sql`, `authenticated` holds SELECT on `public.announcements` column by column, every column but `code`. A column-level revoke under the old table-wide grant would have changed nothing. A new column of the table is unreadable by `authenticated` until its migration grants it, as for `profiles`. A whole-row read (`select *`, a whole-row reference) is refused for the same reason.
+  - The Deal read selects `has_code`, a stored generated column (`code is not null`), to draw the hidden stub.
+  - A Member gets the code only from `reveal_deal_code`, so the reveal count is the count of Members who have the code. The app keeps the answer in its query cache, and asks the same command again for a reveal remembered from another device.
+  - Whoever may edit the Deal (`private.can_manage_deal`) reads it for the edit sheet with `public.deal_code_for_edit(p_announcement_id)`. That read records nothing; it answers `42501 deal_code_forbidden` or `PT404 deal_not_found` like the reveal.
+  - Writing the code is unchanged: an insert or update names it under `announcements_create` / `announcements_update`.
+  - `private.stamp_approval` skips `has_code`: Postgres computes it after the BEFORE triggers, so it is null in `NEW` there.
 
 ## Five Attached Links (R46)
 
@@ -55,4 +61,4 @@ A Deal is a row of `public.announcements` with `kind = 'deal'` and an optional `
 
 ## Tests
 
-`supabase/tests/assignment_team.test.sql`, `osubb_deals.test.sql` and `attached_links.test.sql`, with Attached Links additions in `completed_work_tasks.test.sql` and `update_task.test.sql`. Each rule was proved by mutation: its function line reverted on the local database, the suite run, the named assertions red, the line restored.
+`supabase/tests/assignment_team.test.sql`, `osubb_deals.test.sql` and `attached_links.test.sql`, with Attached Links additions in `completed_work_tasks.test.sql` and `update_task.test.sql`, and the `has_code` stamp case in `approvals.test.sql`. Each rule was proved by mutation: its function line reverted on the local database, the suite run, the named assertions red, the line restored.

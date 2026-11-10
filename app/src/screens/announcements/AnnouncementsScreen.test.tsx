@@ -187,6 +187,7 @@ function createRow(
     links: [],
     kind: 'announcement',
     code: null,
+    has_code: false,
     announcement_reads: [],
     ...overrides,
   };

@@ -12,7 +12,8 @@
 --   3. the Umbrella cascade, and that nothing outside the target moves;
 --   4. the immutability guards still refuse every other delete, and the
 --      ledger's reference constraint;
---   5. delete_event (RSVPs and Notifications go, the Announcement stays);
+--   5. delete_event (RSVPs and Notifications go, and since #1150 the
+--      Announcement the Event wrote for itself goes too);
 --   6. delete_campaign (the label goes, the Tasks and Events stay);
 --   7. group_delete_preview / delete_group: malformed mode, archive_group's
 --      authority, the empty mode, every protected Group, the everything mode
@@ -163,8 +164,8 @@ insert into public.tasks (title, group_id, audience, assignment_mode, status, de
 values ('Etichetat #1017', pg_temp.g('Rădăcină #1017'), 'local', 'direct', 'todo', now() + interval '9 days',
         (select id from public.campaigns where name = 'Campanie #1017'), pg_temp.u(3));
 -- The Event delete_event removes is created the way the app creates one with
--- its Announcement (#909), so the Announcement it must leave in place is the
--- real one: same title, same Group, no link back to the Event.
+-- its Announcement (#909), so the Announcement that goes with it (#1150) is
+-- the real one: same title, same Group, linked by announcements.event_id.
 select pg_temp.test_login(pg_temp.u(3), '{"member_role":"voluntar","member_level":1}'::jsonb);
 select public.create_event('Eveniment #1017', 'activitate', pg_temp.g('Rădăcină #1017'),
   now() + interval '5 days', null, null, null, 'Se anunță odată cu evenimentul.', 0, null, true);
@@ -183,7 +184,8 @@ values (pg_temp.event('Eveniment #1017'), pg_temp.u(5), 'going');
 select private.notify(array[pg_temp.u(5)], 'event'::public.noti_kind, 'Eveniment nou: Eveniment #1017', null,
   null, 'event:' || pg_temp.event('Eveniment #1017'), null, '/calendar?event=' || pg_temp.event('Eveniment #1017'));
 insert into public.announcements (title, body, group_id, created_by) values
-  ('Anunț nepot #1017',          'Doar pentru nepot.',             pg_temp.g('Nepot #1017'),    pg_temp.u(3));
+  ('Anunț nepot #1017',          'Doar pentru nepot.',             pg_temp.g('Nepot #1017'),    pg_temp.u(3)),
+  ('Anunț rădăcină #1017',       'Doar pentru rădăcină.',          pg_temp.g('Rădăcină #1017'), pg_temp.u(3));
 
 create temporary table ids as
 select pg_temp.task('Fără puncte #1017')     as t_plain,
@@ -204,6 +206,7 @@ select pg_temp.task('Fără puncte #1017')     as t_plain,
        (select id from public.announcements where title = 'Eveniment #1017'
            and group_id = pg_temp.g('Rădăcină #1017')) as a_plain,
        (select id from public.announcements where title = 'Anunț nepot #1017') as a_grandchild,
+       (select id from public.announcements where title = 'Anunț rădăcină #1017') as a_root,
        pg_temp.g('Gol #1017') as g_empty;
 grant select on ids to authenticated;
 
@@ -375,8 +378,8 @@ select is((select count(*)::int from public.events where id = (select e_plain fr
   0, 'the Event is gone with its RSVPs');
 select is((select count(*)::int from public.notifications where subject = 'event:' || (select e_plain from ids)),
   0, 'and with its Notifications');
-select is((select title from public.announcements where id = (select a_plain from ids)), 'Eveniment #1017',
-  'the Announcement create_event published with the Event (same title, same Group) stays');
+select is((select count(*)::int from public.announcements where id = (select a_plain from ids)), 0,
+  'the Announcement create_event published with the Event goes with it (#1150)');
 
 -- ==================== 6 · delete_campaign ====================
 
@@ -489,7 +492,7 @@ select is(public.delete_group(pg_temp.g('Rădăcină #1017'), 'everything') ->> 
 reset role;
 select is((select count(*)::int from public.tasks where id in ((select t_resp from ids), (select t_copy from ids), (select t_labelled from ids)))
           + (select count(*)::int from public.events where id = (select e_labelled from ids))
-          + (select count(*)::int from public.announcements where id = (select a_plain from ids)),
+          + (select count(*)::int from public.announcements where id = (select a_root from ids)),
   0, 'every Task, Event and Announcement of the Group is gone');
 select is((select coalesce(sum(delta), 0)::int from public.points_ledger where member_id = pg_temp.u(10)), 0,
   'and every point it held was taken back');
