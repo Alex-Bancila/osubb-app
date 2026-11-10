@@ -11,6 +11,7 @@
 - **Amended:** 2026-10-18 — ruling R58 (Portofoliu Interne): nothing promotes by the calendar any more, Recrut → Voluntar included; a Membership Cutoff Date replaces tenure; an Eligibility Floor gates who is ranked and the percentile is taken over the eligible alone, in one ranking of every Member below BCE for the Voluntar Activ kind; a run measures its Candidates and Signals against the line it computes; only a UBB student may hold Drept de Vot; a Simulation precedes every finalised run
 - **Amended:** 2026-10-20 — R58 amendment (#1089): Portofoliu Interne gets a Setări view, the only place the Eligibility Floor (Prag minim) and the Membership Cutoff Date (Data limită de intrare) are set; a finalised run uses the values in force, records them on its own row and writes back only the share it used, never the Floor or the cutoff
 - **Amended:** 2026-10-24 — R58 amendment: the Adunarea Generală kind ranks the same pool as the Voluntar Activ kind (every active Member below BCE, ranked at or above the Eligibility Floor) and judges only the Voluntari cu Drept de Vot in it, with no Promotion Candidate and no cutoff; it no longer ranks the voters alone
+- **Amended:** 2026-11-10 — ruling R66 (the Adherence Message): the adherence form leaves the promotion Notification and Administrare → Setări; it reaches every active Voluntar Activ whose Universitate is UBB, and only them, through one message BC writes on Portofoliu Interne, shown over the app until the Member answers it and kept on their Profil after; a promotion to Voluntar Activ is notified with the new Role alone
 - **Deciders:** Alex Băncilă (IT Coordinator)
 - **Supersedes:** —
 - **Superseded by:** —
@@ -63,7 +64,7 @@ Read decision 1's Voluntar → Voluntar Activ rule, and the 2026-09-18 reading o
 
 **Retention Signal, never demotion.** When a Period closes, a Voluntar Activ below the top x% and a Voluntar cu Drept de Vot below the top y% each produce a Retention Signal to BC, who may withdraw the Role by hand through the role panel. Decision 3 stands unchanged: nothing lowers a Role automatically.
 
-**AG Eligibility by Role.** A Voluntar Activ is eligible for the Adunarea Generală by that Role alone, because reaching it already required tenure and the threshold; there is no second threshold. The promotion notification offers the adherence form, and only BC's confirmation grants Drept de Vot. The separate "Drept de Vot eligibility signal" the Wave 4 issues described is withdrawn.
+**AG Eligibility by Role.** A Voluntar Activ is eligible for the Adunarea Generală by that Role alone, because reaching it already required tenure and the threshold; there is no second threshold. The promotion notification offers the adherence form, and only BC's confirmation grants Drept de Vot (amended 2026-11-10, R66: the Adherence Message offers the form, to UBB students only; the notification names the Role alone). The separate "Drept de Vot eligibility signal" the Wave 4 issues described is withdrawn.
 
 The `ag_eligibility` / `ag_quorum_top25` views named in decision 2 have no successor (#47); their role is taken by the Period ranking, the Promotion Threshold, and the Retention Signals.
 

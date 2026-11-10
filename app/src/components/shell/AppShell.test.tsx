@@ -56,6 +56,10 @@ vi.mock('../../queries/notifications-realtime', () => ({
 vi.mock('../../queries/push-subscription', () => ({
   usePushSelfRepair: vi.fn(),
 }));
+// R66: the Adherence Message's pop-up has its own suite; here it is a slot.
+vi.mock('./AdherenceMessageGate', () => ({
+  AdherenceMessageGate: () => <div data-testid="adherence-message-gate" />,
+}));
 
 import AppShell from './AppShell';
 import type { Capabilities } from '../../lib/capabilities';
@@ -355,6 +359,13 @@ describe('AppShell', () => {
       expect.stringContaining('osubb-logo-on-dark'),
     ]);
     marks.forEach((mark) => expect(mark).toHaveAttribute('alt', ''));
+  });
+
+  it('mounts the Adherence Message pop-up over every page (R66)', () => {
+    renderShell();
+    // Outside the page's own area: it is a layer over the whole app.
+    const gate = screen.getByTestId('adherence-message-gate');
+    expect(screen.getByRole('main')).not.toContainElement(gate);
   });
 
   it('owns vertical page scrolling in the shared content viewport', () => {

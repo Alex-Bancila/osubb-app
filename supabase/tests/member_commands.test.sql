@@ -299,8 +299,8 @@ select is(
      from notifications
     where member_id = '58000000-0000-0000-0000-000000000004'),
   -- `format('%s', <boolean>)` renders `f`/`t`, not `false`/`true`.
-  'system|Rol actualizat|Rolul tău în OSUBB este acum Voluntar Activ. Ca Voluntar Activ ai Eligibilitate AG: poți intra în Adunarea Generală obținând Dreptul de Vot, pe care BC ți-l acordă după ce confirmă formularul de adeziune. Formularul de adeziune îl primești de la BC.|/profil|||f',
-  'the Role Notification uses the Role display name, links Profil (#843, D24) and has no Task or dedupe key; a new Voluntar Activ hears about AG Eligibility and the adherence form (#826 -- no address set here, so BC sends it)');
+  'system|Rol actualizat|Rolul tău în OSUBB este acum Voluntar Activ.|/profil|||f',
+  'the Role Notification uses the Role display name, links Profil (#843, D24) and has no Task or dedupe key; a new Voluntar Activ hears only the new Role (R66: the adherence form reaches the Members at UBB through the Adherence Message)');
 select is(
   (select count(*) from notifications
     where member_id = '58000000-0000-0000-0000-000000000002'),

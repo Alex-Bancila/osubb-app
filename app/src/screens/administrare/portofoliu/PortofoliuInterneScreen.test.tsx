@@ -115,16 +115,16 @@ const settingRow = (panel: HTMLElement, label: string) => {
   return found;
 };
 
-it('offers Voluntar Activ, Adunarea Generală and Setări, and shows each list once it has a row', async () => {
+it('offers Voluntar Activ, Adunarea Generală, Mesaj and Setări, and shows each list once it has a row', async () => {
   const first = page();
   await settledRun();
-  // One switch of three sections; the old Tip is gone.
+  // One switch of four sections (R66 added Mesaj); the old Tip is gone.
   expect(screen.queryByRole('radiogroup', { name: 'Tip' })).toBeNull();
   expect(
     within(sections())
       .getAllByRole('radio')
       .map((radio) => radio.textContent),
-  ).toEqual(['Voluntar Activ', 'Adunarea Generală', 'Setări']);
+  ).toEqual(['Voluntar Activ', 'Adunarea Generală', 'Mesaj', 'Setări']);
   expect(section('Voluntar Activ')).toBeChecked();
   // No empty candidates, signals or history blocks: the run form alone, in
   // one column.
@@ -331,6 +331,17 @@ it('writes the section into the address, replacing the entry, and removes it for
   // Back must not walk through the choices: each one replaces the entry.
   expect(where).toHaveAttribute('data-navigation', 'REPLACE');
   expect(screen.getByLabelText('Procent')).toHaveValue(25);
+
+  await user.click(section('Mesaj'));
+  expect(where).toHaveTextContent(`${PAGE}?alt=1&vedere=mesaj`);
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Mesajul pentru Voluntarii Activi',
+      level: 2,
+    }),
+  ).toBeVisible();
+  expect(section('Mesaj')).toBeChecked();
+  expect(screen.queryByLabelText('Procent')).toBeNull();
 
   await user.click(section('Setări'));
   expect(where).toHaveTextContent(`${PAGE}?alt=1&vedere=setari`);

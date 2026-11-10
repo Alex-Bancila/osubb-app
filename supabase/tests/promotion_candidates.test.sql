@@ -210,7 +210,11 @@ select is((select count(*) from public.notifications), (select n from notif8261)
 
 -- ==================== 4. The role_history trigger ====================
 
-update public.org_settings set value = 'https://forms.example.org/adeziune' where key = 'adherence_form_url';
+-- R66: the adherence form's address lives in the Adherence Message; even
+-- with one set, the promotion Notification never carries it.
+update public.adherence_message
+   set link_url = 'https://forms.example.org/adeziune', link_label = 'Formularul'
+ where id = 1;
 
 select pg_temp.test_login_leadership('82610000-0000-0000-0000-000000000001');
 select lives_ok($$ select public.set_member_role('82610000-0000-0000-0000-000000000012', 'activ', 'Evaluarea de rol „Evaluare 8261”') $$,
@@ -224,8 +228,8 @@ select results_eq(
 select is(
   (select body from public.notifications
     where member_id = '82610000-0000-0000-0000-000000000012' and title = 'Rol actualizat'),
-  'Rolul tău în OSUBB este acum Voluntar Activ. Ca Voluntar Activ ai Eligibilitate AG: poți intra în Adunarea Generală obținând Dreptul de Vot, pe care BC ți-l acordă după ce confirmă formularul de adeziune. Completează formularul de adeziune: https://forms.example.org/adeziune',
-  'the manual promotion to Voluntar Activ carries AG Eligibility and the adherence form address, read at write time');
+  'Rolul tău în OSUBB este acum Voluntar Activ.',
+  'the manual promotion to Voluntar Activ names only the new Role -- no AG sentence and no address, even with one set (R66)');
 
 select pg_temp.test_login_leadership('82610000-0000-0000-0000-000000000001');
 select lives_ok($$ select public.set_member_role('82610000-0000-0000-0000-000000000013', 'recrut') $$,

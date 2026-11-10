@@ -7,10 +7,8 @@ import {
   type FormEvent,
   type ReactNode,
 } from 'react';
-import { ExternalLink } from 'lucide-react';
 import { cn } from 'cn';
 import {
-  focusRingClass,
   PageGrid,
   Panel,
   rowListClass,
@@ -18,16 +16,8 @@ import {
 } from '../../components/layout';
 import { ErrorState, Loading } from '../../components/states';
 import { Button } from '../../components/ui/button';
-import { FieldError } from '../../components/ui/field';
-import { Input } from '../../components/ui/input';
 import { Select } from '../../components/ui/select';
 import { describeFailure } from '../../lib/command-reasons';
-import { safeHttpUrl } from '../../lib/links';
-import {
-  adherenceFormFieldForReason,
-  adherenceFormSchema,
-} from '../../lib/schemas/org-settings';
-import { useFormValidation } from '../../lib/use-form-validation';
 import { useAdminGroups, type AdminGroup } from '../../queries/groups-admin';
 import {
   useOrgSettingChange,
@@ -63,17 +53,6 @@ type GroupSetting = Setting & {
   key: 'adunarea_generala_group_id' | 'board_group_id';
   /** Which active Groups can hold the setting at all (B59). */
   fits: (group: AdminGroup) => boolean;
-};
-
-const ADHERENCE_FORM: Setting = {
-  key: 'adherence_form_url',
-  label: 'Formular de adeziune',
-  // `set_member_role` puts the address in the Notification of a Member
-  // promoted Voluntar Activ (#681, #826); unset, it says BC sends the form.
-  effect:
-    'Membrii promovați Voluntar Activ primesc acest link în notificare, ca să completeze adeziunea.',
-  unset:
-    'Membrii promovați nu primesc niciun link: află doar că formularul vine de la BC.',
 };
 
 const ADUNAREA_GENERALA: GroupSetting = {
@@ -262,105 +241,6 @@ function useFocusOnOpen() {
 }
 
 /* ------------------------------------------------------------------------ */
-/* The adherence form's address                                              */
-/* ------------------------------------------------------------------------ */
-
-function AdherenceFormEditor({
-  current,
-  onSave,
-  labelId,
-  disabled,
-  onDone,
-}: EditorProps & { current: string | null; onSave: Save }) {
-  const hintId = useId();
-  const formRef = useFocusOnOpen();
-  const [url, setUrl] = useState(current ?? '');
-  const [pending, setPending] = useState(false);
-  const form = useFormValidation(
-    adherenceFormSchema,
-    { url },
-    adherenceFormFieldForReason,
-  );
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    const values = form.validate();
-    if (!values) return;
-    setPending(true);
-    try {
-      await onSave({ key: 'adherence_form_url', value: values.url });
-      onDone(true);
-    } catch (failure) {
-      form.fail(failure, SAVE_FAILED);
-      setPending(false);
-    }
-  }
-
-  return (
-    <form
-      ref={formRef}
-      onSubmit={submit}
-      noValidate
-      aria-labelledby={labelId}
-      className="flex max-w-xl flex-col gap-3"
-    >
-      <Input
-        type="url"
-        inputMode="url"
-        aria-labelledby={labelId}
-        placeholder="https://"
-        value={url}
-        disabled={disabled || pending}
-        onChange={(event) => setUrl(event.target.value)}
-        {...form.field('url', current ? hintId : undefined)}
-      />
-      {/* How to clear it, only when there is something to clear. */}
-      {current && (
-        <p id={hintId} className="m-0 text-sm text-muted-foreground">
-          Lasă câmpul gol ca să nu mai trimiți niciun link.
-        </p>
-      )}
-      <FieldError {...form.errorProps('url')} />
-      <FieldError>{form.formError}</FieldError>
-      <EditorActions
-        changed={url.trim() !== (current ?? '')}
-        pending={pending || disabled}
-        onCancel={() => onDone(false)}
-      />
-    </form>
-  );
-}
-
-function AdherenceFormValue({ current }: { current: string }) {
-  const href = safeHttpUrl(current);
-  // A value written outside the server's guard is shown, never linked.
-  if (!href)
-    return (
-      <span className="block truncate" title={current}>
-        {current}
-      </span>
-    );
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={current}
-      className={cn(
-        'inline-flex max-w-full items-center gap-1.5 rounded-sm underline underline-offset-4',
-        focusRingClass,
-      )}
-    >
-      <span className="truncate">
-        {current.replace(/^https?:\/\//, '').replace(/\/$/, '')}
-      </span>
-      <ExternalLink aria-hidden="true" className="size-3.5 shrink-0" />
-      <span className="sr-only"> (se deschide într-o filă nouă)</span>
-    </a>
-  );
-}
-
-/* ------------------------------------------------------------------------ */
 /* A setting that names a Group: the Adunarea Generală (#512) and the board  */
 /* (#824, decision D1)                                                       */
 /* ------------------------------------------------------------------------ */
@@ -537,7 +417,6 @@ export default function AdminSettingsTab() {
       />
     );
   const value = (key: SettingKey) => settings.data.get(key) ?? null;
-  const adherence = value('adherence_form_url');
   return (
     <PageGrid columns={1}>
       <Panel
@@ -549,18 +428,6 @@ export default function AdminSettingsTab() {
         flush
       >
         <ul className={rowListClass}>
-          <SettingRow
-            setting={ADHERENCE_FORM}
-            value={adherence && <AdherenceFormValue current={adherence} />}
-            disabled={change.isPending}
-            renderEditor={(props) => (
-              <AdherenceFormEditor
-                {...props}
-                current={adherence}
-                onSave={save}
-              />
-            )}
-          />
           <GroupSettingRow
             setting={ADUNAREA_GENERALA}
             current={value('adunarea_generala_group_id')}

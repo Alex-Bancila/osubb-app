@@ -95,6 +95,8 @@ const FAMILIES_BY_TABLE: ReadonlyMap<string, readonly Prefix[]> = new Map<
       keys.groups.all,
       keys.tasks.all,
       keys.points.all,
+      // R66: a Role or a Universitate decides who receives the message.
+      keys.adherence.all,
       CAPABILITIES,
     ],
   ],
@@ -146,6 +148,10 @@ const FAMILIES_BY_TABLE: ReadonlyMap<string, readonly Prefix[]> = new Map<
     ],
   ],
   ['privacy_notice_acknowledgements', [keys.privacy.all]],
+  /* R66: a save re-reads the pop-up in every open app; an answer closes it
+     on the Member's other devices and moves BC's counts. */
+  ['adherence_message', [keys.adherence.all]],
+  ['adherence_message_reads', [keys.adherence.all]],
   ['role_history', [keys.profile.all, keys.members.all]],
   ['role_evaluations', [keys.evaluation.all, keys.points.all]],
   /* #1146: the population a finished run kept; its sheet reads the run. */

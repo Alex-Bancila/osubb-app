@@ -376,7 +376,7 @@ select throws_ok($$ select public.set_org_setting('vote_retention_percent', '30'
   '42501', 'org_settings_manage_forbidden', 'a Voluntar meets the gate before the unknown key');
 reset role;
 select pg_temp.test_login_leadership('86600000-0000-0000-0000-000000000001');
-select lives_ok($$ select public.set_org_setting('adherence_form_url', 'https://forms.example.org/r30') $$,
+select lives_ok($$ select public.set_org_setting('email_daily_quota', '91') $$,
   'set_org_setting still sets every other key');
 reset role;
 select is((select vot_percent from public.evaluation_settings where id = 1), 50,

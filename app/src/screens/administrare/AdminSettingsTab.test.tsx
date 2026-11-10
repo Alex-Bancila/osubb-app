@@ -71,7 +71,6 @@ function group(id: number, name: string, extra: Partial<AdminGroup> = {}) {
 
 beforeEach(() => {
   db.settings = new Map<string, string | null>([
-    ['adherence_form_url', null],
     ['adunarea_generala_group_id', null],
     ['board_group_id', null],
     ['vote_retention_percent', '25'],
@@ -145,7 +144,10 @@ it('groups the settings by purpose, each with its effect, value and one Editeaz�
     within(promotions)
       .getAllByRole('listitem')
       .map((item) => item.getAttribute('data-setting')),
-  ).toEqual(['adherence_form_url', 'adunarea_generala_group_id']);
+  ).toEqual(['adunarea_generala_group_id']);
+  // R66: the adherence form's link lives with the message on Portofoliu
+  // Interne, not here.
+  expect(container).not.toHaveTextContent(/Formular de adeziune/);
   expect(
     within(profile)
       .getAllByRole('listitem')
@@ -166,11 +168,6 @@ it('groups the settings by purpose, each with its effect, value and one Editeaz�
   // Every setting: one sentence of effect, "Nesetat" with its consequence,
   // and the same Editează button; no editor open, no permanent hint.
   const expected = [
-    [
-      'Formular de adeziune',
-      'Membrii promovați Voluntar Activ primesc acest link în notificare, ca să completeze adeziunea.',
-      'Membrii promovați nu primesc niciun link: află doar că formularul vine de la BC.',
-    ],
     [
       'Grupul Adunării Generale',
       'Managerii și responsabilii acestui grup și ai grupurilor de deasupra lui văd clasamentul complet al evaluărilor de rol.',
@@ -195,124 +192,6 @@ it('groups the settings by purpose, each with its effect, value and one Editeaz�
   expect(container).not.toHaveTextContent(/perioad|semnal|http:\/\//i);
   expect(container.querySelectorAll('form')).toHaveLength(0);
   expect((await axe.run(container)).violations).toEqual([]);
-});
-
-it('shows the adherence form in force as a link, only when it is http(s)', async () => {
-  db.settings.set('adherence_form_url', 'https://forms.example.org/adeziune');
-  const view = show();
-  const item = await row('Formular de adeziune');
-  const link = within(valueOf(item)).getByRole('link', {
-    name: /forms\.example\.org\/adeziune/,
-  });
-  expect(link).toHaveAttribute('href', 'https://forms.example.org/adeziune');
-  expect(link).toHaveAttribute('rel', 'noopener noreferrer');
-  expect(within(item).queryByText('Nesetat')).toBeNull();
-  view.unmount();
-
-  // A value written outside the server's guard is shown, never linked.
-  db.settings.set('adherence_form_url', 'javascript:alert(1)');
-  show();
-  const unsafe = await row('Formular de adeziune');
-  expect(within(unsafe).getByText('javascript:alert(1)')).toBeVisible();
-  expect(within(unsafe).queryByRole('link')).toBeNull();
-});
-
-it('edits the adherence form: refuses, saves, cancels and clears', async () => {
-  const user = userEvent.setup();
-  show();
-  const item = await row('Formular de adeziune');
-  const edit = within(item).getByRole('button', {
-    name: 'Editează Formular de adeziune',
-  });
-  await user.click(edit);
-  const field = within(item).getByRole('textbox', {
-    name: 'Formular de adeziune',
-  });
-  expect(field).toHaveFocus();
-  const save = within(item).getByRole('button', { name: 'Salvează' });
-  // Unchanged: nothing to save, and no hint about clearing an empty value.
-  expect(save).toBeDisabled();
-  expect(item).not.toHaveTextContent('Lasă câmpul gol');
-
-  // ftp:// is refused in the browser, under the field, only now.
-  await user.type(field, 'ftp://example.org/form');
-  await user.click(save);
-  expect(
-    within(item).getByText(
-      'Adresa trebuie să înceapă cu http:// sau https://.',
-    ),
-  ).toBeVisible();
-  expect(field).toHaveAttribute('aria-invalid', 'true');
-  expect(rpcCalls('set_org_setting')).toEqual([]);
-
-  // … and the server's own refusal lands in the same place.
-  db.refuse.set('set_org_setting', 'invalid_org_setting_value');
-  await user.clear(field);
-  await user.type(field, 'https://forms.example.org/adeziune');
-  await user.click(save);
-  expect(
-    await within(item).findByText(/Valoarea nu este acceptată/),
-  ).toBeVisible();
-
-  db.refuse.clear();
-  await user.click(within(item).getByRole('button', { name: 'Salvează' }));
-  await waitFor(() =>
-    expect(rpcCalls('set_org_setting').at(-1)).toEqual({
-      p_key: 'adherence_form_url',
-      p_value: 'https://forms.example.org/adeziune',
-    }),
-  );
-  expect(await within(item).findByRole('status')).toHaveTextContent(
-    'Setare salvată.',
-  );
-  expect(
-    await within(valueOf(item)).findByRole('link', {
-      name: /forms\.example\.org\/adeziune/,
-    }),
-  ).toBeVisible();
-  expect(within(item).queryByRole('textbox')).toBeNull();
-  expect(
-    within(item).getByRole('button', { name: 'Editează Formular de adeziune' }),
-  ).toHaveFocus();
-
-  // Renunță drops the draft: the value in force stays, nothing is sent.
-  const sent = rpcCalls('set_org_setting').length;
-  await user.click(
-    within(item).getByRole('button', { name: 'Editează Formular de adeziune' }),
-  );
-  await user.clear(within(item).getByRole('textbox'));
-  await user.type(within(item).getByRole('textbox'), 'https://altceva.ro');
-  await user.click(within(item).getByRole('button', { name: 'Renunță' }));
-  expect(within(item).queryByRole('textbox')).toBeNull();
-  expect(rpcCalls('set_org_setting')).toHaveLength(sent);
-  expect(
-    within(valueOf(item)).getByRole('link', {
-      name: /forms\.example\.org\/adeziune/,
-    }),
-  ).toBeVisible();
-  expect(within(item).getByRole('status')).toBeEmptyDOMElement();
-  // … and reopening starts from the value in force.
-  await user.click(
-    within(item).getByRole('button', { name: 'Editează Formular de adeziune' }),
-  );
-  expect(within(item).getByRole('textbox')).toHaveValue(
-    'https://forms.example.org/adeziune',
-  );
-
-  // Emptying the field clears the setting; the hint says so, now relevant.
-  expect(item).toHaveTextContent(
-    'Lasă câmpul gol ca să nu mai trimiți niciun link.',
-  );
-  await user.clear(within(item).getByRole('textbox'));
-  await user.click(within(item).getByRole('button', { name: 'Salvează' }));
-  await waitFor(() =>
-    expect(rpcCalls('set_org_setting').at(-1)).toEqual({
-      p_key: 'adherence_form_url',
-      p_value: '',
-    }),
-  );
-  expect(await within(valueOf(item)).findByText('Nesetat')).toBeVisible();
-  expect(within(item).queryByRole('link')).toBeNull();
 });
 
 it('edits the Adunarea Generală among top-level Teams with automatic membership (B59)', async () => {

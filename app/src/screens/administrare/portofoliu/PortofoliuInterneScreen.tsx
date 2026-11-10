@@ -22,6 +22,7 @@ import { ReceiptTurnScope } from '../../tracker/ReceiptTurnScope';
 import { CandidatesPanel } from './CandidatesPanel';
 import { ChangeLogPanel } from './ChangeLogPanel';
 import { HistoryPanel } from './HistoryPanel';
+import { MessagePanel } from './MessagePanel';
 import { KIND_LABEL } from './portofoliu-text';
 import { usePortofoliuView, type PortofoliuView } from './portofoliu-view';
 import { RunPanel } from './RunPanel';
@@ -32,6 +33,7 @@ import { SignalsPanel } from './SignalsPanel';
 const VIEWS: readonly SegmentedRadioOption<PortofoliuView>[] = [
   { value: 'voluntar_activ', label: KIND_LABEL['voluntar_activ'] },
   { value: 'adunarea_generala', label: KIND_LABEL['adunarea_generala'] },
+  { value: 'mesaj', label: 'Mesaj' },
   { value: 'setari', label: 'Setări' },
 ];
 
@@ -44,10 +46,11 @@ const VIEWS: readonly SegmentedRadioOption<PortofoliuView>[] = [
  * stays in the Role panel), reads the Retention Signals, and the history of
  * runs and of changes.
  *
- * One **Secțiune** switch at the top chooses among three views, kept in the
+ * One **Secțiune** switch at the top chooses among four views, kept in the
  * URL (`?vedere=`, Alex 2026-10-20): **Voluntar Activ** and **Adunarea
  * Generală**, each with the run form of its kind and its own Candidates,
- * Signals and runs, and **Setări**, with every setting and the log of their
+ * Signals and runs, **Mesaj**, the message every Voluntar Activ at UBB
+ * answers (R66), and **Setări**, with every setting and the log of their
  * changes. The Prag minim and the Data limită de intrare are edited only
  * there; a run uses the ones in force. Until something exists a kind's view is
  * only its run form: each list appears with its first row of that kind, the
@@ -101,17 +104,21 @@ export default function PortofoliuInterneScreen() {
   const hasLog = changes.isError || (changes.data?.length ?? 0) > 0;
   return (
     <ReceiptTurnScope>
-      {/* A choice of three, drawn as segments; a long label wraps inside its
-          segment, never past it (F-22). */}
+      {/* A choice of four, drawn as segments; a long label wraps inside its
+          segment, never past it (F-22). Wide enough on a laptop that
+          "Adunarea Generală" keeps to one line. */}
       <SegmentedRadio<PortofoliuView>
         aria-label="Secțiune"
-        className="sm:max-w-2xl"
+        className="sm:max-w-3xl"
         options={VIEWS}
         value={view}
         onValueChange={chooseView}
         disabled={busy}
       />
-      {view === 'setari' ? (
+      {view === 'mesaj' ? (
+        // R66: the Adherence Message, its form and its counts.
+        <MessagePanel />
+      ) : view === 'setari' ? (
         // The settings, and the log of their changes beside them once it has
         // a row.
         <PageGrid columns={hasLog ? 2 : 1} alignHeaders={hasLog}>

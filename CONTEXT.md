@@ -237,7 +237,7 @@ A labelled external address shown as a button under its label and, in a details 
 _Avoid_: Form link, URL field
 
 **Formatted Text**:
-The body of an Announcement or Deal, the description of a Task and the description of an Event, which their author may style with Titlu, Subtitlu, Citat, bold, italic, strikethrough, highlight, bulleted and numbered lists and Text Links. Every other text field (notes, reasons, the Submission Note, a Cerere's description) stays plain text. Wherever a Notification, a push, an email or a short preview carries Formatted Text, it carries its words without the styling.
+The body of an Announcement or Deal, the description of a Task, the description of an Event and the Adherence Message (ruling R66), which their author may style with Titlu, Subtitlu, Citat, bold, italic, strikethrough, highlight, bulleted and numbered lists and Text Links. Every other text field (notes, reasons, the Submission Note, a Cerere's description) stays plain text. Wherever a Notification, a push, an email or a short preview carries Formatted Text, it carries its words without the styling.
 _Avoid_: Rich text, Markdown (the storage, not the concept)
 
 **Text Link**:
@@ -351,7 +351,7 @@ _Avoid_: Suppression (retired with its table in #1181; no Fan-out ever applied i
 ## Governance
 
 **Portofoliu Interne**:
-The Administrare page where BC or the Moderator runs Role Evaluations and keeps their settings: the Eligibility Floor, each kind's top share, the Membership Cutoff Date, the Points Start Date, the Promotion Thresholds in force, the Promotion Candidates, the Retention Signals and the history of runs and changes. It has three views: Voluntar Activ and Adunarea Generală, each with Rulează o evaluare (the period, the kind's share and the name, then the Simulation), its own Candidați la promovare (Voluntar Activ only), Semnale de retenție and Istoricul evaluărilor; and Setări, with every setting and Istoricul modificărilor. The Eligibility Floor and the Membership Cutoff Date are edited only in Setări. It replaced Evaluări de rol (ruling R58, 2026-10-18); the old addresses and the Notifications that link to them land on it.
+The Administrare page where BC or the Moderator runs Role Evaluations and keeps their settings: the Eligibility Floor, each kind's top share, the Membership Cutoff Date, the Points Start Date, the Promotion Thresholds in force, the Promotion Candidates, the Retention Signals and the history of runs and changes. It has four views: Voluntar Activ and Adunarea Generală, each with Rulează o evaluare (the period, the kind's share and the name, then the Simulation), its own Candidați la promovare (Voluntar Activ only), Semnale de retenție and Istoricul evaluărilor; Mesaj, where BC writes the Adherence Message (ruling R66); and Setări, with every setting and Istoricul modificărilor. The Eligibility Floor and the Membership Cutoff Date are edited only in Setări. It replaced Evaluări de rol (ruling R58, 2026-10-18); the old addresses and the Notifications that link to them land on it.
 _Avoid_: Evaluări de rol, Perioade, the Interne page
 
 **Role Evaluation**:
@@ -391,8 +391,12 @@ The notice BC receives about a Voluntar Activ (Voluntar Activ kind) or a Volunta
 _Avoid_: Demotion, auto-demotion, downgrade
 
 **AG Eligibility**:
-The qualification a Voluntar Activ whose Universitate is Universitatea Babeș-Bolyai holds: the only two conditions for a seat in the Adunarea Generală. Promotion to Voluntar Activ offers the adherence form; only BC's confirmation of it grants Drept de Vot and, through Automatic Membership, a seat in the Adunarea Generală, and the application refuses that grant to anyone who is not a UBB student. No threshold leads to Drept de Vot; the Adunarea Generală Promotion Threshold only measures who keeps it.
+The qualification a Voluntar Activ whose Universitate is Universitatea Babeș-Bolyai holds: the only two conditions for a seat in the Adunarea Generală. The Adherence Message brings the adherence form to every active Member who holds it (ruling R66; the promotion Notification no longer carries it); only BC's confirmation of the form grants Drept de Vot and, through Automatic Membership, a seat in the Adunarea Generală, and the application refuses that grant to anyone who is not a UBB student. No threshold leads to Drept de Vot; the Adunarea Generală Promotion Threshold only measures who keeps it.
 _Avoid_: Drept de Vot threshold
+
+**Adherence Message** (Mesajul pentru Voluntarii Activi):
+The one message BC or the Moderator writes on Portofoliu Interne, under Mesaj, for every active Voluntar Activ whose Universitate is Universitatea Babeș-Bolyai, now and as Members come to hold AG Eligibility (ruling R66, 2026-11-10): a heading, a Formatted Text body and, optionally, a link with the words on its button, which is how the adherence form reaches them. It opens over the app as a window that nothing closes but **Am citit**; once answered it stays on the Member's Profil, under their Role, while they still hold AG Eligibility and the message exists. BC chooses at each save whether readers are asked again (**Salvează și arată din nou**) or not (**Salvează**, a correction); turning it off (**Oprește mesajul**) shows it to nobody and keeps the link. BC sees how many answered the version in force, never who. It is neither an Announcement nor a Notification: it has no Group, no Audience and no Fan-out.
+_Avoid_: Pop-up announcement, banner, notification when the message is meant
 
 **Vote Retention Threshold**:
 The top share (y %, 25 by default, BC-editable from 1 to 100 %) of the Members an Adunarea Generală Role Evaluation ranks, the same pool as a Voluntar Activ one (every active Member below BCE at or above the Eligibility Floor, amended 2026-10-24), that a Voluntar cu Drept de Vot must reach to keep the Role. BC decides each withdrawal by hand after that Role Evaluation; nobody is removed automatically.
@@ -466,6 +470,9 @@ An audit row for each organizational Role or Membership Status change, with the 
 
 **Group settings → `groups` columns**:
 Minimum Level → `groups.min_level` · Application Level → `groups.application_level` · Shared Work Visibility → `groups.shared_work_visibility` · Automatic Membership → `groups.automatic_membership` · the Group Manager's display name → `groups.manager_title` · the Group Responsible position's display name → `groups.responsible_title` · the two Department Cup settings → `groups.competes_in_cup` and `groups.counts_toward_parent_cup`. The Group structure and settings commands own these writes; the browser never updates the table directly.
+
+**Adherence Message → `adherence_message`, `adherence_message_reads`**:
+One row (`id = 1`) holds the heading, the body, the link and `version`, which moves only when BC asks everyone again (and with a first message); no message is `title` and `body` null. `adherence_message_reads` keeps, per Member, the latest `version` they answered: answered means at least the current one. A Member reads the message only through `my_adherence_message()`, never the table.
 
 **Grupuri preferate → `member_group_unselected`**:
 The table stores the Groups a Member **unticked**, one row each, so no row means preferred. It is written only by `public.set_unselected_groups` and read through `private.group_muted_for(group, member)`, which ignores a row below live level 5, on a locked Group, or where the Member holds a position on the Group's path. `public.my_group_preferences()` is the app's read.

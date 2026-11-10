@@ -171,6 +171,12 @@ insert into member_group_unselected (member_id, group_id) values
 insert into privacy_notice_acknowledgements (member_id, notice_version) values
   ('ffffffff-0000-0000-0000-000000000006', '1.0'),
   ('eeeeeeee-0000-0000-0000-000000000156', '1.0');
+-- R66: answers to the Adherence Message are own-row plus level >= 6, the same
+-- shape; the row owned by the claimless uid exercises the own-row limb. The
+-- message itself is the one row its migration seeds.
+insert into adherence_message_reads (member_id, version) values
+  ('ffffffff-0000-0000-0000-000000000006', 1),
+  ('eeeeeeee-0000-0000-0000-000000000156', 1);
 -- #826: no migration seeds a Role Evaluation or a candidate; the owner writes
 -- these fixture rows as it writes every other one here (the commands need a
 -- BC session). The candidate owned by the claimless uid exercises the own-row

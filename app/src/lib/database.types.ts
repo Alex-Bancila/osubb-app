@@ -9,6 +9,109 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      adherence_message: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: number
+          link_label: string | null
+          link_url: string | null
+          title: string | null
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        ComputedFields: never
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id: number
+          link_label?: string | null
+          link_url?: string | null
+          title?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: number
+          link_label?: string | null
+          link_url?: string | null
+          title?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adherence_message_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "adherence_message_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adherence_message_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      adherence_message_reads: {
+        Row: {
+          created_at: string
+          member_id: string
+          read_at: string
+          version: number
+        }
+        ComputedFields: never
+        Insert: {
+          created_at?: string
+          member_id: string
+          read_at?: string
+          version: number
+        }
+        Update: {
+          created_at?: string
+          member_id?: string
+          read_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adherence_message_reads_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "my_points"
+            referencedColumns: ["member_id"]
+          },
+          {
+            foreignKeyName: "adherence_message_reads_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adherence_message_reads_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "profiles_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       announcement_reads: {
         Row: {
           announcement_id: number
@@ -2927,6 +3030,13 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      adherence_message_status: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          answered_count: number
+          eligible_count: number
+        }[]
+      }
       announcement_feed: {
         Args: {
           p_as_of?: string
@@ -2971,6 +3081,21 @@ export type Database = {
           member_id: string
           read_at: string
         }[]
+      }
+      answer_adherence_message: {
+        Args: { p_version: number }
+        Returns: {
+          created_at: string
+          member_id: string
+          read_at: string
+          version: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "adherence_message_reads"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       apply_to_group: {
         Args: { p_group_id: number; p_note?: string }
@@ -4162,6 +4287,17 @@ export type Database = {
       }
       member_delete_preview: { Args: { p_member_id: string }; Returns: Json }
       member_level: { Args: { p_member: string }; Returns: number }
+      my_adherence_message: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          answered: boolean
+          body: string
+          link_label: string
+          link_url: string
+          title: string
+          version: number
+        }[]
+      }
       my_capabilities: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -4600,6 +4736,32 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "tasks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_adherence_message: {
+        Args: {
+          p_ask_again: boolean
+          p_body: string
+          p_link_label: string
+          p_link_url: string
+          p_title: string
+        }
+        Returns: {
+          body: string | null
+          created_at: string
+          id: number
+          link_label: string | null
+          link_url: string | null
+          title: string | null
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "adherence_message"
           isOneToOne: true
           isSetofReturn: false
         }
