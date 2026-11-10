@@ -409,10 +409,9 @@ insert into expected_function_privs (proname, args, anon, auth_ex, svc, pub) val
   ('simulate_role_evaluation',      'p_kind text, p_from date, p_to date, p_floor integer, p_percent integer, p_cutoff date', false, true, false, false),
   ('set_promotion_threshold',       'p_kind text, p_threshold integer', false, true, false, false),
   ('reject_promotion_candidate',    'p_candidate_id bigint, p_reason text', false, true, false, false),
-  -- #866 (ruling R30): the share command and the Praguri read. Same wrapper
-  -- shape; evaluation_percents() is a security-invoker read, so no _impl.
+  -- #866 (ruling R30): the share command. Same wrapper shape. Its Praguri
+  -- read, evaluation_percents(), was dropped by #1206.
   ('set_evaluation_percent',        'p_kind text, p_percent integer', false, true, false, false),
-  ('evaluation_percents',           '',                              false, true, false, false),
   -- #771: the Privacy Acknowledgement command and BC's status read. Same
   -- wrapper shape -- the status read's level >= 6 gate lives in the body.
   ('acknowledge_privacy_notice',    'p_version text',                false, true,  false, false),

@@ -199,9 +199,9 @@ select is(
 
 select pg_temp.test_login_leadership(pg_temp.r58('BC'));
 select results_eq(
-  $$ select kind, percent, changed_at is not null, changed_by from public.evaluation_percents() $$,
-  $$ values ('voluntar_activ'::text, 35, true, null::uuid), ('adunarea_generala'::text, 25, false, null::uuid) $$,
-  'after reset evaluation_percents() reads x 35 and y 25 from evaluation_settings; x was last changed by the migration (no Member), y never (Ruling 16)');
+  $$ select activ_percent, vot_percent from public.evaluation_settings where id = 1 $$,
+  $$ values (35, 25) $$,
+  'after reset BC reads x 35 and y 25 from evaluation_settings (Ruling 16); the log below says which of them moved');
 reset role;
 select results_eq(
   $$ select kind, from_value, to_value, source, changed_by, role_evaluation_id
