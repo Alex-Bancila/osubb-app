@@ -3886,15 +3886,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      evaluation_percents: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          changed_at: string
-          changed_by: string
-          kind: string
-          percent: number
-        }[]
-      }
       express_task_interest: {
         Args: { p_task_id: number }
         Returns: {
