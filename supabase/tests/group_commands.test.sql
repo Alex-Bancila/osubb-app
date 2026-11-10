@@ -80,8 +80,10 @@ select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
 select lives_ok($q$insert into g522_ids select 'request-1',(public.create_completed_work_request('Request #522 1', pg_temp.g522_group('Project #521'))).id$q$,'persona 1 files Group-native Request');
 select throws_ok($q$select public.reject_completed_work_request((select id from g522_ids where name='request-1'),'Self')$q$,'42501','request_decide_forbidden','persona 1 cannot decide own Request');
 reset role;
-select set_eq($q$select member::text from private.request_deciders((select id from g522_ids where name='request-1')) member where member::text like '52100000-%'$q$,array[pg_temp.g521_uid(2)::text,pg_temp.g521_uid(3)::text,pg_temp.g521_uid(4)::text], 'deciders for persona 1');
-select set_eq($q$select member_id::text from public.notifications where dedupe_key='request:'||(select id from g522_ids where name='request-1') and member_id::text like '52100000-%'$q$,array[pg_temp.g521_uid(2)::text,pg_temp.g521_uid(3)::text,pg_temp.g521_uid(4)::text], 'notifications match deciders for persona 1');
+-- #1180: persona 1 is BC, so no Group position below level 6 decides their
+-- Request; only other BC members and the Moderator (outside these personas) do.
+select set_eq($q$select member::text from private.request_deciders((select id from g522_ids where name='request-1')) member where member::text like '52100000-%'$q$,array[]::text[], 'deciders for persona 1: none of the Project''s positions decides a BC member''s Request (#1180)');
+select set_eq($q$select member_id::text from public.notifications where dedupe_key='request:'||(select id from g522_ids where name='request-1') and member_id::text like '52100000-%'$q$,array[]::text[], 'notifications match deciders for persona 1');
 insert into public.completed_work_requests(requester_id,group_id,description) values(pg_temp.g521_uid(5),pg_temp.g522_group('Project #521'),'Twin 5-1');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.g521_uid(1));
