@@ -81,11 +81,11 @@ The position a Member holds in one Group: Group Manager, Group Responsible, or o
 _Avoid_: Project role, team role, local role
 
 **Group Manager**:
-A Member appointed to run a Group: its roster, Group Responsibles, Child Groups, work, and Events. BC or Moderator appoints the Group Managers of a top-level Group; the parent's Group Managers appoint a Child Group's, and the position carries down to every Group below. The Group's settings give the position its display name, such as Vicepreședinte for a Department or Coordonator Principal for a Project; each holder may also carry a function name of their own, such as Coordonator Marketing, pre-filled from it at appointment, and shown before it (#967). A Group with no Group Manager is run by the Group Managers of its nearest ancestor that has one, or by BC and Moderator.
+A Member appointed to run a Group: its roster, Group Responsibles, Child Groups, work, and Events. BC or Moderator appoints the Group Managers of a top-level Group; the parent's Group Managers appoint a Child Group's, and the position carries down to every Group below. The Group's settings give the position its display name, such as Vicepreședinte for a Department or Coordonator Principal for a Project; each holder may also carry a function name of their own, such as Coordonator Marketing, pre-filled from it at appointment, and shown before it (#967). A Group with no Group Manager is run by the Group Managers of its nearest ancestor that has one, or by BC and Moderator. A Group Manager below BC never evaluates the Task of a BC member or of the Moderator, nor decides their completed work: only BC and the Moderator do (#1180).
 _Avoid_: Lead, leader, coordinator, owner; Manager alone where it could be read as Task Manager
 
 **Group Responsible**:
-A Member appointed by a Group Manager to manage the ordinary members, their work, and the Events of a Group and every Group below it, under a custom display name. The Group's settings give the position its display name, such as Coordonator for a Department's BCE members; each holder still carries a title of their own, pre-filled from it at appointment, and shown before it. A Group Responsible never manages or evaluates the Tasks of a Group Manager or of another Group Responsible.
+A Member appointed by a Group Manager to manage the ordinary members, their work, and the Events of a Group and every Group below it, under a custom display name. The Group's settings give the position its display name, such as Coordonator for a Department's BCE members; each holder still carries a title of their own, pre-filled from it at appointment, and shown before it. A Group Responsible never manages or evaluates the Tasks of a Group Manager or of another Group Responsible, and below BC never evaluates the Task of a BC member or of the Moderator (#1180).
 _Avoid_: Deputy, sub-manager, co-lead
 
 **Appointment**:
@@ -344,11 +344,9 @@ _Avoid_: Favourite Groups, subscriptions, muted Groups when the preference is me
 An optional daily email to one Member listing the Notifications they have not read, sent only on a day when there is something unread, each Notification at most once. The Member turns it on and off in Profil.
 _Avoid_: Newsletter, email notification
 
-**Suppression**:
-A rule preventing selected broadcast notification kinds from reaching a Role while preserving direct notifications about a Member’s own work.
-
 **Fan-out**:
-Turning one organization event into targeted Notifications for its intended recipients. An edit fans out too (ruling R53, 2026-10-14): every content change of an Announcement or an Event reaches the same people, never the one who made it, and a label alone (a pin, a Campaign) reaches nobody. Whoever already knows the item — holds a notice about it, opened the Announcement, answered the Event — hears that it changed; whoever does not hears that it is new.
+Turning one organization event into targeted Notifications for its intended recipients. An edit fans out too (ruling R53, 2026-10-14): every content change of an Announcement or an Event reaches the same people, never the one who made it, and a label alone (a pin, a Campaign) reaches nobody. Whoever already knows the item — holds a notice about it, opened the Announcement, answered the Event — hears that it changed; whoever does not hears that it is new. Who a Group's notices reach is the Group Audience rule alone (rulings R32, R42, R43); no Role is muted by kind.
+_Avoid_: Suppression (retired with its table in #1181; no Fan-out ever applied it)
 
 ## Governance
 

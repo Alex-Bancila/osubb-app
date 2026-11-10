@@ -37,7 +37,7 @@ supabase/
 │   │                                            # tables (all retired by #345) · helpers in_my_dept()
 │   ├── 202608222*                       # the v1 tables and their policies: events+event_attendance ·
 │   │                                    # announcements+announcement_reads · notifications ·
-│   │                                    # notif_suppression (bc+bce)+push_tokens · provision_profile()
+│   │                                    # notif_suppression (dropped, #1181)+push_tokens · provision_profile()
 │   │                                    # · reference/teams reads · profiles column grants +
 │   │                                    # profiles_directory/member_contacts · calendar visibility
 │   ├── 20260823*                        # member_level() · auth_is_member() required on all 14
@@ -79,7 +79,7 @@ supabase/
                                  # either number here, it's stale the day it's written
     ├── points_engine · auth_claims · provision_profile · member_level      # functions & triggers
     ├── events_attendance · announcements · notifications ·
-    │   notif_suppression · demo_seed                                       # tables & seeded data
+    │   push_tokens_policies · demo_seed                                    # tables & seeded data
     ├── rls_deny_by_default · rls_tasks_points · rls_profiles_read ·
     │   rls_events · rls_announcements · rls_teams_reference                # policy matrix per role
     └── projects_schema · project_members_schema · project_authorization_helpers ·
@@ -133,7 +133,6 @@ Always confirm against live state: `gh issue list --label max-1h --state open`. 
 
 ## Known traps
 
-- **Suppression is bc + bce** (spec Revision 3 §9.2). Spec §3.4's `insert into notif_suppression values ('bc',…)` is superseded — seeding bc-only fails review.
 - **`to authenticated` is not "a member".** A session can be authenticated with **no org claims** (never invited, or deactivated since its token was issued — ADR-0003 gate 2). `auth_level()` cannot tell them apart from a recrut, who is also level 0, and **`auth.uid()` cannot either** — a deactivated member keeps their uid _and_ their `profiles` row. Any "every member may do this" policy uses **`auth_is_member()`**; `using (true)` is a bug, and so is any disjunct that never mentions the caller (`or status = 'open'`, `or scope = 'org'`). An audit on 2026-08-23 found 12 policies written this way — one of which let a deactivated member join an open graded task and have the ledger trigger **award them points** (migration `20260823140923_require_membership_policies.sql`). The claimless sweep in `rls_deny_by_default.test.sql` now fails, naming the table, if it comes back.
 - **A column-level `revoke select (col)` is a no-op** while the role still holds table-wide SELECT — a table grant implies every column. Revoke the table grant, then grant the safe columns back (see `20260822225003_profiles_read_policies.sql`).
 - **`reset role` does not clear the JWT.** In per-role tests, the previous `pg_temp.login()` claims survive, so a "stranger sees nothing" block silently runs as the last persona and passes for free. Clear it: `select set_config('request.jwt.claims', '', true);`
