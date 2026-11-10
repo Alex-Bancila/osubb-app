@@ -21,7 +21,9 @@ export const OSUBB_DEALS_ASSIGNMENT = 'osubb_deals';
  * A Deal as the feed reads it (ruling R45): an Announcement of kind `deal`,
  * the viewer's own read (`announcement_reads`) and own reveal
  * (`deal_code_reveals`) embedded — RLS lets each Member see only their own
- * rows of both, so an embedded row means "I did".
+ * rows of both, so an embedded row means "I did". Never the code itself
+ * (#1152): the row carries only `has_code`, and the code comes from a
+ * command (`reveal_deal_code`, or `deal_code_for_edit` for the edit sheet).
  */
 const DEAL_FIELDS = `
   id,
@@ -32,7 +34,7 @@ const DEAL_FIELDS = `
   deadline,
   created_by,
   kind,
-  code,
+  has_code,
   links,
   announcement_reads (
     read_at
@@ -53,7 +55,8 @@ export type RawDealRow = {
   deadline: string | null;
   created_by: string | null;
   kind: string;
-  code: string | null;
+  /** Whether the Deal has a code (#1152); the code is never on the row. */
+  has_code: boolean;
   links: Json;
   announcement_reads?: { read_at: string }[] | null;
   deal_code_reveals?: { revealed_at: string }[] | null;
@@ -88,9 +91,10 @@ export function useDeals() {
 
 /**
  * Reveal a Deal Code (R45): the server records the reveal once, however
- * many times it is asked, and answers the code. The feed refetches, so every
- * card of this Member shows it revealed; their other devices read the reveal
- * the next time they load the Deals.
+ * many times it is asked, and answers the code — the only way a Member gets
+ * it (#1152). The feed refetches, so every card of this Member shows it
+ * revealed; their other devices read the reveal the next time they load the
+ * Deals. An empty string when the Deal has no code (any more).
  */
 export async function revealDealCode(announcementId: number): Promise<string> {
   const { data, error } = await supabase.rpc('reveal_deal_code', {
@@ -100,10 +104,18 @@ export async function revealDealCode(announcementId: number): Promise<string> {
   return data ?? '';
 }
 
-export function revealDealCodeMutationOptions(queryClient: QueryClient) {
+export function revealDealCodeMutationOptions(
+  queryClient: QueryClient,
+  memberId: string | undefined,
+) {
   return {
     mutationFn: revealDealCode,
-    onSuccess: async () => {
+    onSuccess: async (code: string, announcementId: number) => {
+      // The answer is the code: keep it where the stub reads it.
+      queryClient.setQueryData(
+        keys.announcements.dealCode(announcementId, memberId),
+        code,
+      );
       await queryClient.invalidateQueries({
         queryKey: ['announcements', 'deals'],
       });
@@ -116,7 +128,56 @@ export function revealDealCodeMutationOptions(queryClient: QueryClient) {
 
 export function useRevealDealCode() {
   const queryClient = useQueryClient();
-  return useMutation(revealDealCodeMutationOptions(queryClient));
+  const memberId = useAuth().session?.user.id;
+  return useMutation(revealDealCodeMutationOptions(queryClient, memberId));
+}
+
+/**
+ * The code of a Deal this Member opened before, on any device: asked of the
+ * same command, which records nothing new (one reveal row per Member). Read
+ * only while `enabled` — the Deal has a code and the server remembers the
+ * reveal — and kept for the visit; a tap's answer lands in the same entry.
+ */
+export function useDealCode(announcementId: number, enabled: boolean) {
+  const memberId = useAuth().session?.user.id;
+  return useQuery({
+    queryKey: keys.announcements.dealCode(announcementId, memberId),
+    queryFn:
+      memberId && enabled ? () => revealDealCode(announcementId) : skipToken,
+    staleTime: Infinity,
+  });
+}
+
+/**
+ * A Deal's code for its edit sheet (#1152): `deal_code_for_edit`, answered
+ * only to whoever may edit the Deal (the rule of `announcements_update`) and
+ * never counted as a reveal. Null when the Deal has no code.
+ */
+export async function fetchDealCodeForEdit(
+  announcementId: number,
+): Promise<string | null> {
+  const { data, error } = await supabase.rpc('deal_code_for_edit', {
+    p_announcement_id: announcementId,
+  });
+  if (error) throw error;
+  return data ?? null;
+}
+
+/**
+ * Read afresh for every opening of the sheet — never from an earlier opening
+ * (`staleTime` 0) — and not kept after it (`gcTime` 0).
+ */
+export function useDealCodeForEdit(announcementId: number, enabled: boolean) {
+  const memberId = useAuth().session?.user.id;
+  return useQuery({
+    queryKey: keys.announcements.dealCodeForEdit(announcementId, memberId),
+    queryFn:
+      memberId && enabled
+        ? () => fetchDealCodeForEdit(announcementId)
+        : skipToken,
+    staleTime: 0,
+    gcTime: 0,
+  });
 }
 
 export type AnnouncementKind = 'announcement' | 'deal';

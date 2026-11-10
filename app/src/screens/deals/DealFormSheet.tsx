@@ -18,7 +18,12 @@ import {
 } from '../../lib/schemas/deal';
 import { useFormValidation } from '../../lib/use-form-validation';
 import { isAnnouncementRefusal } from '../../queries/announcements';
-import { useCreateDeal, useUpdateDeal } from '../../queries/deals';
+import {
+  useCreateDeal,
+  useDealCodeForEdit,
+  useUpdateDeal,
+} from '../../queries/deals';
+import { ErrorState, Loading } from '../../components/states';
 import { useGroups } from '../../queries/reference';
 import { AttachedLinksFields } from '../../components/attached-link/AttachedLinksFields';
 import {
@@ -35,7 +40,10 @@ import type { DealPresentation } from './deals-presentation';
  * is always the Organization's, for every active Member, never critical and
  * never pinned, so the Group, Audience, Nivel, Prioritate and Fixează of an
  * Announcement are not on this form. `deal` given = edit; the caller keys the
- * sheet by its opening so every opening starts from the stored row.
+ * sheet by its opening so every opening starts from the stored row. The row
+ * carries no code (#1152): an edit of a Deal that has one reads it first with
+ * `deal_code_for_edit`, which only whoever may edit the Deal gets and which
+ * is no reveal.
  */
 export default function DealFormSheet({
   deal,
@@ -52,6 +60,32 @@ export default function DealFormSheet({
   const update = useUpdateDeal();
   const pending = create.isPending || update.isPending;
   const editing = deal !== undefined;
+  const needsCode = open && deal?.hasCode === true;
+  const storedCode = useDealCodeForEdit(deal?.id ?? 0, needsCode);
+  // The form starts from a fresh read of the code and keeps what it started
+  // from: a later refresh of that read never replaces a form being filled.
+  const [startedFrom, setStartedFrom] = useState<{
+    code: string | null;
+  } | null>(null);
+  if (
+    needsCode &&
+    startedFrom === null &&
+    storedCode.isSuccess &&
+    !storedCode.isFetching
+  ) {
+    setStartedFrom({ code: storedCode.data ?? null });
+  }
+
+  const form = (code: string | null) => (
+    <DealForm
+      deal={deal}
+      code={code}
+      create={create}
+      update={update}
+      onCancel={() => onOpenChange(false)}
+      onDone={onDone}
+    />
+  );
 
   return (
     <FormSheet
@@ -60,25 +94,35 @@ export default function DealFormSheet({
       title={editing ? 'Editează deal-ul' : 'Deal nou'}
       busy={pending}
     >
-      <DealForm
-        deal={deal}
-        create={create}
-        update={update}
-        onCancel={() => onOpenChange(false)}
-        onDone={onDone}
-      />
+      {!needsCode ? (
+        form(null)
+      ) : startedFrom ? (
+        form(startedFrom.code)
+      ) : storedCode.isError ? (
+        <ErrorState
+          error={storedCode.error}
+          text="Nu am putut deschide codul deal-ului."
+          onRetry={() => void storedCode.refetch()}
+          retrying={storedCode.isFetching}
+        />
+      ) : (
+        <Loading label="Se încarcă deal-ul…" />
+      )}
     </FormSheet>
   );
 }
 
 function DealForm({
   deal,
+  code,
   create,
   update,
   onCancel,
   onDone,
 }: {
   deal?: DealPresentation;
+  /** The stored code of the Deal being edited; null for a new one. */
+  code: string | null;
   create: ReturnType<typeof useCreateDeal>;
   update: ReturnType<typeof useUpdateDeal>;
   onCancel: () => void;
@@ -87,7 +131,7 @@ function DealForm({
   const groups = useGroups();
   const id = useId();
   const [initial] = useState(() =>
-    deal ? draftFromDeal(deal) : EMPTY_DEAL_DRAFT,
+    deal ? draftFromDeal(deal, code) : EMPTY_DEAL_DRAFT,
   );
   const [draft, setDraft] = useState<DealDraft>(initial);
   const deadlineChanged = draft.deadline !== initial.deadline;

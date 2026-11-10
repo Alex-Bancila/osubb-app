@@ -26,7 +26,7 @@ function row(overrides: Partial<RawDealRow> = {}): RawDealRow {
     deadline: null,
     created_by: OTHER,
     kind: 'deal',
-    code: 'OSUBB20',
+    has_code: true,
     links: [{ label: 'Magazin', url: 'https://example.ro' }],
     announcement_reads: [],
     deal_code_reveals: [],
@@ -57,9 +57,11 @@ describe('toDealPresentation', () => {
     expect(done.isRevealed).toBe(true);
   });
 
-  it('treats a blank code as no code, so no stub', () => {
-    expect(toDealPresentation(row({ code: '   ' })).code).toBeNull();
-    expect(toDealPresentation(row({ code: null })).code).toBeNull();
+  it('gives a stub only by has_code, and never carries a code (#1152)', () => {
+    // The server stores a blank code as none, so has_code is false for it.
+    expect(toDealPresentation(row({ has_code: true })).hasCode).toBe(true);
+    expect(toDealPresentation(row({ has_code: false })).hasCode).toBe(false);
+    expect(toDealPresentation(row())).not.toHaveProperty('code');
   });
 });
 
