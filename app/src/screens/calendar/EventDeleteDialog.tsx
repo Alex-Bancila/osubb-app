@@ -19,8 +19,8 @@ const FAILED = 'Nu am putut șterge evenimentul. Încearcă din nou.';
 
 /**
  * **Șterge definitiv** on an Event card (#1017): one confirm naming what goes
- * with it — every RSVP answer — and what stays: an Announcement published
- * together with the Event (#909) is its own post and remains.
+ * with it — every RSVP answer and, since #1150, the Announcement published
+ * together with the Event (#909), which follows its Event.
  */
 export function EventDeleteDialog({
   event,
@@ -102,7 +102,7 @@ function EventDeleteBody({
             : takesRsvp
               ? ['Se șterg și răspunsurile membrilor.']
               : []),
-          'Un anunț publicat odată cu evenimentul rămâne.',
+          'Un anunț publicat odată cu evenimentul se șterge și el.',
         ]}
       />
       {error && (

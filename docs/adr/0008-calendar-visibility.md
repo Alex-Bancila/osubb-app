@@ -13,6 +13,7 @@
 - **Amended:** 2026-10-14 — #1066 (ruling R57): an Event's Minimum Level may be any Role on the ladder (Voluntar and Voluntar Activ added); the Event's Announcement copies it
 - **Amended:** 2026-10-23 — #1096 (ruling R61): every BCE, BC member and the Moderator reads every RSVP on every Event they can read; editing and cancelling stay with the Event's managers
 - **Amended:** 2026-10-23 — #1098 (ruling R63): an Event may be **Toată ziua**, stored midnight to midnight in Bucharest; an Event over several days is one bar across them in the month grid and is listed once, under its first day, naming its last; no reader prints an all-day Event's time
+- **Amended:** 2026-11-05 — #1150 (#1144, decision 2): an Event's own Announcement follows the Event — an edit moves its Group, Minimum Level and Termen and rewrites its untouched text, a cancellation marks it „Anulat: ”, a deletion deletes it
 - **Deciders:** Alex Băncilă + team
 - **Supersedes:** —
 - **Superseded by:** —
@@ -162,3 +163,9 @@ OSUBB runs weekend trips, festivals and campaigns that last days; an Event used 
 - **The day list.** The agenda lists it once, under its first day; its time line names its last day ("Toată ziua · până duminică, 26 oct.") or, for a timed Event, both ends with their days. An all-day Event shows no time anywhere: cards, Acasă **Urmează**, a Group's page, the Notifications ("toată ziua" and its days), the day-before reminder and the Announcement written for it.
 - **Reads and RSVP.** The Calendar's window reads every Event that overlaps it, so a weekend that began the month before is on this month's grid; a Group's page lists its Events still to come or still going the same way. An all-day or several-day Event takes RSVPs, and stays on Acasă, until it ends; a timed one-day Event, as before, until it starts.
 - **Its Announcement.** A timed Event's Announcement keeps the Event's start as its Termen. An all-day Event's has none (controller's ruling, 2026-10-23): its start is a midnight and it lasts its whole days, so a Termen would read "00:00" and expire while the Event is under way. At approval it is written while the Event lasts, a timed Event's only before it starts.
+
+**An Event's Announcement follows the Event** (Alex, 2026-11-05, #1144 decision 2, #1150). The Announcement `create_event(p_announce)` or `approve_event` writes for an Event (`announcements.event_id`) says what the Event now says:
+
+- **An edit.** `update_event` moves its Group, Audience (organisation-wide on the Organization Group, local elsewhere), Minimum Level and Termen with the Event, so an Event raised to a higher Minimum Level or moved into a Private Group stops being readable through its Announcement. Its text and title are rewritten through the same builder (`private.event_announcement_body`) only while they are still the ones the Event wrote, so words its author changed are never overwritten. The edit goes through the Announcement's own rules: its readers hear "Anunț actualizat" as from any edit (R53), and an organisation-wide Announcement rewritten by a writer below BC waits for BC, as its Event does.
+- **A cancellation.** Its title reads „Anulat: _titlu_”, the Calendar's word for a cancelled Event. The mark is the Event's state, not an edit to approve, so it never sends the Announcement back to BC.
+- **A deletion.** `delete_event` deletes it with its Notifications; its reads go with it.
