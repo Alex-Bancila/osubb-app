@@ -129,12 +129,13 @@ select is(
 -- #512 seeds adunarea_generala_group_id (emptied above) and #824
 -- board_group_id, whose values are whatever the demo seed pointed them at, so
 -- only their presence and audit are pinned here. #771 seeds
--- privacy_notice_version, at 1.0, #860 moves it to 1.1 and R58 to 1.2 and
--- 1.3. #775 seeds email_daily_quota, at 90. R58 deleted #48's
+-- privacy_notice_version, at 1.0, #860 moves it to 1.1, R58 to 1.2 and 1.3
+-- and #1183 to 1.4 (privacy_notice_acknowledgements.test.sql owns its rules).
+-- #775 seeds email_daily_quota, at 90. R58 deleted #48's
 -- vote_retention_percent and R66 #681's adherence_form_url.
 select results_eq(
   $$ select key,
-            case key when 'privacy_notice_version' then value = '1.3'
+            case key when 'privacy_notice_version' then value = '1.4'
                      when 'email_daily_quota' then value = '90'
                      else true end,
             updated_by
@@ -143,7 +144,7 @@ select results_eq(
             ('board_group_id'::text, true, null::uuid),
             ('email_daily_quota'::text, true, null::uuid),
             ('privacy_notice_version'::text, true, null::uuid) $$,
-  'the seed rows: #512''s adunarea_generala_group_id, #824''s board_group_id, #775''s email_daily_quota at 90 and #771''s privacy_notice_version at 1.3 (R58), none set through the command -- and no other key (R58 deleted vote_retention_percent, R66 adherence_form_url)');
+  'the seed rows: #512''s adunarea_generala_group_id, #824''s board_group_id, #775''s email_daily_quota at 90 and #771''s privacy_notice_version at 1.4 (#1183), none set through the command -- and no other key (R58 deleted vote_retention_percent, R66 adherence_form_url)');
 
 -- ==================== 3. Grants ====================
 
@@ -196,7 +197,7 @@ select is((select count(*) from public.org_settings), 4::bigint, 'a BCE reads ev
 reset role;
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000004');
 select results_eq(
-  $$ select key, case key when 'privacy_notice_version' then value = '1.3'
+  $$ select key, case key when 'privacy_notice_version' then value = '1.4'
                           when 'email_daily_quota' then value = '90'
                           else true end
        from public.org_settings order by key $$,

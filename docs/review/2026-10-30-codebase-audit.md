@@ -1,6 +1,6 @@
 # Codebase audit — 2026-10-30
 
-**Status 2026-11-06:** every high finding and 24 of the 27 mediums are fixed, and production has run them since the Release of 2026-11-05 at `280814d1` (tag `release/2026-11-05-280814d`). Every low finding is fixed, filed or decided. The findings below are kept as written on 2026-10-30.
+**Status 2026-11-11:** every high finding and all 27 mediums are fixed. Production has run the highs and 24 mediums since the Release of 2026-11-05 at `280814d1` (tag `release/2026-11-05-280814d`); M8, M9 and M20 merged on 2026-11-10 and 2026-11-11 and reach production at the next Release. Every low finding is fixed, filed or decided. The findings below are kept as written on 2026-10-30.
 
 | Finding                     | Issue                                 | PR                                    |
 | --------------------------- | ------------------------------------- | ------------------------------------- |
@@ -12,6 +12,7 @@
 | M18 · M19 · M21 · M22 · M23 | #1136 · #1137 · #1149 · #1138 · #1139 | #1154 · #1179 · #1170 · #1153 · #1158 |
 | M24                         | #1140                                 | #1184                                 |
 | M25 · M26 · M27, with L83   | #1141 · #1142 · #1143                 | #1165 · #1167 · #1168                 |
+| M8 · M9 · M20               | #1150 · #1151 · #1152                 | #1213 · #1211 · #1214                 |
 
 Two races found while fixing these are fixed too:
 
@@ -24,7 +25,7 @@ M24 moved local and CI to Postgres 17, the major production runs (17.11), and th
 
 - Alex's answers cut M8 (#1150), M9 (#1151) and M20 (#1152) to one branch each.
 - They also turned four lows into issues: L4 (#1182), L9 (#1180), L30 (#1181) and L40 (#1183). #1183 is Privacy Notice 1.4, which ships in the same Release as #1151.
-- None of these is started.
+- Built 2026-11-10 and 2026-11-11, one PR each. M8, M9 and M20 are in the table above. L4 is PR #1207, L9 PR #1210, L30 PR #1209 and L40 PR #1212 (Privacy Notice 1.4, approved by Alex on 2026-11-11), all merged. Like M8, M9 and M20, they reach production at the next Release.
 
 **Decided 2026-11-06:**
 
