@@ -199,6 +199,22 @@ vi.mock('../../queries/role-history', () => ({
   useMyRoleHistory: () => roleHistoryMock,
 }));
 
+// R66: the Adherence Message, as `my_adherence_message()` answers it;
+// `null` is no message for this Member.
+const adherenceMock = vi.hoisted(() => ({
+  data: null as null | {
+    title: string;
+    body: string;
+    linkUrl: string | null;
+    linkLabel: string | null;
+    version: number;
+    answered: boolean;
+  },
+}));
+vi.mock('../../queries/adherence-message', () => ({
+  useMyAdherenceMessage: () => adherenceMock,
+}));
+
 vi.mock('../../queries/points', () => ({
   useMyPoints: () => pointsQueryMock,
 }));
@@ -396,10 +412,58 @@ describe('ProfileScreen', () => {
     groupsQueryMock.refetch.mockClear();
 
     promotionMock.state = { kind: 'hidden' };
+    adherenceMock.data = null;
     orgSettingsMock.data = new Map([['board_group_id', '99']]);
     orgSettingsMock.isPending = false;
     orgSettingsMock.isError = false;
     orgSettingsMock.enabled = [];
+  });
+
+  it('keeps the answered Adherence Message under the Role, not before it is answered (R66)', async () => {
+    setTestProfile({ ...mockProfile, role: 'activ' });
+    authMock.claims = {
+      member_role: 'activ',
+      member_level: 2,
+      group_ids: [10, 20, 30],
+    };
+    const message = {
+      title: 'Mesaj de la Biroul de Conducere',
+      body: 'Poți adera la **Adunarea Generală**.',
+      linkUrl: 'https://forms.example.org/aderare',
+      linkLabel: 'Deschide formularul de adeziune',
+      version: 2,
+      answered: false,
+    };
+    // Unanswered: the pop-up asks for it; Profil does not show it yet.
+    adherenceMock.data = message;
+    const first = render(<ProfileScreen />, { wrapper: wrapper() });
+    expect(screen.queryByRole('region', { name: message.title })).toBeNull();
+    first.unmount();
+
+    adherenceMock.data = { ...message, answered: true };
+    const { container } = render(<ProfileScreen />, { wrapper: wrapper() });
+    const panel = screen.getByRole('region', { name: message.title });
+    expect(
+      within(panel).getByText('Adunarea Generală', { selector: 'strong' }),
+    ).toBeVisible();
+    const link = within(panel).getByRole('link', {
+      name: /Deschide formularul de adeziune/,
+    });
+    expect(link).toHaveAttribute('href', message.linkUrl);
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    // Under the identity block (name, Role, since when), above the tabs.
+    expect(
+      identity().compareDocumentPosition(panel) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      panel.compareDocumentPosition(screen.getByRole('tablist')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // No "Am citit" here: it is answered.
+    expect(within(panel).queryByRole('button')).toBeNull();
+    expect((await axe.run(container)).violations).toEqual([]);
   });
 
   it('A Voluntar sees header, contact, edit, Groups, points total, and the theme toggle', async () => {

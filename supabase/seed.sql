@@ -150,6 +150,7 @@ delete from points_ledger l
 -- `role_evaluations.run_by`, `promotion_candidates.member_id`/`decided_by`,
 -- `promotion_threshold_changes.changed_by`, `promotion_thresholds.updated_by`,
 -- `org_settings.updated_by`, `evaluation_settings.updated_by` (R58),
+-- `adherence_message.updated_by` (R66),
 -- `retention_signals.role_evaluation_id`/`member_id` (R58) or
 -- `role_history.member_id`/`changed_by` has an
 -- `on delete` clause, so a demo persona who ran an Evaluation, edited a
@@ -233,6 +234,14 @@ update evaluation_settings setting
    set updated_by = null
   from profiles p
  where p.id = setting.updated_by and p.email like '%@demo.osubb';
+
+-- R66: the Adherence Message is reference data like the settings above: it
+-- keeps its words and forgets a demo author. A demo Member's answer
+-- (adherence_message_reads) goes with their profile by cascade.
+update adherence_message message
+   set updated_by = null
+  from profiles p
+ where p.id = message.updated_by and p.email like '%@demo.osubb';
 
 -- `private.guard_role_history()` rejects every DELETE, as the Task history
 -- guards below do; the same owner-only window, re-enabled at once, and safe

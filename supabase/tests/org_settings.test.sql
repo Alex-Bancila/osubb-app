@@ -1,35 +1,41 @@
 -- org_settings.test.sql -- #681 (ruling R20): organization settings, the
 -- member-readable key-value table and its one BC/Moderator command,
--- public.set_org_setting, seeded with `adherence_form_url` for #52 (and, since
--- #512, `adunarea_generala_group_id`, whose rules evaluation_rankings_read.test.sql
--- owns; #48's `vote_retention_percent` left with R58, y moving to
--- evaluation_settings.vot_percent; since #771, `privacy_notice_version`, whose rules
--- privacy_notice_acknowledgements.test.sql owns; since #824, `board_group_id`,
--- whose rules board_group_setting.test.sql owns).
+-- public.set_org_setting. Its first key, `adherence_form_url`, left with R66
+-- (the address is adherence_message.link_url; adherence_message.test.sql).
+-- The keys left: #512's `adunarea_generala_group_id`, whose rules
+-- evaluation_rankings_read.test.sql owns; #771's `privacy_notice_version`,
+-- whose rules privacy_notice_acknowledgements.test.sql owns; #775's
+-- `email_daily_quota`, whose rules email_digest.test.sql owns; #824's
+-- `board_group_id`, whose rules board_group_setting.test.sql owns. #48's
+-- `vote_retention_percent` left with R58, y moving to
+-- evaluation_settings.vot_percent.
 --
 -- In order: the schema (RLS, the one read policy, the trigger, the named
--- constraints -- Ruling 23), the seed row, the grants on the table and on
+-- constraints -- Ruling 23), the seed rows, the grants on the table and on
 -- both functions, the read matrix, the direct-write matrix, the command's
 -- step-1 rules (answered to every caller, claimless included), its gate
 -- across personas, and its success path (trim, audit, updated_at, clear,
--- nothing_to_update, the 2048-character boundary).
+-- nothing_to_update, the retired key).
 --
 -- Mutation guards, each named against the assertion that turns red:
 --   * drop the level check in set_org_setting_impl -> "a BCE (level 5) sets
 --     nothing" succeeds;
---   * drop the is_http_url check -> "ftp:// is invalid_org_setting_value"
---     becomes a raw 23514 from org_settings_adherence_form_url_ck, and the
---     ordinary Member's step-1 assertion becomes 42501;
+--   * drop the email_daily_quota format check -> "'abc' is
+--     invalid_org_setting_value" becomes a raw 23514 from
+--     org_settings_email_daily_quota_ck, and the ordinary Member's step-1
+--     assertion becomes 42501;
 --   * add any insert/update/delete policy -> "the only policy is
 --     org_settings_read" fails;
 --   * grant a write back to authenticated -> the direct-write assertions stop
 --     throwing;
---   * remove the seed -> "the seed row" fails, and so does
+--   * remove the seed -> "the seed rows" fails, and so does
 --     rls_deny_by_default.test.sql's "every table holds a row" sweep;
 --   * drop the live caller_level() half of org_settings_read -> "a
---     deactivated BC's still-valid token reads nothing" returns the row;
+--     deactivated BC's still-valid token reads nothing" returns the rows;
 --   * drop the trim -> the stored value keeps its padding;
---   * drop updated_by from the UPDATE -> the audit assertions fail.
+--   * drop updated_by from the UPDATE -> the audit assertions fail;
+--   * restore R66's retired branch or row -> "adherence_form_url is
+--     org_setting_not_found" fails.
 --
 -- No pg_temp.test_race: one row, one `for update`, and the host defect in
 -- #596 makes the blocking path unreliable locally.
@@ -39,7 +45,7 @@ begin;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
 
-select plan(62);
+select plan(64);
 
 -- ==================== Fixtures ====================
 
@@ -66,10 +72,20 @@ create function pg_temp.login_stale_bc() returns void language sql as $$
     'dept_ids', '[]'::jsonb, 'team_ids', '[]'::jsonb, 'group_ids', '[]'::jsonb));
 $$;
 
--- The seed row's timestamp, captured before any command moves it.
+-- The quota row's timestamp, captured before any command moves it.
 create temp table seed_681 as
-  select updated_at from public.org_settings where key = 'adherence_form_url';
+  select updated_at from public.org_settings where key = 'email_daily_quota';
 grant select on seed_681 to authenticated;
+
+-- An active root Group for the clear path, and the Adunarea Generală setting
+-- emptied by the owner, so the path does not depend on what the demo seed
+-- pointed it at.
+create temp table group_681 as
+  select grp.id from public.groups as grp
+   where grp.status = 'active' and grp.parent_id is null
+   order by grp.id limit 1;
+grant select on group_681 to authenticated;
+update public.org_settings set value = null where key = 'adunarea_generala_group_id';
 
 -- ==================== 1. Schema ====================
 
@@ -83,50 +99,52 @@ select is(
   'the only policy is org_settings_read, for select -- no client write policy exists');
 select has_trigger('public', 'org_settings', 'org_settings_set_updated_at',
   'org_settings_set_updated_at maintains updated_at');
-select matches(obj_description('public.org_settings'::regclass, 'pg_class'), '#52',
-  'the table comment names #52 as the first reader');
-select matches(obj_description('public.set_org_setting(text, text)'::regprocedure, 'pg_proc'), '#52',
-  'the command comment names #52 as the reader of the value it writes');
+select matches(obj_description('public.org_settings'::regclass, 'pg_class'), 'adherence_form_url \(#681\) left it with R66',
+  'the table comment says where the adherence form''s address went');
+select matches(obj_description('public.set_org_setting(text, text)'::regprocedure, 'pg_proc'), 'adherence_form_url since R66',
+  'the command comment names adherence_form_url as unknown since R66');
 
 select throws_ok(
   $$ insert into public.org_settings (key) values ('Bad-Key') $$,
   '23514', 'new row for relation "org_settings" violates check constraint "org_settings_key_ck"',
   'org_settings_key_ck: a key is lower snake_case');
+-- A key with no rule of its own, so only the length constraint can answer.
 select throws_ok(
-  $$ update public.org_settings set value = 'https://' || repeat('a', 2041) where key = 'adherence_form_url' $$,
+  $$ insert into public.org_settings (key, value) values ('length_probe', repeat('a', 2049)) $$,
   '23514', 'new row for relation "org_settings" violates check constraint "org_settings_value_length_ck"',
   'org_settings_value_length_ck: a value over 2048 characters is refused on a direct write');
-select throws_ok(
-  $$ update public.org_settings set value = 'ftp://forms.example.org/a' where key = 'adherence_form_url' $$,
-  '23514', 'new row for relation "org_settings" violates check constraint "org_settings_adherence_form_url_ck"',
-  'org_settings_adherence_form_url_ck: a non-http(s) adherence form address is refused on a direct write');
+select lives_ok(
+  $$ insert into public.org_settings (key, value) values ('length_probe', repeat('a', 2048)) $$,
+  'org_settings_value_length_ck is inclusive: 2048 characters are stored');
+delete from public.org_settings where key = 'length_probe';
+select is(
+  (select count(*) from pg_constraint
+    where conrelid = 'public.org_settings'::regclass
+      and conname = 'org_settings_adherence_form_url_ck'),
+  0::bigint,
+  'R66 dropped org_settings_adherence_form_url_ck with its key');
 
--- ==================== 2. The seed row ====================
+-- ==================== 2. The seed rows ====================
 
--- #512 seeds a second key, adunarea_generala_group_id; its value is whatever
--- the demo seed pointed it at, so only its presence and audit are pinned here
--- (evaluation_rankings_read.test.sql owns its rules). #48 seeded a third,
--- vote_retention_percent, which R58 deleted (y is evaluation_settings.vot_percent,
--- role_evaluation_simulation.test.sql). #771 seeds privacy_notice_version, at 1.0,
--- #860 moves it to 1.1, R58 to 1.2 and 1.3 and #1183 to 1.4 (privacy_notice_acknowledgements.test.sql
--- owns its rules). #775 seeds email_daily_quota, at 90 (email_digest.test.sql owns
--- its rules). #824 seeds board_group_id, whose value is whatever the demo seed
--- pointed it at (board_group_setting.test.sql owns its rules).
+-- #512 seeds adunarea_generala_group_id (emptied above) and #824
+-- board_group_id, whose values are whatever the demo seed pointed them at, so
+-- only their presence and audit are pinned here. #771 seeds
+-- privacy_notice_version, at 1.0, #860 moves it to 1.1, R58 to 1.2 and 1.3
+-- and #1183 to 1.4 (privacy_notice_acknowledgements.test.sql owns its rules).
+-- #775 seeds email_daily_quota, at 90. R58 deleted #48's
+-- vote_retention_percent and R66 #681's adherence_form_url.
 select results_eq(
   $$ select key,
-            case key when 'adunarea_generala_group_id' then true
-                     when 'board_group_id' then true
-                     when 'privacy_notice_version' then value = '1.4'
+            case key when 'privacy_notice_version' then value = '1.4'
                      when 'email_daily_quota' then value = '90'
-                     else value is null end,
+                     else true end,
             updated_by
        from public.org_settings order by key $$,
-  $$ values ('adherence_form_url'::text, true, null::uuid),
-            ('adunarea_generala_group_id'::text, true, null::uuid),
+  $$ values ('adunarea_generala_group_id'::text, true, null::uuid),
             ('board_group_id'::text, true, null::uuid),
             ('email_daily_quota'::text, true, null::uuid),
             ('privacy_notice_version'::text, true, null::uuid) $$,
-  'the seed rows: adherence_form_url, empty, #512''s adunarea_generala_group_id, #771''s privacy_notice_version at 1.4 (#1183), #775''s email_daily_quota at 90 and #824''s board_group_id, none set through the command -- and no other key (R58 deleted #48''s vote_retention_percent)');
+  'the seed rows: #512''s adunarea_generala_group_id, #824''s board_group_id, #775''s email_daily_quota at 90 and #771''s privacy_notice_version at 1.4 (#1183), none set through the command -- and no other key (R58 deleted vote_retention_percent, R66 adherence_form_url)');
 
 -- ==================== 3. Grants ====================
 
@@ -169,26 +187,23 @@ select is(
 -- ==================== 4. Reading ====================
 
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000001');
-select is((select count(*) from public.org_settings), 5::bigint, 'the Moderator reads every setting');
+select is((select count(*) from public.org_settings), 4::bigint, 'the Moderator reads every setting');
 reset role;
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000002');
-select is((select count(*) from public.org_settings), 5::bigint, 'BC reads every setting');
+select is((select count(*) from public.org_settings), 4::bigint, 'BC reads every setting');
 reset role;
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000003');
-select is((select count(*) from public.org_settings), 5::bigint, 'a BCE reads every setting');
+select is((select count(*) from public.org_settings), 4::bigint, 'a BCE reads every setting');
 reset role;
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000004');
 select results_eq(
-  $$ select key, case key when 'adunarea_generala_group_id' then true
-                          when 'board_group_id' then true
-                          when 'privacy_notice_version' then value = '1.4'
+  $$ select key, case key when 'privacy_notice_version' then value = '1.4'
                           when 'email_daily_quota' then value = '90'
-                          else value is null end
+                          else true end
        from public.org_settings order by key $$,
-  $$ values ('adherence_form_url'::text, true), ('adunarea_generala_group_id'::text, true),
-            ('board_group_id'::text, true),
+  $$ values ('adunarea_generala_group_id'::text, true), ('board_group_id'::text, true),
             ('email_daily_quota'::text, true), ('privacy_notice_version'::text, true) $$,
-  'an ordinary Member reads every setting, the empty adherence form included -- #52 sends it to exactly this Member; the #771 step reads the version');
+  'an ordinary Member reads every setting -- the #771 step reads the version');
 reset role;
 
 select pg_temp.login_stale_bc();
@@ -210,71 +225,75 @@ reset role;
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000002');
 select throws_ok($$ insert into public.org_settings (key, value) values ('new_key', 'x') $$, '42501', null,
   'BC cannot insert a setting directly -- keys are reference data');
-select throws_ok($$ update public.org_settings set value = 'https://forms.example.org/x' $$, '42501', null,
+select throws_ok($$ update public.org_settings set value = '91' $$, '42501', null,
   'BC cannot update a setting directly -- set_org_setting is the only write path');
 select throws_ok($$ delete from public.org_settings $$, '42501', null,
   'BC cannot delete a setting directly');
 reset role;
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000001');
-select throws_ok($$ update public.org_settings set value = 'https://forms.example.org/x' $$, '42501', null,
+select throws_ok($$ update public.org_settings set value = '91' $$, '42501', null,
   'not even the Moderator updates a setting directly');
 reset role;
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000004');
 select throws_ok($$ insert into public.org_settings (key, value) values ('new_key', 'x') $$, '42501', null,
   'an ordinary Member cannot insert a setting');
-select throws_ok($$ update public.org_settings set value = 'https://forms.example.org/x' $$, '42501', null,
+select throws_ok($$ update public.org_settings set value = '91' $$, '42501', null,
   'an ordinary Member cannot update a setting');
 select throws_ok($$ delete from public.org_settings $$, '42501', null,
   'an ordinary Member cannot delete a setting');
 reset role;
 select pg_temp.test_login('68100000-0000-0000-0000-000000000006', '{}'::jsonb);
-select throws_ok($$ update public.org_settings set value = 'https://forms.example.org/x' $$, '42501', null,
+select throws_ok($$ update public.org_settings set value = '91' $$, '42501', null,
   'a claimless session cannot update a setting');
 reset role;
 select pg_temp.test_clear_jwt();
 set local role anon;
-select throws_ok($$ update public.org_settings set value = 'https://forms.example.org/x' $$, '42501', null,
+select throws_ok($$ update public.org_settings set value = '91' $$, '42501', null,
   'anon cannot update a setting');
 select throws_ok($$ insert into public.org_settings (key, value) values ('new_key', 'x') $$, '42501', null,
   'anon cannot insert a setting');
 reset role;
 
 select results_eq(
-  $$ select value, updated_by from public.org_settings where key = 'adherence_form_url' $$,
-  $$ values (null::text, null::uuid) $$,
+  $$ select value, updated_by from public.org_settings where key = 'email_daily_quota' $$,
+  $$ values ('90'::text, null::uuid) $$,
   'after every refused direct write the seed row is untouched');
 
 -- ==================== 6. set_org_setting: step 1, for every caller ====================
 
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000002');
 select throws_ok(
-  $$ select public.set_org_setting('adherence_form_url', 'ftp://forms.example.org/a') $$,
+  $$ select public.set_org_setting('email_daily_quota', 'abc') $$,
   'PT400', 'invalid_org_setting_value',
-  'BC: an ftp:// adherence form address is invalid_org_setting_value');
+  'BC: a quota of ''abc'' is invalid_org_setting_value');
 select throws_ok(
-  $$ select public.set_org_setting('adherence_form_url', 'javascript:alert(1)') $$,
+  $$ select public.set_org_setting('email_daily_quota', '100000') $$,
   'PT400', 'invalid_org_setting_value',
-  'BC: a javascript: address is invalid_org_setting_value');
+  'BC: a quota above 99999 is invalid_org_setting_value');
 select throws_ok(
-  $$ select public.set_org_setting('adherence_form_url', 'forms.example.org/a') $$,
+  $$ select public.set_org_setting('board_group_id', 'x1') $$,
   'PT400', 'invalid_org_setting_value',
-  'BC: an address without a scheme is invalid_org_setting_value');
+  'BC: a Group id that is not a positive integer is invalid_org_setting_value');
 select throws_ok(
-  $$ select public.set_org_setting('adherence_form_url', 'https://' || repeat('a', 2041)) $$,
+  $$ select public.set_org_setting('email_daily_quota', repeat('9', 2049)) $$,
   'PT400', 'value_too_long',
-  'BC: a 2049-character address is value_too_long (the #673 kit''s <field>_<rule> reason)');
+  'BC: a 2049-character value is value_too_long (the #673 kit''s <field>_<rule> reason)');
+select throws_ok(
+  $$ select public.set_org_setting('email_daily_quota', repeat('9', 2048)) $$,
+  'PT400', 'invalid_org_setting_value',
+  'BC: a 2048-character value passes the length rule (inclusive) and meets the key''s own');
 reset role;
 
 -- Malformed for everyone, so answered before the gate (conventions section 2).
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000004');
 select throws_ok(
-  $$ select public.set_org_setting('adherence_form_url', 'ftp://forms.example.org/a') $$,
+  $$ select public.set_org_setting('email_daily_quota', 'abc') $$,
   'PT400', 'invalid_org_setting_value',
-  'an ordinary Member sending ftp:// is answered invalid_org_setting_value before the gate');
+  'an ordinary Member sending ''abc'' is answered invalid_org_setting_value before the gate');
 reset role;
 select pg_temp.test_login('68100000-0000-0000-0000-000000000006', '{}'::jsonb);
 select throws_ok(
-  $$ select public.set_org_setting('adherence_form_url', 'https://' || repeat('a', 2041)) $$,
+  $$ select public.set_org_setting('email_daily_quota', repeat('9', 2049)) $$,
   'PT400', 'value_too_long',
   'a claimless caller sending 2049 characters is answered value_too_long before the gate');
 reset role;
@@ -283,7 +302,7 @@ reset role;
 
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000003');
 select throws_ok(
-  $$ select public.set_org_setting('adherence_form_url', 'https://forms.example.org/a') $$,
+  $$ select public.set_org_setting('email_daily_quota', '91') $$,
   '42501', 'org_settings_manage_forbidden',
   'a BCE (level 5) sets nothing');
 select throws_ok(
@@ -293,33 +312,33 @@ select throws_ok(
 reset role;
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000004');
 select throws_ok(
-  $$ select public.set_org_setting('adherence_form_url', 'https://forms.example.org/a') $$,
+  $$ select public.set_org_setting('email_daily_quota', '91') $$,
   '42501', 'org_settings_manage_forbidden',
   'an ordinary Member sets nothing');
 reset role;
 select pg_temp.login_stale_bc();
 select throws_ok(
-  $$ select public.set_org_setting('adherence_form_url', 'https://forms.example.org/a') $$,
+  $$ select public.set_org_setting('email_daily_quota', '91') $$,
   '42501', 'org_settings_manage_forbidden',
   'a deactivated BC holding a still-valid level-6 token sets nothing');
 reset role;
 select pg_temp.test_login('68100000-0000-0000-0000-000000000006', '{}'::jsonb);
 select throws_ok(
-  $$ select public.set_org_setting('adherence_form_url', 'https://forms.example.org/a') $$,
+  $$ select public.set_org_setting('email_daily_quota', '91') $$,
   '42501', 'org_settings_manage_forbidden',
   'a claimless session sets nothing');
 reset role;
 select pg_temp.test_clear_jwt();
 set local role anon;
 select throws_ok(
-  $$ select public.set_org_setting('adherence_form_url', 'https://forms.example.org/a') $$,
+  $$ select public.set_org_setting('email_daily_quota', '91') $$,
   '42501', null,
   'anon cannot even execute the command');
 reset role;
 
 select results_eq(
-  $$ select value, updated_by from public.org_settings where key = 'adherence_form_url' $$,
-  $$ values (null::text, null::uuid) $$,
+  $$ select value, updated_by from public.org_settings where key = 'email_daily_quota' $$,
+  $$ values ('90'::text, null::uuid) $$,
   'after every refusal the seed row is untouched');
 
 -- ==================== 8. set_org_setting: BC and the Moderator ====================
@@ -334,70 +353,67 @@ select throws_ok(
   'PT404', 'org_setting_not_found',
   'BC naming no key at all is org_setting_not_found');
 select throws_ok(
-  $$ select public.set_org_setting('adherence_form_url', '   ') $$,
-  'PT409', 'nothing_to_update',
-  'BC clearing a value that is already empty is nothing_to_update');
+  $$ select public.set_org_setting('adherence_form_url', 'https://forms.example.org/a') $$,
+  'PT404', 'org_setting_not_found',
+  'R66: adherence_form_url is org_setting_not_found -- the address is set with the Adherence Message');
 
 create temp table set_681 as
-  select * from public.set_org_setting('adherence_form_url', '  https://forms.example.org/adeziune  ');
-select is((select value from set_681), 'https://forms.example.org/adeziune',
-  'BC sets the adherence form address -- returned trimmed');
+  select * from public.set_org_setting('email_daily_quota', '  77  ');
+select is((select value from set_681), '77',
+  'BC sets the quota -- returned trimmed');
 select is((select updated_by from set_681), '68100000-0000-0000-0000-000000000002'::uuid,
   'the returned row records BC as updated_by');
 select ok((select s.updated_at > seed.updated_at from set_681 as s, seed_681 as seed),
   'updated_at moved past the seed''s');
 select throws_ok(
-  $$ select public.set_org_setting('adherence_form_url', 'https://forms.example.org/adeziune ') $$,
+  $$ select public.set_org_setting('email_daily_quota', '77 ') $$,
   'PT409', 'nothing_to_update',
   'sending the current value back, even padded, is nothing_to_update');
 reset role;
 
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000004');
 select results_eq(
-  $$ select value, updated_by from public.org_settings where key = 'adherence_form_url' $$,
-  $$ values ('https://forms.example.org/adeziune'::text, '68100000-0000-0000-0000-000000000002'::uuid) $$,
-  'an ordinary Member reads the stored, trimmed address and who set it');
+  $$ select value, updated_by from public.org_settings where key = 'email_daily_quota' $$,
+  $$ values ('77'::text, '68100000-0000-0000-0000-000000000002'::uuid) $$,
+  'an ordinary Member reads the stored, trimmed value and who set it');
 reset role;
 
 select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000001');
 select is(
-  (select updated_by from public.set_org_setting('adherence_form_url', 'http://forms.example.org/v2')),
+  (select updated_by from public.set_org_setting('email_daily_quota', '0')),
   '68100000-0000-0000-0000-000000000001'::uuid,
-  'the Moderator changes the address and becomes updated_by');
+  'the Moderator changes the quota and becomes updated_by');
 select is(
-  (select value from public.org_settings where key = 'adherence_form_url'),
-  'http://forms.example.org/v2',
-  'an http:// address is accepted and stored');
+  (select value from public.org_settings where key = 'email_daily_quota'),
+  '0',
+  'the Moderator''s value is stored');
 select ok(
   (select s.updated_at > prev.updated_at
      from public.org_settings as s, set_681 as prev
-    where s.key = 'adherence_form_url'),
+    where s.key = 'email_daily_quota'),
   'updated_at moved again on the Moderator''s change');
 select is(
-  (select value from public.set_org_setting('adherence_form_url', '')),
+  (select value from public.set_org_setting('adunarea_generala_group_id', (select id::text from group_681))),
+  (select id::text from group_681),
+  'the Moderator names the Adunarea Generală Group');
+select is(
+  (select value from public.set_org_setting('adunarea_generala_group_id', '')),
   null,
   'an empty string clears the value');
 select is(
-  (select value from public.org_settings where key = 'adherence_form_url'),
+  (select value from public.org_settings where key = 'adunarea_generala_group_id'),
   null,
   'the cleared value is stored as null');
 select throws_ok(
-  $$ select public.set_org_setting('adherence_form_url', null) $$,
+  $$ select public.set_org_setting('adunarea_generala_group_id', null) $$,
   'PT409', 'nothing_to_update',
   'clearing it again with null is nothing_to_update');
 reset role;
 
-select pg_temp.test_login_leadership('68100000-0000-0000-0000-000000000002');
-select is(
-  (select char_length(value) from public.set_org_setting('adherence_form_url', 'https://' || repeat('a', 2040))),
-  2048,
-  'a 2048-character address is accepted -- the limit is inclusive');
-reset role;
-
 select results_eq(
   $$ select count(*)::int from public.org_settings $$,
-  $$ values (5) $$,
-  'no command ever created a key beyond the five the migrations seed (R58 deleted vote_retention_percent)');
+  $$ values (4) $$,
+  'no command ever created a key beyond the four the migrations seed (R58 deleted vote_retention_percent, R66 adherence_form_url)');
 
 select * from finish();
 rollback;

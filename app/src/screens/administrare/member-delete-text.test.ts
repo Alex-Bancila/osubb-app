@@ -76,3 +76,15 @@ it('confirms the deletion by the name typed, without a gendered article', () => 
     'Contul „Ana Pop” a fost șters definitiv.',
   );
 });
+
+/* R66: the Adherence Message. Saving it holds the account under Portofoliu
+   Interne; a Member's answer is their own and goes with them. */
+it('names the Adherence Message: a save holds, an answer goes', () => {
+  expect(memberHeldSentence({ 'adherence_message.updated_by': 1 })).toBe(
+    'Contul are istoric în Portofoliu Interne.',
+  );
+  expect(memberGoesItems({ adherence_message_reads: 1 })).toEqual([
+    'profilul și contul de conectare',
+    'confirmarea mesajului pentru Voluntarii Activi',
+  ]);
+});

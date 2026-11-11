@@ -705,9 +705,10 @@ const REASON_COPY = new Map<string, string>([
     'org_settings_manage_forbidden',
     'Doar BC și Moderatorul pot schimba setările organizației.',
   ],
+  // R66 took the last address (the adherence form) out of the settings.
   [
     'invalid_org_setting_value',
-    'Valoarea nu este acceptată: o adresă începe cu http:// sau https://, iar grupul ales trebuie să fie activ.',
+    'Valoarea nu este acceptată: grupul ales trebuie să fie activ.',
   ],
   ['value_too_long', 'Valoarea are cel mult 2048 de caractere.'],
   /* browser: #932's daily email quota */
@@ -767,6 +768,21 @@ const REASON_COPY = new Map<string, string>([
   [
     'privacy_acknowledgements_forbidden',
     'Doar BC și Moderatorul văd confirmările politicii de confidențialitate.',
+  ],
+
+  /* ---- The Adherence Message (R66) ---- */
+  [
+    'adherence_message_manage_forbidden',
+    'Doar BC și Moderatorul pot schimba mesajul pentru Voluntarii Activi.',
+  ],
+  [
+    'adherence_message_answer_forbidden',
+    'Sesiunea ta nu mai este activă. Conectează-te din nou.',
+  ],
+  ['adherence_message_not_found', 'Mesajul nu mai este pentru tine.'],
+  [
+    'adherence_message_changed',
+    'Mesajul tocmai a fost actualizat. Citește noua versiune.',
   ],
   /*
    * ---- #1143 (audit M27, L83): the refusals that had no copy ----

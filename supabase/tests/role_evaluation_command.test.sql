@@ -197,7 +197,6 @@ update public.profiles set status = 'inactiv'
    and role in ('recrut', 'voluntar', 'activ', 'vot')
    and id::text not like '82600000-%';
 
-update public.org_settings set value = null where key = 'adherence_form_url';
 update public.promotion_thresholds set threshold = 20 where kind = 'voluntar_activ';
 update public.promotion_thresholds set threshold = null where kind = 'adunarea_generala';
 -- Setări's Prag minim and Data limită de intrare, both different from every

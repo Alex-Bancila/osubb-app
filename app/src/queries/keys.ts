@@ -408,6 +408,19 @@ export const keys = {
     settings: (memberId: string | undefined) =>
       ['evaluation', 'settings', { memberId }] as const,
   },
+  /* The Adherence Message (R66): the Member's own read ("mine": the pop-up
+     and Profil's panel), and BC's message row and counts on Portofoliu
+     Interne. One `['adherence']` prefix, so a save or an answer refreshes
+     all three. */
+  adherence: {
+    all: ['adherence'] as const,
+    mine: (memberId: string | undefined) =>
+      ['adherence', 'mine', { memberId }] as const,
+    message: (viewerId: string | undefined) =>
+      ['adherence', 'message', { viewerId }] as const,
+    status: (viewerId: string | undefined) =>
+      ['adherence', 'status', { viewerId }] as const,
+  },
   /* The organization settings (#681): every row, read by every Member. */
   orgSettings: {
     all: ['org-settings'] as const,

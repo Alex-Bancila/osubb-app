@@ -579,7 +579,8 @@ it('names the protected Groups as the server does, a parent of one included (#11
   const settings = new Map<string, string | null>([
     ['board_group_id', '7'],
     ['adunarea_generala_group_id', '8'],
-    ['adherence_form_url', 'https://example.org'],
+    // A setting that names no Group is not read as one.
+    ['email_daily_quota', '90'],
   ]);
   const protectedIds = groups
     .filter((group) => isProtectedGroup(group, groups, settings))

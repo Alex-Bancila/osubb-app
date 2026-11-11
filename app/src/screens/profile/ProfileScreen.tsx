@@ -24,6 +24,7 @@ import {
   tabThumbClass,
   useActiveTabInView,
 } from '../../components/layout';
+import { AdherenceMessagePanel } from '../../components/adherence-message/AdherenceMessage';
 import { memberDisplayName } from '../../components/member/member-identity';
 import { PREFERRED_GROUPS_ANCHOR } from '../../components/preferred-groups/preferred-groups';
 import {
@@ -40,6 +41,7 @@ import { useCapability } from '../../lib/capabilities';
 import { safeHexColor } from '../../lib/color';
 import { formatDayMonthYear, initials } from '../../lib/format';
 import { useTheme } from '../../lib/theme';
+import { useMyAdherenceMessage } from '../../queries/adherence-message';
 import { useMyRoleLabel } from '../../queries/my-role-label';
 import { useOrgSettings } from '../../queries/org-settings';
 import { useMyPoints } from '../../queries/points';
@@ -140,6 +142,8 @@ export default function ProfileScreen() {
   const myRoleLabel = useMyRoleLabel();
   const promotion = usePromotionProgressState();
   const timelineShown = useRoleTimelineShown(profileQuery.data);
+  // R66: the same read as the pop-up; a row only for an eligible Member.
+  const adherenceMessage = useMyAdherenceMessage();
   // R58: BC and the Moderator record the Universitate, their own from the
   // pencil's sheet; for them the row needs no "whom to ask" hint.
   const canEditUniversity = useCapability('manageRoles').data === true;
@@ -321,6 +325,12 @@ export default function ProfileScreen() {
           </span>
         </div>
       </div>
+
+      {/* R66: BC's message to Voluntari Activi at UBB, kept here once it is
+          answered and while it is still for this Member. */}
+      {adherenceMessage.data?.answered && (
+        <AdherenceMessagePanel message={adherenceMessage.data} />
+      )}
 
       {/* Always mounted, so the receipt is announced when it appears
           (as the joining card's); empty, it takes no room. */}

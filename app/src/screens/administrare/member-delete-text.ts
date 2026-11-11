@@ -38,6 +38,7 @@ const HELD_KINDS: readonly (readonly [
       'promotion_thresholds',
       'promotion_threshold_changes',
       'evaluation_settings',
+      'adherence_message',
     ],
   ],
   ['decizii despre roluri', ['role_history']],
@@ -112,6 +113,9 @@ export function memberGoesItems(
     items.push(
       countLabel(n('announcement_reads'), 'anunț citit', 'anunțuri citite'),
     );
+  // R66: one row per Member, the latest version they answered.
+  if (n('adherence_message_reads'))
+    items.push('confirmarea mesajului pentru Voluntarii Activi');
   if (n('deal_code_reveals'))
     items.push(
       countLabel(

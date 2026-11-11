@@ -25,6 +25,7 @@ import { unreadBadgeLabel } from '../../screens/notifications/notifications-pres
 import { decisionsBadgeLabel } from '../../screens/requests/requests-presentation';
 import { FabSlotContext } from '../layout/fab-context';
 import { Badge } from '../ui/badge';
+import { AdherenceMessageGate } from './AdherenceMessageGate';
 import { TabBar } from './TabBar';
 import {
   ANNOUNCEMENTS_PATH,
@@ -403,6 +404,10 @@ export default function AppShell() {
           />
         </div>
       </div>
+
+      {/* R66: BC's message to Voluntari Activi at UBB, over every page until
+          it is answered. A dialog, so it draws in its own layer. */}
+      <AdherenceMessageGate />
     </div>
   );
 }

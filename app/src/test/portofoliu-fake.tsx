@@ -97,6 +97,28 @@ export type Settings = {
   updated_by: string | null;
 };
 
+/** The Adherence Message row (R66), as BC reads it. */
+export type Message = {
+  title: string | null;
+  body: string | null;
+  link_url: string | null;
+  link_label: string | null;
+  version: number;
+  updated_at: string;
+  updated_by: string | null;
+};
+
+/** The day-one row: no message, the old setting's link moved over. */
+export const NO_MESSAGE: Message = {
+  title: null,
+  body: null,
+  link_url: 'https://forms.example.org/aderare',
+  link_label: 'Deschide formularul de adeziune',
+  version: 0,
+  updated_at: '2026-09-01T00:00:00Z',
+  updated_by: null,
+};
+
 export const db = {
   runs: [] as Run[],
   thresholds: [] as Threshold[],
@@ -104,6 +126,9 @@ export const db = {
   candidates: [] as Candidate[],
   signals: [] as Signal[],
   settings: {} as Settings,
+  message: { ...NO_MESSAGE } as Message,
+  /** What `adherence_message_status` answers. */
+  messageStatus: { eligible_count: 30, answered_count: 0 },
   /** What `simulate_role_evaluation` answers. */
   simulation: [] as Ranked[],
   /** What `role_evaluation_ranking` answers, by run id. */
@@ -145,6 +170,8 @@ export function resetDb() {
     updated_at: '2026-09-01T00:00:00Z',
     updated_by: null,
   };
+  db.message = { ...NO_MESSAGE };
+  db.messageStatus = { eligible_count: 30, answered_count: 0 };
   db.simulation = [];
   db.rankings = new Map();
   db.runResult = { candidates: 2, retention_signals: 1 };
@@ -316,6 +343,8 @@ function tableRows(table: string): unknown {
       return db.signals.filter((row) => row.closed_at === null);
     case 'evaluation_settings':
       return db.settings;
+    case 'adherence_message':
+      return db.message;
     default:
       throw new Error(`unexpected table ${table}`);
   }
@@ -492,6 +521,28 @@ const answer = async (name: string, args: Record<string, unknown>) => {
       });
       db.settings.points_start_date = String(args.p_date);
       return { data: db.settings, error: null };
+    case 'adherence_message_status':
+      return { data: [db.messageStatus], error: null };
+    case 'set_adherence_message': {
+      // As the command stores it: trimmed, blank as null; a message that is
+      // new, or asked again, moves the version.
+      const text = (value: unknown) => String(value ?? '').trim() || null;
+      const body = text(args.p_body);
+      const bump =
+        body !== null &&
+        (args.p_ask_again === true || db.message.body === null);
+      db.message = {
+        title: text(args.p_title),
+        body,
+        link_url: text(args.p_link_url),
+        link_label: text(args.p_link_label),
+        version: db.message.version + (bump ? 1 : 0),
+        updated_at: '2026-09-28T11:00:00Z',
+        updated_by: 'bc',
+      };
+      if (bump) db.messageStatus = { ...db.messageStatus, answered_count: 0 };
+      return { data: db.message, error: null };
+    }
     case 'reject_promotion_candidate': {
       const row = db.candidates.find((c) => c.id === args.p_candidate_id);
       if (row) row.decision = 'rejected';
