@@ -142,4 +142,4 @@ Each point is an answer given in the session, in the order given.
 
 ## Privacy Notice
 
-Recording who answered the message is stored activity, like "Anunțurile pe care le-ai citit". This change does **not** bump the Notice. The line `Confirmarea mesajului pentru Voluntarii Activi;` was offered to 1.4 (#1183), but 1.4 was approved and merged on 2026-11-11 without it (PR #1212). The line waits for the next version, so Members are not asked to acknowledge again for one line. If Alex wants it acknowledged sooner, the bump is one `privacy_notice_version` change plus the text.
+Recording who answered the message is stored activity, like "Anunțurile pe care le-ai citit". The R66 PR itself did not bump the Notice. The line `Confirmarea mesajului pentru Voluntarii Activi;` was offered to 1.4 (#1183), but 1.4 was approved and merged on 2026-11-11 without it (PR #1212). Since production was still on 1.3, it was added before the Release as **version 1.5** (2026-11-12): section 2 lists the confirmation and section 4 says BC and the Moderator see it. One Release carries both bumps, so every Member is asked once.

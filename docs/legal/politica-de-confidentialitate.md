@@ -4,7 +4,8 @@
   aprobat de Alex pe 2026-09-27; corecturile versiunii 1.1 (#860), pe 2026-09-29; versiunea 1.2
   (universitatea, ruling R58), aprobată de Alex pe 2026-10-18; versiunea 1.3 (deciziile automate,
   ruling R58, partea a treia), aprobată de Alex pe 2026-10-20; versiunea 1.4 (notificările citite,
-  jurnalele de conectare și cine află de semnalele de retenție, #1183), aprobată de Alex pe 2026-11-11.
+  jurnalele de conectare și cine află de semnalele de retenție, #1183), aprobată de Alex pe 2026-11-11;
+  versiunea 1.5 (confirmarea mesajului pentru Voluntarii Activi, ruling R66, #1220), aprobată pe 2026-11-12.
   Regula versiunilor: orice schimbare de conținut incrementează „Versiunea” și data, în acest fișier și
   în app/src/screens/privacy/PrivacyNoticeContent.tsx, iar în același pull request o migrație ridică
   în org_settings `privacy_notice_version` la același număr; aplicația cere apoi fiecărui Membru o
@@ -14,7 +15,7 @@
 
 # Politica de confidențialitate a aplicației OSUBB
 
-**Versiunea 1.4 · în vigoare de la 11.11.2026**
+**Versiunea 1.5 · în vigoare de la 12.11.2026**
 
 Aplicația OSUBB („app.osubb.ro”) este aplicația internă a Organizației Studenților din Universitatea Babeș-Bolyai (OSUBB). Este folosită doar de membrii organizației, pe bază de invitație, pentru a organiza activitatea de voluntariat: taskuri și puncte, calendarul evenimentelor, anunțuri și notificări.
 
@@ -37,6 +38,7 @@ Operatorul datelor este organizația Studenților din Universitatea Babeș-Bolya
 - Punctele obținute și poziția în clasament;
 - Cererile de recunoaștere a muncii; participarea (RSVP) la evenimente;
 - Anunțurile pe care le-ai citit;
+- Confirmarea mesajului pentru Voluntarii Activi;
 - Notificările primite în aplicație și preferințele tale de notificare; candidaturile la grupuri;
 - Evaluările de rol și rezultatele lor: candidații la promovare și semnalele de retenție.
 
@@ -58,7 +60,7 @@ Vizibilitatea depinde de rol, exact ca în organizație:
 
 - **Orice membru** vede numele și pseudonimul tău, rolul, data intrării în organizație, universitatea, grupurile din care faci parte, și te poate vedea în clasament, dacă rolul lui permite clasamentul.
 - **Coordonatorii grupurilor tale** văd taskurile tale din acele grupuri, evaluările și punctele aferente, candidaturile și cererile tale.
-- **BC, BCE și Moderatorul** văd toate taskurile, evaluările și punctele, participarea (RSVP) la evenimente și datele de contact (email, telefon); **BC și Moderatorul** văd în plus candidaturile și cererile din toate grupurile, istoricul rolurilor și confirmările acestei politici.
+- **BC, BCE și Moderatorul** văd toate taskurile, evaluările și punctele, participarea (RSVP) la evenimente și datele de contact (email, telefon); **BC și Moderatorul** văd în plus candidaturile și cererile din toate grupurile, istoricul rolurilor, confirmările acestei politici și confirmările mesajului pentru Voluntarii Activi.
 
 Numai tu îți vezi notificările, preferințele și dispozitivele abonate la notificări.
 
@@ -108,6 +110,8 @@ Aplicația păstrează în memoria browserului tău sesiunea de conectare, adres
 Când schimbăm această politică, publicăm noua versiune în aplicație, cu numărul și data ei, și îți cerem să confirmi că ai citit-o la următoarea conectare. Confirmarea ta (versiunea și momentul) este păstrată și vizibilă pentru BC și Moderator, ca dovadă că ai fost informat; ea nu este un consimțământ și nu schimbă nimic din datele tale.
 
 ---
+
+_Versiunea 1.5 — 12.11.2026. Secțiunea „Ce date prelucrăm” adaugă confirmarea mesajului pentru Voluntarii Activi, iar secțiunea „Cine vede datele tale” spune că BC și Moderatorul văd aceste confirmări._
 
 _Versiunea 1.4 — 11.11.2026. Secțiunea „Cât păstrăm datele” spune cât se păstrează notificările citite (90 de zile) și jurnalele de conectare (7 zile, inclusiv după ștergerea contului); secțiunea „Decizii automate” spune cine primește notificările despre semnalele de retenție._
 
