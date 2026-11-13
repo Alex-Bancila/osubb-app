@@ -16,9 +16,9 @@ import type { ReactNode } from 'react';
  * app older than the server's version (a tab left open across a Release)
  * offers a reload instead — see `PrivacyGate`.
  */
-export const PRIVACY_NOTICE_VERSION = '1.4';
+export const PRIVACY_NOTICE_VERSION = '1.5';
 /** The effective date as the document writes it (dd.mm.yyyy). */
-export const PRIVACY_NOTICE_DATE = '11.11.2026';
+export const PRIVACY_NOTICE_DATE = '12.11.2026';
 export const PRIVACY_NOTICE_TITLE =
   'Politica de confidențialitate a aplicației OSUBB';
 
@@ -220,6 +220,7 @@ export function PrivacyNoticeContent() {
               evenimente;
             </li>
             <li>Anunțurile pe care le-ai citit;</li>
+            <li>Confirmarea mesajului pentru Voluntarii Activi;</li>
             <li>
               Notificările primite în aplicație și preferințele tale de
               notificare; candidaturile la grupuri;
@@ -301,8 +302,9 @@ export function PrivacyNoticeContent() {
             <Term>BC, BCE și Moderatorul</Term> văd toate taskurile, evaluările
             și punctele, participarea (RSVP) la evenimente și datele de contact
             (email, telefon); <Term>BC și Moderatorul</Term> văd în plus
-            candidaturile și cererile din toate grupurile, istoricul rolurilor
-            și confirmările acestei politici.
+            candidaturile și cererile din toate grupurile, istoricul rolurilor,
+            confirmările acestei politici și confirmările mesajului pentru
+            Voluntarii Activi.
           </li>
         </List>
         <p>
@@ -443,10 +445,16 @@ export function PrivacyNoticeContent() {
       <footer className="space-y-2 border-t pt-6 text-sm text-muted-foreground italic">
         <p>
           Versiunea {PRIVACY_NOTICE_VERSION} —{' '}
-          <time dateTime={DATE_TIME}>{PRIVACY_NOTICE_DATE}</time>. Secțiunea
-          „Cât păstrăm datele” spune cât se păstrează notificările citite (90 de
-          zile) și jurnalele de conectare (7 zile, inclusiv după ștergerea
-          contului); secțiunea „Decizii automate” spune cine primește
+          <time dateTime={DATE_TIME}>{PRIVACY_NOTICE_DATE}</time>. Secțiunea „Ce
+          date prelucrăm” adaugă confirmarea mesajului pentru Voluntarii Activi,
+          iar secțiunea „Cine vede datele tale” spune că BC și Moderatorul văd
+          aceste confirmări.
+        </p>
+        <p>
+          Versiunea 1.4 — <time dateTime="2026-11-11">11.11.2026</time>.
+          Secțiunea „Cât păstrăm datele” spune cât se păstrează notificările
+          citite (90 de zile) și jurnalele de conectare (7 zile, inclusiv după
+          ștergerea contului); secțiunea „Decizii automate” spune cine primește
           notificările despre semnalele de retenție.
         </p>
         <p>
