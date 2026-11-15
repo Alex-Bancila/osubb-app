@@ -12,6 +12,7 @@ import { Fragment, Slice } from '@tiptap/pm/model';
 import type { EditorView } from '@tiptap/pm/view';
 import StarterKit from '@tiptap/starter-kit';
 import { safeHttpUrl } from '../../../lib/links';
+import { lineScoped, LineScopedBlocks } from './line-scope';
 import { parseFormattedText, serializeFormattedText } from './markdown';
 import { whatsappToMarkdown } from './whatsapp';
 
@@ -105,18 +106,23 @@ const NumberedListShortcut = Extension.create({
     const type = this.editor.schema.nodes.orderedList;
     if (!type) return [];
     return [
-      wrappingInputRule({
-        find: /^(\d{1,3})\.\s$/,
-        type,
-        getAttributes: (match) => ({ start: Number(match[1]) }),
-        // Joins a list just above that this number continues.
-        joinPredicate: (match, node) =>
-          (!node.attrs.type || node.attrs.type === '1') &&
-          node.childCount + Number(node.attrs.start) === Number(match[1]),
-      }),
+      lineScoped(
+        wrappingInputRule({
+          find: /^(\d{1,3})\.\s$/,
+          type,
+          getAttributes: (match) => ({ start: Number(match[1]) }),
+          // Joins a list just above that this number continues.
+          joinPredicate: (match, node) =>
+            (!node.attrs.type || node.attrs.type === '1') &&
+            node.childCount + Number(node.attrs.start) === Number(match[1]),
+        }),
+      ),
     ];
   },
 });
+
+/** Titlu and Subtitlu. */
+const TITLE_LEVELS = [1, 2] as const;
 
 /**
  * The extensions of one editor; call it once per editor. Nothing here writes a
@@ -128,7 +134,7 @@ const NumberedListShortcut = Extension.create({
 export function formattedTextExtensions(): Extensions {
   return [
     StarterKit.configure({
-      heading: { levels: [1, 2] },
+      heading: { levels: [...TITLE_LEVELS] },
       code: false,
       codeBlock: false,
       horizontalRule: false,
@@ -144,6 +150,7 @@ export function formattedTextExtensions(): Extensions {
     }),
     Highlight.configure({ multicolor: false }),
     NumberedListShortcut,
+    LineScopedBlocks.configure({ levels: [...TITLE_LEVELS] }),
     FormattedTextMarkdown,
   ];
 }
@@ -219,18 +226,14 @@ function handlePaste(view: EditorView, event: ClipboardEvent): boolean {
  * The options every Formatted Text editor is created with. No injected style
  * sheet (the CSP forbids inline `<style>`; the few rules live in our
  * stylesheet). Of the typing shortcuts, only the line-start ones: `# `, `## `,
- * `- `, `1. ` (one to three digits), `> ` (decision 15); `**word**` typed
- * inside a line stays the symbols it is. Of the paste rules, only Link's: a
- * pasted address becomes a Text Link.
+ * `- `, `1. ` (one to three digits), `> ` (decision 15), each turning only
+ * its own line into a block (`line-scope.ts`); `**word**` typed inside a line
+ * stays the symbols it is. Of the paste rules, only Link's: a pasted address
+ * becomes a Text Link.
  */
 export const EDITOR_OPTIONS = {
   injectCSS: false,
-  enableInputRules: [
-    'heading',
-    'bulletList',
-    'numberedListShortcut',
-    'blockquote',
-  ],
+  enableInputRules: ['lineScopedBlocks', 'numberedListShortcut'],
   enablePasteRules: ['link'],
   editorProps: { handlePaste, transformPastedHTML },
 } satisfies Partial<EditorOptions>;

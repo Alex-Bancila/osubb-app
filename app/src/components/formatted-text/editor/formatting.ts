@@ -139,8 +139,10 @@ export function blockStyleOf(editor: Editor): BlockStyle {
 }
 
 /**
- * Gives the caret's block one style, the others off: a Citat chosen for a
+ * Gives the selected lines one style, the others off: a Citat chosen for a
  * Titlu is a quoted line of text, a Titlu chosen in a Citat leaves the quote.
+ * Only the lines the selection touches change, not the rest of their
+ * paragraph (`line-scope.ts`).
  */
 export function setBlockStyle(
   editor: Editor,
@@ -148,8 +150,14 @@ export function setBlockStyle(
   style: BlockStyle,
 ): ChainedCommands {
   const quoted = editor.isActive('blockquote');
+  // A Citat chosen in a quote only turns a title in it back into text: the
+  // quote stays.
   if (style === 'quote')
-    return quoted ? chain.setParagraph() : chain.setParagraph().setBlockquote();
+    return !quoted
+      ? chain.setParagraph().setBlockquote()
+      : editor.isActive('heading')
+        ? chain.setParagraph()
+        : chain;
   const unquoted = quoted ? chain.unsetBlockquote() : chain;
   return style === 'text'
     ? unquoted.setParagraph()
