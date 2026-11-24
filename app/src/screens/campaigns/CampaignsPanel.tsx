@@ -60,7 +60,7 @@ const SAVE_FAILED = 'Nu am putut salva campania. Reîncearcă.';
 /**
  * A small pop-up that asks for one Campaign name: used to create and to
  * rename. Whoever opens it owns `open` (the page's plus button, a row's
- * menu). The name is checked on blur and on save (3–120 characters, ruling
+ * menu). The name is checked on blur and on save (3–240 characters, ruling
  * R8); a refused save keeps the pop-up and the typed name, with the reason
  * under the field. What the title cannot say (the owning Group) sits behind
  * the "i" beside the label.

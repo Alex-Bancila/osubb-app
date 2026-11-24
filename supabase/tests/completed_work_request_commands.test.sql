@@ -132,17 +132,17 @@ select is((select count(*) from public.profiles as profile
             where profile_role.level >= 6 and profile.status = 'activ'), 1::bigint,
   'exactly one live BC/Moderator remains in this transaction, so every decider set below is fully determined by this suite''s own fixtures');
 
--- ---- Descriptions. D1 is deliberately longer than 120 characters so that
--- both truncations (60 in the notification title, 120 in the Task title) bite.
+-- ---- Descriptions. D1 is deliberately longer than 240 characters so that
+-- both truncations (60 in the notification title, 240 in the Task title) bite.
 create temp table d344 as
-select 'Am organizat standul OSUBB la targul de voluntariat, am pregatit materialele de promovare si am raspuns intrebarilor studentilor timp de trei zile intregi.'::text as dept_description,
+select 'Am organizat standul OSUBB la targul de voluntariat, am pregatit materialele de promovare si am raspuns intrebarilor studentilor timp de trei zile intregi, de dimineata pana seara, alaturi de colegii din echipa, iar la final am strans standul, am numarat materialele ramase si am predat chitantele si raportul de activitate coordonatorului departamentului.'::text as dept_description,
        'Am facut designul afiselor pentru proiect.'::text as project_description,
        'Am carat materialele echipei independente la depozit.'::text as ind_description,
        'Am tinut evidenta prezentei la sedintele echipei departamentale.'::text as dt_description;
 grant select on d344 to authenticated;
 
-select cmp_ok((select length(dept_description) from d344), '>', 120,
-  'the Department Request''s description is longer than 120 characters, so both title truncations are actually exercised');
+select cmp_ok((select length(dept_description) from d344), '>', 240,
+  'the Department Request''s description is longer than 240 characters, so both title truncations are actually exercised');
 -- #586: materialize this suite's legacy setup as rolled-back Group fixtures.
 select pg_temp.materialize_legacy_groups();
 
@@ -539,10 +539,10 @@ select is((select format('%s|%s|%s|%s|%s|%s|%s|%s|%s',
   'task|local|direct|completed|edu|34400000-0000-0000-0000-000000000002|3|4|true',
   'the created Task is a local, direct, completed ordinary Task on the Request''s Origin, created by the approver');
 select is((select task.title from public.tasks as task where task.id = (select task_id from t344)),
-  left((select dept_description from d344), 120),
-  'its title is the description''s first 120 characters');
+  left((select dept_description from d344), 240),
+  'its title is the description''s first 240 characters');
 select is((select length(task.title) from public.tasks as task where task.id = (select task_id from t344)),
-  120, 'which really is a truncation, not the whole description');
+  240, 'which really is a truncation, not the whole description');
 select is((select task.description from public.tasks as task where task.id = (select task_id from t344)),
   (select dept_description from d344),
   'while the full description is preserved on the Task body');
@@ -602,8 +602,8 @@ $$, (select task_id from t344)),
 select set_eq(format($$
   select title from public.notifications where task_id = %s
 $$, (select task_id from t344)),
-  array['Task nou: ' || left((select dept_description from d344), 120),
-        'Task evaluat: ' || left((select dept_description from d344), 120),
+  array['Task nou: ' || left((select dept_description from d344), 240),
+        'Task evaluat: ' || left((select dept_description from d344), 240),
         'Cerere aprobată: ' || left((select dept_description from d344), 60)],
   'the requester receives three notifications -- the Assignment, the Evaluation and the Request decision (private.open_task_assignment only suppresses the "Task nou" row for a reopen)');
 
@@ -1316,12 +1316,12 @@ select is((select count(*) from public.points_ledger
 -- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
 reset role;
 select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
-select throws_ok($$ select public.create_completed_work_request(repeat('d', 2001), 0) $$,
-  'PT400', 'description_too_long', 'a Request description over 2000 characters is refused before the gate');
-select throws_ok($$ select public.approve_completed_work_request(0, 3, 3, repeat('n', 1001)) $$,
-  'PT400', 'note_too_long', 'an approval note over 1000 characters is refused before the gate');
-select throws_ok($$ select public.reject_completed_work_request(0, repeat('n', 1001)) $$,
-  'PT400', 'note_too_long', 'a rejection note over 1000 characters is refused before the gate');
+select throws_ok($$ select public.create_completed_work_request(repeat('d', 4001), 0) $$,
+  'PT400', 'description_too_long', 'a Request description over 4000 characters is refused before the gate');
+select throws_ok($$ select public.approve_completed_work_request(0, 3, 3, repeat('n', 2001)) $$,
+  'PT400', 'note_too_long', 'an approval note over 2000 characters is refused before the gate');
+select throws_ok($$ select public.reject_completed_work_request(0, repeat('n', 2001)) $$,
+  'PT400', 'note_too_long', 'a rejection note over 2000 characters is refused before the gate');
 reset role;
 
 

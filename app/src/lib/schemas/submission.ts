@@ -7,11 +7,11 @@ import { optionalText } from './text';
 
 /**
  * A Submission Note (#684, ruling R7) as `submit_task_for_review` stores it:
- * an optional note for the reviewer of at most 1000 characters (blank is no
+ * an optional note for the reviewer of at most 2000 characters (blank is no
  * note) and an optional Attached Link, both or neither.
  */
 export const submissionSchema = z.object({
-  note: optionalText({ max: 1000, tooLong: 'note_too_long' }),
+  note: optionalText({ max: 2000, tooLong: 'note_too_long' }),
   link: attachedLinkSchema,
 });
 

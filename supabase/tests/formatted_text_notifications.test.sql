@@ -7,8 +7,8 @@
 -- Member is told for the first time or already holds a notice about it. And an
 -- Event's description, copied into its Announcement by private.
 -- event_announcement_body, is cut at whole lines -- never inside a marker --
--- until the visible text is within 2000 characters and the stored text within
--- 4000, the closing ellipsis included, on a line of its own; the date line stays.
+-- until the visible text is within 4000 characters and the stored text within
+-- 8000, the closing ellipsis included, on a line of its own; the date line stays.
 -- A description that is one long paragraph is never dropped whole: its plain
 -- words are kept, cut at the last space inside the limit (ruling 10). With no
 -- description at all the copy is the date line, never clipped.
@@ -89,8 +89,8 @@ select is((select body from public.notifications
   'a quote inside a quote and an escaped tag reach the Notification as words (#1109)');
 
 -- ==================== 2. the Event copy is cut at whole lines ====================
--- 30 lines of 70 visible characters (74 stored): with the date line and a
--- blank line they are 2166 visible characters, so lines go from the end.
+-- 60 lines of 70 visible characters (74 stored): with the date line and a
+-- blank line they are 4296 visible characters, so lines go from the end.
 -- kept = the lines between the blank line and the ellipsis; given = the
 -- description's own lines.
 create temp table copy30 as
@@ -98,10 +98,10 @@ select body,
        (string_to_array(body, E'\n'))[3 : cardinality(string_to_array(body, E'\n')) - 1] as kept,
        string_to_array(description, E'\n') as given
   from (select description, private.event_announcement_body(now() + interval '1 day', null, null, description) as body
-          from (select array_to_string(array_fill('**' || repeat('x', 70) || '**', array[30]), E'\n') as description) as d) as c;
+          from (select array_to_string(array_fill('**' || repeat('x', 70) || '**', array[60]), E'\n') as description) as d) as c;
 
-select ok(pg_temp.plain_len((select body from copy30)) <= 2000,
-  'an Event description over the limit is copied within 2000 visible characters');
+select ok(pg_temp.plain_len((select body from copy30)) <= 4000,
+  'an Event description over the limit is copied within 4000 visible characters');
 select ok((select body from copy30) like E'%\n…',
   'a cut copy ends with an ellipsis on a line of its own');
 select ok(
@@ -112,62 +112,62 @@ select ok(
      from copy30),
   'every line before the ellipsis is an input line unchanged, in order, and none ends inside a marker');
 select ok(
-  (select pg_temp.plain_len(left(body, -2) || E'\n' || given[cardinality(kept) + 1] || E'\n…') > 2000
+  (select pg_temp.plain_len(left(body, -2) || E'\n' || given[cardinality(kept) + 1] || E'\n…') > 4000
      from copy30),
   'the copy keeps as many lines as fit: one more line, ellipsis included, would pass the limit');
 
 -- ==================== 3. the boundary: the ellipsis is inside the limit ====================
--- date_line + blank line + a line of L characters + "\n…" is exactly 2000
--- visible characters when L = 1996 - length(date_line). The next line is
+-- date_line + blank line + a line of L characters + "\n…" is exactly 4000
+-- visible characters when L = 3996 - length(date_line). The next line is
 -- dropped, the first one stays.
-select is(pg_temp.evcopy(repeat('a', 1996 - char_length(pg_temp.date_line())) || E'\nbbbb'),
-  pg_temp.date_line() || E'\n\n' || repeat('a', 1996 - char_length(pg_temp.date_line())) || E'\n…',
+select is(pg_temp.evcopy(repeat('a', 3996 - char_length(pg_temp.date_line())) || E'\nbbbb'),
+  pg_temp.date_line() || E'\n\n' || repeat('a', 3996 - char_length(pg_temp.date_line())) || E'\n…',
   'a copy that fits the limit exactly, ellipsis included, keeps its last whole line');
--- One character longer and the ellipsis would make 2001: the second line goes
--- too, though the copy without its ellipsis would have been within 2000. Three
--- lines: aaa, a line of 1993 - length(date_line) characters, then cccc.
-select is(pg_temp.evcopy(E'aaa\n' || repeat('b', 1993 - char_length(pg_temp.date_line())) || E'\ncccc'),
+-- One character longer and the ellipsis would make 4001: the second line goes
+-- too, though the copy without its ellipsis would have been within 4000. Three
+-- lines: aaa, a line of 3993 - length(date_line) characters, then cccc.
+select is(pg_temp.evcopy(E'aaa\n' || repeat('b', 3993 - char_length(pg_temp.date_line())) || E'\ncccc'),
   pg_temp.date_line() || E'\n\naaa\n…',
   'a line the ellipsis would push over the limit is dropped as well');
 
 -- ==================== 3b. one long paragraph is never dropped whole ====================
 -- A description that is one over-long line has no whole line to keep, so the
--- copy keeps that line's plain words, cut at the last space inside the 2000
+-- copy keeps that line's plain words, cut at the last space inside the 4000
 -- characters (date line, blank line and closing ellipsis included). A single
--- line of 1990 characters with a bold word: 1986 visible, 2027 with the date line.
+-- line of 3990 characters with a bold word: 3986 visible, 4027 with the date line.
 create temp table para as
-select pg_temp.evcopy(repeat('x', 1000) || ' **bold** ' || repeat('x', 980)) as body;
+select pg_temp.evcopy(repeat('x', 2000) || ' **bold** ' || repeat('x', 1980)) as body;
 select ok(
-  (select pg_temp.plain_len(body) <= 2000
-          and char_length(body) <= 4000
+  (select pg_temp.plain_len(body) <= 4000
+          and char_length(body) <= 8000
           and body like pg_temp.date_line() || E'\n\n%'
           and body not like '%**%'
           and body like E'%\n…'
      from para),
   'one long paragraph is copied within the limits, date line first, markers gone, ending with an ellipsis');
 select is((select body from para),
-  pg_temp.date_line() || E'\n\n' || repeat('x', 1000) || ' bold' || E'\n…',
+  pg_temp.date_line() || E'\n\n' || repeat('x', 2000) || ' bold' || E'\n…',
   'its plain words are cut at the last space inside the limit, never inside a word it can step back from');
 -- No space to step back to: the cut is at the budget, which fills the limit exactly.
-select is(pg_temp.evcopy(repeat('x', 2000)),
-  pg_temp.date_line() || E'\n\n' || repeat('x', 2000 - char_length(pg_temp.date_line()) - 4) || E'\n…',
-  'a paragraph without a space is cut at the budget: exactly 2000 visible characters');
+select is(pg_temp.evcopy(repeat('x', 4000)),
+  pg_temp.date_line() || E'\n\n' || repeat('x', 4000 - char_length(pg_temp.date_line()) - 4) || E'\n…',
+  'a paragraph without a space is cut at the budget: exactly 4000 visible characters');
 -- Leading blank lines are not the description's first line.
-select is(pg_temp.evcopy(E'\n' || repeat('x', 2000)),
-  pg_temp.date_line() || E'\n\n' || repeat('x', 2000 - char_length(pg_temp.date_line()) - 4) || E'\n…',
+select is(pg_temp.evcopy(E'\n' || repeat('x', 4000)),
+  pg_temp.date_line() || E'\n\n' || repeat('x', 4000 - char_length(pg_temp.date_line()) - 4) || E'\n…',
   'the plain words come from the first line that has any');
 
--- Stored 4000 is a limit of its own: 7 lines of 189 visible characters
--- (569 stored) are 1366 visible but 4026 stored with the date line.
+-- Stored 8000 is a limit of its own: 15 lines of 189 visible characters
+-- (569 stored) are 2899 visible but 8586 stored with the date line.
 select ok(
   (with cp as (
-     select pg_temp.evcopy(array_to_string(array_fill(repeat('**a** ', 94) || '**a**', array[7]), E'\n')) as body)
-   select char_length(body) <= 4000
-          and pg_temp.plain_len(body) <= 2000
+     select pg_temp.evcopy(array_to_string(array_fill(repeat('**a** ', 94) || '**a**', array[15]), E'\n')) as body)
+   select char_length(body) <= 8000
+          and pg_temp.plain_len(body) <= 4000
           and body like E'%\n…'
-          and cardinality(string_to_array(body, E'\n')) = 2 + 6 + 1
+          and cardinality(string_to_array(body, E'\n')) = 2 + 13 + 1
      from cp),
-  'the stored 4000 cuts a copy at a line too: 6 of the 7 lines stay');
+  'the stored 8000 cuts a copy at a line too: 13 of the 15 lines stay');
 
 -- ==================== 4. a short description is copied whole ====================
 select is(pg_temp.evcopy(E'Aduceți **laptopul**.\n- una'),
@@ -183,8 +183,8 @@ select is(pg_temp.evcopy(E'Aduceți **laptopul**.\n- una'),
 select is(pg_temp.evcopy(null), 'Miercuri, 25 septembrie 2030, 18:40',
   'with no description the copy is the date line alone');
 set local statement_timeout = '10s';
-select is(private.event_announcement_body('2030-09-25 15:40+00', null, repeat('x', 2100), null),
-  'Miercuri, 25 septembrie 2030, 18:40 · ' || repeat('x', 2100),
+select is(private.event_announcement_body('2030-09-25 15:40+00', null, repeat('x', 4100), null),
+  'Miercuri, 25 septembrie 2030, 18:40 · ' || repeat('x', 4100),
   'a null description is never clipped, even under a date line over the limit');
 set local statement_timeout to default;
 

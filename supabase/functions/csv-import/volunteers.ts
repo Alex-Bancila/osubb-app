@@ -120,10 +120,10 @@ function failure(error: DbError): { code: string; message: string } {
   const messages: Record<string, string> = {
     ...GROUP_REFUSAL_MESSAGES,
     phone_invalid: "Telefon invalid.",
-    full_name_too_long: "Numele depășește 120 de caractere.",
+    full_name_too_long: "Numele depășește 240 de caractere.",
     member_not_imported: "Adresa aparține unui membru care nu a fost importat.",
     member_manage_forbidden: "Doar BC poate importa membri.",
-    position_title_too_long: "Un titlu depășește 80 de caractere.",
+    position_title_too_long: "Un titlu depășește 160 de caractere.",
   };
   return {
     code: reason,

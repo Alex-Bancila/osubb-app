@@ -741,9 +741,9 @@ grant select on f684 to authenticated;
 
 select pg_temp.test_login('33400000-0000-0000-0000-000000000002', jsonb_build_object(
   'member_role', 'voluntar', 'member_level', 1, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
-select throws_ok(format($$ select public.submit_task_for_review(%s, repeat('n', 1001)) $$,
+select throws_ok(format($$ select public.submit_task_for_review(%s, repeat('n', 2001)) $$,
   (select note_task_id from f684)), 'PT400', 'note_too_long',
-  '#684: a Submission Note over 1000 characters is refused');
+  '#684: a Submission Note over 2000 characters is refused');
 select throws_ok(format($$ select public.submit_task_for_review(%s, 'Gata', p_link_label => 'Raport') $$,
   (select note_task_id from f684)), 'PT400', 'link_incomplete',
   '#684: a label without an address is refused');
@@ -793,7 +793,7 @@ select is((select count(*) from public.task_activity
 
 -- Step 1 answers a claimless caller before the gate.
 select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
-select throws_ok($$ select public.submit_task_for_review(0, repeat('n', 1001)) $$,
+select throws_ok($$ select public.submit_task_for_review(0, repeat('n', 2001)) $$,
   'PT400', 'note_too_long', '#684: the note length is judged before the gate');
 reset role;
 

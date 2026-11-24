@@ -785,13 +785,13 @@ select throws_ok(format($$ select public.duplicate_task(%s, '2027-06-05 09:00:00
   (select completed_source_id from f341)),
   'PT400', 'title_too_short', '#673: a source title under 3 characters is answered title_too_short, not a raw constraint name');
 reset role;
-update public.tasks set title = (select title from s673), description = repeat('d', 2001)
+update public.tasks set title = (select title from s673), description = repeat('d', 4001)
  where id = (select id from s673);
 select pg_temp.test_login('34100000-0000-0000-0000-000000000002', jsonb_build_object(
   'member_role', 'bce', 'member_level', 5, 'dept_ids', '["edu"]'::jsonb, 'team_ids', '[]'::jsonb));
 select throws_ok(format($$ select public.duplicate_task(%s, '2027-06-05 09:00:00+00') $$,
   (select completed_source_id from f341)),
-  'PT400', 'description_too_long', '#673: a source description over 2000 characters is answered description_too_long');
+  'PT400', 'description_too_long', '#673: a source description over 4000 characters is answered description_too_long');
 reset role;
 update public.tasks set description = (select description from s673) where id = (select id from s673);
 do $$

@@ -15,9 +15,9 @@ const check = (note: string, label = '', url = '') => {
 it.each([
   ['', []],
   ['   ', []],
-  ['n'.repeat(1000), []],
-  [`  ${'n'.repeat(1000)}  `, []],
-  ['n'.repeat(1001), ['note: note_too_long']],
+  ['n'.repeat(2000), []],
+  [`  ${'n'.repeat(2000)}  `, []],
+  ['n'.repeat(2001), ['note: note_too_long']],
 ])(
   'measures the optional note %j trimmed, at the boundary',
   (note, expected) => {

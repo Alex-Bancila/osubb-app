@@ -105,32 +105,32 @@ describe('eventSchema', () => {
     ['   ', ['title: invalid_event_title']],
     ['ab', ['title: title_too_short']],
     ['abc', []],
-    ['t'.repeat(120), []],
-    ['t'.repeat(121), ['title: title_too_long']],
+    ['t'.repeat(240), []],
+    ['t'.repeat(241), ['title: title_too_long']],
   ])('measures the title %j at the boundary', (title, expected) => {
     expect(check({ title })).toEqual(expected);
   });
 
-  it('limits the location to 200 characters, measured trimmed (security pass 2026-09-27)', () => {
-    expect(check({ location: '  ' + 'l'.repeat(200) + '  ' })).toEqual([]);
-    expect(check({ location: 'l'.repeat(201) })).toEqual([
+  it('limits the location to 400 characters, measured trimmed (security pass 2026-09-27)', () => {
+    expect(check({ location: '  ' + 'l'.repeat(400) + '  ' })).toEqual([]);
+    expect(check({ location: 'l'.repeat(401) })).toEqual([
       'location: location_too_long',
     ]);
   });
 
-  it('limits the description to 2000 characters', () => {
-    expect(check({ description: 'd'.repeat(2000) })).toEqual([]);
-    expect(check({ description: 'd'.repeat(2001) })).toEqual([
+  it('limits the description to 4000 characters', () => {
+    expect(check({ description: 'd'.repeat(4000) })).toEqual([]);
+    expect(check({ description: 'd'.repeat(4001) })).toEqual([
       'description: description_too_long',
     ]);
   });
 
-  // R60: Formatted Text, at most 2000 visible and 4000 stored characters.
+  // R60: Formatted Text, at most 4000 visible and 8000 stored characters.
   it('measures the description as Formatted Text (R60)', () => {
     // 3600 stored (3599 trimmed), 1199 visible.
-    expect(check({ description: '**a** '.repeat(600) })).toEqual([]);
+    expect(check({ description: '**a** '.repeat(1200) })).toEqual([]);
     // 4005 stored, only 801 visible.
-    expect(check({ description: '**a**'.repeat(801) })).toEqual([
+    expect(check({ description: '**a**'.repeat(1601) })).toEqual([
       'description: description_too_long',
     ]);
   });

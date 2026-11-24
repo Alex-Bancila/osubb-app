@@ -483,7 +483,7 @@ describe('Announcement composer', () => {
 
     await waitFor(() =>
       expect(message).toHaveAccessibleDescription(
-        /Mesajul are cel mult 2000 de caractere\./,
+        /Mesajul are cel mult 4000 de caractere\./,
       ),
     );
     expect(message).toHaveAttribute('aria-invalid', 'true');

@@ -85,12 +85,12 @@ select throws_ok(
   $$ update public.profiles set nickname = '   B   ' where id = '67500000-0000-0000-0000-000000000001' $$,
   '23514', 'nickname_too_short', 'length is judged after the trim');
 select throws_ok(
-  $$ update public.profiles set nickname = repeat('x', 25) where id = '67500000-0000-0000-0000-000000000001' $$,
+  $$ update public.profiles set nickname = repeat('x', 49) where id = '67500000-0000-0000-0000-000000000001' $$,
   '23514', 'nickname_too_long', 'twenty-five characters is nickname_too_long');
 select lives_ok(
-  $$ update public.profiles set nickname = '  ' || repeat('ă', 24) || '  ' where id = '67500000-0000-0000-0000-000000000001' $$,
+  $$ update public.profiles set nickname = '  ' || repeat('ă', 48) || '  ' where id = '67500000-0000-0000-0000-000000000001' $$,
   'twenty-four characters (counted as characters, not bytes) inside edge whitespace is accepted');
-select is(pg_temp.nick675(1), repeat('ă', 24), 'edge whitespace is trimmed, never rejected');
+select is(pg_temp.nick675(1), repeat('ă', 48), 'edge whitespace is trimmed, never rejected');
 
 select lives_ok(
   $$ update public.profiles set nickname = '  Ana.Maria-Pop 2  ' where id = '67500000-0000-0000-0000-000000000001' $$,

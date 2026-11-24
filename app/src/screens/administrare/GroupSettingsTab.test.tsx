@@ -207,7 +207,7 @@ it("names the Responsible position right after the Manager's, filled from the st
   );
   expect(manager).toHaveValue('Vicepreședinte');
   expect(responsibleField()).toHaveValue('Coordonator');
-  expect(responsibleField()).toHaveAttribute('maxLength', '80');
+  expect(responsibleField()).toHaveAttribute('maxLength', '160');
   expect(responsibleField()).toHaveAttribute(
     'placeholder',
     'Coordonator, Responsabil de Proiect…',
@@ -254,7 +254,7 @@ it("shows update_group's responsible_title_too_long under the Responsible field 
   await save();
   expect(run).toHaveBeenCalledTimes(1);
   expect(responsibleField()).toHaveAccessibleDescription(
-    'Numele funcției are cel mult 80 de caractere.',
+    'Numele funcției are cel mult 160 de caractere.',
   );
 });
 
@@ -323,7 +323,7 @@ it('asks for both halves, on blur and on save, under the half left empty', async
   );
 });
 
-it('limits the label to 60 characters, checked on blur', async () => {
+it('limits the label to 120 characters, checked on blur', async () => {
   const user = userEvent.setup();
   show();
   // Pasted, not typed: each keystroke re-renders the whole Setări form, and
@@ -332,20 +332,20 @@ it('limits the label to 60 characters, checked on blur', async () => {
   await user.click(urlField());
   await user.paste(FORM_URL);
   await user.click(labelField());
-  await user.paste('e'.repeat(61));
+  await user.paste('e'.repeat(121));
   await user.tab();
   expect(labelField()).toHaveAccessibleDescription(
-    'Eticheta are cel mult 60 de caractere.',
+    'Eticheta are cel mult 120 de caractere.',
   );
   await save();
   expect(run).not.toHaveBeenCalled();
   await user.clear(labelField());
-  await user.paste('e'.repeat(60));
+  await user.paste('e'.repeat(120));
   await save();
   expect(run).toHaveBeenCalledTimes(1);
 });
 
-it('asks for an http(s) address of at most 2048 characters', async () => {
+it('asks for an http(s) address of at most 4096 characters', async () => {
   const user = userEvent.setup();
   show();
   await user.click(formSwitch());
@@ -358,10 +358,10 @@ it('asks for an http(s) address of at most 2048 characters', async () => {
   await user.clear(urlField());
   // Pasted, not typed: 2049 keystrokes would be slow for no gain.
   await user.click(urlField());
-  await user.paste(`https://${'a'.repeat(2041)}`);
+  await user.paste(`https://${'a'.repeat(4089)}`);
   await user.tab();
   expect(urlField()).toHaveAccessibleDescription(
-    `${URL_HINT} Adresa are cel mult 2048 de caractere.`,
+    `${URL_HINT} Adresa are cel mult 4096 de caractere.`,
   );
   await save();
   expect(run).not.toHaveBeenCalled();
@@ -369,13 +369,13 @@ it('asks for an http(s) address of at most 2048 characters', async () => {
 
 it.each([
   ['link_incomplete', 'url', 'Completează și eticheta, și adresa.'],
-  ['link_label_too_long', 'label', 'Eticheta are cel mult 60 de caractere.'],
+  ['link_label_too_long', 'label', 'Eticheta are cel mult 120 de caractere.'],
   [
     'link_url_invalid',
     'url',
     'Adresa trebuie să înceapă cu http:// sau https://.',
   ],
-  ['link_url_too_long', 'url', 'Adresa are cel mult 2048 de caractere.'],
+  ['link_url_too_long', 'url', 'Adresa are cel mult 4096 de caractere.'],
 ])(
   "shows update_group's %s under the %s field, in this form's words",
   async (reason, field, copy) => {

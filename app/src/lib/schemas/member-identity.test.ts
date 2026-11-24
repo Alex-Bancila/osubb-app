@@ -35,16 +35,16 @@ it('requires a full name', () => {
   expect(check({ fullName: '   ' })).toEqual(['fullName: full_name_required']);
 });
 
-it('limits the full name to 120 characters (security pass 2026-09-27)', () => {
-  expect(check({ fullName: 'n'.repeat(120) })).toEqual([]);
-  expect(check({ fullName: 'n'.repeat(121) })).toEqual([
+it('limits the full name to 240 characters (security pass 2026-09-27)', () => {
+  expect(check({ fullName: 'n'.repeat(240) })).toEqual([]);
+  expect(check({ fullName: 'n'.repeat(241) })).toEqual([
     'fullName: full_name_too_long',
   ]);
 });
 
 it('refuses a Nickname the server refuses, in the server order', () => {
   expect(check({ nickname: 'A' })).toEqual(['nickname: nickname_too_short']);
-  expect(check({ nickname: 'a'.repeat(25) })).toEqual([
+  expect(check({ nickname: 'a'.repeat(49) })).toEqual([
     'nickname: nickname_too_long',
   ]);
   expect(check({ nickname: 'Ana!' })).toEqual(['nickname: nickname_invalid']);
@@ -82,7 +82,7 @@ it('takes a join date that is a real day, not after today in Bucharest (#932)', 
   expectMapComplete(joinedAtFieldForReason, ['joinedAt'], []);
 });
 
-it('takes a Universitate from the list, or a typed name of 2-120 characters (R58)', () => {
+it('takes a Universitate from the list, or a typed name of 2-240 characters (R58)', () => {
   const judge = (option: string, other = '') => {
     const result = memberUniversitySchema.safeParse({ option, other });
     expectRoutable(result, universityFieldForReason);
@@ -112,8 +112,8 @@ it('takes a Universitate from the list, or a typed name of 2-120 characters (R58
   expect(judge(OTHER_UNIVERSITY, '')).toEqual([
     'university: invalid_university',
   ]);
-  expect(judge(OTHER_UNIVERSITY, 'a'.repeat(120))).toEqual([]);
-  expect(judge(OTHER_UNIVERSITY, 'a'.repeat(121))).toEqual([
+  expect(judge(OTHER_UNIVERSITY, 'a'.repeat(240))).toEqual([]);
+  expect(judge(OTHER_UNIVERSITY, 'a'.repeat(241))).toEqual([
     'university: invalid_university',
   ]);
   // Nothing chosen is not a university.

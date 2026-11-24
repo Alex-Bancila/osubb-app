@@ -1052,7 +1052,7 @@ it('refuses a typed university under 2 characters under its field, and puts a re
   await user.type(name, 'A');
   await user.click(screen.getByRole('button', { name: 'Salvează' }));
   expect(
-    screen.getByText('Universitatea are între 2 și 120 de caractere.'),
+    screen.getByText('Universitatea are între 2 și 240 de caractere.'),
   ).toBeVisible();
   expect(name).toHaveFocus();
   expect(name).toHaveAttribute('aria-invalid', 'true');
@@ -1063,7 +1063,7 @@ it('refuses a typed university under 2 characters under its field, and puts a re
   // The message was about "A": typing a valid name hides it before any blur
   // or submit.
   expect(
-    screen.queryByText('Universitatea are între 2 și 120 de caractere.'),
+    screen.queryByText('Universitatea are între 2 și 240 de caractere.'),
   ).toBeNull();
   await user.click(screen.getByRole('button', { name: 'Salvează' }));
   expect(

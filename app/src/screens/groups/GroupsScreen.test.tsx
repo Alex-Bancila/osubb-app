@@ -261,10 +261,10 @@ it('checks the optional note against its 1000-character limit before applying', 
   const note = screen.getByLabelText('Mesaj (opțional)');
   expect(note).toHaveAttribute('data-slot', 'textarea');
   await user.click(note);
-  await user.paste('n'.repeat(1001));
+  await user.paste('n'.repeat(2001));
   await user.click(screen.getByRole('button', { name: 'Confirmă' }));
   expect(
-    await screen.findByText('Nota are cel mult 1000 de caractere.'),
+    await screen.findByText('Nota are cel mult 2000 de caractere.'),
   ).toBeInTheDocument();
   expect(note).toHaveAttribute('aria-invalid', 'true');
   expect(api.mutate).not.toHaveBeenCalled();

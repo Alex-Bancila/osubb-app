@@ -58,7 +58,7 @@ export function AdherenceMessageLink({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      // A 60-character label wraps on a phone instead of overflowing.
+      // A 120-character label wraps on a phone instead of overflowing.
       className={cn(
         buttonVariants({ variant }),
         'h-auto py-2.5 text-center whitespace-normal',

@@ -302,8 +302,8 @@ function departmentKey(value: string): string {
   return normalizeGroupKey(value).replace(/\s+/g, "");
 }
 
-const TITLE_LIMIT = 80;
-const NAME_LIMIT = 120;
+const TITLE_LIMIT = 160;
+const NAME_LIMIT = 240;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function problem(code: string, message: string, blocking: boolean): Problem {
@@ -368,7 +368,7 @@ export function planVolunteerImport(
       problems.push(problem("name_required", "Numele lipsește.", true));
     } else if (fullName.length > NAME_LIMIT) {
       problems.push(
-        problem("name_too_long", "Numele depășește 120 de caractere.", true),
+        problem("name_too_long", "Numele depășește 240 de caractere.", true),
       );
     }
     if (!email) {
@@ -445,7 +445,7 @@ export function planVolunteerImport(
       problems.push(
         problem(
           "title_too_long",
-          `Titlu prea lung (peste 80 de caractere): ${trimmed}.`,
+          `Titlu prea lung (peste 160 de caractere): ${trimmed}.`,
           false,
         ),
       );

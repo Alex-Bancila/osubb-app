@@ -21,7 +21,7 @@ import { fieldForReason, submissionSchema } from '../../lib/schemas/submission';
 import { useFormValidation } from '../../lib/use-form-validation';
 import type { TaskSubmission } from '../../queries/task-progress';
 
-const NOTE_LIMIT = 1000;
+const NOTE_LIMIT = 2000;
 const EMPTY_LINK: AttachedLinkValue = { label: '', url: '' };
 
 /**

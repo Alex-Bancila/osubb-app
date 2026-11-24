@@ -12,8 +12,8 @@ export const MAX_TASK_COPIES = 100;
 
 /**
  * A Task, as `create_task` / `update_task` accept it (#673, ruling R8): title
- * 3–120 characters, a Formatted Text description of at most 2000 visible and
- * 4000 stored characters (ruling R60), a deadline not in the past on
+ * 3–240 characters, a Formatted Text description of at most 4000 visible and
+ * 8000 stored characters (ruling R60), a deadline not in the past on
  * creation, and the audience / assignment / Executor / Campaign combination
  * ADR-0007 allows. The command stays authoritative; this only means a draft
  * the server would refuse never leaves the browser.
@@ -22,7 +22,7 @@ export const taskTitle = requiredText({
   required: 'title_required',
   min: 3,
   tooShort: 'title_too_short',
-  max: 120,
+  max: 240,
   tooLong: 'title_too_long',
 });
 export const taskDescription = optionalFormattedText({
@@ -175,7 +175,7 @@ export type TaskUpdateValues = {
  * ordinary Task cannot drop (a past one is allowed), a Campaign the Task may
  * carry — one offered for the chosen Group, or the one it already has — a
  * Group the caller manages (`groupIds`, when a fresh read is at hand) and up
- * to five Attached Links, each both or neither (R46).
+ * to ten Attached Links, each both or neither (R46).
  */
 export function taskUpdateSchema({
   umbrella,

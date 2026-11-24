@@ -35,8 +35,8 @@ select 'Dead link #581','x',id,'Form' from groups where name = 'Educațional'$$,
 -- #673 (R8): announcements_guard_text names the rule a direct write breaks
 -- and stores the trimmed text. Every reason is covered in constraints_kit.
 select throws_ok($$insert into announcements(title,body,group_id,audience)
-select repeat('t', 121),'x',id,'local' from groups where name = 'Educațional'$$,
-'23514','title_too_long','a title over 120 characters is refused with its reason, not a constraint name');
+select repeat('t', 241),'x',id,'local' from groups where name = 'Educațional'$$,
+'23514','title_too_long','a title over 240 characters is refused with its reason, not a constraint name');
 select throws_ok($$insert into announcements(title,body,group_id,audience,form_label,form_url)
 select 'Link invalid #673','x',id,'local','Formular','ftp://osubb.ro/f' from groups where name = 'Educațional'$$,
 '23514','link_url_invalid','a link address that is not http(s) is refused');

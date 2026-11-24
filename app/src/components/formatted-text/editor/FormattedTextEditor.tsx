@@ -19,7 +19,7 @@ import { parseFormattedText, serializeFormattedText } from './markdown';
 
 /**
  * How long typing rests before the rest of a burst goes to the form. Writing
- * the Markdown takes a few milliseconds at 2000 characters, too long to
+ * the Markdown takes a few milliseconds at 4000 characters, too long to
  * repeat on every key; the first change of a burst and a blur send it at once.
  */
 const SETTLE_MS = 150;

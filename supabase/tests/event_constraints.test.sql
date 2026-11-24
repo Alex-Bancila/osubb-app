@@ -3,7 +3,7 @@
 -- #579: the Group is an Event's only Origin. scope / dept_id / team_id / project_id,
 -- events_scope_fields_ck, events_team_department_fkey and the event_scope type are gone;
 -- group_id NOT NULL plus events_group_id_fkey are the whole invariant.
--- #724: events_cancel_reason_length_ck (ruling R8, at most 1000 characters).
+-- #724: events_cancel_reason_length_ck (ruling R8, at most 2000 characters).
 -- Runs in one transaction and rolls back, leaving the local demo untouched.
 begin;
 \set osubb_test_suite true
@@ -110,19 +110,19 @@ select lives_ok(
      values ('Anulare validă', 'sedinta', pg_temp.dept_group('org'), now(), now(), 'Sală indisponibilă') $$,
   'a nonblank cancellation reason is accepted');
 
--- #724 (ruling R8): at most 1000 characters, total for every writer --
+-- #724 (ruling R8): at most 2000 characters, total for every writer --
 -- cancel_event measures its reason at step 1, archive_group's
 -- cancel_event_effect and a direct write meet only this constraint.
 select lives_ok(
   $$ insert into events (title, type, group_id, starts_at, cancelled_at, cancel_reason)
-     values ('Anulare 1000', 'sedinta', pg_temp.dept_group('org'), now(), now(), repeat('r', 1000)) $$,
-  'a 1000-character cancellation reason is accepted');
+     values ('Anulare 2000', 'sedinta', pg_temp.dept_group('org'), now(), now(), repeat('r', 2000)) $$,
+  'a 2000-character cancellation reason is accepted');
 
 select throws_ok(
   $$ insert into events (title, type, group_id, starts_at, cancelled_at, cancel_reason)
-     values ('Anulare 1001', 'sedinta', pg_temp.dept_group('org'), now(), now(), repeat('r', 1001)) $$,
+     values ('Anulare 2001', 'sedinta', pg_temp.dept_group('org'), now(), now(), repeat('r', 2001)) $$,
   '23514', 'new row for relation "events" violates check constraint "events_cancel_reason_length_ck"',
-  'a 1001-character cancellation reason is refused by events_cancel_reason_length_ck');
+  'a 2001-character cancellation reason is refused by events_cancel_reason_length_ck');
 
 select is(
   (select convalidated from pg_constraint
@@ -133,11 +133,11 @@ select is(
 -- write, so a staging deploy that stops after the first one is not a hole.
 alter table public.events drop constraint events_cancel_reason_length_ck;
 alter table public.events add constraint events_cancel_reason_length_ck
-  check (cancel_reason is null or char_length(cancel_reason) <= 1000) not valid;
+  check (cancel_reason is null or char_length(cancel_reason) <= 2000) not valid;
 select throws_ok(
-  $$ update events set cancel_reason = repeat('r', 1001) where title = 'Anulare 1000' $$,
+  $$ update events set cancel_reason = repeat('r', 2001) where title = 'Anulare 2000' $$,
   '23514', 'new row for relation "events" violates check constraint "events_cancel_reason_length_ck"',
-  'while NOT VALID, events_cancel_reason_length_ck still refuses a 1001-character reason');
+  'while NOT VALID, events_cancel_reason_length_ck still refuses a 2001-character reason');
 
 -- ==================== Required and bounded values ====================
 select throws_ok(

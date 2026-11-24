@@ -87,7 +87,7 @@ describe('toPlainText against the SQL suite', () => {
   });
 
   // The stripper removes markers or swaps one for a bullet, never adds: a text
-  // stored under the old limit of 2000 characters as typed is at most 2000
+  // stored under the old limit of 4000 characters as typed is at most 4000
   // visible, so every row already stored stays valid under the visible limit.
   it('never makes a text longer', () => {
     for (const { name, input } of fixtures) {

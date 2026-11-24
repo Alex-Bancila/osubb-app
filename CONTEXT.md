@@ -233,7 +233,7 @@ The optional note an Executor attaches when submitting a Task for review, with a
 _Avoid_: Feedback (the reviewer's note), completion description, comment
 
 **Attached Link**:
-A labelled external address shown as a button under its label and, in a details view, as "Deschide: <etichetă>". An Announcement or a Task carries up to five Attached Links; a Submission Note or a Group's application form carries one (ruling R46, 2026-10-07). It stays the place for an item's materials even where the text can carry a Text Link.
+A labelled external address shown as a button under its label and, in a details view, as "Deschide: <etichetă>". An Announcement or a Task carries up to ten Attached Links; a Submission Note or a Group's application form carries one (ruling R46, 2026-10-07). It stays the place for an item's materials even where the text can carry a Text Link.
 _Avoid_: Form link, URL field
 
 **Formatted Text**:
@@ -310,7 +310,7 @@ Informational attendance guidance for an Event. It does not reject an RSVP or cr
 ## Communication
 
 **Announcement**:
-An OSUBB message posted on behalf of one Group, its Origin, by one of that Group's Managers or Responsibles, with an Announcement Audience, a normal, important, or critical Priority, up to five Attached Links, an optional **Termen** (the date by which its readers should act, never in the past when posted), and a Minimum Level: only Members of its Audience at or above it read the Announcement or are notified of it (everyone by default). An Announcement of the Organization Group may be posted by anyone holding a Group Role; once posted, BC, the Moderator and its author edit or delete it, nobody else (ruling R48, #1042), and only BC and the Moderator pin it or any other organisation-wide Announcement (ruling R50, 2026-10-13). An Announcement of the Organization Group, or one with the organisation Audience, posted by a Member below BC is a Cerere de aprobare until BC or the Moderator approve it (ruling R49). Creating an Event may publish its Announcement in the same step, with the Event's Group, Audience and Minimum Level and Termen = the Event's start, except an all-day Event's, which has none (ruling R63). That Announcement follows its Event (#1150, decided 2026-11-05): an edit of the Event moves its Group, Audience, Minimum Level and Termen with it, and rewrites its title and text while they are still the ones the Event wrote, never words its author changed; cancelling the Event puts „Anulat: ” before its title; deleting the Event deletes it.
+An OSUBB message posted on behalf of one Group, its Origin, by one of that Group's Managers or Responsibles, with an Announcement Audience, a normal, important, or critical Priority, up to ten Attached Links, an optional **Termen** (the date by which its readers should act, never in the past when posted), and a Minimum Level: only Members of its Audience at or above it read the Announcement or are notified of it (everyone by default). An Announcement of the Organization Group may be posted by anyone holding a Group Role; once posted, BC, the Moderator and its author edit or delete it, nobody else (ruling R48, #1042), and only BC and the Moderator pin it or any other organisation-wide Announcement (ruling R50, 2026-10-13). An Announcement of the Organization Group, or one with the organisation Audience, posted by a Member below BC is a Cerere de aprobare until BC or the Moderator approve it (ruling R49). Creating an Event may publish its Announcement in the same step, with the Event's Group, Audience and Minimum Level and Termen = the Event's start, except an all-day Event's, which has none (ruling R63). That Announcement follows its Event (#1150, decided 2026-11-05): an edit of the Event moves its Group, Audience, Minimum Level and Termen with it, and rewrites its title and text while they are still the ones the Event wrote, never words its author changed; cancelling the Event puts „Anulat: ” before its title; deleting the Event deletes it.
 _Avoid_: Post, news item, broadcast when the Audience is local
 
 **Cerere de aprobare** (Approval Request):
@@ -318,7 +318,7 @@ An OSUBB-wide Announcement or Event — one on the Organization Group, or an Ann
 _Avoid_: Moderation queue, draft, pending post
 
 **Deal** (OSUBB Deal):
-An Announcement of kind deal: an offer, discount or access that a company gives OSUBB members, posted by the OSUBB Deals team from the Organization Group to every active Member, Recruți included, with Titlu, Descriere, an optional Termen, up to five Attached Links and an optional Deal Code (ruling R45, 2026-10-07). It is never critical or pinned. It lives on the OSUBB Deals tab of Anunțuri, never among the Announcements, and after its Termen only its team still sees it.
+An Announcement of kind deal: an offer, discount or access that a company gives OSUBB members, posted by the OSUBB Deals team from the Organization Group to every active Member, Recruți included, with Titlu, Descriere, an optional Termen, up to ten Attached Links and an optional Deal Code (ruling R45, 2026-10-07). It is never critical or pinned. It lives on the OSUBB Deals tab of Anunțuri, never among the Announcements, and after its Termen only its team still sees it.
 _Avoid_: Offer, promo, partnership post
 
 **Deal Code**:

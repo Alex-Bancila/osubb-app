@@ -16,8 +16,8 @@ it.each([
   ['   ', ['name: invalid_campaign_name']],
   ['ab', ['name: name_too_short']],
   ['abc', []],
-  ['n'.repeat(120), []],
-  ['n'.repeat(121), ['name: name_too_long']],
+  ['n'.repeat(240), []],
+  ['n'.repeat(241), ['name: name_too_long']],
 ])('measures the Campaign name %j at the boundary', (name, expected) => {
   expect(check(name)).toEqual(expected);
 });
@@ -26,7 +26,7 @@ it('trims the name before measuring and saving it', () => {
   expect(campaignSchema.parse({ name: '  Balul  ' })).toEqual({
     name: 'Balul',
   });
-  expect(check(`  ${'n'.repeat(120)}  `)).toEqual([]);
+  expect(check(`  ${'n'.repeat(240)}  `)).toEqual([]);
 });
 
 it('maps every reason a Campaign command raises to the name', () => {

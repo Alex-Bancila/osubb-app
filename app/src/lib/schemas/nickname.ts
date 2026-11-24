@@ -21,7 +21,7 @@ const NICKNAME_CHARACTERS =
 /**
  * A Nickname as `private.guard_profile_nickname` (#675, ruling R5) stores it:
  * NFC-normalised and trimmed before it is measured, blank is none (the full
- * name stands in), otherwise 2–24 characters of letters, digits, spaces, `.`,
+ * name stands in), otherwise 2–48 characters of letters, digits, spaces, `.`,
  * `-` or `_`. The reasons are the server's, raised in the server's order;
  * `nickname_taken` is the server's alone, since only it sees every Nickname.
  */
@@ -35,7 +35,7 @@ export const memberNicknameSchema = z
     const reason =
       length < 2
         ? 'nickname_too_short'
-        : length > 24
+        : length > 48
           ? 'nickname_too_long'
           : NICKNAME_CHARACTERS.test(nickname)
             ? undefined

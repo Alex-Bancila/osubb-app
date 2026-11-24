@@ -107,9 +107,9 @@ select throws_ok(
   '23514', 'new row for relation "groups" violates check constraint "groups_responsible_title_ck"',
   'groups_responsible_title_ck: a whitespace-only title is refused on a direct write');
 select throws_ok(
-  $$ update public.groups set responsible_title = repeat('r', 81) where name = 'Echipă #962' $$,
+  $$ update public.groups set responsible_title = repeat('r', 161) where name = 'Echipă #962' $$,
   '23514', 'new row for relation "groups" violates check constraint "groups_responsible_title_length_ck"',
-  'groups_responsible_title_length_ck: a title over 80 characters is refused on a direct write');
+  'groups_responsible_title_length_ck: a title over 160 characters is refused on a direct write');
 select is(
   (select array_agg(conname::text order by conname) from pg_constraint
     where conrelid = 'public.groups'::regclass and contype = 'c' and convalidated
@@ -130,12 +130,12 @@ select pg_temp.test_login(pg_temp.g962_uid(5), '{"provider":"email"}'::jsonb);
 select throws_ok(pg_temp.g962_set(null, '   '),
   'PT400', 'invalid_position_title',
   'a claimless caller sending a blank (not null) title gets PT400 invalid_position_title, as for the Manager title');
-select throws_ok(pg_temp.g962_set(null, repeat('r', 81)),
+select throws_ok(pg_temp.g962_set(null, repeat('r', 161)),
   'PT400', 'responsible_title_too_long',
-  'a claimless caller sending 81 characters gets PT400 responsible_title_too_long, ahead of the gate');
-select throws_ok(pg_temp.g962_set(null, ' ' || repeat('r', 80) || ' '),
+  'a claimless caller sending 161 characters gets PT400 responsible_title_too_long, ahead of the gate');
+select throws_ok(pg_temp.g962_set(null, ' ' || repeat('r', 160) || ' '),
   '42501', 'group_manage_forbidden',
-  'the title is measured as stored (trimmed): 80 characters padded pass step 1 and meet the gate');
+  'the title is measured as stored (trimmed): 160 characters padded pass step 1 and meet the gate');
 
 -- ==================== 3 · authority: private.require_group_manager ====================
 
@@ -170,9 +170,9 @@ select lives_ok(pg_temp.g962_set('Vicepreședinte', 'Coordonator'),
   'the two position names are set in one call');
 select is(pg_temp.g962_titles('Departament #962'), array['Vicepreședinte', 'Coordonator'],
   'and stored side by side, each in its own column');
-select lives_ok(pg_temp.g962_set('Vicepreședinte', repeat('ș', 80)),
-  'an 80-character title is accepted (counted in characters, not bytes)');
-select is((select char_length(responsible_title) from public.groups where name = 'Departament #962'), 80,
+select lives_ok(pg_temp.g962_set('Vicepreședinte', repeat('ș', 160)),
+  'a 160-character title is accepted (counted in characters, not bytes)');
+select is((select char_length(responsible_title) from public.groups where name = 'Departament #962'), 160,
   'and stored whole');
 select lives_ok(pg_temp.g962_set('Vicepreședinte', null),
   'a null title clears the setting (full-state replace, OD5)');

@@ -133,12 +133,12 @@ it('lists the open Promotion Candidates: Promovează opens Roluri preset, Respin
   );
   expect(reason).toHaveAccessibleDescription('Scrie motivul respingerii.');
   await user.click(reason);
-  await user.paste('r'.repeat(501));
+  await user.paste('r'.repeat(1001));
   await user.click(
     within(dialog).getByRole('button', { name: 'Respinge candidatul' }),
   );
   expect(reason).toHaveAccessibleDescription(
-    'Motivul are cel mult 500 de caractere.',
+    'Motivul are cel mult 1000 de caractere.',
   );
   expect(db.rpc).not.toHaveBeenCalledWith(
     'reject_promotion_candidate',

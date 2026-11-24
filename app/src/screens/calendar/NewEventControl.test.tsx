@@ -484,7 +484,7 @@ describe('NewEventControl', () => {
 
     await waitFor(() =>
       expect(description).toHaveAccessibleDescription(
-        expect.stringContaining('Descrierea are cel mult 2000 de caractere'),
+        expect.stringContaining('Descrierea are cel mult 4000 de caractere'),
       ),
     );
     expect(description).toHaveAttribute('aria-invalid', 'true');

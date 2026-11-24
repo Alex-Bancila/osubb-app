@@ -73,13 +73,13 @@ it('refuses a 1001-character note under its field before any request', async () 
   const note = within(dialog).getByLabelText(
     'Notă pentru verificator (opțional)',
   );
-  // Pasting is instant; typing 1001 characters one by one is not.
+  // Pasting is instant; typing 2001 characters one by one is not.
   await user.click(note);
-  await user.paste('n'.repeat(1001));
+  await user.paste('n'.repeat(2001));
   await user.click(send(dialog));
   expect(onSubmit).not.toHaveBeenCalled();
   expect(note).toHaveAccessibleDescription(
-    expect.stringContaining('Nota are cel mult 1000 de caractere.'),
+    expect.stringContaining('Nota are cel mult 2000 de caractere.'),
   );
   expect(note).toHaveFocus();
 });

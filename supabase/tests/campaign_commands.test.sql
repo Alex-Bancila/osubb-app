@@ -687,8 +687,8 @@ reset role;
 select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
 select throws_ok($$ select public.create_campaign(0, '  ab  ') $$,
   'PT400', 'name_too_short', 'a Campaign name is measured trimmed and must have 3 characters');
-select throws_ok($$ select public.update_campaign(0, repeat('c', 121)) $$,
-  'PT400', 'name_too_long', 'a Campaign name over 120 characters is refused before the gate');
+select throws_ok($$ select public.update_campaign(0, repeat('c', 241)) $$,
+  'PT400', 'name_too_long', 'a Campaign name over 240 characters is refused before the gate');
 reset role;
 
 select * from finish();

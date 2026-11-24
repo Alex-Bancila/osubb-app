@@ -107,9 +107,9 @@ select pg_temp.test_login(pg_temp.g967_uid(10), '{"provider":"email"}'::jsonb);
 select throws_ok(pg_temp.g967_set('Departament #967', 4, 'manager', '   '),
   'PT400', 'invalid_position_title',
   'a blank (not null) Manager title is malformed for everyone, as a Responsible''s is');
-select throws_ok(pg_temp.g967_set('Departament #967', 4, 'manager', repeat('m', 81)),
+select throws_ok(pg_temp.g967_set('Departament #967', 4, 'manager', repeat('m', 161)),
   'PT400', 'position_title_too_long',
-  'an 81-character Manager title is PT400 position_title_too_long, ahead of the gate');
+  'an 161-character Manager title is PT400 position_title_too_long, ahead of the gate');
 select throws_ok(pg_temp.g967_set('Departament #967', 4, 'manager', 'Coordonator Marketing'),
   '42501', 'group_manage_forbidden',
   'a title on a manager row is no longer malformed: the claimless caller meets the gate instead');
@@ -152,10 +152,10 @@ select is(pg_temp.g967_body(6),
   'without either name the Manager is "coordonator de grup", as before');
 
 select pg_temp.g967_bc();
-select lives_ok(pg_temp.g967_set('Echipă #967', 7, 'manager', ' ' || repeat('ș', 80) || ' '),
-  'an 80-character title is accepted, measured as stored (trimmed) and in characters, not bytes');
+select lives_ok(pg_temp.g967_set('Echipă #967', 7, 'manager', ' ' || repeat('ș', 160) || ' '),
+  'a 160-character title is accepted, measured as stored (trimmed) and in characters, not bytes');
 reset role;
-select is((pg_temp.g967_row('Echipă #967', 7))[2], repeat('ș', 80),
+select is((pg_temp.g967_row('Echipă #967', 7))[2], repeat('ș', 160),
   'and stored whole');
 
 -- ==================== 3 · the readers return it ====================
@@ -210,9 +210,9 @@ select is(pg_temp.g967_row('Departament #967', 4), array['member', null],
 select throws_ok(pg_temp.g967_appoint(8, 'manager', '   '),
   'PT400', 'invalid_position_title',
   'appoint_group_member: a blank Manager title is malformed');
-select throws_ok(pg_temp.g967_appoint(8, 'manager', repeat('m', 81)),
+select throws_ok(pg_temp.g967_appoint(8, 'manager', repeat('m', 161)),
   'PT400', 'position_title_too_long',
-  'appoint_group_member: an 81-character Manager title is too long');
+  'appoint_group_member: an 161-character Manager title is too long');
 select throws_ok(pg_temp.g967_appoint(8, 'member', 'Membru de onoare'),
   'PT400', 'invalid_position_title',
   'appoint_group_member: an ordinary row carries no title');

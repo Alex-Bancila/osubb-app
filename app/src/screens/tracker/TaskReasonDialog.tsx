@@ -29,7 +29,7 @@ import type { MenuDialog } from './menu-dialog';
 /**
  * One small pop-up for the Task actions that need a written reason: send work
  * back with feedback (a `note`), reopen or cancel (a `reason`). The text is
- * required and at most 1000 characters (ruling R8); a refusal stays inside the
+ * required and at most 2000 characters (ruling R8); a refusal stays inside the
  * pop-up, under the field, with the text kept, so the member can fix it.
  *
  * It draws its own trigger button, unless `menu` hands it the open state of

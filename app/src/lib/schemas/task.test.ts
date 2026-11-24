@@ -73,31 +73,32 @@ describe('taskDraftSchema', () => {
     ['ab', ['title: title_too_short']],
     [' ab ', ['title: title_too_short']],
     ['abc', []],
-    ['t'.repeat(120), []],
-    ['t'.repeat(121), ['title: title_too_long']],
-    // Characters, as char_length counts them: 120 emoji are 120, not 240.
-    ['😀'.repeat(120), []],
+    ['t'.repeat(240), []],
+    ['t'.repeat(241), ['title: title_too_long']],
+    // Characters, as char_length counts them: 240 emoji are 240, not 480.
+    ['😀'.repeat(240), []],
   ])('measures the title %j at the boundary', (title, expected) => {
     expect(check({ title })).toEqual(expected);
   });
 
-  it('allows a description of 2000 characters and refuses 2001', () => {
-    expect(check({ description: 'd'.repeat(2000) })).toEqual([]);
-    expect(check({ description: `  ${'d'.repeat(2000)}  ` })).toEqual([]);
-    expect(check({ description: 'd'.repeat(2001) })).toEqual([
+  it('allows a description of 4000 characters and refuses 4001', () => {
+    expect(check({ description: 'd'.repeat(4000) })).toEqual([]);
+    expect(check({ description: `  ${'d'.repeat(4000)}  ` })).toEqual([]);
+    expect(check({ description: 'd'.repeat(4001) })).toEqual([
       'description: description_too_long',
     ]);
   });
 
-  // R60: Formatted Text, at most 2000 visible and 4000 stored characters.
+  // R60: Formatted Text, at most 4000 visible and 8000 stored characters.
   it('measures the description as Formatted Text (R60)', () => {
     // 3600 stored (3599 trimmed), 1199 visible.
-    expect(check({ description: '**a** '.repeat(600) })).toEqual([]);
+    expect(check({ description: '**a** '.repeat(1200) })).toEqual([]);
     expect(
-      schema.parse({ ...draft, description: '**a** '.repeat(600) }).description,
-    ).toBe('**a** '.repeat(600).trim());
+      schema.parse({ ...draft, description: '**a** '.repeat(1200) })
+        .description,
+    ).toBe('**a** '.repeat(1200).trim());
     // 4005 stored, only 801 visible.
-    expect(check({ description: '**a**'.repeat(801) })).toEqual([
+    expect(check({ description: '**a**'.repeat(1601) })).toEqual([
       'description: description_too_long',
     ]);
   });
@@ -211,18 +212,20 @@ describe('taskDraftSchema', () => {
       check({ links: [{ label: '', url: 'https://example.org' }] }),
     ).toEqual(['links.0.label: link_label_required']);
     expect(
-      check({ links: [{ label: 'l'.repeat(61), url: 'https://example.org' }] }),
+      check({
+        links: [{ label: 'l'.repeat(121), url: 'https://example.org' }],
+      }),
     ).toEqual(['links.0.label: link_label_too_long']);
     expect(
       check({ links: [ok, ok, { label: 'Brief', url: 'ftp://example.org' }] }),
     ).toEqual(['links.2.url: link_url_invalid']);
     expect(
       check({
-        links: [{ label: 'Brief', url: `https://${'a'.repeat(2041)}` }],
+        links: [{ label: 'Brief', url: `https://${'a'.repeat(4089)}` }],
       }),
     ).toEqual(['links.0.url: link_url_too_long']);
-    expect(check({ links: Array(5).fill(ok) })).toEqual([]);
-    expect(check({ links: Array(6).fill(ok) })).toEqual([
+    expect(check({ links: Array(10).fill(ok) })).toEqual([]);
+    expect(check({ links: Array(11).fill(ok) })).toEqual([
       'links: too_many_links',
     ]);
     // An Umbrella may carry a link like any Task.
@@ -282,14 +285,14 @@ describe('taskUpdateSchema', () => {
   });
 
   it('keeps the title and description limits', () => {
-    expect(checkEdit({ title: 't'.repeat(121) })).toEqual([
+    expect(checkEdit({ title: 't'.repeat(241) })).toEqual([
       'title: title_too_long',
     ]);
-    expect(checkEdit({ description: 'd'.repeat(2001) })).toEqual([
+    expect(checkEdit({ description: 'd'.repeat(4001) })).toEqual([
       'description: description_too_long',
     ]);
     // R60: 3600 stored, 1199 visible is a Formatted Text within both limits.
-    expect(checkEdit({ description: '**a** '.repeat(600) })).toEqual([]);
+    expect(checkEdit({ description: '**a** '.repeat(1200) })).toEqual([]);
   });
 
   it('allows only the offered Campaigns and keeps an Umbrella without one', () => {

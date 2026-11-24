@@ -4,8 +4,8 @@ import { isId, requiredFormattedText, requiredText } from './text';
 
 /**
  * An Announcement, as `announcements_guard_text` stores it (#673, ruling R8):
- * a title of 3–120 characters, a Formatted Text body of at most 2000 visible
- * and 4000 stored characters (ruling R60), up to five Attached
+ * a title of 3–240 characters, a Formatted Text body of at most 4000 visible
+ * and 8000 stored characters (ruling R60), up to ten Attached
  * Links (ruling R46), an Origin Group the author may publish from, and an
  * optional Termen that is not in the past (#909,
  * `announcements_guard_deadline`). `deadline` is an ISO instant, `null` for
@@ -16,7 +16,7 @@ export const announcementSchema = z.object({
     required: 'title_required',
     min: 3,
     tooShort: 'title_too_short',
-    max: 120,
+    max: 240,
     tooLong: 'title_too_long',
   }),
   body: requiredFormattedText({

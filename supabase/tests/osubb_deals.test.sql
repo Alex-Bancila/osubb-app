@@ -153,8 +153,8 @@ select throws_ok($$insert into public.announcements(kind, title, body, group_id,
   values ('deal', 'Deal R45 fixat', 'Corp.', pg_temp.org(), 'org', true)$$,
   '23514', 'invalid_deal_settings', 'a Deal is never pinned');
 select throws_ok(format($$insert into public.announcements(kind, title, body, code, group_id, audience)
-  values ('deal', 'Deal R45 cod lung', 'Corp.', %L, pg_temp.org(), 'org')$$, repeat('C', 81)),
-  'PT400', 'deal_code_too_long', 'a Deal Code is at most 80 characters');
+  values ('deal', 'Deal R45 cod lung', 'Corp.', %L, pg_temp.org(), 'org')$$, repeat('C', 161)),
+  'PT400', 'deal_code_too_long', 'a Deal Code is at most 160 characters');
 select throws_ok($$update public.announcements set pinned = true where id = pg_temp.deal('Deal R45 resp')$$,
   '23514', 'invalid_deal_settings', 'an edit cannot pin a Deal');
 select throws_ok($$update public.announcements set kind = 'announcement' where id = pg_temp.deal('Deal R45 resp')$$,

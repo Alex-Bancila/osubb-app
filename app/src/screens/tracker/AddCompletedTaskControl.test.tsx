@@ -330,7 +330,7 @@ it('puts a server refusal of the Detalii under them (R60)', async () => {
 
   await waitFor(() =>
     expect(details).toHaveAccessibleDescription(
-      /Descrierea are cel mult 2000 de caractere\./,
+      /Descrierea are cel mult 4000 de caractere\./,
     ),
   );
   expect(details).toHaveAttribute('aria-invalid', 'true');

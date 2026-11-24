@@ -15,7 +15,7 @@ import { isId } from './text';
  * A completed Task (#915), as `approve_completed_work_request` (shaping a
  * Request's Task), `create_completed_task` (adding one directly) and
  * `create_completed_tasks` (adding it n times, spec 2026-10-11 Part E) accept
- * it: the Task's title, details, Group, Attached Links (up to five, R46) and
+ * it: the Task's title, details, Group, Attached Links (up to ten, R46) and
  * Campaign — no deadline, no Audience — the number of copies, then the
  * Evaluation's Difficulty, Rating and note. The commands stay authoritative;
  * this keeps a draft they would refuse in the browser.

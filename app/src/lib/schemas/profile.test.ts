@@ -66,20 +66,20 @@ it('clears the Nickname when it is emptied', () => {
   expect(nickname(null)).toBeNull();
 });
 
-it('accepts 2 and 24 characters, diacritics and every allowed sign', () => {
+it('accepts 2 and 48 characters, diacritics and every allowed sign', () => {
   expect(nickname('Io')).toBe('Io');
-  expect(nickname('a'.repeat(24))).toBe('a'.repeat(24));
+  expect(nickname('a'.repeat(48))).toBe('a'.repeat(48));
   expect(nickname('Ăla-Bala 2.0_x')).toBe('Ăla-Bala 2.0_x');
   // A decomposed ș is stored composed, and counts once.
   expect(nickname('șt')).toBe('șt');
 });
 
-it('refuses a Nickname outside 2-24 characters, measured after trimming', () => {
+it('refuses a Nickname outside 2-48 characters, measured after trimming', () => {
   expect(check({ nickname: 'A' })).toEqual(['nickname: nickname_too_short']);
   expect(check({ nickname: '  A  ' })).toEqual([
     'nickname: nickname_too_short',
   ]);
-  expect(check({ nickname: 'a'.repeat(25) })).toEqual([
+  expect(check({ nickname: 'a'.repeat(49) })).toEqual([
     'nickname: nickname_too_long',
   ]);
 });

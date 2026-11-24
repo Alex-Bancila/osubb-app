@@ -49,7 +49,7 @@ it('takes a Role Evaluation as run_role_evaluation checks it (#826, R58)', () =>
   expect(issues(run.safeParse({ ...valid, name: 'ab' }))).toEqual([
     'name:name_too_short',
   ]);
-  expect(issues(run.safeParse({ ...valid, name: 'n'.repeat(121) }))).toEqual([
+  expect(issues(run.safeParse({ ...valid, name: 'n'.repeat(241) }))).toEqual([
     'name:name_too_long',
   ]);
 });
@@ -191,12 +191,12 @@ it('takes a whole share from 1 to 100 % (#866)', () => {
   expect(percentSchema.parse({ percent: '100' })).toEqual({ percent: 100 });
 });
 
-it('requires a rejection reason of at most 500 characters', () => {
+it('requires a rejection reason of at most 1000 characters', () => {
   expect(issues(rejectionSchema.safeParse({ reason: '  ' }))).toEqual([
     'reason:invalid_rejection_reason',
   ]);
   expect(
-    issues(rejectionSchema.safeParse({ reason: 'r'.repeat(501) })),
+    issues(rejectionSchema.safeParse({ reason: 'r'.repeat(1001) })),
   ).toEqual(['reason:candidate_rejection_reason_too_long']);
   expect(
     rejectionSchema.parse({ reason: ' Puncte din alt semestru ' }),

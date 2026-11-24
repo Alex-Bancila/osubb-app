@@ -659,8 +659,8 @@ select lives_ok(
 -- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
 reset role;
 select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
-select throws_ok($$ select public.create_group(repeat('g', 121), 'team') $$,
-  'PT400', 'name_too_long', 'a Group name over 120 characters is refused before the gate');
+select throws_ok($$ select public.create_group(repeat('g', 241), 'team') $$,
+  'PT400', 'name_too_long', 'a Group name over 240 characters is refused before the gate');
 select throws_ok($$ select public.update_group(0, 'ab', null, null, false, null, false, 0, null, null) $$,
   'PT400', 'name_too_short', 'a Group name under 3 characters is refused before the gate');
 reset role;

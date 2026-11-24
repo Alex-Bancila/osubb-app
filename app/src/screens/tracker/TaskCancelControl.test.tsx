@@ -120,10 +120,10 @@ it('checks the 1000-character limit and shows the server reason under the field'
   const dialog = await openDialog(user);
   const reason = within(dialog).getByLabelText(reasonLabel);
   await user.click(reason);
-  await user.paste('r'.repeat(1001));
+  await user.paste('r'.repeat(2001));
   await user.tab();
   expect(reason).toHaveAccessibleDescription(
-    'Motivul are cel mult 1000 de caractere.',
+    'Motivul are cel mult 2000 de caractere.',
   );
   await user.clear(reason);
   await user.type(reason, 'Surse');
@@ -132,7 +132,7 @@ it('checks the 1000-character limit and shows the server reason under the field'
   );
   await waitFor(() =>
     expect(reason).toHaveAccessibleDescription(
-      'Motivul are cel mult 1000 de caractere.',
+      'Motivul are cel mult 2000 de caractere.',
     ),
   );
   expect(reason).toHaveFocus();

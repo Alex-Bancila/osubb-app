@@ -4,16 +4,16 @@ import { requiredFormattedText, requiredText } from './text';
 
 /**
  * The Adherence Message as `set_adherence_message` stores it (ruling R66): a
- * plain heading of 1–120 characters, a Formatted Text body (R60: 2000
- * visible, 4000 stored) and an optional link, judged as an Attached Link (a
- * label of at most 60 characters and an http(s) address of at most 2048,
+ * plain heading of 1–240 characters, a Formatted Text body (R60: 4000
+ * visible, 8000 stored) and an optional link, judged as an Attached Link (a
+ * label of at most 120 characters and an http(s) address of at most 4096,
  * both or neither). The form publishes only with a heading and a body;
  * turning the message off is its own button.
  */
 export const adherenceMessageSchema = z.object({
   title: requiredText({
     required: 'title_required',
-    max: 120,
+    max: 240,
     tooLong: 'title_too_long',
   }),
   body: requiredFormattedText({

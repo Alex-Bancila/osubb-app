@@ -173,8 +173,8 @@ reset role;
 select pg_temp.test_login_leadership(pg_temp.u47(2));
 select throws_ok($$select public.reject_announcement((pg_temp.ann('Ann pending #4700')).id, '  ')$$, 'PT400', 'rejection_reason_required',
   'a rejection needs its reason');
-select throws_ok($$select public.reject_announcement((pg_temp.ann('Ann pending #4700')).id, repeat('x', 1001))$$, 'PT400', 'rejection_reason_too_long',
-  'of at most 1000 characters');
+select throws_ok($$select public.reject_announcement((pg_temp.ann('Ann pending #4700')).id, repeat('x', 2001))$$, 'PT400', 'rejection_reason_too_long',
+  'of at most 2000 characters');
 select throws_ok($$select public.approve_announcement((pg_temp.ann('Ann by BC #4700')).id)$$, 'PT409', 'announcement_not_pending',
   'an approved Announcement is not decided again');
 select throws_ok($$select public.approve_announcement(0)$$, 'PT404', 'announcement_not_found', 'an unknown id');

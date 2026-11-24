@@ -159,7 +159,7 @@ function EditProfileForm({
               Poreclă (opțional)
             </FieldLabel>
             <InfoHint label="Despre poreclă" id="edit-profile-nickname-hint">
-              2–24 de caractere: litere, cifre, spații, punct, cratimă sau
+              2–48 de caractere: litere, cifre, spații, punct, cratimă sau
               underscore. Fără poreclă, se afișează numele complet.
             </InfoHint>
           </div>

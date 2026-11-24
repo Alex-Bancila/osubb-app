@@ -48,7 +48,7 @@ export type TaskDraft = {
   campaignId: number | null;
   /** How many identical Tasks to create at once (1 to `MAX_TASK_COPIES`; 1 for an Umbrella). */
   copies: number;
-  /** The Attached Links (ruling R46): complete rows only, at most five. */
+  /** The Attached Links (ruling R46): complete rows only, at most ten. */
   links: AttachedLink[];
   /** **Cine îl vede** (R57): the lowest Level that sees a public Task and may
    *  join its queue; 0 for a direct Task and an Umbrella. */

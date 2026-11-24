@@ -38,7 +38,7 @@ type AttachedLinksFieldsProps = {
 const EMPTY_LINK: AttachedLinkValue = { label: '', url: '' };
 
 /**
- * Up to five Attached Links (ruling R46), entered one row at a time: a label
+ * Up to ten Attached Links (ruling R46), entered one row at a time: a label
  * and an address per row, "Adaugă link" until the fifth, "Elimină" per row.
  * Each row is #674's pair rule, its errors under its own fields through the
  * caller's `useFormValidation`; a blank row is dropped on save

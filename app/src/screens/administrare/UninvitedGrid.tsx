@@ -81,7 +81,7 @@ function check<T>(schema: ZodType<T>, value: string) {
 
 const nameSchema = requiredText({
   required: 'full_name_required',
-  max: 120,
+  max: 240,
   tooLong: 'full_name_too_long',
 });
 

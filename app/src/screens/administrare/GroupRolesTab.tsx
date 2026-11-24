@@ -174,7 +174,7 @@ function AppointDialog({
               </span>
               <Input
                 value={positionTitle}
-                maxLength={80}
+                maxLength={160}
                 placeholder={titlePlaceholder}
                 disabled={busy}
                 aria-invalid={missing.title ? true : undefined}

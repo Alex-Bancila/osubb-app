@@ -100,14 +100,14 @@ describe('AttachedLinkFields', () => {
     );
   });
 
-  it('shows the 60-character label limit under the label field', async () => {
+  it('shows the 120-character label limit under the label field', async () => {
     const user = userEvent.setup();
     render(<Harness />);
-    await user.type(labelBox(), 'l'.repeat(61));
+    await user.type(labelBox(), 'l'.repeat(121));
     await user.type(urlBox(), 'https://osubb.ro');
     await user.click(submit());
     expect(labelBox()).toHaveAccessibleDescription(
-      'Numele linkului are cel mult 60 de caractere.',
+      'Numele linkului are cel mult 120 de caractere.',
     );
   });
 
@@ -139,7 +139,7 @@ describe('AttachedLinkFields', () => {
       screen.getByRole('button', { name: 'Simulează refuz server' }),
     );
     expect(labelBox()).toHaveAccessibleDescription(
-      'Numele linkului are cel mult 60 de caractere.',
+      'Numele linkului are cel mult 120 de caractere.',
     );
   });
 
