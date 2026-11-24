@@ -79,23 +79,23 @@ describe('AttachedLinksFields', () => {
     ).not.toHaveClass('border');
     await user.click(add());
     expect(label(2)).toHaveFocus();
-    expect(screen.getByText('2 din 5')).toBeInTheDocument();
+    expect(screen.getByText('2 din 10')).toBeInTheDocument();
   });
 
-  it('stops at five: no "Adaugă link" once the fifth row is there', async () => {
+  it('stops at ten: no "Adaugă link" once the tenth row is there', async () => {
     const user = userEvent.setup();
-    render(<Harness initial={full(4)} />);
+    render(<Harness initial={full(9)} />);
     await user.click(add());
-    expect(label(5)).toHaveFocus();
+    expect(label(10)).toHaveFocus();
     expect(screen.queryByRole('button', { name: 'Adaugă link' })).toBeNull();
     expect(
-      screen.getByText('Ai atașat numărul maxim de linkuri (5).'),
+      screen.getByText('Ai atașat numărul maxim de linkuri (10).'),
     ).toBeInTheDocument();
     // Removing one brings the button back; the cursor goes to the row
     // above the removed last one.
-    await user.click(screen.getByRole('button', { name: 'Elimină linkul 5' }));
+    await user.click(screen.getByRole('button', { name: 'Elimină linkul 10' }));
     expect(add()).toBeInTheDocument();
-    expect(label(4)).toHaveFocus();
+    expect(label(9)).toHaveFocus();
   });
 
   it('moves the cursor to “Adaugă link” when the only row goes', async () => {
@@ -184,7 +184,7 @@ describe('AttachedLinksFields', () => {
       screen.getByRole('button', { name: 'Simulează refuz server' }),
     );
     expect(
-      screen.getByText('Poți atașa cel mult 5 linkuri.'),
+      screen.getByText('Poți atașa cel mult 10 linkuri.'),
     ).toBeInTheDocument();
   });
 

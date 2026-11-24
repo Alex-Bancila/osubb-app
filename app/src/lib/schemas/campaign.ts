@@ -3,14 +3,14 @@ import { requiredText } from './text';
 
 /**
  * A Campaign, as `create_campaign` / `update_campaign` accept it (#673,
- * ruling R8): a name of 3–120 characters, measured trimmed. A blank name is
+ * ruling R8): a name of 3–240 characters, measured trimmed. A blank name is
  * the commands' own `invalid_campaign_name`.
  */
 export const campaignName = requiredText({
   required: 'invalid_campaign_name',
   min: 3,
   tooShort: 'name_too_short',
-  max: 120,
+  max: 240,
   tooLong: 'name_too_long',
 });
 

@@ -5,7 +5,7 @@ import { optionalText, requiredText } from './text';
 
 /**
  * A Group, as `create_group`, `update_group` and `update_group_structure`
- * accept it (#582, #673, ruling R8): a name of 3–120 characters, a Minimum
+ * accept it (#582, #673, ruling R8): a name of 3–240 characters, a Minimum
  * Level and Application Level from the Role levels, and a colour written as
  * `#RRGGBB`. Authority and tree rules (a parent's floor, the actor's own
  * level) stay with the commands and the pickers that offer only valid levels.
@@ -17,7 +17,7 @@ export const groupName = requiredText({
   required: 'invalid_group_name',
   min: 3,
   tooShort: 'name_too_short',
-  max: 120,
+  max: 240,
   tooLong: 'name_too_long',
 });
 
@@ -29,20 +29,20 @@ const optional = z
 
 /**
  * Security pass 2026-09-27: the Group labels' column limits, the same as the
- * inputs' maxLength -- Prescurtare at most 16 characters (groups_short_length_ck),
- * a Manager title at most 80 (groups_manager_title_length_ck), and (#962) the
- * Group's name for its Responsible position at most 80
+ * inputs' maxLength -- Prescurtare at most 32 characters (groups_short_length_ck),
+ * a Manager title at most 160 (groups_manager_title_length_ck), and (#962) the
+ * Group's name for its Responsible position at most 160
  * (groups_responsible_title_length_ck). A Responsible's or (#967) a
- * Manager's own title input caps itself at the same 80
+ * Manager's own title input caps itself at the same 160
  * (group_members_position_title_length_ck).
  */
-const short = optionalText({ max: 16, tooLong: 'short_too_long' });
+const short = optionalText({ max: 32, tooLong: 'short_too_long' });
 const managerTitle = optionalText({
-  max: 80,
+  max: 160,
   tooLong: 'manager_title_too_long',
 });
 const responsibleTitle = optionalText({
-  max: 80,
+  max: 160,
   tooLong: 'responsible_title_too_long',
 });
 
@@ -63,7 +63,7 @@ export type PositionTitleRule = 'required' | 'optional' | 'none';
 
 /**
  * Appointing into a position (Audit D-16): a member is always chosen, and a
- * title, where the position takes one, is trimmed and at most 80 characters
+ * title, where the position takes one, is trimmed and at most 160 characters
  * (group_members_position_title_length_ck). An optional one left blank is no
  * title, so the Group's name for the position labels the holder.
  */
@@ -77,11 +77,11 @@ export function appointmentSchema(rule: PositionTitleRule) {
       rule === 'required'
         ? requiredText({
             required: 'position_title_required',
-            max: 80,
+            max: 160,
             tooLong: 'position_title_too_long',
           })
         : rule === 'optional'
-          ? optionalText({ max: 80, tooLong: 'position_title_too_long' })
+          ? optionalText({ max: 160, tooLong: 'position_title_too_long' })
           : z.string().transform(() => null),
   });
 }
@@ -100,8 +100,8 @@ export const groupCreateSchema = z.object({
  * The Group's application form link (#697, #698, ruling R18): an Attached
  * Link, "Formular de înscriere", judged as update_group judges it through
  * #684's private.require_attached_link -- trimmed, blank as no value, both or
- * neither, a label of at most 60 characters, an http(s) address of at most
- * 2048. The copy names this form's own fields (Eticheta butonului, Adresa
+ * neither, a label of at most 120 characters, an http(s) address of at most
+ * 4096. The copy names this form's own fields (Eticheta butonului, Adresa
  * formularului), so the reasons are this form's, not the Task link's.
  */
 const applicationForm = z
@@ -121,10 +121,10 @@ const applicationForm = z
       issue('url', 'application_form_incomplete');
     if (link.url !== null && link.label === null)
       issue('label', 'application_form_incomplete');
-    if (link.label !== null && charLength(link.label) > 60)
+    if (link.label !== null && charLength(link.label) > 120)
       issue('label', 'application_form_label_too_long');
     if (link.url !== null) {
-      if (charLength(link.url) > 2048) issue('url', 'link_url_too_long');
+      if (charLength(link.url) > 4096) issue('url', 'link_url_too_long');
       else if (!/^https?:\/\//.test(link.url))
         issue('url', 'application_form_url_invalid');
     }

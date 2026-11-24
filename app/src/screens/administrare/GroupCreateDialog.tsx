@@ -380,7 +380,7 @@ export function GroupCreateDialog({
               <Input
                 id={`${id}-short`}
                 value={short}
-                maxLength={16}
+                maxLength={32}
                 disabled={disabled}
                 onChange={(event) => setShort(event.target.value)}
                 {...form.field('short')}

@@ -48,10 +48,10 @@ it.each([
   expect(check({ rating })).toEqual(expected);
 });
 
-it('requires a note of at most 1000 characters', () => {
+it('requires a note of at most 2000 characters', () => {
   expect(check({ note: '   ' })).toEqual(['note: evaluation_note_required']);
-  expect(check({ note: 'n'.repeat(1000) })).toEqual([]);
-  expect(check({ note: 'n'.repeat(1001) })).toEqual([
+  expect(check({ note: 'n'.repeat(2000) })).toEqual([]);
+  expect(check({ note: 'n'.repeat(2001) })).toEqual([
     'note: evaluation_note_too_long',
   ]);
 });

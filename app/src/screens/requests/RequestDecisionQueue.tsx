@@ -68,7 +68,7 @@ function RequestSummary({ request }: { request: PendingDecision }) {
   );
 }
 
-/** Rejecting a Request: a required note of at most 1000 characters (R8). */
+/** Rejecting a Request: a required note of at most 2000 characters (R8). */
 function RejectForm({
   pending,
   onReject,
@@ -187,9 +187,9 @@ function ApproveRequestForm({
       // The Request summary above already names the requester.
       volunteerLabel={null}
       initial={{
-        // The Task's title is the Request's first 120 characters, as the
+        // The Task's title is the Request's first 240 characters, as the
         // server writes it when nothing is changed.
-        title: request.description.slice(0, 120),
+        title: request.description.slice(0, 240),
         description: request.description,
         groupId: request.group_id,
       }}

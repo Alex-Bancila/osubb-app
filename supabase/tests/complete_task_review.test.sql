@@ -1352,8 +1352,8 @@ reset role;
 -- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
 reset role;
 select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
-select throws_ok($$ select public.complete_task_review(0, 3, 3, repeat('n', 1001)) $$,
-  'PT400', 'note_too_long', 'an Evaluation note over 1000 characters is refused before the gate');
+select throws_ok($$ select public.complete_task_review(0, 3, 3, repeat('n', 2001)) $$,
+  'PT400', 'note_too_long', 'an Evaluation note over 2000 characters is refused before the gate');
 reset role;
 
 select * from finish();

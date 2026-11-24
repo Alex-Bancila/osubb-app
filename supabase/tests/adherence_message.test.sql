@@ -166,20 +166,20 @@ select throws_ok($$ select public.set_adherence_message(null, 'Corp', null, null
   'PT400', 'title_required', 'a body without a heading is title_required');
 select throws_ok($$ select public.set_adherence_message('Titlu', '   ', null, null, false) $$,
   'PT400', 'body_required', 'a heading without a body is body_required');
-select throws_ok(format($$ select public.set_adherence_message(%L, 'Corp', null, null, false) $$, repeat('t', 121)),
-  'PT400', 'title_too_long', 'a heading over 120 characters is title_too_long');
-select throws_ok(format($$ select public.set_adherence_message('Titlu', %L, null, null, false) $$, repeat('**b** ', 667)),
-  'PT400', 'body_too_long', 'a body over 4000 stored characters is body_too_long');
-select throws_ok(format($$ select public.set_adherence_message('Titlu', %L, null, null, false) $$, repeat('a', 2001)),
-  'PT400', 'body_too_long', 'a body over 2000 visible characters is body_too_long (R60)');
+select throws_ok(format($$ select public.set_adherence_message(%L, 'Corp', null, null, false) $$, repeat('t', 241)),
+  'PT400', 'title_too_long', 'a heading over 240 characters is title_too_long');
+select throws_ok(format($$ select public.set_adherence_message('Titlu', %L, null, null, false) $$, repeat('**b** ', 1334)),
+  'PT400', 'body_too_long', 'a body over 8000 stored characters is body_too_long');
+select throws_ok(format($$ select public.set_adherence_message('Titlu', %L, null, null, false) $$, repeat('a', 4001)),
+  'PT400', 'body_too_long', 'a body over 4000 visible characters is body_too_long (R60)');
 select throws_ok($$ select public.set_adherence_message('Titlu', 'Corp', 'https://forms.example.org/a', '  ', false) $$,
   'PT400', 'link_incomplete', 'an address without a label is link_incomplete');
-select throws_ok(format($$ select public.set_adherence_message('Titlu', 'Corp', 'https://forms.example.org/a', %L, false) $$, repeat('l', 61)),
-  'PT400', 'link_label_too_long', 'a label over 60 characters is link_label_too_long');
+select throws_ok(format($$ select public.set_adherence_message('Titlu', 'Corp', 'https://forms.example.org/a', %L, false) $$, repeat('l', 121)),
+  'PT400', 'link_label_too_long', 'a label over 120 characters is link_label_too_long');
 select throws_ok($$ select public.set_adherence_message('Titlu', 'Corp', 'ftp://forms.example.org/a', 'Formular', false) $$,
   'PT400', 'link_url_invalid', 'an address that is not http(s) is link_url_invalid');
-select throws_ok(format($$ select public.set_adherence_message('Titlu', 'Corp', %L, 'Formular', false) $$, 'https://' || repeat('a', 2041)),
-  'PT400', 'link_url_too_long', 'an address over 2048 characters is link_url_too_long');
+select throws_ok(format($$ select public.set_adherence_message('Titlu', 'Corp', %L, 'Formular', false) $$, 'https://' || repeat('a', 4089)),
+  'PT400', 'link_url_too_long', 'an address over 4096 characters is link_url_too_long');
 reset role;
 select pg_temp.as_member(4);
 select throws_ok($$ select public.set_adherence_message(null, 'Corp', null, null, false) $$,

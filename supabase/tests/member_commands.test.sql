@@ -12,7 +12,7 @@
 -- public.profiles and the host defect in #596 makes the blocking path
 -- unreliable locally.
 --
--- #724 adds the 1000-character limit on both reasons (ruling R8), at the end.
+-- #724 adds the 2000-character limit on both reasons (ruling R8), at the end.
 begin;
 \set osubb_test_suite true
 \ir _helpers.sql
@@ -716,40 +716,40 @@ reset role;
 
 -- #724 (ruling R8): a Role or Status change reason is at most 1000
 -- characters, measured as it is stored -- trimmed -- at step 1. Removing a
--- check turns its 1001-character assertion into a success (role_history.reason
+-- check turns its 2001-character assertion into a success (role_history.reason
 -- has no length constraint underneath); moving it below the gate turns the
 -- no-authority assertions at the end into 42501.
 select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000002');
 select is((select status::text from public.set_member_status(
-  '61200000-0000-0000-0000-000000000001', 'activ', repeat('s', 1000))),
-  'activ', 'set_member_status accepts a 1000-character reason');
+  '61200000-0000-0000-0000-000000000001', 'activ', repeat('s', 2000))),
+  'activ', 'set_member_status accepts a 2000-character reason');
 select throws_ok($$select public.set_member_status(
-  '61200000-0000-0000-0000-000000000001', 'inactiv', repeat('s', 1001))$$,
-  'PT400', 'reason_too_long', 'set_member_status refuses a 1001-character reason');
+  '61200000-0000-0000-0000-000000000001', 'inactiv', repeat('s', 2001))$$,
+  'PT400', 'reason_too_long', 'set_member_status refuses a 2001-character reason');
 select is((select status::text from public.set_member_status(
-  '61200000-0000-0000-0000-000000000001', 'inactiv', E' \t' || repeat('s', 1000) || E'\n ')),
+  '61200000-0000-0000-0000-000000000001', 'inactiv', E' \t' || repeat('s', 2000) || E'\n ')),
   'inactiv', 'set_member_status measures the reason after trimming it');
 select is((select role::text from public.set_member_role(
-  '61200000-0000-0000-0000-000000000001', 'activ', repeat('r', 1000))),
-  'activ', 'set_member_role accepts a 1000-character reason');
+  '61200000-0000-0000-0000-000000000001', 'activ', repeat('r', 2000))),
+  'activ', 'set_member_role accepts a 2000-character reason');
 select throws_ok($$select public.set_member_role(
-  '61200000-0000-0000-0000-000000000001', 'vot', repeat('r', 1001))$$,
-  'PT400', 'reason_too_long', 'set_member_role refuses a 1001-character reason');
+  '61200000-0000-0000-0000-000000000001', 'vot', repeat('r', 2001))$$,
+  'PT400', 'reason_too_long', 'set_member_role refuses a 2001-character reason');
 select is((select role::text from public.set_member_role(
-  '61200000-0000-0000-0000-000000000001', 'vot', E' \t' || repeat('r', 1000) || E'\n ')),
+  '61200000-0000-0000-0000-000000000001', 'vot', E' \t' || repeat('r', 2000) || E'\n ')),
   'vot', 'set_member_role measures the reason after trimming it');
 reset role;
 select is((select array_agg(char_length(reason) order by id) from public.role_history
   where member_id = '61200000-0000-0000-0000-000000000001'
     and reason ~ '^[rs]+$'),
-  array[1000, 1000, 1000, 1000],
+  array[2000, 2000, 2000, 2000],
   'the four accepted reasons are stored whole and trimmed; the two refused ones wrote nothing');
 select pg_temp.test_login_leadership('58000000-0000-0000-0000-000000000003');
 select throws_ok($$select public.set_member_role(
-  '61200000-0000-0000-0000-000000000001', 'activ', repeat('r', 1001))$$,
+  '61200000-0000-0000-0000-000000000001', 'activ', repeat('r', 2001))$$,
   'PT400', 'reason_too_long', 'set_member_role answers reason_too_long before the gate, even without authority');
 select throws_ok($$select public.set_member_status(
-  '61200000-0000-0000-0000-000000000001', 'activ', repeat('s', 1001))$$,
+  '61200000-0000-0000-0000-000000000001', 'activ', repeat('s', 2001))$$,
   'PT400', 'reason_too_long', 'set_member_status answers reason_too_long before the gate, even without authority');
 reset role;
 

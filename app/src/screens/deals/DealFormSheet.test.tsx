@@ -248,12 +248,12 @@ describe('Deal nou (R45)', () => {
     const sheet = await openCompose(user);
     await user.type(within(sheet).getByLabelText('Titlu'), 'Acces gratuit');
     await user.type(await findFormattedText('Descriere', sheet), 'Detalii.');
-    await user.type(within(sheet).getByLabelText(/Cod/), 'X'.repeat(81));
+    await user.type(within(sheet).getByLabelText(/Cod/), 'X'.repeat(161));
     await user.click(
       within(sheet).getByRole('button', { name: 'Publică deal-ul' }),
     );
     expect(
-      within(sheet).getByText('Codul are cel mult 80 de caractere.'),
+      within(sheet).getByText('Codul are cel mult 160 de caractere.'),
     ).toBeVisible();
     expect(supabaseMock.insert).not.toHaveBeenCalled();
   });
@@ -293,7 +293,7 @@ describe('Deal nou (R45)', () => {
 
     await waitFor(() =>
       expect(body).toHaveAccessibleDescription(
-        /Mesajul are cel mult 2000 de caractere\./,
+        /Mesajul are cel mult 4000 de caractere\./,
       ),
     );
     expect(body).toHaveAttribute('aria-invalid', 'true');

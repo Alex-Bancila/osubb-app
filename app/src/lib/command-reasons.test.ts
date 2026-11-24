@@ -107,16 +107,16 @@ it.each([
 /* The security pass of 2026-09-27: the column limits that had none, from the
    commands (PT400) and the profile guard (23514). */
 it.each([
-  ['location_too_long', 'Locul are cel mult 200 de caractere.'],
-  ['short_too_long', 'Prescurtarea are cel mult 16 caractere.'],
-  ['manager_title_too_long', 'Numele funcției are cel mult 80 de caractere.'],
+  ['location_too_long', 'Locul are cel mult 400 de caractere.'],
+  ['short_too_long', 'Prescurtarea are cel mult 32 de caractere.'],
+  ['manager_title_too_long', 'Numele funcției are cel mult 160 de caractere.'],
   // #962: the Group Responsible position's name, the same limit and words.
   [
     'responsible_title_too_long',
-    'Numele funcției are cel mult 80 de caractere.',
+    'Numele funcției are cel mult 160 de caractere.',
   ],
-  ['position_title_too_long', 'Numele funcției are cel mult 80 de caractere.'],
-  ['full_name_too_long', 'Numele complet are cel mult 120 de caractere.'],
+  ['position_title_too_long', 'Numele funcției are cel mult 160 de caractere.'],
+  ['full_name_too_long', 'Numele complet are cel mult 240 de caractere.'],
   ['invalid_avatar_color', 'Alege o culoare din listă.'],
 ])('has Romanian copy for the column-limit reason %s', (reason, copy) => {
   expect(reasonCopy(reason)).toBe(copy);
@@ -130,7 +130,7 @@ it('says the limits in words a member can act on', () => {
     'Titlul are cel puțin 3 caractere.',
   );
   expect(reasonCopy('title_too_long')).toBe(
-    'Titlul are cel mult 120 de caractere.',
+    'Titlul are cel mult 240 de caractere.',
   );
   expect(reasonCopy('deadline_in_past')).toBe(
     'Termenul nu poate fi în trecut.',
@@ -218,7 +218,7 @@ it.each([
 
 /* R58: the Universitate and the rule that only a UBB student is granted Drept de Vot. */
 it.each([
-  ['invalid_university', 'Universitatea are între 2 și 120 de caractere.'],
+  ['invalid_university', 'Universitatea are între 2 și 240 de caractere.'],
   [
     'vote_requires_ubb_student',
     'Doar un student UBB poate primi Drept de Vot.',
@@ -233,7 +233,7 @@ it('describes a failure for a form: the reason and the copy', () => {
     describeFailure({ code: 'PT400', message: 'title_too_long' }, 'fallback'),
   ).toEqual({
     reason: 'title_too_long',
-    message: 'Titlul are cel mult 120 de caractere.',
+    message: 'Titlul are cel mult 240 de caractere.',
   });
   expect(
     describeFailure(
@@ -316,7 +316,7 @@ it.each([
   ['invalid_rejection_reason', 'Scrie motivul respingerii.'],
   [
     'candidate_rejection_reason_too_long',
-    'Motivul are cel mult 500 de caractere.',
+    'Motivul are cel mult 1000 de caractere.',
   ],
   ['date_required', 'Alege data.'],
 ])(
@@ -382,7 +382,10 @@ it.each([
    update_group's Attached Link reasons to these). */
 it.each([
   ['application_form_incomplete', 'Completează și eticheta, și adresa.'],
-  ['application_form_label_too_long', 'Eticheta are cel mult 60 de caractere.'],
+  [
+    'application_form_label_too_long',
+    'Eticheta are cel mult 120 de caractere.',
+  ],
   [
     'application_form_url_invalid',
     'Adresa trebuie să înceapă cu http:// sau https://.',

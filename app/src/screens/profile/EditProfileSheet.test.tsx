@@ -62,7 +62,7 @@ const sampleProfile: MyProfile = {
 };
 
 const NICKNAME_RULE =
-  '2–24 de caractere: litere, cifre, spații, punct, cratimă sau underscore. Fără poreclă, se afișează numele complet.';
+  '2–48 de caractere: litere, cifre, spații, punct, cratimă sau underscore. Fără poreclă, se afișează numele complet.';
 
 function wrapper(queryClient = new QueryClient()) {
   return function QueryWrapper({ children }: { children: ReactNode }) {
@@ -270,12 +270,12 @@ describe('EditProfileSheet', () => {
       renderSheet();
 
       await user.clear(nicknameInput());
-      await user.type(nicknameInput(), 'a'.repeat(25));
+      await user.type(nicknameInput(), 'a'.repeat(49));
       await save();
 
       expect(updateProfileMock).not.toHaveBeenCalled();
       expect(nicknameInput()).toHaveAccessibleDescription(
-        /Porecla are cel mult 24 de caractere\./,
+        /Porecla are cel mult 48 de caractere\./,
       );
     });
 
@@ -528,7 +528,7 @@ describe('EditProfileSheet', () => {
 
       expect(universityName()).toHaveAttribute('aria-invalid', 'true');
       expect(universityName()).toHaveAccessibleDescription(
-        'Universitatea are între 2 și 120 de caractere.',
+        'Universitatea are între 2 și 240 de caractere.',
       );
       expect(universityName()).toHaveFocus();
       expect(updateUniversityMock).not.toHaveBeenCalled();
@@ -554,7 +554,7 @@ describe('EditProfileSheet', () => {
       await save();
 
       expect(universityName()).toHaveAccessibleDescription(
-        'Universitatea are între 2 și 120 de caractere.',
+        'Universitatea are între 2 și 240 de caractere.',
       );
       expect(updateProfileMock).not.toHaveBeenCalled();
     });
@@ -573,7 +573,7 @@ describe('EditProfileSheet', () => {
       await save();
 
       expect(universityName()).toHaveAccessibleDescription(
-        'Universitatea are între 2 și 120 de caractere.',
+        'Universitatea are între 2 și 240 de caractere.',
       );
       expect(universityName()).toHaveFocus();
       expect(screen.queryByText(/invalid_university/)).not.toBeInTheDocument();

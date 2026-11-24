@@ -38,7 +38,7 @@ const REASON_COPY = new Map<string, string>([
   ['event_not_pending', 'Cererea a fost deja decisă.'],
   // Also the client-side rejection form's own reason (D-15).
   ['rejection_reason_required', 'Scrie motivul respingerii.'],
-  ['rejection_reason_too_long', 'Motivul are cel mult 1000 de caractere.'],
+  ['rejection_reason_too_long', 'Motivul are cel mult 2000 de caractere.'],
   ['announcement_not_found', 'Anunțul nu mai există.'],
   // Ruling R50 (2026-10-13)
   [
@@ -64,7 +64,7 @@ const REASON_COPY = new Map<string, string>([
     'assignment_team_duplicate',
     'Alege pe altcineva: persoana are deja un loc în echipă.',
   ],
-  ['deal_code_too_long', 'Codul are cel mult 80 de caractere.'],
+  ['deal_code_too_long', 'Codul are cel mult 160 de caractere.'],
   ['code_only_on_deals', 'Doar un deal poate avea cod.'],
   [
     'invalid_deal_settings',
@@ -203,7 +203,10 @@ const REASON_COPY = new Map<string, string>([
      form renames those to these (`applicationFormFailure` in
      `lib/schemas/group.ts`), so the copy names the fields on screen. */
   ['application_form_incomplete', 'Completează și eticheta, și adresa.'],
-  ['application_form_label_too_long', 'Eticheta are cel mult 60 de caractere.'],
+  [
+    'application_form_label_too_long',
+    'Eticheta are cel mult 120 de caractere.',
+  ],
   [
     'application_form_url_invalid',
     'Adresa trebuie să înceapă cu http:// sau https://.',
@@ -245,34 +248,34 @@ const REASON_COPY = new Map<string, string>([
   /* ---- Input limits (#673, ruling R8) ---- */
   ['title_required', 'Scrie titlul.'],
   ['title_too_short', 'Titlul are cel puțin 3 caractere.'],
-  ['title_too_long', 'Titlul are cel mult 120 de caractere.'],
-  ['description_too_long', 'Descrierea are cel mult 2000 de caractere.'],
+  ['title_too_long', 'Titlul are cel mult 240 de caractere.'],
+  ['description_too_long', 'Descrierea are cel mult 4000 de caractere.'],
   ['name_too_short', 'Numele are cel puțin 3 caractere.'],
-  ['name_too_long', 'Numele are cel mult 120 de caractere.'],
+  ['name_too_long', 'Numele are cel mult 240 de caractere.'],
   ['body_required', 'Scrie mesajul.'],
-  ['body_too_long', 'Mesajul are cel mult 2000 de caractere.'],
+  ['body_too_long', 'Mesajul are cel mult 4000 de caractere.'],
   ['note_required', 'Scrie o notă.'],
-  ['note_too_long', 'Nota are cel mult 1000 de caractere.'],
+  ['note_too_long', 'Nota are cel mult 2000 de caractere.'],
   ['reason_required', 'Scrie motivul.'],
-  ['reason_too_long', 'Motivul are cel mult 1000 de caractere.'],
+  ['reason_too_long', 'Motivul are cel mult 2000 de caractere.'],
   ['deadline_in_past', 'Termenul nu poate fi în trecut.'],
   ['starts_at_in_past', 'Începutul nu poate fi în trecut.'],
-  ['link_label_too_long', 'Numele linkului are cel mult 60 de caractere.'],
+  ['link_label_too_long', 'Numele linkului are cel mult 120 de caractere.'],
   ['link_url_invalid', 'Adresa trebuie să înceapă cu http:// sau https://.'],
-  ['link_url_too_long', 'Adresa are cel mult 2048 de caractere.'],
-  // R46: an Announcement or a Task carries at most five Attached Links.
-  ['too_many_links', 'Poți atașa cel mult 5 linkuri.'],
+  ['link_url_too_long', 'Adresa are cel mult 4096 de caractere.'],
+  // R46: an Announcement or a Task carries at most ten Attached Links.
+  ['too_many_links', 'Poți atașa cel mult 10 linkuri.'],
   // Security pass 2026-09-27: the column limits that had none.
-  ['location_too_long', 'Locul are cel mult 200 de caractere.'],
-  ['short_too_long', 'Prescurtarea are cel mult 16 caractere.'],
-  ['manager_title_too_long', 'Numele funcției are cel mult 80 de caractere.'],
+  ['location_too_long', 'Locul are cel mult 400 de caractere.'],
+  ['short_too_long', 'Prescurtarea are cel mult 32 de caractere.'],
+  ['manager_title_too_long', 'Numele funcției are cel mult 160 de caractere.'],
   // #962: the Group Responsible position's name, the same limit.
   [
     'responsible_title_too_long',
-    'Numele funcției are cel mult 80 de caractere.',
+    'Numele funcției are cel mult 160 de caractere.',
   ],
-  ['position_title_too_long', 'Numele funcției are cel mult 80 de caractere.'],
-  ['full_name_too_long', 'Numele complet are cel mult 120 de caractere.'],
+  ['position_title_too_long', 'Numele funcției are cel mult 160 de caractere.'],
+  ['full_name_too_long', 'Numele complet are cel mult 240 de caractere.'],
   [
     'link_incomplete',
     'Completează și numele, și adresa linkului, sau lasă-le pe amândouă goale.',
@@ -383,7 +386,7 @@ const REASON_COPY = new Map<string, string>([
   ['invalid_difficulty', 'Alege Dificultatea.'],
   ['invalid_rating', 'Alege Nota.'],
   ['evaluation_note_required', 'Scrie observațiile evaluării.'],
-  ['evaluation_note_too_long', 'Observațiile au cel mult 1000 de caractere.'],
+  ['evaluation_note_too_long', 'Observațiile au cel mult 2000 de caractere.'],
   [
     'request_not_pending',
     'Cererea a fost deja decisă. Lista a fost actualizată.',
@@ -527,7 +530,7 @@ const REASON_COPY = new Map<string, string>([
   ],
   // #675 (ruling R5): the Nickname guard on `profiles`.
   ['nickname_too_short', 'Porecla are cel puțin 2 caractere.'],
-  ['nickname_too_long', 'Porecla are cel mult 24 de caractere.'],
+  ['nickname_too_long', 'Porecla are cel mult 48 de caractere.'],
   [
     'nickname_invalid',
     'Porecla poate avea doar litere latine, cifre, spații, punct, cratimă sau underscore.',
@@ -541,7 +544,7 @@ const REASON_COPY = new Map<string, string>([
   ['joined_at_in_future', 'Data intrării nu poate fi în viitor.'],
   // R58: the Universitate BC sets on a Member's page; only a UBB student is
   // granted Drept de Vot (`profiles_guard_vote_university`, PT409).
-  ['invalid_university', 'Universitatea are între 2 și 120 de caractere.'],
+  ['invalid_university', 'Universitatea are între 2 și 240 de caractere.'],
   [
     'vote_requires_ubb_student',
     'Doar un student UBB poate primi Drept de Vot.',
@@ -691,11 +694,11 @@ const REASON_COPY = new Map<string, string>([
     'Candidatul a fost deja decis. Pagina a fost actualizată.',
   ],
   ['invalid_rejection_reason', 'Scrie motivul respingerii.'],
-  // The browser's own limit for a Promotion Candidate's rejection: 500, under
-  // its own code, so it never shadows the approval's 1000.
+  // The browser's own limit for a Promotion Candidate's rejection: 1000, under
+  // its own code, so it never shadows the approval's 2000.
   [
     'candidate_rejection_reason_too_long',
-    'Motivul are cel mult 500 de caractere.',
+    'Motivul are cel mult 1000 de caractere.',
   ],
   // The ranking of a recorded run (R58): the run was never there, or is gone.
   ['role_evaluation_not_found', 'Evaluarea nu mai există. Reîncarcă pagina.'],
@@ -710,7 +713,7 @@ const REASON_COPY = new Map<string, string>([
     'invalid_org_setting_value',
     'Valoarea nu este acceptată: grupul ales trebuie să fie activ.',
   ],
-  ['value_too_long', 'Valoarea are cel mult 2048 de caractere.'],
+  ['value_too_long', 'Valoarea are cel mult 4096 de caractere.'],
   /* browser: #932's daily email quota */
   ['email_daily_quota_invalid', 'Scrie un număr întreg de la 0 la 99999.'],
   ['org_setting_not_found', 'Setarea nu mai există. Reîncarcă pagina.'],

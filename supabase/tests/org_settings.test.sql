@@ -110,12 +110,12 @@ select throws_ok(
   'org_settings_key_ck: a key is lower snake_case');
 -- A key with no rule of its own, so only the length constraint can answer.
 select throws_ok(
-  $$ insert into public.org_settings (key, value) values ('length_probe', repeat('a', 2049)) $$,
+  $$ insert into public.org_settings (key, value) values ('length_probe', repeat('a', 4097)) $$,
   '23514', 'new row for relation "org_settings" violates check constraint "org_settings_value_length_ck"',
-  'org_settings_value_length_ck: a value over 2048 characters is refused on a direct write');
+  'org_settings_value_length_ck: a value over 4096 characters is refused on a direct write');
 select lives_ok(
-  $$ insert into public.org_settings (key, value) values ('length_probe', repeat('a', 2048)) $$,
-  'org_settings_value_length_ck is inclusive: 2048 characters are stored');
+  $$ insert into public.org_settings (key, value) values ('length_probe', repeat('a', 4096)) $$,
+  'org_settings_value_length_ck is inclusive: 4096 characters are stored');
 delete from public.org_settings where key = 'length_probe';
 select is(
   (select count(*) from pg_constraint
@@ -276,13 +276,13 @@ select throws_ok(
   'PT400', 'invalid_org_setting_value',
   'BC: a Group id that is not a positive integer is invalid_org_setting_value');
 select throws_ok(
-  $$ select public.set_org_setting('email_daily_quota', repeat('9', 2049)) $$,
+  $$ select public.set_org_setting('email_daily_quota', repeat('9', 4097)) $$,
   'PT400', 'value_too_long',
-  'BC: a 2049-character value is value_too_long (the #673 kit''s <field>_<rule> reason)');
+  'BC: a 4097-character value is value_too_long (the #673 kit''s <field>_<rule> reason)');
 select throws_ok(
-  $$ select public.set_org_setting('email_daily_quota', repeat('9', 2048)) $$,
+  $$ select public.set_org_setting('email_daily_quota', repeat('9', 4096)) $$,
   'PT400', 'invalid_org_setting_value',
-  'BC: a 2048-character value passes the length rule (inclusive) and meets the key''s own');
+  'BC: a 4096-character value passes the length rule (inclusive) and meets the key''s own');
 reset role;
 
 -- Malformed for everyone, so answered before the gate (conventions section 2).
@@ -294,9 +294,9 @@ select throws_ok(
 reset role;
 select pg_temp.test_login('68100000-0000-0000-0000-000000000006', '{}'::jsonb);
 select throws_ok(
-  $$ select public.set_org_setting('email_daily_quota', repeat('9', 2049)) $$,
+  $$ select public.set_org_setting('email_daily_quota', repeat('9', 4097)) $$,
   'PT400', 'value_too_long',
-  'a claimless caller sending 2049 characters is answered value_too_long before the gate');
+  'a claimless caller sending 4097 characters is answered value_too_long before the gate');
 reset role;
 
 -- ==================== 7. set_org_setting: the gate ====================

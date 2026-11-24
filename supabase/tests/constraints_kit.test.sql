@@ -48,8 +48,8 @@ select is(private.is_http_url(input), expected, format('is_http_url(%s) = %s', l
   from (values
     ('https://osubb.ro/formular',                  'https',             true),
     ('  http://osubb.ro  ',                        'trimmed http',      true),
-    ('https://' || repeat('a', 2040),              '2048 characters',   true),
-    ('https://' || repeat('a', 2041),              '2049 characters',   false),
+    ('https://' || repeat('a', 4088),              '4096 characters',   true),
+    ('https://' || repeat('a', 4089),              '4097 characters',   false),
     ('ftp://osubb.ro',                             'ftp',               false),
     ('osubb.ro',                                   'no scheme',         false),
     (null,                                         'null',              false)
@@ -93,25 +93,25 @@ select throws_ok($$ select pg_temp.announce(E' \t ', 'Corp') $$, '23514', 'title
   'a whitespace-only title is title_required, not title_too_short');
 select throws_ok($$ select pg_temp.announce('  ab  ', 'Corp') $$, '23514', 'title_too_short',
   'the title is trimmed before it is measured');
-select throws_ok($$ select pg_temp.announce(repeat('t', 121), 'Corp') $$, '23514', 'title_too_long',
-  'a title over 120 characters is title_too_long');
+select throws_ok($$ select pg_temp.announce(repeat('t', 241), 'Corp') $$, '23514', 'title_too_long',
+  'a title over 240 characters is title_too_long');
 select throws_ok($$ select pg_temp.announce('Titlu #673', '   ') $$, '23514', 'body_required',
   'a whitespace-only body is body_required');
-select throws_ok($$ select pg_temp.announce('Titlu #673', repeat('b', 2001)) $$, '23514', 'body_too_long',
-  'a body over 2000 characters is body_too_long');
-select throws_ok($$ select pg_temp.announce('Titlu #673', 'Corp', repeat('l', 61), 'https://osubb.ro') $$,
-  '23514', 'link_label_too_long', 'a link label over 60 characters is link_label_too_long');
+select throws_ok($$ select pg_temp.announce('Titlu #673', repeat('b', 4001)) $$, '23514', 'body_too_long',
+  'a body over 4000 characters is body_too_long');
+select throws_ok($$ select pg_temp.announce('Titlu #673', 'Corp', repeat('l', 121), 'https://osubb.ro') $$,
+  '23514', 'link_label_too_long', 'a link label over 120 characters is link_label_too_long');
 select throws_ok($$ select pg_temp.announce('Titlu #673', 'Corp', 'Formular', 'osubb.ro/formular') $$,
   '23514', 'link_url_invalid', 'a link address without http(s) is link_url_invalid');
-select throws_ok($$ select pg_temp.announce('Titlu #673', 'Corp', 'Formular', 'https://' || repeat('a', 2041)) $$,
-  '23514', 'link_url_too_long', 'a link address over 2048 characters is link_url_too_long');
+select throws_ok($$ select pg_temp.announce('Titlu #673', 'Corp', 'Formular', 'https://' || repeat('a', 4089)) $$,
+  '23514', 'link_url_too_long', 'a link address over 4096 characters is link_url_too_long');
 
-select lives_ok($$ select pg_temp.announce(E'  Titlu limită #673\n', repeat('b', 2000) || '   ',
-                                           '  ' || repeat('l', 60) || '  ', '  https://osubb.ro/f  ') $$,
+select lives_ok($$ select pg_temp.announce(E'  Titlu limită #673\n', repeat('b', 4000) || '   ',
+                                           '  ' || repeat('l', 120) || '  ', '  https://osubb.ro/f  ') $$,
   'values at every limit, once trimmed, are accepted');
 select is((select format('%s|%s|%s|%s', title, char_length(body), char_length(form_label), form_url)
              from public.announcements where title = 'Titlu limită #673'),
-  'Titlu limită #673|2000|60|https://osubb.ro/f',
+  'Titlu limită #673|4000|120|https://osubb.ro/f',
   'title, body, link label and address are stored trimmed');
 select lives_ok($$ select pg_temp.announce('Fără link #673', 'Corp', '   ', '   ') $$,
   'a blank link label and address become no link at all');
@@ -205,12 +205,12 @@ select is(pg_temp.as_not_valid(k.tbl, k.conname), false, format('%s is back to N
 
 select throws_ok($$ update public.tasks set title = 'ab' where id = (select min(id) from public.tasks) $$,
   '23514', pg_temp.violation('tasks', 'tasks_title_length_ck'), 'NOT VALID tasks_title_length_ck refuses a two-character title');
-select throws_ok($$ update public.tasks set description = repeat('d', 4001) where id = (select min(id) from public.tasks) $$,
-  '23514', pg_temp.violation('tasks', 'tasks_description_length_ck'), 'NOT VALID tasks_description_length_ck refuses 4001 stored characters (R60: the visible limit is the commands'' to judge)');
+select throws_ok($$ update public.tasks set description = repeat('d', 8001) where id = (select min(id) from public.tasks) $$,
+  '23514', pg_temp.violation('tasks', 'tasks_description_length_ck'), 'NOT VALID tasks_description_length_ck refuses 8001 stored characters (R60: the visible limit is the commands'' to judge)');
 select throws_ok($$ update public.events set title = 'ab' where id = (select min(id) from public.events) $$,
   '23514', pg_temp.violation('events', 'events_title_length_ck'), 'NOT VALID events_title_length_ck refuses a two-character title');
-select throws_ok($$ update public.events set description = repeat('d', 4001) where id = (select min(id) from public.events) $$,
-  '23514', pg_temp.violation('events', 'events_description_length_ck'), 'NOT VALID events_description_length_ck refuses 4001 stored characters (R60: the visible limit is the commands'' to judge)');
+select throws_ok($$ update public.events set description = repeat('d', 8001) where id = (select min(id) from public.events) $$,
+  '23514', pg_temp.violation('events', 'events_description_length_ck'), 'NOT VALID events_description_length_ck refuses 8001 stored characters (R60: the visible limit is the commands'' to judge)');
 select throws_ok($$ update public.events set capacity = 1001 where id = (select min(id) from public.events) $$,
   '23514', pg_temp.violation('events', 'events_capacity_range_ck'), 'NOT VALID events_capacity_range_ck refuses a capacity of 1001');
 select throws_ok($$ update public.campaigns set name = 'ab' where id = (select min(id) from public.campaigns) $$,
@@ -219,31 +219,31 @@ select throws_ok($$ update public.groups set name = 'ab' where id = (select min(
   '23514', pg_temp.violation('groups', 'groups_name_length_ck'), 'NOT VALID groups_name_length_ck refuses a two-character name');
 select throws_ok($$ update public.announcements set title = 'ab' where id = (select min(id) from public.announcements) $$,
   '23514', pg_temp.violation('announcements', 'announcements_title_length_ck'), 'NOT VALID announcements_title_length_ck refuses a two-character title');
-select throws_ok($$ update public.announcements set body = repeat('b', 4001) where id = (select min(id) from public.announcements) $$,
-  '23514', pg_temp.violation('announcements', 'announcements_body_length_ck'), 'NOT VALID announcements_body_length_ck refuses 4001 stored characters (R60: the visible limit is the row guard''s to judge)');
+select throws_ok($$ update public.announcements set body = repeat('b', 8001) where id = (select min(id) from public.announcements) $$,
+  '23514', pg_temp.violation('announcements', 'announcements_body_length_ck'), 'NOT VALID announcements_body_length_ck refuses 8001 stored characters (R60: the visible limit is the row guard''s to judge)');
 select throws_ok($$ update public.announcements set form_label = 'Formular', form_url = 'ftp://osubb.ro'
                     where id = (select min(id) from public.announcements) $$,
   '23514', pg_temp.violation('announcements', 'announcements_form_link_ck'), 'NOT VALID announcements_form_link_ck refuses a non-http(s) address');
-select throws_ok($$ update public.task_activity set note = repeat('n', 1001) where id = (select min(id) from public.task_activity) $$,
-  '23514', pg_temp.violation('task_activity', 'task_activity_note_length_ck'), 'NOT VALID task_activity_note_length_ck refuses 1001 characters');
-select throws_ok($$ update public.task_assignments set end_note = repeat('n', 1001)
+select throws_ok($$ update public.task_activity set note = repeat('n', 2001) where id = (select min(id) from public.task_activity) $$,
+  '23514', pg_temp.violation('task_activity', 'task_activity_note_length_ck'), 'NOT VALID task_activity_note_length_ck refuses 2001 characters');
+select throws_ok($$ update public.task_assignments set end_note = repeat('n', 2001)
                     where id = (select min(id) from public.task_assignments where ended_at is not null) $$,
-  '23514', pg_temp.violation('task_assignments', 'task_assignments_end_note_length_ck'), 'NOT VALID task_assignments_end_note_length_ck refuses 1001 characters');
-select throws_ok($$ update public.task_evaluations set note = repeat('n', 1001) where id = (select min(id) from public.task_evaluations) $$,
-  '23514', pg_temp.violation('task_evaluations', 'task_evaluations_note_length_ck'), 'NOT VALID task_evaluations_note_length_ck refuses 1001 characters');
+  '23514', pg_temp.violation('task_assignments', 'task_assignments_end_note_length_ck'), 'NOT VALID task_assignments_end_note_length_ck refuses 2001 characters');
+select throws_ok($$ update public.task_evaluations set note = repeat('n', 2001) where id = (select min(id) from public.task_evaluations) $$,
+  '23514', pg_temp.violation('task_evaluations', 'task_evaluations_note_length_ck'), 'NOT VALID task_evaluations_note_length_ck refuses 2001 characters');
 select throws_ok($$ update public.task_evaluations
-                       set reversed_at = evaluated_at, reversed_by = evaluated_by, reversal_reason = repeat('r', 1001)
+                       set reversed_at = evaluated_at, reversed_by = evaluated_by, reversal_reason = repeat('r', 2001)
                      where id = (select min(id) from public.task_evaluations where evaluated_by is not null) $$,
-  '23514', pg_temp.violation('task_evaluations', 'task_evaluations_reversal_reason_length_ck'), 'NOT VALID task_evaluations_reversal_reason_length_ck refuses 1001 characters');
-select throws_ok($$ update public.tasks set cancel_reason = repeat('r', 1001)
+  '23514', pg_temp.violation('task_evaluations', 'task_evaluations_reversal_reason_length_ck'), 'NOT VALID task_evaluations_reversal_reason_length_ck refuses 2001 characters');
+select throws_ok($$ update public.tasks set cancel_reason = repeat('r', 2001)
                     where id = (select min(id) from public.tasks where status = 'cancelled') $$,
-  '23514', pg_temp.violation('tasks', 'tasks_cancel_reason_length_ck'), 'NOT VALID tasks_cancel_reason_length_ck refuses 1001 characters');
-select throws_ok($$ update public.completed_work_requests set decision_note = repeat('n', 1001)
+  '23514', pg_temp.violation('tasks', 'tasks_cancel_reason_length_ck'), 'NOT VALID tasks_cancel_reason_length_ck refuses 2001 characters');
+select throws_ok($$ update public.completed_work_requests set decision_note = repeat('n', 2001)
                     where id = (select min(id) from public.completed_work_requests where status = 'rejected') $$,
-  '23514', pg_temp.violation('completed_work_requests', 'completed_work_requests_decision_note_length_ck'), 'NOT VALID completed_work_requests_decision_note_length_ck refuses 1001 characters');
-select throws_ok($$ update public.completed_work_requests set description = repeat('d', 2001)
+  '23514', pg_temp.violation('completed_work_requests', 'completed_work_requests_decision_note_length_ck'), 'NOT VALID completed_work_requests_decision_note_length_ck refuses 2001 characters');
+select throws_ok($$ update public.completed_work_requests set description = repeat('d', 4001)
                     where id = (select min(id) from public.completed_work_requests) $$,
-  '23514', pg_temp.violation('completed_work_requests', 'completed_work_requests_description_length_ck'), 'NOT VALID completed_work_requests_description_length_ck refuses 2001 characters');
+  '23514', pg_temp.violation('completed_work_requests', 'completed_work_requests_description_length_ck'), 'NOT VALID completed_work_requests_description_length_ck refuses 4001 characters');
 
 select * from finish();
 rollback;

@@ -174,8 +174,8 @@ select throws_ok(format($$ select public.reject_promotion_candidate(%s, E' \t') 
   'PT400', 'invalid_rejection_reason', 'a blank reason is invalid_rejection_reason, before the gate');
 select throws_ok(format($$ select public.reject_promotion_candidate(%s, null) $$, (select c11 from fx8261)),
   'PT400', 'invalid_rejection_reason', 'a null reason is invalid_rejection_reason');
-select throws_ok(format($$ select public.reject_promotion_candidate(%s, repeat('r', 501)) $$, (select c11 from fx8261)),
-  'PT400', 'reason_too_long', 'a 501-character reason is reason_too_long');
+select throws_ok(format($$ select public.reject_promotion_candidate(%s, repeat('r', 1001)) $$, (select c11 from fx8261)),
+  'PT400', 'reason_too_long', 'a 1001-character reason is reason_too_long');
 select throws_ok(format($$ select public.reject_promotion_candidate(%s, 'Motiv') $$, (select c11 from fx8261)),
   '42501', 'promotion_candidate_manage_forbidden', 'a claimless session cannot reject, though its uid is a live BC');
 reset role;

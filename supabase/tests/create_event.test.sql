@@ -239,12 +239,12 @@ select is((select count(*) from public.events where title like 'campaign % 691' 
 -- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
 reset role;
 select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
-select throws_ok($$ select public.create_event(repeat('t', 121), 'sedinta', 0, now() + interval '1 day') $$,
-  'PT400', 'title_too_long', 'an Event title over 120 characters is refused before the gate');
+select throws_ok($$ select public.create_event(repeat('t', 241), 'sedinta', 0, now() + interval '1 day') $$,
+  'PT400', 'title_too_long', 'an Event title over 240 characters is refused before the gate');
 select throws_ok($$ select public.create_event('  ab  ', 'sedinta', 0, now() + interval '1 day') $$,
   'PT400', 'title_too_short', 'an Event title is measured trimmed');
-select throws_ok($$ select public.create_event('Eveniment #673', 'sedinta', 0, now() + interval '1 day', p_description => repeat('d', 2001)) $$,
-  'PT400', 'description_too_long', 'an Event description over 2000 characters is refused before the gate');
+select throws_ok($$ select public.create_event('Eveniment #673', 'sedinta', 0, now() + interval '1 day', p_description => repeat('d', 4001)) $$,
+  'PT400', 'description_too_long', 'an Event description over 4000 characters is refused before the gate');
 select throws_ok($$ select public.create_event('Eveniment #673', 'sedinta', 0, now() - interval '1 hour') $$,
   'PT400', 'starts_at_in_past', 'an Event cannot be created starting in the past');
 select throws_ok($$ select public.create_event('Eveniment #673', 'sedinta', 0, now() + interval '1 day', p_capacity => 1001) $$,

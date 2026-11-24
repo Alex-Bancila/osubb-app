@@ -3,14 +3,14 @@ import { attachedLinksSchema, linksFieldForReason } from './attached-link';
 import { optionalText, requiredFormattedText, requiredText } from './text';
 
 /** The Deal Code's limit, trimmed (`deal_code_too_long`). */
-export const DEAL_CODE_MAX = 80;
+export const DEAL_CODE_MAX = 160;
 
 /**
  * A Deal (ruling R45), as the announcement guards store it: the
  * Announcement's title and body rules (`announcements_guard_text`), an
- * optional Termen that is not in the past, up to five Attached Links, each
+ * optional Termen that is not in the past, up to ten Attached Links, each
  * label-and-address pair validated as one, and an optional Deal Code of at
- * most 80 characters. The Group, Audience, Minimum Level, Priority and pin are
+ * most 160 characters. The Group, Audience, Minimum Level, Priority and pin are
  * not the author's to choose: every Deal is the Organization's, for everyone.
  */
 export const dealSchema = z.object({
@@ -18,10 +18,10 @@ export const dealSchema = z.object({
     required: 'title_required',
     min: 3,
     tooShort: 'title_too_short',
-    max: 120,
+    max: 240,
     tooLong: 'title_too_long',
   }),
-  // R60: Formatted Text, at most 2000 visible and 4000 stored characters.
+  // R60: Formatted Text, at most 4000 visible and 8000 stored characters.
   body: requiredFormattedText({
     required: 'body_required',
     tooLong: 'body_too_long',

@@ -31,8 +31,8 @@ type AttachedLinkFieldsProps = {
 /**
  * The one way an Attached Link is entered (CONTEXT.md's glossary, ruling R7):
  * a label and an address, validated as one pair by #674's `attached-link`
- * schema — both or neither, the empty pair valid, the label at most 60
- * characters, the address `http(s)` at most 2048. Errors land under the
+ * schema — both or neither, the empty pair valid, the label at most 120
+ * characters, the address `http(s)` at most 4096. Errors land under the
  * field they belong to through the caller's `useFormValidation`, exactly as
  * every other form in `app/` shows them (`docs` in `app/README.md`).
  */

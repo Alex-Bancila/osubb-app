@@ -30,7 +30,7 @@ type Bound = Pick<
  * "Editează anunțul" (#930) so the two can never drift: Titlu, Mesaj, Termen,
  * then the Origin (`origin`: a picker when composing, read-only when editing),
  * Cine îl vede, Prioritate, anything the caller adds (`extra`), and the
- * Attached Links (up to five, ruling R46). They are the children of the
+ * Attached Links (up to ten, ruling R46). They are the children of the
  * form's own column: its gap is what separates them.
  */
 export function AnnouncementFields({

@@ -1485,8 +1485,8 @@ select ok((select pg_get_functiondef('private.reopen_task_impl(bigint,text)'::re
 -- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
 reset role;
 select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
-select throws_ok($$ select public.reopen_task(0, repeat('r', 1001)) $$,
-  'PT400', 'reason_too_long', 'a reopen reason over 1000 characters is refused before the gate');
+select throws_ok($$ select public.reopen_task(0, repeat('r', 2001)) $$,
+  'PT400', 'reason_too_long', 'a reopen reason over 2000 characters is refused before the gate');
 reset role;
 
 select * from finish();

@@ -317,8 +317,8 @@ select throws_ok($$ select * from public.run_role_evaluation('voluntar_activ', c
   'PT400', 'invalid_role_evaluation_name', 'a blank name is invalid_role_evaluation_name, before the gate');
 select throws_ok($$ select * from public.run_role_evaluation('voluntar_activ', current_date - 2, current_date - 1, E' ab\t', 5, 50, current_date - 1) $$,
   'PT400', 'name_too_short', 'the name is measured trimmed: two characters are name_too_short');
-select throws_ok($$ select * from public.run_role_evaluation('voluntar_activ', current_date - 2, current_date - 1, repeat('e', 121), 5, 50, current_date - 1) $$,
-  'PT400', 'name_too_long', 'a 121-character name is name_too_long');
+select throws_ok($$ select * from public.run_role_evaluation('voluntar_activ', current_date - 2, current_date - 1, repeat('e', 241), 5, 50, current_date - 1) $$,
+  'PT400', 'name_too_long', 'a 241-character name is name_too_long');
 select throws_ok($$ select * from public.run_role_evaluation('voluntar_activ', null, current_date - 1, 'Evaluare', 5, 50, current_date - 1) $$,
   'PT400', 'invalid_date_range', 'a missing start is invalid_date_range');
 select throws_ok($$ select * from public.run_role_evaluation('voluntar_activ', current_date - 1, current_date - 2, 'Evaluare', 5, 50, current_date - 1) $$,

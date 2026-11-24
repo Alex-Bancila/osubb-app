@@ -46,8 +46,8 @@ describe('Group name', () => {
     ['   ', ['name: invalid_group_name']],
     ['ab', ['name: name_too_short']],
     ['abc', []],
-    ['g'.repeat(120), []],
-    ['g'.repeat(121), ['name: name_too_long']],
+    ['g'.repeat(240), []],
+    ['g'.repeat(241), ['name: name_too_long']],
   ])(
     'measures %j at the boundary, on create and on settings',
     (name, expected) => {
@@ -56,39 +56,39 @@ describe('Group name', () => {
     },
   );
 
-  it('limits Prescurtare to 16 and the coordinator title to 80 characters (security pass 2026-09-27)', () => {
-    expect(check(groupCreateSchema, create, { short: 's'.repeat(16) })).toEqual(
+  it('limits Prescurtare to 32 and the coordinator title to 160 characters (security pass 2026-09-27)', () => {
+    expect(check(groupCreateSchema, create, { short: 's'.repeat(32) })).toEqual(
       [],
     );
-    expect(check(groupCreateSchema, create, { short: 's'.repeat(17) })).toEqual(
+    expect(check(groupCreateSchema, create, { short: 's'.repeat(33) })).toEqual(
       ['short: short_too_long'],
     );
     expect(
       check(
         groupStructureSchema,
         { color: '', short: '' },
-        { short: 's'.repeat(17) },
+        { short: 's'.repeat(33) },
       ),
     ).toEqual(['short: short_too_long']);
     expect(
       check(groupSettingsSchema, settings, {
-        managerTitle: ' ' + 'm'.repeat(80) + ' ',
+        managerTitle: ' ' + 'm'.repeat(160) + ' ',
       }),
     ).toEqual([]);
     expect(
-      check(groupSettingsSchema, settings, { managerTitle: 'm'.repeat(81) }),
+      check(groupSettingsSchema, settings, { managerTitle: 'm'.repeat(161) }),
     ).toEqual(['managerTitle: manager_title_too_long']);
   });
 
-  it("limits the Responsible position's name to 80 characters, as groups_responsible_title_length_ck does (#962)", () => {
+  it("limits the Responsible position's name to 160 characters, as groups_responsible_title_length_ck does (#962)", () => {
     expect(
       check(groupSettingsSchema, settings, {
-        responsibleTitle: ' ' + 'ș'.repeat(80) + ' ',
+        responsibleTitle: ' ' + 'ș'.repeat(160) + ' ',
       }),
     ).toEqual([]);
     expect(
       check(groupSettingsSchema, settings, {
-        responsibleTitle: 'r'.repeat(81),
+        responsibleTitle: 'r'.repeat(161),
       }),
     ).toEqual(['responsibleTitle: responsible_title_too_long']);
   });
@@ -166,20 +166,20 @@ describe('Appointment: the title rule per position (#967)', () => {
       ).toEqual(['memberId: member_required']);
   });
 
-  it("requires a Responsabil's title, trimmed, of at most 80 characters", () => {
+  it("requires a Responsabil's title, trimmed, of at most 160 characters", () => {
     expect(issues(appoint('required', '  '))).toEqual([
       'positionTitle: position_title_required',
     ]);
-    expect(issues(appoint('required', 'r'.repeat(81)))).toEqual([
+    expect(issues(appoint('required', 'r'.repeat(161)))).toEqual([
       'positionTitle: position_title_too_long',
     ]);
-    expect(appoint('required', ` ${'ș'.repeat(80)} `)).toMatchObject({
+    expect(appoint('required', ` ${'ș'.repeat(160)} `)).toMatchObject({
       success: true,
-      data: { positionTitle: 'ș'.repeat(80) },
+      data: { positionTitle: 'ș'.repeat(160) },
     });
   });
 
-  it("takes a Coordonator's title as optional: blank is none, trimmed, at most 80", () => {
+  it("takes a Coordonator's title as optional: blank is none, trimmed, at most 160", () => {
     expect(appoint('optional', '   ')).toMatchObject({
       success: true,
       data: { positionTitle: null },
@@ -192,8 +192,8 @@ describe('Appointment: the title rule per position (#967)', () => {
       success: true,
       data: { positionTitle: 'Coordonator Marketing' },
     });
-    expect(appoint('optional', 'ș'.repeat(80)).success).toBe(true);
-    expect(issues(appoint('optional', 'm'.repeat(81)))).toEqual([
+    expect(appoint('optional', 'ș'.repeat(160)).success).toBe(true);
+    expect(issues(appoint('optional', 'm'.repeat(161)))).toEqual([
       'positionTitle: position_title_too_long',
     ]);
   });
@@ -203,7 +203,7 @@ describe('Appointment: the title rule per position (#967)', () => {
       success: true,
       data: { positionTitle: null },
     });
-    expect(appoint('none', 'm'.repeat(81)).success).toBe(true);
+    expect(appoint('none', 'm'.repeat(161)).success).toBe(true);
   });
 });
 
@@ -281,24 +281,24 @@ describe('Application form link (#698)', () => {
     ]);
   });
 
-  it('measures the label at 60 characters, as char_length counts them', () => {
+  it('measures the label at 120 characters, as char_length counts them', () => {
     expect(
       check(groupSettingsSchema, settings, {
-        applicationForm: { label: 'ș'.repeat(60), url },
+        applicationForm: { label: 'ș'.repeat(120), url },
       }),
     ).toEqual([]);
     expect(
       check(groupSettingsSchema, settings, {
-        applicationForm: { label: 'ș'.repeat(61), url },
+        applicationForm: { label: 'ș'.repeat(121), url },
       }),
     ).toEqual(['applicationForm.label: application_form_label_too_long']);
   });
 
-  it('asks for an http(s) address of at most 2048 characters', () => {
+  it('asks for an http(s) address of at most 4096 characters', () => {
     for (const ok of [
       'http://a.ro',
       'https://a.ro',
-      `https://${'a'.repeat(2040)}`,
+      `https://${'a'.repeat(4088)}`,
     ])
       expect(form('Formular', ok), ok).toEqual([]);
     expect(
@@ -314,7 +314,7 @@ describe('Application form link (#698)', () => {
       check(groupSettingsSchema, settings, {
         applicationForm: {
           label: 'Formular',
-          url: `https://${'a'.repeat(2041)}`,
+          url: `https://${'a'.repeat(4089)}`,
         },
       }),
     ).toEqual(['applicationForm.url: link_url_too_long']);

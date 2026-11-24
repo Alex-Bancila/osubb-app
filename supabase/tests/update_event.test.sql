@@ -288,8 +288,8 @@ reset role;
 select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
 select throws_ok($$ select public.update_event(0, 'ab', 'sedinta', 0, now() + interval '1 day', null, null, null, null, 0, null) $$,
   'PT400', 'title_too_short', 'an Event title under 3 characters is refused before the gate');
-select throws_ok($$ select public.update_event(0, 'Eveniment #673', 'sedinta', 0, now() + interval '1 day', null, null, null, repeat('d', 2001), 0, null) $$,
-  'PT400', 'description_too_long', 'an Event description over 2000 characters is refused before the gate');
+select throws_ok($$ select public.update_event(0, 'Eveniment #673', 'sedinta', 0, now() + interval '1 day', null, null, null, repeat('d', 4001), 0, null) $$,
+  'PT400', 'description_too_long', 'an Event description over 4000 characters is refused before the gate');
 select throws_ok($$ select public.update_event(0, 'Eveniment #673', 'sedinta', 0, now() + interval '1 day', null, null, 1001, null, 0, null) $$,
   'PT400', 'invalid_event_capacity', 'a capacity above 1000 is invalid_event_capacity on update too');
 reset role;

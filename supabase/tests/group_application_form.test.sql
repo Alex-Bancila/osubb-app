@@ -94,10 +94,10 @@ select throws_ok(
   '23514', 'new row for relation "groups" violates check constraint "groups_application_form_ck"',
   'groups_application_form_ck: an address without a label is refused on a direct write');
 select throws_ok(
-  $$ update public.groups set application_form_label = repeat('a', 61),
+  $$ update public.groups set application_form_label = repeat('a', 121),
                               application_form_url = 'https://forms.example.org/a' where name = 'Copil #697' $$,
   '23514', 'new row for relation "groups" violates check constraint "groups_application_form_label_ck"',
-  'groups_application_form_label_ck: a label over 60 characters is refused on a direct write');
+  'groups_application_form_label_ck: a label over 120 characters is refused on a direct write');
 select throws_ok(
   $$ update public.groups set application_form_label = '   ',
                               application_form_url = 'https://forms.example.org/a' where name = 'Copil #697' $$,
@@ -110,9 +110,9 @@ select throws_ok(
   'groups_application_form_url_ck: a non-http(s) address is refused on a direct write');
 select throws_ok(
   $$ update public.groups set application_form_label = 'Formular',
-                              application_form_url = 'https://' || repeat('a', 2041) where name = 'Copil #697' $$,
+                              application_form_url = 'https://' || repeat('a', 4089) where name = 'Copil #697' $$,
   '23514', 'new row for relation "groups" violates check constraint "groups_application_form_url_ck"',
-  'groups_application_form_url_ck: an address over 2048 characters is refused on a direct write');
+  'groups_application_form_url_ck: an address over 4096 characters is refused on a direct write');
 
 select pg_temp.g697_bc();
 select throws_ok(
@@ -143,12 +143,12 @@ select throws_ok(pg_temp.g697_set('Formular', 'ftp://forms.example.org/a'),
 select throws_ok(pg_temp.g697_set('Formular', 'javascript:alert(1)'),
   'PT400', 'link_url_invalid',
   'a javascript: address is link_url_invalid -- only http(s) ever reaches an applicant');
-select throws_ok(pg_temp.g697_set(repeat('a', 61), 'https://forms.example.org/a'),
+select throws_ok(pg_temp.g697_set(repeat('a', 121), 'https://forms.example.org/a'),
   'PT400', 'link_label_too_long',
-  'a 61-character label is link_label_too_long');
-select throws_ok(pg_temp.g697_set('Formular', 'https://' || repeat('a', 2041)),
+  'a 121-character label is link_label_too_long');
+select throws_ok(pg_temp.g697_set('Formular', 'https://' || repeat('a', 4089)),
   'PT400', 'link_url_too_long',
-  'a 2049-character address is link_url_too_long');
+  'a 4097-character address is link_url_too_long');
 select is(pg_temp.g697_link('Copil #697'), array[null, null]::text[],
   'nothing refused above reached the row');
 

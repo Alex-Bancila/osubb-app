@@ -35,9 +35,9 @@ it('takes both or neither, trimmed, and blank as none', () => {
   expect(check('', 'https://osubb.ro')).toEqual(['label: link_label_required']);
 });
 
-it('limits the label to 60 characters', () => {
-  expect(check('l'.repeat(60), 'https://osubb.ro')).toEqual([]);
-  expect(check('l'.repeat(61), 'https://osubb.ro')).toEqual([
+it('limits the label to 120 characters', () => {
+  expect(check('l'.repeat(120), 'https://osubb.ro')).toEqual([]);
+  expect(check('l'.repeat(121), 'https://osubb.ro')).toEqual([
     'label: link_label_too_long',
   ]);
 });
@@ -46,8 +46,8 @@ it('limits the label to 60 characters', () => {
 it.each([
   ['https://osubb.ro/formular', []],
   ['  http://osubb.ro  ', []],
-  [`https://${'a'.repeat(2040)}`, []],
-  [`https://${'a'.repeat(2041)}`, ['url: link_url_too_long']],
+  [`https://${'a'.repeat(4088)}`, []],
+  [`https://${'a'.repeat(4089)}`, ['url: link_url_too_long']],
   ['ftp://osubb.ro', ['url: link_url_invalid']],
   ['osubb.ro', ['url: link_url_invalid']],
 ])('reads the address %j as the server does', (url, expected) => {
@@ -90,10 +90,10 @@ describe('attachedLinksSchema (ruling R46)', () => {
     ]);
   });
 
-  it('takes five links and refuses a sixth', () => {
-    expect(MAX_ATTACHED_LINKS).toBe(5);
-    expect(listIssues(Array(5).fill(ok))).toEqual([]);
-    expect(listIssues(Array(6).fill(ok))).toEqual([': too_many_links']);
+  it('takes ten links and refuses an eleventh', () => {
+    expect(MAX_ATTACHED_LINKS).toBe(10);
+    expect(listIssues(Array(10).fill(ok))).toEqual([]);
+    expect(listIssues(Array(11).fill(ok))).toEqual([': too_many_links']);
   });
 
   it('sends every server reason about links to the list itself', () => {
@@ -128,8 +128,8 @@ describe('attachedLinksFrom', () => {
     expect(attachedLinksFrom(null)).toEqual([]);
     expect(attachedLinksFrom({ label: 'x', url: 'https://x' })).toEqual([]);
     expect(
-      attachedLinksFrom(Array(7).fill({ label: 'a', url: 'https://a' })),
-    ).toHaveLength(5);
+      attachedLinksFrom(Array(12).fill({ label: 'a', url: 'https://a' })),
+    ).toHaveLength(10);
   });
 });
 

@@ -558,7 +558,7 @@ export function ThresholdRow({
   );
 }
 
-/** "Respinge", with the reason BC gives (at most 500 characters). */
+/** "Respinge", with the reason BC gives (at most 1000 characters). */
 export function RejectDialog({
   candidate,
   name,

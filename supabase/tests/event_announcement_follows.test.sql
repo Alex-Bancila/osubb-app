@@ -111,7 +111,7 @@ select public.create_event('Spre OSUBB #1150', 'eveniment', pg_temp.root(), '203
                            null, null, null, 0, null, true);
 select public.create_event('Anulat local #1150', 'sedinta', pg_temp.root(), '2030-11-03 18:00+02', null,
                            null, null, null, 0, null, true);
-select public.create_event(rpad('Titlu lung #1150 ', 120, 'x'), 'sedinta', pg_temp.root(), '2030-11-03 18:00+02', null,
+select public.create_event(rpad('Titlu lung #1150 ', 240, 'x'), 'sedinta', pg_temp.root(), '2030-11-03 18:00+02', null,
                            null, null, null, 0, null, true);
 select public.create_event('Șters #1150', 'sedinta', pg_temp.root(), '2030-11-03 18:00+02', null,
                            null, null, null, 0, null, true);
@@ -130,7 +130,7 @@ select pg_temp.test_clear_jwt();
 select pg_temp.remember(label, label)
   from unnest(array['Ședință #1150', 'Atelier #1150', 'Curs #1150', 'Secret #1150', 'Spre OSUBB #1150',
                     'Anulat local #1150', 'Șters #1150', 'Gală #1150']) as label;
-select pg_temp.remember('Titlu lung', rpad('Titlu lung #1150 ', 120, 'x'));
+select pg_temp.remember('Titlu lung', rpad('Titlu lung #1150 ', 240, 'x'));
 
 -- ==================== 1. One builder ====================
 select is((select count(*) from pg_temp.annc), 9::bigint,
@@ -279,12 +279,12 @@ select is(pg_temp.reads(2, 'Anulat local #1150'), 1::bigint, 'its readers still 
 
 -- A title at the limit keeps the mark and is cut to fit.
 select pg_temp.test_login_leadership(pg_temp.u1150(1));
-select public.cancel_event(pg_temp.event(rpad('Titlu lung #1150 ', 120, 'x')), 'Nu mai are loc.');
+select public.cancel_event(pg_temp.event(rpad('Titlu lung #1150 ', 240, 'x')), 'Nu mai are loc.');
 reset role;
 select pg_temp.test_clear_jwt();
 select is((select title from announcements where id = pg_temp.annc('Titlu lung')),
-          'Anulat: ' || left(rpad('Titlu lung #1150 ', 120, 'x'), 111) || '…',
-  'a 120-character title is cut so the marked title still fits in 120');
+          'Anulat: ' || left(rpad('Titlu lung #1150 ', 240, 'x'), 231) || '…',
+  'a 240-character title is cut so the marked title still fits in 240');
 
 -- An organization-wide Announcement cancelled by its Event's author below BC
 -- stays published: a cancellation is the Event's state, never a content edit

@@ -27,7 +27,7 @@ const score = (reason: string, max: number) =>
 
 /**
  * An Evaluation (#673, ruling R8; #985): a Difficulty of 1–10, a Rating of
- * 1–5 and a required note of at most 1000 characters — `complete_task_review`,
+ * 1–5 and a required note of at most 2000 characters — `complete_task_review`,
  * `mark_task_unfulfilled`, `approve_completed_work_request` and
  * `create_completed_task`.
  */
@@ -36,7 +36,7 @@ export const evaluationShape = {
   rating: score('invalid_rating', MAX_RATING),
   note: requiredText({
     required: 'evaluation_note_required',
-    max: 1000,
+    max: 2000,
     tooLong: 'evaluation_note_too_long',
   }),
 };

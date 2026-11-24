@@ -479,7 +479,7 @@ export function GroupSettingsTab({
           <Field label="Cum se numește coordonatorul (opțional)">
             <Input
               value={managerTitle}
-              maxLength={80}
+              maxLength={160}
               placeholder="BCE, Coordonator Principal…"
               disabled={busy}
               onChange={(event) => setManagerTitle(event.target.value)}
@@ -496,7 +496,7 @@ export function GroupSettingsTab({
           <Field label="Cum se numesc responsabilii (opțional)">
             <Input
               value={responsibleTitle}
-              maxLength={80}
+              maxLength={160}
               placeholder="Coordonator, Responsabil de Proiect…"
               disabled={busy}
               onChange={(event) => setResponsibleTitle(event.target.value)}
@@ -823,7 +823,7 @@ export function GroupSettingsTab({
             <Field label="Prescurtare (opțional)">
               <Input
                 value={short}
-                maxLength={16}
+                maxLength={32}
                 disabled={busy}
                 onChange={(event) => setShort(event.target.value)}
                 {...structureForm.field('short')}

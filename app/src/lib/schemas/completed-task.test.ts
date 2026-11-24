@@ -45,7 +45,7 @@ it('parses a completed Task: trimmed text, blank details as none, scores as numb
 
 it('mirrors the server: the constraints kit, an offered Group, a volunteer, a Campaign of the Group', () => {
   expect(reasons({ title: 'ab' })).toEqual(['title_too_short']);
-  expect(reasons({ description: 'd'.repeat(2001) })).toEqual([
+  expect(reasons({ description: 'd'.repeat(4001) })).toEqual([
     'description_too_long',
   ]);
   expect(reasons({ groupId: null, campaignId: null })).toEqual([

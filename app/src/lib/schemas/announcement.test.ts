@@ -24,17 +24,17 @@ it('trims every text, as announcements_guard_text does', () => {
     announcementSchema.parse({
       ...valid,
       title: '  Titlu  ',
-      body: ` ${'b'.repeat(2000)} `,
+      body: ` ${'b'.repeat(4000)} `,
       links: [
-        { label: `  ${'l'.repeat(60)}  `, url: '  https://osubb.ro/f  ' },
+        { label: `  ${'l'.repeat(120)}  `, url: '  https://osubb.ro/f  ' },
         { label: '', url: ' ' },
       ],
     }),
   ).toEqual({
     title: 'Titlu',
-    body: 'b'.repeat(2000),
+    body: 'b'.repeat(4000),
     groupId: 3,
-    links: [{ label: 'l'.repeat(60), url: 'https://osubb.ro/f' }],
+    links: [{ label: 'l'.repeat(120), url: 'https://osubb.ro/f' }],
     deadline: null,
   });
   // #909: a future Termen passes as the ISO instant the form produced.
@@ -44,25 +44,27 @@ it('trims every text, as announcements_guard_text does', () => {
   ).toBe('2099-10-02T20:59:00.000Z');
 });
 
-// R60: the body is Formatted Text, at most 2000 characters as the reader sees
-// them and 4000 as stored -- private.require_formatted_text_length's rule.
+// R60: the body is Formatted Text, at most 4000 characters as the reader sees
+// them and 8000 as stored -- private.require_formatted_text_length's rule.
 it('measures the body as Formatted Text (R60)', () => {
-  // 3600 stored (3599 trimmed), 1199 visible.
-  expect(check({ body: '**a** '.repeat(600) })).toEqual([]);
-  expect(check({ body: 'a'.repeat(2001) })).toEqual(['body: body_too_long']);
-  // 4005 stored, only 801 visible.
-  expect(check({ body: '**a**'.repeat(801) })).toEqual(['body: body_too_long']);
+  // 7200 stored (7199 trimmed), 2399 visible.
+  expect(check({ body: '**a** '.repeat(1200) })).toEqual([]);
+  expect(check({ body: 'a'.repeat(4001) })).toEqual(['body: body_too_long']);
+  // 8005 stored, only 1601 visible.
+  expect(check({ body: '**a**'.repeat(1601) })).toEqual([
+    'body: body_too_long',
+  ]);
 });
 
 it.each([
   [{ title: ' \t ' }, ['title: title_required']],
   [{ title: '  ab  ' }, ['title: title_too_short']],
-  [{ title: 't'.repeat(121) }, ['title: title_too_long']],
+  [{ title: 't'.repeat(241) }, ['title: title_too_long']],
   [{ body: '   ' }, ['body: body_required']],
-  [{ body: 'b'.repeat(2001) }, ['body: body_too_long']],
+  [{ body: 'b'.repeat(4001) }, ['body: body_too_long']],
   [{ groupId: null as never }, ['groupId: announcement_group_required']],
   [
-    { links: [{ label: 'l'.repeat(61), url: 'https://osubb.ro' }] },
+    { links: [{ label: 'l'.repeat(121), url: 'https://osubb.ro' }] },
     ['links.0.label: link_label_too_long'],
   ],
   [
@@ -74,9 +76,9 @@ it.each([
     },
     ['links.1.url: link_url_invalid'],
   ],
-  // R46: up to five Attached Links.
+  // R46: up to ten Attached Links.
   [
-    { links: Array(6).fill({ label: 'Formular', url: 'https://osubb.ro' }) },
+    { links: Array(11).fill({ label: 'Formular', url: 'https://osubb.ro' }) },
     ['links: too_many_links'],
   ],
   // #909: announcements_guard_deadline's rule, and a wall time Romania skips.

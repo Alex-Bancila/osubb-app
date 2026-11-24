@@ -11,7 +11,7 @@ import { cn } from '../../lib/utils';
 import { Textarea } from '../ui/input';
 
 /** The visible characters a Formatted Text may hold (decision 10). */
-const VISIBLE_LIMIT = 2000;
+const VISIBLE_LIMIT = 4000;
 
 /**
  * The editor's chunk, loaded by the first field that opens. `lazy` keeps a
@@ -64,7 +64,7 @@ class EditorUnavailable extends Component<
  * A Formatted Text field (ruling R60, §C): the Mesaj of an Announcement, the
  * Descriere of a Deal, a Task or an Event, the Detalii of a completed Task.
  * It writes Markdown in the reader's dialect and counts what the reader shows
- * ("N / 2000 caractere"). The editor is its own chunk, loaded when the form
+ * ("N / 4000 caractere"). The editor is its own chunk, loaded when the form
  * opens; until then the text shows read-only in a text area with the
  * field's `id`, so its label still names it.
  */

@@ -1,4 +1,4 @@
--- Ruling R46 (2026-10-07): up to five Attached Links on an Announcement (a Deal
+-- Ruling R46 (2026-10-07): up to ten Attached Links on an Announcement (a Deal
 -- included) and on a Task, each a label and an address judged by the one-link
 -- rule (private.require_attached_link) through private.require_attached_links.
 -- The old single pair (announcements.form_label/form_url, tasks.link_label/
@@ -62,22 +62,22 @@ select ok(exists (select 1 from public.announcements where jsonb_array_length(li
 -- ==================== Announcements: direct writes ====================
 select pg_temp.test_login_leadership(pg_temp.u46(1));
 select lives_ok(format($$insert into public.announcements(title, body, group_id, audience, links)
-  values ('Cinci linkuri R46', 'Corp.', %s, 'local', %L)$$, pg_temp.dept(), pg_temp.links(5)),
-  'an Announcement carries five Attached Links');
+  values ('Cinci linkuri R46', 'Corp.', %s, 'local', %L)$$, pg_temp.dept(), pg_temp.links(10)),
+  'an Announcement carries ten Attached Links');
 select throws_ok(format($$insert into public.announcements(title, body, group_id, audience, links)
-  values ('Sase linkuri R46', 'Corp.', %s, 'local', %L)$$, pg_temp.dept(), pg_temp.links(6)),
-  '23514', 'too_many_links', 'a sixth link is refused');
+  values ('Sase linkuri R46', 'Corp.', %s, 'local', %L)$$, pg_temp.dept(), pg_temp.links(11)),
+  '23514', 'too_many_links', 'an eleventh link is refused');
 select throws_ok(format($$insert into public.announcements(title, body, group_id, audience, links)
   values ('Eticheta lunga R46', 'Corp.', %s, 'local', %L)$$, pg_temp.dept(),
-  jsonb_build_array(jsonb_build_object('label', repeat('e', 61), 'url', 'https://example.org'))),
-  '23514', 'link_label_too_long', 'a label over 60 characters is refused');
+  jsonb_build_array(jsonb_build_object('label', repeat('e', 121), 'url', 'https://example.org'))),
+  '23514', 'link_label_too_long', 'a label over 120 characters is refused');
 select throws_ok(format($$insert into public.announcements(title, body, group_id, audience, links)
   values ('Adresa ftp R46', 'Corp.', %s, 'local', '[{"label": "FTP", "url": "ftp://example.org"}]')$$, pg_temp.dept()),
   '23514', 'link_url_invalid', 'a non-http(s) address is refused');
 select throws_ok(format($$insert into public.announcements(title, body, group_id, audience, links)
   values ('Adresa lunga R46', 'Corp.', %s, 'local', %L)$$, pg_temp.dept(),
-  jsonb_build_array(jsonb_build_object('label', 'Lung', 'url', 'https://example.org/' || repeat('u', 2030)))),
-  '23514', 'link_url_too_long', 'an address over 2048 characters is refused');
+  jsonb_build_array(jsonb_build_object('label', 'Lung', 'url', 'https://example.org/' || repeat('u', 4077)))),
+  '23514', 'link_url_too_long', 'an address over 4096 characters is refused');
 select throws_ok(format($$insert into public.announcements(title, body, group_id, audience, links)
   values ('Doar eticheta R46', 'Corp.', %s, 'local', '[{"label": "Doar"}]')$$, pg_temp.dept()),
   '23514', 'link_incomplete', 'a label without an address is refused');
@@ -95,7 +95,7 @@ reset role;
 select is((pg_temp.ann('Rand gol R46')).links, '[{"url": "https://example.org/f", "label": "Formular"}]'::jsonb,
   'links are stored trimmed, a blank row dropped, only label and url kept');
 select is(format('%s|%s', (pg_temp.ann('Cinci linkuri R46')).form_label, (pg_temp.ann('Cinci linkuri R46')).form_url),
-  'Link 1|https://example.org/1', 'the first of five links is mirrored into form_label / form_url');
+  'Link 1|https://example.org/1', 'the first of ten links is mirrored into form_label / form_url');
 
 -- An app version from before R46 writes only the pair.
 select pg_temp.test_login_leadership(pg_temp.u46(1));
@@ -110,8 +110,8 @@ update public.announcements set form_label = 'Primul nou', form_url = 'https://e
  where id = (pg_temp.ann('Cinci linkuri R46')).id;
 reset role;
 select is((select jsonb_agg(element ->> 'label') from jsonb_array_elements((pg_temp.ann('Cinci linkuri R46')).links) as list(element)),
-  '["Primul nou", "Link 2", "Link 3", "Link 4", "Link 5"]'::jsonb,
-  'an old app editing the pair replaces the first link and keeps the other four');
+  '["Primul nou", "Link 2", "Link 3", "Link 4", "Link 5", "Link 6", "Link 7", "Link 8", "Link 9", "Link 10"]'::jsonb,
+  'an old app editing the pair replaces the first link and keeps the other nine');
 select pg_temp.test_login_leadership(pg_temp.u46(1));
 update public.announcements set form_label = null, form_url = null
  where id = (pg_temp.ann('Pereche veche R46')).id;
@@ -119,8 +119,8 @@ reset role;
 select is((pg_temp.ann('Pereche veche R46')).links, '[]'::jsonb, 'an old app clearing the pair clears its one link');
 select pg_temp.test_login_leadership(pg_temp.u46(1));
 update public.announcements set links = pg_temp.links(2) where id = (pg_temp.ann('Pereche veche R46')).id;
-select throws_ok(format($$update public.announcements set links = %L where id = (pg_temp.ann('Pereche veche R46')).id$$, pg_temp.links(6)),
-  '23514', 'too_many_links', 'an edit to six links is refused');
+select throws_ok(format($$update public.announcements set links = %L where id = (pg_temp.ann('Pereche veche R46')).id$$, pg_temp.links(11)),
+  '23514', 'too_many_links', 'an edit to eleven links is refused');
 update public.announcements set links = '[]' where id = (pg_temp.ann('Cinci linkuri R46')).id;
 reset role;
 select is(format('%s|%s', (pg_temp.ann('Pereche veche R46')).form_label, (pg_temp.ann('Pereche veche R46')).form_url),
@@ -131,11 +131,11 @@ select is(format('%s|%s', (pg_temp.ann('Cinci linkuri R46')).form_label is null,
 -- ==================== Tasks: create_task ====================
 select pg_temp.test_login_leadership(pg_temp.u46(1));
 select is(jsonb_array_length((public.create_task('Task cinci R46', null, now() + interval '7 days', 'local', 'direct',
-    p_executor_id => pg_temp.u46(2), p_group_id => pg_temp.dept(), p_links => pg_temp.links(5))).links), 5,
-  'create_task stores five Attached Links');
+    p_executor_id => pg_temp.u46(2), p_group_id => pg_temp.dept(), p_links => pg_temp.links(10))).links), 10,
+  'create_task stores ten Attached Links');
 select throws_ok(format($$select public.create_task('Task sase R46', null, now() + interval '7 days', 'local', 'public',
-    p_group_id => %s, p_links => %L)$$, pg_temp.dept(), pg_temp.links(6)),
-  'PT400', 'too_many_links', 'create_task refuses a sixth link at step 1');
+    p_group_id => %s, p_links => %L)$$, pg_temp.dept(), pg_temp.links(11)),
+  'PT400', 'too_many_links', 'create_task refuses an eleventh link at step 1');
 select throws_ok(format($$select public.create_task('Task ftp R46', null, now() + interval '7 days', 'local', 'public',
     p_group_id => %s, p_links => '[{"label": "F", "url": "ftp://x"}]')$$, pg_temp.dept()),
   'PT400', 'link_url_invalid', 'create_task judges each link');
@@ -158,7 +158,7 @@ select is(format('%s|%s', (pg_temp.task('Task cinci R46')).link_label, (pg_temp.
 select pg_temp.test_clear_jwt();
 set local role authenticated;
 select throws_ok(format($$select public.create_task('Task claimless R46', null, now() + interval '7 days', 'local', 'public',
-    p_group_id => %s, p_links => %L)$$, pg_temp.dept(), pg_temp.links(6)),
+    p_group_id => %s, p_links => %L)$$, pg_temp.dept(), pg_temp.links(11)),
   'PT400', 'too_many_links', 'a malformed list is refused before the gate, even claimless');
 reset role;
 
@@ -185,8 +185,8 @@ select is((pg_temp.task('Task pereche R46')).link_label, 'Link 1', 'the mirror f
 select pg_temp.test_login_leadership(pg_temp.u46(1));
 select throws_ok(pg_temp.edit('Task pereche R46', pg_temp.links(3)), 'PT409', 'nothing_to_update',
   'the same three links are no change');
-select throws_ok(replace(replace(pg_temp.edit('Task pereche R46', pg_temp.links(6)), 'public.update_task', '* from public.preview_task_update'), ', false, ', ', '),
-  'PT400', 'too_many_links', 'preview_task_update refuses a sixth link like the command');
+select throws_ok(replace(replace(pg_temp.edit('Task pereche R46', pg_temp.links(11)), 'public.update_task', '* from public.preview_task_update'), ', false, ', ', '),
+  'PT400', 'too_many_links', 'preview_task_update refuses an eleventh link like the command');
 select lives_ok(pg_temp.edit('Task pereche R46', null, 'Doar una', 'https://example.org/una'),
   'an old app''s update_task sends only the pair (p_links not sent)');
 reset role;
@@ -213,19 +213,19 @@ select is(format('%s|%s', (pg_temp.task('Task pereche R46')).links, (pg_temp.tas
 
 -- ==================== Tasks: duplicate, leadership read, the mirror ====================
 select pg_temp.test_login_leadership(pg_temp.u46(1));
-select is((public.duplicate_task((select id from t46_cinci), now() + interval '9 days')).links, pg_temp.links(5),
-  'duplicate_task copies all five links');
+select is((public.duplicate_task((select id from t46_cinci), now() + interval '9 days')).links, pg_temp.links(10),
+  'duplicate_task copies all ten links');
 reset role;
 -- An old-pair write that reaches the table directly (none is left in the schema).
 update public.tasks set link_label = 'Direct', link_url = 'https://example.org/direct'
  where id = (select id from t46_cinci);
 select is((select jsonb_agg(element ->> 'label') from jsonb_array_elements((select links from public.tasks where id = (select id from t46_cinci))) as list(element)),
-  '["Direct", "Link 2", "Link 3", "Link 4", "Link 5"]'::jsonb,
+  '["Direct", "Link 2", "Link 3", "Link 4", "Link 5", "Link 6", "Link 7", "Link 8", "Link 9", "Link 10"]'::jsonb,
   'a pair-only write replaces the first link and keeps the rest');
 -- leadership_member_tasks carries the list (the Task was created with its Executor).
 select pg_temp.test_login_leadership(pg_temp.u46(3));
 select is((select jsonb_array_length(links) from public.leadership_member_tasks(pg_temp.u46(2))
-            where task_id = (select id from t46_cinci)), 5,
+            where task_id = (select id from t46_cinci)), 10,
   'leadership_member_tasks returns the Task''s links');
 reset role;
 select is(private.task_field_labels(array['links']), 'linkuri', 'the Executor''s edit Notification names the links "linkuri"');

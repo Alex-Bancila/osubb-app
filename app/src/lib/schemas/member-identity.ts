@@ -14,10 +14,10 @@ import { requiredText } from './text';
  */
 export const memberIdentitySchema = z.object({
   nickname: memberNicknameSchema,
-  // Security pass 2026-09-27: profiles_full_name_length_ck (at most 120).
+  // Security pass 2026-09-27: profiles_full_name_length_ck (at most 240).
   fullName: requiredText({
     required: 'full_name_required',
-    max: 120,
+    max: 240,
     tooLong: 'full_name_too_long',
   }),
 });
@@ -52,7 +52,7 @@ export const memberInviteSchema = z.object({
   email: emailSchema,
   fullName: requiredText({
     required: 'full_name_required',
-    max: 120,
+    max: 240,
     tooLong: 'full_name_too_long',
   }),
   // The chosen Groups' ids, so a Group refusal clears once the choice changes.
@@ -102,7 +102,7 @@ export const joinedAtFieldForReason: Readonly<Record<string, string>> = {
 
 /**
  * A Member's Universitate (ruling R58): either an entry of the list or, under
- * "Altă universitate", a typed name -- trimmed, then 2-120 characters, as
+ * "Altă universitate", a typed name -- trimmed, then 2-240 characters, as
  * `profiles_university_length_ck` measures it. The draft is the select's value
  * and the typed name; the output is the one `university` the column stores.
  * The typed name belongs to the field a refusal is shown under.
@@ -112,7 +112,7 @@ export const memberUniversitySchema = z
   .transform(({ option, other }, ctx) => {
     const university = option === OTHER_UNIVERSITY ? trimText(other) : option;
     const length = charLength(university);
-    if (length < 2 || length > 120) {
+    if (length < 2 || length > 240) {
       ctx.addIssue({
         code: 'custom',
         path: ['university'],

@@ -642,7 +642,7 @@ it('places the refusal of a finalised run under the name', async () => {
   );
   await waitFor(() =>
     expect(within(run).getByLabelText('Nume')).toHaveAccessibleDescription(
-      'Numele are cel mult 120 de caractere.',
+      'Numele are cel mult 240 de caractere.',
     ),
   );
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());

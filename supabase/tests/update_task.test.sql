@@ -319,20 +319,20 @@ select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:umbrell
 select lives_ok(format('select public.update_task(%s)', pg_temp.args('x:umbrella', p_title => 'T626 umbrela noua')),
   'an Umbrella''s title is editable with null mode and Audience');
 -- #673 (R8): the length rules, at step 1 for the command and its preview alike.
-select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input', p_title => repeat('t', 121))),
-  'PT400', 'title_too_long', '#673: a title over 120 characters is refused');
+select throws_ok(format('select public.update_task(%s)', pg_temp.args('x:input', p_title => repeat('t', 241))),
+  'PT400', 'title_too_long', '#673: a title over 240 characters is refused');
 select throws_ok(format('select * from public.preview_task_update(%s)', pg_temp.args('x:input', p_title => '  ab  ')),
   'PT400', 'title_too_short', '#673: the preview measures the trimmed title, so "  ab  " is too short');
 select throws_ok(format('select public.update_task(%s, %s, %L, %L, now() + interval ''7 days'', null, %L, %L, null, null)',
-    pg_temp.t('x:input'), pg_temp.dept_group('edu'), 'T626 x:input', repeat('d', 2001), 'direct', 'local'),
-  'PT400', 'description_too_long', '#673: a description over 2000 characters is refused');
+    pg_temp.t('x:input'), pg_temp.dept_group('edu'), 'T626 x:input', repeat('d', 4001), 'direct', 'local'),
+  'PT400', 'description_too_long', '#673: a description over 4000 characters is refused');
 select lives_ok(format('select public.update_task(%s)', pg_temp.args('todo:deadline', p_deadline => now() - interval '1 day')),
   '#673: update_task accepts a deadline in the past on an existing Task -- R8 judges the deadline only at creation');
 reset role;
 select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
-select throws_ok($$ select public.update_task(0, 0, repeat('t', 121), null, null, null, null, null, null, null) $$,
+select throws_ok($$ select public.update_task(0, 0, repeat('t', 241), null, null, null, null, null, null, null) $$,
   'PT400', 'title_too_long', '#673: step 1 answers a claimless caller before the gate');
-select throws_ok($$ select * from public.preview_task_update(0, 0, 'Titlu bun #673', repeat('d', 2001), null, null, null, null, null, null) $$,
+select throws_ok($$ select * from public.preview_task_update(0, 0, 'Titlu bun #673', repeat('d', 4001), null, null, null, null, null, null) $$,
   'PT400', 'description_too_long', '#673: the preview answers a claimless caller before the gate too');
 reset role;
 select pg_temp.test_login_leadership(pg_temp.u(1));
@@ -653,14 +653,14 @@ select throws_ok(format('select public.update_task(%s)', pg_temp.args('link:edit
 select throws_ok(format('select * from public.preview_task_update(%s)', pg_temp.args('link:edit', p_link_url => 'https://example.org/x')),
   'PT400', 'link_incomplete', '#684: preview_task_update refuses an address without a label');
 select throws_ok(format('select * from public.preview_task_update(%s)',
-    pg_temp.args('link:edit', p_link_label => repeat('e', 61), p_link_url => 'https://example.org/x')),
-  'PT400', 'link_label_too_long', '#684: the preview refuses a label over 60 characters');
+    pg_temp.args('link:edit', p_link_label => repeat('e', 121), p_link_url => 'https://example.org/x')),
+  'PT400', 'link_label_too_long', '#684: the preview refuses a label over 120 characters');
 select throws_ok(format('select public.update_task(%s)',
     pg_temp.args('link:edit', p_link_label => 'FTP', p_link_url => 'ftp://example.org/x')),
   'PT400', 'link_url_invalid', '#684: update_task refuses a non-http(s) address');
 select throws_ok(format('select public.update_task(%s)',
-    pg_temp.args('link:edit', p_link_label => 'Lung', p_link_url => 'https://example.org/' || repeat('u', 2030))),
-  'PT400', 'link_url_too_long', '#684: update_task refuses an address over 2048 characters');
+    pg_temp.args('link:edit', p_link_label => 'Lung', p_link_url => 'https://example.org/' || repeat('u', 4077))),
+  'PT400', 'link_url_too_long', '#684: update_task refuses an address over 4096 characters');
 reset role;
 select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
 select throws_ok($$ select public.update_task(0, 0, 'Titlu bun #684', null, null, null, null, null, 'Doar eticheta', null) $$,

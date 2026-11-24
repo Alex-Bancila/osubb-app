@@ -91,11 +91,11 @@ select is(private.event_announcement_body('2030-09-25 15:40+00','2030-09-26 07:0
   'an Event that ends on another day names the end day');
 -- R60: a copy over the limit is cut at whole lines, never mid-line, and the
 -- ellipsis has a line of its own (suite formatted_text_notifications).
-select is(private.event_announcement_body('2030-09-25 15:40+00',null,null,repeat('x',2000)),
-  E'Miercuri, 25 septembrie 2030, 18:40\n\n' || repeat('x',1961) || E'\n…',
-  'a description that is one line filling the limit is never dropped whole: its words are cut to what the date line and the ellipsis leave of 2000');
+select is(private.event_announcement_body('2030-09-25 15:40+00',null,null,repeat('x',4000)),
+  E'Miercuri, 25 septembrie 2030, 18:40\n\n' || repeat('x',3961) || E'\n…',
+  'a description that is one line filling the limit is never dropped whole: its words are cut to what the date line and the ellipsis leave of 4000');
 select ok(private.event_announcement_body('2030-09-25 15:40+00',null,null,
-    array_to_string(array_fill(repeat('x',49), array[40]), E'\n')) like E'%\n…',
+    array_to_string(array_fill(repeat('x',49), array[81]), E'\n')) like E'%\n…',
   'a multi-line description over the limit is cut at a line and ends with an ellipsis on its own line');
 
 -- ==================== 4. create_event without p_announce ====================

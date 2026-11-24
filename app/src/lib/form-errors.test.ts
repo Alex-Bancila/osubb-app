@@ -8,9 +8,9 @@ import {
 } from './schemas/task';
 
 it('puts a zod issue and a server reason for the same field under that field', () => {
-  const local = noteSchema.safeParse({ note: 'n'.repeat(1001) });
+  const local = noteSchema.safeParse({ note: 'n'.repeat(2001) });
   expect(fieldErrors(local, undefined, fieldForReason)).toEqual({
-    note: 'Nota are cel mult 1000 de caractere.',
+    note: 'Nota are cel mult 2000 de caractere.',
   });
   // The server has the last word on the same field.
   expect(fieldErrors(local, 'note_required', fieldForReason)).toEqual({
@@ -20,7 +20,7 @@ it('puts a zod issue and a server reason for the same field under that field', (
     fieldErrors(noteSchema.safeParse({ note: 'ok' }), 'note_too_long', {
       ...fieldForReason,
     }),
-  ).toEqual({ note: 'Nota are cel mult 1000 de caractere.' });
+  ).toEqual({ note: 'Nota are cel mult 2000 de caractere.' });
 });
 
 it('sends a reason that names no field to the form-level slot', () => {

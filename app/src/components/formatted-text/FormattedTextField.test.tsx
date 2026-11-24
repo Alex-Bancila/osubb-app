@@ -14,7 +14,7 @@ import {
   type FormattedTextFieldProps,
 } from './FormattedTextField';
 
-const TOO_LONG = 'Mesajul are cel mult 2000 de caractere.';
+const TOO_LONG = 'Mesajul are cel mult 4000 de caractere.';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -307,18 +307,18 @@ describe('FormattedTextField (R60, §C)', () => {
     expect(onSubmit).toHaveBeenCalledWith('Ședința e joi');
   });
 
-  it('checks a pasted text over 2000 characters on blur, with the flushed value (ruling 33)', async () => {
+  it('checks a pasted text over 4000 characters on blur, with the flushed value (ruling 33)', async () => {
     const user = userEvent.setup();
     render(<Form />);
     const field = await findFormattedText('Mesaj');
     await user.click(field);
 
-    await user.paste('a'.repeat(2001));
+    await user.paste('a'.repeat(4001));
     await user.click(screen.getByLabelText('Alt câmp'));
 
     expect(await screen.findByText(TOO_LONG)).toBeInTheDocument();
     expect(field).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByText('2001 / 2000 caractere')).toHaveClass(
+    expect(screen.getByText('4001 / 4000 caractere')).toHaveClass(
       'text-destructive',
     );
   });
@@ -327,7 +327,7 @@ describe('FormattedTextField (R60, §C)', () => {
     render(<Form initial="**ab**" />);
     await findFormattedText('Mesaj');
 
-    expect(screen.getByText('2 / 2000 caractere')).toBeInTheDocument();
+    expect(screen.getByText('2 / 4000 caractere')).toBeInTheDocument();
   });
 
   it('a failed submit focuses the text', async () => {
@@ -451,7 +451,7 @@ describe('FormattedTextField (R60, §C)', () => {
     await user.click(screen.getByRole('button', { name: 'Golește' }));
 
     expect(field.textContent).toBe('');
-    expect(screen.getByText('0 / 2000 caractere')).toBeInTheDocument();
+    expect(screen.getByText('0 / 4000 caractere')).toBeInTheDocument();
   });
 
   it('locks the text while its fieldset is disabled', async () => {

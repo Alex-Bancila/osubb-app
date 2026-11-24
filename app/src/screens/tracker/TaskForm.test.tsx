@@ -341,10 +341,10 @@ it('sends the Attached Links, checks each as a pair on blur and submit, and puts
   await user.click(screen.getByRole('button', { name: 'Adaugă link' }));
   const label = screen.getByLabelText('Etichetă link 1');
   const url = screen.getByLabelText('Adresă link 1');
-  await user.type(label, 'l'.repeat(61));
+  await user.type(label, 'l'.repeat(121));
   await user.tab();
   expect(label).toHaveAccessibleDescription(
-    'Numele linkului are cel mult 60 de caractere.',
+    'Numele linkului are cel mult 120 de caractere.',
   );
   await user.clear(label);
   await user.type(label, 'Brief');
@@ -612,7 +612,7 @@ it('checks the whole draft on submit, focuses the first broken field and never s
   );
   const user = userEvent.setup();
   const title = screen.getByLabelText('Titlu');
-  fireEvent.change(title, { target: { value: 't'.repeat(121) } });
+  fireEvent.change(title, { target: { value: 't'.repeat(241) } });
   await user.click(screen.getByRole('button', { name: 'Continuă' }));
   expect(onDraft).not.toHaveBeenCalled();
   // Every rule broken, each under its own field; the first one has focus.
@@ -620,7 +620,7 @@ it('checks the whole draft on submit, focuses the first broken field and never s
     screen.getByText('Alege exact un grup de origine.'),
   ).toBeInTheDocument();
   expect(title).toHaveAccessibleDescription(
-    'Titlul are cel mult 120 de caractere.',
+    'Titlul are cel mult 240 de caractere.',
   );
   expect(screen.getByLabelText(/Termen/)).toHaveAccessibleDescription(
     'Alege termenul taskului.',
@@ -658,12 +658,12 @@ it('puts a server refusal under the field it names, and the rest above the butto
   const title = screen.getByLabelText('Titlu');
   await waitFor(() =>
     expect(title).toHaveAccessibleDescription(
-      'Titlul are cel mult 120 de caractere.',
+      'Titlul are cel mult 240 de caractere.',
     ),
   );
   expect(title).toHaveFocus();
   expect(screen.getByRole('alert')).toHaveTextContent(
-    'Titlul are cel mult 120 de caractere.',
+    'Titlul are cel mult 240 de caractere.',
   );
   expect(screen.queryByText(/private|title_too_long/)).not.toBeInTheDocument();
   // A reason that names no field lands in the form-level slot.
@@ -692,7 +692,7 @@ it('puts a server refusal of the Descriere under it (R60)', async () => {
   );
   await waitFor(() =>
     expect(description).toHaveAccessibleDescription(
-      /Descrierea are cel mult 2000 de caractere\./,
+      /Descrierea are cel mult 4000 de caractere\./,
     ),
   );
   await waitFor(() => expect(description).toHaveFocus());

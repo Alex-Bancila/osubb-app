@@ -15,9 +15,9 @@ const check = (reason: string) => {
 it.each([
   [' \n ', ['reason: reason_required']],
   ['r', []],
-  ['r'.repeat(1000), []],
-  [`  ${'r'.repeat(1000)}  `, []],
-  ['r'.repeat(1001), ['reason: reason_too_long']],
+  ['r'.repeat(2000), []],
+  [`  ${'r'.repeat(2000)}  `, []],
+  ['r'.repeat(2001), ['reason: reason_too_long']],
 ])('measures the reason %j trimmed, at the boundary', (reason, expected) => {
   expect(check(reason)).toEqual(expected);
 });

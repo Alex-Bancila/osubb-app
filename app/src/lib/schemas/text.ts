@@ -55,8 +55,8 @@ export function optionalText(rule: Omit<TextRule, 'required'> = {}) {
 }
 
 /**
- * Formatted Text (ruling R60) is at most 2000 characters as the reader sees
- * them (`visibleLength`) and at most 4000 as stored, the rule of
+ * Formatted Text (ruling R60) is at most 4000 characters as the reader sees
+ * them (`visibleLength`) and at most 8000 as stored, the rule of
  * `private.require_formatted_text_length`. The stored cap is judged first, so
  * the stripper never runs on an unbounded value.
  */
@@ -65,7 +65,7 @@ function measureFormatted(
   tooLong: string,
   ctx: z.RefinementCtx,
 ) {
-  if (charLength(value) > 4000 || visibleLength(value) > 2000)
+  if (charLength(value) > 8000 || visibleLength(value) > 4000)
     ctx.addIssue({ code: 'custom', message: tooLong });
 }
 

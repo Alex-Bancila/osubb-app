@@ -65,7 +65,7 @@ function withoutAddedEscapes(value: string): string {
 
 /**
  * How deep quotes and lists may nest (ruling 16). `marked` recurses once per
- * level, so a line of 2000 `>` (within every limit) would overflow the stack;
+ * level, so a line of 4000 `>` (within every limit) would overflow the stack;
  * past this depth a line's markers are text.
  */
 const MAX_DEPTH = 8;

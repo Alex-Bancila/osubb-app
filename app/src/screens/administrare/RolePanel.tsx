@@ -233,7 +233,7 @@ export const ROLE_PANEL_ROLE_PARAM = 'rol';
 /** Prefills the reason beside `membru` (#827: the Role Evaluation's name). */
 export const ROLE_PANEL_REASON_PARAM = 'motiv';
 /** `set_member_role`'s reason limit; a longer prefill is cut, never sent. */
-const REASON_MAX = 1000;
+const REASON_MAX = 2000;
 
 /**
  * The Role and Status management surface; the server capability gates mount.

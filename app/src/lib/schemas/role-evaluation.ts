@@ -122,7 +122,7 @@ function withSettings<T extends { kind: RoleEvaluationKind }>(
  * it before its gate: a kind, both days of the Evaluation Period with **Până
  * la** not before **De la** and before `today` (a Bucharest day, given by the
  * caller; #1131: yesterday at the latest, since today is not a complete day),
- * a name trimmed to 3–120 characters and the **Procent** (a whole
+ * a name trimmed to 3–240 characters and the **Procent** (a whole
  * number from 1 to 100). The form does not hold the **Prag minim** or the
  * **Data limită de intrare**: Setări does, and the run takes the ones `inForce`
  * (the Floor for both kinds, the cutoff for the Voluntar Activ kind only,
@@ -138,7 +138,7 @@ export function runSchema(today: string, inForce: RunSettings) {
         required: 'invalid_role_evaluation_name',
         min: 3,
         tooShort: 'name_too_short',
-        max: 120,
+        max: 240,
         tooLong: 'name_too_long',
       }),
     })
@@ -227,15 +227,15 @@ export const percentFieldForReason: Readonly<Record<string, 'percent'>> = {
 
 /**
  * The reason BC gives for rejecting a Promotion Candidate
- * (`reject_promotion_candidate`): required, trimmed, at most 500 characters.
- * The limit is half the shared 1000 of `reason_too_long`, so the browser says
- * 500 with its own reason; the server's `reason_too_long` lands on the same
+ * (`reject_promotion_candidate`): required, trimmed, at most 1000 characters.
+ * The limit is half the shared 2000 of `reason_too_long`, so the browser says
+ * 1000 with its own reason; the server's `reason_too_long` lands on the same
  * field.
  */
 export const rejectionSchema = z.object({
   reason: requiredText({
     required: 'invalid_rejection_reason',
-    max: 500,
+    max: 1000,
     tooLong: 'candidate_rejection_reason_too_long',
   }),
 });

@@ -1143,14 +1143,14 @@ reset role;
 -- Step 1 answers before the gate: a claimless caller hears the reason, not 42501.
 reset role;
 select pg_temp.test_login('67300000-0000-0000-0000-000000000001', '{"provider":"email"}'::jsonb);
-select throws_ok($$ select public.create_task(repeat('t', 121), 'd', now() + interval '7 days', 'local', 'direct') $$,
-  'PT400', 'title_too_long', 'a title over 120 characters is refused before the gate');
+select throws_ok($$ select public.create_task(repeat('t', 241), 'd', now() + interval '7 days', 'local', 'direct') $$,
+  'PT400', 'title_too_long', 'a title over 240 characters is refused before the gate');
 select throws_ok($$ select public.create_task('  ab  ', 'd', now() + interval '7 days', 'local', 'direct') $$,
   'PT400', 'title_too_short', 'the title is measured trimmed: "  ab  " is two characters, too short');
-select throws_ok($$ select public.create_task(E'\t' || repeat('t', 120) || '  ', 'd', now() + interval '7 days', 'local', 'direct') $$,
-  '42501', 'task_command_forbidden', 'surrounding whitespace does not count: a trimmed 120-character title passes step 1 and meets the gate');
-select throws_ok($$ select public.create_task('Titlu bun #673', repeat('d', 2001), now() + interval '7 days', 'local', 'direct') $$,
-  'PT400', 'description_too_long', 'a description over 2000 characters is refused before the gate');
+select throws_ok($$ select public.create_task(E'\t' || repeat('t', 240) || '  ', 'd', now() + interval '7 days', 'local', 'direct') $$,
+  '42501', 'task_command_forbidden', 'surrounding whitespace does not count: a trimmed 240-character title passes step 1 and meets the gate');
+select throws_ok($$ select public.create_task('Titlu bun #673', repeat('d', 4001), now() + interval '7 days', 'local', 'direct') $$,
+  'PT400', 'description_too_long', 'a description over 4000 characters is refused before the gate');
 select throws_ok($$ select public.create_task('Titlu bun #673', 'd', now() - interval '1 day', 'local', 'direct') $$,
   'PT400', 'deadline_in_past', 'a deadline in the past is refused at creation, before the gate');
 reset role;
@@ -1189,11 +1189,11 @@ select throws_ok($$ select public.create_task('Link ftp #684', 'd', now() + inte
     p_group_id => pg_temp.dept_group('edu'), p_link_label => 'FTP', p_link_url => 'ftp://example.org/x') $$,
   'PT400', 'link_url_invalid', 'a non-http(s) address is refused');
 select throws_ok($$ select public.create_task('Link lung #684', 'd', now() + interval '7 days', 'local', 'direct',
-    p_group_id => pg_temp.dept_group('edu'), p_link_label => 'Lung', p_link_url => 'https://example.org/' || repeat('u', 2030)) $$,
-  'PT400', 'link_url_too_long', 'an address over 2048 characters is refused');
+    p_group_id => pg_temp.dept_group('edu'), p_link_label => 'Lung', p_link_url => 'https://example.org/' || repeat('u', 4077)) $$,
+  'PT400', 'link_url_too_long', 'an address over 4096 characters is refused');
 select throws_ok($$ select public.create_task('Eticheta lunga #684', 'd', now() + interval '7 days', 'local', 'direct',
-    p_group_id => pg_temp.dept_group('edu'), p_link_label => repeat('e', 61), p_link_url => 'https://example.org/x') $$,
-  'PT400', 'link_label_too_long', 'a label over 60 characters is refused');
+    p_group_id => pg_temp.dept_group('edu'), p_link_label => repeat('e', 121), p_link_url => 'https://example.org/x') $$,
+  'PT400', 'link_label_too_long', 'a label over 120 characters is refused');
 reset role;
 select is((select format('%s|%s', task.link_label, task.link_url) from public.tasks as task where task.title = 'Cu link #684'),
   'Brief|https://example.org/brief', 'both link fields are stored trimmed');

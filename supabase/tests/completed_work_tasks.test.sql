@@ -277,7 +277,7 @@ select throws_ok(format($q$
 $q$, pg_temp.u915(4), pg_temp.g915('Echipa A1 #915')),
   'PT400', 'title_too_short', 'the constraints kit judges the title');
 select throws_ok(format($q$
-  select public.create_completed_task(%L, %s, 'Refuz descriere #915', repeat('d', 2001), null, null, null, 3, 3, 'n')
+  select public.create_completed_task(%L, %s, 'Refuz descriere #915', repeat('d', 4001), null, null, null, 3, 3, 'n')
 $q$, pg_temp.u915(4), pg_temp.g915('Echipa A1 #915')),
   'PT400', 'description_too_long', 'and the details');
 select throws_ok(format($q$
@@ -395,7 +395,7 @@ select throws_ok(format($q$
 $q$, pg_temp.q915('Q8')),
   'PT400', 'title_required', 'an edited title cannot be blank');
 select throws_ok(format($q$
-  select public.approve_completed_work_request(%s, 3, 3, 'n', p_description => repeat('d', 2001))
+  select public.approve_completed_work_request(%s, 3, 3, 'n', p_description => repeat('d', 4001))
 $q$, pg_temp.q915('Q8')),
   'PT400', 'description_too_long', 'nor edited details too long');
 select throws_ok(format($q$

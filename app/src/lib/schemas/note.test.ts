@@ -15,9 +15,9 @@ const check = (note: string) => {
 it.each([
   ['  ', ['note: note_required']],
   ['n', []],
-  ['n'.repeat(1000), []],
-  [`  ${'n'.repeat(1000)}  `, []],
-  ['n'.repeat(1001), ['note: note_too_long']],
+  ['n'.repeat(2000), []],
+  [`  ${'n'.repeat(2000)}  `, []],
+  ['n'.repeat(2001), ['note: note_too_long']],
 ])('measures the note %j trimmed, at the boundary', (note, expected) => {
   expect(check(note)).toEqual(expected);
 });
@@ -36,8 +36,8 @@ it('maps both note reasons to the note', () => {
 
 it.each([
   ['  ', null, []],
-  ['n'.repeat(1000), 'n'.repeat(1000), []],
-  ['n'.repeat(1001), undefined, ['note: note_too_long']],
+  ['n'.repeat(2000), 'n'.repeat(2000), []],
+  ['n'.repeat(2001), undefined, ['note: note_too_long']],
 ])(
   'an optional note %j: blank is no note, the limit still holds',
   (note, parsed, expected) => {

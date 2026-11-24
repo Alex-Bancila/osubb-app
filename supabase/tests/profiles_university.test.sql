@@ -71,12 +71,12 @@ select throws_ok(
   '23514', 'new row for relation "profiles" violates check constraint "profiles_university_length_ck"',
   'trailing whitespace is refused');
 select throws_ok(
-  $$ update public.profiles set university = repeat('x', 121) where id = pg_temp.u58(2) $$,
+  $$ update public.profiles set university = repeat('x', 241) where id = pg_temp.u58(2) $$,
   '23514', 'new row for relation "profiles" violates check constraint "profiles_university_length_ck"',
-  '121 characters is too long');
+  '241 characters is too long');
 select lives_ok(
-  $$ update public.profiles set university = repeat('x', 120) where id = pg_temp.u58(3) $$,
-  '120 characters is the longest accepted');
+  $$ update public.profiles set university = repeat('x', 240) where id = pg_temp.u58(3) $$,
+  '240 characters is the longest accepted');
 select lives_ok(
   $$ update public.profiles set university = 'Universitatea Tehnică din Cluj-Napoca' where id = pg_temp.u58(3) $$,
   'and an ordinary university is accepted');

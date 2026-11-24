@@ -32,7 +32,7 @@ it('rejects blank or long notes and invalid scoring before a request', async () 
     decideRequest({ kind: 'reject', requestId: 8, note: ' ' }),
   ).rejects.toMatchObject({ reason: 'note_required' });
   await expect(
-    decideRequest({ kind: 'reject', requestId: 8, note: 'x'.repeat(1001) }),
+    decideRequest({ kind: 'reject', requestId: 8, note: 'x'.repeat(2001) }),
   ).rejects.toMatchObject({ reason: 'note_too_long' });
   await expect(
     decideRequest({

@@ -20,18 +20,18 @@ it('needs a heading and a body, in the server words (R66)', () => {
   ]);
 });
 
-it('keeps the heading to 120 characters and the body to R60 limits', () => {
+it('keeps the heading to 240 characters and the body to R60 limits', () => {
   expect(
-    issues({ title: 'a'.repeat(121), body: 'Text', link: link('', '') }),
+    issues({ title: 'a'.repeat(241), body: 'Text', link: link('', '') }),
   ).toEqual([['title', 'title_too_long']]);
   expect(
-    issues({ title: 'Titlu', body: 'a'.repeat(2001), link: link('', '') }),
+    issues({ title: 'Titlu', body: 'a'.repeat(4001), link: link('', '') }),
   ).toEqual([['body', 'body_too_long']]);
   // Markup is not counted as visible characters.
   expect(
     issues({
       title: 'Titlu',
-      body: `**${'a'.repeat(1998)}**`,
+      body: `**${'a'.repeat(3998)}**`,
       link: link('', ''),
     }),
   ).toEqual([]);
@@ -48,7 +48,7 @@ it('judges the link as an Attached Link: both or neither, http(s), within limits
     issues({ title: 'T', body: 'B', link: link('Formular', 'ftp://x.ro') }),
   ).toEqual([['link.url', 'link_url_invalid']]);
   expect(
-    issues({ title: 'T', body: 'B', link: link('a'.repeat(61), 'https://x') }),
+    issues({ title: 'T', body: 'B', link: link('a'.repeat(121), 'https://x') }),
   ).toEqual([['link.label', 'link_label_too_long']]);
 });
 
